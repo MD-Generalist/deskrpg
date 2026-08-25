@@ -12,8 +12,16 @@ import {
   characters,
   groupMembers,
   meetingMinutes,
+  chatMessages,
   jsonForDb,
 } from "../db";
+import {
+  appendNpcChatMessage,
+  clearNpcChatHistory,
+  loadNpcChatHistory,
+  npcHistoryKey,
+  type NpcHistoryMessage,
+} from "@/lib/npc-chat-history";
 import {
   extractFileContent,
   buildFilePromptSection,
@@ -221,11 +229,10 @@ const meetingRooms = new Map<string, MeetingRoom>();
 const activeBrokers = new Map<string, any>();
 const discussionInitiators = new Map<string, string>();
 
-// NPC chat history: `${channelId}:${npcId}` -> [{ role, content, timestamp }]
-const npcChatHistory = new Map<
-  string,
-  { role: "player" | "npc"; content: string; timestamp: number }[]
->();
+// NPC chat history: `${characterId}:${npcId}` -> messages.
+// 정본은 chat_messages 테이블이고 이 맵은 그 앞의 캐시다 — 프로세스가 죽으면 비지만,
+// 다음 조회에서 DB 로부터 다시 채워진다. 키는 npcHistoryKey() 하나로만 만든다.
+const npcChatHistory = new Map<string, NpcHistoryMessage[]>();
 
 // OpenClaw gateway connections: gatewayId -> gateway instance
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -316,24 +323,53 @@ export function getSocketIdsToKick(existingSocketIds: string[], joiningSocketId:
   return existingSocketIds.filter((id) => id !== joiningSocketId);
 }
 
-function appendNpcHistoryMessage(channelId: string, npcId: string, content: string) {
-  const sanitizedContent = sanitizeNpcResponseText(content);
+/**
+ * 이력에 한 줄 남긴다 — 캐시와 DB 양쪽에.
+ *
+ * DB 쓰기가 실패해도 대화는 끊지 않는다. 이력을 잃는 것과 대화가 멈추는 것 중에는
+ * 앞이 낫다. 다만 조용히 넘기지 않고 로그를 남긴다 — 성공을 보고하는 실패를 만들지
+ * 않기 위해서다.
+ */
+async function appendNpcHistoryMessage(
+  characterId: string,
+  npcId: string,
+  content: string,
+  role: "player" | "npc" = "npc",
+) {
+  const sanitizedContent = role === "npc" ? sanitizeNpcResponseText(content) : content;
   if (!sanitizedContent.trim()) return null;
-  const historyKey = `${channelId}:${npcId}`;
+
+  const historyKey = npcHistoryKey(characterId, npcId);
   const history = npcChatHistory.get(historyKey) || [];
-  history.push({ role: "npc", content: sanitizedContent, timestamp: Date.now() });
+  history.push({ role, content: sanitizedContent, timestamp: Date.now() });
   npcChatHistory.set(historyKey, history);
+
+  try {
+    await appendNpcChatMessage(
+      db,
+      { chatMessages },
+      {
+        characterId,
+        npcId,
+        role,
+        content: sanitizedContent,
+      },
+    );
+  } catch (err) {
+    console.error("[chat-history] failed to persist message", { characterId, npcId, role }, err);
+  }
   return sanitizedContent;
 }
 
-function appendNpcHistoryMessageForUser(
+async function appendNpcHistoryMessageForUser(
   io: Server,
   userId: string,
   channelId: string,
+  characterId: string,
   npcId: string,
   content: string,
 ) {
-  const sanitizedContent = appendNpcHistoryMessage(channelId, npcId, content);
+  const sanitizedContent = await appendNpcHistoryMessage(characterId, npcId, content);
   if (!sanitizedContent) return;
 
   const joinedSockets = getJoinedSocketsForUserAndChannel(io, userId, channelId);
@@ -446,7 +482,7 @@ async function processNpcTaskActions(
       }
 
       if (shouldDeliverCompletionReport(taskAction as { action?: string })) {
-        appendNpcHistoryMessage(input.channelId, input.npcId, parsed.message);
+        await appendNpcHistoryMessage(input.assignerCharacterId, input.npcId, parsed.message);
         const report = await enqueueCompletionReport(
           db,
           { npcReports },
@@ -541,7 +577,7 @@ async function runProgressNudgeForTask(
     });
 
     const preview = (parsed.message || "").trim() || `${task.title} 진행 상황을 보고했습니다.`;
-    appendNpcHistoryMessage(task.channelId, task.npcId, preview);
+    await appendNpcHistoryMessage(task.assignerId, task.npcId, preview);
 
     const report = await enqueueQueuedReport(
       db,
@@ -1543,9 +1579,12 @@ export function setupSocketHandlers(io: Server) {
         }
 
         const player = players.get(socket.id);
-        const historyKey = `${player?.mapId || npcConfig._channelId}:${npcId}`;
-        const history = npcChatHistory.get(historyKey) || [];
-        history.push({ role: "player", content: trimmed, timestamp: Date.now() });
+        // 이력은 캐릭터 소유다. 캐릭터를 모르면 이 발화는 남길 곳이 없다 —
+        // 채널로 대신 묶으면 같은 채널의 다른 사람 이력에 섞인다.
+        const historyCharacterId = player?.characterId ?? null;
+        if (historyCharacterId) {
+          await appendNpcHistoryMessage(historyCharacterId, npcId, trimmed, "player");
+        }
 
         // Inject task reminder on every NPC DM so task actions can be parsed consistently.
         const fileSection = buildFilePromptSection(extractedFiles);
@@ -1581,7 +1620,9 @@ export function setupSocketHandlers(io: Server) {
           }
           const parsed = parseNpcResponse(finalResponse);
           const sanitizedResponse = sanitizeNpcResponseText(finalResponse);
-          history.push({ role: "npc", content: sanitizedResponse, timestamp: Date.now() });
+          if (historyCharacterId) {
+            await appendNpcHistoryMessage(historyCharacterId, npcId, sanitizedResponse, "npc");
+          }
           if (player?.characterId) {
             await processNpcTaskActions(io, parsed, {
               channelId: npcConfig._channelId,
@@ -1595,15 +1636,30 @@ export function setupSocketHandlers(io: Server) {
           }
           socket.emit("npc:response-complete", { npcId, npcName: npcConfig._name || npcId });
         }
-        npcChatHistory.set(historyKey, history);
       },
     );
 
-    socket.on("npc:history", ({ npcId }: { npcId: string }) => {
+    socket.on("npc:history", async ({ npcId }: { npcId: string }) => {
       if (!npcId) return;
       const player = players.get(socket.id);
-      const historyKey = `${player?.mapId || ""}:${npcId}`;
-      const history = npcChatHistory.get(historyKey) || [];
+      const characterId = player?.characterId;
+      if (!characterId) {
+        socket.emit("npc:history", { npcId, messages: [] });
+        return;
+      }
+
+      const historyKey = npcHistoryKey(characterId, npcId);
+      let history = npcChatHistory.get(historyKey);
+      if (!history) {
+        // 캐시 미스 — 재시작 직후가 여기다. DB 가 정본이므로 거기서 채운다.
+        try {
+          history = await loadNpcChatHistory(db, { chatMessages }, { characterId, npcId });
+          npcChatHistory.set(historyKey, history);
+        } catch (err) {
+          console.error("[chat-history] failed to load history", { characterId, npcId }, err);
+          history = [];
+        }
+      }
       socket.emit("npc:history", { npcId, messages: history });
     });
 
@@ -1717,11 +1773,19 @@ export function setupSocketHandlers(io: Server) {
       },
     );
 
-    socket.on("npc:reset-chat", ({ npcId }: { npcId: string }) => {
+    socket.on("npc:reset-chat", async ({ npcId }: { npcId: string }) => {
       if (!npcId) return;
       const player = players.get(socket.id);
-      const historyKey = `${player?.mapId || ""}:${npcId}`;
-      npcChatHistory.delete(historyKey);
+      const characterId = player?.characterId;
+      if (!characterId) return;
+
+      npcChatHistory.delete(npcHistoryKey(characterId, npcId));
+      // 캐시만 비우면 새로고침에 되살아난다 — 사용자에게는 초기화가 안 된 것으로 보인다.
+      try {
+        await clearNpcChatHistory(db, { chatMessages }, { characterId, npcId });
+      } catch (err) {
+        console.error("[chat-history] failed to clear history", { characterId, npcId }, err);
+      }
     });
 
     socket.on("npc:report-consumed", async ({ reportId }: { reportId?: string }) => {
@@ -2002,10 +2066,11 @@ export function setupSocketHandlers(io: Server) {
           runnableTask = resumedTask;
         }
 
-        appendNpcHistoryMessageForUser(
+        await appendNpcHistoryMessageForUser(
           io,
           player.userId,
           player.mapId,
+          player.characterId,
           runnableTask.npcId,
           buildTaskActionStartMessage({ title: runnableTask.title }, "request-report"),
         );
@@ -2049,10 +2114,11 @@ export function setupSocketHandlers(io: Server) {
         if (resumedTask) {
           io.to(player.mapId).emit("task:updated", { task: resumedTask, action: "resume" });
 
-          appendNpcHistoryMessageForUser(
+          await appendNpcHistoryMessageForUser(
             io,
             player.userId,
             player.mapId,
+            player.characterId,
             resumedTask.npcId,
             buildTaskActionStartMessage({ title: resumedTask.title }, "resume"),
           );
