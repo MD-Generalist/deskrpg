@@ -238,34 +238,28 @@ export default function NpcHireModal({
       }
 
       // 외형 프리셋 카드를 누른 것은 "외형"에 대한 의사다. 그때 사용자가 이미 써 둔
-      // 페르소나 본문까지 지우면, 가장 자연스러운 순서(본문 먼저 → 외형 나중)가 그대로
+      // 페르소나까지 지우면, 가장 자연스러운 순서(본문 먼저 → 외형 나중)가 그대로
       // 데이터 손실이 된다. 페르소나 select 를 직접 바꾼 경우는 교체가 요청 자체이므로
       // 편집 여부와 무관하게 덮어쓴다.
-      const replaceIdentity = shouldReplacePresetText(source, identityCustomized);
-      const replaceSoul = shouldReplacePresetText(source, soulCustomized);
+      const replacePersona = shouldReplacePresetText(source, {
+        identity: identityCustomized,
+        soul: soulCustomized,
+      });
+      if (!replacePersona) return;
 
-      if (replaceIdentity) {
-        setIdentity(
-          localizeNpcPromptDocument(
-            applyPresetName(preset.identity, resolvedName),
-            locale,
-            "identity",
-          ),
-        );
-        setIdentityCustomized(false);
-      }
-      if (replaceSoul) {
-        setSoul(
-          localizeNpcPromptDocument(applyPresetName(preset.soul, resolvedName), locale, "soul"),
-        );
-        setSoulCustomized(false);
-      }
-
-      // 본문을 하나도 바꾸지 않았다면 select 표시도 옮기지 않는다 — 그러지 않으면
-      // 화면은 프리셋 이름을 말하는데 본문은 사용자 것인 상태가 된다.
-      if (replaceIdentity || replaceSoul) {
-        setPersonaPresetId(preset.id);
-      }
+      setIdentity(
+        localizeNpcPromptDocument(
+          applyPresetName(preset.identity, resolvedName),
+          locale,
+          "identity",
+        ),
+      );
+      setSoul(
+        localizeNpcPromptDocument(applyPresetName(preset.soul, resolvedName), locale, "soul"),
+      );
+      setIdentityCustomized(false);
+      setSoulCustomized(false);
+      setPersonaPresetId(preset.id);
     },
     [findPreset, identityCustomized, locale, name, soulCustomized, t],
   );
