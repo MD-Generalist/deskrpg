@@ -160,3 +160,63 @@ test("clear 는 delete 를 부른다", async () => {
   await clearNpcChatHistory(db, schema, { characterId: "char-a", npcId: "npc-1" });
   assert.equal(deleted, true);
 });
+
+// --- 소유자 결정: join 전 대화가 조용히 사라지지 않게 하는 지점 ---
+
+import { characterBelongsToUser, pickHistoryCharacterId } from "./npc-chat-history";
+
+test("join 된 소켓은 서버가 아는 캐릭터를 쓰고 검증하지 않는다", () => {
+  const picked = pickHistoryCharacterId({
+    joinedCharacterId: "char-joined",
+    claimedCharacterId: "char-claimed",
+  });
+  // 클라이언트가 다른 값을 불러도 서버가 아는 쪽이 이긴다.
+  assert.deepEqual(picked, { characterId: "char-joined", needsVerification: false });
+});
+
+test("아직 join 전이면 클라이언트가 말한 캐릭터를 쓰되 검증을 요구한다", () => {
+  assert.deepEqual(
+    pickHistoryCharacterId({ joinedCharacterId: null, claimedCharacterId: "char-x" }),
+    {
+      characterId: "char-x",
+      needsVerification: true,
+    },
+  );
+});
+
+test("둘 다 없으면 소유자를 정하지 못한다", () => {
+  assert.deepEqual(pickHistoryCharacterId({ joinedCharacterId: null, claimedCharacterId: null }), {
+    characterId: null,
+    needsVerification: false,
+  });
+});
+
+test("빈 문자열은 캐릭터로 치지 않는다", () => {
+  assert.deepEqual(pickHistoryCharacterId({ joinedCharacterId: "", claimedCharacterId: "  " }), {
+    characterId: null,
+    needsVerification: false,
+  });
+});
+
+test("소유 검증은 그 사용자의 캐릭터일 때만 통과한다", async () => {
+  const db = {
+    select: () => ({
+      from: () => ({ where: () => ({ limit: async () => [{ id: "char-x" }] }) }),
+    }),
+  };
+  assert.equal(
+    await characterBelongsToUser(db, { characters: {} }, { characterId: "char-x", userId: "u1" }),
+    true,
+  );
+});
+
+test("남의 캐릭터를 실어 보내면 거부한다", async () => {
+  // 조회가 비면 그 사용자의 것이 아니다 — 남의 이력에 쓰지 못하게 막는 지점이다.
+  const db = {
+    select: () => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) }),
+  };
+  assert.equal(
+    await characterBelongsToUser(db, { characters: {} }, { characterId: "char-y", userId: "u1" }),
+    false,
+  );
+});

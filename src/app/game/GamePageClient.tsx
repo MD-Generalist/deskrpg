@@ -1094,7 +1094,10 @@ function GamePageInner() {
       EventBus.emit("npc:bubble-clear", { npcId: data.npcId });
       // Request NPC chat history from server
       if (socketRef.current) {
-        socketRef.current.emit("npc:history", { npcId: data.npcId });
+        socketRef.current.emit("npc:history", {
+          npcId: data.npcId,
+          characterId: characterId ?? undefined,
+        });
       }
     };
 
@@ -1195,7 +1198,10 @@ function GamePageInner() {
         // Always request history to ensure conversation is complete
         // (dialog might have been auto-closed during NPC approach, losing partial messages)
         if (socketRef.current) {
-          socketRef.current.emit("npc:history", { npcId: data.npcId });
+          socketRef.current.emit("npc:history", {
+            npcId: data.npcId,
+            characterId: characterId ?? undefined,
+          });
         }
       }
     };
@@ -1237,7 +1243,7 @@ function GamePageInner() {
       EventBus.off("npc:movement-arrived", handleMovementArrived);
       EventBus.off("npc:movement-returned", handleMovementReturned);
     };
-  }, [resetDialog, showToastNotification, t]);
+  }, [characterId, resetDialog, showToastNotification, t]);
 
   const handleDialogClose = useCallback(() => {
     resetDialog();
@@ -1301,7 +1307,7 @@ function GamePageInner() {
   const handleResetNpcChatById = useCallback(
     (npcId: string) => {
       if (socketRef.current) {
-        socketRef.current.emit("npc:reset-chat", { npcId });
+        socketRef.current.emit("npc:reset-chat", { npcId, characterId: characterId ?? undefined });
       }
       if (dialogNpcRef.current?.npcId === npcId) {
         setNpcMessages([]);
@@ -1310,7 +1316,7 @@ function GamePageInner() {
       setContextMenu(null);
       closeRosterMenus();
     },
-    [closeRosterMenus],
+    [characterId, closeRosterMenus],
   );
 
   const handleFireNpcById = useCallback(
@@ -1347,10 +1353,10 @@ function GamePageInner() {
       EventBus.emit("dialog:open");
       EventBus.emit("npc:bubble-clear", { npcId });
       if (socketRef.current) {
-        socketRef.current.emit("npc:history", { npcId });
+        socketRef.current.emit("npc:history", { npcId, characterId: characterId ?? undefined });
       }
     },
-    [resetDialog],
+    [characterId, resetDialog],
   );
 
   const handleDialogSend = useCallback(
@@ -1388,10 +1394,13 @@ function GamePageInner() {
       socket.emit("npc:chat", {
         npcId: dialogNpc.npcId,
         message,
+        // 맵 로딩이 끝나기 전에는 서버가 아직 이 소켓의 캐릭터를 모른다. 그 창에서
+        // 나눈 대화가 사라지지 않도록 캐릭터를 함께 보낸다(서버가 소유를 검증한다).
+        characterId: characterId ?? undefined,
         files: filePayloads,
       });
     },
-    [socket, dialogNpc, showToastNotification, t],
+    [socket, dialogNpc, characterId, showToastNotification, t],
   );
 
   const handleTaskDialogSend = useCallback(
@@ -2655,7 +2664,11 @@ function GamePageInner() {
             onEditNpc={(npcId) => EventBus.emit("npc:edit", { npcId })}
             onFireNpc={(npcId) => EventBus.emit("npc:fire", { npcId })}
             onResetNpcChat={(npcId) => {
-              if (socketRef.current) socketRef.current.emit("npc:reset-chat", { npcId });
+              if (socketRef.current)
+                socketRef.current.emit("npc:reset-chat", {
+                  npcId,
+                  characterId: characterId ?? undefined,
+                });
               setNpcMessages([]);
             }}
             channelMessages={channelMessages}

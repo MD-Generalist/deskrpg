@@ -17,9 +17,11 @@ import {
 } from "../db";
 import {
   appendNpcChatMessage,
+  characterBelongsToUser,
   clearNpcChatHistory,
   loadNpcChatHistory,
   npcHistoryKey,
+  pickHistoryCharacterId,
   type NpcHistoryMessage,
 } from "@/lib/npc-chat-history";
 import {
@@ -375,6 +377,50 @@ async function appendNpcHistoryMessageForUser(
   const joinedSockets = getJoinedSocketsForUserAndChannel(io, userId, channelId);
   for (const joinedSocket of joinedSockets) {
     joinedSocket.emit("npc:history-append", { npcId, message: sanitizedContent });
+  }
+}
+
+/**
+ * 이 소켓의 발화를 누구의 이력으로 남길지 정한다.
+ *
+ * join 이 끝난 소켓은 서버가 캐릭터를 알고 있으므로 그 값을 쓴다. 아직 join 전이면
+ * (맵 로딩 중에도 NPC 대화는 열린다) 클라이언트가 실어 보낸 값을 쓰되, 정말 그
+ * 사용자의 캐릭터인지 DB 로 확인한다 — 확인 없이 믿으면 남의 이력에 쓸 수 있다.
+ */
+async function resolveHistoryCharacterId(
+  socket: Socket,
+  userId: string,
+  claimedCharacterId?: string | null,
+): Promise<string | null> {
+  const player = players.get(socket.id);
+  const picked = pickHistoryCharacterId({
+    joinedCharacterId: player?.characterId ?? null,
+    claimedCharacterId: claimedCharacterId ?? null,
+  });
+  if (!picked.characterId) return null;
+  if (!picked.needsVerification) return picked.characterId;
+
+  try {
+    const owned = await characterBelongsToUser(
+      db,
+      { characters },
+      {
+        characterId: picked.characterId,
+        userId,
+      },
+    );
+    if (!owned) {
+      console.warn("[chat-history] rejected character claim", {
+        socketId: socket.id,
+        userId,
+        claimed: picked.characterId,
+      });
+      return null;
+    }
+    return picked.characterId;
+  } catch (err) {
+    console.error("[chat-history] failed to verify character claim", err);
+    return null;
   }
 }
 
@@ -1512,6 +1558,7 @@ export function setupSocketHandlers(io: Server) {
       async (data: {
         npcId: string;
         message: string;
+        characterId?: string;
         files?: Array<{ name: string; type: string; size: number; data: ArrayBuffer }>;
       }) => {
         const { npcId, message, files } = data;
@@ -1579,9 +1626,13 @@ export function setupSocketHandlers(io: Server) {
         }
 
         const player = players.get(socket.id);
-        // 이력은 캐릭터 소유다. 캐릭터를 모르면 이 발화는 남길 곳이 없다 —
-        // 채널로 대신 묶으면 같은 채널의 다른 사람 이력에 섞인다.
-        const historyCharacterId = player?.characterId ?? null;
+        // 이력은 캐릭터 소유다. join 전이면 클라이언트가 실어 보낸 캐릭터를 검증해 쓴다 —
+        // 그러지 않으면 맵 로딩 중 나눈 대화가 통째로 사라진다.
+        const historyCharacterId = await resolveHistoryCharacterId(
+          socket,
+          user.userId,
+          data.characterId,
+        );
         if (historyCharacterId) {
           await appendNpcHistoryMessage(historyCharacterId, npcId, trimmed, "player");
         }
@@ -1639,29 +1690,31 @@ export function setupSocketHandlers(io: Server) {
       },
     );
 
-    socket.on("npc:history", async ({ npcId }: { npcId: string }) => {
-      if (!npcId) return;
-      const player = players.get(socket.id);
-      const characterId = player?.characterId;
-      if (!characterId) {
-        socket.emit("npc:history", { npcId, messages: [] });
-        return;
-      }
-
-      const historyKey = npcHistoryKey(characterId, npcId);
-      let history = npcChatHistory.get(historyKey);
-      if (!history) {
-        // 캐시 미스 — 재시작 직후가 여기다. DB 가 정본이므로 거기서 채운다.
-        try {
-          history = await loadNpcChatHistory(db, { chatMessages }, { characterId, npcId });
-          npcChatHistory.set(historyKey, history);
-        } catch (err) {
-          console.error("[chat-history] failed to load history", { characterId, npcId }, err);
-          history = [];
+    socket.on(
+      "npc:history",
+      async ({ npcId, characterId: claimed }: { npcId: string; characterId?: string }) => {
+        if (!npcId) return;
+        const characterId = await resolveHistoryCharacterId(socket, user.userId, claimed);
+        if (!characterId) {
+          socket.emit("npc:history", { npcId, messages: [] });
+          return;
         }
-      }
-      socket.emit("npc:history", { npcId, messages: history });
-    });
+
+        const historyKey = npcHistoryKey(characterId, npcId);
+        let history = npcChatHistory.get(historyKey);
+        if (!history) {
+          // 캐시 미스 — 재시작 직후가 여기다. DB 가 정본이므로 거기서 채운다.
+          try {
+            history = await loadNpcChatHistory(db, { chatMessages }, { characterId, npcId });
+            npcChatHistory.set(historyKey, history);
+          } catch (err) {
+            console.error("[chat-history] failed to load history", { characterId, npcId }, err);
+            history = [];
+          }
+        }
+        socket.emit("npc:history", { npcId, messages: history });
+      },
+    );
 
     // ----- npc:task-chat (per-task session) -----
     socket.on(
@@ -1773,20 +1826,22 @@ export function setupSocketHandlers(io: Server) {
       },
     );
 
-    socket.on("npc:reset-chat", async ({ npcId }: { npcId: string }) => {
-      if (!npcId) return;
-      const player = players.get(socket.id);
-      const characterId = player?.characterId;
-      if (!characterId) return;
+    socket.on(
+      "npc:reset-chat",
+      async ({ npcId, characterId: claimed }: { npcId: string; characterId?: string }) => {
+        if (!npcId) return;
+        const characterId = await resolveHistoryCharacterId(socket, user.userId, claimed);
+        if (!characterId) return;
 
-      npcChatHistory.delete(npcHistoryKey(characterId, npcId));
-      // 캐시만 비우면 새로고침에 되살아난다 — 사용자에게는 초기화가 안 된 것으로 보인다.
-      try {
-        await clearNpcChatHistory(db, { chatMessages }, { characterId, npcId });
-      } catch (err) {
-        console.error("[chat-history] failed to clear history", { characterId, npcId }, err);
-      }
-    });
+        npcChatHistory.delete(npcHistoryKey(characterId, npcId));
+        // 캐시만 비우면 새로고침에 되살아난다 — 사용자에게는 초기화가 안 된 것으로 보인다.
+        try {
+          await clearNpcChatHistory(db, { chatMessages }, { characterId, npcId });
+        } catch (err) {
+          console.error("[chat-history] failed to clear history", { characterId, npcId }, err);
+        }
+      },
+    );
 
     socket.on("npc:report-consumed", async ({ reportId }: { reportId?: string }) => {
       if (!reportId) return;

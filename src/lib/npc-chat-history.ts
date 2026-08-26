@@ -32,6 +32,30 @@ export function npcHistoryKey(characterId: string, npcId: string): string {
   return `${characterId}:${npcId}`;
 }
 
+/**
+ * 이 발화를 누구의 이력으로 남길지 정한다.
+ *
+ * 대화 패널은 게임 씬과 무관하게 열리는데 `player:join` 은 씬 로딩이 끝나야 나간다.
+ * 그 사이(맵이 무거우면 수십 초)에 오간 대화는 서버가 캐릭터를 몰라 통째로 사라졌다 —
+ * 화면은 성공을 보여주고 기록만 없는, 조용한 유실이다.
+ *
+ * 그래서 클라이언트가 자기 캐릭터를 함께 실어 보낸다. 다만 클라이언트가 말한 값은
+ * 그대로 믿지 않는다. 서버가 이미 아는 값(join 된 소켓)이 있으면 그쪽이 이기고,
+ * 없을 때만 클라이언트의 주장을 쓰되 소유를 확인하라고 표시한다.
+ */
+export function pickHistoryCharacterId(input: {
+  joinedCharacterId: string | null;
+  claimedCharacterId: string | null;
+}): { characterId: string | null; needsVerification: boolean } {
+  const joined = input.joinedCharacterId?.trim();
+  if (joined) return { characterId: joined, needsVerification: false };
+
+  const claimed = input.claimedCharacterId?.trim();
+  if (claimed) return { characterId: claimed, needsVerification: true };
+
+  return { characterId: null, needsVerification: false };
+}
+
 /** 저장할 값이 없으면 null — 빈 발화로 이력을 더럽히지 않는다. */
 export function buildChatMessageRow(input: {
   characterId: string;
@@ -144,4 +168,35 @@ export async function clearNpcChatHistory(
   await asChatDb(db)
     .delete(chatMessages)
     .where(ownerCondition(chatMessages, input.characterId, input.npcId));
+}
+
+/**
+ * 클라이언트가 실어 보낸 캐릭터가 정말 그 사용자의 것인지 확인한다.
+ * 이 검증이 빠지면 남의 characterId 를 실어 그 사람 이력에 쓸 수 있다.
+ */
+export async function characterBelongsToUser(
+  db: unknown,
+  schema: unknown,
+  input: { characterId: string; userId: string },
+): Promise<boolean> {
+  const { characters } = schema as { characters: { id: unknown; userId: unknown } };
+  const rows = await (
+    db as {
+      select: (fields?: unknown) => {
+        from: (table: unknown) => {
+          where: (cond: unknown) => { limit: (n: number) => Promise<unknown[]> };
+        };
+      };
+    }
+  )
+    .select({ id: characters.id })
+    .from(characters)
+    .where(
+      and(
+        eq(characters.id as never, input.characterId),
+        eq(characters.userId as never, input.userId),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
