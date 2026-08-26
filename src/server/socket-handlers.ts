@@ -383,8 +383,8 @@ async function appendNpcHistoryMessageForUser(
 /**
  * 이 소켓의 발화를 누구의 이력으로 남길지 정한다.
  *
- * join 이 끝난 소켓은 서버가 캐릭터를 알고 있으므로 그 값을 쓴다. 아직 join 전이면
- * (맵 로딩 중에도 NPC 대화는 열린다) 클라이언트가 실어 보낸 값을 쓰되, 정말 그
+ * join 이 끝난 소켓은 서버가 캐릭터를 알고 있으므로 그 값을 쓴다. `players` 에 없으면
+ * (재연결 직후 join 이 다시 성립하기 전) 클라이언트가 실어 보낸 값을 쓰되, 정말 그
  * 사용자의 캐릭터인지 DB 로 확인한다 — 확인 없이 믿으면 남의 이력에 쓸 수 있다.
  */
 async function resolveHistoryCharacterId(
@@ -1626,8 +1626,8 @@ export function setupSocketHandlers(io: Server) {
         }
 
         const player = players.get(socket.id);
-        // 이력은 캐릭터 소유다. join 전이면 클라이언트가 실어 보낸 캐릭터를 검증해 쓴다 —
-        // 그러지 않으면 맵 로딩 중 나눈 대화가 통째로 사라진다.
+        // 이력은 캐릭터 소유다. `players` 에 없으면 클라이언트가 실어 보낸 캐릭터를 검증해
+        // 쓴다 — 그러지 않으면 재연결 직후 나눈 대화가 통째로 사라진다.
         const historyCharacterId = await resolveHistoryCharacterId(
           socket,
           user.userId,

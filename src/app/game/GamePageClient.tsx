@@ -1394,8 +1394,8 @@ function GamePageInner() {
       socket.emit("npc:chat", {
         npcId: dialogNpc.npcId,
         message,
-        // 맵 로딩이 끝나기 전에는 서버가 아직 이 소켓의 캐릭터를 모른다. 그 창에서
-        // 나눈 대화가 사라지지 않도록 캐릭터를 함께 보낸다(서버가 소유를 검증한다).
+        // 재연결 직후에는 서버의 `players` 에 이 소켓이 아직 없어 캐릭터를 모른다.
+        // 그 구간에서 나눈 대화가 사라지지 않도록 캐릭터를 함께 보낸다(서버가 소유를 검증한다).
         characterId: characterId ?? undefined,
         files: filePayloads,
       });
