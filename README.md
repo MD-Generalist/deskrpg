@@ -4,7 +4,7 @@
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG home screen" width="100%" />
 
-DeskRPG is a 2D pixel-art virtual office you can self-host. Create LPC characters, enter shared channels, walk around a live office map, hire AI NPC coworkers through OpenClaw, assign tasks, receive reports in-world, and run AI meetings in a browser.
+DeskRPG is a 2D pixel-art virtual office you can self-host. Create LPC characters, enter shared channels, walk around a live office map, hire AI NPC coworkers backed by Hermes agents, assign tasks, receive reports in-world, and run AI meetings in a browser.
 
 DeskRPG is built for people who want a playful, self-hosted workspace rather than another plain chat room.
 
@@ -16,7 +16,7 @@ DeskRPG is built for people who want a playful, self-hosted workspace rather tha
 
 - Create your own pixel-art office avatar with LPC-based character customization.
 - Join or self-host shared office channels with live multiplayer movement.
-- Hire AI NPCs, connect them to OpenClaw agents, and talk to them in-world.
+- Hire AI NPCs, bind them to Hermes agent profiles, and talk to them in-world.
 - Delegate tasks, request reports, resume stalled work, and review progress in a task board.
 - Run AI meetings in a dedicated meeting room with meeting notes and multi-agent discussion.
 - Build or upload your own office maps with the browser-based map editor.
@@ -118,38 +118,7 @@ If you prefer the explicit file path version, you can run:
 docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -d
 ```
 
-### Option 5: Docker with PostgreSQL and OpenClaw
-
-Use this stack if you want DeskRPG, PostgreSQL, and an OpenClaw gateway in one compose setup.
-
-```bash
-cp .env.example .env.docker
-docker compose --env-file .env.docker -f docker/docker-compose.openclaw.yml up -d --build
-```
-
-Before the first run, open `.env.docker` and set:
-
-- `JWT_SECRET`
-- `POSTGRES_PASSWORD`
-- `OPENCLAW_TOKEN`
-
-Default endpoints:
-
-- DeskRPG: `http://localhost:3102`
-- OpenClaw: `http://localhost:18789/openclaw?token=<OPENCLAW_TOKEN>`
-
-This stack has been verified end to end, but OpenClaw still needs provider/model onboarding before AI features will work.
-
-1. Open `http://localhost:18789/openclaw?token=<OPENCLAW_TOKEN>`.
-2. Complete provider and model onboarding in the OpenClaw dashboard.
-3. Then save these values inside DeskRPG from `Settings -> Channel Settings -> AI Connection`:
-
-- `OpenClaw Gateway URL`: `http://localhost:18789`
-- `Token`: the same `OPENCLAW_TOKEN` from `.env.docker`
-
-Until this is done, NPC hiring, task automation, and AI meetings will not work.
-
-### Option 6: Docker with SQLite
+### Option 5: Docker with SQLite
 
 Recommended if you want the simplest single-machine setup.
 
@@ -169,28 +138,51 @@ Important environment variables:
 
 - `JWT_SECRET`
 - `POSTGRES_PASSWORD` (PostgreSQL Docker setup)
-- `OPENCLAW_TOKEN` (integrated OpenClaw Docker setup)
+- `DESKRPG_ALLOW_HOST_HERMES_PROFILES` (optional; lets a loopback gateway read `~/.hermes/profiles` on the host — off by default)
 
 For production, always set a real `JWT_SECRET`.
 
-OpenClaw gateway URL and token are configured inside the app from `설정 -> 채널 설정 -> AI 연결`.
-Even in the integrated Docker setup, provider/model onboarding is still completed in the OpenClaw dashboard.
+Gateway URL and token are not environment variables. They are registered inside the app on the
+`My Gateways` page and then attached to a channel from `Settings -> Channel Settings -> AI Connection`.
 
-## OpenClaw Connection
+## Hermes Connection
 
-AI NPCs, task automation, and AI meetings depend on an OpenClaw gateway connection.
+AI NPCs, task automation, and AI meetings all run through a Hermes gateway.
 
-After entering a channel:
+DeskRPG does not ship a bundled agent runtime. Run a
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) API server yourself — on the same
+machine or on any host you can reach — and note two things from it:
 
-1. Open `Settings` in the top-right menu.
-2. Open `Channel Settings`.
-3. Go to `AI Connection`.
-4. Enter:
-   - `OpenClaw Gateway URL`
-   - `Token`
-5. Save and test the connection.
+- the base URL it listens on (for example `http://127.0.0.1:8642`)
+- the API key of the profile you want DeskRPG to use
 
-Once connected, you can hire NPCs and bind them to available OpenClaw agents.
+Hermes config is machine-scoped but auth is per profile, so each profile carries its own key.
+
+Connecting it to DeskRPG then takes three steps.
+
+**1. Register the gateway**
+
+Open `My Gateways` from the top-right menu and choose `New gateway`:
+
+- `Display name` — anything you will recognise later
+- `Hermes Gateway URL` — for example `http://127.0.0.1:8642`
+- `Token` — the API key for that gateway
+
+Save, then run the connection test. A failed test tells you what went wrong rather than just
+failing, so read the message before changing anything.
+
+**2. Add Hermes profiles**
+
+A gateway can serve several agent profiles, and each profile has its own key. Add them on the same
+page — profiles are what NPCs actually bind to. Registering the gateway alone is not enough.
+
+**3. Attach the gateway to a channel**
+
+Enter a channel, then `Settings -> Channel Settings -> AI Connection`, pick your saved gateway, test,
+and save. The header badge changes to `AI Connected` once it takes.
+
+Now you can hire NPCs. Each NPC is bound to one Hermes profile at hire time, and you can rebind it
+later without firing it.
 
 ## How DeskRPG Works
 
@@ -209,7 +201,8 @@ Once connected, you can hire NPCs and bind them to available OpenClaw agents.
 ### 3. AI NPCs
 
 - NPCs live inside channels.
-- NPCs can be connected to OpenClaw agents.
+- Each NPC is bound to one Hermes profile, and can be rebound later without being fired.
+- One-on-one conversations are stored per character, so history survives a server restart.
 - NPCs can be called over, sent back, edited, reset, and fired from in-app menus.
 
 ### 4. Tasks
@@ -222,7 +215,7 @@ Once connected, you can hire NPCs and bind them to available OpenClaw agents.
 ### 5. Meetings
 
 - DeskRPG includes a dedicated meeting room.
-- AI meetings are channel-scoped and orchestrated through OpenClaw.
+- AI meetings are channel-scoped and orchestrated through the channel's Hermes gateway.
 - Meeting notes are stored and visible from the header.
 
 ### 6. Map Editor

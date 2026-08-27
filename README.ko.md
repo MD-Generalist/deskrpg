@@ -4,7 +4,7 @@ English README: [README.md](README.md)
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG 홈 화면" width="100%" />
 
-DeskRPG는 직접 운영할 수 있는 2D 픽셀 아트 가상 오피스입니다. LPC 기반 캐릭터를 만들고, 공유 채널에 입장해 실시간 오피스 맵을 돌아다니고, OpenClaw를 통해 AI NPC 동료를 고용하고, 업무를 맡기고, 오피스 안에서 직접 보고를 받고, 브라우저에서 AI 회의까지 진행할 수 있습니다.
+DeskRPG는 직접 운영할 수 있는 2D 픽셀 아트 가상 오피스입니다. LPC 기반 캐릭터를 만들고, 공유 채널에 입장해 실시간 오피스 맵을 돌아다니고, Hermes 에이전트를 붙인 AI NPC 동료를 고용하고, 업무를 맡기고, 오피스 안에서 직접 보고를 받고, 브라우저에서 AI 회의까지 진행할 수 있습니다.
 
 DeskRPG는 평범한 채팅방 대신, 조금 더 살아 있는 업무 공간을 원하는 사람들을 위해 만들어졌습니다.
 
@@ -16,7 +16,7 @@ DeskRPG는 평범한 채팅방 대신, 조금 더 살아 있는 업무 공간을
 
 - LPC 기반 캐릭터 커스터마이징으로 나만의 픽셀 오피스 아바타를 만들 수 있습니다.
 - 실시간 멀티플레이가 가능한 오피스 채널에 입장하거나 직접 운영할 수 있습니다.
-- AI NPC를 고용하고 OpenClaw 에이전트와 연결해 오피스 안에서 대화할 수 있습니다.
+- AI NPC를 고용하고 Hermes 에이전트 프로필에 바인딩해 오피스 안에서 대화할 수 있습니다.
 - NPC에게 업무를 맡기고, 보고를 요청하고, 중단된 업무를 재개시키고, 태스크 보드에서 진행 상황을 관리할 수 있습니다.
 - 전용 회의실에서 AI 회의를 진행하고 회의록을 저장할 수 있습니다.
 - 브라우저 기반 맵 에디터로 직접 오피스 맵을 만들거나 업로드할 수 있습니다.
@@ -118,38 +118,7 @@ DeskRPG는 `http://localhost:3102`에서 열립니다.
 docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -d
 ```
 
-### 5. Docker + PostgreSQL + OpenClaw
-
-DeskRPG와 PostgreSQL, OpenClaw 게이트웨이를 한 번에 올리고 싶다면 이 구성을 사용하세요.
-
-```bash
-cp .env.example .env.docker
-docker compose --env-file .env.docker -f docker/docker-compose.openclaw.yml up -d --build
-```
-
-처음 실행하기 전 `.env.docker`를 열어 아래 값을 설정하세요.
-
-- `JWT_SECRET`
-- `POSTGRES_PASSWORD`
-- `OPENCLAW_TOKEN`
-
-기본 포트:
-
-- DeskRPG: `http://localhost:3102`
-- OpenClaw: `http://localhost:18789/openclaw?token=<OPENCLAW_TOKEN>`
-
-이 구성은 실제 기동 검증까지 끝난 상태입니다. 다만 OpenClaw는 컨테이너가 떠 있는 것만으로 바로 사용할 수 있는 게 아니라, 첫 실행 후 대시보드에서 provider/model 인증을 마쳐야 합니다.
-
-1. `http://localhost:18789/openclaw?token=<OPENCLAW_TOKEN>`을 엽니다.
-2. OpenClaw 대시보드에서 사용할 provider와 model을 인증하거나 선택합니다.
-3. 그 다음 DeskRPG 안의 `설정 -> 채널 설정 -> AI 연결`에서 아래 값을 저장합니다.
-
-- `OpenClaw 게이트웨이 URL`: `http://localhost:18789`
-- `토큰`: `.env.docker`에 넣은 `OPENCLAW_TOKEN`
-
-이 단계를 마치기 전에는 NPC 고용, 태스크 자동화, AI 회의가 동작하지 않습니다.
-
-### 6. Docker + SQLite
+### 5. Docker + SQLite
 
 한 대의 서버에서 가볍게 시작하고 싶다면 이 구성이 가장 간단합니다.
 
@@ -169,28 +138,52 @@ DeskRPG는 `http://localhost:3102`에서 열립니다.
 
 - `JWT_SECRET`
 - `POSTGRES_PASSWORD` (PostgreSQL Docker 구성 사용 시)
-- `OPENCLAW_TOKEN` (OpenClaw 통합 Docker 구성 사용 시)
+- `DESKRPG_ALLOW_HOST_HERMES_PROFILES` (선택 사항. 루프백 게이트웨이가 호스트의 `~/.hermes/profiles`를 읽도록 허용합니다. 기본값은 꺼짐)
 
 운영 환경에서는 반드시 실제 `JWT_SECRET` 값을 설정해야 합니다.
 
-OpenClaw 게이트웨이 URL과 토큰은 앱 안의 `설정 -> 채널 설정 -> AI 연결`에서 입력합니다.
-통합 Docker 구성을 사용하더라도, provider/model 인증은 OpenClaw 대시보드에서 직접 진행해야 합니다.
+게이트웨이 URL과 토큰은 환경 변수가 아닙니다. 앱의 `내 게이트웨이` 페이지에서 등록한 뒤,
+`설정 -> 채널 설정 -> AI 연결`에서 채널에 연결합니다.
 
-## OpenClaw 연결
+## Hermes 연결
 
-AI NPC, 태스크 자동화, AI 회의는 OpenClaw 게이트웨이 연결이 필요합니다.
+AI NPC, 태스크 자동화, AI 회의는 모두 Hermes 게이트웨이를 통해 동작합니다.
 
-채널에 입장한 뒤:
+DeskRPG는 에이전트 런타임을 함께 배포하지 않습니다.
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) API 서버를 직접 띄우세요.
+같은 머신이든 접근 가능한 다른 호스트든 상관없습니다. Hermes 쪽에서 두 가지를 확인해 둡니다.
 
-1. 오른쪽 상단의 `설정` 메뉴를 엽니다.
-2. `채널 설정`을 선택합니다.
-3. `AI 연결` 탭으로 이동합니다.
-4. 아래 두 값을 입력합니다.
-   - `OpenClaw 게이트웨이 URL`
-   - `토큰`
-5. 저장하고 연결 테스트를 진행합니다.
+- API 서버가 열려 있는 주소 (예: `http://127.0.0.1:8642`)
+- DeskRPG가 사용할 프로필의 API 키
 
-연결이 끝나면 NPC를 고용하고, 사용 가능한 OpenClaw 에이전트와 연결할 수 있습니다.
+Hermes는 설정이 머신 단위인 반면 인증은 프로필 단위입니다. 프로필마다 키가 따로 있습니다.
+
+DeskRPG에 연결하는 절차는 세 단계입니다.
+
+**1. 게이트웨이 등록**
+
+우측 상단 메뉴에서 `내 게이트웨이`를 열고 `새 게이트웨이`를 선택합니다.
+
+- `표시 이름` — 나중에 알아볼 수 있는 이름이면 됩니다
+- `Hermes 게이트웨이 URL` — 예: `http://127.0.0.1:8642`
+- `토큰` — 해당 게이트웨이의 API 키
+
+저장한 뒤 연결 테스트를 실행합니다. 실패하면 그냥 실패로 끝나지 않고 원인을 알려주므로,
+설정을 바꾸기 전에 메시지를 먼저 읽어 보세요.
+
+**2. Hermes 프로필 추가**
+
+하나의 게이트웨이가 여러 에이전트 프로필을 서빙할 수 있고, 프로필마다 키가 다릅니다.
+같은 페이지에서 추가합니다. NPC가 실제로 바인딩되는 대상은 프로필이므로, 게이트웨이만
+등록해 두면 아직 부족합니다.
+
+**3. 채널에 게이트웨이 연결**
+
+채널에 입장한 뒤 `설정 -> 채널 설정 -> AI 연결`에서 저장해 둔 게이트웨이를 고르고,
+테스트한 다음 저장합니다. 적용되면 헤더 배지가 `AI 연결`로 바뀝니다.
+
+이제 NPC를 고용할 수 있습니다. NPC는 고용 시점에 Hermes 프로필 하나에 바인딩되며,
+해고하지 않고 나중에 다른 프로필로 다시 연결할 수 있습니다.
 
 ## DeskRPG는 어떻게 동작하나요
 
@@ -209,7 +202,8 @@ AI NPC, 태스크 자동화, AI 회의는 OpenClaw 게이트웨이 연결이 필
 ### 3. AI NPC
 
 - NPC는 채널 안에서 함께 생활합니다.
-- NPC는 OpenClaw 에이전트와 연결할 수 있습니다.
+- NPC는 Hermes 프로필 하나에 바인딩되며, 해고하지 않고 다시 연결할 수 있습니다.
+- NPC와의 1:1 대화는 캐릭터별로 저장되어 서버를 재시작해도 남습니다.
 - 앱 안의 메뉴에서 호출, 복귀, 대화, 수정, 대화 초기화, 해고가 가능합니다.
 
 ### 4. 태스크
@@ -222,7 +216,7 @@ AI NPC, 태스크 자동화, AI 회의는 OpenClaw 게이트웨이 연결이 필
 ### 5. 회의
 
 - DeskRPG에는 전용 회의실이 있습니다.
-- AI 회의는 채널 단위로 동작하며 OpenClaw가 오케스트레이션합니다.
+- AI 회의는 채널 단위로 동작하며, 해당 채널의 Hermes 게이트웨이가 오케스트레이션합니다.
 - 저장된 회의록은 헤더에서 바로 확인할 수 있습니다.
 
 ### 6. 맵 에디터
