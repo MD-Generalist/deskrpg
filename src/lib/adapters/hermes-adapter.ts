@@ -56,9 +56,11 @@ export class HermesAdapter implements NpcAdapter {
         const name = typeof event.data.tool_name === "string" ? event.data.tool_name : "";
         options.onToolProgress?.(name, "");
       }
-      if (event.event === "tool.completed") {
-        options.onToolProgress?.("", "");
-      }
+      // tool.completed 로는 끄지 않는다. started 와 completed 가 순식간에 교차하면
+      // 두 상태 갱신이 한 배치에 묶여 중간 상태가 렌더되지 않는다 — 실측(2026-08-28)에서
+      // web_search 를 3회 썼는데 화면에는 아무것도 나타나지 않았다. 마지막 도구 이름을
+      // 그대로 두었다가 스트림이 끝날 때 한 번에 끄면, 사용자는 "무슨 일 하는 중"을
+      // 끊김 없이 본다.
     };
   }
 

@@ -141,11 +141,9 @@ describe("HermesAdapter", () => {
       prompt: "p",
       onToolProgress: (name, preview) => progress.push([name, preview]),
     });
-    // 이름만 넘긴다. 끝나면 빈 이름으로 "표시를 끄라"고 알린다.
-    assert.deepEqual(progress, [
-      ["web_search", ""],
-      ["", ""],
-    ]);
+    // 이름만 넘긴다. completed 로는 끄지 않는다 — started 와 completed 가 한 배치에
+    // 묶이면 중간 상태가 렌더되지 않아 화면에 아무것도 나타나지 않는다.
+    assert.deepEqual(progress, [["web_search", ""]]);
   });
 
   test("abort stops the last run", async () => {
