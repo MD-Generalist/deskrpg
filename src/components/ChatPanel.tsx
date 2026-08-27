@@ -322,7 +322,11 @@ export default function ChatPanel({
                 </div>
                 {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
                     예전에는 tool.progress 를 채팅 청크로 흘려서 답이 두 번 보였다. */}
-                {isNpcStreaming && npcActivityKey && (
+                {/* isStreaming 을 함께 보지 않는다 — 그 값은 **첫 답변 청크**가 와야
+                    true 가 되는데, 도구는 그 전에 돈다. 실측(2026-08-28): web_search 가
+                    3회 돌 동안 화면에 아무것도 뜨지 않았다. 활동 키가 있다는 것 자체가
+                    "아직 진행 중"이라는 뜻이므로 그것만으로 충분하다. */}
+                {npcActivityKey && (
                   <div
                     className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
                     role="status"
