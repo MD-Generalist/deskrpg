@@ -1292,7 +1292,7 @@ const en: Record<string, string> = {
   "game.loadingEngine": "Loading game engine...",
   "game.notMember": "Not a member of this channel",
   "game.loadFailed": "Failed to load character",
-  "game.pressToTalk": "Press / to talk to {name}",
+  "game.pressToTalk": "Click {name} or press / to talk",
   "game.menuSettings": "Settings",
   "game.settings": "Channel Settings",
   "game.members": "Members",

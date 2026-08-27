@@ -1140,13 +1140,19 @@ function GamePageInner() {
       );
     };
 
-    const handleToastShow = (data: { message: string }) => {
+    const handleToastShow = (data: {
+      message?: string;
+      messageKey?: string;
+      params?: Record<string, string>;
+    }) => {
       // Cancel any auto-clear timer so proximity toast persists until toast:hide
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
       }
-      setToastMessage(data.message);
+      // Phaser 씬은 로케일을 모른다 — 키만 넘기고 번역은 여기서 한다.
+      // (예전에는 씬이 영어 문장을 만들어 넘겨서 한국어 사용자도 영어를 봤다.)
+      setToastMessage(data.messageKey ? t(data.messageKey, data.params) : (data.message ?? ""));
     };
     const handleToastHide = () => {
       if (toastTimerRef.current) {

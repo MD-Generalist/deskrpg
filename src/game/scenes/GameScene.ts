@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
+import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
 import type { Socket } from "socket.io-client";
 import {
   MapObject,
@@ -1348,7 +1349,8 @@ export class GameScene extends Phaser.Scene {
           npc.waitTimer = 0;
           EventBus.emit("npc:bubble", { npcId: npc.id, text: npc.arrivalBubbleText || undefined });
           EventBus.emit("toast:show", {
-            message: `Press / to talk to ${data.npcName || npc.name}`,
+            messageKey: "game.pressToTalk",
+            params: { name: data.npcName || npc.name },
           });
           EventBus.emit("npc:movement-arrived", {
             npcId: npc.id,
@@ -1653,9 +1655,6 @@ export class GameScene extends Phaser.Scene {
           destTileX = walkable[0];
           destTileY = walkable[1];
         }
-        this.targetNpcId = clickedNpc.id;
-      } else {
-        this.targetNpcId = null;
       }
 
       if (!this.isWalkable(destTileX, destTileY) || this.isTileOccupied(destTileX, destTileY)) {
@@ -1672,6 +1671,22 @@ export class GameScene extends Phaser.Scene {
         destTileY,
         (tx, ty) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
       );
+
+      // 클릭 한 번이 무슨 뜻인지 여기서 정한다. 예전에는 "걸어가서 도착하면 대화"뿐이라
+      // 이미 옆에 서 있으면 경로가 서지 않아 아무 일도 일어나지 않았다.
+      const intent = decideNpcClick({
+        pathLength: path?.length ?? 0,
+        clickedNpcId: clickedNpc?.id ?? null,
+      });
+
+      // 도착 대기를 걸 때만 목표를 남긴다 — 그러지 않으면 다음 이동의 도착 시점에
+      // 엉뚱한 NPC 대화가 열린다.
+      this.targetNpcId = clickedNpc && shouldRememberTarget(intent) ? clickedNpc.id : null;
+
+      if (intent === "interact-now" && clickedNpc) {
+        EventBus.emit("npc:interact", { npcId: clickedNpc.id, npcName: clickedNpc.name });
+        return;
+      }
 
       if (path && path.length > 1) {
         this.currentPath = path;
@@ -3156,10 +3171,13 @@ export class GameScene extends Phaser.Scene {
 
     if (hasNearby && !this.dialogOpen) {
       const targetName = nearby.length > 0 ? nearby[0].name : nearbyP[0].name;
-      const msg = `Press / to talk to ${targetName}`;
-      if (msg !== this.lastToastMessage) {
-        this.lastToastMessage = msg;
-        EventBus.emit("toast:show", { message: msg });
+      // 문구 자체가 아니라 대상 이름으로 중복을 판단한다 — 번역은 React 가 한다.
+      if (targetName !== this.lastToastMessage) {
+        this.lastToastMessage = targetName;
+        EventBus.emit("toast:show", {
+          messageKey: "game.pressToTalk",
+          params: { name: targetName },
+        });
       }
     } else if (!this.dialogOpen) {
       if (this.lastToastMessage !== null) {
@@ -3317,7 +3335,8 @@ export class GameScene extends Phaser.Scene {
             text: npc.arrivalBubbleText || undefined,
           });
           EventBus.emit("toast:show", {
-            message: `Press / to talk to ${npc.name}`,
+            messageKey: "game.pressToTalk",
+            params: { name: npc.name },
           });
           EventBus.emit("npc:movement-arrived", {
             npcId: npc.id,

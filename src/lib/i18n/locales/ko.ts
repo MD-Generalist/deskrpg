@@ -1293,7 +1293,7 @@ const ko: Record<string, string> = {
   "game.loadingEngine": "게임 엔진 로딩 중...",
   "game.notMember": "이 채널의 멤버가 아닙니다",
   "game.loadFailed": "캐릭터 로드에 실패했습니다",
-  "game.pressToTalk": "/를 눌러 {name}에게 말걸기",
+  "game.pressToTalk": "{name}을(를) 클릭하거나 /를 눌러 대화",
   "game.menuSettings": "설정",
   "game.settings": "채널 설정",
   "game.members": "멤버",
