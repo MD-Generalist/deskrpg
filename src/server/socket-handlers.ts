@@ -943,9 +943,9 @@ async function streamNpcResponse(
         // 답이 정확히 두 번 보였다. 본문 경로(onDelta)와 활동 경로를 아예 갈라 두었으니
         // 그 버그는 구조적으로 재발할 수 없다.
         onToolProgress: (toolName: string) => {
+          // 빈 이름은 "도구가 끝났다"는 뜻이다(tool.completed) — 표시를 끈다.
           const notice = describeActivity(toolName);
-          if (!notice) return;
-          socket.emit("npc:activity", { npcId, activityKey: notice.key });
+          socket.emit("npc:activity", { npcId, activityKey: notice?.key ?? null });
         },
         onRunStarted: (runId: string) => {
           registerHermesRun(sessionKey, runId);

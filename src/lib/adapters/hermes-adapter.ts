@@ -45,10 +45,19 @@ export class HermesAdapter implements NpcAdapter {
       ) {
         options.onDelta?.(event.data.delta);
       }
-      if (event.event === "tool.progress") {
+      // 실제 도구 사용은 tool.started / tool.completed 로 온다. tool.progress 만 보면
+      // 거의 아무것도 못 본다 — 실측(2026-08-28, 도구 3회 사용): started 3, completed 3,
+      // progress 는 `_thinking` 단 1회였다.
+      //
+      // preview 는 넘기지 않는다. tool.progress 의 `_thinking` preview 는 완성된 답변
+      // 전체라, 예전에 이걸 채팅 청크로 흘리다가 답이 두 번 보였다. 소비자에게는
+      // **이름만** 준다.
+      if (event.event === "tool.started" || event.event === "tool.progress") {
         const name = typeof event.data.tool_name === "string" ? event.data.tool_name : "";
-        const preview = typeof event.data.delta === "string" ? event.data.delta : "";
-        options.onToolProgress?.(name, preview);
+        options.onToolProgress?.(name, "");
+      }
+      if (event.event === "tool.completed") {
+        options.onToolProgress?.("", "");
       }
     };
   }

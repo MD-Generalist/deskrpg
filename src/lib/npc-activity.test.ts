@@ -3,10 +3,19 @@ import assert from "node:assert/strict";
 
 import { allActivityKeys, describeActivity } from "./npc-activity";
 
-test("아는 도구는 사람이 읽는 문구로 바뀐다", () => {
-  assert.deepEqual(describeActivity("web"), { key: "npc.activity.searching" });
-  assert.deepEqual(describeActivity("file"), { key: "npc.activity.readingFile" });
+test("실제로 오는 함수명이 사람이 읽는 문구로 바뀐다", () => {
+  // 실측(2026-08-28): 이벤트에 실려 오는 것은 툴셋 이름(`web`)이 아니라
+  // 개별 함수명(`web_search`)이다. 처음에 툴셋 이름으로 짰다가 전부 빗나갔다.
+  assert.deepEqual(describeActivity("web_search"), { key: "npc.activity.searching" });
+  assert.deepEqual(describeActivity("read_file"), { key: "npc.activity.readingFile" });
   assert.deepEqual(describeActivity("terminal"), { key: "npc.activity.runningCommand" });
+  assert.deepEqual(describeActivity("skill_view"), { key: "npc.activity.organizing" });
+});
+
+test("더 구체적인 접두사가 이긴다", () => {
+  // browser_vision 은 browser_ 보다 구체적이다 — 화면을 보는 중이지 둘러보는 중이 아니다.
+  assert.deepEqual(describeActivity("browser_navigate"), { key: "npc.activity.browsing" });
+  assert.deepEqual(describeActivity("browser_vision"), { key: "npc.activity.lookingAtImage" });
 });
 
 test("_thinking 은 생각 중으로 보인다", () => {

@@ -214,6 +214,8 @@ const en: Record<string, string> = {
   "npc.adapterType": "AI Engine",
   "npc.cliAdapterNote":
     "This NPC will use the selected CLI tool. Make sure the tool is installed and a provider is configured.",
+  "npc.activity.writingFile": "Writing a file…",
+  "npc.activity.speaking": "Preparing audio…",
   "npc.activity.thinking": "Thinking…",
   "npc.activity.searching": "Searching…",
   "npc.activity.browsing": "Browsing the web…",

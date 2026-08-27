@@ -213,6 +213,8 @@ const ko: Record<string, string> = {
   "npc.adapterType": "AI 엔진",
   "npc.cliAdapterNote":
     "이 NPC는 선택한 CLI 도구를 사용합니다. 도구가 설치되어 있고 제공자가 설정되어 있는지 확인하세요.",
+  "npc.activity.writingFile": "파일을 쓰는 중…",
+  "npc.activity.speaking": "음성을 만드는 중…",
   "npc.activity.thinking": "생각하는 중…",
   "npc.activity.searching": "검색하는 중…",
   "npc.activity.browsing": "웹을 둘러보는 중…",

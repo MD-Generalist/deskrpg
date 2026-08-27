@@ -123,10 +123,13 @@ describe("HermesAdapter", () => {
     assert.deepEqual(seen, ["r5"]);
   });
 
-  test("forwards tool progress to the caller", async () => {
+  test("실제 도구 사용은 tool.started/completed 로 온다", async () => {
+    // 실측(2026-08-28, 도구 3회 사용): started 3, completed 3, progress 는 `_thinking` 1회.
+    // tool.progress 만 보면 실제 도구 사용을 거의 못 본다.
     const client = clientWith(() =>
       sseResponse([
-        'event: tool.progress\ndata: {"tool_name":"read_file","delta":"src/app.ts"}\n\n',
+        'event: tool.started\ndata: {"tool_name":"web_search","preview":"쿼리 문자열"}\n\n',
+        'event: tool.completed\ndata: {"tool_name":"web_search","preview":null}\n\n',
         'event: assistant.completed\ndata: {"content":"완료"}\n\n',
       ]),
     );
@@ -138,7 +141,11 @@ describe("HermesAdapter", () => {
       prompt: "p",
       onToolProgress: (name, preview) => progress.push([name, preview]),
     });
-    assert.deepEqual(progress, [["read_file", "src/app.ts"]]);
+    // 이름만 넘긴다. 끝나면 빈 이름으로 "표시를 끄라"고 알린다.
+    assert.deepEqual(progress, [
+      ["web_search", ""],
+      ["", ""],
+    ]);
   });
 
   test("abort stops the last run", async () => {
@@ -296,8 +303,9 @@ describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () =>
     });
 
     // preview 라는 이름과 달리 내용은 "미리보기"가 아니라 완성된 답변 전체다.
-    // 소비자가 이걸 본문으로 착각하지 않도록 이 사실 자체를 고정해 둔다.
-    assert.deepEqual(progress, [["_thinking", "사과딸기"]]);
+    // 그래서 아예 넘기지 않는다 — 소비자가 본문으로 착각할 여지를 없앤다.
+    assert.deepEqual(progress, [["_thinking", ""]]);
+    assert.ok(!progress.some(([, preview]) => preview.includes("사과딸기")));
   });
 });
 
