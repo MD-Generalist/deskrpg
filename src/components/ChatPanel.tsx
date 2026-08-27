@@ -21,6 +21,8 @@ export interface ChannelChatMessage {
 interface ChatPanelProps {
   dialogNpc: { npcId: string; npcName: string } | null;
   npcMessages: NpcChatMessage[];
+  /** 지금 NPC 가 무엇을 하는 중인지 알려 주는 번역 키. 없으면 표시하지 않는다. */
+  npcActivityKey?: string | null;
   isNpcStreaming: boolean;
   npcChatInputDisabled?: boolean;
   npcChatDisabledPlaceholder?: string;
@@ -60,6 +62,7 @@ const DEFAULT_WIDTH = 320;
 export default function ChatPanel({
   dialogNpc,
   npcMessages,
+  npcActivityKey = null,
   isNpcStreaming,
   npcChatInputDisabled,
   npcChatDisabledPlaceholder,
@@ -317,6 +320,18 @@ export default function ChatPanel({
                     </ChatBubble>
                   ))}
                 </div>
+                {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
+                    예전에는 tool.progress 를 채팅 청크로 흘려서 답이 두 번 보였다. */}
+                {isNpcStreaming && npcActivityKey && (
+                  <div
+                    className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    {t(npcActivityKey)}
+                  </div>
+                )}
                 <ChatInput
                   onSend={onSend}
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}

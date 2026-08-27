@@ -1738,6 +1738,20 @@ export class GameScene extends Phaser.Scene {
     });
     EventBus.on("npc:bubble-clear", (data: { npcId: string }) => {
       this.clearNpcBubble(data.npcId);
+      this.activityBubbles.delete(data.npcId);
+    });
+    // 작업 중 표시. "할 말 있음"(점 세 개) 말풍선과 자리는 같지만 뜻이 다르므로,
+    // 활동으로 띄운 것만 따로 기억해 두었다가 활동이 끝날 때 그것만 지운다 —
+    // 그러지 않으면 NPC 가 정말 할 말이 있어 띄운 말풍선까지 같이 사라진다.
+    EventBus.on("npc:activity-bubble", (data: { npcId: string; text?: string }) => {
+      if (data.text) {
+        this.activityBubbles.add(data.npcId);
+        this.showNpcBubbleIcon(data.npcId, data.text);
+        return;
+      }
+      if (this.activityBubbles.delete(data.npcId)) {
+        this.clearNpcBubble(data.npcId);
+      }
     });
 
     // Respond to position requests from React (for save-on-leave)
@@ -1776,6 +1790,7 @@ export class GameScene extends Phaser.Scene {
         "chat:bubble",
         "npc:bubble",
         "npc:bubble-clear",
+        "npc:activity-bubble",
         "request-player-position",
       ];
       for (const ev of gameSceneEvents) {
@@ -3027,6 +3042,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private npcBubbles: Map<string, Phaser.GameObjects.Container> = new Map();
+  /** 활동 표시로 띄운 말풍선. "할 말 있음" 말풍선과 구분하기 위해 따로 센다. */
+  private activityBubbles: Set<string> = new Set();
 
   private createBubbleIcon(x: number, y: number, text?: string): Phaser.GameObjects.Container {
     const container = this.add.container(x, y - 44);

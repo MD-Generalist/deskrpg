@@ -15,6 +15,7 @@ import {
   chatMessages,
   jsonForDb,
 } from "../db";
+import { describeActivity } from "@/lib/npc-activity";
 import {
   appendNpcChatMessage,
   characterBelongsToUser,
@@ -936,15 +937,16 @@ async function streamNpcResponse(
         onDelta: (delta: string) => {
           socket.emit(responseEvent, { npcId, chunk: delta, done: false });
         },
-        // onToolProgress 는 의도적으로 넘기지 않는다. tool.progress 는 "에이전트가 아직
-        // 살아 있다"는 진행 신호이지 답변 본문이 아니다 — 실측(v0.20.2)에서 Hermes 의
-        // `_thinking` 툴은 완성된 답변 **전체**를 delta 필드에 한 번 더 실어 보낸다:
-        //   assistant.delta "사"/"과"/"딸"/"기"
-        //   tool.progress   tool_name="_thinking"  delta="사과딸기"   ← 통째로 다시
-        //   assistant.completed content="사과딸기"
-        // 이걸 채팅 청크로 흘리던 탓에 1:1 대화에서 답이 정확히 두 번 보였다.
-        // 회의 경로(ConversationEngine)는 처음부터 timeout.touch() 용으로만 썼다 —
-        // 같은 콜백을 두 소비자가 다르게 읽었고, 1:1 쪽만 어긋나 있었다.
+        // tool.progress 는 진행 신호이지 답변이 아니다. 그래서 **도구 이름만** 쓰고
+        // delta 본문은 버린다 — 실측(v0.20.2)에서 `_thinking` 툴은 완성된 답변 전체를
+        // delta 에 한 번 더 실어 보내는데, 예전에 이걸 채팅 청크로 흘리다가 1:1 대화에서
+        // 답이 정확히 두 번 보였다. 본문 경로(onDelta)와 활동 경로를 아예 갈라 두었으니
+        // 그 버그는 구조적으로 재발할 수 없다.
+        onToolProgress: (toolName: string) => {
+          const notice = describeActivity(toolName);
+          if (!notice) return;
+          socket.emit("npc:activity", { npcId, activityKey: notice.key });
+        },
         onRunStarted: (runId: string) => {
           registerHermesRun(sessionKey, runId);
         },
@@ -963,6 +965,8 @@ async function streamNpcResponse(
       return "";
     } finally {
       clearHermesRun(sessionKey);
+      // 성공이든 실패든 활동 표시는 반드시 끈다 — 남으면 "영원히 검색 중"이 된다.
+      socket.emit("npc:activity", { npcId, activityKey: null });
     }
   }
 

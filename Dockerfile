@@ -54,6 +54,7 @@ COPY --from=builder /app/src/lib/i18n/task-prompt-messages.js ./src/lib/i18n/tas
 COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
 COPY --from=builder /app/src/lib/task-reporting.ts ./src/lib/task-reporting.ts
 COPY --from=builder /app/src/lib/npc-chat-history.ts ./src/lib/npc-chat-history.ts
+COPY --from=builder /app/src/lib/npc-activity.ts ./src/lib/npc-activity.ts
 COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-access.ts
 
 # 대화 런타임과 소켓 서버는 **디렉토리째** 복사한다.

@@ -261,6 +261,7 @@ function GamePageInner() {
   const dialogNpcRef = useRef<{ npcId: string; npcName: string } | null>(null);
 
   // NPC dialog state — all managed here, ChatPanel is pure display
+  const [npcActivityKey, setNpcActivityKey] = useState<string | null>(null);
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
   // Keep ref in sync so socket listeners can read current value without stale closure
   useEffect(() => {
@@ -810,6 +811,23 @@ function GamePageInner() {
       // Only explicit report-ready events should pull an NPC over to the player.
       socketInstance.on("npc:response-complete", () => {});
 
+      // 진행 상태. 대화창이 열려 있으면 창 안 상태 줄로, 아니면 맵 위 말풍선으로 —
+      // 같은 사실을 두 군데 동시에 띄우지 않는다.
+      socketInstance.on("npc:activity", (data: { npcId: string; activityKey?: string | null }) => {
+        const key = data.activityKey ?? null;
+        const inDialog = dialogNpcRef.current?.npcId === data.npcId;
+        if (inDialog) {
+          setNpcActivityKey(key);
+          EventBus.emit("npc:activity-bubble", { npcId: data.npcId });
+          return;
+        }
+        setNpcActivityKey(null);
+        EventBus.emit("npc:activity-bubble", {
+          npcId: data.npcId,
+          text: key ? t(key) : undefined,
+        });
+      });
+
       socketInstance.on("npc:returning", (data: { npcId: string }) => {
         EventBus.emit("npc:start-return", { npcId: data.npcId });
       });
@@ -1071,6 +1089,7 @@ function GamePageInner() {
     activeTaskIdRef.current = null;
     setIsTaskStreaming(false);
     taskStreamBufferRef.current = "";
+    setNpcActivityKey(null);
   }, []);
 
   // Keep refs in sync with state for use in socket handlers
@@ -2659,6 +2678,7 @@ function GamePageInner() {
           <ChatPanel
             dialogNpc={dialogNpc}
             npcMessages={npcMessages}
+            npcActivityKey={npcActivityKey}
             isNpcStreaming={isNpcStreaming}
             npcChatInputDisabled={!socketConnected}
             npcChatDisabledPlaceholder={t("chat.disconnected")}
