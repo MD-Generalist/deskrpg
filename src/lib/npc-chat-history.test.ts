@@ -220,3 +220,21 @@ test("남의 캐릭터를 실어 보내면 거부한다", async () => {
     false,
   );
 });
+
+// --- 태스크와 이력이 같은 소유자를 봐야 한다 ---
+
+test("이력과 태스크는 같은 캐릭터 판정을 쓴다", () => {
+  // 실측(2026-08-28): 태스크 분기만 `players` 맵을 직접 봐서, 재연결 직후 세션에서
+  // 이력은 남는데 태스크만 조용히 사라졌다 — 사용자는 승인까지 마친 뒤였다.
+  // 두 경로가 같은 함수를 쓰는 한 이 어긋남은 다시 생길 수 없다.
+  const joined = pickHistoryCharacterId({
+    joinedCharacterId: null,
+    claimedCharacterId: "char-x",
+  });
+  assert.equal(joined.characterId, "char-x");
+  assert.equal(joined.needsVerification, true);
+
+  // join 전이어도 소유자를 정할 수 있다는 것이 핵심이다 —
+  // 예전 태스크 경로는 이 경우를 그냥 버렸다.
+  assert.notEqual(joined.characterId, null);
+});

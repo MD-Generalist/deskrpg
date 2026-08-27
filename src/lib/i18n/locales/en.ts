@@ -1397,6 +1397,8 @@ const en: Record<string, string> = {
   "npc.gatewayError": "AI Gateway error",
   "npc.unsupportedAdapter": "This NPC uses an unsupported adapter.",
   "npc.unbound": "This NPC is not yet linked to a Hermes profile.",
+  "npc.taskOwnerUnknown":
+    "I couldn't tell whose task this is — please rejoin the channel and try again.",
   "npc.hermesImageUnsupported": "This NPC cannot receive images yet.",
   "npc.notFound": "NPC not found",
   "npc.waitBeforeSending": "Wait before sending.",

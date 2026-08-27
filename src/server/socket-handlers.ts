@@ -1678,16 +1678,20 @@ export function setupSocketHandlers(io: Server) {
           if (historyCharacterId) {
             await appendNpcHistoryMessage(historyCharacterId, npcId, sanitizedResponse, "npc");
           }
-          if (player?.characterId) {
+          // 이력 저장과 **같은 값**을 쓴다. 예전에는 여기만 `players` 맵을 직접 봐서,
+          // 재연결 직후처럼 소켓이 그 맵에 없으면 이력은 남는데 태스크만 조용히
+          // 사라졌다 — 사용자는 승인까지 마쳤으므로 등록됐다고 믿는다.
+          if (historyCharacterId) {
             await processNpcTaskActions(io, parsed, {
               channelId: npcConfig._channelId,
               npcId,
               npcName: npcConfig._name,
-              assignerCharacterId: player.characterId,
-              targetUserId: player.userId,
+              assignerCharacterId: historyCharacterId,
+              targetUserId: user.userId,
             });
           } else {
             console.warn("[TaskManager] No characterId for socket", socket.id);
+            emitNpcSystemResponse(socket, npcId, "task_owner_unknown");
           }
           socket.emit("npc:response-complete", { npcId, npcName: npcConfig._name || npcId });
         }

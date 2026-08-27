@@ -1400,6 +1400,8 @@ const ja: Record<string, string> = {
   "npc.gatewayError": "AIゲートウェイエラー",
   "npc.unsupportedAdapter": "このNPCはサポートされていないアダプターを使用しています。",
   "npc.unbound": "このNPCはまだHermesプロファイルに接続されていません。",
+  "npc.taskOwnerUnknown":
+    "このタスクの担当者を特定できません — チャンネルに入り直してからお試しください。",
   "npc.hermesImageUnsupported": "このNPCはまだ画像を受け取れません。",
   "npc.notFound": "NPCが見つかりません",
   "npc.waitBeforeSending": "しばらくお待ちください",
