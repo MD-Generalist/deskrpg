@@ -1,7 +1,6 @@
 # Force LF for shell scripts (Docker entrypoints break with CRLF)
 *.sh text eol=lf
 docker-entrypoint.sh text eol=lf
-docker/openclaw-entrypoint.sh text eol=lf
 
 # Force LF for Dockerfiles
 Dockerfile* text eol=lf

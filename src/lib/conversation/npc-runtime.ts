@@ -24,8 +24,8 @@ import type { EngineParticipant } from "./types";
  * 멈춘 에이전트는 회의를 영원히 붙잡았다. 값(180초)만 그 죽은 설정에서 가져왔다.
  *
  * 대가가 있다: idle 타이머는 onDelta/onToolProgress에서만 리셋되는데
- * OpenClawAdapter는 onToolProgress를 절대 호출하지 않는다(openclaw-adapter.ts:33,39 —
- * onDelta만 전달한다). 그래서 도구를 3분 넘게 조용히 돌리는 OpenClaw NPC는 예전이라면
+ * 예전 게이트웨이 어댑터는 onToolProgress를 절대 호출하지 않고 onDelta만 전달했다.
+ * 그래서 도구를 3분 넘게 조용히 돌리는 NPC는 예전이라면
  * 완주했을 턴이 지금은 중단되고 에러로 보고된다. 스펙의 "tool.progress 수신 시 idle
  * 타이머를 리셋한다"는 현재 Hermes 경로에만 구현돼 있다.
  */

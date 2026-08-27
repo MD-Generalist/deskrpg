@@ -1,7 +1,7 @@
 /**
  * file-extractor.ts
  * Extracts text/image content from uploaded files for NPC chat attachments.
- * Images are resized and sent as OpenClaw chat.send attachments (multimodal vision).
+ * Images are resized and sent as gateway attachments (multimodal vision).
  * Text-based files (PDF, XLSX, DOCX) are extracted and inlined in the message.
  */
 
@@ -52,8 +52,8 @@ export interface ExtractedFile {
   truncated: boolean;
 }
 
-/** OpenClaw chat.send attachment format */
-export interface OpenClawAttachment {
+/** Attachment format sent to the gateway. */
+export interface GatewayAttachment {
   type: "image";
   mimeType: string;
   fileName: string;
@@ -124,7 +124,7 @@ export async function extractFileContent(
   try {
     const ext = extOf(name);
 
-    // Images → resize and base64 encode for OpenClaw multimodal vision
+    // Images → resize and base64 encode for multimodal vision
     if (mimeType.startsWith("image/")) {
       const base64 = await extractImage(buffer);
       return {
@@ -184,9 +184,9 @@ export function buildFilePromptSection(files: ExtractedFile[]): string {
   return "\n\n" + sections.join("\n\n");
 }
 
-// ─── OpenClaw attachments builder (images only) ─────────────────────
+// ─── Attachment builder (images only) ───────────────────────────────
 
-export function buildAttachments(files: ExtractedFile[]): OpenClawAttachment[] | undefined {
+export function buildAttachments(files: ExtractedFile[]): GatewayAttachment[] | undefined {
   const images = files.filter((f) => f.imageBase64);
   if (images.length === 0) return undefined;
   return images.map((f) => ({

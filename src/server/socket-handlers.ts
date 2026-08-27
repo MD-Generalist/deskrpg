@@ -31,7 +31,7 @@ import {
   isAllowedFileType,
   FILE_LIMITS,
 } from "@/lib/file-extractor";
-import type { ExtractedFile, OpenClawAttachment } from "@/lib/file-extractor";
+import type { ExtractedFile, GatewayAttachment } from "@/lib/file-extractor";
 
 const DEBUG_CHAT = process.env.DEBUG_CHAT === "1" || process.env.DEBUG_CHAT === "true";
 function chatLog(...args: unknown[]) {
@@ -236,7 +236,7 @@ const discussionInitiators = new Map<string, string>();
 // 다음 조회에서 DB 로부터 다시 채워진다. 키는 npcHistoryKey() 하나로만 만든다.
 const npcChatHistory = new Map<string, NpcHistoryMessage[]>();
 
-// OpenClaw gateway connections: gatewayId -> gateway instance
+// Gateway connections: gatewayId -> gateway instance
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
 const CHAT_COOLDOWN_MS = 2000;
@@ -885,7 +885,7 @@ async function createOpenChat(
 }
 
 // ---------------------------------------------------------------------------
-// OpenClaw streaming — 1:1 DM chat
+// Gateway streaming — 1:1 DM chat
 // ---------------------------------------------------------------------------
 
 async function streamNpcResponse(
@@ -894,7 +894,7 @@ async function streamNpcResponse(
   npcConfig: NpcConfig,
   userId: string,
   message: string,
-  attachments?: OpenClawAttachment[],
+  attachments?: GatewayAttachment[],
   sessionKeyOverride?: string,
   emitEvent?: string,
 ): Promise<string> {
@@ -998,7 +998,7 @@ async function streamNpcResponse(
 }
 
 // ---------------------------------------------------------------------------
-// OpenClaw streaming — meeting room broadcast
+// Gateway streaming — meeting room broadcast
 // ---------------------------------------------------------------------------
 
 async function streamMeetingNpcResponse(
@@ -1593,7 +1593,7 @@ export function setupSocketHandlers(io: Server) {
 
         // --- File processing (text-based files only) ---
         let extractedFiles: ExtractedFile[] = [];
-        let fileAttachments: OpenClawAttachment[] | undefined;
+        let fileAttachments: GatewayAttachment[] | undefined;
 
         if (files && files.length > 0) {
           if (files.length > FILE_LIMITS.maxFileCount) {
@@ -1759,7 +1759,7 @@ export function setupSocketHandlers(io: Server) {
 
         // File processing (same pattern as npc:chat)
         let extractedFiles: ExtractedFile[] = [];
-        let fileAttachments: OpenClawAttachment[] | undefined;
+        let fileAttachments: GatewayAttachment[] | undefined;
 
         if (files && files.length > 0) {
           if (files.length > FILE_LIMITS.maxFileCount) {

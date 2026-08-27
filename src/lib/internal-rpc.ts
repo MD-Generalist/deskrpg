@@ -6,7 +6,7 @@ const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport
   getInternalSocketBaseUrl: () => string;
 };
 
-/** EBUSY errors from the gateway's atomic rename on openclaw.json. */
+/** EBUSY errors from an atomic rename on the config file a handler writes. */
 const EBUSY_MAX_RETRIES = 3;
 const EBUSY_BASE_DELAY_MS = 150;
 
@@ -20,13 +20,13 @@ function sleep(ms: number) {
 }
 
 /**
- * Calls the OpenClaw gateway RPC.
+ * Calls an internal RPC handler.
  *
  * - Same process (dev): delegates to the in-process handler registered by
  *   dev-server.ts via registerRpcHandler(). No HTTP, no port dependency.
  * - Separate process (production): HTTP POST to server.js on PORT+1.
  *
- * Retries automatically on EBUSY errors (file-lock contention on openclaw.json).
+ * Retries automatically on EBUSY errors (file-lock contention).
  */
 export async function internalRpc(
   channelId: string,

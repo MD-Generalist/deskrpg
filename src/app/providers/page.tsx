@@ -52,7 +52,6 @@ const PROVIDER_OPTIONS: ProviderTypeOption[] = [
   { value: "claude", labelKey: "providers.providerAnthropic", adapterKey: "claude" },
   { value: "codex", labelKey: "providers.providerOpenAI", adapterKey: "codex" },
   { value: "gemini", labelKey: "providers.providerGoogle", adapterKey: "gemini" },
-  { value: "openclaw", labelKey: "providers.providerOpenClaw", adapterKey: "openclaw" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
