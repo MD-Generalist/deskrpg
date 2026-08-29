@@ -28,11 +28,6 @@ export interface BuildPersonaConfigOptions extends BuildNpcPresetDefaultsOptions
   fallbackPersona?: string;
 }
 
-export interface GatewayAgentFile {
-  name: "IDENTITY.md" | "SOUL.md" | "AGENTS.md";
-  content: string;
-}
-
 function getOfficePresetOrThrow(presetId: string) {
   const preset = OFFICE_PRESETS.find((candidate) => candidate.id === presetId);
   if (!preset) {
@@ -266,27 +261,3 @@ export function buildPersonaConfig({
   };
 }
 
-export function buildGatewayAgentFiles({
-  presetId,
-  npcName,
-  locale,
-  identityOverride,
-  soulOverride,
-  fallbackPersona,
-}: BuildPersonaConfigOptions): GatewayAgentFile[] {
-  const defaults = getNpcPresetDefaults({ presetId, npcName, locale });
-  const personaConfig = buildPersonaConfig({
-    presetId,
-    npcName,
-    locale,
-    identityOverride,
-    soulOverride,
-    fallbackPersona,
-  });
-
-  return [
-    { name: "IDENTITY.md", content: personaConfig.identity },
-    { name: "SOUL.md", content: personaConfig.soul },
-    { name: "AGENTS.md", content: defaults.meetingProtocol },
-  ];
-}

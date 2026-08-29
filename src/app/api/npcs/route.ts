@@ -183,6 +183,9 @@ export async function POST(req: NextRequest) {
         sessionKeyPrefix: `ot-${channelId.slice(0, 8)}-${agentId}`,
         personaConfig,
         locale: normalizedLocale,
+        // 회의 규칙은 생성 시점에 로케일까지 확정해 저장한다 — 발신 시점에는
+        // 저장된 값을 그대로 싣는다(socket-handlers 의 npcInstructions).
+        meetingProtocol: getDefaultMeetingProtocol(normalizedLocale),
       };
     } else if (agentAction === "select" && agentId) {
       // Select an existing agent on the gateway
@@ -190,6 +193,7 @@ export async function POST(req: NextRequest) {
         agentId,
         sessionKeyPrefix: `ot-${channelId.slice(0, 8)}-${agentId}`,
         locale: normalizedLocale,
+        meetingProtocol: getDefaultMeetingProtocol(normalizedLocale),
       };
     } else {
       // No agent — backward compat: store persona in agentConfig

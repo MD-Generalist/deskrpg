@@ -16,6 +16,8 @@ import {
   jsonForDb,
 } from "../db";
 import { describeActivity } from "@/lib/npc-activity";
+import { composeNpcInstructions } from "@/lib/npc-prompt-layers";
+import { buildTaskCorePrompt } from "@/lib/task-prompt";
 import {
   appendNpcChatMessage,
   characterBelongsToUser,
@@ -194,6 +196,29 @@ interface NpcConfig {
   _name: string;
   role?: string | null;
   passPolicy?: string | null;
+  /** 이 NPC 의 회의 발언 규칙. 없으면 로케일 기본값을 쓴다. */
+  meetingProtocol?: string | null;
+  /** 프롬프트 문서의 언어. 태스크 절차를 그 언어로 만든다. */
+  locale?: string | null;
+}
+
+/**
+ * 이 NPC 의 턴에 실을 시스템 지시를 만든다.
+ *
+ * 인격(identity/soul)은 여기 들어가지 않는다 — 그 소유자는 Hermes 프로필의
+ * SOUL.md 이고, `instructions` 는 그것을 대체하지 못하고 뒤에 덧붙기만 한다.
+ * 자세한 근거는 `npc-prompt-layers.ts` 상단 주석.
+ */
+function npcInstructions(npc: NpcConfig): string | undefined {
+  const locale = npc.locale ?? undefined;
+  // 회의 규칙은 **생성 시점에** 로케일까지 확정해 agentConfig 에 저장한다(api/npcs).
+  // 여기서 기본값을 다시 만들지 않는 이유는 두 가지다 — 저장된 값과 갈릴 수 있고,
+  // npc-agent-defaults 를 임포트하면 소켓 서버의 런타임 의존이 10개 늘어난다
+  // (프리셋·i18n 로케일 전부. docker-runtime-deps 테스트가 이걸 잡는다).
+  return composeNpcInstructions({
+    meetingProtocol: npc.meetingProtocol,
+    taskProtocol: buildTaskCorePrompt(locale),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -592,6 +617,7 @@ async function runProgressNudgeForTask(
       ({ response } = await adapter.execute({
         sessionKey,
         prompt,
+        instructions: npcInstructions(npcConfig),
         model:
           typeof npcConfig.adapterConfig.model === "string"
             ? npcConfig.adapterConfig.model
@@ -734,6 +760,8 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
       _name: npc.name,
       role: "Participant",
       passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
+      meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+      locale: typeof oc.locale === "string" ? oc.locale : null,
     };
   } catch (err) {
     console.error(`[npc] Failed to load config for ${npcId}:`, err);
@@ -758,6 +786,8 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
         hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
         _channelId: channelId,
         _name: npc.name,
+        meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+        locale: typeof oc.locale === "string" ? oc.locale : null,
         role: "Participant",
         passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
       };
@@ -934,6 +964,7 @@ async function streamNpcResponse(
       const { response, session } = await adapter.execute({
         sessionKey,
         prompt: message,
+        instructions: npcInstructions(npcConfig),
         onDelta: (delta: string) => {
           socket.emit(responseEvent, { npcId, chunk: delta, done: false });
         },
@@ -978,6 +1009,7 @@ async function streamNpcResponse(
       const { response } = await adapter.execute({
         sessionKey,
         prompt: message,
+        instructions: npcInstructions(npcConfig),
         attachments,
         model:
           typeof npcConfig.adapterConfig.model === "string"
@@ -1109,6 +1141,7 @@ async function streamMeetingNpcResponse(
       const { response, session } = await hermesAdapter!.execute({
         sessionKey,
         prompt,
+        instructions: npcInstructions(npcConfig),
         onDelta,
         onRunStarted: (runId: string) => registerHermesRun(sessionKey, runId),
       });
@@ -1121,6 +1154,7 @@ async function streamMeetingNpcResponse(
       const { response } = await adapter.execute({
         sessionKey,
         prompt,
+        instructions: npcInstructions(npcConfig),
         model:
           typeof npcConfig.adapterConfig.model === "string"
             ? npcConfig.adapterConfig.model
