@@ -221,14 +221,22 @@ export class HermesClient {
   async streamSessionChat(args: {
     sessionId: string;
     message: string;
+    /**
+     * 이 턴의 시스템 지시. Hermes 는 `system_message` 를 `instructions` 보다 먼저
+     * 보고(api_server 의 `body.get("system_message") or body.get("instructions")`),
+     * 둘 다 같은 ephemeral 시스템 프롬프트로 흘러간다. 빈 값이면 필드를 만들지 않는다.
+     */
+    systemMessage?: string;
     sessionKey?: string;
     onEvent: (event: SseEvent) => void;
   }): Promise<{ text: string; runId: string | null; sessionId: string }> {
+    const chatBody: Record<string, unknown> = { message: args.message };
+    if (args.systemMessage) chatBody.system_message = args.systemMessage;
     const res = await this.request(
       `/api/sessions/${encodeURIComponent(args.sessionId)}/chat/stream`,
       {
         method: "POST",
-        body: JSON.stringify({ message: args.message }),
+        body: JSON.stringify(chatBody),
         sessionKey: args.sessionKey,
       },
     );

@@ -16,6 +16,8 @@ import {
   jsonForDb,
 } from "../db";
 import { describeActivity } from "@/lib/npc-activity";
+import { composeNpcInstructions } from "@/lib/npc-prompt-layers";
+import { buildTaskCorePrompt } from "@/lib/task-prompt";
 import {
   appendNpcChatMessage,
   characterBelongsToUser,
@@ -194,7 +196,17 @@ interface NpcConfig {
   _name: string;
   role?: string | null;
   passPolicy?: string | null;
+  /** 이 NPC 의 회의 발언 규칙. 없으면 로케일 기본값을 쓴다. */
+  meetingProtocol?: string | null;
+  /** 프롬프트 문서의 언어. 태스크 절차를 그 언어로 만든다. */
+  locale?: string | null;
+  /**
+   * 이 NPC 의 턴에 실을 시스템 지시. getNpcConfig* 가 층을 조립해 채운다 —
+   * 호출부는 계산하지 않고 이 필드만 읽는다. 1:1·회의·채널 멘션이 같은 값을 쓴다.
+   */
+  instructions?: string;
 }
+
 
 // ---------------------------------------------------------------------------
 // Meeting room types
@@ -592,6 +604,7 @@ async function runProgressNudgeForTask(
       ({ response } = await adapter.execute({
         sessionKey,
         prompt,
+        instructions: npcConfig.instructions,
         model:
           typeof npcConfig.adapterConfig.model === "string"
             ? npcConfig.adapterConfig.model
@@ -734,6 +747,12 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
       _name: npc.name,
       role: "Participant",
       passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
+      meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+      locale: typeof oc.locale === "string" ? oc.locale : null,
+      instructions: composeNpcInstructions({
+        meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+        taskProtocol: buildTaskCorePrompt(typeof oc.locale === "string" ? oc.locale : null),
+      }),
     };
   } catch (err) {
     console.error(`[npc] Failed to load config for ${npcId}:`, err);
@@ -758,6 +777,12 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
         hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
         _channelId: channelId,
         _name: npc.name,
+        meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+        locale: typeof oc.locale === "string" ? oc.locale : null,
+        instructions: composeNpcInstructions({
+          meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+          taskProtocol: buildTaskCorePrompt(typeof oc.locale === "string" ? oc.locale : null),
+        }),
         role: "Participant",
         passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
       };
@@ -810,6 +835,7 @@ async function createOpenChat(
       sessionKey: resolved.sessionKey,
       role: resolved.participant.role,
       passPolicy: resolved.participant.passPolicy,
+      instructions: resolved.participant.instructions ?? null,
     });
   }
   if (participants.length === 0) return null;
@@ -934,6 +960,7 @@ async function streamNpcResponse(
       const { response, session } = await adapter.execute({
         sessionKey,
         prompt: message,
+        instructions: npcConfig.instructions,
         onDelta: (delta: string) => {
           socket.emit(responseEvent, { npcId, chunk: delta, done: false });
         },
@@ -978,6 +1005,7 @@ async function streamNpcResponse(
       const { response } = await adapter.execute({
         sessionKey,
         prompt: message,
+        instructions: npcConfig.instructions,
         attachments,
         model:
           typeof npcConfig.adapterConfig.model === "string"
@@ -1109,6 +1137,7 @@ async function streamMeetingNpcResponse(
       const { response, session } = await hermesAdapter!.execute({
         sessionKey,
         prompt,
+        instructions: npcConfig.instructions,
         onDelta,
         onRunStarted: (runId: string) => registerHermesRun(sessionKey, runId),
       });
@@ -1121,6 +1150,7 @@ async function streamMeetingNpcResponse(
       const { response } = await adapter.execute({
         sessionKey,
         prompt,
+        instructions: npcConfig.instructions,
         model:
           typeof npcConfig.adapterConfig.model === "string"
             ? npcConfig.adapterConfig.model

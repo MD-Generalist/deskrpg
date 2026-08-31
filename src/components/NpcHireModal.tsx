@@ -14,6 +14,7 @@ import { getAgentProgressMeter, type AgentProgressPhase } from "@/lib/npc-agent-
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
 import { shouldRebindProfile } from "@/components/hermes/rebind-decision";
+import { isPersonaOwnedByProfile } from "@/components/npc-persona-ownership";
 import {
   shouldReplacePresetText,
   type PresetApplySource,
@@ -604,7 +605,10 @@ export default function NpcHireModal({
 
             {/* Persona Section */}
             <PersonaSection
-              isExistingAgentSelected={false}
+              // 프로필이 인격을 소유하면 편집 칸 대신 "게이트웨이가 관리합니다" 를
+              // 보여준다. 예전에는 여기가 `false` 로 하드코딩돼 있어서, 사용자가 쓴
+              // 성격이 저장만 되고 전달되지 않는데도 화면은 편집 가능한 척했다.
+              isExistingAgentSelected={isPersonaOwnedByProfile({ adapterType })}
               personaPresetId={personaPresetId}
               onPersonaPresetChange={handlePersonaPresetChange}
               identity={identity}

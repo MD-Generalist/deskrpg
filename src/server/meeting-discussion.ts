@@ -53,6 +53,8 @@ type MeetingNpcConfig = {
   hermesProfileId?: string | null;
   role?: string | null;
   passPolicy?: string | null;
+  /** 이 NPC 의 턴에 실을 시스템 지시. getNpcConfig* 가 계산해 넣는다. */
+  instructions?: string | null;
 };
 
 type MeetingSocket = {
@@ -79,6 +81,8 @@ type MeetingBrokerParticipant = {
   displayName: string;
   role: string;
   passPolicy: string | null;
+  /** composeNpcInstructions() 결과. 폴과 발언 양쪽에 실린다. */
+  instructions?: string | null;
 };
 
 type ExcludedMeetingNpc = {
@@ -251,6 +255,7 @@ export async function resolveNpcAdapter(
     displayName: npc.name,
     role: npc.role || "Participant",
     passPolicy: npc.passPolicy || null,
+    instructions: npc.instructions ?? null,
   };
 
   if (dispatchKind === "unbound") {
@@ -325,6 +330,7 @@ export async function defaultCreateMeetingBroker(
       sessionKey,
       role: participant.role,
       passPolicy: participant.passPolicy,
+      instructions: participant.instructions ?? null,
     }),
   );
 

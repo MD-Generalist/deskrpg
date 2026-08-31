@@ -125,6 +125,7 @@ export class NpcRuntime {
     const { response } = await this.participant.adapter.execute({
       sessionKey: `${this.participant.sessionKey}-poll`,
       prompt: pollMsg,
+      instructions: this.participant.instructions ?? undefined,
       // 폴은 히스토리를 싣지 않지만 그래도 다자 대화다 — NPC의 영속 세션에
       // "SPEAK:/PASS" 문답이 쌓이면 안 된다.
       multiParty: true,
@@ -199,6 +200,7 @@ export class NpcRuntime {
           .execute({
             sessionKey: this.participant.sessionKey,
             prompt,
+            instructions: this.participant.instructions ?? undefined,
             // 트랜스크립트는 엔진이 소유한다. 첫 턴은 히스토리가 비지만 그것도 다자 대화의
             // 한 턴이므로 전송 경로가 2번째 턴부터와 달라지면 안 된다.
             multiParty: true,

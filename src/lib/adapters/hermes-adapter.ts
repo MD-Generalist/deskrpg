@@ -79,6 +79,7 @@ export class HermesAdapter implements NpcAdapter {
       const { runId } = await this.client.startRun({
         input: options.prompt,
         conversationHistory: options.conversationHistory ?? [],
+        instructions: options.instructions,
         sessionKey: options.sessionKey,
       });
       this.lastRunId = runId;
@@ -98,6 +99,7 @@ export class HermesAdapter implements NpcAdapter {
     const result = await this.client.streamSessionChat({
       sessionId: this.sessionId,
       message: options.prompt,
+      systemMessage: options.instructions,
       sessionKey: options.sessionKey,
       onEvent,
     });

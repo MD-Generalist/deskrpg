@@ -15,6 +15,12 @@ export interface AdapterExecuteOptions {
   multiParty?: boolean;
   /** Multi-party transcript owned by the caller (ConversationEngine). */
   conversationHistory?: Array<{ role: string; content: string }>;
+  /**
+   * 이 턴에 실을 시스템 지시. `composeNpcInstructions()` 가 층을 조립해 만든다.
+   * 백엔드는 이것을 **사용자 메시지가 아니라 시스템 자리**에 실어야 한다.
+   * 실을 층이 없으면 호출부가 아예 넘기지 않는다(빈 문자열을 넘기지 않는다).
+   */
+  instructions?: string;
   onDelta?: (chunk: string) => void;
   onToolProgress?: (toolName: string, preview: string) => void;
   /** Fires as soon as the backend assigns a run handle, for abort/steer. */

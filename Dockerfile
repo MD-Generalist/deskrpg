@@ -55,6 +55,7 @@ COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transp
 COPY --from=builder /app/src/lib/task-reporting.ts ./src/lib/task-reporting.ts
 COPY --from=builder /app/src/lib/npc-chat-history.ts ./src/lib/npc-chat-history.ts
 COPY --from=builder /app/src/lib/npc-activity.ts ./src/lib/npc-activity.ts
+COPY --from=builder /app/src/lib/npc-prompt-layers.ts ./src/lib/npc-prompt-layers.ts
 COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-access.ts
 
 # 대화 런타임과 소켓 서버는 **디렉토리째** 복사한다.

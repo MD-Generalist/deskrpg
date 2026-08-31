@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  buildGatewayAgentFiles,
   buildPersonaConfig,
   getDefaultAgentIdForPreset,
   getNpcPresetDefaults,
@@ -42,21 +41,6 @@ test("buildPersonaConfig prefers explicit overrides over preset defaults", () =>
 
   assert.match(config.identity, /Custom identity for Alice/);
   assert.match(config.soul, /Custom soul for Alice/);
-});
-
-test("buildGatewayAgentFiles returns IDENTITY, SOUL, and AGENTS payloads", () => {
-  const files = buildGatewayAgentFiles({
-    presetId: "dev-a",
-    npcName: "Alice",
-  });
-
-  assert.deepEqual(
-    files.map((file) => file.name),
-    ["IDENTITY.md", "SOUL.md", "AGENTS.md"],
-  );
-  assert.match(files[0].content, /Task Management Protocol/);
-  assert.match(files[0].content, /Alice/);
-  assert.match(files[2].content, /AGENTS\.md - Your Workspace/);
 });
 
 test("buildPersonaConfig injects language policy into custom overrides", () => {

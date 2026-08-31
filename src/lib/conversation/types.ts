@@ -21,4 +21,10 @@ export type EngineParticipant = Participant & {
   /** 폴링 프롬프트의 `[발언 지침]` 블록에 실린다(meeting-formatter.js:30-32). 옛 브로커는
    * agent.passPolicy를 그대로 넘겼다(meeting-broker.js:307) — 값이 없으면 블록 자체가 빠진다. */
   passPolicy?: string | null;
+  /**
+   * 이 NPC 의 턴에 실을 시스템 지시(`composeNpcInstructions()` 결과).
+   * 폴과 발언 **양쪽 모두**에 같은 값이 실려야 한다 — 한쪽만 실으면 같은 NPC 가
+   * 손들 때와 말할 때 다른 규칙을 받는다.
+   */
+  instructions?: string | null;
 };
