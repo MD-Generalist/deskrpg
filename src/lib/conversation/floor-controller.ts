@@ -24,6 +24,15 @@ import {
 export type PollReport = {
   raises: Array<{ npcId: string; reason: string }>;
   passes: string[];
+  /**
+   * 폴에 **닿지 못한** 참가자. `passes` 와 갈라 둔다 — 침묵과 부재는 다르다.
+   *
+   * 예전에는 실패가 어느 쪽에도 안 들어가고 사라져서, 아무도 패스하지 않았는데도
+   * 결정이 `all-passed` 가 되고 화면에는 "전원 PASS" 로 보였다. Hermes 는 동시 실행
+   * 상한을 넘기면 429 로 또박또박 거절하는데(`api_server.py:7154`) 그 거절이 여기서
+   * 증발했다. 클라이언트가 재시도까지 한 뒤에도 실패한 것만 여기 남는다.
+   */
+  failures: Array<{ npcId: string; reason: string }>;
 } | null;
 
 export type FloorDecision =
@@ -121,7 +130,7 @@ export class MeetingFloorController {
       return { kind: "speaker", npcId: speaker.npcId, pollResult: null };
     }
 
-    const { raises, passes } = await this.pollCandidates(
+    const { raises, passes, failures } = await this.pollCandidates(
       candidates,
       ctx.runtimeFor,
       ctx.remainingTurns,
@@ -129,6 +138,7 @@ export class MeetingFloorController {
     const pollResult: PollReport = {
       raises: raises.map((r) => ({ npcId: r.npcId, reason: r.reason })),
       passes,
+      failures,
     };
 
     if (raises.length === 0) {
@@ -143,32 +153,53 @@ export class MeetingFloorController {
 
   /**
    * 후보를 maxConcurrentPolls 크기로 나눠 청크마다 병렬 폴링한다(청크 사이는 순차).
-   * 실패한 참가자는 raises/passes 어느 쪽에도 넣지 않는다 — 회의를 중단시키지 않되
-   * 그 라운드에서는 사실상 PASS로 취급된다(현행 meeting-broker.js:322-325 동작 보존, 결함 보존).
+   *
+   * 실패한 참가자는 회의를 중단시키지 않는다(그 라운드에서 발언하지 않는다). 다만
+   * **`failures` 로 기록해 침묵과 구분한다** — 예전에는 조용히 버려서 "전원 PASS" 와
+   * "아무에게도 닿지 못함" 이 화면에서 같아 보였다.
    */
   private async pollCandidates(
     candidates: Participant[],
     runtimeFor: (npcId: string) => NpcRuntime | undefined,
     remainingTurns: (npcId: string) => number,
-  ): Promise<{ raises: Array<{ npcId: string; reason: string }>; passes: string[] }> {
+  ): Promise<{
+    raises: Array<{ npcId: string; reason: string }>;
+    passes: string[];
+    failures: Array<{ npcId: string; reason: string }>;
+  }> {
     this.onPollStart();
 
     const raises: Array<{ npcId: string; reason: string }> = [];
     const passes: string[] = [];
+    const failures: Array<{ npcId: string; reason: string }> = [];
 
     for (const group of chunk(candidates, this.maxConcurrentPolls)) {
       const results = await Promise.allSettled(
         group.map(async (c) => {
           const runtime = runtimeFor(c.npcId)!;
           const remaining = remainingTurns(c.npcId);
-          const parsed = await runtime.poll(remaining);
-          return { npcId: c.npcId, parsed };
+          try {
+            const parsed = await runtime.poll(remaining);
+            return { npcId: c.npcId, parsed };
+          } catch (err) {
+            // 어느 NPC 가 실패했는지 알아야 기록할 수 있다 — reject 를 그대로 올리면
+            // Promise.allSettled 의 reason 에 npcId 가 없다.
+            throw Object.assign(new Error("poll failed"), {
+              npcId: c.npcId,
+              cause: err,
+            });
+          }
         }),
       );
 
       for (const result of results) {
         if (result.status === "rejected") {
-          // 실패한 참가자는 조용히 건너뛴다 — 회의를 중단하지 않는다(보존된 결함 3).
+          const reason = result.reason as { npcId?: string; cause?: unknown };
+          const cause = reason?.cause;
+          failures.push({
+            npcId: reason?.npcId ?? "unknown",
+            reason: cause instanceof Error ? cause.message : String(cause ?? "unknown"),
+          });
           continue;
         }
         const { npcId, parsed } = result.value;
@@ -180,6 +211,6 @@ export class MeetingFloorController {
       }
     }
 
-    return { raises, passes };
+    return { raises, passes, failures };
   }
 }
