@@ -132,6 +132,8 @@ type MeetingBrokerCallbacks = {
   onPollResult?: (
     raises: Array<{ agent: MeetingBrokerParticipant; reason: string }>,
     passes: string[],
+    /** 폴에 닿지 못한 참가자. 침묵(passes)과 갈라 전달한다. */
+    failures: Array<{ agent: MeetingBrokerParticipant; reason: string }>,
   ) => void;
   onTurnStart?: (agent: MeetingBrokerParticipant) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
@@ -357,12 +359,14 @@ export async function defaultCreateMeetingBroker(
     },
     {
       onPollStart: () => callbacks.onPollStart?.(),
-      onPollResult: (raises, passes) => {
+      onPollResult: (raises, passes, failures) => {
         meetingLog(
           "폴링 결과: raises=",
           raises.map((r) => r.npcId).join(",") || "(없음)",
           "passes=",
           passes.join(",") || "(없음)",
+          "failures=",
+          (failures ?? []).map((f) => f.npcId).join(",") || "(없음)",
         );
         callbacks.onPollResult?.(
           raises
@@ -372,6 +376,12 @@ export async function defaultCreateMeetingBroker(
             })
             .filter((r): r is { agent: MeetingBrokerParticipant; reason: string } => r !== null),
           passes,
+          (failures ?? [])
+            .map((f) => {
+              const agent = participantByNpcId.get(f.npcId);
+              return agent ? { agent, reason: f.reason } : null;
+            })
+            .filter((f): f is { agent: MeetingBrokerParticipant; reason: string } => f !== null),
         );
       },
       onTurnStart: (npcId) => {
@@ -538,13 +548,19 @@ export function registerMeetingDiscussionHandlers({
         onPollStart: () => {
           io.to(getMeetingRoomId(channelId)).emit("meeting:poll-status", { status: "polling" });
         },
-        onPollResult: (raises, passes) => {
+        onPollResult: (raises, passes, failures) => {
           io.to(getMeetingRoomId(channelId)).emit("meeting:poll-status", {
             raises: raises.map((raise) => ({
               name: raise.agent.displayName,
               reason: raise.reason,
             })),
             passes,
+            // 닿지 못한 참가자를 침묵과 구분해 보낸다 — 화면이 "전원 PASS" 로
+            // 뭉개지 않게.
+            failures: (failures ?? []).map((failure) => ({
+              name: failure.agent.displayName,
+              reason: failure.reason,
+            })),
           });
         },
         onTurnStart: (agent) => {

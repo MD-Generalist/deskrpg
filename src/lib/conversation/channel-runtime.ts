@@ -29,7 +29,12 @@ export type EngineEndReason =
 
 export type EngineCallbacks = {
   onPollStart?: () => void;
-  onPollResult?: (raises: Array<{ npcId: string; reason: string }>, passes: string[]) => void;
+  onPollResult?: (
+    raises: Array<{ npcId: string; reason: string }>,
+    passes: string[],
+    /** 폴에 닿지 못한 참가자. 침묵(passes)과 갈라 전달한다. */
+    failures: Array<{ npcId: string; reason: string }>,
+  ) => void;
   onTurnStart?: (npcId: string, displayName: string) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
   /** meta는 턴이 중단되어 끝났을 때만 실린다 — 그 경우 fullResponse는 그때까지 스트리밍된
@@ -386,7 +391,11 @@ export class ChannelRuntime {
       // 같은 필드(decision.pollResult)를 쓰므로 kind 와 무관하게 갈래 앞으로 뺀다 — 한쪽만
       // 고치다 다른 쪽에 남는 사고를 구조적으로 없앤다.
       if (decision.pollResult) {
-        this.callbacks.onPollResult?.(decision.pollResult.raises, decision.pollResult.passes);
+        this.callbacks.onPollResult?.(
+          decision.pollResult.raises,
+          decision.pollResult.passes,
+          decision.pollResult.failures,
+        );
       }
 
       if (decision.kind === "all-passed") {

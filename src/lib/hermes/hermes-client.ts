@@ -7,6 +7,8 @@ import { isTerminalEvent, type HermesCapabilities } from "./types";
 export type HermesErrorCode =
   "unauthorized" | "unknown_profile" | "unreachable" | "http_error" | "run_failed";
 
+import { parseRetryAfterMs, retryDelayMs, shouldRetryStatus } from "./retry-policy";
+
 export class HermesError extends Error {
   readonly code: HermesErrorCode;
   readonly status: number;
@@ -25,7 +27,12 @@ export type HermesClientConfig = {
   profileName: string | null;
   token: string;
   fetchImpl?: typeof fetch;
+  /** 테스트가 실제로 기다리지 않게 하는 주입 지점. */
+  sleepImpl?: (ms: number) => Promise<void>;
 };
+
+/** 최초 1회 뒤 몇 번까지 다시 걸어 볼지. 회의 한 턴이 붙들리는 시간을 감안한 값이다. */
+const MAX_RETRIES = 2;
 
 function errorCodeForStatus(status: number): HermesErrorCode {
   if (status === 401 || status === 403) return "unauthorized";
@@ -38,12 +45,15 @@ export class HermesClient {
   private readonly profileName: string | null;
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly sleepImpl: (ms: number) => Promise<void>;
 
   constructor(config: HermesClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.profileName = config.profileName;
     this.token = config.token;
     this.fetchImpl = config.fetchImpl ?? fetch;
+    this.sleepImpl =
+      config.sleepImpl ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   }
 
   url(path: string): string {
@@ -59,26 +69,45 @@ export class HermesClient {
     };
   }
 
+  /**
+   * 게이트웨이가 동시 실행 상한을 넘겼다고 429 로 거절하면 잠깐 기다렸다 다시 건다.
+   *
+   * 예전에는 그 거절이 그대로 예외가 되어 호출부까지 올라갔고, 회의 폴링은 실패한
+   * 참가자를 조용히 건너뛰었다 — 그 NPC 는 raises 에도 passes 에도 없이 사라졌다.
+   * Hermes 는 `Retry-After` 까지 붙여 주므로 버릴 이유가 없다.
+   */
   private async request(
     path: string,
     init: RequestInit & { sessionKey?: string } = {},
   ): Promise<Response> {
     const { sessionKey, ...rest } = init;
-    let res: Response;
-    try {
-      res = await this.fetchImpl(this.url(path), {
-        ...rest,
-        headers: this.headers(sessionKey ? { "X-Hermes-Session-Key": sessionKey } : undefined),
-      });
-    } catch (err) {
-      throw new HermesError(
-        "unreachable",
-        err instanceof Error ? err.message : "Gateway unreachable",
-        0,
-      );
-    }
 
-    if (!res.ok) {
+    for (let attempt = 0; ; attempt += 1) {
+      let res: Response;
+      try {
+        res = await this.fetchImpl(this.url(path), {
+          ...rest,
+          headers: this.headers(sessionKey ? { "X-Hermes-Session-Key": sessionKey } : undefined),
+        });
+      } catch (err) {
+        throw new HermesError(
+          "unreachable",
+          err instanceof Error ? err.message : "Gateway unreachable",
+          0,
+        );
+      }
+
+      if (res.ok) return res;
+
+      if (shouldRetryStatus(res.status) && attempt < MAX_RETRIES) {
+        // 본문을 읽어 소켓을 비운다 — 읽지 않고 버리면 연결이 재사용되지 않는다.
+        await res.text().catch(() => "");
+        await this.sleepImpl(
+          retryDelayMs(attempt, parseRetryAfterMs(res.headers.get("Retry-After"))),
+        );
+        continue;
+      }
+
       const text = await res.text().catch(() => "");
       throw new HermesError(
         errorCodeForStatus(res.status),
@@ -86,7 +115,6 @@ export class HermesClient {
         res.status,
       );
     }
-    return res;
   }
 
   async getCapabilities(): Promise<HermesCapabilities> {
