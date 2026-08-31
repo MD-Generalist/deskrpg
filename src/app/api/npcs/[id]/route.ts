@@ -3,7 +3,6 @@ import { db, isPostgres, jsonForDb } from "@/db";
 import { npcs, channels } from "@/db";
 import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import { injectTaskPrompt } from "@/lib/task-prompt";
 import {
   buildPersonaConfig,
   getDefaultMeetingProtocol,
@@ -119,10 +118,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             fallbackPersona: body.persona?.trim(),
           })
         : {
-            identity: injectTaskPrompt(
-              localizeNpcPromptDocument(newIdentity, normalizedLocale, "identity"),
-              normalizedLocale,
-            ),
+            identity: localizeNpcPromptDocument(newIdentity, normalizedLocale, "identity"),
             soul: localizeNpcPromptDocument(newSoul, normalizedLocale, "soul"),
           };
 

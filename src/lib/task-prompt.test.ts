@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { injectTaskPrompt, withTaskReminder } from "./task-prompt.js";
+import { buildTaskCorePrompt, withTaskReminder } from "./task-prompt.js";
 
-test("injectTaskPrompt localizes the task registration confirmation by locale", () => {
-  const englishPrompt = injectTaskPrompt("# Identity", "en");
-  const koreanPrompt = injectTaskPrompt("# Identity", "ko");
+test("태스크 코어 프롬프트가 로케일에 따라 확인 문구를 번역한다", () => {
+  const englishPrompt = buildTaskCorePrompt("en");
+  const koreanPrompt = buildTaskCorePrompt("ko");
 
   assert.match(englishPrompt, /Would you like me to register this as a task\?/);
   assert.match(koreanPrompt, /이 작업을 태스크로 등록할까요\?/);
