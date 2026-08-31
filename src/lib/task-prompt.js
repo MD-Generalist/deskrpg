@@ -75,19 +75,6 @@ ${"```"}
 const TASK_CORE_PROMPT = buildTaskCorePrompt("en");
 
 /**
- * identity에 태스크 프로토콜을 prepend. 이미 포함되어 있으면 건너뜀 (멱등성).
- * @param {string} userIdentity
- * @param {string | null | undefined} locale
- * @returns {string}
- */
-function injectTaskPrompt(userIdentity, locale) {
-  if (userIdentity && userIdentity.includes("Task Management Protocol")) {
-    return userIdentity;
-  }
-  return buildTaskCorePrompt(locale) + "\n\n" + (userIdentity || "");
-}
-
-/**
  * 대화 히스토리가 길어질 때 LLM에게 프로토콜을 상기시키는 짧은 리마인더.
  * 사용자 메시지 앞에 [SYSTEM] 태그로 prepend된다.
  */
@@ -148,7 +135,6 @@ function buildTaskSessionPrompt(task, locale) {
 
 module.exports = {
   TASK_CORE_PROMPT,
-  injectTaskPrompt,
   TASK_REMINDER,
   withTaskReminder,
   buildTaskCorePrompt,

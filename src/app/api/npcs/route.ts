@@ -3,7 +3,6 @@ import { db, jsonForDb } from "@/db";
 import { npcs, channels } from "@/db";
 import { eq, count } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import { injectTaskPrompt } from "@/lib/task-prompt";
 import {
   buildPersonaConfig,
   getDefaultMeetingProtocol,
@@ -171,10 +170,7 @@ export async function POST(req: NextRequest) {
             fallbackPersona: persona?.trim(),
           })
         : {
-            identity: injectTaskPrompt(
-              localizeNpcPromptDocument(resolvedIdentity, normalizedLocale, "identity"),
-              normalizedLocale,
-            ),
+            identity: localizeNpcPromptDocument(resolvedIdentity, normalizedLocale, "identity"),
             soul: localizeNpcPromptDocument(resolvedSoul, normalizedLocale, "soul"),
           };
       // Agent was already created via /api/npcs/create-agent
@@ -210,10 +206,7 @@ export async function POST(req: NextRequest) {
                 fallbackPersona: persona?.trim(),
               })
             : {
-                identity: injectTaskPrompt(
-                  localizeNpcPromptDocument(identityText, normalizedLocale, "identity"),
-                  normalizedLocale,
-                ),
+                identity: localizeNpcPromptDocument(identityText, normalizedLocale, "identity"),
                 soul: localizeNpcPromptDocument(resolvedSoul, normalizedLocale, "soul"),
               }
           : null;
