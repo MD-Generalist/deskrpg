@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { db, gatewayResources, nowForDb } from "@/db";
 import { decryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
-import { probeDeskrpgPlugin } from "@/lib/hermes/plugin-capability";
+import { buildPluginCacheUpdate, probeDeskrpgPlugin } from "@/lib/hermes/plugin-capability";
 import { diagnoseUnreachable } from "@/lib/hermes/unreachable-hint";
 import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
@@ -57,12 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     await db
       .update(gatewayResources)
-      .set({
-        pluginStatus: plugin.status,
-        pluginVersion: plugin.version,
-        pluginCheckedAt: nowForDb(),
-        updatedAt: nowForDb(),
-      })
+      .set(buildPluginCacheUpdate(plugin, nowForDb()))
       .where(eq(gatewayResources.id, id));
 
     return NextResponse.json({
