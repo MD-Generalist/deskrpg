@@ -1,0 +1,66 @@
+/**
+ * 고용 마법사의 단계 구성과 전이.
+ *
+ * 능력에 따라 **기능이 조용히 깨지는 대신 눈에 보이게 줄어든다.** 잠긴 단계는
+ * 사라지지 않고 이유와 함께 남는다 — 사라지면 사용자는 그런 기능이 있는 줄도
+ * 모르고, 회색으로 남으면 무엇을 하면 열리는지 알 수 있다.
+ */
+
+import type { PluginStatus } from "@/lib/hermes/plugin-capability";
+
+export type WizardStep = "profile" | "identity" | "config" | "placement";
+
+export type StepAvailability = {
+  step: WizardStep;
+  enabled: boolean;
+  /** 잠긴 이유의 i18n 키. 열려 있으면 null */
+  lockedReason: string | null;
+};
+
+const ORDER: WizardStep[] = ["profile", "identity", "config", "placement"];
+
+export function availableSteps(status: PluginStatus, localDiscovery: boolean): StepAvailability[] {
+  const pluginOk = status === "plugin_ready";
+
+  // 401 과 404 는 사용자가 할 일이 정반대다 — 키 교체 vs 플러그인 설치.
+  const blockedReason =
+    status === "plugin_unauthorized"
+      ? "hermes.plugin.locked.unauthorized"
+      : status === "plugin_absent"
+        ? "hermes.plugin.locked.absent"
+        : "hermes.plugin.locked.unknown";
+
+  return ORDER.map((step) => {
+    if (step === "placement") {
+      // 배치는 플러그인과 무관하다 — NPC 레코드와 맵 좌표만 쓴다.
+      return { step, enabled: true, lockedReason: null };
+    }
+    if (step === "profile") {
+      // 프로필은 플러그인이 없어도 로컬 파일시스템 발견으로 찾아 등록할 수 있다.
+      const enabled = pluginOk || localDiscovery;
+      return { step, enabled, lockedReason: enabled ? null : blockedReason };
+    }
+    // 인격·설정은 플러그인 없이는 원격에서 손댈 방법이 없다.
+    return { step, enabled: pluginOk, lockedReason: pluginOk ? null : blockedReason };
+  });
+}
+
+export function identityDecision(payload: {
+  isDefaultTemplate: boolean | null;
+  unreadable?: boolean;
+}): "edit_fresh" | "ask_overwrite" | "blocked" {
+  if (payload.unreadable) return "blocked";
+  // null 은 "읽지 못했다" 이지 "기본 템플릿이다" 가 아니다. false 로 접으면
+  // 덮어쓰기를 제안하고, true 로 접으면 빈 편집기를 연다 — 둘 다 원본을 잃는다.
+  if (payload.isDefaultTemplate === null) return "blocked";
+  return payload.isDefaultTemplate ? "edit_fresh" : "ask_overwrite";
+}
+
+export function nextStep(current: WizardStep, steps: StepAvailability[]): WizardStep | null {
+  const idx = ORDER.indexOf(current);
+  for (let i = idx + 1; i < ORDER.length; i += 1) {
+    const candidate = steps.find((s) => s.step === ORDER[i]);
+    if (candidate?.enabled) return candidate.step;
+  }
+  return null;
+}
