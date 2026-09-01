@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
+import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 
 import {
   partitionRegistrationResults,
@@ -12,6 +13,7 @@ import {
   type DiscoveryRow,
   type ProbeStatus,
 } from "./discovery-rows";
+import NpcHireWizard from "./NpcHireWizard";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -65,6 +67,30 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [registerError, setRegisterError] = useState("");
   const [optInError, setOptInError] = useState("");
   const [optingIn, setOptingIn] = useState(false);
+
+  // 고용 마법사 — Task 9 의 게이트웨이 테스트 응답이 실어 보내는 plugin 필드에서
+  // 상태를 얻는다. HermesProfileList 는 게이트웨이 목록(page.tsx)이 아니라 여기서
+  // 스스로 부른다 — 목록 라우트는 이 필드를 내려주지 않고, 테스트 자체가 이 필드의
+  // 유일한 출처다(리뷰 브리프, "게이트웨이 테스트 응답에서 받아").
+  const [pluginStatus, setPluginStatus] = useState<PluginStatus>("unknown");
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const status = (d as { plugin?: { status?: unknown } })?.plugin?.status;
+        setPluginStatus(typeof status === "string" ? (status as PluginStatus) : "unknown");
+      })
+      .catch(() => {
+        if (!cancelled) setPluginStatus("unknown");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gatewayId]);
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);
@@ -215,9 +241,32 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
 
   return (
     <section className="rounded-xl border border-border bg-surface p-5">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("gateway.profile.title")}</h2>
+        {canRegister && (
+          <button
+            type="button"
+            onClick={() => setWizardOpen((prev) => !prev)}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+          >
+            {t("hermes.wizard.openButton")}
+          </button>
+        )}
       </div>
+
+      {wizardOpen && (
+        <div className="mb-4">
+          <NpcHireWizard
+            gatewayId={gatewayId}
+            pluginStatus={pluginStatus}
+            localDiscovery={!!discovery?.available && !!discovery?.optedIn}
+            onDone={() => {
+              setWizardOpen(false);
+              void loadProfiles();
+            }}
+          />
+        </div>
+      )}
 
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
