@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
-import type { PluginStatus } from "@/lib/hermes/plugin-capability";
+import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
 
 import {
   partitionRegistrationResults,
@@ -68,29 +68,57 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [optInError, setOptInError] = useState("");
   const [optingIn, setOptingIn] = useState(false);
 
-  // 고용 마법사 — Task 9 의 게이트웨이 테스트 응답이 실어 보내는 plugin 필드에서
-  // 상태를 얻는다. HermesProfileList 는 게이트웨이 목록(page.tsx)이 아니라 여기서
-  // 스스로 부른다 — 목록 라우트는 이 필드를 내려주지 않고, 테스트 자체가 이 필드의
-  // 유일한 출처다(리뷰 브리프, "게이트웨이 테스트 응답에서 받아").
+  // 고용 마법사 — 최종 리뷰 I-1: Task 4 가 만든 캐시(pluginStatus/pluginCheckedAt)를
+  // 먼저 읽는다. `resolvePluginStatusFromCache` 가 신선하다고 판단하면 그 값을 그대로
+  // 쓰고, 오래됐거나 없으면 그때만 `/test` 를 쏜다(원격 왕복 2회, 최대 10초) — 예전엔
+  // 이 화면을 열 때마다(마법사를 열지 않아도) 무조건 다시 찔렀다.
   const [pluginStatus, setPluginStatus] = useState<PluginStatus>("unknown");
   const [wizardOpen, setWizardOpen] = useState(false);
 
+  const reprobePlugin = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      const status = (data as { plugin?: { status?: unknown } })?.plugin?.status;
+      return typeof status === "string" ? (status as PluginStatus) : "unknown";
+    } catch {
+      return "unknown" as PluginStatus;
+    }
+  }, [gatewayId]);
+
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" })
-      .then((r) => r.json())
-      .then((d) => {
+    (async () => {
+      try {
+        const res = await fetch("/api/gateways");
+        const data = await res.json().catch(() => ({}));
+        const rows = Array.isArray((data as { gateways?: unknown }).gateways)
+          ? (data as { gateways: unknown[] }).gateways
+          : [];
+        const mine = rows.find(
+          (g): g is { pluginStatus: string | null; pluginCheckedAt: string | Date | null } =>
+            !!g && typeof g === "object" && (g as { id?: unknown }).id === gatewayId,
+        );
+        const cached = resolvePluginStatusFromCache({
+          pluginStatus: mine?.pluginStatus ?? null,
+          pluginCheckedAt: mine?.pluginCheckedAt ?? null,
+          now: new Date(),
+        });
         if (cancelled) return;
-        const status = (d as { plugin?: { status?: unknown } })?.plugin?.status;
-        setPluginStatus(typeof status === "string" ? (status as PluginStatus) : "unknown");
-      })
-      .catch(() => {
-        if (!cancelled) setPluginStatus("unknown");
-      });
+        if (!cached.needsReprobe) {
+          setPluginStatus(cached.status);
+          return;
+        }
+      } catch {
+        // 목록 조회 자체가 실패해도 재프로브로 폴백한다 — 아래에서 그대로 진행.
+      }
+      const status = await reprobePlugin();
+      if (!cancelled) setPluginStatus(status);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [gatewayId]);
+  }, [gatewayId, reprobePlugin]);
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);

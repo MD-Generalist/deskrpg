@@ -22,7 +22,14 @@ export function stripApiKey(payload: CreateProfilePayload): SafeCreateResult {
   return out;
 }
 
-/** 발급된 키를 우리 DB 에 저장한 결과. `reason` 은 화면에 그대로 보여도 되는 설명. */
+/**
+ * 발급된 키를 우리 DB 에 저장한 결과. `reason` 은 **에러코드**다 — 문장이 아니다.
+ *
+ * 최종 리뷰 M-3: 이 값이 그대로 `keyStoredError` 로 화면에 실려 렌더된다. 예전엔
+ * 여기 한국어 문장을 직접 넣었는데, 이 브랜치의 나머지 전부(`errorCode` + 4로케일)와
+ * 어긋나 en/ja/zh 사용자가 한국어를 봤다. 이제 `wizard-error-codes.ts` 에 등록된 코드
+ * (`key_missing_after_issue`/`key_store_forbidden`)를 넣고, 화면이 그 사전으로 번역한다.
+ */
 export type KeyStorageResult = { ok: true } | { ok: false; reason: string };
 
 export type ProvisionedProfile = SafeCreateResult & { keyStored: boolean; keyStoredError?: string };

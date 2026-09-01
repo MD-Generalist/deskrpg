@@ -24,6 +24,10 @@
  * 이 프로젝트의 스펙 문서가 코드명을 잘못 적었고 플러그인은 그 문서대로 구현됐다).
  * 플러그인을 고치면 이미 배포된 구버전이 붙은 게이트웨이가 깨지므로, **두 코드를 모두
  * 등록**하고 같은 i18n 키를 가리키게 한다 — 구버전·신버전 플러그인 모두 대응.
+ *
+ * 최종 리뷰 M-3: `key_missing_after_issue`/`key_store_forbidden` 은 플러그인이 아니라
+ * `POST .../plugin/profiles` 라우트 자신의 후처리 실패(키 값 누락 · 저장 권한 없음)에서
+ * 나온다 — 예전엔 여기만 한국어 문장을 하드코딩해 4로케일 규율을 깨고 있었다.
  */
 
 export const WIZARD_ERROR_CODES = [
@@ -50,6 +54,8 @@ export const WIZARD_ERROR_CODES = [
   "unauthorized",
   "upstream_error",
   "gateway_auth_failed",
+  "key_missing_after_issue",
+  "key_store_forbidden",
 ] as const;
 
 export type WizardErrorCode = (typeof WIZARD_ERROR_CODES)[number];
@@ -76,6 +82,8 @@ export const WIZARD_ERROR_MESSAGE_KEYS: Record<WizardErrorCode, string> = {
   unauthorized: "hermes.wizard.error.unauthorized",
   upstream_error: "hermes.wizard.error.upstreamError",
   gateway_auth_failed: "hermes.wizard.error.gatewayAuthFailed",
+  key_missing_after_issue: "hermes.wizard.error.keyMissingAfterIssue",
+  key_store_forbidden: "hermes.wizard.error.keyStoreForbidden",
 };
 
 const UNKNOWN_KEY = "hermes.wizard.error.unknown";

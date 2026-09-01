@@ -1,49 +1,12 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import { describe, it } from "node:test";
 
-import { classifyPluginProbe, probeDeskrpgPlugin, shouldReprobePlugin } from "./plugin-capability";
-import type {
-  PluginCapability,
-  buildPluginCacheUpdate as BuildPluginCacheUpdateFn,
+import {
+  classifyPluginProbe,
+  probeDeskrpgPlugin,
+  resolvePluginStatusFromCache,
+  shouldReprobePlugin,
 } from "./plugin-capability";
-
-const require = createRequire(import.meta.url);
-
-// PostgreSQL: `timestamp(withTimezone)` 컬럼은 date 모드라 드라이버가 `Date` 를 기대한다.
-// SQLite: `text` 컬럼은 문자열을 기대한다. `buildPluginCacheUpdate()` 는 이제 스스로
-// `nowForDb()` 를 부르므로(호출자가 값을 주입할 자리가 없다 — Task 9 라운드 3), 그
-// 방언 분기를 관찰하려면 `nowForDb()` 가 캡처된 시점의 `src/db/index.ts` 자체를
-// 다시 읽어야 한다. `isPostgres` 는 그 모듈 로드 시점의 상수라
-// (task-manager-timestamps.test.ts 와 같은 사고), require 캐시를 지우고 환경변수를
-// 바꿔 같은 프로세스 안에서 `db/index.ts` 와 `plugin-capability.ts` 를 함께
-// 다시 읽는다 — plugin-capability.ts 의 `import { nowForDb } from "@/db"` 가 새로
-// 읽힌 db/index.ts 를 다시 가리키게 하기 위해서다.
-function loadBuildPluginCacheUpdate(env: {
-  DB_TYPE: string;
-  DATABASE_URL?: string;
-}): typeof BuildPluginCacheUpdateFn {
-  const prevDbType = process.env.DB_TYPE;
-  const prevDatabaseUrl = process.env.DATABASE_URL;
-  process.env.DB_TYPE = env.DB_TYPE;
-  if (env.DATABASE_URL) process.env.DATABASE_URL = env.DATABASE_URL;
-  else delete process.env.DATABASE_URL;
-
-  const dbModulePath = require.resolve("../../db/index.ts");
-  const pluginCapabilityModulePath = require.resolve("./plugin-capability.ts");
-  delete require.cache[dbModulePath];
-  delete require.cache[pluginCapabilityModulePath];
-  const { buildPluginCacheUpdate } = require("./plugin-capability.ts") as {
-    buildPluginCacheUpdate: typeof BuildPluginCacheUpdateFn;
-  };
-
-  if (prevDbType === undefined) delete process.env.DB_TYPE;
-  else process.env.DB_TYPE = prevDbType;
-  if (prevDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-  else process.env.DATABASE_URL = prevDatabaseUrl;
-
-  return buildPluginCacheUpdate;
-}
 
 describe("classifyPluginProbe", () => {
   // 401 과 404 를 뭉치면 사용자가 할 일이 사라진다 — 전자는 키 교체,
@@ -182,33 +145,61 @@ describe("shouldReprobePlugin", () => {
   });
 });
 
-// 판정 D·F 회귀 방어: 게이트웨이 테스트 라우트가 db.update(...).set(...) 에 넘길 payload 의
-// 값 TYPE 을 방언별로 고정한다. `nowForDb()` 를 `new Date().toISOString()` 으로 되돌리면
-// PG 방언 케이스가 실패해야 한다 — 실제로 되돌려 확인함(task-9-report.md 참조).
-describe("buildPluginCacheUpdate", () => {
-  const plugin: PluginCapability = { status: "plugin_ready", version: "0.3.0" };
+// 최종 리뷰 I-1: shouldReprobePlugin 정의만 있고 소비자가 없어서 Task 4·9 산출물이
+// 전부 죽어 있었다. HermesProfileList 가 "캐시를 쓸지 다시 찌를지" 를 결정하는 판정
+// 로직을 순수 함수로 뽑아 여기서 고정한다 — 이 테스트가 그 결정을 지킨다.
+describe("resolvePluginStatusFromCache", () => {
+  const now = new Date("2026-09-01T00:00:00Z");
 
-  // 라운드 2 까지는 `now` 를 호출자가 주입했다 — 그래서 호출부(route.ts)가
-  // `new Date().toISOString()` 같은 방언-무관 값을 대신 넘겨도 이 테스트는 그
-  // 실수를 못 잡았다(실제로 실증됨). 이제 함수가 스스로 nowForDb() 를 부르므로,
-  // 호출부는 `buildPluginCacheUpdate(plugin)` 외의 선택지가 없다 — 여기서 물리면
-  // 실제 코드 경로(함수 몸통 안의 nowForDb() 호출)를 보는 것이다.
-  it("PostgreSQL 방언: 스스로 부른 nowForDb() 가 Date 를 낸다", () => {
-    const buildPluginCacheUpdate = loadBuildPluginCacheUpdate({
-      DB_TYPE: "postgresql",
-      DATABASE_URL: "postgres://fake:fake@localhost:5432/fake",
+  it("캐시가 신선하고 값이 있으면 그 값을 쓰고 재프로브가 필요없다고 말한다", () => {
+    const result = resolvePluginStatusFromCache({
+      pluginStatus: "plugin_ready",
+      pluginCheckedAt: "2026-08-31T23:50:00Z",
+      now,
     });
-
-    const payload = buildPluginCacheUpdate(plugin);
-    assert.ok(payload.pluginCheckedAt instanceof Date, "PG 방언에서는 Date 여야 한다");
-    assert.ok(payload.updatedAt instanceof Date);
+    assert.deepEqual(result, { status: "plugin_ready", needsReprobe: false });
   });
 
-  it("SQLite 방언: 스스로 부른 nowForDb() 가 ISO 문자열을 낸다", () => {
-    const buildPluginCacheUpdate = loadBuildPluginCacheUpdate({ DB_TYPE: "sqlite" });
+  it("캐시가 오래됐으면 재프로브가 필요하다고 말한다", () => {
+    const result = resolvePluginStatusFromCache({
+      pluginStatus: "plugin_ready",
+      pluginCheckedAt: "2026-08-30T00:00:00Z",
+      now,
+    });
+    assert.deepEqual(result, { status: "unknown", needsReprobe: true });
+  });
 
-    const payload = buildPluginCacheUpdate(plugin);
-    assert.equal(typeof payload.pluginCheckedAt, "string", "SQLite 방언에서는 문자열이어야 한다");
-    assert.equal(typeof payload.updatedAt, "string");
+  it("캐시가 아예 없으면(checkedAt null) 재프로브가 필요하다", () => {
+    const result = resolvePluginStatusFromCache({
+      pluginStatus: null,
+      pluginCheckedAt: null,
+      now,
+    });
+    assert.deepEqual(result, { status: "unknown", needsReprobe: true });
+  });
+
+  it("checkedAt 은 신선한데 pluginStatus 가 알려진 값이 아니면 재프로브가 필요하다", () => {
+    // DB 컬럼이 nullable 이라 이론상 pluginStatus 가 null 인데 checkedAt 만 있는
+    // 상태가 있을 수 있다 — 값 없이 "신선하다" 고 우길 수 없다.
+    const result = resolvePluginStatusFromCache({
+      pluginStatus: null,
+      pluginCheckedAt: "2026-08-31T23:50:00Z",
+      now,
+    });
+    assert.deepEqual(result, { status: "unknown", needsReprobe: true });
+  });
+
+  it("PG 방언(Date 객체)도 그대로 받는다", () => {
+    const result = resolvePluginStatusFromCache({
+      pluginStatus: "plugin_absent",
+      pluginCheckedAt: new Date("2026-08-31T23:50:00Z"),
+      now,
+    });
+    assert.deepEqual(result, { status: "plugin_absent", needsReprobe: false });
   });
 });
+
+// `buildPluginCacheUpdate` 의 방언별 테스트는 plugin-cache-update.test.ts 로 옮겼다 —
+// 그 함수 자체가 plugin-cache-update.ts(서버 전용)로 옮겨졌기 때문이다. 이 파일의
+// 헤더 주석 참조(HermesProfileList.tsx 가 이 파일을 직접 import 하므로 `@/db` 를
+// 더는 담을 수 없다).

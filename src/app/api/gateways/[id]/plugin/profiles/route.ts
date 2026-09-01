@@ -118,22 +118,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     keyStorage = null;
   } else if (!res.data.apiKey) {
     // M-3: keyIssued:true 인데 apiKey 가 비어 왔다 — "발급 자체가 없었다"(null)와
-    // 다른 상황이니 이유 없이 keyStored:false 만 나가면 안 된다.
-    keyStorage = {
-      ok: false,
-      reason: "플러그인이 키가 발급됐다고 보고했지만 키 값을 받지 못했습니다.",
-    };
+    // 다른 상황이니 이유 없이 keyStored:false 만 나가면 안 된다. 코드로 보낸다 —
+    // 최종 리뷰 M-3, 화면이 wizard-error-codes 사전으로 번역한다.
+    keyStorage = { ok: false, reason: "key_missing_after_issue" };
   } else {
     const stored = await registerHermesProfile({
       userId,
       gatewayId: id,
       profileName: res.data.name,
       token: res.data.apiKey,
+      // 최종 리뷰 I-2: 이 라우트만 이 프로필을 실제로 만든다 — 마법사가 세운
+      // 표시라는 사실을 여기서 명시적으로 넘긴다. 수동 등록(profiles/route.ts,
+      // 다른 파일)은 이 인자를 넘기지 않아 false 로 남는다.
+      provisionedByDeskrpg: true,
     });
-    keyStorage =
-      "error" in stored
-        ? { ok: false, reason: "게이트웨이 소유자가 아니라 발급된 키를 저장하지 못했습니다." }
-        : { ok: true };
+    keyStorage = "error" in stored ? { ok: false, reason: "key_store_forbidden" } : { ok: true };
   }
 
   return NextResponse.json(attachKeyStorage(stripApiKey(res.data), keyStorage), { status: 201 });

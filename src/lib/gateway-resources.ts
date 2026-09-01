@@ -195,6 +195,13 @@ export async function listAccessibleGatewayResources(userId: string) {
       lastValidatedAt: resource.lastValidatedAt,
       lastValidationStatus: resource.lastValidationStatus,
       lastValidationError: resource.lastValidationError,
+      // 최종 리뷰 I-1: 이 캐시(Task 4·9 산출물)를 읽는 소비자가 하나도 없어서
+      // HermesProfileList 가 화면 진입마다 무조건 /test 를 다시 쳤다(원격 왕복
+      // 2회 + DB UPDATE, 최대 10초). 여기서 내려줘야 `shouldReprobePlugin` 으로
+      // 캐시가 신선한지 판단할 수 있다.
+      pluginStatus: resource.pluginStatus,
+      pluginVersion: resource.pluginVersion,
+      pluginCheckedAt: resource.pluginCheckedAt,
       canEditCredentials: true,
       shareRole: null as string | null,
       isOwner: true,
@@ -209,6 +216,9 @@ export async function listAccessibleGatewayResources(userId: string) {
         lastValidatedAt: resource.lastValidatedAt,
         lastValidationStatus: resource.lastValidationStatus,
         lastValidationError: resource.lastValidationError,
+        pluginStatus: resource.pluginStatus,
+        pluginVersion: resource.pluginVersion,
+        pluginCheckedAt: resource.pluginCheckedAt,
         canEditCredentials: false,
         shareRole: share?.role ?? null,
         isOwner: false,

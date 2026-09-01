@@ -8,9 +8,14 @@
  *
  * 모르는 응답은 `unknown` 으로 접고 기능을 **켜지 않는다**. 능력을 낙관적으로
  * 가정하면 사용자가 마법사를 열었다가 중간에 실패한다.
+ *
+ * 이 파일은 **클라이언트 컴포넌트에서 직접 import 된다**(`HermesProfileList.tsx`,
+ * 최종 리뷰 I-1 — `resolvePluginStatusFromCache` 를 브라우저에서 쓴다). 그래서
+ * `@/db`(및 그것이 끌어오는 `pg`/`better-sqlite3` 같은 Node-only 모듈)를 이 파일에
+ * import 하면 안 된다 — 실제로 한 번 그렇게 했다가 브라우저 번들이 깨졌다(`Module
+ * not found: Can't resolve 'dns'/'fs'/'net'/'tls'`). DB 를 만지는
+ * `buildPluginCacheUpdate` 는 그래서 `plugin-cache-update.ts`(서버 전용)로 뽑았다.
  */
-
-import { nowForDb } from "@/db";
 
 export type PluginStatus = "plugin_ready" | "plugin_unauthorized" | "plugin_absent" | "unknown";
 
@@ -54,20 +59,34 @@ export function shouldReprobePlugin(input: {
 }
 
 /**
- * 게이트웨이 테스트 라우트가 `db.update(gatewayResources).set(...)` 에 넘길 payload 를
- * 만든다. 타임스탬프를 **스스로** `nowForDb()` 로 구한다 — 호출자에게 맡기면 호출부가
- * `new Date().toISOString()` 같은 방언-무관 값을 대신 넘길 수 있고, PostgreSQL 에서는
- * `Date` 를 기대하는 `timestamp(withTimezone)` 컬럼에 문자열이 잘못 바인딩된다
- * (판정 D 사고). 잘못된 타입을 넘길 자리 자체를 없애는 것이 이 함수의 계약이다.
+ * 최종 리뷰 I-1: `shouldReprobePlugin` 을 정의만 하고 아무도 부르지 않아서 Task 4·9 의
+ * 산출물(캐시 컬럼 3개, 이 함수)이 전부 죽어 있었다 — `HermesProfileList` 가 화면
+ * 진입마다 무조건 `/test`(원격 왕복 2회, 플러그인 프로브만 타임아웃 10초)를 다시 쳤다.
+ *
+ * 이 함수가 "캐시를 쓸지 다시 찌를지"의 판정을 순수 함수로 뽑아 고정한다 — 캐시가
+ * 신선하고 값이 있으면 그 값을 그대로 쓰고, 오래됐거나(또는 아예 없으면) 재프로브가
+ * 필요하다고 말한다. 호출부(`HermesProfileList`)는 이 결과에 따라 `/test` 를 부를지
+ * 말지만 결정하면 된다.
  */
-export function buildPluginCacheUpdate(plugin: PluginCapability) {
-  const now = nowForDb();
-  return {
-    pluginStatus: plugin.status,
-    pluginVersion: plugin.version,
-    pluginCheckedAt: now,
-    updatedAt: now,
-  };
+export function resolvePluginStatusFromCache(input: {
+  pluginStatus: string | null;
+  pluginCheckedAt: string | Date | null;
+  now: Date;
+}): { status: PluginStatus; needsReprobe: boolean } {
+  const stale = shouldReprobePlugin({ checkedAt: input.pluginCheckedAt, now: input.now });
+  if (!stale && isPluginStatus(input.pluginStatus)) {
+    return { status: input.pluginStatus, needsReprobe: false };
+  }
+  return { status: "unknown", needsReprobe: true };
+}
+
+function isPluginStatus(value: string | null): value is PluginStatus {
+  return (
+    value === "plugin_ready" ||
+    value === "plugin_unauthorized" ||
+    value === "plugin_absent" ||
+    value === "unknown"
+  );
 }
 
 export async function probeDeskrpgPlugin(input: {

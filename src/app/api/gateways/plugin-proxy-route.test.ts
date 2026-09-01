@@ -261,8 +261,10 @@ describe("plugin proxy — keyIssued:true 인데 apiKey 가 비어 오면 이유
       assert.equal(res.status, 201, "프로필 자체는 실제로 만들어졌으니 201 을 유지한다");
       assert.equal(body.keyIssued, true);
       assert.equal(body.keyStored, false);
-      assert.equal(typeof body.keyStoredError, "string");
-      assert.ok(body.keyStoredError.length > 0, "이유 없이 keyStored:false 만 나가면 안 된다");
+      // 최종 리뷰 M-3: 이 값은 화면에 그대로 렌더되는 한국어 문장이 아니라
+      // wizard-error-codes.ts 사전의 코드여야 한다 — en/ja/zh 사용자도 번역된
+      // 문구를 본다.
+      assert.equal(body.keyStoredError, "key_missing_after_issue");
       assert.equal("apiKey" in body, false);
     } finally {
       server.close();

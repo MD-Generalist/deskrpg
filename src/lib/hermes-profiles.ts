@@ -40,7 +40,7 @@ function isUniqueViolation(err: unknown): boolean {
 
 async function updateHermesProfileToken(
   profileId: string,
-  input: { token: string; displayName?: string },
+  input: { token: string; displayName?: string; provisionedByDeskrpg?: boolean },
   fallbackDisplayName: string | null,
 ) {
   const [updated] = await db
@@ -49,6 +49,10 @@ async function updateHermesProfileToken(
       tokenEncrypted: encryptGatewayToken(input.token.trim()),
       displayName: input.displayName?.trim() || fallbackDisplayName,
       updatedAt: nowForDb(),
+      // 최종 리뷰 I-2: 이 인자가 없거나 false 면 기존 값을 건드리지 않는다 — 수동
+      // 재등록(토큰 교체 등) 경로가 이미 서 있는 provisionedByDeskrpg 를 조용히
+      // false 로 되돌리면 안 된다. 마법사만 true 를 명시적으로 넘긴다.
+      ...(input.provisionedByDeskrpg ? { provisionedByDeskrpg: true } : {}),
     })
     .where(eq(hermesProfiles.id, profileId))
     .returning();
@@ -75,6 +79,14 @@ export async function registerHermesProfile(input: {
   profileName: string;
   token: string;
   displayName?: string;
+  /**
+   * 최종 리뷰 I-2: 스펙 §3① — "마법사가 이 값을 세운다." 마법사(플러그인 프로필 생성
+   * 라우트)만 `true` 를 넘긴다. 수동 등록 화면(`/api/gateways/[id]/profiles`)은 이
+   * 인자를 아예 넘기지 않아 기본값(false)이 유지된다 — DeskRPG 가 만든 프로필과
+   * 사용자가 손으로 등록한 프로필을 구분하는 유일한 신호이므로, 여기서 잘못 세우면
+   * 영원히 되돌릴 방법이 없다.
+   */
+  provisionedByDeskrpg?: boolean;
 }): Promise<{ profile: typeof hermesProfiles.$inferSelect } | { error: "forbidden" }> {
   // Registering writes a credential onto the gateway, so this requires ownership —
   // a shared "use" role is enough to read/validate profiles but not to write one.
@@ -106,6 +118,7 @@ export async function registerHermesProfile(input: {
         profileName,
         tokenEncrypted: encryptGatewayToken(input.token.trim()),
         displayName: input.displayName?.trim() || profileName,
+        provisionedByDeskrpg: input.provisionedByDeskrpg ?? false,
       })
       .returning();
     return { profile: created };

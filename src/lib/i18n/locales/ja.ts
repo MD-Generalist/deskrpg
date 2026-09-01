@@ -299,6 +299,10 @@ const ja: Record<string, string> = {
   "hermes.wizard.error.upstreamError": "ゲートウェイがエラーを報告しました。",
   "hermes.wizard.error.gatewayAuthFailed":
     "ゲートウェイキーが拒否されました。キーを確認してください。",
+  "hermes.wizard.error.keyMissingAfterIssue":
+    "プラグインはキーが発行されたと報告しましたが、キーの値を受け取れませんでした。",
+  "hermes.wizard.error.keyStoreForbidden":
+    "ゲートウェイの所有者ではないため、発行されたキーを保存できませんでした。",
   "hermes.wizard.error.unknown": "不明なエラーが発生しました。",
   "gateway.statusCard.title": "ゲートウェイ接続状態",
   "gateway.statusCard.status.idle": "待機中",

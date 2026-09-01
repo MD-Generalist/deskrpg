@@ -628,7 +628,11 @@ export default function NpcHireWizard({
                     {t("hermes.wizard.profile.keyStoredFalseTitle")}
                   </p>
                   {created.keyStoredError && (
-                    <p className="text-xs text-text-muted">{created.keyStoredError}</p>
+                    // 최종 리뷰 M-3: 이 값은 이제 한국어 문장이 아니라 코드다 —
+                    // wizard-error-codes 사전으로 번역해야 en/ja/zh 사용자도 읽는다.
+                    <p className="text-xs text-text-muted">
+                      {getWizardErrorMessage(t, created.keyStoredError)}
+                    </p>
                   )}
                 </div>
               )}
