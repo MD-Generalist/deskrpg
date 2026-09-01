@@ -344,3 +344,156 @@ describe("plugin proxy — DELETE 성공 시 로컬 등록 행을 함께 지운�
     }
   });
 });
+
+describe("plugin proxy — 실패 응답에 upstreamStatus 를 함께 싣는다 (수정 라운드 1)", () => {
+  // 프록시는 실패를 항상 HTTP 200 + errorCode 로 옮긴다(Cloudflare 가 origin 5xx 를
+  // 자기 페이지로 갈아치우는 문제의 연장선). 그 과정에서 원래 있던 업스트림 상태
+  // 코드가 함께 사라지면, 구조화 `error` 필드 없는 401 과 404 가 둘 다 `plugin_error`
+  // 로 뭉쳐 "401 과 404 는 사용자가 할 일이 정반대다" 원칙이 이 층에서 재발한다
+  // (classifyPluginProbe 가 게이트웨이 레벨에서 이미 겪은 문제). upstreamStatus 필드가
+  // 그 원 상태 코드를 그대로 실어 보내는지 라우트 레벨에서 고정한다.
+
+  test("identity GET — 업스트림 401(구조화 error 없음) 이 upstreamStatus:401 로 도착한다", async () => {
+    const server = http.createServer((_httpReq, httpRes) => {
+      httpRes.writeHead(401, { "content-type": "application/json" });
+      httpRes.end(JSON.stringify({}));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("failed to bind stub server");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const admin = await seedUser("system_admin");
+      const gateway = await seedGateway(admin.id, baseUrl);
+      const { db, hermesProfiles } = await loadDb();
+      const { encryptGatewayToken } = await import("@/lib/gateway-resources");
+      await db.insert(hermesProfiles).values({
+        gatewayId: gateway.id,
+        profileName: "noah",
+        tokenEncrypted: encryptGatewayToken("profile-scoped-key-abcdefgh01"),
+        displayName: "noah",
+      });
+
+      const { GET } = await import("./[id]/plugin/profiles/[name]/identity/route");
+      const res = await GET(
+        getReq(
+          `http://localhost/api/gateways/${gateway.id}/plugin/profiles/noah/identity`,
+          admin.id,
+        ),
+        { params: Promise.resolve({ id: gateway.id, name: "noah" }) },
+      );
+      assert.ok(res);
+      const body = await res.json();
+      assert.equal(res.status, 200, "실패도 200 규약을 유지한다");
+      assert.equal(
+        body.errorCode,
+        "plugin_error",
+        "구조화 error 필드가 없으면 여전히 뭉뚱그려진다",
+      );
+      assert.equal(body.upstreamStatus, 401, "그러나 원 상태 코드는 그대로 살아남는다");
+    } finally {
+      server.close();
+    }
+  });
+
+  test("identity GET — 업스트림 404(구조화 error 없음) 이 upstreamStatus:404 로 도착한다", async () => {
+    const server = http.createServer((_httpReq, httpRes) => {
+      httpRes.writeHead(404, { "content-type": "application/json" });
+      httpRes.end(JSON.stringify({}));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("failed to bind stub server");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const admin = await seedUser("system_admin");
+      const gateway = await seedGateway(admin.id, baseUrl);
+      const { db, hermesProfiles } = await loadDb();
+      const { encryptGatewayToken } = await import("@/lib/gateway-resources");
+      await db.insert(hermesProfiles).values({
+        gatewayId: gateway.id,
+        profileName: "noah",
+        tokenEncrypted: encryptGatewayToken("profile-scoped-key-abcdefgh01"),
+        displayName: "noah",
+      });
+
+      const { GET } = await import("./[id]/plugin/profiles/[name]/identity/route");
+      const res = await GET(
+        getReq(
+          `http://localhost/api/gateways/${gateway.id}/plugin/profiles/noah/identity`,
+          admin.id,
+        ),
+        { params: Promise.resolve({ id: gateway.id, name: "noah" }) },
+      );
+      assert.ok(res);
+      const body = await res.json();
+      assert.equal(res.status, 200);
+      assert.equal(body.errorCode, "plugin_error");
+      assert.equal(body.upstreamStatus, 404, "이 값이 없으면 401 과 404 를 화면에서 가를 수 없다");
+    } finally {
+      server.close();
+    }
+  });
+
+  test("POST /plugin/profiles — 업스트림 409(already_exists) 도 upstreamStatus 를 싣는다", async () => {
+    const server = http.createServer((_httpReq, httpRes) => {
+      httpRes.writeHead(409, { "content-type": "application/json" });
+      httpRes.end(JSON.stringify({ error: "already_exists", name: "noah" }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("failed to bind stub server");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const admin = await seedUser("system_admin");
+      const gateway = await seedGateway(admin.id, baseUrl);
+
+      const { POST } = await import("./[id]/plugin/profiles/route");
+      const res = await POST(
+        mutatingReq(
+          `http://localhost/api/gateways/${gateway.id}/plugin/profiles`,
+          admin.id,
+          "POST",
+          {
+            name: "noah",
+          },
+        ),
+        { params: Promise.resolve({ id: gateway.id }) },
+      );
+      const body = await res.json();
+      assert.equal(res.status, 200);
+      assert.equal(body.errorCode, "already_exists");
+      assert.equal(
+        body.upstreamStatus,
+        409,
+        "명명된 코드가 있는 경로도 upstreamStatus 를 잃지 않는다",
+      );
+    } finally {
+      server.close();
+    }
+  });
+
+  test("DELETE /plugin/profiles/{name} — 네트워크 도달 실패는 upstreamStatus:0 이다", async () => {
+    // UNREACHABLE_BASE_URL 은 아무도 듣지 않아 client 가 `{status:0}` 를 낸다
+    // (plugin-client.ts 의 UNREACHABLE). 이 값도 그대로 실려야 "도달 못 함" 과
+    // "원격이 거절함" 이 화면에서 갈린다.
+    const admin = await seedUser("system_admin");
+    const gateway = await seedGateway(admin.id, UNREACHABLE_BASE_URL);
+    const { DELETE } = await import("./[id]/plugin/profiles/[name]/route");
+    const res = await DELETE(
+      mutatingReq(
+        `http://localhost/api/gateways/${gateway.id}/plugin/profiles/noah`,
+        admin.id,
+        "DELETE",
+      ),
+      { params: Promise.resolve({ id: gateway.id, name: "noah" }) },
+    );
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.errorCode, "unreachable");
+    assert.equal(body.upstreamStatus, 0);
+  });
+});

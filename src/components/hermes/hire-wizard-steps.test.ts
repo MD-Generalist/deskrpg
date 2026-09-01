@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { availableSteps, identityDecision, nextStep } from "./hire-wizard-steps";
+import {
+  availableSteps,
+  classifyServingCheck,
+  identityDecision,
+  nextStep,
+} from "./hire-wizard-steps";
 
 describe("availableSteps — 축소 사다리", () => {
   it("플러그인이 있으면 4단 전부 열린다", () => {
@@ -79,5 +84,39 @@ describe("nextStep", () => {
   it("마지막 단계 다음은 없다", () => {
     const steps = availableSteps("plugin_ready", false);
     assert.equal(nextStep("placement", steps), null);
+  });
+});
+
+describe("classifyServingCheck — 401 과 404 를 가른다 (수정 라운드 1)", () => {
+  it("errorCode 가 없으면 서빙되는 것이다", () => {
+    assert.equal(classifyServingCheck({ errorCode: null, upstreamStatus: null }), "served");
+  });
+
+  it("업스트림 401 은 키 문제다 — allowlist 안내와는 다른 조치가 필요하다", () => {
+    assert.equal(
+      classifyServingCheck({ errorCode: "plugin_error", upstreamStatus: 401 }),
+      "key_rejected",
+    );
+  });
+
+  it("업스트림 404 는 이 게이트웨이가 새 프로필을 서빙하지 않는다는 뜻이다", () => {
+    assert.equal(
+      classifyServingCheck({ errorCode: "plugin_error", upstreamStatus: 404 }),
+      "not_served",
+    );
+  });
+
+  it("업스트림 상태가 401/404 가 아니면 이름 있는 에러코드라도 unknown 으로 접는다", () => {
+    // identity_unreadable(409) 처럼 서빙 여부와 무관한 다른 문제를 401/404 로
+    // 오인해 엉뚱한 안내를 하면 안 된다 — 이 경우는 일반 에러코드 메시지로 넘긴다.
+    assert.equal(
+      classifyServingCheck({ errorCode: "identity_unreadable", upstreamStatus: 409 }),
+      "unknown",
+    );
+  });
+
+  it("도달 실패(status 0)나 그 외 상태코드는 unknown 으로 접는다", () => {
+    assert.equal(classifyServingCheck({ errorCode: "unreachable", upstreamStatus: 0 }), "unknown");
+    assert.equal(classifyServingCheck({ errorCode: "timeout", upstreamStatus: null }), "unknown");
   });
 });

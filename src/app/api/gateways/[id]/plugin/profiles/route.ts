@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const res = await client.listProfiles();
   if (!res.ok) {
     return NextResponse.json(
-      { errorCode: res.failure.code, error: res.failure.message },
+      { errorCode: res.failure.code, error: res.failure.message, upstreamStatus: res.status },
       proxyInit(res.failure.code),
     );
   }
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const res = await client.createProfile(nameCheck.name);
   if (!res.ok) {
     return NextResponse.json(
-      { errorCode: res.failure.code, error: res.failure.message },
+      { errorCode: res.failure.code, error: res.failure.message, upstreamStatus: res.status },
       proxyInit(res.failure.code),
     );
   }

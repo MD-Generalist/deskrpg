@@ -60,6 +60,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         errorCode: res.failure.code,
         error: res.failure.message,
         blocksEditor: res.failure.blocksEditor,
+        upstreamStatus: res.status,
       },
       proxyInit(res.failure.code),
     );
@@ -88,7 +89,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   });
   if (!res.ok) {
     return NextResponse.json(
-      { errorCode: res.failure.code, error: res.failure.message },
+      { errorCode: res.failure.code, error: res.failure.message, upstreamStatus: res.status },
       proxyInit(res.failure.code),
     );
   }

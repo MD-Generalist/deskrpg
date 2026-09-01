@@ -24,6 +24,7 @@ import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 
 import {
   availableSteps,
+  classifyServingCheck,
   identityDecision,
   nextStep,
   type StepAvailability,
@@ -50,7 +51,12 @@ type IdentityPayload = {
   unreadable?: boolean;
 };
 
-type ProxyFailure = { errorCode?: string; error?: string; shellCommand?: string | null };
+type ProxyFailure = {
+  errorCode?: string;
+  error?: string;
+  shellCommand?: string | null;
+  upstreamStatus?: number | null;
+};
 
 interface NpcHireWizardProps {
   gatewayId: string;
@@ -63,6 +69,13 @@ function extractErrorCode(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const code = (payload as { errorCode?: unknown }).errorCode;
   return typeof code === "string" ? code : null;
+}
+
+/** 프록시 4종이 실패 응답에 함께 싣는 원 업스트림 상태 코드. 없으면 null(예: 네트워크 실패). */
+function extractUpstreamStatus(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") return null;
+  const status = (payload as { upstreamStatus?: unknown }).upstreamStatus;
+  return typeof status === "number" ? status : null;
 }
 
 export default function NpcHireWizard({
@@ -90,9 +103,10 @@ export default function NpcHireWizard({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [created, setCreated] = useState<ProvisionedProfile | null>(null);
-  const [serving, setServing] = useState<"idle" | "checking" | "served" | "not_served" | "error">(
-    "idle",
-  );
+  const [serving, setServing] = useState<
+    "idle" | "checking" | "served" | "key_rejected" | "not_served" | "error"
+  >("idle");
+  const [servingError, setServingError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [deleteShellCommand, setDeleteShellCommand] = useState<string | null>(null);
@@ -157,20 +171,30 @@ export default function NpcHireWizard({
       }
 
       setServing("checking");
+      setServingError("");
       const idRes = await fetch(
         `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(profile.name)}/identity`,
       );
       const idData = withHeaderErrorCode(await idRes.json().catch(() => ({})), idRes.headers);
       const idCode = extractErrorCode(idData);
-      if (!idCode && idRes.ok) {
+      // 판정 I: served_profiles 스냅샷을 쓰지 않는다 — 방금 만든 프로필을 실제로
+      // 호출해 판정한다. 수정 라운드 1: 프록시가 이제 `upstreamStatus` 를 함께
+      // 실어 보내므로, 401(키 문제)과 404(allowlist 로 서빙 안 함)를 가른다 —
+      // 둘 다 `plugin_error` 로 뭉쳐지던 문제(리뷰 지적)를 여기서 고친다.
+      const verdict = classifyServingCheck({
+        errorCode: idCode,
+        upstreamStatus: extractUpstreamStatus(idData),
+      });
+      if (verdict === "served") {
         setServing("served");
         setIdentityPayload(idData as IdentityPayload);
-      } else {
-        // 판정 I: served_profiles 스냅샷을 쓰지 않는다 — 방금 만든 프로필을 실제로
-        // 호출해 200/실패로 판정한다. 프록시가 원격 상태코드를 그대로 넘기지 않고
-        // 200+errorCode 로 옮기므로(라우트 주석 참조), 여기서는 상태코드가 아니라
-        // errorCode 유무로 "서빙되지 않음" 을 판정한다.
+      } else if (verdict === "key_rejected") {
+        setServing("key_rejected");
+      } else if (verdict === "not_served") {
         setServing("not_served");
+      } else {
+        setServing("error");
+        setServingError(getWizardErrorMessage(t, idCode));
       }
     } catch {
       setCreateError(t("errors.connectionFailed"));
@@ -557,9 +581,13 @@ export default function NpcHireWizard({
                   {serving === "served" && (
                     <p className="text-sm text-emerald-300">{t("hermes.wizard.profile.served")}</p>
                   )}
+                  {serving === "key_rejected" && (
+                    <p className="text-sm text-danger">{t("hermes.wizard.profile.keyRejected")}</p>
+                  )}
                   {serving === "not_served" && (
                     <p className="text-sm text-danger">{t("hermes.wizard.profile.notServed")}</p>
                   )}
+                  {serving === "error" && <p className="text-sm text-danger">{servingError}</p>}
                   {serving === "served" && (
                     <button
                       type="button"

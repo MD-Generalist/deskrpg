@@ -232,6 +232,8 @@ const en: Record<string, string> = {
   "hermes.wizard.profile.served": "Confirmed — this profile is being served.",
   "hermes.wizard.profile.notServed":
     "This gateway doesn't serve new profiles (it may use an allowlist).",
+  "hermes.wizard.profile.keyRejected":
+    "Not authenticated with this profile's key. Check that the issued key is correct.",
   "hermes.wizard.profile.continue": "Continue",
   "hermes.wizard.identity.loading": "Loading identity…",
   "hermes.wizard.identity.blocked": "The identity file can't be read, so the editor stays closed.",

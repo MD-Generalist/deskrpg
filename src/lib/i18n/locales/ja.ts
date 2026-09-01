@@ -234,6 +234,8 @@ const ja: Record<string, string> = {
   "hermes.wizard.profile.served": "確認済み — このプロフィールは提供されています。",
   "hermes.wizard.profile.notServed":
     "このゲートウェイは新しいプロフィールを提供していません（allowlist設定の可能性があります）。",
+  "hermes.wizard.profile.keyRejected":
+    "このプロフィールのキーで認証されませんでした。発行されたキーが正しいか確認してください。",
   "hermes.wizard.profile.continue": "次のステップへ",
   "hermes.wizard.identity.loading": "人格を読み込み中…",
   "hermes.wizard.identity.blocked": "人格ファイルを読み込めないため、エディタは開きません。",

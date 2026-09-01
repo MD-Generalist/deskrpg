@@ -56,7 +56,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const res = await r.client.getConfig(r.name, r.profileToken);
   if (!res.ok) {
     return NextResponse.json(
-      { errorCode: res.failure.code, error: res.failure.message },
+      { errorCode: res.failure.code, error: res.failure.message, upstreamStatus: res.status },
       proxyInit(res.failure.code),
     );
   }
@@ -85,7 +85,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   const res = await r.client.putConfig(r.name, r.profileToken, patchCheck.patch);
   if (!res.ok) {
     return NextResponse.json(
-      { errorCode: res.failure.code, error: res.failure.message },
+      { errorCode: res.failure.code, error: res.failure.message, upstreamStatus: res.status },
       proxyInit(res.failure.code),
     );
   }

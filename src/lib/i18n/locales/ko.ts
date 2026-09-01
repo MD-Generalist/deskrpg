@@ -229,6 +229,8 @@ const ko: Record<string, string> = {
   "hermes.wizard.profile.served": "확인됨 — 이 프로필이 서빙되고 있습니다.",
   "hermes.wizard.profile.notServed":
     "이 게이트웨이는 새 프로필을 서빙하지 않습니다(allowlist 설정일 수 있습니다).",
+  "hermes.wizard.profile.keyRejected":
+    "이 프로필의 키로 인증되지 않았습니다. 발급된 키가 맞는지 확인하세요.",
   "hermes.wizard.profile.continue": "다음 단계로",
   "hermes.wizard.identity.loading": "인격을 불러오는 중…",
   "hermes.wizard.identity.blocked": "인격 파일을 읽을 수 없어 편집기를 열지 않습니다.",

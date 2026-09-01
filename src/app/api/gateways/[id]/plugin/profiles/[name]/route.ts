@@ -64,6 +64,7 @@ export async function DELETE(
         errorCode: res.failure.code,
         error: res.failure.message,
         shellCommand: res.failure.showsShellCommand,
+        upstreamStatus: res.status,
       },
       proxyInit(res.failure.code),
     );

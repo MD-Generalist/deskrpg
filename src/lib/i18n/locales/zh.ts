@@ -225,6 +225,7 @@ const zh: Record<string, string> = {
   "hermes.wizard.profile.served": "已确认 — 此配置文件正在被提供。",
   "hermes.wizard.profile.notServed": "此网关不为新配置文件提供服务（可能使用了白名单）。",
   "hermes.wizard.profile.continue": "继续下一步",
+  "hermes.wizard.profile.keyRejected": "使用此配置文件的密钥认证失败，请确认签发的密钥是否正确。",
   "hermes.wizard.identity.loading": "正在加载人格…",
   "hermes.wizard.identity.blocked": "无法读取人格文件，因此不会打开编辑器。",
   "hermes.wizard.identity.askOverwriteTitle": "已存在人格内容，您想怎么做？",

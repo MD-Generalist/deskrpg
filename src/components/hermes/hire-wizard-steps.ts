@@ -56,6 +56,30 @@ export function identityDecision(payload: {
   return payload.isDefaultTemplate ? "edit_fresh" : "ask_overwrite";
 }
 
+export type ServingVerdict = "served" | "key_rejected" | "not_served" | "unknown";
+
+/**
+ * ① 에서 만든 프로필이 실제로 서빙되는지 — `GET .../identity` 실호출 한 번의 결과로
+ * 판정한다(판정 I, `served_profiles` 스냅샷은 쓰지 않는다).
+ *
+ * 수정 라운드 1: 프록시 라우트는 업스트림 실패를 항상 HTTP 200 + `errorCode` 로 옮긴다
+ * (Cloudflare 가 origin 5xx 본문을 갈아치우는 문제의 연장선, `route.ts` 의 `proxyInit`
+ * 주석 참조) — 그 과정에서 원래 있던 업스트림 상태 코드(`PluginResponse.status`)가
+ * 함께 사라져, 구조화 `error` 필드 없는 401 과 404 가 둘 다 `plugin_error` 로 뭉쳐
+ * "401 과 404 는 사용자가 할 일이 정반대다" 원칙이 이 층에서 재발했다. 프록시 4종이
+ * 이제 `upstreamStatus` 를 함께 싣는다 — 여기서 그 값으로 401(키 문제)과 404(allowlist
+ * 로 이 프로필을 서빙하지 않음)를 가른다.
+ */
+export function classifyServingCheck(input: {
+  errorCode: string | null;
+  upstreamStatus: number | null;
+}): ServingVerdict {
+  if (!input.errorCode) return "served";
+  if (input.upstreamStatus === 401) return "key_rejected";
+  if (input.upstreamStatus === 404) return "not_served";
+  return "unknown";
+}
+
 export function nextStep(current: WizardStep, steps: StepAvailability[]): WizardStep | null {
   const idx = ORDER.indexOf(current);
   for (let i = idx + 1; i < ORDER.length; i += 1) {
