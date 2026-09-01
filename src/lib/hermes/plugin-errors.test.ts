@@ -249,4 +249,16 @@ describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, 
     assert.equal(got.code, "plugin_error");
     assert.equal(got.message, "internal failure");
   });
+
+  it("error 가 배열이면 객체 분기(code/message 추출)를 타지 않는다", () => {
+    // typeof [] === "object" 라 Array.isArray 가드가 없으면 nested.code 를 찾다가
+    // 조용히 undefined 를 만나거나, 배열 요소를 코드로 오인할 수 있다.
+    const got = mapPluginFailure({
+      status: 400,
+      body: { error: ["one", "two"], reason: "여러 문제가 있다" },
+    });
+    assert.ok(got);
+    assert.equal(got.code, "plugin_error");
+    assert.equal(got.message, "여러 문제가 있다", "reason 이 있으면 그것을 message 로 쓴다");
+  });
 });
