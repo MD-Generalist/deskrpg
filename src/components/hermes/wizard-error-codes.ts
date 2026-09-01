@@ -14,6 +14,10 @@
  * unreachable·malformed_response), 프록시 라우트 자체의 `unauthorized`/`forbidden`/
  * `not_found`/`bad_request`/`invalid_profile_name`, `plugin-profile-access.ts`
  * (`no_profile`), `validation.ts`(`unsupported_config_key`).
+ *
+ * 수정 라운드 2: `upstream_error`(업스트림 `error` 가 평문 문장이라 코드로 못 쓸 때의
+ * fallback)와 `gateway_auth_failed`(업스트림 401 의 `error` 가 객체일 때 그 안에서
+ * 뽑아낸 진짜 코드)를 추가했다 — `plugin-errors.ts` 의 `extractCodeAndMessage` 참조.
  */
 
 export const WIZARD_ERROR_CODES = [
@@ -36,6 +40,8 @@ export const WIZARD_ERROR_CODES = [
   "forbidden",
   "not_found",
   "unauthorized",
+  "upstream_error",
+  "gateway_auth_failed",
 ] as const;
 
 export type WizardErrorCode = (typeof WIZARD_ERROR_CODES)[number];
@@ -59,6 +65,8 @@ export const WIZARD_ERROR_MESSAGE_KEYS: Record<WizardErrorCode, string> = {
   forbidden: "hermes.wizard.error.forbidden",
   not_found: "hermes.wizard.error.notFound",
   unauthorized: "hermes.wizard.error.unauthorized",
+  upstream_error: "hermes.wizard.error.upstreamError",
+  gateway_auth_failed: "hermes.wizard.error.gatewayAuthFailed",
 };
 
 const UNKNOWN_KEY = "hermes.wizard.error.unknown";

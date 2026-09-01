@@ -276,6 +276,8 @@ const zh: Record<string, string> = {
   "hermes.wizard.error.forbidden": "没有权限。",
   "hermes.wizard.error.notFound": "未找到。",
   "hermes.wizard.error.unauthorized": "需要身份验证。",
+  "hermes.wizard.error.upstreamError": "网关报告了一个错误。",
+  "hermes.wizard.error.gatewayAuthFailed": "网关密钥被拒绝，请检查密钥是否正确。",
   "hermes.wizard.error.unknown": "发生未知错误。",
   "gateway.statusCard.title": "网关连接状态",
   "gateway.statusCard.status.idle": "待机中",

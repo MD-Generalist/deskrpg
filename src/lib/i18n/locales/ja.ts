@@ -291,6 +291,9 @@ const ja: Record<string, string> = {
   "hermes.wizard.error.forbidden": "権限がありません。",
   "hermes.wizard.error.notFound": "見つかりません。",
   "hermes.wizard.error.unauthorized": "認証が必要です。",
+  "hermes.wizard.error.upstreamError": "ゲートウェイがエラーを報告しました。",
+  "hermes.wizard.error.gatewayAuthFailed":
+    "ゲートウェイキーが拒否されました。キーを確認してください。",
   "hermes.wizard.error.unknown": "不明なエラーが発生しました。",
   "gateway.statusCard.title": "ゲートウェイ接続状態",
   "gateway.statusCard.status.idle": "待機中",

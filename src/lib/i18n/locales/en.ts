@@ -289,6 +289,9 @@ const en: Record<string, string> = {
   "hermes.wizard.error.forbidden": "You don't have permission.",
   "hermes.wizard.error.notFound": "Not found.",
   "hermes.wizard.error.unauthorized": "Authentication required.",
+  "hermes.wizard.error.upstreamError": "The gateway reported an error.",
+  "hermes.wizard.error.gatewayAuthFailed":
+    "The gateway rejected the key. Check that it is correct.",
   "hermes.wizard.error.unknown": "An unknown error occurred.",
   "gateway.statusCard.title": "Gateway connection",
   "gateway.statusCard.status.idle": "Idle",

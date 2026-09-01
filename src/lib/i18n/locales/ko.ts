@@ -284,6 +284,8 @@ const ko: Record<string, string> = {
   "hermes.wizard.error.forbidden": "권한이 없습니다.",
   "hermes.wizard.error.notFound": "찾을 수 없습니다.",
   "hermes.wizard.error.unauthorized": "인증이 필요합니다.",
+  "hermes.wizard.error.upstreamError": "게이트웨이가 오류를 보고했습니다.",
+  "hermes.wizard.error.gatewayAuthFailed": "게이트웨이 키가 거부되었습니다. 키를 확인하세요.",
   "hermes.wizard.error.unknown": "알 수 없는 오류가 발생했습니다.",
   "gateway.statusCard.title": "게이트웨이 연결 상태",
   "gateway.statusCard.status.idle": "대기 중",

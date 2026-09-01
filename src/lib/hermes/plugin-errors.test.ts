@@ -190,3 +190,63 @@ describe("profile_has_service 안내", () => {
     assert.equal(got.showsShellCommand, "hermes profile delete my-bot");
   });
 });
+
+describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, MiniPC 게이트웨이, Hermes v0.21.0)", () => {
+  it("404 — error 가 평문 문장이면 코드 자리에 문장을 흘리지 않는다", () => {
+    // 실측 그대로: { "error": "Unknown or unconfigured profile" }
+    const got = mapPluginFailure({
+      status: 404,
+      body: { error: "Unknown or unconfigured profile" },
+    });
+    assert.ok(got);
+    assert.equal(
+      got.code,
+      "upstream_error",
+      "문장은 wizard-error-codes 사전에 없는 값이라 코드로 쓰면 안 된다",
+    );
+    assert.equal(
+      got.message,
+      "Unknown or unconfigured profile",
+      "문장 자체는 잃지 않고 message 에 보존한다",
+    );
+  });
+
+  it("401 — error 가 객체면 안의 진짜 code 를 꺼낸다", () => {
+    // 실측 그대로: { "error": { "message": "...", "type": "gateway_auth_error",
+    //                            "code": "gateway_auth_failed" } }
+    const got = mapPluginFailure({
+      status: 401,
+      body: {
+        error: {
+          message: "Invalid gateway API key (API_SERVER_KEY)",
+          type: "gateway_auth_error",
+          code: "gateway_auth_failed",
+        },
+      },
+    });
+    assert.ok(got);
+    assert.equal(got.code, "gateway_auth_failed", "plugin_error 로 뭉개면 진짜 원인을 잃는다");
+    assert.equal(got.message, "Invalid gateway API key (API_SERVER_KEY)");
+  });
+
+  it("409 — error 가 짧은 코드 문자열이면 기존처럼 그대로 코드로 쓴다", () => {
+    // 실측 그대로: { "error": "config_unreadable", "reason": "..." } — 우리 플러그인 모양.
+    const got = mapPluginFailure({
+      status: 409,
+      body: { error: "config_unreadable", reason: "기존 model 키가 매핑이 아니다" },
+    });
+    assert.ok(got);
+    assert.equal(got.code, "config_unreadable");
+    assert.equal(got.message, "기존 model 키가 매핑이 아니다");
+  });
+
+  it("객체 error 에 code 가 없으면 plugin_error 로 접되 message 는 살린다", () => {
+    const got = mapPluginFailure({
+      status: 500,
+      body: { error: { message: "internal failure" } },
+    });
+    assert.ok(got);
+    assert.equal(got.code, "plugin_error");
+    assert.equal(got.message, "internal failure");
+  });
+});
