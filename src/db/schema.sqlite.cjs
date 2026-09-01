@@ -104,6 +104,9 @@ const gatewayResources = sqliteTable(
     localDiscoveryOptedInBy: text("local_discovery_opted_in_by").references(() => users.id, {
       onDelete: "set null",
     }),
+    pluginStatus: text("plugin_status"),
+    pluginVersion: text("plugin_version"),
+    pluginCheckedAt: text("plugin_checked_at"),
     createdAt: text("created_at").$defaultFn(isoNow).notNull(),
     updatedAt: text("updated_at").$defaultFn(isoNow).notNull(),
   },

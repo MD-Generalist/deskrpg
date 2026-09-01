@@ -85,6 +85,12 @@ export const gatewayResources = sqliteTable(
     localDiscoveryOptedInBy: text("local_discovery_opted_in_by").references(() => users.id, {
       onDelete: "set null",
     }),
+    // `GET /deskrpg/info` 판정 캐시. 매 화면 진입마다 원격을 찌르지 않기 위한 것이고,
+    // 게이트웨이 테스트·편집 때 갱신된다. `plugin_status` 값은
+    // src/lib/hermes/plugin-capability.ts 의 PluginStatus 와 같은 문자열이다.
+    pluginStatus: text("plugin_status"),
+    pluginVersion: text("plugin_version"),
+    pluginCheckedAt: text("plugin_checked_at"),
     createdAt: text("created_at")
       .$defaultFn(() => new Date().toISOString())
       .notNull(),
