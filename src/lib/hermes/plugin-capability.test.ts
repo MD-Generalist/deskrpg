@@ -87,4 +87,25 @@ describe("probeDeskrpgPlugin", () => {
     const got = await probeDeskrpgPlugin({ baseUrl: "http://x", token: "t", fetchImpl });
     assert.equal(got.status, "unknown");
   });
+
+  // M-1: 이 시그널·타이머 배선을 전부 제거해도 기존 테스트가 통과했다(격리 사본 실측).
+  // fetchImpl 이 signal 의 abort 를 실제로 기다리게 해서 신호가 정말 전달되는지 물게 한다.
+  it("timeoutMs 안에 응답이 없으면 신호를 중단시켜 unknown 을 돌려준다", async () => {
+    const fetchImpl = ((_url: string, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const err = new Error("aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      })) as unknown as typeof fetch;
+
+    const got = await probeDeskrpgPlugin({
+      baseUrl: "http://x",
+      token: "t",
+      fetchImpl,
+      timeoutMs: 5,
+    });
+    assert.equal(got.status, "unknown");
+  });
 });
