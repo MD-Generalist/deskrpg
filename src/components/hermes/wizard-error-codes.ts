@@ -18,11 +18,19 @@
  * 수정 라운드 2: `upstream_error`(업스트림 `error` 가 평문 문장이라 코드로 못 쓸 때의
  * fallback)와 `gateway_auth_failed`(업스트림 401 의 `error` 가 객체일 때 그 안에서
  * 뽑아낸 진짜 코드)를 추가했다 — `plugin-errors.ts` 의 `extractCodeAndMessage` 참조.
+ *
+ * 수정 라운드 3 결함 8: 플러그인이 실제로 내는 코드는 `revision_conflict` 가 아니라
+ * `revision_mismatch` 다(`deskrpg_plugin/identity.py:142`, team-lead 라이브 실측 —
+ * 이 프로젝트의 스펙 문서가 코드명을 잘못 적었고 플러그인은 그 문서대로 구현됐다).
+ * 플러그인을 고치면 이미 배포된 구버전이 붙은 게이트웨이가 깨지므로, **두 코드를 모두
+ * 등록**하고 같은 i18n 키를 가리키게 한다 — 구버전·신버전 플러그인 모두 대응.
  */
 
 export const WIZARD_ERROR_CODES = [
   "profile_has_service",
   "revision_conflict",
+  // 결함 8: 플러그인이 실제로 내는 코드. `revision_conflict` 와 같은 i18n 키를 쓴다.
+  "revision_mismatch",
   "already_exists",
   "timeout",
   "unreachable",
@@ -50,6 +58,7 @@ export type WizardErrorCode = (typeof WIZARD_ERROR_CODES)[number];
 export const WIZARD_ERROR_MESSAGE_KEYS: Record<WizardErrorCode, string> = {
   profile_has_service: "hermes.wizard.error.profileHasService",
   revision_conflict: "hermes.wizard.error.revisionConflict",
+  revision_mismatch: "hermes.wizard.error.revisionConflict",
   already_exists: "hermes.wizard.error.alreadyExists",
   timeout: "hermes.wizard.error.timeout",
   unreachable: "hermes.wizard.error.unreachable",

@@ -244,10 +244,15 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("gateway.profile.title")}</h2>
         {canRegister && (
+          // I-3: 열려 있을 때는 이 버튼을 비활성화한다. 이전엔 토글(prev => !prev)이라
+          // 열린 채로 한 번 더 누르면 마법사의 "프로필이 남습니다" 확인 없이 그대로
+          // 언마운트됐다 — 닫는 유일한 경로는 이제 마법사 자신의 "닫기"(내부에서
+          // requestClose 가 확인을 거친다)뿐이다.
           <button
             type="button"
-            onClick={() => setWizardOpen((prev) => !prev)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+            disabled={wizardOpen}
+            onClick={() => setWizardOpen(true)}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
           >
             {t("hermes.wizard.openButton")}
           </button>

@@ -262,3 +262,56 @@ describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, 
     assert.equal(got.message, "여러 문제가 있다", "reason 이 있으면 그것을 message 로 쓴다");
   });
 });
+
+describe("isCodeLikeString 경계 (수정 라운드 3 I-4 — 리뷰어 실증)", () => {
+  it("대문자로 시작하는 한 단어 문장은 코드로 오인되지 않고, 문장이 message 에 남는다", () => {
+    // 예전 정규식(`i` 플래그)은 이걸 코드로 통과시켰다 — 그러면 미등록 코드가 되고
+    // (화면엔 "알 수 없는 오류") reason 이 없으니 message 도 "" 라 원문이 통째로 사라졌다.
+    for (const sentence of ["Unauthorized", "Forbidden"]) {
+      const got = mapPluginFailure({ status: 401, body: { error: sentence } });
+      assert.ok(got);
+      assert.equal(got.code, "upstream_error", `${sentence} 는 코드가 아니다`);
+      assert.equal(got.message, sentence, `${sentence} 자체가 message 에 남아야 한다`);
+    }
+  });
+
+  it("구분자(_ 또는 -) 없는 소문자 한 단어도 코드로 오인되지 않는다", () => {
+    for (const word of ["conflict", "error", "failed"]) {
+      const got = mapPluginFailure({ status: 409, body: { error: word } });
+      assert.ok(got);
+      assert.equal(got.code, "upstream_error", `${word} 는 구분자가 없어 코드가 아니다`);
+      assert.equal(got.message, word);
+    }
+  });
+
+  it("등록된 코드처럼 밑줄이 있으면 여전히 코드로 통과한다 (회귀 방지)", () => {
+    for (const code of [
+      "config_unreadable",
+      "already_exists",
+      "profile_has_service",
+      "gateway_auth_failed",
+    ]) {
+      const got = mapPluginFailure({ status: 409, body: { error: code } });
+      assert.ok(got);
+      assert.equal(got.code, code);
+    }
+  });
+
+  it("코드로 판정됐지만 reason 이 없으면 message 는 코드 문자열 자체로 채워진다", () => {
+    // I-4 (a): 코드 판정 여부와 무관하게 message 를 항상 채운다 — 빈 문자열로 두면
+    // 화면의 상세 문구가 이유 없이 사라진다.
+    const got = mapPluginFailure({ status: 409, body: { error: "revision_conflict" } });
+    assert.ok(got);
+    assert.equal(got.code, "revision_conflict");
+    assert.equal(got.message, "revision_conflict");
+  });
+
+  it("공백이 있으면 여전히 문장으로 취급한다 (원래도 안전했던 경로 회귀 방지)", () => {
+    for (const sentence of ["Not Found", "Bad Request", "internal server error"]) {
+      const got = mapPluginFailure({ status: 404, body: { error: sentence } });
+      assert.ok(got);
+      assert.equal(got.code, "upstream_error");
+      assert.equal(got.message, sentence);
+    }
+  });
+});

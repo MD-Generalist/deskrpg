@@ -244,7 +244,9 @@ const ko: Record<string, string> = {
   "hermes.wizard.identity.saved": "저장했습니다.",
   "hermes.wizard.identity.conflict":
     "다른 곳에서 바뀌었습니다. 최신 내용을 다시 불러왔습니다 — 확인 후 다시 저장하세요.",
-  "hermes.wizard.identity.reload": "다시 불러오기",
+  "hermes.wizard.identity.conflictRemoteEmpty": "(원격 인격이 비어 있습니다)",
+  "hermes.wizard.identity.conflictKeepDraft": "내 초안 유지",
+  "hermes.wizard.identity.conflictUseRemote": "이 내용으로 바꾸기",
   "hermes.wizard.identity.skip": "건너뛰기",
   "hermes.wizard.config.model": "모델",
   "hermes.wizard.config.provider": "프로바이더",
@@ -256,6 +258,9 @@ const ko: Record<string, string> = {
   "hermes.wizard.config.saved": "저장했습니다.",
   "hermes.wizard.config.loading": "설정을 불러오는 중…",
   "hermes.wizard.placement.ready": "프로필 '{name}' 준비 완료.",
+  "hermes.wizard.placement.alreadyRegistered":
+    "프로필 '{name}' 은(는) 이미 등록돼 있습니다 — 다시 만들 필요 없습니다.",
+  "hermes.wizard.placement.goToChannels": "채널로 이동",
   "hermes.wizard.placement.guide":
     "NPC 를 지도에 배치하려면 채널로 이동해 'NPC 고용'을 열고 이 프로필을 선택하세요.",
   "hermes.wizard.placement.done": "마법사 닫기",

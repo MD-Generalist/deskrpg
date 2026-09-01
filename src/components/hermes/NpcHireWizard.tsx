@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
@@ -122,7 +123,12 @@ export default function NpcHireWizard({
   const [identityMode, setIdentityMode] = useState<"keep" | "new" | "load" | null>(null);
   const [identityBody, setIdentityBody] = useState("");
   const [identitySaving, setIdentitySaving] = useState(false);
+  const [identitySaved, setIdentitySaved] = useState(false);
   const [identityConflict, setIdentityConflict] = useState(false);
+  // I-1: 충돌 시 원격 본문을 여기 따로 담는다 — 사용자가 방금 쓴 초안(identityBody)은
+  // 절대 말없이 덮어쓰지 않는다. 사용자가 명시적으로 "이 내용으로 바꾸기" 를 눌러야만
+  // identityBody 로 옮겨간다.
+  const [conflictRemoteBody, setConflictRemoteBody] = useState<string | null>(null);
 
   // --- Step ③ config ---
   const [configLoading, setConfigLoading] = useState(false);
@@ -245,6 +251,8 @@ export default function NpcHireWizard({
     setIdentityLoading(true);
     setIdentityError("");
     setIdentityConflict(false);
+    setConflictRemoteBody(null);
+    setIdentitySaved(false);
     try {
       const res = await fetch(`${profileBase}/identity`);
       const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
@@ -280,11 +288,36 @@ export default function NpcHireWizard({
     }
   }, [current, identityPayload, identityLoading, loadIdentity]);
 
+  // I-1: `revision_conflict`/`revision_mismatch`(결함 8 — 플러그인이 실제로 내는 코드는
+  // 후자다) 를 맞았을 때 **전용** 재조회. `loadIdentity` 를 재사용하지 않는다 — 그 함수는
+  // 첫 줄에서 `identityConflict` 를 꺼버리고, `identityDecision` 결과에 따라
+  // `identityMode`/`identityBody` 를 초기화한다. 같은 틱에 배너가 켜졌다 꺼지고,
+  // 사용자가 방금 쓴 초안이 원격 본문으로 조용히 교체되는 사고가 여기서 났었다(리뷰
+  // Important-1). 이 함수는 revision 만 최신화하고 사용자 초안·현재 모드는 건드리지 않는다.
+  const refetchIdentityForConflict = useCallback(async () => {
+    if (!profileBase) return;
+    try {
+      const res = await fetch(`${profileBase}/identity`);
+      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
+      const code = extractErrorCode(data);
+      if (code) {
+        // 재조회 자체가 실패했다 — 충돌 배너는 유지하되 원격 본문은 보여줄 수 없다.
+        setIdentityError(getWizardErrorMessage(t, code));
+        return;
+      }
+      const payload = data as IdentityPayload;
+      setIdentityPayload((prev) => (prev ? { ...prev, revision: payload.revision } : payload));
+      setConflictRemoteBody(payload.body ?? "");
+    } catch {
+      setIdentityError(t("errors.connectionFailed"));
+    }
+  }, [profileBase, t]);
+
   const handleSaveIdentity = useCallback(async () => {
     if (!profileBase || !identityPayload) return;
     setIdentitySaving(true);
     setIdentityError("");
-    setIdentityConflict(false);
+    setIdentitySaved(false);
     try {
       const res = await fetch(`${profileBase}/identity`, {
         method: "PUT",
@@ -293,9 +326,11 @@ export default function NpcHireWizard({
       });
       const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
       const code = extractErrorCode(data);
-      if (code === "revision_conflict") {
+      // 결함 8: 플러그인이 실제로 내는 코드는 `revision_mismatch` 다(스펙은
+      // `revision_conflict` 라고 적었지만 구현이 그렇게 안 됐다) — 둘 다 받는다.
+      if (code === "revision_conflict" || code === "revision_mismatch") {
         setIdentityConflict(true);
-        await loadIdentity();
+        await refetchIdentityForConflict();
         return;
       }
       if (code) {
@@ -308,12 +343,15 @@ export default function NpcHireWizard({
       }
       const saved = data as { revision: string };
       setIdentityPayload((prev) => (prev ? { ...prev, revision: saved.revision } : prev));
+      setIdentityConflict(false);
+      setConflictRemoteBody(null);
+      setIdentitySaved(true);
     } catch {
       setIdentityError(t("errors.connectionFailed"));
     } finally {
       setIdentitySaving(false);
     }
-  }, [identityBody, identityPayload, loadIdentity, profileBase, t]);
+  }, [identityBody, identityPayload, profileBase, refetchIdentityForConflict, t]);
 
   // --- Step ③ actions ---
 
@@ -418,6 +456,24 @@ export default function NpcHireWizard({
 
   // ---------------------------------------------------------------------------
 
+  // I-2: 삭제 실패 표시를 한 조각으로 뽑아 두 자리(닫기-확인 패널 / ①의
+  // keyIssued:false 박스 "지우고 다시 시도")가 같이 쓴다. 예전엔 이 상태를 렌더하는
+  // 곳이 닫기-확인 패널뿐이라, keyIssued:false 쪽에서 `profile_has_service` 로
+  // 거절되면 셸 명령이 통째로 버려지고 화면엔 아무것도 안 떴다.
+  const deleteFailureBlock = (deleteError || deleteShellCommand) && (
+    <div className="space-y-1">
+      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
+      {deleteShellCommand && (
+        <div className="space-y-1">
+          <p className="text-xs text-text-muted">{t("hermes.wizard.deleteFailedShell")}</p>
+          <pre className="overflow-x-auto rounded bg-bg px-3 py-2 text-xs text-text">
+            {deleteShellCommand}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="mb-4 flex items-center justify-between">
@@ -452,10 +508,20 @@ export default function NpcHireWizard({
           </button>
         ))}
       </div>
-      {!stepByName[current]?.enabled && stepByName[current]?.lockedReason && (
-        <p className="mb-4 text-sm text-text-muted">
-          {t(stepByName[current].lockedReason as string)}
-        </p>
+      {/* M-5: 잠긴 탭은 `disabled` 라 현재 단계가 될 수 없다 — `title` 툴팁 하나로만
+          이유가 도달하면 터치·키보드 환경에서는 아예 안 보이고, 초기 단계가 ④로
+          점프하는 조합(예: plugin_absent + localDiscovery:false)에서는 ①②③이 왜
+          잠겼는지 화면 어디에도 글자로 없다. 잠긴 단계 전부의 이유를 항상 나열한다. */}
+      {steps.some((s) => !s.enabled && s.lockedReason) && (
+        <ul className="mb-4 space-y-1 text-xs text-text-muted">
+          {steps
+            .filter((s) => !s.enabled && s.lockedReason)
+            .map((s) => (
+              <li key={s.step}>
+                {t(`hermes.wizard.step.${s.step}`)} — {t(s.lockedReason as string)}
+              </li>
+            ))}
+        </ul>
       )}
 
       {showCloseConfirm && created && (
@@ -466,12 +532,7 @@ export default function NpcHireWizard({
           <p className="text-sm text-text-muted">
             {t("hermes.wizard.closeConfirmBody", { name: created.name })}
           </p>
-          {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
-          {deleteShellCommand && (
-            <pre className="overflow-x-auto rounded bg-bg px-3 py-2 text-xs text-text">
-              {deleteShellCommand}
-            </pre>
-          )}
+          {deleteFailureBlock}
           <div className="flex gap-2">
             <button
               type="button"
@@ -540,6 +601,7 @@ export default function NpcHireWizard({
                   {created.keyError && (
                     <p className="text-xs text-text-muted">{created.keyError}</p>
                   )}
+                  {deleteFailureBlock}
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -660,15 +722,53 @@ export default function NpcHireWizard({
           ) : (
             <div className="space-y-2">
               {identityConflict && (
-                <p className="text-sm text-amber-300">{t("hermes.wizard.identity.conflict")}</p>
+                // I-1: 배너가 자기 자신을 지우거나 사용자 초안을 말없이 덮어쓰지 않는다.
+                // 아래 textarea 의 `identityBody` 는 이 블록과 무관하게 그대로 남는다 —
+                // 사용자가 명시적으로 "이 내용으로 바꾸기" 를 눌러야만 교체된다.
+                <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
+                  <p className="text-sm font-semibold text-amber-300">
+                    {t("hermes.wizard.identity.conflict")}
+                  </p>
+                  {conflictRemoteBody !== null && (
+                    <div className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-bg px-3 py-2 text-xs text-text-muted">
+                      {conflictRemoteBody || t("hermes.wizard.identity.conflictRemoteEmpty")}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIdentityConflict(false)}
+                      className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
+                    >
+                      {t("hermes.wizard.identity.conflictKeepDraft")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdentityBody(conflictRemoteBody ?? "");
+                        setIdentityConflict(false);
+                        setConflictRemoteBody(null);
+                      }}
+                      className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
+                    >
+                      {t("hermes.wizard.identity.conflictUseRemote")}
+                    </button>
+                  </div>
+                </div>
               )}
               <textarea
                 value={identityBody}
-                onChange={(e) => setIdentityBody(e.target.value)}
+                onChange={(e) => {
+                  setIdentityBody(e.target.value);
+                  setIdentitySaved(false);
+                }}
                 placeholder={t("hermes.wizard.identity.placeholder")}
                 rows={8}
                 className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
               />
+              {identitySaved && (
+                <p className="text-xs text-emerald-300">{t("hermes.wizard.identity.saved")}</p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -756,14 +856,30 @@ export default function NpcHireWizard({
           <p className="text-sm text-text">
             {created ? t("hermes.wizard.placement.ready", { name: created.name }) : ""}
           </p>
+          {/* M-1: 안내에 채널로 가는 링크와 "이미 등록돼 있다" 는 사실을 함께 준다 —
+              둘 다 없으면 사용자가 채널에서 프로필을 못 찾고 마법사로 돌아와 같은
+              이름으로 다시 만들다 409 를 맞는다. */}
+          {created && (
+            <p className="text-sm text-text-muted">
+              {t("hermes.wizard.placement.alreadyRegistered", { name: created.name })}
+            </p>
+          )}
           <p className="text-sm text-text-muted">{t("hermes.wizard.placement.guide")}</p>
-          <button
-            type="button"
-            onClick={onDone}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
-          >
-            {t("hermes.wizard.placement.done")}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/channels"
+              className="rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-hover"
+            >
+              {t("hermes.wizard.placement.goToChannels")}
+            </Link>
+            <button
+              type="button"
+              onClick={onDone}
+              className="rounded bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
+            >
+              {t("hermes.wizard.placement.done")}
+            </button>
+          </div>
         </div>
       )}
     </div>

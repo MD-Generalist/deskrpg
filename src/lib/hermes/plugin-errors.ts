@@ -73,21 +73,46 @@ function extractDetails(record: Record<string, unknown>, omit: string[]): Record
 }
 
 /**
- * 공백이 없고 문자·숫자·밑줄·하이픈만으로 이뤄져 있으면 "코드처럼 생겼다" 고 본다
- * (`config_unreadable`, `already_exists`, `gateway_auth_failed` 는 통과, `Unknown or
- * unconfigured profile` 은 공백 때문에 탈락). 휴리스틱이라 경계에서 틀릴 수 있지만,
- * 실측된 세 모양(모듈 주석 참조)을 가르는 데는 이걸로 충분하고, 애매할 때 문장을
- * 코드 자리에 흘리는 것보다는 안전한 쪽으로 접는다.
+ * 소문자로 시작하고 문자·숫자·밑줄·하이픈만으로 이뤄져 있으며 **밑줄이나 하이픈을
+ * 하나 이상** 포함해야 "코드처럼 생겼다" 고 본다.
+ *
+ * 수정 라운드 3 I-4 (리뷰어 실증): 예전 정규식(`i` 플래그 + 구분자 요구 없음)은
+ * 대문자로 시작하는 한 단어 문장과 `_`/`-` 없는 소문자 한 단어를 코드로 오인했다 —
+ * 그때 `message` 도 `reason`(보통 빈 문자열)이라 **문장이 통째로 사라졌다**(평문
+ * 문장 케이스보다 나쁨). 실증표:
+ *
+ *     config_unreadable / already_exists / profile_has_service / gateway_auth_failed
+ *       → true (의도대로 코드)
+ *     Unknown or unconfigured profile
+ *       → false (공백 있음, 문장 그대로 유지)
+ *     Unauthorized / Forbidden / conflict / error / failed
+ *       → 예전: true(오판) → 지금: false (대문자 시작은 `i` 제거로, 구분자 없는
+ *         소문자 한 단어는 `_`/`-` 요구로 각각 막는다)
+ *     Not Found / Bad Request / internal server error
+ *       → false (공백 있음, 원래도 안전)
+ *
+ * `no_profile`/`unsupported_config_key`/`invalid_profile_name`/`bad_request`/
+ * `forbidden`/`not_found`/`unauthorized`(4종은 프록시 라우트 자신의 검증·인가
+ * 실패에서 나오는 **리터럴** 값이라 이 함수를 거치지 않는다) 는 실제 `record.error`
+ * 로는 오지 않는 값들이다 — `timeout`/`unreachable`/`unreadable`/`forbidden`/
+ * `unauthorized` 처럼 밑줄·하이픈이 없는 등록 코드도 마찬가지로 `plugin-client.ts`
+ * 의 하드코딩된 실패 객체이거나 우리 자신의 라우트 리터럴이라 이 정규식을 타지
+ * 않는다 — 실제로 `record.error` 문자열로 도달하는 코드는 전부 밑줄을 가진
+ * snake_case 다(위 실증표).
  */
-const CODE_LIKE_RE = /^[a-z][a-z0-9_-]*$/i;
+const CODE_LIKE_RE = /^[a-z][a-z0-9_-]*$/;
 
 function isCodeLikeString(value: string): boolean {
-  return CODE_LIKE_RE.test(value);
+  return CODE_LIKE_RE.test(value) && (value.includes("_") || value.includes("-"));
 }
 
 /**
  * `record.error` 의 세 모양(문자열-코드 / 문자열-문장 / 객체)을 갈라 `{code, message}`
  * 로 접는다. 모듈 주석의 라이브 실측 참조.
+ *
+ * I-4: 코드로 판정하든 말든 `message` 는 항상 원문을 담는다(`reason || errorField`).
+ * 예전엔 코드로 오판된 문자열의 `message` 가 `reason`(보통 `""`) 하나뿐이라, 오판되면
+ * 코드 자리(미등록 값 → 화면엔 "알 수 없는 오류")도 문장 자리도 둘 다 잃었다.
  */
 function extractCodeAndMessage(record: Record<string, unknown>): { code: string; message: string } {
   const errorField = record.error;
@@ -102,9 +127,11 @@ function extractCodeAndMessage(record: Record<string, unknown>): { code: string;
   }
 
   if (typeof errorField === "string") {
-    if (isCodeLikeString(errorField)) return { code: errorField, message: reason };
-    // 평문 문장이다 — 코드 자리에 문장을 넣지 않는다. 문장은 잃지 않고 message 에 담는다.
-    return { code: "upstream_error", message: errorField || reason };
+    const message = reason || errorField;
+    if (isCodeLikeString(errorField)) return { code: errorField, message };
+    // 평문 문장(또는 구분자 없는 한 단어)이다 — 코드 자리에 넣지 않는다. 문장은
+    // 잃지 않고 message 에 담는다.
+    return { code: "upstream_error", message };
   }
 
   return { code: "plugin_error", message: reason };

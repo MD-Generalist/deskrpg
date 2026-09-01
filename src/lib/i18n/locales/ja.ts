@@ -249,7 +249,9 @@ const ja: Record<string, string> = {
   "hermes.wizard.identity.saved": "保存しました。",
   "hermes.wizard.identity.conflict":
     "他の場所で変更されました。最新の内容を再読み込みしました — 確認してから再度保存してください。",
-  "hermes.wizard.identity.reload": "再読み込み",
+  "hermes.wizard.identity.conflictRemoteEmpty": "(リモートの人格は空です)",
+  "hermes.wizard.identity.conflictKeepDraft": "自分の下書きを維持",
+  "hermes.wizard.identity.conflictUseRemote": "この内容に置き換える",
   "hermes.wizard.identity.skip": "スキップ",
   "hermes.wizard.config.model": "モデル",
   "hermes.wizard.config.provider": "プロバイダー",
@@ -261,6 +263,9 @@ const ja: Record<string, string> = {
   "hermes.wizard.config.saved": "保存しました。",
   "hermes.wizard.config.loading": "設定を読み込み中…",
   "hermes.wizard.placement.ready": "プロフィール「{name}」の準備ができました。",
+  "hermes.wizard.placement.alreadyRegistered":
+    "プロフィール「{name}」はすでに登録されています — 再度作成する必要はありません。",
+  "hermes.wizard.placement.goToChannels": "チャンネルへ移動",
   "hermes.wizard.placement.guide":
     "NPCをマップに配置するには、チャンネルに移動して「NPC雇用」を開き、このプロフィールを選択してください。",
   "hermes.wizard.placement.done": "ウィザードを閉じる",

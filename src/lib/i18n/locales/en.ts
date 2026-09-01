@@ -248,7 +248,9 @@ const en: Record<string, string> = {
   "hermes.wizard.identity.saved": "Saved.",
   "hermes.wizard.identity.conflict":
     "It changed elsewhere. The latest content was reloaded — review it, then save again.",
-  "hermes.wizard.identity.reload": "Reload",
+  "hermes.wizard.identity.conflictRemoteEmpty": "(the remote identity is empty)",
+  "hermes.wizard.identity.conflictKeepDraft": "Keep my draft",
+  "hermes.wizard.identity.conflictUseRemote": "Replace with this",
   "hermes.wizard.identity.skip": "Skip",
   "hermes.wizard.config.model": "Model",
   "hermes.wizard.config.provider": "Provider",
@@ -260,6 +262,9 @@ const en: Record<string, string> = {
   "hermes.wizard.config.saved": "Saved.",
   "hermes.wizard.config.loading": "Loading config…",
   "hermes.wizard.placement.ready": "Profile '{name}' is ready.",
+  "hermes.wizard.placement.alreadyRegistered":
+    "Profile '{name}' is already registered — no need to create it again.",
+  "hermes.wizard.placement.goToChannels": "Go to channels",
   "hermes.wizard.placement.guide":
     'To place this NPC on the map, go to the channel, open "Hire NPC", and select this profile.',
   "hermes.wizard.placement.done": "Close wizard",
