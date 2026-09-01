@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 
 import { eq } from "drizzle-orm";
 
-import { db, gatewayResources, nowForDb } from "@/db";
+import { db, gatewayResources } from "@/db";
 import { decryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { buildPluginCacheUpdate, probeDeskrpgPlugin } from "@/lib/hermes/plugin-capability";
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     await db
       .update(gatewayResources)
-      .set(buildPluginCacheUpdate(plugin, nowForDb()))
+      .set(buildPluginCacheUpdate(plugin))
       .where(eq(gatewayResources.id, id));
 
     return NextResponse.json({

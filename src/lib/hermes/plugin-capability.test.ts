@@ -2,39 +2,47 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { describe, it } from "node:test";
 
-import {
-  buildPluginCacheUpdate,
-  classifyPluginProbe,
-  probeDeskrpgPlugin,
-  shouldReprobePlugin,
+import { classifyPluginProbe, probeDeskrpgPlugin, shouldReprobePlugin } from "./plugin-capability";
+import type {
+  PluginCapability,
+  buildPluginCacheUpdate as BuildPluginCacheUpdateFn,
 } from "./plugin-capability";
 
 const require = createRequire(import.meta.url);
 
 // PostgreSQL: `timestamp(withTimezone)` 컬럼은 date 모드라 드라이버가 `Date` 를 기대한다.
-// SQLite: `text` 컬럼은 문자열을 기대한다. `nowForDb()` 는 `src/db/index.ts` 모듈 로드
-// 시점의 `isPostgres` 상수로 분기하므로(task-manager-timestamps.test.ts 와 같은 사고),
-// require 캐시를 지우고 환경변수를 바꿔 같은 프로세스 안에서 두 방언을 다시 읽는다.
-function loadNowForDb(env: { DB_TYPE: string; DATABASE_URL?: string }) {
+// SQLite: `text` 컬럼은 문자열을 기대한다. `buildPluginCacheUpdate()` 는 이제 스스로
+// `nowForDb()` 를 부르므로(호출자가 값을 주입할 자리가 없다 — Task 9 라운드 3), 그
+// 방언 분기를 관찰하려면 `nowForDb()` 가 캡처된 시점의 `src/db/index.ts` 자체를
+// 다시 읽어야 한다. `isPostgres` 는 그 모듈 로드 시점의 상수라
+// (task-manager-timestamps.test.ts 와 같은 사고), require 캐시를 지우고 환경변수를
+// 바꿔 같은 프로세스 안에서 `db/index.ts` 와 `plugin-capability.ts` 를 함께
+// 다시 읽는다 — plugin-capability.ts 의 `import { nowForDb } from "@/db"` 가 새로
+// 읽힌 db/index.ts 를 다시 가리키게 하기 위해서다.
+function loadBuildPluginCacheUpdate(env: {
+  DB_TYPE: string;
+  DATABASE_URL?: string;
+}): typeof BuildPluginCacheUpdateFn {
   const prevDbType = process.env.DB_TYPE;
   const prevDatabaseUrl = process.env.DATABASE_URL;
   process.env.DB_TYPE = env.DB_TYPE;
   if (env.DATABASE_URL) process.env.DATABASE_URL = env.DATABASE_URL;
   else delete process.env.DATABASE_URL;
 
-  const modulePath = require.resolve("../../db/index.ts");
-  delete require.cache[modulePath];
-  // nowForDb() 의 선언 타입은 항상 Date 다(PG 스키마 타입 기준). SQLite 방언에서는
-  // 런타임에 ISO 문자열이 그 자리에 캐스팅되어 들어오므로, 실제 값을 unknown 으로
-  // 받아 typeof/instanceof 로 직접 검사한다.
-  const { nowForDb } = require("../../db/index.ts") as { nowForDb: () => Date };
+  const dbModulePath = require.resolve("../../db/index.ts");
+  const pluginCapabilityModulePath = require.resolve("./plugin-capability.ts");
+  delete require.cache[dbModulePath];
+  delete require.cache[pluginCapabilityModulePath];
+  const { buildPluginCacheUpdate } = require("./plugin-capability.ts") as {
+    buildPluginCacheUpdate: typeof BuildPluginCacheUpdateFn;
+  };
 
   if (prevDbType === undefined) delete process.env.DB_TYPE;
   else process.env.DB_TYPE = prevDbType;
   if (prevDatabaseUrl === undefined) delete process.env.DATABASE_URL;
   else process.env.DATABASE_URL = prevDatabaseUrl;
 
-  return nowForDb;
+  return buildPluginCacheUpdate;
 }
 
 describe("classifyPluginProbe", () => {
@@ -178,33 +186,29 @@ describe("shouldReprobePlugin", () => {
 // 값 TYPE 을 방언별로 고정한다. `nowForDb()` 를 `new Date().toISOString()` 으로 되돌리면
 // PG 방언 케이스가 실패해야 한다 — 실제로 되돌려 확인함(task-9-report.md 참조).
 describe("buildPluginCacheUpdate", () => {
-  const plugin = { status: "plugin_ready" as const, version: "0.3.0" };
+  const plugin: PluginCapability = { status: "plugin_ready", version: "0.3.0" };
 
-  it("PostgreSQL 방언: nowForDb() 가 돌려준 Date 를 그대로 싣는다", () => {
-    const nowForDb = loadNowForDb({
+  // 라운드 2 까지는 `now` 를 호출자가 주입했다 — 그래서 호출부(route.ts)가
+  // `new Date().toISOString()` 같은 방언-무관 값을 대신 넘겨도 이 테스트는 그
+  // 실수를 못 잡았다(실제로 실증됨). 이제 함수가 스스로 nowForDb() 를 부르므로,
+  // 호출부는 `buildPluginCacheUpdate(plugin)` 외의 선택지가 없다 — 여기서 물리면
+  // 실제 코드 경로(함수 몸통 안의 nowForDb() 호출)를 보는 것이다.
+  it("PostgreSQL 방언: 스스로 부른 nowForDb() 가 Date 를 낸다", () => {
+    const buildPluginCacheUpdate = loadBuildPluginCacheUpdate({
       DB_TYPE: "postgresql",
       DATABASE_URL: "postgres://fake:fake@localhost:5432/fake",
     });
-    const now = nowForDb();
-    assert.ok(now instanceof Date, "PG 모드의 nowForDb() 는 Date 를 돌려줘야 한다");
 
-    const payload = buildPluginCacheUpdate(plugin, now);
-    assert.ok(payload.pluginCheckedAt instanceof Date);
+    const payload = buildPluginCacheUpdate(plugin);
+    assert.ok(payload.pluginCheckedAt instanceof Date, "PG 방언에서는 Date 여야 한다");
     assert.ok(payload.updatedAt instanceof Date);
-    // 같은 참조를 그대로 실었는지까지 — 함수 안에서 새로 만들거나 문자열로
-    // 바꾸면 여기서 걸린다.
-    assert.equal(payload.pluginCheckedAt, now);
-    assert.equal(payload.updatedAt, now);
   });
 
-  it("SQLite 방언: nowForDb() 가 돌려준 ISO 문자열을 그대로 싣는다", () => {
-    const nowForDb = loadNowForDb({ DB_TYPE: "sqlite" });
-    const now = nowForDb();
-    assert.equal(typeof now, "string", "SQLite 모드의 nowForDb() 는 문자열을 돌려줘야 한다");
+  it("SQLite 방언: 스스로 부른 nowForDb() 가 ISO 문자열을 낸다", () => {
+    const buildPluginCacheUpdate = loadBuildPluginCacheUpdate({ DB_TYPE: "sqlite" });
 
-    const payload = buildPluginCacheUpdate(plugin, now);
-    assert.equal(typeof payload.pluginCheckedAt, "string");
+    const payload = buildPluginCacheUpdate(plugin);
+    assert.equal(typeof payload.pluginCheckedAt, "string", "SQLite 방언에서는 문자열이어야 한다");
     assert.equal(typeof payload.updatedAt, "string");
-    assert.equal(payload.pluginCheckedAt, now);
   });
 });

@@ -10,6 +10,8 @@
  * 가정하면 사용자가 마법사를 열었다가 중간에 실패한다.
  */
 
+import { nowForDb } from "@/db";
+
 export type PluginStatus = "plugin_ready" | "plugin_unauthorized" | "plugin_absent" | "unknown";
 
 export type PluginCapability = { status: PluginStatus; version: string | null };
@@ -53,17 +55,13 @@ export function shouldReprobePlugin(input: {
 
 /**
  * 게이트웨이 테스트 라우트가 `db.update(gatewayResources).set(...)` 에 넘길 payload 를
- * 만든다. `now` 는 호출자가 `nowForDb()` 로 구한 값을 **그대로** 받아 그대로 돌려준다 —
- * 이 함수 안에서 새 `Date` 를 만들거나 문자열로 바꾸면, PostgreSQL 에서는 `Date` 를
- * 기대하는 `timestamp(withTimezone)` 컬럼에 문자열이 잘못 바인딩된다(판정 D 사고).
- * 값을 손대지 않는 것 자체가 이 함수의 계약이라 순수 pass-through 로 남겨둔다.
- *
- * `now` 는 `nowForDb()` 와 같은 시그니처(`Date`)를 쓴다 — `src/db/index.ts` 가
- * PG 스키마 타입에 맞춰 SQLite 방언에서도 런타임엔 문자열을 `Date` 로 캐스팅해
- * 돌려주기 때문이다(PG 스키마가 drizzle 타입의 기준이다). 실제 런타임 값은
- * 방언에 따라 `Date` 이거나 ISO 문자열이고, 이 함수는 그 값을 그대로 통과시킨다.
+ * 만든다. 타임스탬프를 **스스로** `nowForDb()` 로 구한다 — 호출자에게 맡기면 호출부가
+ * `new Date().toISOString()` 같은 방언-무관 값을 대신 넘길 수 있고, PostgreSQL 에서는
+ * `Date` 를 기대하는 `timestamp(withTimezone)` 컬럼에 문자열이 잘못 바인딩된다
+ * (판정 D 사고). 잘못된 타입을 넘길 자리 자체를 없애는 것이 이 함수의 계약이다.
  */
-export function buildPluginCacheUpdate(plugin: PluginCapability, now: Date) {
+export function buildPluginCacheUpdate(plugin: PluginCapability) {
+  const now = nowForDb();
   return {
     pluginStatus: plugin.status,
     pluginVersion: plugin.version,
