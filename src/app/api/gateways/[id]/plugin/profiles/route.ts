@@ -112,22 +112,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // 놓치면 프로필은 있는데 말을 걸 수 없는 상태가 영구히 남는다. `registerHermesProfile`
   // 은 게이트웨이 소유자가 아니면 `{error:"forbidden"}` 을 돌려주는데, 라우트는
   // system_admin 만 검사하므로 그 실패를 삼키지 않고 응답에 실어 보낸다.
-  const keyStorage =
-    res.data.keyIssued && res.data.apiKey
-      ? await registerHermesProfile({
-          userId,
-          gatewayId: id,
-          profileName: res.data.name,
-          token: res.data.apiKey,
-        }).then((stored) =>
-          "error" in stored
-            ? {
-                ok: false as const,
-                reason: "게이트웨이 소유자가 아니라 발급된 키를 저장하지 못했습니다.",
-              }
-            : { ok: true as const },
-        )
-      : null;
+  let keyStorage: { ok: true } | { ok: false; reason: string } | null;
+  if (!res.data.keyIssued) {
+    // 애초에 발급이 없었다 — attachKeyStorage 가 이 경우를 null 로 구분한다.
+    keyStorage = null;
+  } else if (!res.data.apiKey) {
+    // M-3: keyIssued:true 인데 apiKey 가 비어 왔다 — "발급 자체가 없었다"(null)와
+    // 다른 상황이니 이유 없이 keyStored:false 만 나가면 안 된다.
+    keyStorage = {
+      ok: false,
+      reason: "플러그인이 키가 발급됐다고 보고했지만 키 값을 받지 못했습니다.",
+    };
+  } else {
+    const stored = await registerHermesProfile({
+      userId,
+      gatewayId: id,
+      profileName: res.data.name,
+      token: res.data.apiKey,
+    });
+    keyStorage =
+      "error" in stored
+        ? { ok: false, reason: "게이트웨이 소유자가 아니라 발급된 키를 저장하지 못했습니다." }
+        : { ok: true };
+  }
 
   return NextResponse.json(attachKeyStorage(stripApiKey(res.data), keyStorage), { status: 201 });
 }

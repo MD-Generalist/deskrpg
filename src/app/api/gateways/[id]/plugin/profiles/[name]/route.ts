@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { db, users } from "@/db";
-import { eq } from "drizzle-orm";
+import { db, hermesProfiles, users } from "@/db";
+import { and, eq } from "drizzle-orm";
 import { decryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { createPluginClient } from "@/lib/hermes/plugin-client";
+import { isValidProfileName } from "@/lib/hermes/profile-name";
 import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
@@ -37,6 +38,16 @@ export async function DELETE(
   }
 
   const { id, name } = await ctx.params;
+
+  // M-1: 이름을 검증 없이 원격 경로에 끼우면 encodeURIComponent 가 "." 을 이스케이프하지
+  // 않아 name==".." 일 때 URL 정규화로 프로필 스코프가 조용히 사라진다(profile-name.ts
+  // 의 경고 그대로). 삭제 대상은 *기존* 프로필이라 관대한 isValidProfileName 을 쓴다 —
+  // 새 이름 문법(isCreatableProfileName)을 쓰면 과거에 만들어진 대문자·마침표 이름의
+  // 프로필을 지울 수 없게 된다.
+  if (!isValidProfileName(name)) {
+    return NextResponse.json({ errorCode: "invalid_profile_name" }, { status: 400 });
+  }
+
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) {
     return NextResponse.json({ errorCode: "not_found" }, { status: 404 });
@@ -57,5 +68,13 @@ export async function DELETE(
       proxyInit(res.failure.code),
     );
   }
+
+  // M-4: 원격 삭제가 성공했는데 로컬 등록 행을 남겨두면 게이트웨이에는 없는 프로필이
+  // DeskRPG 목록에 계속 보이고, 거기 묶인 NPC 는 대화 시점에야 실패한다. 이 행이
+  // 없어도(애초에 등록 안 된 프로필을 지운 경우) 삭제는 no-op 이라 안전하다.
+  await db
+    .delete(hermesProfiles)
+    .where(and(eq(hermesProfiles.gatewayId, id), eq(hermesProfiles.profileName, name)));
+
   return NextResponse.json(res.data);
 }
