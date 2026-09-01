@@ -52,8 +52,7 @@ export class HermesClient {
     this.profileName = config.profileName;
     this.token = config.token;
     this.fetchImpl = config.fetchImpl ?? fetch;
-    this.sleepImpl =
-      config.sleepImpl ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+    this.sleepImpl = config.sleepImpl ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   }
 
   url(path: string): string {

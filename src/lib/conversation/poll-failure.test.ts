@@ -16,7 +16,9 @@ function participant(npcId: string): Participant {
   return { npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0 } as Participant;
 }
 
-function controllerWith(poll: (npcId: string) => Promise<{ wantsToSpeak: boolean; reason: string }>) {
+function controllerWith(
+  poll: (npcId: string) => Promise<{ wantsToSpeak: boolean; reason: string }>,
+) {
   const fc = new MeetingFloorController({
     inbox: { take: () => null } as never,
     mode: "meeting",

@@ -259,4 +259,3 @@ export function buildPersonaConfig({
     soul: localizeNpcPromptDocument(soulSource, locale, "soul"),
   };
 }
-
