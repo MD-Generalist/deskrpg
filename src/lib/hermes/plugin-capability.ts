@@ -33,6 +33,24 @@ export function classifyPluginProbe(input: { status: number; body: unknown }): P
   return { status: "plugin_ready", version };
 }
 
+/** 캐시된 판정을 다시 확인할 주기. 플러그인은 나중에 설치될 수 있으므로 영구 캐시는 틀린다. */
+const REPROBE_AFTER_MS = 60 * 60 * 1000;
+
+/**
+ * `checkedAt` 은 SQLite 에서는 ISO 문자열로, PostgreSQL 에서는 `timestamp(withTimezone)`
+ * 컬럼이라 drizzle 이 `Date` 객체로 읽어준다 — 두 방언을 다 받는다.
+ */
+export function shouldReprobePlugin(input: {
+  checkedAt: string | Date | null;
+  now: Date;
+}): boolean {
+  if (!input.checkedAt) return true;
+  const at =
+    input.checkedAt instanceof Date ? input.checkedAt.getTime() : Date.parse(input.checkedAt);
+  if (Number.isNaN(at)) return true;
+  return input.now.getTime() - at >= REPROBE_AFTER_MS;
+}
+
 export async function probeDeskrpgPlugin(input: {
   baseUrl: string;
   token: string;

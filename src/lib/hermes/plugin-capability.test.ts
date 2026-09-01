@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { classifyPluginProbe, probeDeskrpgPlugin } from "./plugin-capability";
+import { classifyPluginProbe, probeDeskrpgPlugin, shouldReprobePlugin } from "./plugin-capability";
 
 describe("classifyPluginProbe", () => {
   // 401 과 404 를 뭉치면 사용자가 할 일이 사라진다 — 전자는 키 교체,
@@ -107,5 +107,35 @@ describe("probeDeskrpgPlugin", () => {
       timeoutMs: 5,
     });
     assert.equal(got.status, "unknown");
+  });
+});
+
+describe("shouldReprobePlugin", () => {
+  const now = new Date("2026-09-01T00:00:00Z");
+
+  it("한 번도 찌른 적 없으면 찌른다", () => {
+    assert.equal(shouldReprobePlugin({ checkedAt: null, now }), true);
+  });
+
+  it("최근에 찔렀으면 다시 찌르지 않는다", () => {
+    assert.equal(shouldReprobePlugin({ checkedAt: "2026-08-31T23:50:00Z", now }), false);
+  });
+
+  it("오래됐으면 다시 찌른다 — 플러그인은 나중에 설치될 수 있다", () => {
+    assert.equal(shouldReprobePlugin({ checkedAt: "2026-08-30T00:00:00Z", now }), true);
+  });
+
+  it("깨진 타임스탬프는 찌른다 — 모르면 확인하는 쪽이 안전하다", () => {
+    assert.equal(shouldReprobePlugin({ checkedAt: "not-a-date", now }), true);
+  });
+
+  // PG 판정 E: PostgreSQL 은 pluginCheckedAt 을 Date 객체로 돌려준다 — 문자열만 받으면
+  // 스테이징에서 이 분기가 항상 "다시 찌른다"로 새서 캐시가 무력화된다.
+  it("Date 객체로 들어와도 최근이면 다시 찌르지 않는다 (PG 방언)", () => {
+    assert.equal(shouldReprobePlugin({ checkedAt: new Date("2026-08-31T23:50:00Z"), now }), false);
+  });
+
+  it("Date 객체로 들어와도 오래됐으면 다시 찌른다 (PG 방언)", () => {
+    assert.equal(shouldReprobePlugin({ checkedAt: new Date("2026-08-30T00:00:00Z"), now }), true);
   });
 });
