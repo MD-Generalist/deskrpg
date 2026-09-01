@@ -172,3 +172,21 @@ describe("mapPluginFailure — 5xx 도 편집기를 막는다 (M-4)", () => {
     assert.equal(got.blocksEditor, false);
   });
 });
+
+describe("profile_has_service 안내", () => {
+  it("셸 명령에 프로필 이름이 그대로 들어간다", () => {
+    // 사용자가 복붙해서 바로 실행할 수 있어야 한다. 이름을 우리가 다시
+    // 조립하면 인코딩·공백에서 틀릴 수 있으니 플러그인이 준 문자열을 쓴다.
+    const got = mapPluginFailure({
+      status: 409,
+      body: {
+        error: "profile_has_service",
+        unit: "hermes-gateway-my-bot",
+        reason:
+          "프로필 'my-bot' 은 자기 서비스(hermes-gateway-my-bot)를 갖고 있어 여기서 지울 수 없습니다. 셸에서 정리하세요: hermes profile delete my-bot",
+      },
+    });
+    assert.ok(got);
+    assert.equal(got.showsShellCommand, "hermes profile delete my-bot");
+  });
+});
