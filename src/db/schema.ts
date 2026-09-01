@@ -87,6 +87,14 @@ export const gatewayResources = pgTable(
     localDiscoveryOptedInBy: uuid("local_discovery_opted_in_by").references(() => users.id, {
       onDelete: "set null",
     }),
+    // `GET /deskrpg/info` 판정 캐시. 매 화면 진입마다 원격을 찌르지 않기 위한 것이고,
+    // 게이트웨이 테스트·편집 때 갱신된다. `plugin_status` 값은
+    // src/lib/hermes/plugin-capability.ts 의 PluginStatus 와 같은 문자열이다.
+    // pluginStatus 는 lastValidationStatus 와 같은 짧은 열거형 문자열이라 varchar(40) 을,
+    // pluginCheckedAt 은 lastValidatedAt 과 같은 타임스탬프 열이라 같은 타입을 따른다.
+    pluginStatus: varchar("plugin_status", { length: 40 }),
+    pluginVersion: text("plugin_version"),
+    pluginCheckedAt: timestamp("plugin_checked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
