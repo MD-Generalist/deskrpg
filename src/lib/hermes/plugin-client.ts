@@ -11,6 +11,16 @@
  *
  * 어떤 메서드도 **던지지 않는다** — 네트워크 실패까지 `{ok:false}` 로 돌려준다.
  * 프록시 라우트가 그것을 200 + errorCode 로 옮기기 때문이다.
+ *
+ * 리뷰 라운드 1:
+ * - I-1: 200 인데 JSON 이 아니면(게이트웨이 앞단이 HTML 오류 페이지를 주는 경우가
+ *   실제로 있었다) 예전엔 `{ok:true, data:null}` 을 내보내 호출부가 그 다음 줄에서
+ *   던졌다. 형제 모듈 `plugin-capability.ts` 와 같은 기준으로 접는다 — 성공을
+ *   자칭하지 않는다. (204 를 쓰는 라우트는 이 API 에 없다.)
+ * - I-3: `probeDeskrpgPlugin` 은 타임아웃이 있는데 정작 데이터를 주고받는 이 파일은
+ *   없어서, 게이트웨이가 소켓을 열어두면 라우트 핸들러가 무한정 매달렸다. 재시도할
+ *   문제(`unreachable`)와 주소를 확인할 문제(`timeout`)는 사용자가 할 일이 달라 코드를
+ *   분리한다.
  */
 
 import { mapPluginFailure, type PluginFailure } from "./plugin-errors";
@@ -60,21 +70,49 @@ const UNREACHABLE: PluginFailure = {
   message: "",
   blocksEditor: true,
   showsShellCommand: null,
+  details: {},
 };
+
+// I-3: 게이트웨이에 닿았고 응답을 기다리는 중에 시간이 다 됐다. `unreachable` 과
+// 사용자가 할 일이 다르다 — 재시도가 아니라 주소·상태를 먼저 확인해야 한다.
+const TIMEOUT: PluginFailure = {
+  code: "timeout",
+  message: "",
+  blocksEditor: true,
+  showsShellCommand: null,
+  details: {},
+};
+
+// I-1: 2xx 인데 본문이 JSON 객체가 아니면(HTML 오류 페이지, `null`, 파싱 실패 등)
+// 성공을 자칭하지 않는다. `plugin-capability.ts:28` 의 판정 기준과 맞춘다.
+const MALFORMED_RESPONSE: PluginFailure = {
+  code: "malformed_response",
+  message: "",
+  blocksEditor: true,
+  showsShellCommand: null,
+  details: {},
+};
+
+const DEFAULT_TIMEOUT_MS = 15000;
 
 export function createPluginClient(input: {
   baseUrl: string;
   defaultToken: string;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }): PluginClient {
   const fetchImpl = input.fetchImpl ?? fetch;
   const base = input.baseUrl.replace(/\/+$/, "");
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   async function call<T>(
     path: string,
     token: string,
     init: { method?: string; body?: unknown } = {},
   ): Promise<PluginResponse<T>> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     let res: Response;
     try {
       res = await fetchImpl(`${base}${path}`, {
@@ -84,16 +122,30 @@ export function createPluginClient(input: {
           ...(init.body === undefined ? {} : { "content-type": "application/json" }),
         },
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+        signal: controller.signal,
       });
     } catch {
-      return { ok: false, failure: UNREACHABLE, status: 0 };
+      // 중단이 우리가 건 타이머 때문이었는지로 재시도(unreachable)와 타임아웃을 가른다.
+      return controller.signal.aborted
+        ? { ok: false, failure: TIMEOUT, status: 0 }
+        : { ok: false, failure: UNREACHABLE, status: 0 };
+    } finally {
+      clearTimeout(timer);
     }
 
     let body: unknown = null;
+    let parseFailed = false;
     try {
       body = await res.json();
     } catch {
-      body = null;
+      parseFailed = true;
+    }
+
+    // 2xx 인데 본문이 객체가 아니면(HTML 오류 페이지, 파싱 실패, `null` 등) 그것도
+    // 실패다 — 성공을 자칭한 채 null 을 실어 보내면 호출부가 다음 줄에서 던진다.
+    const isSuccessStatus = res.status >= 200 && res.status < 300;
+    if (isSuccessStatus && (parseFailed || typeof body !== "object" || body === null)) {
+      return { ok: false, failure: MALFORMED_RESPONSE, status: res.status };
     }
 
     const failure = mapPluginFailure({ status: res.status, body });

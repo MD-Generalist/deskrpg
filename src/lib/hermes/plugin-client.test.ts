@@ -126,4 +126,76 @@ describe("plugin client — 실패", () => {
     if (res.ok) return;
     assert.equal(res.failure.code, "unreachable");
   });
+
+  // I-1 / M-2: 200 인데 JSON 이 아니면(HTML 오류 페이지 등) {ok:true, data:null} 을 내보내
+  // 호출부가 `res.data.body` 에서 던졌다. 형제 모듈 plugin-capability.ts 와 같은 기준으로
+  // 접어야 한다 — 성공을 자칭하면서 null 을 실어 보내지 않는다.
+  it("200 인데 JSON 이 아니면(HTML 등) 성공을 자칭하지 않는다", async () => {
+    const fetchImpl = (async () =>
+      new Response("<html>gateway error</html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      })) as unknown as typeof fetch;
+    const client = createPluginClient({ baseUrl: "http://gw:8642", defaultToken: "t", fetchImpl });
+    const res = await client.getIdentity("noah", "pt");
+    assert.equal(res.ok, false);
+    if (res.ok) return;
+    assert.equal(res.failure.code, "malformed_response");
+  });
+
+  it("200 인데 JSON 배열처럼 객체가 아닌 값이 와도 성공을 자칭하지 않는다", async () => {
+    const fetchImpl = (async () =>
+      new Response("null", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch;
+    const client = createPluginClient({ baseUrl: "http://gw:8642", defaultToken: "t", fetchImpl });
+    const res = await client.listProfiles();
+    assert.equal(res.ok, false);
+    if (res.ok) return;
+    assert.equal(res.failure.code, "malformed_response");
+  });
+});
+
+describe("plugin client — 타임아웃 (I-3)", () => {
+  it("게이트웨이가 응답 없이 소켓을 열어두면 timeoutMs 뒤 timeout 코드로 접는다", async () => {
+    // fetchImpl 이 신호가 중단될 때까지 매달렸다가 AbortError 로 거부한다 — 실제
+    // undici/fetch 가 signal 을 받았을 때의 동작을 흉내낸다.
+    const fetchImpl = ((_url: string, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const err = new Error("aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      })) as unknown as typeof fetch;
+
+    const client = createPluginClient({
+      baseUrl: "http://gw:8642",
+      defaultToken: "t",
+      fetchImpl,
+      timeoutMs: 5,
+    });
+    const res = await client.listProfiles();
+    assert.equal(res.ok, false);
+    if (res.ok) return;
+    // 재시도(unreachable)와 주소 확인(timeout)은 사용자가 할 일이 다르다.
+    assert.equal(res.failure.code, "timeout");
+  });
+
+  it("타임아웃 전에 응답이 오면 정상 처리된다", async () => {
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ profiles: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch;
+    const client = createPluginClient({
+      baseUrl: "http://gw:8642",
+      defaultToken: "t",
+      fetchImpl,
+      timeoutMs: 5000,
+    });
+    const res = await client.listProfiles();
+    assert.equal(res.ok, true);
+  });
 });
