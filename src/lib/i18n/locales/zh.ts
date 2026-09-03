@@ -2229,6 +2229,7 @@ const zh: Record<string, string> = {
   "errors.gatewayNotFound": "未找到网关",
   "errors.badRequest": "请求无效",
   "errors.unsupportedConfigKey": "不支持的配置项",
+  "errors.malformedResponse": "无法解析服务器响应",
   "errors.noProfile": "该配置文件尚未注册",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
   "task.chatPlaceholder": "发送关于此任务的额外指示。",

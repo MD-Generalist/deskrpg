@@ -2266,6 +2266,7 @@ const ko: Record<string, string> = {
   "errors.gatewayNotFound": "게이트웨이를 찾을 수 없습니다",
   "errors.badRequest": "잘못된 요청입니다",
   "errors.unsupportedConfigKey": "지원하지 않는 설정 항목입니다",
+  "errors.malformedResponse": "서버 응답을 해석할 수 없습니다",
   "errors.noProfile": "이 프로필이 등록되지 않았습니다",
   "errors.templateDeleteConfirm": '"{name}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
   "task.chatPlaceholder": "태스크에 대해 추가 지시를 보내보세요.",

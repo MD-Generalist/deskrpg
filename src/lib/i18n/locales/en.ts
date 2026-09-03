@@ -2271,6 +2271,7 @@ const en: Record<string, string> = {
   "errors.gatewayNotFound": "Gateway not found",
   "errors.badRequest": "Bad request",
   "errors.unsupportedConfigKey": "Unsupported config key",
+  "errors.malformedResponse": "Could not parse the server response",
   "errors.noProfile": "This profile is not registered",
   "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
   "task.chatPlaceholder": "Send additional instructions about this task.",

@@ -46,13 +46,23 @@ export function availableSteps(status: PluginStatus, localDiscovery: boolean): S
 }
 
 export function identityDecision(payload: {
-  isDefaultTemplate: boolean | null;
+  isDefaultTemplate?: boolean | null;
   unreadable?: boolean;
 }): "edit_fresh" | "ask_overwrite" | "blocked" {
   if (payload.unreadable) return "blocked";
-  // null 은 "읽지 못했다" 이지 "기본 템플릿이다" 가 아니다. false 로 접으면
-  // 덮어쓰기를 제안하고, true 로 접으면 빈 편집기를 연다 — 둘 다 원본을 잃는다.
-  if (payload.isDefaultTemplate === null) return "blocked";
+  // **불리언이 아닌 것은 전부 막는다.** 예전에는 `=== null` 만 걸렀는데, 필드가
+  // 아예 **없는** payload(`{}`)가 오면 `undefined` 가 falsy 로 흘러
+  // `ask_overwrite` 가 됐다 — 즉 "인격이 없다"를 "인격이 있으니 덮어쓸까요"로
+  // 뒤집어 보여줬다. 스테이징에서 실제로 재현됐다(2026-09-02): 플러그인은
+  // `isDefaultTemplate: true` 를 정직하게 줬는데 화면은 덮어쓰기를 물었다.
+  //
+  // 타입이 `boolean | null` 이라 TypeScript 는 필드 누락을 막아주지만, 응답을
+  // `as IdentityPayload` 로 캐스팅하는 순간 그 보호가 사라진다. 런타임에서
+  // 다시 확인해야 하는 이유다.
+  //
+  // 모르면 막는 쪽이 안전하다 — 빈 편집기를 열거나 덮어쓰기를 제안하면 사람이
+  // 쓴 인격을 저장 한 번으로 잃는다.
+  if (typeof payload.isDefaultTemplate !== "boolean") return "blocked";
   return payload.isDefaultTemplate ? "edit_fresh" : "ask_overwrite";
 }
 

@@ -120,3 +120,32 @@ describe("classifyServingCheck — 401 과 404 를 가른다 (수정 라운드 1
     assert.equal(classifyServingCheck({ errorCode: "timeout", upstreamStatus: null }), "unknown");
   });
 });
+
+describe("identityDecision — 불리언이 아닌 것은 전부 막는다", () => {
+  // 스테이징에서 실제로 났다(2026-09-02): 플러그인이 `isDefaultTemplate: true` 를
+  // 정직하게 줬는데 화면은 "이미 작성된 인격이 있습니다" 를 물었다. 응답 파싱이
+  // 깨져 `{}` 가 payload 로 흘렀고, `undefined` 가 falsy 라 ask_overwrite 로 접혔다.
+  // null 만 걸러서는 부족하다 — 폴백이 하필 위험한 쪽이었다.
+  const cases: Array<[string, unknown, string]> = [
+    ["필드가 아예 없다", {}, "blocked"],
+    ["undefined 를 명시", { isDefaultTemplate: undefined }, "blocked"],
+    ["null", { isDefaultTemplate: null }, "blocked"],
+    ["문자열 'true'", { isDefaultTemplate: "true" }, "blocked"],
+    ["숫자 1", { isDefaultTemplate: 1 }, "blocked"],
+    ["진짜 true", { isDefaultTemplate: true }, "edit_fresh"],
+    ["진짜 false", { isDefaultTemplate: false }, "ask_overwrite"],
+  ];
+
+  for (const [name, payload, expected] of cases) {
+    it(name, () => {
+      assert.equal(
+        identityDecision(payload as Parameters<typeof identityDecision>[0]),
+        expected,
+      );
+    });
+  }
+
+  it("unreadable 은 다른 무엇보다 먼저 막는다", () => {
+    assert.equal(identityDecision({ isDefaultTemplate: true, unreadable: true }), "blocked");
+  });
+});

@@ -2276,6 +2276,7 @@ const ja: Record<string, string> = {
   "errors.gatewayNotFound": "ゲートウェイが見つかりません",
   "errors.badRequest": "不正なリクエストです",
   "errors.unsupportedConfigKey": "サポートされていない設定項目です",
+  "errors.malformedResponse": "サーバーの応答を解釈できませんでした",
   "errors.noProfile": "このプロファイルは登録されていません",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
   "task.chatPlaceholder": "タスクについて追加の指示を送信してください。",

@@ -66,6 +66,32 @@ interface NpcHireWizardProps {
   onDone: () => void;
 }
 
+/**
+ * 응답 본문을 파싱한다. **파싱 실패를 성공으로 자칭하지 않는다.**
+ *
+ * 예전에는 호출부마다 `await res.json().catch(() => ({}))` 였다. 그 `{}` 는
+ * `errorCode` 가 없으므로 아래 오류 분기를 그대로 통과해 **성공한 payload** 로
+ * 취급됐고, 필드가 전부 `undefined` 인 채 화면 판정에 들어갔다. 스테이징에서
+ * 실제로 그 결과가 나왔다(2026-09-02): 플러그인이 `isDefaultTemplate: true` 를
+ * 줬는데 화면은 "이미 작성된 인격이 있습니다" 를 물었다 — 파싱이 깨졌을 때의
+ * 폴백이 하필 **위험한 쪽**이었다.
+ *
+ * 이제 파싱에 실패하면 `malformed_response` 코드를 실어 오류로 흐르게 한다.
+ * 서버가 무엇을 보냈든(HTML 오류 페이지, 빈 본문, 잘린 JSON) 화면은 "성공"이라고
+ * 말하지 않는다.
+ */
+async function parseJsonBody(res: Response): Promise<Record<string, unknown>> {
+  try {
+    const parsed = await res.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { errorCode: "malformed_response" };
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return { errorCode: "malformed_response" };
+  }
+}
+
 function extractErrorCode(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const code = (payload as { errorCode?: unknown }).errorCode;
@@ -156,7 +182,7 @@ export default function NpcHireWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nameTrimmed }),
       });
-      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       if (code) {
         setCreateError(getWizardErrorMessage(t, code));
@@ -220,7 +246,7 @@ export default function NpcHireWizard({
         { method: "DELETE" },
       );
       const data = withHeaderErrorCode(
-        await res.json().catch(() => ({})),
+        await parseJsonBody(res),
         res.headers,
       ) as ProxyFailure;
       const code = extractErrorCode(data);
@@ -255,7 +281,7 @@ export default function NpcHireWizard({
     setIdentitySaved(false);
     try {
       const res = await fetch(`${profileBase}/identity`);
-      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       if (code) {
         setIdentityError(getWizardErrorMessage(t, code));
@@ -298,7 +324,7 @@ export default function NpcHireWizard({
     if (!profileBase) return;
     try {
       const res = await fetch(`${profileBase}/identity`);
-      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       if (code) {
         // 재조회 자체가 실패했다 — 충돌 배너는 유지하되 원격 본문은 보여줄 수 없다.
@@ -324,7 +350,7 @@ export default function NpcHireWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: identityBody, ifRevision: identityPayload.revision ?? "" }),
       });
-      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       // 결함 8: 플러그인이 실제로 내는 코드는 `revision_mismatch` 다(스펙은
       // `revision_conflict` 라고 적었지만 구현이 그렇게 안 됐다) — 둘 다 받는다.
@@ -362,7 +388,7 @@ export default function NpcHireWizard({
     setConfigLocked(false);
     try {
       const res = await fetch(`${profileBase}/config`);
-      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       if (code) {
         // "unreadable"(200 분기)·"config_unreadable"(409) 둘 다 폼을 잠근다 — 빈
@@ -421,7 +447,7 @@ export default function NpcHireWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       if (code) {
         setConfigError(getWizardErrorMessage(t, code));

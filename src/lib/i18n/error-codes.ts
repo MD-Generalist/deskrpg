@@ -156,6 +156,7 @@ export type ErrorCode =
   | "gateway_not_found"
   | "bad_request"
   | "unsupported_config_key"
+  | "malformed_response"
   | "no_profile";
 
 /** 등록된 모든 에러코드 → 번역 키. 커버리지 가드가 이 표 전체를 훑는다. */
@@ -317,6 +318,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   gateway_not_found: "errors.gatewayNotFound",
   bad_request: "errors.badRequest",
   unsupported_config_key: "errors.unsupportedConfigKey",
+  malformed_response: "errors.malformedResponse",
   no_profile: "errors.noProfile",
 };
 
