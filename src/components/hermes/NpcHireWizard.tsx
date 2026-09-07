@@ -548,7 +548,7 @@ export default function NpcHireWizard({
     } finally {
       setConfigSaving(false);
     }
-  }, [model, profileBase, provider, t, toolsetsText]);
+  }, [catalog, effort, model, profileBase, provider, t, toolsetsText]);
 
   // --- Navigation ---
 
