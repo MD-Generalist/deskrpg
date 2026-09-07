@@ -159,7 +159,7 @@ export default function MapEditorLayout({
     } catch {
       /* ignore */
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
   const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>({
     layers: true,
     tilesets: true,
@@ -478,7 +478,7 @@ export default function MapEditorLayout({
       console.error("Save failed:", err);
       alert(t("settings.failedToSave"));
     }
-  }, [state.mapData, state.projectId, state.tilesetImages, saveProject, t]);
+  }, [state.mapData, state.projectId, state.tilesetImages, saveProject, findTileset, t]);
 
   const handleExportTMJ = useCallback(() => {
     if (!state.mapData) return;
@@ -1087,9 +1087,6 @@ export default function MapEditorLayout({
 
   // === Sorted tileset list for palette ===
 
-  const isCollisionLayer =
-    state.mapData?.layers[state.activeLayerIndex]?.name?.toLowerCase() === "collision";
-
   const sortedTilesets = useMemo(() => {
     if (!state.mapData) {
       return Object.values(state.tilesetImages)
@@ -1105,7 +1102,7 @@ export default function MapEditorLayout({
         !ts.name.startsWith("edited-selection-"),
     );
     return [...builtIn, ...userTs].map((ts) => state.tilesetImages[ts.firstgid]).filter(Boolean);
-  }, [state.tilesetImages, state.mapData, isCollisionLayer]);
+  }, [state.tilesetImages, state.mapData]);
 
   // === Selection Operations ===
 
@@ -1632,7 +1629,7 @@ export default function MapEditorLayout({
         dispatch({ type: "PLACE_STAMP", stampLayers: stampLayerChanges });
       }
     },
-    [activeStamp, state.mapData, state.tilesetImages, state.activeLayerIndex, dispatch],
+    [activeStamp, state.mapData, state.activeLayerIndex, dispatch],
   );
 
   // === Space-held pan mode ===

@@ -219,6 +219,9 @@ export function MapCanvas({
     activeStamp,
     isPasteMode,
     pasteCursorTile,
+    // 부모의 useState 객체라 토글할 때만 바뀐다 — 빠져 있으면 레이어
+    // 오버레이를 껐다 켜도 캔버스가 그대로다.
+    layerOverlayMap,
   ]);
 
   // === Coordinate conversion ===
@@ -479,6 +482,12 @@ export function MapCanvas({
       startWalkAnimation,
       screenToTile,
       dispatch,
+      // 이 넷이 빠져 있으면 스탬프를 고르거나 영역을 잡아도 핸들러가
+      // 예전 값을 붙잡는다 — 선택 영역 안을 끌어도 이동 대신 새 선택이 됐다.
+      activeStamp,
+      isPasteMode,
+      onPlaceStamp,
+      state.selection,
     ],
   );
 
@@ -604,6 +613,11 @@ export function MapCanvas({
       onStatusUpdate,
       dispatch,
       isBlocked,
+      // 스탬프·붙여넣기 미리보기 커서가 따라오지 않던 원인.
+      activeStamp,
+      isPasteMode,
+      state.clipboard,
+      state.selection,
     ],
   );
 

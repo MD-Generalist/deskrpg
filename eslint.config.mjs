@@ -7,10 +7,10 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // 오래된 클로저가 조용히 값을 떨구는 결함을 실제로 겪었다 — 위저드가
   // "저장했습니다" 를 띄우면서 reasoning_effort 를 안 보냈다(catalog 가
-  // 의존성에 없어 초기 렌더의 null 을 붙잡고 있었다). 타일 에디터에는
-  // 기존 위반 19건이 있어 전역으로 켜지 못하고, 이 디렉터리부터 막는다.
+  // 의존성에 없어 초기 렌더의 null 을 붙잡고 있었다). 타일 에디터의
+  // 기존 위반 17건도 정리해 전역으로 켰다.
   {
-    files: ["src/components/hermes/**/*.tsx"],
+    files: ["**/*.tsx", "**/*.jsx"],
     rules: { "react-hooks/exhaustive-deps": "error" },
   },
   // Override default ignores of eslint-config-next.

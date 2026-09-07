@@ -855,7 +855,6 @@ export default function PixelEditorModal({
   }, [
     pan,
     zoom,
-    tilesetInfo,
     tool,
     brushSize,
     color,
@@ -863,6 +862,9 @@ export default function PixelEditorModal({
     isPixelPasteMode,
     pixelClipboard,
     transformActive,
+    effectiveTileWidth,
+    effectiveTileHeight,
+    getHandlePositions,
   ]);
 
   useEffect(() => {
@@ -1343,6 +1345,10 @@ export default function PixelEditorModal({
       zoom,
       pan,
       magicEraserTolerance,
+      // 선택 영역을 만든 뒤 그 안을 끌어도 변형 모드로 들어가지 않던 원인.
+      pixelSelection,
+      enterTransform,
+      getHandlePositions,
     ],
   );
 
@@ -1642,7 +1648,6 @@ export default function PixelEditorModal({
     },
     [
       getPixelCoord,
-      getTileCoord,
       paintPixel,
       zoom,
       pan,
@@ -1652,6 +1657,11 @@ export default function PixelEditorModal({
       renderCanvas,
       tool,
       computeMagicEraserPreview,
+      // 선택을 만든 뒤 핸들 위에서 커서 모양이 바뀌지 않던 원인.
+      pixelSelection,
+      transformActive,
+      hitTestHandle,
+      getHandlePositions,
     ],
   );
 
@@ -1674,7 +1684,7 @@ export default function PixelEditorModal({
     }
     isDrawingRef.current = false;
     drawStartRef.current = null;
-  }, [applyShift, enterTransform, pixelSelection]);
+  }, [applyShift]);
 
   // Cleanup document listeners on unmount
   useEffect(() => {
@@ -1735,6 +1745,67 @@ export default function PixelEditorModal({
   );
 
   // --- Keyboard shortcuts ---
+  // --- Trim fully transparent edge rows/columns ---
+  const trimEdges = useCallback(() => {
+    const ec = editCanvasRef.current;
+    if (!ec) return;
+    const ctx = ec.getContext("2d")!;
+    const tw = effectiveTileWidth;
+    const th = effectiveTileHeight;
+    const cols = Math.round(ec.width / tw);
+    const rows = Math.round(ec.height / th);
+
+    // Check which edge tile-columns/rows are fully transparent
+    const isColEmpty = (col: number) => {
+      const id = ctx.getImageData(col * tw, 0, tw, ec.height);
+      for (let i = 3; i < id.data.length; i += 4) if (id.data[i] > 0) return false;
+      return true;
+    };
+    const isRowEmpty = (row: number) => {
+      const id = ctx.getImageData(0, row * th, ec.width, th);
+      for (let i = 3; i < id.data.length; i += 4) if (id.data[i] > 0) return false;
+      return true;
+    };
+
+    let trimLeft = 0,
+      trimRight = 0,
+      trimTop = 0,
+      trimBottom = 0;
+    while (trimLeft < cols - 1 && isColEmpty(trimLeft)) trimLeft++;
+    while (trimRight < cols - 1 - trimLeft && isColEmpty(cols - 1 - trimRight)) trimRight++;
+    while (trimTop < rows - 1 && isRowEmpty(trimTop)) trimTop++;
+    while (trimBottom < rows - 1 - trimTop && isRowEmpty(rows - 1 - trimBottom)) trimBottom++;
+
+    if (trimLeft === 0 && trimRight === 0 && trimTop === 0 && trimBottom === 0) return;
+
+    pushUndo();
+    const newCols = cols - trimLeft - trimRight;
+    const newRows = rows - trimTop - trimBottom;
+    const newCanvas = document.createElement("canvas");
+    newCanvas.width = newCols * tw;
+    newCanvas.height = newRows * th;
+    const newCtx = newCanvas.getContext("2d")!;
+    newCtx.drawImage(
+      ec,
+      trimLeft * tw,
+      trimTop * th,
+      newCanvas.width,
+      newCanvas.height,
+      0,
+      0,
+      newCanvas.width,
+      newCanvas.height,
+    );
+
+    editCanvasRef.current = newCanvas;
+    setExpandedCols(newCols);
+    setExpandedRows(newRows);
+    requestAnimationFrame(() => {
+      autoFit();
+      renderCanvas();
+    });
+  }, [effectiveTileWidth, effectiveTileHeight, pushUndo, autoFit, renderCanvas]);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -1862,7 +1933,12 @@ export default function PixelEditorModal({
     commitTransform,
     cancelTransform,
     switchTool,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+    // 단축키가 붙잡고 있던 예전 함수들. pan/zoom 마다 리스너를 다시 다는
+    // 비용은 이미 매 프레임 도는 캔버스 리렌더에 비하면 무시할 수준이다.
+    pushUndo,
+    renderCanvas,
+    trimEdges,
+  ]);
 
   // --- Save handlers ---
   const getDataUrl = useCallback(() => {
@@ -1997,68 +2073,16 @@ export default function PixelEditorModal({
       autoFit();
       renderCanvas();
     });
-  }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, autoFit, renderCanvas]);
+  }, [
+    resizeTargetCols,
+    resizeTargetRows,
+    pushUndo,
+    autoFit,
+    renderCanvas,
+    effectiveTileWidth,
+    effectiveTileHeight,
+  ]);
 
-  // --- Trim fully transparent edge rows/columns ---
-  const trimEdges = useCallback(() => {
-    const ec = editCanvasRef.current;
-    if (!ec) return;
-    const ctx = ec.getContext("2d")!;
-    const tw = effectiveTileWidth;
-    const th = effectiveTileHeight;
-    const cols = Math.round(ec.width / tw);
-    const rows = Math.round(ec.height / th);
-
-    // Check which edge tile-columns/rows are fully transparent
-    const isColEmpty = (col: number) => {
-      const id = ctx.getImageData(col * tw, 0, tw, ec.height);
-      for (let i = 3; i < id.data.length; i += 4) if (id.data[i] > 0) return false;
-      return true;
-    };
-    const isRowEmpty = (row: number) => {
-      const id = ctx.getImageData(0, row * th, ec.width, th);
-      for (let i = 3; i < id.data.length; i += 4) if (id.data[i] > 0) return false;
-      return true;
-    };
-
-    let trimLeft = 0,
-      trimRight = 0,
-      trimTop = 0,
-      trimBottom = 0;
-    while (trimLeft < cols - 1 && isColEmpty(trimLeft)) trimLeft++;
-    while (trimRight < cols - 1 - trimLeft && isColEmpty(cols - 1 - trimRight)) trimRight++;
-    while (trimTop < rows - 1 && isRowEmpty(trimTop)) trimTop++;
-    while (trimBottom < rows - 1 - trimTop && isRowEmpty(rows - 1 - trimBottom)) trimBottom++;
-
-    if (trimLeft === 0 && trimRight === 0 && trimTop === 0 && trimBottom === 0) return;
-
-    pushUndo();
-    const newCols = cols - trimLeft - trimRight;
-    const newRows = rows - trimTop - trimBottom;
-    const newCanvas = document.createElement("canvas");
-    newCanvas.width = newCols * tw;
-    newCanvas.height = newRows * th;
-    const newCtx = newCanvas.getContext("2d")!;
-    newCtx.drawImage(
-      ec,
-      trimLeft * tw,
-      trimTop * th,
-      newCanvas.width,
-      newCanvas.height,
-      0,
-      0,
-      newCanvas.width,
-      newCanvas.height,
-    );
-
-    editCanvasRef.current = newCanvas;
-    setExpandedCols(newCols);
-    setExpandedRows(newRows);
-    requestAnimationFrame(() => {
-      autoFit();
-      renderCanvas();
-    });
-  }, [effectiveTileWidth, effectiveTileHeight, pushUndo, autoFit, renderCanvas]);
 
   // --- Delete edge row/column ---
   const deleteEdge = useCallback(

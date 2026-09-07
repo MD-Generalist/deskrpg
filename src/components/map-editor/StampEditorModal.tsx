@@ -120,6 +120,9 @@ export default function StampEditorModal({
     setSelectedTile(null);
     setStampName(stamp.name);
     setEditingName(false);
+    // 다른 스탬프가 열릴 때만 폼을 초기화한다. stamp.layers 등을 의존성에
+    // 넣으면 부모가 객체를 새로 만들 때마다 편집 중인 내용이 날아간다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stamp.id]);
 
   useEffect(() => {
@@ -290,6 +293,9 @@ export default function StampEditorModal({
     findTileset,
     selectedTile,
     getTileOwnerLayer,
+    // 크기를 바꿔도 격자가 예전 값으로 그려지던 원인.
+    stampCols,
+    stampRows,
   ]);
 
   useEffect(() => {
@@ -418,7 +424,7 @@ export default function StampEditorModal({
     (idx: number) => {
       setActiveLayerIndex(idx);
     },
-    [selectedTile, layers, stampCols, getTileOwnerLayer, moveTileToLayer],
+    [],
   );
 
   const buildLayerImage = useCallback(
@@ -458,7 +464,7 @@ export default function StampEditorModal({
       }
       return offscreen.toDataURL("image/png");
     },
-    [layers, tilesetImages, stamp, findTileset],
+    [layers, tilesetImages, stamp, findTileset, stampCols, stampRows],
   );
 
   const handleEditPixels = useCallback(() => {
@@ -601,7 +607,15 @@ export default function StampEditorModal({
         img.src = resultDataUrl;
       },
     );
-  }, [activeLayerIndex, layers, tilesets, stamp, buildLayerImage, onOpenPixelEditor]);
+  }, [
+    activeLayerIndex,
+    stamp,
+    buildLayerImage,
+    onOpenPixelEditor,
+    findTileset,
+    stampCols,
+    stampRows,
+  ]);
 
   const generateCleanThumbnail = useCallback((): string | null => {
     if (tilesetImages.size === 0) return null;
