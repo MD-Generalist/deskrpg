@@ -4,7 +4,11 @@ import { existsSync } from "node:fs";
 import { eq } from "drizzle-orm";
 
 import { db, gatewayResources } from "@/db";
-import { decryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
+import {
+  decryptGatewayToken,
+  getAccessibleGatewayResource,
+  persistGatewayValidationState,
+} from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { buildPluginCacheUpdate } from "@/lib/hermes/plugin-cache-update";
 import { probeDeskrpgPlugin } from "@/lib/hermes/plugin-capability";
@@ -61,6 +65,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .set(buildPluginCacheUpdate(plugin))
       .where(eq(gatewayResources.id, id));
 
+    // 프로브 결과를 **검증 상태로도** 남긴다. 예전에는 plugin_* 만 쓰고
+    // last_validation_status 를 비워 둬서, 연결 테스트를 아무리 눌러도 목록이
+    // "아직 테스트하지 않음" 에 머물렀다(스테이징 실측 2026-09-07).
+    // persistGatewayValidationState 는 이 브랜치 이전부터 있었지만 **아무도 부르지
+    // 않는 죽은 코드**였다.
+    await persistGatewayValidationState(id, { status: "valid", error: null });
+
     return NextResponse.json({
       ok: true,
       messageCode: "gateway_connection_succeeded",
@@ -72,6 +83,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (probe.kind === "dashboard") {
     // 주소는 Hermes 인데 API Server 가 아니다. 대시보드(기본 9119)에 붙은 경우가
     // 대부분이라, 고쳐야 할 것은 토큰이 아니라 포트다.
+    await persistGatewayValidationState(id, {
+      status: "error",
+      error: `gateway_is_not_api_server (HTTP ${probe.status})`,
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -89,6 +104,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       baseUrl: accessible.resource.baseUrl,
       inContainer: existsSync("/.dockerenv"),
     });
+    await persistGatewayValidationState(id, {
+      status: "unreachable",
+      error: probe.error,
+    });
     return NextResponse.json(
       { ok: false, errorCode, error: probe.error },
       PROBE_RESULT_INIT(errorCode),
@@ -96,6 +115,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // 응답은 왔지만 Hermes API Server 가 아니다. 고쳐야 할 것은 자격증명이 아니라 주소다.
+  await persistGatewayValidationState(id, {
+    status: "error",
+    error: `not_a_hermes_gateway (HTTP ${probe.status})`,
+  });
   return NextResponse.json(
     {
       ok: false,

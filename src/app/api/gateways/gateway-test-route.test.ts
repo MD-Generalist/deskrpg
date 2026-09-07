@@ -137,6 +137,13 @@ describe("게이트웨이 테스트 라우트 — 플러그인 캐시를 실제�
 
       assert.equal(row.pluginStatus, "plugin_ready");
       assert.equal(row.pluginVersion, "0.4.2");
+      // 화면의 "아직 테스트하지 않음" 은 last_validation_status 를 본다. 예전에는
+      // 이 라우트가 plugin_* 만 쓰고 검증 상태를 비워 둬서, 연결 테스트를 아무리
+      // 눌러도 목록이 그대로였다(스테이징 실측 2026-09-07). persistGatewayValidationState
+      // 는 이 브랜치 이전부터 있었지만 **아무도 부르지 않는 죽은 코드**였다.
+      assert.equal(row.lastValidationStatus, "valid");
+      assert.equal(row.lastValidationError, null);
+      assert.ok(row.lastValidatedAt, "lastValidatedAt 이 채워져야 한다");
       // SQLite 방언에서 쓰인 값이 정말 방금 만든 시각인지만 본다 — "그 값이
       // nowForDb() 에서 나왔는가"는 함수 몸통이 nowForDb() 를 스스로 부르는
       // 구조(라운드 3) + plugin-capability.test.ts 의 방언 재평가 테스트가 잠근다.
