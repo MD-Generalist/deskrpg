@@ -258,6 +258,8 @@ const en: Record<string, string> = {
   "hermes.wizard.config.provider": "Provider",
   "hermes.wizard.config.toolsets": "Toolsets",
   "hermes.wizard.config.toolsetsHint": "Comma-separated",
+  "hermes.wizard.config.notAuthenticated": "not authenticated",
+  "hermes.wizard.config.effort": "Reasoning effort (unset)",
   "hermes.wizard.config.locked": "The config file can't be read, so this form is locked.",
   "hermes.wizard.config.save": "Save",
   "hermes.wizard.config.saving": "Saving…",

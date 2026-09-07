@@ -247,6 +247,8 @@ const zh: Record<string, string> = {
   "hermes.wizard.config.provider": "提供方",
   "hermes.wizard.config.toolsets": "工具集",
   "hermes.wizard.config.toolsetsHint": "请用逗号分隔",
+  "hermes.wizard.config.notAuthenticated": "未认证",
+  "hermes.wizard.config.effort": "推理强度（未指定）",
   "hermes.wizard.config.locked": "无法读取设置文件，此表单已锁定。",
   "hermes.wizard.config.save": "保存",
   "hermes.wizard.config.saving": "保存中…",

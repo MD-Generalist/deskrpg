@@ -42,7 +42,7 @@ export function validateIdentityPutBody(input: unknown): IdentityPutValidation {
   return { ok: true, body, ifRevision };
 }
 
-const ALLOWED_CONFIG_KEYS = new Set(["model", "provider", "toolsets"]);
+const ALLOWED_CONFIG_KEYS = new Set(["model", "provider", "toolsets", "reasoning_effort"]);
 
 export type ConfigPutValidation =
   | { ok: true; patch: Record<string, unknown> }
@@ -50,7 +50,8 @@ export type ConfigPutValidation =
   | { ok: false; errorCode: "unsupported_config_key"; unknownKeys: string[] };
 
 /**
- * 플러그인이 허용하는 세 키(`model`/`provider`/`toolsets`)만 통과시킨다. 화면이
+ * 플러그인이 허용하는 네 키(`model`/`provider`/`toolsets`/`reasoning_effort`)만
+ * 통과시킨다. 화면이
  * 실수로 다른 키를 보내면 원격이 400 을 내는데, 여기서 막으면 왜 막혔는지가
  * 분명해진다.
  */

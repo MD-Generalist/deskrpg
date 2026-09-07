@@ -82,6 +82,18 @@ describe("validateConfigPatch", () => {
     });
   });
 
+  test("passes reasoning_effort through", () => {
+    // 플러그인이 받는 키인데 여기서 막히면 화면의 드롭다운이 조용히 무력해진다.
+    const result = validateConfigPatch({ reasoning_effort: "high" });
+    assert.deepEqual(result, { ok: true, patch: { reasoning_effort: "high" } });
+  });
+
+  test("passes an empty reasoning_effort through (means unset)", () => {
+    // 빈 문자열은 "지정 안 함" 이라는 뜻이다 — 여기서 떨구면 해제할 방법이 없다.
+    const result = validateConfigPatch({ reasoning_effort: "" });
+    assert.deepEqual(result, { ok: true, patch: { reasoning_effort: "" } });
+  });
+
   test("rejects a non-object body", () => {
     const result = validateConfigPatch("nope");
     assert.deepEqual(result, { ok: false, errorCode: "bad_request" });

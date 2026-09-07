@@ -259,6 +259,8 @@ const ja: Record<string, string> = {
   "hermes.wizard.config.provider": "プロバイダー",
   "hermes.wizard.config.toolsets": "ツールセット",
   "hermes.wizard.config.toolsetsHint": "カンマ区切りで入力してください",
+  "hermes.wizard.config.notAuthenticated": "未認証",
+  "hermes.wizard.config.effort": "推論強度（未指定）",
   "hermes.wizard.config.locked": "設定ファイルを読み込めないため、フォームをロックします。",
   "hermes.wizard.config.save": "保存",
   "hermes.wizard.config.saving": "保存中…",

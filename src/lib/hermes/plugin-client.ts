@@ -47,6 +47,12 @@ export type DeleteProfilePayload = {
   removed: { profileDir: boolean; wrapperScript: boolean };
 };
 
+export type CatalogPayload = {
+  providers: Array<{ id: string; name: string; authenticated: boolean }>;
+  models: Record<string, string[]>;
+  reasoningEfforts: string[];
+};
+
 export type PluginClient = {
   listProfiles(): Promise<PluginResponse<{ profiles: unknown[] }>>;
   createProfile(name: string): Promise<PluginResponse<CreateProfilePayload>>;
@@ -58,6 +64,7 @@ export type PluginClient = {
     input: { body: string; ifRevision: string },
   ): Promise<PluginResponse<{ revision: string }>>;
   getConfig(name: string, profileToken: string): Promise<PluginResponse<Record<string, unknown>>>;
+  getCatalog(name: string, profileToken: string): Promise<PluginResponse<CatalogPayload>>;
   putConfig(
     name: string,
     profileToken: string,
@@ -178,6 +185,9 @@ export function createPluginClient(input: {
       call(`/p/${seg(name)}/deskrpg/identity`, profileToken, { method: "PUT", body }),
 
     getConfig: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/config`, profileToken),
+
+    // 모델·프로바이더 목록. 프로필 스코프다 — 인증 상태가 프로필별로 갈릴 수 있다.
+    getCatalog: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/catalog`, profileToken),
 
     putConfig: (name, profileToken, patch) =>
       call(`/p/${seg(name)}/deskrpg/config`, profileToken, { method: "PUT", body: patch }),

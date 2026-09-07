@@ -22,6 +22,7 @@ import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
+import type { CatalogPayload } from "@/lib/hermes/plugin-client";
 
 import {
   availableSteps,
@@ -190,6 +191,13 @@ export default function NpcHireWizard({
   const [toolsetsText, setToolsetsText] = useState("");
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
+  const [effort, setEffort] = useState("");
+  /**
+   * 모델·프로바이더·추론 강도 목록. 캐시하지 않는다 — Hermes 가 models.dev 를 20분
+   * TTL 로 캐시하고 있어서, 여기서 또 들고 있으면 "매번 최신" 이 두 배로 늦어진다.
+   */
+  const [catalog, setCatalog] = useState<CatalogPayload | null>(null);
+  const [catalogError, setCatalogError] = useState("");
 
   const profileBase = created
     ? `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(created.name)}`
@@ -443,6 +451,7 @@ export default function NpcHireWizard({
       const record = data as Record<string, unknown>;
       setModel(typeof record.model === "string" ? record.model : "");
       setProvider(typeof record.provider === "string" ? record.provider : "");
+      setEffort(typeof record.reasoning_effort === "string" ? record.reasoning_effort : "");
       const toolsets = record.toolsets;
       setToolsetsText(
         Array.isArray(toolsets) ? toolsets.filter((x) => typeof x === "string").join(", ") : "",
@@ -468,6 +477,38 @@ export default function NpcHireWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current]);
 
+  /**
+   * 모델·프로바이더 목록을 받아온다. 실패해도 ③단계를 막지 않는다 — 목록이 없으면
+   * 직접 입력으로 떨어질 뿐이고, 그게 예전 동작이다. 드롭다운을 못 채웠다고 설정
+   * 자체를 못 하게 하면 기능이 후퇴한다.
+   */
+  const loadCatalog = useCallback(async () => {
+    if (!profileBase) return;
+    setCatalogError("");
+    try {
+      const res = await fetch(`${profileBase}/catalog`);
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
+      const code = extractErrorCode(data);
+      if (code) {
+        setCatalogError(getWizardErrorMessage(t, code));
+        setCatalog(null);
+        return;
+      }
+      setCatalog(data as unknown as CatalogPayload);
+    } catch {
+      setCatalogError(t("errors.connectionFailed"));
+      setCatalog(null);
+    }
+  }, [profileBase, t]);
+
+  // ③ 에 들어오면 카탈로그를 한 번 받는다. 설정 로딩과 독립이라 별도 effect 다 —
+  // 하나가 실패해도 다른 하나는 진행한다.
+  useEffect(() => {
+    if (current === "config" && profileBase && !catalog && !catalogError) {
+      void loadCatalog();
+    }
+  }, [current, profileBase, catalog, catalogError, loadCatalog]);
+
   const handleSaveConfig = useCallback(async () => {
     if (!profileBase) return;
     setConfigSaving(true);
@@ -482,6 +523,9 @@ export default function NpcHireWizard({
         .map((s) => s.trim())
         .filter(Boolean);
       if (toolsets.length > 0) patch.toolsets = toolsets;
+      // 빈 문자열도 보낸다 — "지정 안 함" 으로 되돌리는 유일한 방법이다.
+      // 조건을 걸면 한 번 고른 effort 를 화면에서 해제할 수 없어진다.
+      if (catalog) patch.reasoning_effort = effort;
 
       const res = await fetch(`${profileBase}/config`, {
         method: "PUT",
@@ -895,22 +939,78 @@ export default function NpcHireWizard({
           ) : (
             <>
               {configError && !configLocked && <p className="text-sm text-danger">{configError}</p>}
+              {catalogError && <p className="text-xs text-text-muted">{catalogError}</p>}
               <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  type="text"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder={t("hermes.wizard.config.model")}
-                  className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                />
-                <input
-                  type="text"
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                  placeholder={t("hermes.wizard.config.provider")}
-                  className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                />
+                {/* 프로바이더를 먼저 고른다 — 모델 목록이 거기서 나온다. 인증되지 않은
+                    것도 목록에 남기되(지우면 "왜 내 모델이 없지" 를 알 수 없다) 고를 수
+                    없게 한다. 목록을 못 받았으면 예전처럼 직접 입력으로 떨어진다. */}
+                {catalog ? (
+                  <select
+                    value={provider}
+                    onChange={(e) => {
+                      setProvider(e.target.value);
+                      // 프로바이더가 바뀌면 이전 모델은 그 프로바이더의 것이 아니다.
+                      // 남겨 두면 저장 시점에야 실패한다.
+                      setModel("");
+                    }}
+                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">{t("hermes.wizard.config.provider")}</option>
+                    {catalog.providers.map((p) => (
+                      <option key={p.id} value={p.id} disabled={!p.authenticated}>
+                        {p.name}
+                        {p.authenticated ? "" : ` — ${t("hermes.wizard.config.notAuthenticated")}`}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value)}
+                    placeholder={t("hermes.wizard.config.provider")}
+                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                )}
+
+                {catalog && (catalog.models[provider]?.length ?? 0) > 0 ? (
+                  <select
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">{t("hermes.wizard.config.model")}</option>
+                    {(catalog.models[provider] ?? []).map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    placeholder={t("hermes.wizard.config.model")}
+                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                )}
               </div>
+
+              {catalog && catalog.reasoningEfforts.length > 0 && (
+                <select
+                  value={effort}
+                  onChange={(e) => setEffort(e.target.value)}
+                  className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">{t("hermes.wizard.config.effort")}</option>
+                  {catalog.reasoningEfforts.map((e2) => (
+                    <option key={e2} value={e2}>
+                      {e2}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 type="text"
                 value={toolsetsText}

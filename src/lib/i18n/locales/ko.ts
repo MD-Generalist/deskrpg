@@ -254,6 +254,8 @@ const ko: Record<string, string> = {
   "hermes.wizard.config.provider": "프로바이더",
   "hermes.wizard.config.toolsets": "툴셋",
   "hermes.wizard.config.toolsetsHint": "쉼표로 구분해 입력하세요",
+  "hermes.wizard.config.notAuthenticated": "인증 안 됨",
+  "hermes.wizard.config.effort": "추론 강도(미지정)",
   "hermes.wizard.config.locked": "설정 파일을 읽을 수 없어 폼을 잠급니다.",
   "hermes.wizard.config.save": "저장",
   "hermes.wizard.config.saving": "저장하는 중…",
