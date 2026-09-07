@@ -168,6 +168,7 @@ const ja: Record<string, string> = {
   "gateway.profile.tokenPlaceholder": "プロファイルトークン (16文字以上)",
   "gateway.profile.add": "追加",
   "gateway.profile.test": "接続テスト",
+  "gateway.profile.persona": "人格",
   "gateway.profile.edit": "編集",
   "gateway.profile.delete": "削除",
   "gateway.profile.save": "保存",

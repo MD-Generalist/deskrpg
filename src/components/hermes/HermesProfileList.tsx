@@ -61,6 +61,8 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [selected, setSelected] = useState<string[]>([]);
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const [registering, setRegistering] = useState(false);
+  /** "인격" 버튼이 지정한 프로필 — 마법사를 그 프로필의 ②단계로 바로 연다. */
+  const [wizardProfile, setWizardProfile] = useState<string | null>(null);
   const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>(
     [],
   );
@@ -293,9 +295,11 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
             gatewayId={gatewayId}
             pluginStatus={pluginStatus}
             existingProfiles={profiles.map((p) => p.profileName)}
+            initialProfile={wizardProfile}
             localDiscovery={!!discovery?.available && !!discovery?.optedIn}
             onDone={() => {
               setWizardOpen(false);
+              setWizardProfile(null);
               void loadProfiles();
             }}
           />
@@ -327,6 +331,18 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                     >
                       {t(key)}
                     </span>
+                    {pluginStatus === "plugin_ready" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWizardProfile(profile.profileName);
+                          setWizardOpen(true);
+                        }}
+                        className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
+                      >
+                        {t("gateway.profile.persona")}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void handleTest(profile.id)}

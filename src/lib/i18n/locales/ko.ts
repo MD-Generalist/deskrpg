@@ -166,6 +166,7 @@ const ko: Record<string, string> = {
   "gateway.profile.tokenPlaceholder": "프로필 토큰 (16자 이상)",
   "gateway.profile.add": "추가",
   "gateway.profile.test": "연결 테스트",
+  "gateway.profile.persona": "인격",
   "gateway.profile.edit": "수정",
   "gateway.profile.delete": "삭제",
   "gateway.profile.save": "저장",

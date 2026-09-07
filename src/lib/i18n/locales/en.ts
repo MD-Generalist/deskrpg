@@ -168,6 +168,7 @@ const en: Record<string, string> = {
   "gateway.profile.tokenPlaceholder": "Profile token (16+ characters)",
   "gateway.profile.add": "Add",
   "gateway.profile.test": "Test connection",
+  "gateway.profile.persona": "Persona",
   "gateway.profile.edit": "Edit",
   "gateway.profile.delete": "Delete",
   "gateway.profile.save": "Save",

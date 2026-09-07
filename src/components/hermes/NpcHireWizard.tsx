@@ -72,6 +72,12 @@ interface NpcHireWizardProps {
    * 정당한 용도다 — 스펙이 그 입구를 빠뜨렸다.
    */
   existingProfiles: string[];
+  /**
+   * 이 프로필로 **곧바로 ②인격부터** 시작한다. 프로필 목록의 "인격" 버튼이 쓴다 —
+   * 마법사를 열고 ①에서 다시 고르게 하면 기능이 있어도 아무도 못 찾는다
+   * (스테이징에서 사용자가 실제로 "인격을 수정할 방법이 없어 보인다" 고 했다).
+   */
+  initialProfile?: string | null;
   onDone: () => void;
 }
 
@@ -119,6 +125,7 @@ export default function NpcHireWizard({
   pluginStatus,
   localDiscovery,
   existingProfiles,
+  initialProfile = null,
   onDone,
 }: NpcHireWizardProps) {
   const t = useT();
@@ -133,15 +140,21 @@ export default function NpcHireWizard({
   );
 
   const firstEnabled = steps.find((s) => s.enabled)?.step ?? "placement";
-  const [current, setCurrent] = useState<WizardStep>(firstEnabled);
+  // `initialProfile` 로 들어오면 ①(프로필 만들기)은 이미 끝난 일이다 — 곧바로 ②로 연다.
+  // 다만 ②가 잠겨 있으면(플러그인 없음) 그리 보낼 수 없으므로 열린 첫 단계로 떨어진다.
+  const [current, setCurrent] = useState<WizardStep>(
+    initialProfile && stepByName.identity?.enabled ? "identity" : firstEnabled,
+  );
 
   // --- Step ① profile ---
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
-  const [created, setCreated] = useState<ProvisionedProfile | null>(null);
+  const [created, setCreated] = useState<ProvisionedProfile | null>(
+    initialProfile ? { name: initialProfile, keyIssued: true, keyStored: true } : null,
+  );
   /** 이번 세션에서 만든 것이 아니라 기존 프로필로 들어왔는가 — 닫기 확인 문구가 갈린다. */
-  const [resumed, setResumed] = useState(false);
+  const [resumed, setResumed] = useState(Boolean(initialProfile));
   const [serving, setServing] = useState<
     "idle" | "checking" | "served" | "key_rejected" | "not_served" | "error"
   >("idle");

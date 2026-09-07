@@ -164,6 +164,7 @@ const zh: Record<string, string> = {
   "gateway.profile.tokenPlaceholder": "配置文件令牌 (至少16个字符)",
   "gateway.profile.add": "添加",
   "gateway.profile.test": "测试连接",
+  "gateway.profile.persona": "人格",
   "gateway.profile.edit": "编辑",
   "gateway.profile.delete": "删除",
   "gateway.profile.save": "保存",
