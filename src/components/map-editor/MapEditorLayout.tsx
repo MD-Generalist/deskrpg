@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   useMapEditor,
   createDefaultMap,
@@ -91,6 +92,10 @@ export default function MapEditorLayout({
     });
 
   const [projectLoaded, setProjectLoaded] = useState(false);
+  // 로드 실패를 화면 상태로 올린다. 예전엔 `alert()` 로 띄우고 곧바로 목록으로
+  // 튕겼다 — 브라우저 모달이라 문구를 다듬을 수 없고, 확인을 누르면 사유를 다시
+  // 볼 방법도 없었다.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Modal visibility
   const [showImportTileset, setShowImportTileset] = useState(false);
@@ -247,11 +252,10 @@ export default function MapEditorLayout({
         })
         .catch((err) => {
           console.error("Failed to load project:", err);
-          alert(err instanceof Error ? err.message : t("errors.failedToFetchProject"));
-          router.push("/map-editor");
+          setLoadError(err instanceof Error ? err.message : t("errors.failedToFetchProject"));
         });
     }
-  }, [initialProjectId, loadProject, router, t]);
+  }, [initialProjectId, loadProject, t]);
 
   // === Layer visibility sync ===
 
@@ -1797,6 +1801,20 @@ export default function MapEditorLayout({
           router.push(`/map-editor/${result.createdBy}/${result.id}`);
         }}
       />
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-danger text-sm">{loadError}</p>
+        <Link
+          href="/map-editor"
+          className="rounded bg-surface-raised px-4 py-2 text-sm font-semibold text-text hover:bg-surface-raised/80"
+        >
+          {t("mapEditor.project.browserTitle")}
+        </Link>
+      </div>
     );
   }
 
