@@ -52,10 +52,7 @@ const { TaskManager } = require("./task-manager.js") as {
       summary: string | null,
     ) => Promise<TaskRow>;
     hasInProgressTask: (npcId: string, channelId: string) => Promise<boolean>;
-    getNextPendingTask: (
-      npcId: string,
-      channelId: string,
-    ) => Promise<TaskRow | null>;
+    getNextPendingTask: (npcId: string, channelId: string) => Promise<TaskRow | null>;
     markTaskNudged: (taskId: string, channelId: string) => Promise<TaskRow | null>;
     markTaskStalled: (
       taskId: string,
@@ -63,14 +60,8 @@ const { TaskManager } = require("./task-manager.js") as {
       reason?: string,
     ) => Promise<TaskRow | null>;
     resumeTask: (taskId: string, channelId: string) => Promise<TaskRow | null>;
-    getTaskByNpcTaskId: (
-      npcId: string,
-      npcTaskId: string,
-    ) => Promise<TaskRow | null>;
-    getStaleInProgressTasks: (
-      channelId: string,
-      olderThanIso: string,
-    ) => Promise<TaskRow[]>;
+    getTaskByNpcTaskId: (npcId: string, npcTaskId: string) => Promise<TaskRow | null>;
+    getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<TaskRow[]>;
   };
 };
 

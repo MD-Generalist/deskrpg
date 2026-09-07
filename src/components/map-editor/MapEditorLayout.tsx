@@ -37,7 +37,7 @@ import { useProjectManager } from "./hooks/useProjectManager";
 import StampPanel from "./StampPanel";
 import SaveStampModal from "./SaveStampModal";
 import StampEditorModal from "./StampEditorModal";
-import type { StampListItem, StampData } from "@/lib/stamp-utils";
+import type { StampListItem, StampData, StampLayerData, StampTilesetData } from "@/lib/stamp-utils";
 import { buildGidRemapTable, findLayerByName } from "@/lib/stamp-utils";
 
 // === Props ===
@@ -1159,7 +1159,7 @@ export default function MapEditorLayout({
       if (res.ok) {
         const data = await res.json();
         setStamps(
-          (data.stamps ?? []).map((s: any) => ({
+          (data.stamps ?? []).map((s: StampListItem) => ({
             id: s.id,
             name: s.name,
             cols: s.cols,
@@ -1250,8 +1250,8 @@ export default function MapEditorLayout({
     rows: number;
     tileWidth: number;
     tileHeight: number;
-    layers: any[];
-    tilesets: any[];
+    layers: StampLayerData[];
+    tilesets: StampTilesetData[];
     thumbnail: string | null;
   } | null>(null);
 
@@ -1297,7 +1297,9 @@ export default function MapEditorLayout({
           if (layer.name.toLowerCase() === "collision") continue;
 
           const data: number[] = [];
-          const depthProp = layer.properties?.find((p: any) => p.name === "depth");
+          const depthProp = layer.properties?.find(
+            (p: { name: string; value: unknown }) => p.name === "depth",
+          );
           const depthVal = depthProp ? Number(depthProp.value) || 0 : 0;
 
           for (let row = 0; row < sel.height; row++) {
@@ -1478,8 +1480,8 @@ export default function MapEditorLayout({
       name?: string;
       cols?: number;
       rows?: number;
-      layers: any[];
-      tilesets: any[];
+      layers: StampLayerData[];
+      tilesets: StampTilesetData[];
       thumbnail: string | null;
     }) => {
       if (!editingStamp) return;
@@ -2050,7 +2052,7 @@ export default function MapEditorLayout({
                               if (res.ok) {
                                 const data = await res.json();
                                 setStamps(
-                                  data.stamps.map((s: any) => ({
+                                  data.stamps.map((s: StampListItem) => ({
                                     id: s.id,
                                     name: s.name,
                                     cols: s.cols,

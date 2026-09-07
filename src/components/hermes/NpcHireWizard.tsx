@@ -220,7 +220,6 @@ export default function NpcHireWizard({
     setCreateError("");
   }, []);
 
-
   const handleCreate = useCallback(async () => {
     if (!nameValid) return;
     setCreating(true);
@@ -294,10 +293,7 @@ export default function NpcHireWizard({
         `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(created.name)}`,
         { method: "DELETE" },
       );
-      const data = withHeaderErrorCode(
-        await parseJsonBody(res),
-        res.headers,
-      ) as ProxyFailure;
+      const data = withHeaderErrorCode(await parseJsonBody(res), res.headers) as ProxyFailure;
       const code = extractErrorCode(data);
       if (code) {
         setDeleteError(getWizardErrorMessage(t, code));
@@ -690,9 +686,7 @@ export default function NpcHireWizard({
               <p className="text-xs text-text-muted">{t("hermes.wizard.profile.nameHint")}</p>
               {existingProfiles.length > 0 && (
                 <div className="space-y-1 border-t border-gray-700 pt-3">
-                  <p className="text-xs text-text-muted">
-                    {t("hermes.wizard.profile.resumeHint")}
-                  </p>
+                  <p className="text-xs text-text-muted">{t("hermes.wizard.profile.resumeHint")}</p>
                   <div className="flex flex-wrap gap-2">
                     {existingProfiles.map((profileName) => (
                       <button

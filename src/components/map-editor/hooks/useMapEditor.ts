@@ -2,6 +2,16 @@
 
 import { useReducer, useCallback } from "react";
 
+/**
+ * 스탬프 한 번을 놓을 때 레이어별로 바뀐 타일들. `PLACE_STAMP` 액션과 그 되돌리기가
+ * 같은 모양을 쓴다 — 예전엔 두 곳에 인라인으로 적혀 있었고, 되돌리기 쪽은
+ * 좁히지 못해 `lastAction as any` 로 타입을 껐다.
+ */
+export type StampLayerChange = {
+  layerIndex: number;
+  changes: Array<{ index: number; oldGid: number; newGid: number }>;
+};
+
 // === Types ===
 
 export interface TiledTileset {
@@ -92,10 +102,7 @@ export interface UndoAction {
 
 export interface PlaceStampUndoAction {
   type: "PLACE_STAMP";
-  stampLayers: Array<{
-    layerIndex: number;
-    changes: Array<{ index: number; oldGid: number; newGid: number }>;
-  }>;
+  stampLayers: StampLayerChange[];
 }
 
 export type AnyUndoAction = UndoAction | PlaceStampUndoAction;
@@ -422,10 +429,7 @@ type EditorAction =
   | { type: "REMOVE_UNUSED_TILESETS"; firstgids: number[] }
   | {
       type: "PLACE_STAMP";
-      stampLayers: Array<{
-        layerIndex: number;
-        changes: Array<{ index: number; oldGid: number; newGid: number }>;
-      }>;
+      stampLayers: StampLayerChange[];
     }
   | { type: "SET_LAYER_DEPTH"; index: number; depth: number | string }
   | { type: "MOVE_SELECTION_TO_LAYER"; targetLayerIndex: number };
@@ -503,7 +507,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
           ...l,
           data: l.data ? [...l.data] : l.data,
         }));
-        for (const sl of (lastAction as any).stampLayers) {
+        for (const sl of (lastAction as { stampLayers: StampLayerChange[] }).stampLayers) {
           const layer = newLayers[sl.layerIndex];
           if (!layer || !layer.data) continue;
           for (const c of sl.changes) {
@@ -531,7 +535,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       });
       // Handle extra layers (e.g., MOVE_SELECTION_TO_LAYER)
       if ("extraLayers" in undoAction) {
-        for (const el of (undoAction as any).extraLayers) {
+        for (const el of (undoAction as { extraLayers: StampLayerChange[] }).extraLayers) {
           const extraLayer = newLayers[el.layerIndex];
           if (!extraLayer || !extraLayer.data) continue;
           for (const c of el.changes) {
@@ -558,7 +562,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
           ...l,
           data: l.data ? [...l.data] : l.data,
         }));
-        for (const sl of (lastAction as any).stampLayers) {
+        for (const sl of (lastAction as { stampLayers: StampLayerChange[] }).stampLayers) {
           const layer = newLayers[sl.layerIndex];
           if (!layer || !layer.data) continue;
           for (const c of sl.changes) {
@@ -586,7 +590,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       });
       // Handle extra layers (e.g., MOVE_SELECTION_TO_LAYER)
       if ("extraLayers" in redoAction) {
-        for (const el of (redoAction as any).extraLayers) {
+        for (const el of (redoAction as { extraLayers: StampLayerChange[] }).extraLayers) {
           const extraLayer = newLayers[el.layerIndex];
           if (!extraLayer || !extraLayer.data) continue;
           for (const c of el.changes) {

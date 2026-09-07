@@ -14,13 +14,20 @@ import test from "node:test";
  */
 
 const SRC = path.join(process.cwd(), "src");
-const SERVER_ONLY_SPECIFIERS = [/^node:/, /^@\/db(\/|$)/, /^better-sqlite3$/, /^pg$/, /^drizzle-orm\/node-postgres$/];
+const SERVER_ONLY_SPECIFIERS = [
+  /^node:/,
+  /^@\/db(\/|$)/,
+  /^better-sqlite3$/,
+  /^pg$/,
+  /^drizzle-orm\/node-postgres$/,
+];
 
 function listFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) listFiles(full, out);
-    else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\.(ts|tsx)$/.test(entry.name)) out.push(full);
+    else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\.(ts|tsx)$/.test(entry.name))
+      out.push(full);
   }
   return out;
 }
@@ -39,7 +46,12 @@ function resolve(spec: string, fromFile: string): string | null {
   if (spec.startsWith("@/")) base = path.join(SRC, spec.slice(2));
   else if (spec.startsWith(".")) base = path.resolve(path.dirname(fromFile), spec);
   else return null; // 외부 패키지는 파일로 따라가지 않는다
-  for (const cand of [base + ".ts", base + ".tsx", path.join(base, "index.ts"), path.join(base, "index.tsx")]) {
+  for (const cand of [
+    base + ".ts",
+    base + ".tsx",
+    path.join(base, "index.ts"),
+    path.join(base, "index.tsx"),
+  ]) {
     if (fs.existsSync(cand)) return cand;
   }
   return null;

@@ -1059,11 +1059,19 @@ export default function PixelEditorModal({
     setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
   }, []);
 
-  const handlePanEnd = useCallback(() => {
-    isPanningRef.current = false;
-    document.removeEventListener("mousemove", handlePanMove);
-    document.removeEventListener("mouseup", handlePanEnd);
-  }, [handlePanMove]);
+  // 이름 붙인 함수 표현식이라 `panEnd` 는 **자기 자신**을 가리킨다. 예전엔 바깥의
+  // `handlePanEnd` 상수를 참조했는데, 그건 선언 전 접근이라 렌더마다 바인딩이 갈릴 수
+  // 있다 — `handlePanMove` 에 의존성이 하나라도 생기는 순간, 팬 도중에 새로 만들어진
+  // 함수가 등록된 적 없는 자기를 지우려 하고 mousemove 리스너가 남는다(마우스를 떼도
+  // 계속 끌리는 상태). 지금은 `handlePanMove` 가 `[]` 라 드러나지 않을 뿐이다.
+  const handlePanEnd = useCallback(
+    function panEnd() {
+      isPanningRef.current = false;
+      document.removeEventListener("mousemove", handlePanMove);
+      document.removeEventListener("mouseup", panEnd);
+    },
+    [handlePanMove],
+  );
 
   // --- Apply shift: move image within current canvas (no auto-expand) ---
   const applyShift = useCallback(
@@ -2082,7 +2090,6 @@ export default function PixelEditorModal({
     effectiveTileWidth,
     effectiveTileHeight,
   ]);
-
 
   // --- Delete edge row/column ---
   const deleteEdge = useCallback(

@@ -91,12 +91,12 @@ import {
   registerHermesRun,
 } from "./hermes-dispatch";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseNpcResponse, isValidTaskAction } =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("../lib/task-parser.js") as typeof import("../lib/task-parser.js");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+
 const { sanitizeNpcResponseText } =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("../lib/task-block-utils.js") as typeof import("../lib/task-block-utils.js");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { TaskManager } = require("../lib/task-manager.js") as {
@@ -132,8 +132,9 @@ const { TaskManager } = require("../lib/task-manager.js") as {
     getNextPendingTask: (npcId: string, channelId: string) => Promise<ManagedTask | null>;
   };
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+
 const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt } =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
 
 const adapterRegistry = new AdapterRegistry();
@@ -249,7 +250,6 @@ const discussionInitiators = new Map<string, string>();
 const npcChatHistory = new Map<string, NpcHistoryMessage[]>();
 
 // Gateway connections: gatewayId -> gateway instance
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 
 const CHAT_COOLDOWN_MS = 2000;
 const PROGRESS_NUDGE_SCAN_MS = 60_000;

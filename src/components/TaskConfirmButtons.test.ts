@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 // Test the isTaskConfirmPrompt detection logic
 // (import the function directly since it's a pure utility)
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { isTaskConfirmPrompt } = require("./TaskConfirmButtons");
 
 // --- Korean ---

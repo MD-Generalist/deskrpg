@@ -212,7 +212,8 @@ const ko: Record<string, string> = {
   "hermes.wizard.step.config": "③ 설정",
   "hermes.wizard.step.placement": "④ 배치",
   "hermes.wizard.profile.namePlaceholder": "새 프로필 이름 (예: noah)",
-  "hermes.wizard.profile.resumeHint": "또는 이미 등록된 프로필을 골라 인격·설정을 이어서 편집합니다.",
+  "hermes.wizard.profile.resumeHint":
+    "또는 이미 등록된 프로필을 골라 인격·설정을 이어서 편집합니다.",
   "hermes.wizard.profile.nameHint": "소문자·숫자·하이픈·밑줄만, 소문자나 숫자로 시작 (최대 64자)",
   "hermes.wizard.profile.nameInvalid":
     "이 이름은 만들 수 없습니다 — 규칙에 맞지 않거나 예약어입니다",

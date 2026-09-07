@@ -2,7 +2,6 @@
 // NPC 응답에서 태스크 메타데이터를 추출하는 파서.
 // 두 가지 모드: block (기본), structured. 동일한 출력 형태 반환.
 
-/* eslint-disable @typescript-eslint/no-require-imports */
 const { extractTaskBlocks } = require("./task-block-utils.js");
 
 /**

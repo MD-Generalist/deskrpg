@@ -18,6 +18,9 @@ export default function SaveStampModal({ open, onClose, onSave, saving }: SaveSt
 
   useEffect(() => {
     if (open) {
+      // 모달이 열릴 때마다 이름을 비운다. 부모가 `key` 로 다시 마운트하게 하면
+      // 이펙트 없이 되지만, 그건 이 컴포넌트가 정할 수 없는 호출부의 구조다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName("");
       setTimeout(() => inputRef.current?.focus(), 100);
     }

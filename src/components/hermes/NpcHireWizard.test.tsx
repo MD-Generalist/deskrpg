@@ -85,9 +85,7 @@ test("설정 저장이 선택한 reasoning_effort 를 PUT 본문에 싣는다", 
     );
 
     // ③ 설정 단계로 이동
-    const configTab = [...el.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("③"),
-    );
+    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
     assert.ok(configTab, "③ 설정 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();
@@ -166,9 +164,7 @@ test("카탈로그를 못 받으면 드롭다운 대신 직접 입력으로 떨�
       </I18nProvider>,
     );
 
-    const configTab = [...el.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("③"),
-    );
+    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
     assert.ok(configTab, "③ 설정 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();

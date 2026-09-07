@@ -2,13 +2,13 @@
 // conversation-engine.ts의 speak()/pollCandidates()에서 그대로 옮겼다(순수 이동, 동작 변경 없음).
 // 트랜스크립트 기록과 콜백 방출은 채널(엔진)의 일이라 여기 없다 — SpeakOutcome이 그 경계다.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const {
   formatPollMessage,
   formatSpeakMessage,
   parseHandRaise,
   sanitizeSpokenResponse,
   sanitizeStreamingSpokenResponse,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("../meeting-formatter.js") as typeof import("../meeting-formatter.js");
 
 import { parseMention } from "./mention";

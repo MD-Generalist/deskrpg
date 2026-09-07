@@ -1,6 +1,5 @@
 // src/lib/task-manager.js
 // 태스크 DB CRUD. server.js에서 공유 db + schema를 받아 사용.
-/* eslint-disable @typescript-eslint/no-require-imports */
 
 "use strict";
 

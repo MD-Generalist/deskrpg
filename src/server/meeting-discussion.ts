@@ -12,8 +12,8 @@ import {
   deriveHermesContextKey,
 } from "./hermes-dispatch";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { generateTranscript } =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("../lib/meeting-formatter.js") as typeof import("../lib/meeting-formatter.js");
 
 // 회의는 소켓 이벤트로만 흐르고 HTTP 로그를 남기지 않는다. 그래서 "화면에는 시작됐다고

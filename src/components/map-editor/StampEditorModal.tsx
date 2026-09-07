@@ -420,12 +420,9 @@ export default function StampEditorModal({
   }, [open, selectedTile, deleteSelectedTiles]);
 
   // Handle layer click — switch active layer only (tile move is via dropdown)
-  const handleLayerClick = useCallback(
-    (idx: number) => {
-      setActiveLayerIndex(idx);
-    },
-    [],
-  );
+  const handleLayerClick = useCallback((idx: number) => {
+    setActiveLayerIndex(idx);
+  }, []);
 
   const buildLayerImage = useCallback(
     (layerIndex: number): string | null => {

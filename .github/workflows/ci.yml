@@ -31,9 +31,19 @@ jobs:
         if: always()
         run: npm run test
 
-      - name: 타입 검사 (소스만)
+      - name: 타입 검사
         if: always()
         run: npm run typecheck
+
+      # 2026-09-07 에 0으로 만들었다. 이 단계가 없는 동안 react-hooks/exhaustive-deps
+      # 위반 17건이 타일 에디터에 살아 있었고, 그중 여럿이 실제 결함이었다
+      # (레이어 오버레이 토글이 캔버스를 다시 그리지 않는 등).
+      #
+      # 경고(미사용 변수 등)로는 실패하지 않는다 — 오류만 게이트다. 경고까지 막으려면
+      # 먼저 그것들을 0으로 만들어야 하고, 그건 별개의 작업이다.
+      - name: 린트
+        if: always()
+        run: npm run lint
 
       # 이 저장소에서 가장 값진 게이트다. 없는 모듈을 import 하는 코드가 넉 달을
       # 살아남은 적이 있다(ec60ca2d) — 단위 테스트는 그 라우트를 import 하지 않고,

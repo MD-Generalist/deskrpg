@@ -6,7 +6,6 @@
 // src/db/schema-drift.test.ts guards drift.
 
 "use strict";
-/* eslint-disable @typescript-eslint/no-require-imports */
 
 const {
   sqliteTable,

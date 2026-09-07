@@ -8,7 +8,6 @@ import { selectProfileToken } from "@/lib/hermes/plugin-profile-access";
 import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
-
 /**
  * 모델·프로바이더·추론 강도 목록을 중계한다. 읽기 전용이라 게이트웨이 접근 권한이면
  * 충분하다(생성·삭제와 달리 system_admin 을 요구하지 않는다).

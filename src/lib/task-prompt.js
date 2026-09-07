@@ -1,7 +1,6 @@
 // src/lib/task-prompt.js
 // NPC identity에 멱등하게 주입되는 태스크 프로토콜 지시문.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { taskPromptMessages } = require("./i18n/task-prompt-messages.js");
 
 function normalizeTaskPromptLocale(locale) {

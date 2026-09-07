@@ -7,6 +7,7 @@ import { usePanZoom } from "./hooks/usePanZoom";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import { getDefaultLayers } from "@/hooks/useCharacterAppearance";
 import { useT } from "@/lib/i18n";
+import type { StampData } from "@/lib/stamp-utils";
 
 // === Props ===
 
@@ -25,7 +26,7 @@ interface MapCanvasProps {
   ) => void;
   onCopySelection?: () => void;
   onSaveAsStamp?: (thumbnail: string | null) => void;
-  activeStamp?: any | null;
+  activeStamp?: StampData | null;
   onPlaceStamp?: (targetX: number, targetY: number) => void;
 }
 
@@ -118,6 +119,10 @@ export function MapCanvas({
           (o) => o.type === "spawn" || o.name.toLowerCase() === "spawn",
         );
         if (spawn) {
+          // 맵이 처음 들어올 때 스폰 지점으로 캐릭터를 한 번 옮긴다. 렌더 중에 유도할
+          // 수 있는 값이 아니다 — 어느 레이어의 어느 오브젝트가 스폰인지는 맵 데이터를
+          // 훑어야 알고, 이후 캐릭터는 사용자 조작으로 움직인다.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCharacterState((prev) => ({
             ...prev,
             tileX: Math.floor(spawn.x / state.mapData!.tilewidth),
@@ -858,6 +863,10 @@ export function MapCanvas({
   // === Enter paste mode when clipboard is set ===
   useEffect(() => {
     if (state.clipboard && state.tool === "select") {
+      // 이 이펙트의 본체는 외부 시스템 갱신이다 — 오프스크린 캔버스에 붙여넣기
+      // 미리보기를 그린다. 붙여넣기 모드 진입은 그 작업과 한 몸이라 떼어 내면
+      // 미리보기 없이 모드만 켜지는 순간이 생긴다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsPasteMode(true);
       // Generate paste preview image from clipboard GIDs
       if (state.mapData) {

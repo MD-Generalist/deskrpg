@@ -6,7 +6,6 @@
 // MUST stay structurally identical to it. src/db/schema-drift.test.ts guards drift.
 
 "use strict";
-/* eslint-disable @typescript-eslint/no-require-imports */
 
 const {
   pgTable,

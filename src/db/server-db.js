@@ -3,7 +3,6 @@
 // Supports PostgreSQL (default) and SQLite via DB_TYPE env var
 
 "use strict";
-/* eslint-disable @typescript-eslint/no-require-imports */
 
 const fs = require("node:fs");
 const os = require("node:os");

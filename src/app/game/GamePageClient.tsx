@@ -252,8 +252,17 @@ function GamePageInner() {
   const [showRosterMenu, setShowRosterMenu] = useState<"players" | "npcs" | null>(null);
   const [rosterActionMenu, setRosterActionMenu] = useState<RosterActionMenu | null>(null);
   const [mode, setMode] = useState<"office" | "meeting">("office");
+  // `/api/npcs` 가 실제로 주는 필드다(`src/app/api/npcs/route.ts:32-47`).
+  // 예전엔 여기에 `hasAgent` 가 없어서, 그것을 읽는 자리마다 `npc: any` 로
+  // 타입을 껐다 — 응답이 바뀌어도 아무도 모르는 상태였다.
   const [channelNpcs, setChannelNpcs] = useState<
-    { id: string; name: string; appearance: unknown }[]
+    {
+      id: string;
+      name: string;
+      appearance: unknown;
+      hasAgent?: boolean;
+      agentConfig?: unknown;
+    }[]
   >([]);
   const [channelPlayers, setChannelPlayers] = useState<ChannelPlayerSummary[]>([]);
 
@@ -2611,7 +2620,7 @@ function GamePageInner() {
         isOpen={showTaskBoard}
         onClose={() => setShowTaskBoard(false)}
         tasks={allTasks}
-        npcs={channelNpcs.map((npc: any) => ({
+        npcs={channelNpcs.map((npc) => ({
           id: npc.id,
           name: npc.name,
           isActive: Boolean(npc.hasAgent ?? npc.agentConfig),

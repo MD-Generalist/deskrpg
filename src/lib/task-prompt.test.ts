@@ -20,6 +20,7 @@ test("withTaskReminder localizes the reminder step and falls back to English", (
 });
 
 test("buildTaskSessionPrompt includes task context", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { buildTaskSessionPrompt } = require("./task-prompt.js");
   const task = {
     title: "PDF 보고서",
@@ -37,6 +38,7 @@ test("buildTaskSessionPrompt includes task context", () => {
 });
 
 test("buildTaskSessionPrompt works with null summary", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { buildTaskSessionPrompt } = require("./task-prompt.js");
   const task = {
     title: "테스트",
@@ -51,6 +53,7 @@ test("buildTaskSessionPrompt works with null summary", () => {
 });
 
 test("buildTaskSessionPrompt includes buildTaskCorePrompt content", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { buildTaskSessionPrompt, buildTaskCorePrompt } = require("./task-prompt.js");
   const task = {
     title: "Test",
@@ -66,6 +69,7 @@ test("buildTaskSessionPrompt includes buildTaskCorePrompt content", () => {
 });
 
 test("buildTaskSessionPrompt locale fallback to en", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { buildTaskSessionPrompt } = require("./task-prompt.js");
   const task = {
     title: "Test",

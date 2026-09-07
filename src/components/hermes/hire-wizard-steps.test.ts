@@ -138,10 +138,7 @@ describe("identityDecision — 불리언이 아닌 것은 전부 막는다", () 
 
   for (const [name, payload, expected] of cases) {
     it(name, () => {
-      assert.equal(
-        identityDecision(payload as Parameters<typeof identityDecision>[0]),
-        expected,
-      );
+      assert.equal(identityDecision(payload as Parameters<typeof identityDecision>[0]), expected);
     });
   }
 

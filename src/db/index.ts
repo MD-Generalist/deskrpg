@@ -10,6 +10,7 @@ const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js") as {
     sqlite: BetterSqlite3.Database,
   ) => { migrated: number; removed: number } | null;
 };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js") as {
   ensureSqliteBaseSchema: (sqlite: BetterSqlite3.Database) => void;
 };
@@ -480,8 +481,8 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
 export function getDb(): DbInstance {
   if (!_db) {
     if (isPostgres) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { drizzle } =
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         require("drizzle-orm/node-postgres") as typeof import("drizzle-orm/node-postgres");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Pool } = require("pg") as typeof import("pg");
@@ -490,8 +491,8 @@ export function getDb(): DbInstance {
       const pool = new Pool({ connectionString: databaseUrl });
       _db = drizzle(pool, { schema: pgSchema });
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { drizzle } =
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         require("drizzle-orm/better-sqlite3") as typeof import("drizzle-orm/better-sqlite3");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Database = require("better-sqlite3") as typeof import("better-sqlite3");
