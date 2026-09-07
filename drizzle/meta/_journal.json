@@ -50,6 +50,13 @@
       "when": 1788310000000,
       "tag": "0006_hermes_plugin_capability",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788310000001,
+      "tag": "0007_align_snapshot",
+      "breakpoints": true
     }
   ]
 }

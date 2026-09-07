@@ -59,3 +59,34 @@ test("journal entries stay ordered by idx and by time", () => {
     }
   });
 });
+
+function snapshotIdxs(): number[] {
+  return readdirSync(path.join(drizzleDir, "meta"))
+    .filter((f) => /^\d+_snapshot\.json$/.test(f))
+    .map((f) => Number(f.split("_")[0]))
+    .sort((a, b) => a - b);
+}
+
+/**
+ * `drizzle-kit generate` 는 **마지막 스냅샷**과 현재 `schema.ts` 의 차분을 뱉는다.
+ * 손으로 쓴 SQL 은 스냅샷을 남기지 않으므로, 그런 마이그레이션이 쌓이면 스냅샷이
+ * 뒤처지고 다음 `generate` 가 **이미 적용된 변경을 통째로 다시** 만들어 낸다.
+ *
+ * 실측(2026-09-07): 스냅샷이 0003 에서 멈춘 상태로 `generate` 를 돌렸더니
+ * `ALTER TABLE "npcs" DROP COLUMN "openclaw_config";` 가 나왔다. 0005 는 같은 삭제를
+ * 하되 **그 전에** 페르소나를 `agent_config` 로 옮기고 레거시 행을 백업한다.
+ * 생성된 쪽에는 그 단계도 `IF EXISTS` 도 없다 — 읽지 않고 적용하면 페르소나가 사라진다.
+ *
+ * 손으로 SQL 을 쓰는 것 자체는 막지 않는다. 다만 **마지막 마이그레이션에는 반드시
+ * 짝이 되는 스냅샷이 있어야** `generate` 가 거기서부터 차분을 잡는다.
+ */
+test("마지막 마이그레이션에 짝이 되는 스냅샷이 있다", () => {
+  const lastMigration = journalTags().length - 1;
+  const snapshots = snapshotIdxs();
+  assert.ok(
+    snapshots.includes(lastMigration),
+    `스냅샷이 뒤처졌습니다(마지막 마이그레이션 idx ${lastMigration}, 스냅샷 ${snapshots.join(",")}). ` +
+      "이 상태에서 `drizzle-kit generate` 는 이미 적용된 변경을 다시 만들어 내고, " +
+      "거기엔 데이터 이전 단계가 빠진 DROP 이 섞일 수 있습니다.",
+  );
+});
