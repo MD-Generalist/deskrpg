@@ -292,6 +292,7 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
           <NpcHireWizard
             gatewayId={gatewayId}
             pluginStatus={pluginStatus}
+            existingProfiles={profiles.map((p) => p.profileName)}
             localDiscovery={!!discovery?.available && !!discovery?.optedIn}
             onDone={() => {
               setWizardOpen(false);

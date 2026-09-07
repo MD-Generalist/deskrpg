@@ -208,6 +208,7 @@ const zh: Record<string, string> = {
   "hermes.wizard.step.config": "③ 设置",
   "hermes.wizard.step.placement": "④ 放置",
   "hermes.wizard.profile.namePlaceholder": "新配置文件名称（例如 noah）",
+  "hermes.wizard.profile.resumeHint": "或选择已注册的配置文件，继续编辑其人格与设置。",
   "hermes.wizard.profile.nameHint":
     "仅限小写字母、数字、连字符、下划线，且以字母或数字开头（最多 64 字符）",
   "hermes.wizard.profile.nameInvalid": "无法创建此名称 — 不符合规则或为保留字",

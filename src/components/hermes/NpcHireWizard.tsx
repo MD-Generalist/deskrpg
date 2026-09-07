@@ -63,6 +63,15 @@ interface NpcHireWizardProps {
   gatewayId: string;
   pluginStatus: PluginStatus;
   localDiscovery: boolean;
+  /**
+   * 이 게이트웨이에 **이미 등록된** 프로필 이름들.
+   *
+   * 없으면 마법사는 "이번에 만든 프로필" 로만 ②③④ 를 진행할 수 있어, 중간에 닫으면
+   * 돌아갈 길이 사라진다(스테이징 실측 2026-09-03: `oliver` 를 만들고 닫았더니 인격을
+   * 편집할 방법이 없었다). 기존 프로필의 인격·설정을 나중에 고치는 것도 마법사의
+   * 정당한 용도다 — 스펙이 그 입구를 빠뜨렸다.
+   */
+  existingProfiles: string[];
   onDone: () => void;
 }
 
@@ -109,6 +118,7 @@ export default function NpcHireWizard({
   gatewayId,
   pluginStatus,
   localDiscovery,
+  existingProfiles,
   onDone,
 }: NpcHireWizardProps) {
   const t = useT();
@@ -130,6 +140,8 @@ export default function NpcHireWizard({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [created, setCreated] = useState<ProvisionedProfile | null>(null);
+  /** 이번 세션에서 만든 것이 아니라 기존 프로필로 들어왔는가 — 닫기 확인 문구가 갈린다. */
+  const [resumed, setResumed] = useState(false);
   const [serving, setServing] = useState<
     "idle" | "checking" | "served" | "key_rejected" | "not_served" | "error"
   >("idle");
@@ -171,6 +183,22 @@ export default function NpcHireWizard({
     : null;
 
   // --- Step ① actions ---
+
+  /**
+   * 이미 등록된 프로필로 ②③ 을 진행한다.
+   *
+   * 새로 만들지 않으므로 키 발급·저장 관련 상태는 "이미 있는 것" 으로 채운다 —
+   * `keyIssued`/`keyStored` 를 true 로 두는 것은 거짓이 아니라 **사실**이다:
+   * 이 프로필은 `hermes_profiles` 에 토큰이 저장돼 있어야만 목록에 뜬다.
+   * 다만 `resumed` 를 세워, 닫을 때 "방금 만든 프로필이 남습니다" 를 묻지 않게 한다 —
+   * 우리가 만든 것이 아니므로 지울지 물으면 안 된다.
+   */
+  const handleResume = useCallback((profileName: string) => {
+    setCreated({ name: profileName, keyIssued: true, keyStored: true });
+    setResumed(true);
+    setCreateError("");
+  }, []);
+
 
   const handleCreate = useCallback(async () => {
     if (!nameValid) return;
@@ -473,12 +501,15 @@ export default function NpcHireWizard({
   }, [current, steps]);
 
   const requestClose = useCallback(() => {
-    if (created && !showCloseConfirm) {
+    // `resumed` 면 이 프로필은 **우리가 만든 것이 아니다** — 지울지 물으면 안 된다.
+    // 확인 패널의 문구가 "방금 만든 프로필이 남습니다, 지울까요?" 이므로, 남의
+    // 프로필에 그걸 띄우면 사용자를 실수로 유도한다.
+    if (created && !resumed && !showCloseConfirm) {
       setShowCloseConfirm(true);
       return;
     }
     onDone();
-  }, [created, onDone, showCloseConfirm]);
+  }, [created, resumed, onDone, showCloseConfirm]);
 
   // ---------------------------------------------------------------------------
 
@@ -600,6 +631,25 @@ export default function NpcHireWizard({
                 className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
               />
               <p className="text-xs text-text-muted">{t("hermes.wizard.profile.nameHint")}</p>
+              {existingProfiles.length > 0 && (
+                <div className="space-y-1 border-t border-gray-700 pt-3">
+                  <p className="text-xs text-text-muted">
+                    {t("hermes.wizard.profile.resumeHint")}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {existingProfiles.map((profileName) => (
+                      <button
+                        key={profileName}
+                        type="button"
+                        onClick={() => handleResume(profileName)}
+                        className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
+                      >
+                        {profileName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {nameTrimmed.length > 0 && !nameValid && (
                 <p className="text-xs text-danger">{t("hermes.wizard.profile.nameInvalid")}</p>
               )}

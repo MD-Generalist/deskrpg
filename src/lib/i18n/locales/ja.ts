@@ -216,6 +216,7 @@ const ja: Record<string, string> = {
   "hermes.wizard.step.config": "③設定",
   "hermes.wizard.step.placement": "④配置",
   "hermes.wizard.profile.namePlaceholder": "新しいプロフィール名（例: noah）",
+  "hermes.wizard.profile.resumeHint": "または、すでに登録済みのプロフィールを選んで人格・設定を続けて編集します。",
   "hermes.wizard.profile.nameHint":
     "小文字・数字・ハイフン・アンダースコアのみ、小文字か数字で始まる（最大64文字）",
   "hermes.wizard.profile.nameInvalid": "この名前は作成できません — 規則に一致しないか予約語です",

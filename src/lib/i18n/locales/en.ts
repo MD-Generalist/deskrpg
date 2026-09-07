@@ -213,6 +213,7 @@ const en: Record<string, string> = {
   "hermes.wizard.step.config": "③ Config",
   "hermes.wizard.step.placement": "④ Placement",
   "hermes.wizard.profile.namePlaceholder": "New profile name (e.g. noah)",
+  "hermes.wizard.profile.resumeHint": "Or pick a profile you already registered to edit its persona and settings.",
   "hermes.wizard.profile.nameHint":
     "Lowercase letters, digits, hyphens, underscores only, starting with a letter or digit (max 64 chars)",
   "hermes.wizard.profile.nameInvalid":
