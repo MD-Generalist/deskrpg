@@ -454,6 +454,11 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   applySqliteAlterStatements(sqlite, "gateway_resources", [
     "ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_at TEXT",
     "ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL",
+    // `GET /deskrpg/info` 판정 캐시. src/lib/hermes/plugin-capability.ts 의 PluginStatus 문자열이
+    // plugin_status 에 들어간다 — 이 컬럼이 없으면 기존 DB 를 쓰는 사용자에게서만 조용히 깨진다.
+    "ALTER TABLE gateway_resources ADD COLUMN plugin_status TEXT",
+    "ALTER TABLE gateway_resources ADD COLUMN plugin_version TEXT",
+    "ALTER TABLE gateway_resources ADD COLUMN plugin_checked_at TEXT",
   ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);

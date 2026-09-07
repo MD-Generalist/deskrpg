@@ -63,6 +63,9 @@ function ensureSqliteBaseSchema(sqlite) {
       last_validation_error TEXT,
       local_discovery_opted_in_at TEXT,
       local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      plugin_status TEXT,
+      plugin_version TEXT,
+      plugin_checked_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

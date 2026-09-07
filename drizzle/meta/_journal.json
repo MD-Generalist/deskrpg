@@ -43,6 +43,13 @@
       "when": 1787305534000,
       "tag": "0005_retire_openclaw_config",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788310000000,
+      "tag": "0006_hermes_plugin_capability",
+      "breakpoints": true
     }
   ]
 }

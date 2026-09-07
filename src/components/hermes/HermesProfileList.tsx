@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
+import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
 
 import {
   partitionRegistrationResults,
@@ -12,6 +13,7 @@ import {
   type DiscoveryRow,
   type ProbeStatus,
 } from "./discovery-rows";
+import NpcHireWizard from "./NpcHireWizard";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -59,12 +61,66 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [selected, setSelected] = useState<string[]>([]);
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const [registering, setRegistering] = useState(false);
+  /** "인격" 버튼이 지정한 프로필 — 마법사를 그 프로필의 ②단계로 바로 연다. */
+  const [wizardProfile, setWizardProfile] = useState<string | null>(null);
   const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>(
     [],
   );
   const [registerError, setRegisterError] = useState("");
   const [optInError, setOptInError] = useState("");
   const [optingIn, setOptingIn] = useState(false);
+
+  // 고용 마법사 — 최종 리뷰 I-1: Task 4 가 만든 캐시(pluginStatus/pluginCheckedAt)를
+  // 먼저 읽는다. `resolvePluginStatusFromCache` 가 신선하다고 판단하면 그 값을 그대로
+  // 쓰고, 오래됐거나 없으면 그때만 `/test` 를 쏜다(원격 왕복 2회, 최대 10초) — 예전엔
+  // 이 화면을 열 때마다(마법사를 열지 않아도) 무조건 다시 찔렀다.
+  const [pluginStatus, setPluginStatus] = useState<PluginStatus>("unknown");
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  const reprobePlugin = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      const status = (data as { plugin?: { status?: unknown } })?.plugin?.status;
+      return typeof status === "string" ? (status as PluginStatus) : "unknown";
+    } catch {
+      return "unknown" as PluginStatus;
+    }
+  }, [gatewayId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/gateways");
+        const data = await res.json().catch(() => ({}));
+        const rows = Array.isArray((data as { gateways?: unknown }).gateways)
+          ? (data as { gateways: unknown[] }).gateways
+          : [];
+        const mine = rows.find(
+          (g): g is { pluginStatus: string | null; pluginCheckedAt: string | Date | null } =>
+            !!g && typeof g === "object" && (g as { id?: unknown }).id === gatewayId,
+        );
+        const cached = resolvePluginStatusFromCache({
+          pluginStatus: mine?.pluginStatus ?? null,
+          pluginCheckedAt: mine?.pluginCheckedAt ?? null,
+          now: new Date(),
+        });
+        if (cancelled) return;
+        if (!cached.needsReprobe) {
+          setPluginStatus(cached.status);
+          return;
+        }
+      } catch {
+        // 목록 조회 자체가 실패해도 재프로브로 폴백한다 — 아래에서 그대로 진행.
+      }
+      const status = await reprobePlugin();
+      if (!cancelled) setPluginStatus(status);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gatewayId, reprobePlugin]);
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);
@@ -215,9 +271,40 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
 
   return (
     <section className="rounded-xl border border-border bg-surface p-5">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("gateway.profile.title")}</h2>
+        {canRegister && (
+          // I-3: 열려 있을 때는 이 버튼을 비활성화한다. 이전엔 토글(prev => !prev)이라
+          // 열린 채로 한 번 더 누르면 마법사의 "프로필이 남습니다" 확인 없이 그대로
+          // 언마운트됐다 — 닫는 유일한 경로는 이제 마법사 자신의 "닫기"(내부에서
+          // requestClose 가 확인을 거친다)뿐이다.
+          <button
+            type="button"
+            disabled={wizardOpen}
+            onClick={() => setWizardOpen(true)}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+          >
+            {t("hermes.wizard.openButton")}
+          </button>
+        )}
       </div>
+
+      {wizardOpen && (
+        <div className="mb-4">
+          <NpcHireWizard
+            gatewayId={gatewayId}
+            pluginStatus={pluginStatus}
+            existingProfiles={profiles.map((p) => p.profileName)}
+            initialProfile={wizardProfile}
+            localDiscovery={!!discovery?.available && !!discovery?.optedIn}
+            onDone={() => {
+              setWizardOpen(false);
+              setWizardProfile(null);
+              void loadProfiles();
+            }}
+          />
+        </div>
+      )}
 
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
@@ -244,6 +331,18 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                     >
                       {t(key)}
                     </span>
+                    {pluginStatus === "plugin_ready" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWizardProfile(profile.profileName);
+                          setWizardOpen(true);
+                        }}
+                        className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
+                      >
+                        {t("gateway.profile.persona")}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void handleTest(profile.id)}

@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-
-import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
-import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
-import { diagnoseUnreachable } from "@/lib/hermes/unreachable-hint";
 import { existsSync } from "node:fs";
+
+import { eq } from "drizzle-orm";
+
+import { db, gatewayResources } from "@/db";
+import { decryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
+import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
+import { buildPluginCacheUpdate } from "@/lib/hermes/plugin-cache-update";
+import { probeDeskrpgPlugin } from "@/lib/hermes/plugin-capability";
+import { diagnoseUnreachable } from "@/lib/hermes/unreachable-hint";
 import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
@@ -45,10 +50,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const probe = await probeHermesGateway(accessible.resource.baseUrl);
 
   if (probe.kind === "hermes") {
+    // Hermes 임이 확인된 뒤에만 플러그인을 찌른다 — API Server 가 아닌 곳에 우리
+    // 경로를 보낼 이유가 없다.
+    const plugin = await probeDeskrpgPlugin({
+      baseUrl: accessible.resource.baseUrl,
+      token: decryptGatewayToken(accessible.resource.tokenEncrypted),
+    });
+    await db
+      .update(gatewayResources)
+      .set(buildPluginCacheUpdate(plugin))
+      .where(eq(gatewayResources.id, id));
+
     return NextResponse.json({
       ok: true,
       messageCode: "gateway_connection_succeeded",
       message: "Gateway connection succeeded.",
+      plugin,
     });
   }
 

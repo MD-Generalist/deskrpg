@@ -96,6 +96,9 @@ const gatewayResources = pgTable(
     localDiscoveryOptedInBy: uuid("local_discovery_opted_in_by").references(() => users.id, {
       onDelete: "set null",
     }),
+    pluginStatus: varchar("plugin_status", { length: 40 }),
+    pluginVersion: text("plugin_version"),
+    pluginCheckedAt: timestamp("plugin_checked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
