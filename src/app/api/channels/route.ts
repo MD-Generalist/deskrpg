@@ -24,7 +24,8 @@ import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
 import { normalizeLocale } from "@/lib/i18n/server";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
 import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
-import { generateChannelInviteCode, isChannelPasswordValid } from "@/lib/security-policy";
+import { isChannelPasswordValid } from "@/lib/security-policy";
+import { generateChannelInviteCode } from "@/lib/invite-code";
 import {
   summarizeChannelCreateAccess,
   summarizeChannelDetailAccess,
