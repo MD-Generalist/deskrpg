@@ -2096,7 +2096,9 @@ const ko: Record<string, string> = {
   "mapEditor.tilesets.deleteInUseConfirm":
     '"{name}" 타일셋이 맵에서 사용 중입니다. 그래도 삭제할까요?',
   "mapEditor.tilesets.deleteConfirm": '"{name}" 타일셋을 삭제할까요?',
-  "mapEditor.tilesets.removeUnusedConfirm": "사용하지 않는 타일셋 {count}개를 제거할까요?\n{names}",
+  "mapEditor.tilesets.removeUnusedConfirm":
+    "사용하지 않는 타일셋 {count}개를 제거할까요?\n{names}\n\n되돌릴 수 없습니다 — 이미지도 함께 지워집니다.",
+  "mapEditor.tilesets.removeUnusedTooltip": "사용하지 않는 타일셋 {count}개 정리",
   "mapEditor.pixel.tolerance": "허용 오차",
   "mapEditor.pixel.magicEraser": "매직 지우개",
   "mapEditor.pixel.smooth": "부드럽게",

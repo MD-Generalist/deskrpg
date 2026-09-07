@@ -18,7 +18,7 @@ import type {
   TiledLayer,
 } from "./hooks/useMapEditor";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { Plus, Stamp } from "lucide-react";
+import { Plus, Stamp, Eraser } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import Tooltip from "./Tooltip";
@@ -1057,9 +1057,14 @@ export default function MapEditorLayout({
 
   // === Clean Up Unused Tilesets ===
 
-  const handleCleanUpUnused = useCallback(() => {
-    if (!state.mapData) return;
-    const unusedFirstgids: number[] = [];
+  /**
+   * 어떤 타일도 맵에 쓰이지 않는 타일셋. 헤더 버튼을 **있을 때만** 띄우려고
+   * 목록으로 올렸다 — 예전에는 핸들러 안에서만 계산해, 기능이 있는데도 화면에
+   * 진입점이 없었다(2026-09-08 lint 정리 중 발견: 호출부가 선언 한 줄뿐이었다).
+   */
+  const unusedTilesets = useMemo(() => {
+    if (!state.mapData) return [] as { firstgid: number; name: string }[];
+    const found: { firstgid: number; name: string }[] = [];
     for (const ts of state.mapData.tilesets) {
       if (ts.name === BUILTIN_TILESET_NAME) continue;
       const maxGid = ts.firstgid + ts.tilecount - 1;
@@ -1070,23 +1075,29 @@ export default function MapEditorLayout({
           break;
         }
       }
-      if (!isUsed) unusedFirstgids.push(ts.firstgid);
+      if (!isUsed) found.push({ firstgid: ts.firstgid, name: ts.name });
     }
-    if (unusedFirstgids.length === 0) return;
-    const names = unusedFirstgids
-      .map(
-        (fgid) =>
-          state.mapData!.tilesets.find((t) => t.firstgid === fgid)?.name ?? `firstgid=${fgid}`,
-      )
-      .join(", ");
+    return found;
+  }, [state.mapData, usedGids]);
+
+  const handleCleanUpUnused = useCallback(() => {
+    if (unusedTilesets.length === 0) return;
+    // 이 액션은 undoStack 에 들어가지 않는다(`REMOVE_UNUSED_TILESETS` 리듀서는
+    // 히스토리를 쌓지 않고 이미지까지 함께 지운다). 확인 문구가 그걸 말해야 한다.
     if (
       !window.confirm(
-        t("mapEditor.tilesets.removeUnusedConfirm", { count: unusedFirstgids.length, names }),
+        t("mapEditor.tilesets.removeUnusedConfirm", {
+          count: unusedTilesets.length,
+          names: unusedTilesets.map((ts) => ts.name).join(", "),
+        }),
       )
     )
       return;
-    dispatch({ type: "REMOVE_UNUSED_TILESETS", firstgids: unusedFirstgids });
-  }, [state.mapData, usedGids, dispatch, t]);
+    dispatch({
+      type: "REMOVE_UNUSED_TILESETS",
+      firstgids: unusedTilesets.map((ts) => ts.firstgid),
+    });
+  }, [unusedTilesets, dispatch, t]);
 
   // === Sorted tileset list for palette ===
 
@@ -1978,6 +1989,20 @@ export default function MapEditorLayout({
                             onClick={handleCreateStampFromTileset}
                           >
                             <Stamp className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                      )}
+                      {unusedTilesets.length > 0 && (
+                        <Tooltip
+                          label={t("mapEditor.tilesets.removeUnusedTooltip", {
+                            count: unusedTilesets.length,
+                          })}
+                        >
+                          <button
+                            className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
+                            onClick={handleCleanUpUnused}
+                          >
+                            <Eraser className="w-3.5 h-3.5" />
                           </button>
                         </Tooltip>
                       )}

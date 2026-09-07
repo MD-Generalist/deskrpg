@@ -2100,7 +2100,9 @@ const en: Record<string, string> = {
   "mapEditor.tilesets.deleteInUseConfirm":
     'Tileset "{name}" has tiles in use on the map. Delete anyway?',
   "mapEditor.tilesets.deleteConfirm": 'Delete tileset "{name}"?',
-  "mapEditor.tilesets.removeUnusedConfirm": "Remove {count} unused tileset(s)?\n{names}",
+  "mapEditor.tilesets.removeUnusedConfirm":
+    "Remove {count} unused tileset(s)?\n{names}\n\nThis cannot be undone — the images are deleted too.",
+  "mapEditor.tilesets.removeUnusedTooltip": "Clean up {count} unused tileset(s)",
   "mapEditor.pixel.tolerance": "Tolerance",
   "mapEditor.pixel.magicEraser": "Magic Eraser",
   "mapEditor.pixel.smooth": "Smooth",

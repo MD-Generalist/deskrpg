@@ -2062,7 +2062,9 @@ const zh: Record<string, string> = {
   "mapEditor.layers.deleteLayerConfirm": "要删除图层“{name}”吗？",
   "mapEditor.tilesets.deleteInUseConfirm": "图块集“{name}”仍在地图中使用。仍要删除吗？",
   "mapEditor.tilesets.deleteConfirm": "要删除图块集“{name}”吗？",
-  "mapEditor.tilesets.removeUnusedConfirm": "要移除 {count} 个未使用的图块集吗？\n{names}",
+  "mapEditor.tilesets.removeUnusedConfirm":
+    "要移除 {count} 个未使用的图块集吗？\n{names}\n\n无法撤销 — 图片也会一并删除。",
+  "mapEditor.tilesets.removeUnusedTooltip": "清理 {count} 个未使用的图块集",
   "mapEditor.pixel.tolerance": "容差",
   "mapEditor.pixel.magicEraser": "魔术橡皮擦",
   "mapEditor.pixel.smooth": "平滑",
