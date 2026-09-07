@@ -8,17 +8,12 @@
  * 5. MeetingBroker: adapterResolver accepted
  * 6. Unsupported adapter: clean rejection
  */
-import { describe, test, mock } from "node:test";
+import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { CodexAdapter } from "./codex-adapter";
 import { AdapterRegistry } from "./types";
-import type {
-  NpcAdapter,
-  AdapterExecuteOptions,
-  AdapterHealthResult,
-  AdapterSessionInfo,
-} from "./types";
+import type { NpcAdapter } from "./types";
 
 // ---------------------------------------------------------------------------
 // 1. DB Schema — adapter_type and adapter_config columns

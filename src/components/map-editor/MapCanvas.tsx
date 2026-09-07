@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useState } from "react";
-import type { EditorState, TileRegion, TilesetImageInfo, EditorAction } from "./hooks/useMapEditor";
+import type { EditorState, TilesetImageInfo, EditorAction } from "./hooks/useMapEditor";
 import { useCanvasRenderer, type CharacterState } from "./hooks/useCanvasRenderer";
 import { usePanZoom } from "./hooks/usePanZoom";
 import { compositeCharacter } from "@/lib/sprite-compositor";
@@ -33,7 +33,6 @@ interface MapCanvasProps {
 // === Constants ===
 
 const CHARACTER_DRAW_SIZE = 48;
-const CHARACTER_FRAME_COUNT = 9; // 0 = idle, 1-8 = walk
 const WALK_INTERVAL_MS = 120;
 
 // === Component ===

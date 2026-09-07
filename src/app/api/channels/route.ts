@@ -392,7 +392,6 @@ export async function POST(req: NextRequest) {
     if (defaultNpc && (gatewayConfig?.gatewayId || gatewayConfig?.url)) {
       try {
         const agentId = defaultNpc.agentId || "main";
-        const isMainAgent = agentId === "main";
         const defaultNpcLocale = normalizeLocale(defaultNpc.locale);
         const meetingProtocol =
           defaultNpc.meetingProtocol || getDefaultMeetingProtocol(defaultNpcLocale);

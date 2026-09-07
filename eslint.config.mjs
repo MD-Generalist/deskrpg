@@ -13,6 +13,18 @@ const eslintConfig = defineConfig([
     files: ["**/*.tsx", "**/*.jsx"],
     rules: { "react-hooks/exhaustive-deps": "error" },
   },
+  // 이 앱의 <img> 는 전부 **런타임 data URL** 이다 — 프로젝트 썸네일, 스탬프
+  // 썸네일, 사용자가 올린 타일셋 base64, 마크다운 본문의 이미지. `next/image` 는
+  // data: URI 를 최적화하지 못하고, 원격 패턴 설정도 적용되지 않는다. 즉 규칙이
+  // 권하는 대안이 이 자리에는 없다.
+  //
+  // 사이트마다 주석으로 끄는 쪽을 먼저 시도했으나 대상 대부분이 **삼항 분기 안**이라
+  // JSX 주석도 `//` 도 문법 오류가 된다(9곳 중 5곳). 그래서 설정에서 끈다.
+  // 정적 자산에 `<img>` 를 쓰는 새 코드가 생기면 이 결정을 다시 봐야 한다.
+  {
+    files: ["**/*.tsx"],
+    rules: { "@next/next/no-img-element": "off" },
+  },
   // 밑줄 접두는 이 저장소에서 "받긴 하지만 일부러 쓰지 않는다" 는 뜻이다
   // (`_fromStatus`, `_catId` …). 규칙에 그 관례를 알려 준다.
   {

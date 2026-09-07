@@ -54,7 +54,7 @@ test("buildTaskSessionPrompt works with null summary", () => {
 
 test("buildTaskSessionPrompt includes buildTaskCorePrompt content", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { buildTaskSessionPrompt, buildTaskCorePrompt } = require("./task-prompt.js");
+  const { buildTaskSessionPrompt } = require("./task-prompt.js");
   const task = {
     title: "Test",
     npcTaskId: "t-1",

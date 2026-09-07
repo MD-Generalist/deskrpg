@@ -57,7 +57,7 @@ export default function ImportTilesetModal({
   const [libraryLoading, setLibraryLoading] = useState(false);
 
   const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [fileName, setFileName] = useState("");
+  const [, setFileName] = useState("");
   const [name, setName] = useState("");
   const [tileWidth, setTileWidth] = useState(32);
   const [tileHeight, setTileHeight] = useState(32);

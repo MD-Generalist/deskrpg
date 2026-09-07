@@ -1908,7 +1908,7 @@ export class GameScene extends Phaser.Scene {
 
   private finishTiledMapLoad(
     tiledJson: Record<string, unknown>,
-    loadedImages: { key: string; tileWidth: number; tileHeight: number }[],
+    _loadedImages: { key: string; tileWidth: number; tileHeight: number }[],
   ): void {
     const map = this.make.tilemap({ key: "channel-map" });
 
@@ -3623,11 +3623,6 @@ export class GameScene extends Phaser.Scene {
 
     // Manual collision check (since we don't use layer colliders with multi-layer)
     if (hasKeyboardInput) {
-      const nextX = this.player.x + (left ? -4 : right ? 4 : 0);
-      const nextY = this.player.y + (up ? -4 : down ? 4 : 0);
-      const nextTileX = Math.floor(nextX / TILE_SIZE);
-      const nextTileY = Math.floor(nextY / TILE_SIZE);
-
       // Check if the next tile is walkable
       const currentTileX = Math.floor(this.player.x / TILE_SIZE);
       const currentTileY = Math.floor(this.player.y / TILE_SIZE);

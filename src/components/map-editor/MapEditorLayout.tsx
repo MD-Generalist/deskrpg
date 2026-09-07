@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   useMapEditor,
-  createDefaultMap,
   generateBuiltinTilesetDataUrl,
   getBuiltinTilesetInfo,
   BUILTIN_TILESET_NAME,
@@ -71,10 +70,10 @@ function downloadString(content: string, filename: string, mime = "application/j
 
 export default function MapEditorLayout({
   projectId: initialProjectId,
-  ownerId,
-  initialTemplateId,
-  fromCreate,
-  characterId,
+  ownerId: _ownerId,
+  initialTemplateId: _initialTemplateId,
+  fromCreate: _fromCreate,
+  characterId: _characterId,
 }: MapEditorLayoutProps) {
   const router = useRouter();
   const t = useT();
@@ -207,7 +206,7 @@ export default function MapEditorLayout({
   const isResizing = useRef(false);
 
   // Layer visibility (local -- independent from mapData.layers[].visible which persists)
-  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
+  const [, setLayerVisibility] = useState<Record<string, boolean>>({});
 
   // Status bar
   const [statusInfo, setStatusInfo] = useState<{
@@ -833,7 +832,7 @@ export default function MapEditorLayout({
   );
 
   const handleEditPixels = useCallback(
-    (firstgid: number, region: TileRegion) => {
+    (firstgid: number, _region: TileRegion) => {
       if (!state.tilesetImages[firstgid]) return;
       setSelectionPixelData(null);
       setShowPixelEditor(true);

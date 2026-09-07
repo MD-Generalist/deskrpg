@@ -70,7 +70,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Handle persona/identity/soul updates
     const existingConfig = parseDbObject(npc.agentConfig) || {};
-    const existingAgentId = existingConfig.agentId as string | null;
     const presetDefaults = hasNpcPresetDefaults(body.presetId)
       ? getNpcPresetDefaults({
           presetId: body.presetId,
@@ -173,8 +172,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         { status: result.status },
       );
     }
-
-    const { npc } = result;
 
     // 예전에는 NPC 를 지울 때 게이트웨이의 OpenClaw 에이전트도 함께 지웠다. Hermes
     // 프로필은 NPC 보다 오래 사는 자원이고 다른 NPC 가 다시 바인딩할 수 있으므로,

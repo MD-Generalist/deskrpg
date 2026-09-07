@@ -29,7 +29,7 @@ const STATUS_BADGE: Record<string, { bg: string; text: string }> = {
 };
 
 export default function TaskChatView({
-  taskId,
+  taskId: _taskId,
   taskTitle,
   taskStatus,
   messages,

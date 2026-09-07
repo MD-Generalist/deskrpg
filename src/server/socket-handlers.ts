@@ -42,7 +42,6 @@ function chatLog(...args: unknown[]) {
 }
 
 import { parseDbObject } from "../lib/db-json";
-import { getGatewayRuntimeConfigForChannel } from "../lib/gateway-resources";
 import {
   buildChannelAccessDeniedPayload,
   type ChannelAccessDeniedReason,
@@ -924,7 +923,7 @@ async function streamNpcResponse(
   sessionKeyOverride?: string,
   emitEvent?: string,
 ): Promise<string> {
-  const { agentId, _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
+  const { _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
   const responseEvent = emitEvent || "npc:response";
   const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
 
@@ -1658,7 +1657,6 @@ export function setupSocketHandlers(io: Server) {
           );
         }
 
-        const player = players.get(socket.id);
         // 이력은 캐릭터 소유다. `players` 에 없으면 클라이언트가 실어 보낸 캐릭터를 검증해
         // 쓴다 — 그러지 않으면 재연결 직후 나눈 대화가 통째로 사라진다.
         const historyCharacterId = await resolveHistoryCharacterId(
@@ -1847,7 +1845,6 @@ export function setupSocketHandlers(io: Server) {
 
         if (response) {
           const parsed = parseNpcResponse(response);
-          const sanitizedResponse = sanitizeNpcResponseText(response);
           const player = players.get(socket.id);
           if (player?.characterId) {
             await processNpcTaskActions(io, parsed, {

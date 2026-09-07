@@ -11,7 +11,6 @@ import {
   Eraser,
   MousePointer2,
   Move,
-  Home,
   Globe,
   Save,
   ArrowLeft,

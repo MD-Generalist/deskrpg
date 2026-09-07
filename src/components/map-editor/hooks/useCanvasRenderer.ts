@@ -161,7 +161,7 @@ export function useCanvasRenderer(state: EditorState, findTileset: FindTilesetFn
       }
 
       // Pass 3: Draw foreground layers — all rows EXCEPT the above-character row
-      for (const { li, layer } of fgLayers) {
+      for (const { layer } of fgLayers) {
         if (layer.type !== "tilelayer" || !layer.data) continue;
         const prevAlpha = ctx.globalAlpha;
         ctx.globalAlpha = layer.opacity;

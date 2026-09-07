@@ -884,7 +884,7 @@ function GamePageInner() {
       // NPC task response streaming — per-task session messages
       socketInstance.on(
         "npc:task-response",
-        ({ npcId, chunk, done }: { npcId: string; chunk: string; done: boolean }) => {
+        ({ npcId: _npcId, chunk, done }: { npcId: string; chunk: string; done: boolean }) => {
           const taskId = activeTaskIdRef.current;
           if (!taskId) return;
 

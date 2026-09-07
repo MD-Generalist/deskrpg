@@ -250,7 +250,7 @@ export default function LayerPanel({
 }: LayerPanelProps) {
   const t = useT();
   const dragVisualIndexRef = useRef<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [, setDragOverIndex] = useState<number | null>(null);
   const [dragOverDivider, setDragOverDivider] = useState(false);
 
   // Sort layers by depth descending (highest depth at top = renders on top)

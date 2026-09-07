@@ -5,11 +5,11 @@ import type { CharacterAppearance } from "@/lib/lpc-registry";
 import type { NpcPreset } from "@/lib/npc-presets";
 import { PERSONA_PRESETS, applyPresetName } from "@/lib/npc-persona-presets";
 import { useLocale, useT } from "@/lib/i18n";
-import { Trash2, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import { useCharacterAppearance } from "@/hooks/useCharacterAppearance";
 import CharacterPreview from "@/components/CharacterPreview";
 import AppearanceEditor from "@/components/AppearanceEditor";
-import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
+import { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import { getAgentProgressMeter, type AgentProgressPhase } from "@/lib/npc-agent-progress";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
@@ -44,14 +44,6 @@ const MAX_NPC_COUNT = 10;
 // ---------------------------------------------------------------------------
 // Agent types
 // ---------------------------------------------------------------------------
-
-interface GatewayAgent {
-  id: string;
-  name: string;
-  workspace: string;
-  inUse: boolean;
-  usedByNpcName: string | null;
-}
 
 interface GatewayConnectionState {
   status: GatewayStatus;
@@ -120,7 +112,7 @@ interface NpcHireModalProps {
 // ---------------------------------------------------------------------------
 
 export default function NpcHireModal({
-  channelId,
+  channelId: _channelId,
   isOpen,
   onClose,
   onPlaceOnMap,
@@ -184,7 +176,7 @@ export default function NpcHireModal({
   }>({ phase: "idle", status: "" });
 
   // Agent selection state
-  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({
+  const [, setGatewayConnectionState] = useState<GatewayConnectionState>({
     status: "idle",
   });
 
@@ -439,7 +431,6 @@ export default function NpcHireModal({
 
   // 예전에는 여기서 `/api/npcs/create-agent` 로 OpenClaw 게이트웨이에 에이전트를 만들었다.
   // Hermes 는 프로필이 이미 그 자리에 있고 우리는 바인딩만 하므로 만들 것이 없다.
-  const handleCreateAgent = () => handleSubmit();
 
   const handleSubmit = async () => {
     if (!canSubmit) return;

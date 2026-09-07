@@ -9,13 +9,9 @@ import {
   Move,
   BoxSelect,
   Scissors,
-  Trash2,
-  PlusSquare,
-  MinusSquare,
   Undo2,
   Redo2,
   HelpCircle,
-  ZoomIn,
   Grid3x3,
   Wand2,
   Maximize2,
@@ -394,31 +390,6 @@ export default function PixelEditorModal({
   }, [buildCheckerboard]);
 
   // --- Calculate expanded grid from shift offset ---
-  const calcExpandedGrid = useCallback(
-    (dx: number, dy: number) => {
-      if (!editCanvasRef.current) {
-        return { cols: expandedCols, rows: expandedRows, originX: 0, originY: 0 };
-      }
-      const tilewidth = effectiveTileWidth;
-      const tileheight = effectiveTileHeight;
-      const ec = editCanvasRef.current;
-      const currentCols = Math.round(ec.width / tilewidth);
-      const currentRows = Math.round(ec.height / tileheight);
-
-      const extraLeft = dx < 0 ? Math.ceil(Math.abs(dx) / tilewidth) : 0;
-      const extraRight = dx > 0 ? Math.ceil(dx / tilewidth) : 0;
-      const extraTop = dy < 0 ? Math.ceil(Math.abs(dy) / tileheight) : 0;
-      const extraBottom = dy > 0 ? Math.ceil(dy / tileheight) : 0;
-
-      const cols = currentCols + extraLeft + extraRight;
-      const rows = currentRows + extraTop + extraBottom;
-      const originX = extraLeft * tilewidth + dx;
-      const originY = extraTop * tileheight + dy;
-
-      return { cols, rows, originX, originY };
-    },
-    [effectiveTileWidth, effectiveTileHeight, expandedCols, expandedRows],
-  );
 
   // --- Initialize edit canvas from region ---
   const initEditCanvas = useCallback(() => {
@@ -615,7 +586,6 @@ export default function PixelEditorModal({
     ctx.translate(pan.x, pan.y);
 
     const so = shiftOffsetRef.current;
-    const isShifting = so.dx !== 0 || so.dy !== 0;
 
     {
       // Normal render (no shift)
@@ -953,25 +923,6 @@ export default function PixelEditorModal({
   );
 
   // --- Tile coordinate from mouse event (for edge detection) ---
-  const getTileCoord = useCallback(
-    (e: React.MouseEvent) => {
-      const canvas = canvasRef.current;
-      const ec = editCanvasRef.current;
-      if (!canvas || !ec) return null;
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left - pan.x;
-      const my = e.clientY - rect.top - pan.y;
-      const tw = effectiveTileWidth * zoom;
-      const th = effectiveTileHeight * zoom;
-      const cols = Math.round(ec.width / effectiveTileWidth);
-      const rows = Math.round(ec.height / effectiveTileHeight);
-      const tileX = Math.floor(mx / tw);
-      const tileY = Math.floor(my / th);
-      if (tileX < 0 || tileY < 0 || tileX >= cols || tileY >= rows) return null;
-      return { tileX, tileY, cols, rows };
-    },
-    [pan, zoom, effectiveTileWidth, effectiveTileHeight],
-  );
 
   // --- Parse hex color to RGBA ---
   const colorToRGBA = useCallback((): [number, number, number, number] => {
@@ -2022,8 +1973,6 @@ export default function PixelEditorModal({
 
   const handleOverwrite = useCallback(() => {
     const dataUrl = getDataUrl();
-    const tw = effectiveTileWidth;
-    const th = effectiveTileHeight;
 
     if (isDirectImage) {
       // Direct image mode (e.g. opened from selection)
@@ -2052,8 +2001,6 @@ export default function PixelEditorModal({
     expandedRows,
     initialCols,
     initialRows,
-    effectiveTileWidth,
-    effectiveTileHeight,
   ]);
 
   // --- Resize handler ---

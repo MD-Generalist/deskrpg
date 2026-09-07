@@ -139,7 +139,7 @@ export function isCoreLayer(layer: TiledLayer): boolean {
   return CORE_LAYERS.includes((layer.name || "").toLowerCase());
 }
 
-export function getDeskRPGRole(layer: TiledLayer, idx: number, layers: TiledLayer[]) {
+export function getDeskRPGRole(layer: TiledLayer, _idx: number, _layers: TiledLayer[]) {
   const n = (layer.name || "").toLowerCase();
   if (n === "collision")
     return {

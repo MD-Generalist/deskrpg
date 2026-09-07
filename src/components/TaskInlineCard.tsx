@@ -17,7 +17,7 @@ const STATUS_STYLES: Record<string, { border: string; text: string; icon: string
 };
 
 export default function TaskInlineCard({
-  taskId,
+  taskId: _taskId,
   npcTaskId,
   title,
   status,

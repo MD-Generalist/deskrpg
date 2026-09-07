@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { DEV_JWT_SECRET } from "./dev-constants";
@@ -6,27 +9,45 @@ import { DEV_JWT_SECRET } from "./dev-constants";
 test("DEV_JWT_SECRET is a non-empty string", () => {
   assert.equal(typeof DEV_JWT_SECRET, "string");
   assert.ok(DEV_JWT_SECRET.length > 0);
+  assert.ok(DEV_JWT_SECRET.includes("do-not-use-in-production"));
 });
 
-test("DEV_JWT_SECRET is consistent across imports", async () => {
-  // Verify the same constant is used in jwt.ts and gateway-resources.ts
-  const jwtModule = await import("./jwt");
-  const gatewayModule = await import("./gateway-resources");
+/**
+ * 이 테스트는 원래 "consistent across imports" 라는 이름으로 두 모듈을 `await import`
+ * 했지만, **가져온 값을 쓰지 않고** 앞 테스트와 같은 단언만 했다. 즉 이름이 주장하는
+ * 것을 한 번도 검증하지 않았고, 어떤 회귀로도 빨개질 수 없었다(2026-09-08 발견).
+ *
+ * 공유는 구조적으로 보장된다 — `jwt.ts` 와 `gateway-resources.ts` 가 둘 다
+ * `./dev-constants` 에서 가져온다. 깨지는 경로는 하나뿐이다: 누군가 그 리터럴을
+ * 자기 파일에 다시 적는 것. 그러면 한쪽 비밀만 바뀌어 토큰이 조용히 서로 안 맞는다.
+ * 그래서 검사하는 것도 그것이다.
+ */
+test("개발용 비밀 리터럴은 dev-constants.ts 에만 있다", () => {
+  const libDir = path.dirname(fileURLToPath(import.meta.url));
+  const srcDir = path.resolve(libDir, "..");
+  const offenders: string[] = [];
 
-  // Both modules should import from dev-constants — verify by checking
-  // that the dev secret is used when JWT_SECRET is absent in non-production
-  const originalEnv = process.env.JWT_SECRET;
-  const originalNodeEnv = process.env.NODE_ENV;
-  delete process.env.JWT_SECRET;
-  // @types/node 에서 NODE_ENV 는 읽기 전용이다. 이 테스트는 일부러 바꾸므로
-  // 환경 객체를 가변 레코드로 좁혀 쓴다(런타임 동작은 같다).
-  const env = process.env as Record<string, string | undefined>;
-  env.NODE_ENV = "development";
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.(ts|tsx|js|cjs|mjs)$/.test(entry.name)) continue;
+      if (full === path.join(libDir, "dev-constants.ts")) continue;
+      if (full === fileURLToPath(import.meta.url)) continue;
+      if (readFileSync(full, "utf8").includes(DEV_JWT_SECRET)) {
+        offenders.push(path.relative(srcDir, full));
+      }
+    }
+  };
+  walk(srcDir);
 
-  // If modules share the same DEV_JWT_SECRET, encryption/decryption should be consistent
-  assert.ok(DEV_JWT_SECRET.includes("do-not-use-in-production"));
-
-  // Restore
-  if (originalEnv !== undefined) process.env.JWT_SECRET = originalEnv;
-  if (originalNodeEnv !== undefined) env.NODE_ENV = originalNodeEnv;
+  assert.deepEqual(
+    offenders,
+    [],
+    "개발용 비밀을 직접 적은 파일이 있습니다 — dev-constants 에서 가져오세요:\n  " +
+      offenders.join("\n  "),
+  );
 });

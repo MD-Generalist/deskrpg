@@ -177,8 +177,6 @@ export default function StampEditorModal({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const ds = DISPLAY_TILE_SIZE;
-    const tw = stamp.tileWidth;
-    const th = stamp.tileHeight;
     canvas.width = stampCols * ds;
     canvas.height = stampRows * ds;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -289,7 +287,6 @@ export default function StampEditorModal({
     layers,
     activeLayerIndex,
     tilesetImages,
-    stamp,
     findTileset,
     selectedTile,
     getTileOwnerLayer,

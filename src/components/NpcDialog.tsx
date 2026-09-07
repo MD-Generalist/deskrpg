@@ -52,7 +52,7 @@ export default function NpcDialog({
   onSend,
   onClose,
   // Task session props
-  tasks = [],
+  tasks: _tasks = [],
   taskMessages = new Map(),
   isTaskStreaming = false,
   onTaskSend,

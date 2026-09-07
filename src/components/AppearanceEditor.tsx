@@ -422,7 +422,7 @@ function ItemDrawer({
   activeCat,
   activeCategory,
   currentSelection,
-  layers,
+  layers: _layers,
   onSelectItem,
   onClearCategory,
   onSetVariant,
