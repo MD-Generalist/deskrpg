@@ -9,7 +9,7 @@ import {
   gatewayResources,
   gatewayShares,
   getDefaultSqlitePath,
-} from "./index.ts";
+} from "./index";
 
 test("gateway resource schema exports are available", () => {
   assert.ok(gatewayResources);

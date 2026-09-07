@@ -4,7 +4,7 @@ import test from "node:test";
 test("runtime paths resolve under DESKRPG_HOME when provided", async () => {
   process.env.DESKRPG_HOME = "/tmp/deskrpg-home";
 
-  const runtimePaths = await import("./runtime-paths.ts");
+  const runtimePaths = await import("./runtime-paths");
 
   assert.equal(runtimePaths.getDeskRpgHomeDir(), "/tmp/deskrpg-home");
   assert.equal(runtimePaths.getDeskRpgEnvPath(), "/tmp/deskrpg-home/.env.local");

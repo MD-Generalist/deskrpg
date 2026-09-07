@@ -32,6 +32,7 @@ test("행은 캐릭터·NPC·역할·내용을 담는다", () => {
     role: "player",
     content: "안녕",
   });
+  assert.ok(row, "행이 저장되지 않았다");
   assert.equal(row.characterId, "char-a");
   assert.equal(row.npcId, "npc-1");
   assert.equal(row.role, "player");

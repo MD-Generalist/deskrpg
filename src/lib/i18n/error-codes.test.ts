@@ -211,7 +211,12 @@ const REQUIRED_KEYS = [
   "errors.templateDeleteConfirm",
 ] as const;
 
-const TEST_CODES: Record<ErrorCode, string> = {
+// **전수 목록이 아니다.** 코드 → 번역 키 매핑이 조용히 바뀌는 것을 막는 고정용
+// 스팟체크다. 전수 검사는 아래 두 테스트가 맡는다 — 모든 등록 코드가 4개 로케일에
+// 번역을 갖는지, 그리고 라우트가 실제로 내보내는 errorCode 가 전부 등록돼 있는지.
+// 여기에 모든 코드를 나열하면 ERROR_MESSAGE_KEYS 를 그대로 베껴 자기 자신과
+// 비교하게 되므로, 타입도 Partial 이 정직하다.
+const TEST_CODES: Partial<Record<ErrorCode, string>> = {
   invalid_credentials: "errors.invalidCredentials",
   login_id_password_required: "errors.loginIdPasswordRequired",
   login_id_nickname_password_required: "errors.loginIdNicknamePasswordRequired",

@@ -18,12 +18,15 @@ test("DEV_JWT_SECRET is consistent across imports", async () => {
   const originalEnv = process.env.JWT_SECRET;
   const originalNodeEnv = process.env.NODE_ENV;
   delete process.env.JWT_SECRET;
-  process.env.NODE_ENV = "development";
+  // @types/node 에서 NODE_ENV 는 읽기 전용이다. 이 테스트는 일부러 바꾸므로
+  // 환경 객체를 가변 레코드로 좁혀 쓴다(런타임 동작은 같다).
+  const env = process.env as Record<string, string | undefined>;
+  env.NODE_ENV = "development";
 
   // If modules share the same DEV_JWT_SECRET, encryption/decryption should be consistent
   assert.ok(DEV_JWT_SECRET.includes("do-not-use-in-production"));
 
   // Restore
   if (originalEnv !== undefined) process.env.JWT_SECRET = originalEnv;
-  if (originalNodeEnv !== undefined) process.env.NODE_ENV = originalNodeEnv;
+  if (originalNodeEnv !== undefined) env.NODE_ENV = originalNodeEnv;
 });

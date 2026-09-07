@@ -10,7 +10,7 @@ test("ensureDeskRpgHome creates env, data, uploads, and logs directories", async
   fs.writeFileSync(envExamplePath, "JWT_SECRET=\n");
   process.env.DESKRPG_HOME = homeDir;
 
-  const runtimePaths = await import("./runtime-paths.ts");
+  const runtimePaths = await import("./runtime-paths");
 
   runtimePaths.ensureDeskRpgHome({
     homeDir,

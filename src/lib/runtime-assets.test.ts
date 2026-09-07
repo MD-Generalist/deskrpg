@@ -3,7 +3,7 @@ import test from "node:test";
 
 test("resolveRuntimeUploadRequestPath maps upload URLs into the DeskRPG home uploads directory", async () => {
   process.env.DESKRPG_HOME = "/tmp/deskrpg-runtime";
-  const runtimeAssets = await import("./runtime-assets.ts");
+  const runtimeAssets = await import("./runtime-assets");
 
   assert.equal(
     runtimeAssets.resolveRuntimeUploadRequestPath("/assets/uploads/template-1/tileset.png"),
@@ -13,7 +13,7 @@ test("resolveRuntimeUploadRequestPath maps upload URLs into the DeskRPG home upl
 
 test("resolveRuntimeUploadRequestPath rejects path traversal attempts", async () => {
   process.env.DESKRPG_HOME = "/tmp/deskrpg-runtime";
-  const runtimeAssets = await import("./runtime-assets.ts");
+  const runtimeAssets = await import("./runtime-assets");
 
   assert.equal(
     runtimeAssets.resolveRuntimeUploadRequestPath("/assets/uploads/../../etc/passwd"),

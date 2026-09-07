@@ -8,46 +8,69 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { tasks, npcs } from "../db/schema-sqlite";
 
 const require = createRequire(import.meta.url);
+
+/**
+ * `task-manager.js` 는 타입이 없는 JS 라, 이 선언이 테스트가 기대하는 유일한 계약서다.
+ * 예전엔 `TaskRow` 이었는데, 그러면 `task.id` 가 `unknown` 이라
+ * 다음 호출에 넘길 수 없고(20건) 널 가능성도 드러나지 않아(10건) `tsc` 가 상시 빨갰다.
+ * 읽는 필드만 적는다 — 여기 없는 컬럼은 이 테스트가 관심을 두지 않는다는 뜻이다.
+ */
+type TaskRow = {
+  id: string;
+  npcTaskId: string;
+  status: string;
+  title: string;
+  summary: string | null;
+  npcId: string | null;
+  completedAt: unknown;
+  autoNudgeCount: number;
+  autoNudgeMax?: number;
+  lastNudgedAt: unknown;
+  lastReportedAt: unknown;
+  stalledAt: unknown;
+  stalledReason: string | null;
+};
+
 const { TaskManager } = require("./task-manager.js") as {
   TaskManager: new (
     db: ReturnType<typeof drizzle>,
     schema: { tasks: typeof tasks; npcs: typeof npcs },
   ) => {
-    handleTaskAction: (...args: unknown[]) => Promise<Record<string, unknown> | null>;
-    getTaskById: (taskId: string, channelId: string) => Promise<Record<string, unknown> | null>;
+    handleTaskAction: (...args: unknown[]) => Promise<TaskRow | null>;
+    getTaskById: (taskId: string, channelId: string) => Promise<TaskRow | null>;
     moveTask: (
       taskId: string,
       channelId: string,
       toStatus: string,
       npcId: string | null,
       options?: { expectedFromStatus?: string },
-    ) => Promise<Record<string, unknown> | null>;
+    ) => Promise<TaskRow | null>;
     createBacklogTask: (
       channelId: string,
       assignerId: string,
       title: string,
       summary: string | null,
-    ) => Promise<Record<string, unknown>>;
+    ) => Promise<TaskRow>;
     hasInProgressTask: (npcId: string, channelId: string) => Promise<boolean>;
     getNextPendingTask: (
       npcId: string,
       channelId: string,
-    ) => Promise<Record<string, unknown> | null>;
-    markTaskNudged: (taskId: string, channelId: string) => Promise<Record<string, unknown> | null>;
+    ) => Promise<TaskRow | null>;
+    markTaskNudged: (taskId: string, channelId: string) => Promise<TaskRow | null>;
     markTaskStalled: (
       taskId: string,
       channelId: string,
       reason?: string,
-    ) => Promise<Record<string, unknown> | null>;
-    resumeTask: (taskId: string, channelId: string) => Promise<Record<string, unknown> | null>;
+    ) => Promise<TaskRow | null>;
+    resumeTask: (taskId: string, channelId: string) => Promise<TaskRow | null>;
     getTaskByNpcTaskId: (
       npcId: string,
       npcTaskId: string,
-    ) => Promise<Record<string, unknown> | null>;
+    ) => Promise<TaskRow | null>;
     getStaleInProgressTasks: (
       channelId: string,
       olderThanIso: string,
-    ) => Promise<Record<string, unknown>[]>;
+    ) => Promise<TaskRow[]>;
   };
 };
 
@@ -278,6 +301,7 @@ test("moveTask: backlog → pending with npcId", async () => {
   const { mgr } = createTaskTestDb();
   const task = await mgr.createBacklogTask("channel-1", "character-1", "Test task", null);
   const moved = await mgr.moveTask(task.id, "channel-1", "pending", "npc-1");
+  assert.ok(moved, "moveTask 가 null 을 반환했다 — 이동이 거절됐다");
   assert.equal(moved.status, "pending");
   assert.equal(moved.npcId, "npc-1");
 });
@@ -287,6 +311,7 @@ test("moveTask: pending → backlog clears npcId", async () => {
   const task = await mgr.createBacklogTask("channel-1", "character-1", "Test task", null);
   await mgr.moveTask(task.id, "channel-1", "pending", "npc-1");
   const moved = await mgr.moveTask(task.id, "channel-1", "backlog", null);
+  assert.ok(moved, "moveTask 가 null 을 반환했다 — 이동이 거절됐다");
   assert.equal(moved.status, "backlog");
   assert.equal(moved.npcId, null);
 });
@@ -296,6 +321,7 @@ test("moveTask: pending → in_progress keeps existing npcId", async () => {
   const task = await mgr.createBacklogTask("channel-1", "character-1", "Test task", null);
   await mgr.moveTask(task.id, "channel-1", "pending", "npc-1");
   const moved = await mgr.moveTask(task.id, "channel-1", "in_progress", null);
+  assert.ok(moved, "moveTask 가 null 을 반환했다 — 이동이 거절됐다");
   assert.equal(moved.status, "in_progress");
   assert.equal(moved.npcId, "npc-1");
 });
@@ -305,6 +331,7 @@ test("moveTask: any → complete sets completedAt", async () => {
   const task = await mgr.createBacklogTask("channel-1", "character-1", "Test task", null);
   await mgr.moveTask(task.id, "channel-1", "pending", "npc-1");
   const moved = await mgr.moveTask(task.id, "channel-1", "complete", null);
+  assert.ok(moved, "moveTask 가 null 을 반환했다 — 이동이 거절됐다");
   assert.equal(moved.status, "complete");
   assert.ok(moved.completedAt);
 });
@@ -313,6 +340,7 @@ test("moveTask: any → cancelled without npcId", async () => {
   const { mgr } = createTaskTestDb();
   const task = await mgr.createBacklogTask("channel-1", "character-1", "Test task", null);
   const moved = await mgr.moveTask(task.id, "channel-1", "cancelled", null);
+  assert.ok(moved, "moveTask 가 null 을 반환했다 — 이동이 거절됐다");
   assert.equal(moved.status, "cancelled");
   assert.equal(moved.npcId, null);
 });

@@ -185,10 +185,12 @@ test("server-db sqlite bootstraps base tables for a fresh empty database", () =>
   require("./server-db.js");
 
   const sqlite = new Database(sqlitePath);
-  const tableNames = sqlite
+  // better-sqlite3 의 all() 은 unknown[] 이다. 콜백 파라미터에 타입을 박으면
+  // 시그니처가 안 맞으므로, 쿼리가 무엇을 주는지 결과 쪽에서 좁힌다.
+  const rows = sqlite
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-    .all()
-    .map((row: { name: string }) => row.name);
+    .all() as Array<{ name: string }>;
+  const tableNames = rows.map((row) => row.name);
 
   assert.ok(tableNames.includes("users"));
   assert.ok(tableNames.includes("channels"));
