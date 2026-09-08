@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, hermesProfiles, npcs, channels } from "@/db";
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { getUserId } from "@/lib/internal-rpc";
+import { selectNpcById } from "@/lib/npc-projection";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
@@ -67,5 +68,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .where(eq(npcs.id, id))
     .returning();
 
-  return NextResponse.json({ npc: updated });
+  // 리바인딩은 이름·외형을 통째로 바꾼다(둘 다 프로필이 정본이다). 갱신된 행을 그대로
+  // 실으면 방금 버린 프로필의 이름이 응답에 남는다 — 투영을 다시 읽어 싣는다.
+  const projected = await selectNpcById(id);
+  return NextResponse.json({ npc: projected ?? updated });
 }

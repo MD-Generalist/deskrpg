@@ -102,21 +102,20 @@ async function seedChannel(ownerId: string) {
   return channel;
 }
 
-async function seedNpc(channelId: string) {
-  const { db, npcs, jsonForDb } = await loadDb();
-  const [npc] = await db
-    .insert(npcs)
-    .values({
-      channelId,
-      name: "Test NPC",
-      positionX: 0,
-      positionY: 0,
-      appearance: jsonForDb({}),
-      openclawConfig: jsonForDb({}),
-      adapterType: "hermes",
-    } as never)
-    .returning();
-  return npc;
+// NPC 는 프로필 없이 존재할 수 없다(`npcs.hermes_profile_id` NOT NULL) — 게이트웨이와
+// 프로필까지 함께 심는다. 씨앗 헬퍼는 src/test-setup/npc-seed.ts 를 쓴다.
+async function seedNpc(channelId: string, ownerId: string) {
+  const { seedGateway, seedHermesProfile, seedNpc: insertNpc } =
+    await import("@/test-setup/npc-seed");
+  const gateway = await seedGateway(ownerId);
+  const profile = await seedHermesProfile(gateway.id);
+  return insertNpc({
+    channelId,
+    hermesProfileId: profile.id,
+    positionX: 0,
+    positionY: 0,
+    adapterType: "hermes",
+  });
 }
 
 describe("hermes session persistence", () => {
@@ -124,7 +123,7 @@ describe("hermes session persistence", () => {
     const { getStoredHermesSessionRef } = await import("./hermes-dispatch");
     const user = await seedUser();
     const channel = await seedChannel(user.id);
-    const npc = await seedNpc(channel.id);
+    const npc = await seedNpc(channel.id, user.id);
 
     const stored = await getStoredHermesSessionRef(npc.id, user.id, "dm-" + user.id);
     assert.equal(stored, null);
@@ -135,7 +134,7 @@ describe("hermes session persistence", () => {
       await import("./hermes-dispatch");
     const user = await seedUser();
     const channel = await seedChannel(user.id);
-    const npc = await seedNpc(channel.id);
+    const npc = await seedNpc(channel.id, user.id);
     const contextKey = "dm-" + user.id;
 
     await persistHermesSessionRef(npc.id, user.id, contextKey, "session-1");

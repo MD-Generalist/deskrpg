@@ -1,0 +1,93 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { NextRequest } from "next/server";
+
+import { seedChannelWithProfiles, setupThrowawaySqlite } from "@/test-setup/npc-seed";
+
+// `GET /api/npcs?channelId=` 의 계약을 고정한다. 이 응답은 GameScene 이 그대로 먹는다 —
+// 형태가 조용히 바뀌면 맵이 깨지고, 그 사실은 브라우저에서야 드러난다.
+//
+// `db` 는 지연 초기화 싱글턴이고 node:test 는 파일마다 프로세스를 나누므로, 모듈
+// 최상단에서 한 번 임시 DB 를 잡으면 이 파일의 모든 테스트가 그 DB 를 쓴다.
+setupThrowawaySqlite("npcs-contract-test");
+
+type NpcBody = {
+  npcs: Array<{
+    id: string;
+    name: string;
+    positionX: number | null;
+    positionY: number | null;
+    appearance: unknown;
+    adapterType: string;
+    hermesProfileId: string;
+    active?: boolean;
+    placed?: boolean;
+  }>;
+};
+
+async function get(query: string): Promise<NpcBody> {
+  const { GET } = await import("./route");
+  const res = await GET(new NextRequest(`http://localhost/api/npcs?${query}`));
+  assert.equal(res.status, 200);
+  return (await res.json()) as NpcBody;
+}
+
+test("roster 없이 부르면 자리 미정·휴면 NPC 는 절대 나오지 않는다", async () => {
+  const { channelId } = await seedChannelWithProfiles({
+    placedActive: 1,
+    unplaced: 1,
+    dormant: 1,
+  });
+
+  const body = await get(`channelId=${channelId}`);
+
+  assert.equal(body.npcs.length, 1);
+  for (const n of body.npcs) {
+    assert.notEqual(
+      n.positionX,
+      null,
+      "GameScene 이 positionX*TILE_SIZE 를 바로 계산한다 — null 이 새면 NaN 좌표다",
+    );
+    assert.notEqual(n.positionY, null);
+    assert.equal(n.active, undefined, "roster 없이 부르면 active/placed 는 실리지 않는다");
+    assert.equal(n.placed, undefined);
+  }
+});
+
+test("roster=1 이면 셋 다 나오고 placed 가 구분한다", async () => {
+  const { channelId } = await seedChannelWithProfiles({
+    placedActive: 1,
+    unplaced: 1,
+    dormant: 1,
+  });
+
+  const body = await get(`channelId=${channelId}&roster=1`);
+
+  assert.equal(body.npcs.length, 3);
+  assert.deepEqual(body.npcs.map((n) => `${n.placed}/${n.active}`).sort(), [
+    "false/true",
+    "true/false",
+    "true/true",
+  ]);
+});
+
+test("응답의 name 은 프로필 표시 이름이다 — npcs.name 의 옛 값이 아니다", async () => {
+  const { channelId } = await seedChannelWithProfiles({
+    placedActive: 1,
+    staleNpcName: "옛이름",
+    displayName: "올리버",
+  });
+
+  const body = await get(`channelId=${channelId}`);
+
+  assert.equal(body.npcs.length, 1);
+  assert.equal(body.npcs[0].name, "올리버");
+});
+
+test("channelId 없이 부르면 400 이다 — 전 채널 NPC 를 흘리지 않는다", async () => {
+  const { GET } = await import("./route");
+  const res = await GET(new NextRequest("http://localhost/api/npcs"));
+  assert.equal(res.status, 400);
+  const body = (await res.json()) as { errorCode: string };
+  assert.equal(body.errorCode, "channel_id_required");
+});

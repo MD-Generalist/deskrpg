@@ -30,6 +30,7 @@ function nowForDb() {
   return (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
 }
 
+import { selectChannelNpcs } from "./npc-projection";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { DEV_JWT_SECRET } from "./dev-constants";
 
@@ -352,10 +353,9 @@ export async function listChannelBindingsForGateway(
 
   return Promise.all(
     rows.map(async (row) => {
-      const [{ value: npcCount }] = await db
-        .select({ value: count() })
-        .from(npcs)
-        .where(eq(npcs.channelId, row.channelId));
+      // 개수도 투영을 거친다 — 화면의 "NPC n명" 과 명부(`/api/npcs?roster=1`)가
+      // 같은 집합을 세도록 한다.
+      const npcCount = (await selectChannelNpcs(row.channelId, { roster: true })).length;
       const [{ value: meetingMinutesCount }] = await db
         .select({ value: count() })
         .from(meetingMinutes)

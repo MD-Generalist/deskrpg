@@ -12,6 +12,7 @@ import {
 } from "@/lib/npc-agent-defaults";
 import { normalizeLocale } from "@/lib/i18n/server";
 import { parseDbJson, parseDbObject } from "@/lib/db-json";
+import { selectNpcById } from "@/lib/npc-projection";
 
 async function verifyNpcOwnership(req: NextRequest, npcId: string) {
   const userId = getUserId(req);
@@ -48,7 +49,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const updates: Record<string, unknown> = {
       updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
     };
-    const nextName = body.name?.trim() || npc.name;
+    // 이름은 프로필이 정본이다 — 페르소나 문서를 조립할 때 쓰는 "지금 이름"도
+    // `npcs.name` 이 아니라 투영에서 가져온다.
+    const projected = await selectNpcById(id);
+    const nextName = body.name?.trim() || projected?.name || "";
     const normalizedLocale = normalizeLocale(body.locale);
 
     if (body.name?.trim()) updates.name = body.name.trim().slice(0, 100);
@@ -146,10 +150,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const [updated] = await db.update(npcs).set(updates).where(eq(npcs.id, id)).returning();
+    // 응답의 name/appearance 는 투영(프로필)이 낸 값이다. 갱신된 행을 그대로 실으면
+    // `npcs.name` 의 옛 값이 화면으로 돌아간다.
+    const reprojected = await selectNpcById(id);
     return NextResponse.json({
       npc: {
         ...updated,
-        appearance: parseDbJson(updated.appearance) ?? updated.appearance,
+        ...(reprojected
+          ? { name: reprojected.name, appearance: reprojected.appearance }
+          : {
+              appearance: parseDbJson(updated.appearance) ?? updated.appearance,
+            }),
         agentConfig: parseDbObject(updated.agentConfig) ?? updated.agentConfig,
       },
     });

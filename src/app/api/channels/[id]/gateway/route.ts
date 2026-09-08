@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { channels, npcs } from "@/db";
+import { channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { eq, count } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
+import { selectChannelNpcs } from "@/lib/npc-projection";
 import {
   bindGatewayToChannel,
   decryptGatewayToken,
@@ -151,10 +152,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const isBindingChanging = previousGatewayId !== nextGatewayId;
 
   if (isBindingChanging) {
-    const [{ value: npcCount }] = await db
-      .select({ value: count() })
-      .from(npcs)
-      .where(eq(npcs.channelId, id));
+    const npcCount = (await selectChannelNpcs(id, { roster: true })).length;
 
     if (npcCount > 0 && body.confirmNpcReset !== true) {
       return NextResponse.json(
@@ -214,10 +212,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (channel.ownerId !== userId)
     return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
-  const [{ value: npcCount }] = await db
-    .select({ value: count() })
-    .from(npcs)
-    .where(eq(npcs.channelId, id));
+  const npcCount = (await selectChannelNpcs(id, { roster: true })).length;
 
   const confirmNpcReset = req.nextUrl.searchParams.get("confirmNpcReset") === "1";
   if (npcCount > 0 && !confirmNpcReset) {

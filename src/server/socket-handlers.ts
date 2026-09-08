@@ -41,7 +41,7 @@ function chatLog(...args: unknown[]) {
   if (DEBUG_CHAT) console.log("[npc:chat]", ...args);
 }
 
-import { parseDbObject } from "../lib/db-json";
+import { selectChannelNpcs, selectNpcById } from "../lib/npc-projection";
 import {
   buildChannelAccessDeniedPayload,
   type ChannelAccessDeniedReason,
@@ -725,13 +725,13 @@ async function scanProgressNudges(io: Server) {
 
 async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
   try {
-    const rows = await db.select().from(npcs).where(eq(npcs.id, npcId)).limit(1);
+    // 이름은 프로필이 정본이다 — `npcs.name` 을 읽으면 프로필에서 이름을 바꾼 뒤에도
+    // 옛 이름이 대화에 실린다. 투영이 이름·외형과 JSON 파싱을 한 번에 해 준다.
+    const npc = await selectNpcById(npcId);
+    if (!npc) return null;
 
-    if (rows.length === 0) return null;
-
-    const npc = rows[0];
-    const oc = parseDbObject(npc.agentConfig) || {};
-    const adapterConfig = parseDbObject(npc.adapterConfig) || {};
+    const oc = (npc.agentConfig ?? {}) as Record<string, unknown>;
+    const adapterConfig = (npc.adapterConfig ?? {}) as Record<string, unknown>;
 
     return {
       id: npc.id,
@@ -760,11 +760,13 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
 
 async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> {
   try {
-    const rows = await db.select().from(npcs).where(eq(npcs.channelId, channelId));
+    // 회의·자유채팅 참가자 명단이다. `roster: true` 로 전부 읽는다 — 맵 밖(자리 미정)에
+    // 있는 NPC 를 대화에서 지우는 것은 이 함수의 일이 아니다(예전 동작 유지).
+    const rows = await selectChannelNpcs(channelId, { roster: true });
 
     return rows.map((npc) => {
-      const oc = parseDbObject(npc.agentConfig) || {};
-      const adapterConfig = parseDbObject(npc.adapterConfig) || {};
+      const oc = (npc.agentConfig ?? {}) as Record<string, unknown>;
+      const adapterConfig = (npc.adapterConfig ?? {}) as Record<string, unknown>;
       return {
         id: npc.id,
         name: npc.name,

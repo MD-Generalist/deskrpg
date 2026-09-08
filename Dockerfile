@@ -75,6 +75,8 @@ COPY --from=builder /app/src/db/schema.ts ./src/db/schema.ts
 COPY --from=builder /app/src/db/schema-sqlite.ts ./src/db/schema-sqlite.ts
 COPY --from=builder /app/src/lib/file-extractor.ts ./src/lib/file-extractor.ts
 COPY --from=builder /app/src/lib/db-json.ts ./src/lib/db-json.ts
+# NPC 의 이름·외형은 Hermes 프로필이 정본이다 — 소켓 서버의 NPC 로더가 이 투영을 거친다.
+COPY --from=builder /app/src/lib/npc-projection.ts ./src/lib/npc-projection.ts
 # NOTE: src/lib/runtime-paths.ts (ESM) is distinct from src/lib/runtime-paths.js
 # (CJS, copied above for openclaw-gateway.js's require()). db/index.ts imports the
 # extensionless "../lib/runtime-paths", which TypeScript resolves to the .ts file.

@@ -389,7 +389,15 @@ export async function POST(req: NextRequest) {
     });
 
     // --- Default NPC creation ---
-    if (defaultNpc && (gatewayConfig?.gatewayId || gatewayConfig?.url)) {
+    // NPC 는 이제 Hermes 프로필 없이 존재할 수 없다(`npcs.hermes_profile_id` NOT NULL).
+    // 프로필을 지정하지 않은 defaultNpc 요청은 예전이라면 프로필 없는 NPC 를 만들었을
+    // 자리다 — 조용히 건너뛴다(채널 생성 자체는 성공한다).
+    const defaultNpcProfileId =
+      typeof defaultNpc?.hermesProfileId === "string" && defaultNpc.hermesProfileId.trim()
+        ? defaultNpc.hermesProfileId.trim()
+        : null;
+
+    if (defaultNpc && defaultNpcProfileId && (gatewayConfig?.gatewayId || gatewayConfig?.url)) {
       try {
         const agentId = defaultNpc.agentId || "main";
         const defaultNpcLocale = normalizeLocale(defaultNpc.locale);
@@ -407,6 +415,7 @@ export async function POST(req: NextRequest) {
 
         await db.insert(npcs).values({
           channelId: channel.id,
+          hermesProfileId: defaultNpcProfileId,
           name: defaultNpc.name || "AI Assistant",
           positionX: npcPositionX,
           positionY: npcPositionY,

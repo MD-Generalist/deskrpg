@@ -13,37 +13,47 @@ import {
 import { normalizeLocale } from "@/lib/i18n/server";
 import { getGatewayRuntimeStateForChannel } from "@/lib/gateway-resources";
 import { parseDbJson, parseDbObject } from "@/lib/db-json";
+import { selectChannelNpcs, selectNpcById } from "@/lib/npc-projection";
 
 export async function GET(req: NextRequest) {
   try {
     const channelId = req.nextUrl.searchParams.get("channelId");
-    let rows;
-    if (channelId) {
-      const gatewayState = await getGatewayRuntimeStateForChannel(channelId, {
-        forceRefresh: true,
-      });
-      if (gatewayState.status !== "valid") {
-        return NextResponse.json({ npcs: [] });
-      }
-      rows = await db.select().from(npcs).where(eq(npcs.channelId, channelId));
-    } else {
-      rows = await db.select().from(npcs);
+    // roster=1 은 "고용 명부" — 아직 자리를 못 잡았거나 퇴근한 NPC 까지 준다.
+    // 기본 응답(맵용)은 예전 그대로 배치·출근한 것만 낸다.
+    const roster = req.nextUrl.searchParams.get("roster") === "1";
+    if (!channelId) {
+      // 예전에는 channelId 가 없으면 전 채널의 NPC 를 통째로 돌려줬다. 호출부가
+      // 하나도 없는 경로였고, 채널 경계를 넘어 새는 응답이었다.
+      return NextResponse.json(
+        { errorCode: "channel_id_required", error: "channelId required" },
+        { status: 400 },
+      );
     }
-    const result = rows.map((npc) => {
-      const agentConfig = parseDbObject(npc.agentConfig);
-      const appearance = parseDbJson<unknown>(npc.appearance) ?? npc.appearance;
 
+    const gatewayState = await getGatewayRuntimeStateForChannel(channelId, {
+      forceRefresh: true,
+    });
+    if (gatewayState.status !== "valid") {
+      return NextResponse.json({ npcs: [] });
+    }
+
+    const list = await selectChannelNpcs(channelId, { roster });
+    const result = list.map((npc) => {
+      const agentConfig = (npc.agentConfig ?? {}) as Record<string, unknown>;
       return {
         id: npc.id,
         name: npc.name,
         positionX: npc.positionX,
         positionY: npc.positionY,
         direction: npc.direction,
-        appearance,
-        hasAgent: !!agentConfig?.agentId,
-        agentId: (agentConfig?.agentId as string) || null,
+        appearance: npc.appearance,
+        hasAgent: !!agentConfig.agentId,
+        agentId: (agentConfig.agentId as string) || null,
         adapterType: npc.adapterType,
         hermesProfileId: npc.hermesProfileId,
+        ...(roster
+          ? { active: npc.active, placed: npc.positionX !== null, profile: npc.profile }
+          : {}),
       };
     });
     return NextResponse.json({ npcs: result });
@@ -85,7 +95,19 @@ export async function POST(req: NextRequest) {
     } = body;
     const normalizedLocale = normalizeLocale(locale);
 
-    if (!channelId || !name?.trim() || !appearance || positionX == null || positionY == null) {
+    // 프로필은 이제 NPC 의 정본이다(`npcs.hermes_profile_id` NOT NULL). 없이 들어오면
+    // 예전에는 조용히 NULL 로 저장돼 대화를 걸어야 비로소 드러났다 — 여기서 막는다.
+    const boundProfileId =
+      typeof hermesProfileId === "string" && hermesProfileId.trim() ? hermesProfileId.trim() : null;
+
+    if (
+      !channelId ||
+      !name?.trim() ||
+      !appearance ||
+      positionX == null ||
+      positionY == null ||
+      !boundProfileId
+    ) {
       return NextResponse.json(
         {
           errorCode: "missing_required_fields",
@@ -234,16 +256,21 @@ export async function POST(req: NextRequest) {
         // 모달이 고른 엔진과 프로필. 넣지 않으면 컬럼 기본값 'openclaw' + 프로필 없음으로
         // 저장되고, 사용자는 대화를 걸어야 비로소 자기 선택이 버려진 것을 안다.
         adapterType: typeof adapterType === "string" && adapterType ? adapterType : "openclaw",
-        hermesProfileId:
-          typeof hermesProfileId === "string" && hermesProfileId ? hermesProfileId : null,
+        hermesProfileId: boundProfileId,
       })
       .returning();
 
+    // 응답의 name/appearance 는 프로필이 정본이다 — 방금 쓴 행을 그대로 실으면
+    // 클라이언트가 이 응답으로 스프라이트를 띄우는 자리(npc:spawn-local)에서
+    // 요청에 실려 온 이름이 프로필 이름 대신 화면에 남는다.
+    const projected = await selectNpcById(npc.id);
     return NextResponse.json(
       {
         npc: {
           ...npc,
-          appearance: parseDbJson(npc.appearance) ?? npc.appearance,
+          ...(projected
+            ? { name: projected.name, appearance: projected.appearance }
+            : { appearance: parseDbJson(npc.appearance) ?? npc.appearance }),
           agentConfig: parseDbObject(npc.agentConfig) ?? npc.agentConfig,
         },
       },

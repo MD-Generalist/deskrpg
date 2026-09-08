@@ -1,12 +1,16 @@
-import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
+
+import {
+  seedChannel,
+  seedGateway,
+  seedHermesProfile,
+  seedNpc,
+  seedUser,
+  setupThrowawaySqlite,
+} from "@/test-setup/npc-seed";
 
 // Regression test for the rebind IDOR: a caller who owns the NPC's channel must not be
 // able to bind that NPC to a Hermes profile on a gateway they have no relationship to.
@@ -15,84 +19,31 @@ import { NextRequest } from "next/server";
 // initialized module singleton and node:test runs each test *file* in its own process, so
 // setting SQLITE_PATH once at module scope (before any test body touches `db`) pins every
 // test in this file to one throwaway DB.
-const sqlitePath = path.join(os.tmpdir(), `rebind-route-test-${crypto.randomUUID()}.db`);
-process.env.DESKRPG_HOME = os.tmpdir();
-process.env.SQLITE_PATH = sqlitePath;
-for (const ext of ["", "-wal", "-shm"]) {
-  process.on("exit", () => fs.rmSync(`${sqlitePath}${ext}`, { force: true }));
-}
+//
+// 씨앗은 src/test-setup/npc-seed.ts 를 쓴다 — `npcs.hermes_profile_id` 가 NOT NULL 이
+// 된 뒤로 "프로필 없는 NPC" 는 스키마가 거부한다. 그래서 이 테스트는 "미바인딩 → 바인딩"
+// 이 아니라 **프로필 A 에 묶인 NPC 를 프로필 B 로 옮기는가**를 본다.
+setupThrowawaySqlite("rebind-route-test");
 
 async function loadDb() {
   return import("@/db");
 }
 
-async function seedUser(nickname: string) {
-  const { db, users } = await loadDb();
-  const [user] = await db
-    .insert(users)
-    .values({
-      loginId: `${nickname}-${crypto.randomUUID().slice(0, 8)}`,
-      nickname: `${nickname}-${crypto.randomUUID().slice(0, 8)}`,
-      passwordHash: "hash",
-    })
-    .returning();
-  return user;
-}
-
-async function seedGateway(ownerUserId: string) {
-  const { db, gatewayResources } = await loadDb();
-  const { encryptGatewayToken } = await import("@/lib/gateway-resources");
-  const [gateway] = await db
-    .insert(gatewayResources)
-    .values({
-      ownerUserId,
-      displayName: "Test Gateway",
-      baseUrl: "http://gw.test",
-      tokenEncrypted: encryptGatewayToken("gateway-owner-key-1234567890"),
-    })
-    .returning();
-  return gateway;
-}
-
-async function seedHermesProfile(gatewayId: string) {
-  const { db, hermesProfiles } = await loadDb();
-  const { encryptGatewayToken } = await import("@/lib/gateway-resources");
-  const [profile] = await db
-    .insert(hermesProfiles)
-    .values({
-      gatewayId,
-      profileName: "sophie",
-      tokenEncrypted: encryptGatewayToken("victims-profile-key-1234567890"),
-      displayName: "sophie",
-    })
-    .returning();
-  return profile;
-}
-
-async function seedChannelWithNpc(ownerId: string) {
-  const { db, channels, npcs } = await loadDb();
-  const [channel] = await db
-    .insert(channels)
-    .values({
-      name: "Test Channel",
-      ownerId,
-    })
-    .returning();
-  const [npc] = await db
-    .insert(npcs)
-    .values({
-      channelId: channel.id,
-      name: "Test NPC",
-      positionX: 0,
-      positionY: 0,
-      appearance: "{}",
-      agentConfig: "{}",
-      // 어댑터 타입을 명시한다 — 이 테스트가 보는 것은 "403 일 때 값이 바뀌지 않는가"이지
-      // 컬럼 기본값이 무엇인가가 아니다. 기본값에 기대면 기본값이 바뀔 때 같이 깨진다.
-      adapterType: "unbound",
-    })
-    .returning();
-  return { channel, npc };
+/** 자기 게이트웨이의 프로필에 이미 묶여 있는 NPC 를 가진 채널. */
+async function seedChannelWithBoundNpc(ownerId: string) {
+  const ownGateway = await seedGateway(ownerId);
+  const ownProfile = await seedHermesProfile(ownGateway.id, { profileName: "own" });
+  const channel = await seedChannel(ownerId);
+  const npc = await seedNpc({
+    channelId: channel.id,
+    hermesProfileId: ownProfile.id,
+    positionX: 0,
+    positionY: 0,
+    // 어댑터 타입을 명시한다 — 이 테스트가 보는 것은 "403 일 때 값이 바뀌지 않는가"이지
+    // 컬럼 기본값이 무엇인가가 아니다. 기본값에 기대면 기본값이 바뀔 때 같이 깨진다.
+    adapterType: "unbound",
+  });
+  return { channel, npc, ownProfile };
 }
 
 describe("POST /api/npcs/[id]/rebind", () => {
@@ -101,10 +52,10 @@ describe("POST /api/npcs/[id]/rebind", () => {
 
     const victimOwner = await seedUser("victim-owner");
     const victimGateway = await seedGateway(victimOwner.id);
-    const victimProfile = await seedHermesProfile(victimGateway.id);
+    const victimProfile = await seedHermesProfile(victimGateway.id, { profileName: "sophie" });
 
     const attacker = await seedUser("attacker");
-    const { npc } = await seedChannelWithNpc(attacker.id);
+    const { npc, ownProfile } = await seedChannelWithBoundNpc(attacker.id);
 
     const req = new NextRequest("http://localhost/api/npcs/x/rebind", {
       method: "POST",
@@ -120,7 +71,11 @@ describe("POST /api/npcs/[id]/rebind", () => {
 
     const { db, npcs } = await loadDb();
     const [reloaded] = await db.select().from(npcs).where(eq(npcs.id, npc.id));
-    assert.equal(reloaded.hermesProfileId, null, "the NPC must not be bound to the profile");
+    assert.equal(
+      reloaded.hermesProfileId,
+      ownProfile.id,
+      "the NPC must still be bound to its original profile",
+    );
     assert.equal(reloaded.adapterType, "unbound", "the NPC's adapter type must be left unchanged");
   });
 
@@ -129,14 +84,15 @@ describe("POST /api/npcs/[id]/rebind", () => {
 
     const gatewayOwner = await seedUser("gateway-owner");
     const gateway = await seedGateway(gatewayOwner.id);
-    const profile = await seedHermesProfile(gateway.id);
+    const profile = await seedHermesProfile(gateway.id, { profileName: "sophie" });
 
     const { db, gatewayShares } = await loadDb();
     const npcOwner = await seedUser("npc-owner");
     await db
       .insert(gatewayShares)
       .values({ gatewayId: gateway.id, userId: npcOwner.id, role: "use" });
-    const { npc } = await seedChannelWithNpc(npcOwner.id);
+    const { npc, ownProfile } = await seedChannelWithBoundNpc(npcOwner.id);
+    assert.notEqual(ownProfile.id, profile.id);
 
     const req = new NextRequest("http://localhost/api/npcs/x/rebind", {
       method: "POST",
