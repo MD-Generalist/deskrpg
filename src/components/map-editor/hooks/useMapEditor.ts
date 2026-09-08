@@ -209,6 +209,21 @@ export function getDepthLabel(layer: TiledLayer): string {
 // === Collision Tileset Generator ===
 export const BUILTIN_TILESET_NAME = "color-palette";
 
+/**
+ * 스탬프 배치·픽셀 편집이 **자동으로 만든** 타일셋인가.
+ *
+ * 팔레트는 이 이름들을 숨긴다 — 사용자가 고르라고 만든 것이 아니기 때문이다.
+ * "사용하지 않는 타일셋 정리" 의 대상도 정확히 이 집합이어야 한다.
+ *
+ * 2026-09-08 스테이징 실측: 이 구분 없이 "맵에 배치된 타일이 없는 것" 을 전부
+ * 대상으로 삼았더니 16개 중 4개가 사용자가 직접 가져온 타일셋이었다
+ * (`small-office-furniture1/2`, `small-office-equipment`, `dante-labs-tileset`).
+ * 나중에 쓰려고 올려둔 것도 "미사용" 으로 잡힌다 — 정리가 자산을 지운다.
+ */
+export function isGeneratedTilesetName(name: string): boolean {
+  return name.startsWith("stamp-") || name.startsWith("edited-selection-");
+}
+
 const PALETTE_COLORS = [
   "#ef4444",
   "#f97316",

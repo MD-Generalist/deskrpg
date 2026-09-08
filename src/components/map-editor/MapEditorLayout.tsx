@@ -9,6 +9,7 @@ import {
   getBuiltinTilesetInfo,
   BUILTIN_TILESET_NAME,
   isCoreLayer,
+  isGeneratedTilesetName,
 } from "./hooks/useMapEditor";
 import type {
   TiledMap,
@@ -1066,7 +1067,9 @@ export default function MapEditorLayout({
     if (!state.mapData) return [] as { firstgid: number; name: string }[];
     const found: { firstgid: number; name: string }[] = [];
     for (const ts of state.mapData.tilesets) {
-      if (ts.name === BUILTIN_TILESET_NAME) continue;
+      // 사용자가 가져온 타일셋은 지금 배치돼 있지 않아도 **자산**이다. 정리 대상은
+      // 스탬프·픽셀 편집이 자동 생성한 것뿐이다(팔레트가 숨기는 바로 그 집합).
+      if (!isGeneratedTilesetName(ts.name)) continue;
       const maxGid = ts.firstgid + ts.tilecount - 1;
       let isUsed = false;
       for (let gid = ts.firstgid; gid <= maxGid; gid++) {
@@ -1104,16 +1107,13 @@ export default function MapEditorLayout({
   const sortedTilesets = useMemo(() => {
     if (!state.mapData) {
       return Object.values(state.tilesetImages)
-        .filter((info) => !info.name.startsWith("stamp-"))
+        .filter((info) => !isGeneratedTilesetName(info.name))
         .sort((a, b) => a.firstgid - b.firstgid);
     }
     // Color palette first, then user tilesets (hide stamp-generated)
     const builtIn = state.mapData.tilesets.filter((ts) => ts.name === BUILTIN_TILESET_NAME);
     const userTs = state.mapData.tilesets.filter(
-      (ts) =>
-        ts.name !== BUILTIN_TILESET_NAME &&
-        !ts.name.startsWith("stamp-") &&
-        !ts.name.startsWith("edited-selection-"),
+      (ts) => ts.name !== BUILTIN_TILESET_NAME && !isGeneratedTilesetName(ts.name),
     );
     return [...builtIn, ...userTs].map((ts) => state.tilesetImages[ts.firstgid]).filter(Boolean);
   }, [state.tilesetImages, state.mapData]);

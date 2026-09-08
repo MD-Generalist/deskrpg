@@ -2104,8 +2104,8 @@ const ja: Record<string, string> = {
     "タイルセット「{name}」はマップ上で使用中です。それでも削除しますか?",
   "mapEditor.tilesets.deleteConfirm": "タイルセット「{name}」を削除しますか?",
   "mapEditor.tilesets.removeUnusedConfirm":
-    "未使用のタイルセット {count} 個を削除しますか?\n{names}\n\n元に戻せません — 画像も一緒に削除されます。",
-  "mapEditor.tilesets.removeUnusedTooltip": "未使用のタイルセット {count} 個を整理",
+    "編集で生成されたタイルセット {count} 個を削除しますか?\n{names}\n\nスタンプ配置・ピクセル編集が自動生成したものです。取り込んだタイルセットは削除しません。\n元に戻せません — 画像も一緒に削除されます。",
+  "mapEditor.tilesets.removeUnusedTooltip": "編集で生成されたタイルセット {count} 個を整理",
   "mapEditor.pixel.tolerance": "許容値",
   "mapEditor.pixel.magicEraser": "マジック消しゴム",
   "mapEditor.pixel.smooth": "スムーズ",
