@@ -70,3 +70,75 @@ test("옛 게이트웨이로 되돌리면 잠들어 있던 NPC 가 그대로 되
   assert.equal(roster.length, 2, "행은 늘지 않는다 — 되살릴 뿐이다");
   assert.equal(roster.filter((n) => n.active).length, 1, "A 의 NPC 만 다시 출근");
 });
+
+test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도 회의록도 그대로", async () => {
+  const { userId, channelId, gatewayA } = await seedTwoGateways({ profilesEach: 2 });
+  const { selectChannelNpcs } = await import("@/lib/npc-projection");
+  const { db, npcs } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const { PUT, DELETE } = await import("./[id]/gateway/route");
+
+  const put = () =>
+    PUT(
+      new NextRequest(`http://localhost/api/channels/${channelId}/gateway`, {
+        method: "PUT",
+        body: JSON.stringify({ gatewayId: gatewayA }),
+        headers: authHeaders(userId),
+      }),
+      { params: Promise.resolve({ id: channelId }) },
+    );
+
+  assert.equal((await put()).status, 200);
+  // 자리를 준다 — 휴면이 자리를 기억하는지 보려면 자리가 있어야 한다.
+  const hired = await selectChannelNpcs(channelId, { roster: true });
+  assert.equal(hired.length, 2);
+  for (const [i, npc] of hired.entries()) {
+    await db.update(npcs).set({ positionX: i, positionY: 3 }).where(eq(npcs.id, npc.id));
+  }
+  await seedMeetingMinutes(channelId);
+
+  // 예전에는 확인 없이 부르면 409 gateway_disconnect_requires_npc_reset 였다.
+  const res = await DELETE(
+    new NextRequest(`http://localhost/api/channels/${channelId}/gateway`, {
+      method: "DELETE",
+      headers: authHeaders(userId),
+    }),
+    { params: Promise.resolve({ id: channelId }) },
+  );
+  assert.equal(res.status, 200, "예전의 409 gateway_disconnect_requires_npc_reset 은 없다");
+
+  const slept = await selectChannelNpcs(channelId, { roster: true });
+  assert.equal(slept.length, 2, "NPC 는 지워지지 않는다");
+  assert.equal(slept.filter((n) => n.active).length, 0, "전부 휴면");
+  assert.deepEqual(
+    slept.map((n) => [n.positionX, n.positionY]).sort(),
+    [
+      [0, 3],
+      [1, 3],
+    ],
+    "자리는 기억한다",
+  );
+  assert.equal(await countMeetingMinutes(channelId), 1, "회의록은 지우지 않는다");
+
+  // 다시 연결하면 새로 만드는 것이 아니라 되살린다 — 잠든 수만큼 정확히.
+  const { hireGatewayProfilesIntoChannel } = await import("@/lib/npc-roster");
+  assert.deepEqual(
+    await hireGatewayProfilesIntoChannel(channelId, gatewayA),
+    { created: 0, reactivated: 2 },
+    "되살림 2, 신규 0",
+  );
+
+  // 라우트로 다시 연결해도 행이 늘거나 자리가 흐트러지지 않는다(멱등).
+  assert.equal((await put()).status, 200);
+  const back = await selectChannelNpcs(channelId, { roster: true });
+  assert.equal(back.length, 2);
+  assert.equal(back.filter((n) => n.active).length, 2, "다시 출근");
+  assert.deepEqual(
+    back.map((n) => [n.positionX, n.positionY]).sort(),
+    [
+      [0, 3],
+      [1, 3],
+    ],
+    "자리를 되찾는다",
+  );
+});

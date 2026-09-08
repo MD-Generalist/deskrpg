@@ -2152,8 +2152,6 @@ const en: Record<string, string> = {
   "errors.gatewayInUseByChannels":
     "Cannot delete: a channel is still using this gateway. Disconnect it from the channel first",
   "errors.gatewayAccessDenied": "You do not have access to this gateway",
-  "errors.gatewayDisconnectRequiresNpcReset":
-    "Disconnecting requires unbinding this channel's NPCs first",
   "errors.localDiscoveryUnavailable": "Local profile discovery is unavailable",
   "errors.notOptedIn": "This feature has not been opted into",
   "errors.noProfiles": "No profiles are registered",

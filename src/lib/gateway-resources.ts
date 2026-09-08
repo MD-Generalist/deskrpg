@@ -10,7 +10,6 @@ import {
   gatewayShares,
   isPostgres,
   jsonForDb,
-  npcs,
   meetingMinutes,
   users,
 } from "@/db";
@@ -332,7 +331,7 @@ export type GatewayChannelBinding = {
   channelName: string;
   /** 요청자가 이 채널의 소유자인가. 연결 해제는 채널 소유자만 할 수 있다. */
   canUnbind: boolean;
-  /** 연결을 해제하면 함께 삭제되는 것들 — deleteChannelGatewayArtifacts() 가 지우는 범위다. */
+  /** 연결을 해제하면 휴면(`active=false`)에 들어가는 NPC 수. 지워지지는 않는다. */
   npcCount: number;
   meetingMinutesCount: number;
 };
@@ -436,11 +435,6 @@ export async function unbindGatewayFromChannel(channelId: string) {
   await db.delete(channelGatewayBindings).where(eq(channelGatewayBindings.id, existing.binding.id));
   invalidateGatewayRuntimeState(existing.binding.gatewayId);
   return existing.binding;
-}
-
-export async function deleteChannelGatewayArtifacts(channelId: string) {
-  await db.delete(meetingMinutes).where(eq(meetingMinutes.channelId, channelId));
-  await db.delete(npcs).where(eq(npcs.channelId, channelId));
 }
 
 function mapGatewayErrorStatus(errorCode: string | undefined, status: number) {

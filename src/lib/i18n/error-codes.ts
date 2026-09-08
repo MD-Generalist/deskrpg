@@ -36,7 +36,6 @@ export type ErrorCode =
   | "gateway_loopback_in_container"
   | "gateway_in_use_by_channels"
   | "gateway_access_denied"
-  | "gateway_disconnect_requires_npc_reset"
   | "local_discovery_unavailable"
   | "not_opted_in"
   | "no_profiles"
@@ -197,7 +196,6 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   gateway_loopback_in_container: "errors.gatewayLoopbackInContainer",
   gateway_in_use_by_channels: "errors.gatewayInUseByChannels",
   gateway_access_denied: "errors.gatewayAccessDenied",
-  gateway_disconnect_requires_npc_reset: "errors.gatewayDisconnectRequiresNpcReset",
   local_discovery_unavailable: "errors.localDiscoveryUnavailable",
   not_opted_in: "errors.notOptedIn",
   no_profiles: "errors.noProfiles",

@@ -2148,8 +2148,6 @@ const ko: Record<string, string> = {
   "errors.gatewayInUseByChannels":
     "이 게이트웨이를 사용 중인 채널이 있어 삭제할 수 없습니다. 채널에서 연결을 먼저 해제하세요",
   "errors.gatewayAccessDenied": "이 게이트웨이에 접근할 권한이 없습니다",
-  "errors.gatewayDisconnectRequiresNpcReset":
-    "연결을 해제하려면 이 채널의 NPC 연결을 먼저 해제해야 합니다",
   "errors.localDiscoveryUnavailable": "로컬 프로필 탐색을 사용할 수 없습니다",
   "errors.notOptedIn": "이 기능이 아직 허용되지 않았습니다",
   "errors.noProfiles": "등록된 프로필이 없습니다",

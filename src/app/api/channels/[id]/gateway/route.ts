@@ -3,12 +3,10 @@ import { channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import { selectChannelNpcs } from "@/lib/npc-projection";
 import { hireGatewayProfilesIntoChannel, sleepChannelNpcs } from "@/lib/npc-roster";
 import {
   bindGatewayToChannel,
   decryptGatewayToken,
-  deleteChannelGatewayArtifacts,
   getAccessibleGatewayResource,
   getChannelGatewayBinding,
   unbindGatewayFromChannel,
@@ -190,7 +188,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   });
 }
 
-// DELETE /api/channels/:id/gateway — owner-only, unbinds the channel gateway and removes NPC data
+// DELETE /api/channels/:id/gateway — owner-only, unbinds the channel gateway and puts its NPCs to sleep
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId)
@@ -203,25 +201,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (channel.ownerId !== userId)
     return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
-  const npcCount = (await selectChannelNpcs(id, { roster: true })).length;
-
-  const confirmNpcReset = req.nextUrl.searchParams.get("confirmNpcReset") === "1";
-  if (npcCount > 0 && !confirmNpcReset) {
-    return NextResponse.json(
-      {
-        errorCode: "gateway_disconnect_requires_npc_reset",
-        error:
-          "Disconnecting the channel gateway removes existing NPCs and their task or meeting context.",
-      },
-      { status: 409 },
-    );
-  }
-
-  if (npcCount > 0) {
-    await deleteChannelGatewayArtifacts(id);
-  }
+  // 연결 해제도 교체와 같다 — 지우는 것이 아니라 재우는 것이다. 자리와 회의록은
+  // 그대로 남고, 다시 연결하면 그 자리로 되돌아온다. 그래서 확인을 받을 일도
+  // (예전의 409 gateway_disconnect_requires_npc_reset) 없다.
+  const previousGatewayId = (await getChannelGatewayBinding(id))?.resource.id ?? null;
 
   await unbindGatewayFromChannel(id);
+  if (previousGatewayId) {
+    await sleepChannelNpcs(id, previousGatewayId);
+  }
   await emitGatewayConfigUpdated(id);
 
   return NextResponse.json({

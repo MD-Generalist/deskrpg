@@ -87,7 +87,3 @@ export async function DELETE(
     channels: result.channels,
   });
 }
-
-// 화면이 외형 저장에 PUT 을 쓰든 PATCH 를 쓰든 같은 핸들러로 받는다 — 부분 수정
-// 규약(보낸 필드만 바뀐다)은 둘 다 동일하다.
-export const PUT = PATCH;
