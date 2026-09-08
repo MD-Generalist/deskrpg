@@ -10,6 +10,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js");
 const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js");
+const { migrateNpcsToProfileOwnership } = require("./sqlite-npc-profile-ownership.js");
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -376,6 +377,12 @@ function ensureSqliteCompatibility(sqlite) {
   ]);
   // 컬럼이 갖춰진 다음에 은퇴 마이그레이션을 돌린다(이관 대상 열이 둘 다 있어야 한다).
   retireOpenclawConfig(sqlite);
+  // hermes_profiles.appearance 는 ALTER 로 되지만 npcs 의 NOT NULL·FK·유니크는 재생성이 필요하다.
+  // src/db/index.ts 의 ensureSqliteCompatibility 와 같은 순서 — 두 부트 경로가 갈리지 않게 한다.
+  applySqliteAlterStatements(sqlite, "hermes_profiles", [
+    "ALTER TABLE hermes_profiles ADD COLUMN appearance TEXT",
+  ]);
+  migrateNpcsToProfileOwnership(sqlite);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",

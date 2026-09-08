@@ -217,3 +217,75 @@ test("server-db sqlite bootstraps base tables for a fresh empty database", () =>
     "신규 DB 의 hermes_profiles 에는 appearance 가 있어야 한다",
   );
 });
+
+test("server-db sqlite boot path migrates a legacy npcs table to profile ownership", () => {
+  // 소켓 서버(server-db.js)의 ensureSqliteCompatibility 와 API 라우트(src/db/index.ts)의
+  // 동명 함수는 서로 다른 부트 경로다. 한쪽만 migrateNpcsToProfileOwnership 을 부르면
+  // 그 경로에서만 npcs 가 낡은 정의로 남는다 — 이 테스트가 두 경로의 동등성을 고정한다.
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-server-db-legacy-npcs-"));
+  const sqlitePath = path.join(tempDir, "legacy-npcs.sqlite");
+
+  // 서버 부트를 태우기 전에 실 파일에 레거시 스키마를 미리 심는다 —
+  // sqlite-npc-profile-ownership.test.ts 의 legacyDb() 와 같은 모양.
+  const seed = new Database(sqlitePath);
+  seed.pragma("foreign_keys = ON");
+  seed.exec(`
+    CREATE TABLE users(id TEXT PRIMARY KEY);
+    CREATE TABLE channels(id TEXT PRIMARY KEY);
+    CREATE TABLE hermes_profiles(
+      id TEXT PRIMARY KEY, gateway_id TEXT NOT NULL, profile_name TEXT NOT NULL,
+      token_encrypted TEXT NOT NULL, display_name TEXT, description TEXT,
+      provisioned_by_deskrpg INTEGER NOT NULL DEFAULT 0,
+      last_validated_at TEXT, last_validation_status TEXT, last_validation_error TEXT,
+      created_at TEXT, updated_at TEXT);
+    CREATE TABLE npcs(
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, position_x INTEGER NOT NULL, position_y INTEGER NOT NULL,
+      direction TEXT DEFAULT 'down', appearance TEXT NOT NULL,
+      adapter_type TEXT NOT NULL DEFAULT 'hermes', adapter_config TEXT,
+      hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL,
+      agent_config TEXT, created_at TEXT, updated_at TEXT,
+      UNIQUE(channel_id, position_x, position_y));
+    CREATE TABLE tasks(
+      id TEXT PRIMARY KEY,
+      npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      npc_task_id TEXT
+    );
+    INSERT INTO channels VALUES ('c1');
+    INSERT INTO hermes_profiles(id,gateway_id,profile_name,token_encrypted) VALUES ('p1','g','p','t');
+    INSERT INTO npcs(id,channel_id,name,position_x,position_y,appearance,hermes_profile_id,updated_at)
+      VALUES ('old','c1','old',1,1,'{"v":"old"}','p1','2026-01-01T00:00:00Z');
+  `);
+  seed.close();
+
+  process.env.DB_TYPE = "sqlite";
+  process.env.SQLITE_PATH = sqlitePath;
+
+  const modulePath = require.resolve("./server-db.js");
+  delete require.cache[modulePath];
+  require("./server-db.js");
+
+  const sqlite = new Database(sqlitePath);
+
+  const npcCols = sqlite.prepare("PRAGMA table_info(npcs)").all() as Array<{
+    name: string;
+    notnull: number;
+  }>;
+  assert.ok(
+    npcCols.some((c) => c.name === "active" && c.notnull === 1),
+    "소켓 서버 부트 경로도 레거시 npcs 를 active NOT NULL 정의로 재생성해야 한다",
+  );
+
+  const fk = sqlite.prepare("PRAGMA foreign_key_list(npcs)").all() as Array<{
+    table: string;
+    on_delete: string;
+  }>;
+  const profileFk = fk.find((f) => f.table === "hermes_profiles");
+  assert.equal(
+    profileFk?.on_delete,
+    "CASCADE",
+    "소켓 서버 부트 경로도 hermes_profile_id 를 CASCADE FK 로 재생성해야 한다",
+  );
+});

@@ -16,11 +16,24 @@ function tableExists(sqlite, table) {
   );
 }
 
+// 이관 쿼리가 실제로 읽고 쓰는 열들. 이 중 하나라도 없으면 npcs 는 아직 "진짜 레거시"
+// 모양이 아니다 — RBAC 테스트 등이 쓰는 최소 픽스처(id, channel_id 뿐인 npcs)가 그렇다.
+// 그런 DB 는 sqlite-base-schema.js 가 새 정의로 만들 몫이라 여기서는 손대지 않는다.
+const LEGACY_NPC_COLUMNS = [
+  "appearance",
+  "hermes_profile_id",
+  "channel_id",
+  "created_at",
+  "updated_at",
+];
+
 function migrateNpcsToProfileOwnership(sqlite) {
   // npcs 나 hermes_profiles 가 아직 없는 DB(최소 픽스처, 신규 부트스트랩 이전 단계)에는
   // 옮길 것도 재생성할 것도 없다 — sqlite-base-schema.js 가 새 정의로 만든다.
   if (!tableExists(sqlite, "npcs") || !tableExists(sqlite, "hermes_profiles")) return null;
-  if (columns(sqlite, "npcs").includes("active")) return null; // 이미 적용됨
+  const npcCols = columns(sqlite, "npcs");
+  if (npcCols.includes("active")) return null; // 이미 적용됨
+  if (!LEGACY_NPC_COLUMNS.every((c) => npcCols.includes(c))) return null; // 진짜 레거시 모양이 아니다
 
   // 1) 외형 이관 + 백업 + 삭제는 한 트랜잭션. SQLite 는 트랜잭션 안에서
   // `PRAGMA foreign_keys` 변경을 무시하므로, 테이블 재생성은 별도 트랜잭션으로 뺀다.
