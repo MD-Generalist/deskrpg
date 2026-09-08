@@ -209,8 +209,8 @@ const ja: Record<string, string> = {
     "このゲートウェイマシンにdeskrpgプラグインがインストールされていません。",
   "hermes.plugin.locked.unknown":
     "プラグインの状態を確認できません。ゲートウェイ接続を再テストしてください。",
-  "hermes.wizard.openButton": "NPC雇用ウィザード",
-  "hermes.wizard.title": "NPC雇用ウィザード",
+  "hermes.wizard.openButton": "社員登録ウィザード",
+  "hermes.wizard.title": "社員登録ウィザード",
   "hermes.wizard.close": "閉じる",
   "hermes.wizard.next": "次へ",
   "hermes.wizard.back": "戻る",
@@ -274,7 +274,7 @@ const ja: Record<string, string> = {
     "プロフィール「{name}」はすでに登録されています — 再度作成する必要はありません。",
   "hermes.wizard.placement.goToChannels": "チャンネルへ移動",
   "hermes.wizard.placement.guide":
-    "NPCをマップに配置するには、チャンネルに移動して「NPC雇用」を開き、このプロフィールを選択してください。",
+    "プロフィールはすでにチャンネルへ自動出勤しています。チャンネルの出勤簿で「席未定」を押して席を決めてください。",
   "hermes.wizard.placement.done": "ウィザードを閉じる",
   "hermes.wizard.closeConfirmTitle": "今閉じるとどうなるか",
   "hermes.wizard.closeConfirmBody": "①で作成したプロフィール「{name}」が残ります。削除しますか？",
@@ -1506,7 +1506,6 @@ const ja: Record<string, string> = {
   "about.debugCopied": "デバッグ情報をコピーしました",
 
   // NPC
-  "npc.hire": "NPC雇用",
   "npc.fire": "NPC解雇",
   "npc.sleep": "退勤",
   "npc.wake": "出勤",

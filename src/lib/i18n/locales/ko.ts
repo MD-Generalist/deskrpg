@@ -204,8 +204,8 @@ const ko: Record<string, string> = {
   "hermes.plugin.locked.absent": "이 게이트웨이 머신에 deskrpg 플러그인이 설치돼 있지 않습니다.",
   "hermes.plugin.locked.unknown":
     "플러그인 상태를 확인할 수 없습니다. 게이트웨이 연결을 다시 테스트하세요.",
-  "hermes.wizard.openButton": "NPC 고용 마법사",
-  "hermes.wizard.title": "NPC 고용 마법사",
+  "hermes.wizard.openButton": "직원 등록 마법사",
+  "hermes.wizard.title": "직원 등록 마법사",
   "hermes.wizard.close": "닫기",
   "hermes.wizard.next": "다음",
   "hermes.wizard.back": "이전",
@@ -269,7 +269,7 @@ const ko: Record<string, string> = {
     "프로필 '{name}' 은(는) 이미 등록돼 있습니다 — 다시 만들 필요 없습니다.",
   "hermes.wizard.placement.goToChannels": "채널로 이동",
   "hermes.wizard.placement.guide":
-    "NPC 를 지도에 배치하려면 채널로 이동해 'NPC 고용'을 열고 이 프로필을 선택하세요.",
+    "프로필은 이미 채널에 자동 출근했습니다. 채널의 출근부에서 '자리 미정' 을 눌러 자리를 정하세요.",
   "hermes.wizard.placement.done": "마법사 닫기",
   "hermes.wizard.closeConfirmTitle": "지금 닫으면 어떻게 되나요",
   "hermes.wizard.closeConfirmBody": "①에서 만든 프로필 '{name}' 이(가) 남습니다. 지울까요?",
@@ -1499,7 +1499,6 @@ const ko: Record<string, string> = {
   "about.debugCopied": "디버그 정보를 복사했습니다",
 
   // NPC
-  "npc.hire": "NPC 고용",
   "npc.fire": "NPC 해고",
   "npc.sleep": "퇴근",
   "npc.wake": "출근",

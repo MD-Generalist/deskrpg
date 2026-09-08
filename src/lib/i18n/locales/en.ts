@@ -206,8 +206,8 @@ const en: Record<string, string> = {
   "hermes.plugin.locked.absent": "The deskrpg plugin isn't installed on this gateway machine.",
   "hermes.plugin.locked.unknown":
     "Couldn't determine plugin status. Re-test the gateway connection.",
-  "hermes.wizard.openButton": "Hire NPC wizard",
-  "hermes.wizard.title": "Hire NPC wizard",
+  "hermes.wizard.openButton": "Employee registration wizard",
+  "hermes.wizard.title": "Employee registration wizard",
   "hermes.wizard.close": "Close",
   "hermes.wizard.next": "Next",
   "hermes.wizard.back": "Back",
@@ -273,7 +273,7 @@ const en: Record<string, string> = {
     "Profile '{name}' is already registered — no need to create it again.",
   "hermes.wizard.placement.goToChannels": "Go to channels",
   "hermes.wizard.placement.guide":
-    'To place this NPC on the map, go to the channel, open "Hire NPC", and select this profile.',
+    'This profile has already clocked in to the channel. Open the channel\'s roster and click "Unplaced" to give it a seat.',
   "hermes.wizard.placement.done": "Close wizard",
   "hermes.wizard.closeConfirmTitle": "What happens if you close now",
   "hermes.wizard.closeConfirmBody":
@@ -1502,7 +1502,6 @@ const en: Record<string, string> = {
   "about.debugCopied": "Debug information copied",
 
   // NPC
-  "npc.hire": "Hire NPC",
   "npc.fire": "Fire NPC",
   "npc.sleep": "Clock out",
   "npc.wake": "Clock in",

@@ -201,8 +201,8 @@ const zh: Record<string, string> = {
   "hermes.plugin.locked.unauthorized": "此网关的令牌不是默认密钥，请更换令牌。",
   "hermes.plugin.locked.absent": "此网关主机上未安装 deskrpg 插件。",
   "hermes.plugin.locked.unknown": "无法确认插件状态，请重新测试网关连接。",
-  "hermes.wizard.openButton": "雇用 NPC 向导",
-  "hermes.wizard.title": "雇用 NPC 向导",
+  "hermes.wizard.openButton": "员工注册向导",
+  "hermes.wizard.title": "员工注册向导",
   "hermes.wizard.close": "关闭",
   "hermes.wizard.next": "下一步",
   "hermes.wizard.back": "上一步",
@@ -260,7 +260,7 @@ const zh: Record<string, string> = {
   "hermes.wizard.placement.alreadyRegistered": "配置文件“{name}”已注册 — 无需再次创建。",
   "hermes.wizard.placement.goToChannels": "前往频道",
   "hermes.wizard.placement.guide":
-    "要将此 NPC 放置到地图上，请前往频道，打开“雇用 NPC”并选择此配置文件。",
+    "该配置文件已自动在频道上班。请在频道的出勤表中点击“未定座位”来安排座位。",
   "hermes.wizard.placement.done": "关闭向导",
   "hermes.wizard.closeConfirmTitle": "现在关闭会怎样",
   "hermes.wizard.closeConfirmBody": "步骤①中创建的配置文件“{name}”将会保留。要删除吗？",
@@ -1479,7 +1479,6 @@ const zh: Record<string, string> = {
   "about.debugCopied": "调试信息已复制",
 
   // NPC
-  "npc.hire": "雇佣NPC",
   "npc.fire": "解雇NPC",
   "npc.sleep": "下班",
   "npc.wake": "上班",
