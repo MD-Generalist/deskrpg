@@ -105,8 +105,11 @@ async function seedChannel(ownerId: string) {
 // NPC 는 프로필 없이 존재할 수 없다(`npcs.hermes_profile_id` NOT NULL) — 게이트웨이와
 // 프로필까지 함께 심는다. 씨앗 헬퍼는 src/test-setup/npc-seed.ts 를 쓴다.
 async function seedNpc(channelId: string, ownerId: string) {
-  const { seedGateway, seedHermesProfile, seedNpc: insertNpc } =
-    await import("@/test-setup/npc-seed");
+  const {
+    seedGateway,
+    seedHermesProfile,
+    seedNpc: insertNpc,
+  } = await import("@/test-setup/npc-seed");
   const gateway = await seedGateway(ownerId);
   const profile = await seedHermesProfile(gateway.id);
   return insertNpc({

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { fetchChannelNpcs } from "../npc-prefetch";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
 import type { Socket } from "socket.io-client";
@@ -2625,19 +2626,19 @@ export class GameScene extends Phaser.Scene {
 
   /** Fetch NPC positions early so spawn collision check works before sprites load */
   private async prefetchNpcPositions(): Promise<NpcData[]> {
-    try {
-      const url = this.channelId ? `/api/npcs?channelId=${this.channelId}` : "/api/npcs";
-      const res = await fetch(url);
-      const data = await res.json();
-      const npcs: NpcData[] = data.npcs || [];
-      for (const npc of npcs) {
-        this.npcTilePositions.add(`${npc.positionX},${npc.positionY}`);
-      }
-      return npcs;
-    } catch (err) {
-      console.error("[GameScene] prefetchNpcPositions failed:", err);
+    // 실패는 빈 목록과 구분해서 알린다. 예전에는 채널 없이 `/api/npcs` 를 부르고
+    // (씬 재시작이면 this.channelId 가 "" 다) 응답 상태를 보지 않아, 400 이 조용히
+    // "NPC 0명" 으로 그려졌다.
+    const result = await fetchChannelNpcs(this.channelId);
+    if (!result.ok) {
+      console.warn(`[GameScene] prefetchNpcPositions failed (${result.reason}):`, result.message);
       return [];
     }
+    const npcs = result.npcs as NpcData[];
+    for (const npc of npcs) {
+      this.npcTilePositions.add(`${npc.positionX},${npc.positionY}`);
+    }
+    return npcs;
   }
 
   private loadNpcs(npcDataList: NpcData[]): void {
