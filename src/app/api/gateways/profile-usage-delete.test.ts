@@ -57,6 +57,17 @@ test("DELETE 는 지워진 NPC 수와 채널 수를 돌려주고, npcs 에 그 �
   assert.deepEqual(await profileUsage(profileId), { npcs: 0, channels: 0 });
 });
 
+// validateAppearance 는 body 레이어를 요구한다(lpc-registry.ts) — api/characters 가
+// 쓰는 것과 같은 모양의 픽스처를 쓴다.
+const MALE_APPEARANCE = {
+  bodyType: "male",
+  layers: { body: { itemKey: "body", variant: "light" } },
+};
+const FEMALE_APPEARANCE = {
+  bodyType: "female",
+  layers: { body: { itemKey: "body", variant: "light" } },
+};
+
 test("외형은 소유자만 바꾼다 — 공유받은 사용자는 forbidden", async () => {
   const { gatewayId, userId, profileId } = await hiredProfile();
   const { PATCH } = await import("./[id]/profiles/[profileId]/route");
@@ -70,7 +81,7 @@ test("외형은 소유자만 바꾼다 — 공유받은 사용자는 forbidden",
       { params: Promise.resolve({ id: gatewayId, profileId }) },
     );
 
-  assert.equal((await patch(userId, { bodyType: "male", layers: {} })).status, 200);
+  assert.equal((await patch(userId, MALE_APPEARANCE)).status, 200);
   const { selectChannelNpcs } = await import("@/lib/npc-projection");
   const { db, npcs } = await import("@/db");
   const { eq } = await import("drizzle-orm");
@@ -92,5 +103,38 @@ test("외형은 소유자만 바꾼다 — 공유받은 사용자는 forbidden",
     targetLoginId: other.loginId,
   });
   assert.ok(shared.share, "공유가 실제로 만들어져야 이 테스트가 의미 있다");
-  assert.equal((await patch(other.id, { bodyType: "female", layers: {} })).status, 403);
+  assert.equal((await patch(other.id, FEMALE_APPEARANCE)).status, 403);
+});
+
+test("망가진 외형은 400 으로 막는다 — 프로필이 정본이라 모든 채널이 한꺼번에 깨진다", async () => {
+  const { gatewayId, userId, profileId } = await hiredProfile();
+  const { PATCH } = await import("./[id]/profiles/[profileId]/route");
+
+  const res = await PATCH(
+    new NextRequest(`http://localhost/api/gateways/${gatewayId}/profiles/${profileId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ appearance: "garbage" }),
+      headers: authHeaders(userId),
+    }),
+    { params: Promise.resolve({ id: gatewayId, profileId }) },
+  );
+  assert.equal(res.status, 400);
+  // api/characters 두 라우트와 같은 코드를 쓴다 — 화면의 번역이 이미 있다.
+  assert.equal((await res.json()).errorCode, "character_appearance_invalid");
+});
+
+test("GET 은 URL 의 게이트웨이에 속하지 않은 프로필을 404 로 막는다", async () => {
+  const a = await hiredProfile();
+  const b = await hiredProfile();
+  const { GET } = await import("./[id]/profiles/[profileId]/route");
+
+  // A 의 게이트웨이 URL 로 B 의 프로필 수치를 캐낼 수 없다.
+  const res = await GET(
+    new NextRequest(`http://localhost/api/gateways/${a.gatewayId}/profiles/${b.profileId}`, {
+      headers: authHeaders(a.userId),
+    }),
+    { params: Promise.resolve({ id: a.gatewayId, profileId: b.profileId }) },
+  );
+  assert.equal(res.status, 404);
+  assert.equal((await res.json()).errorCode, "profile_not_found");
 });

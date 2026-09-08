@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { db, hermesProfiles } from "@/db";
+import { eq } from "drizzle-orm";
+
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { deleteHermesProfile, profileUsage, updateHermesProfile } from "@/lib/hermes-profiles";
 import { getUserId } from "@/lib/internal-rpc";
+import { validateAppearance } from "@/lib/lpc-registry";
+import type { CharacterAppearance } from "@/lib/lpc-registry";
 
 /**
  * 프로필 조회·수정·삭제.
@@ -26,6 +31,20 @@ export async function GET(
   if (!(await getAccessibleGatewayResource(userId, id))) {
     return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
   }
+  // URL 의 게이트웨이와 프로필이 실제로 한 몸인지 본다 — 접근 가능한 게이트웨이
+  // 하나만 있으면 남의 게이트웨이 프로필 수치를 캐낼 수 있으면 안 된다
+  // (PATCH·DELETE 는 updateHermesProfile/deleteHermesProfile 안에서 이미 검사한다).
+  const [row] = await db
+    .select({ gatewayId: hermesProfiles.gatewayId })
+    .from(hermesProfiles)
+    .where(eq(hermesProfiles.id, profileId))
+    .limit(1);
+  if (!row || row.gatewayId !== id) {
+    return NextResponse.json(
+      { errorCode: "profile_not_found", error: "profile_not_found" },
+      { status: 404 },
+    );
+  }
   return NextResponse.json({ usage: await profileUsage(profileId) });
 }
 
@@ -44,6 +63,19 @@ export async function PATCH(
     displayName?: unknown;
     appearance?: unknown;
   };
+
+  // 외형은 프로필이 정본이라 이 프로필이 나가는 **모든** 채널의 렌더링을 한꺼번에
+  // 좌우한다 — 모양이 깨진 값이 들어오면 그 인격 전부가 동시에 망가진다.
+  // 캐릭터 라우트(api/characters)와 같은 검증·같은 에러코드를 쓴다.
+  if (Object.hasOwn(body, "appearance")) {
+    const validationError = validateAppearance(body.appearance as CharacterAppearance);
+    if (validationError) {
+      return NextResponse.json(
+        { errorCode: "character_appearance_invalid", error: validationError },
+        { status: 400 },
+      );
+    }
+  }
 
   const result = await updateHermesProfile(userId, profileId, {
     // 토큰은 보낼 때만 바뀐다 — 화면이 빈 칸을 아예 보내지 않는 규약이다.

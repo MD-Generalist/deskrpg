@@ -148,6 +148,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const previousGatewayId = currentBinding?.resource.id ?? null;
+  const isBindingChanging = previousGatewayId !== nextGatewayId;
 
   if (nextGatewayId) {
     await bindGatewayToChannel({
@@ -165,7 +166,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (previousGatewayId && previousGatewayId !== nextGatewayId) {
     await sleepChannelNpcs(id, previousGatewayId);
   }
-  if (nextGatewayId) {
+  // 고용은 **연결이 바뀔 때만** 한다. taskAutomation 만 저장하는 PUT 이 매번
+  // 고용을 돌면, 사용자가 개별적으로 재운 NPC 가 설정 저장 한 번에 조용히
+  // 되살아난다(Task 7 의 NPC 별 토글이 그 상태를 만든다).
+  if (nextGatewayId && isBindingChanging) {
     await hireGatewayProfilesIntoChannel(id, nextGatewayId);
   }
 

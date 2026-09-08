@@ -137,7 +137,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       keyStorage = { ok: false, reason: "key_store_forbidden" };
     } else {
       // 마법사가 만든 프로필도 곧바로 출근시킨다(수동 등록과 같은 규약).
-      await hireProfileIntoBoundChannels(stored.profile.id);
+      //
+      // 고용 실패로 500 을 내면 원격 Hermes 에는 프로필이 남고 사용자는 같은 이름으로
+      // 다시 만들 수 없다 — 되돌릴 수 없는 상태를 만드는 대신 삼키고 로그만 남긴다.
+      try {
+        await hireProfileIntoBoundChannels(stored.profile.id);
+      } catch (hireErr) {
+        console.error(
+          `Failed to hire wizard profile ${stored.profile.id} into bound channels:`,
+          hireErr,
+        );
+      }
       keyStorage = { ok: true };
     }
   }

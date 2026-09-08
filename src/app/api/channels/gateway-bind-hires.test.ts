@@ -142,3 +142,34 @@ test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도
     "자리를 되찾는다",
   );
 });
+
+test("연결이 그대로면 설정만 저장하는 PUT 은 잠든 NPC 를 되살리지 않는다", async () => {
+  const { userId, channelId, gatewayA } = await seedTwoGateways({ profilesEach: 2 });
+  const { selectChannelNpcs } = await import("@/lib/npc-projection");
+  const { setNpcActive } = await import("@/lib/npc-roster");
+  const { PUT } = await import("./[id]/gateway/route");
+  const put = (body: Record<string, unknown>) =>
+    PUT(
+      new NextRequest(`http://localhost/api/channels/${channelId}/gateway`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+        headers: authHeaders(userId),
+      }),
+      { params: Promise.resolve({ id: channelId }) },
+    );
+
+  assert.equal((await put({ gatewayId: gatewayA })).status, 200);
+  const [first] = await selectChannelNpcs(channelId, { roster: true });
+  await setNpcActive(first.id, false);
+
+  // 같은 게이트웨이 + taskAutomation 만 바뀐 저장. 여기서 고용을 돌면 사용자가
+  // 직접 재운 NPC 가 조용히 되살아난다.
+  assert.equal((await put({ gatewayId: gatewayA, taskAutomation: { enabled: true } })).status, 200);
+
+  const roster = await selectChannelNpcs(channelId, { roster: true });
+  assert.equal(
+    roster.find((n) => n.id === first.id)?.active,
+    false,
+    "사용자가 재운 NPC 는 설정 저장으로 되살아나지 않는다",
+  );
+});

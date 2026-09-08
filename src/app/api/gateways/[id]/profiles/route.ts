@@ -66,7 +66,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // 프로필 = NPC 다. 이 게이트웨이가 이미 묶여 있는 채널에는 지금 바로 출근시킨다 —
   // 채널을 다시 열거나 게이트웨이를 다시 연결할 때까지 기다리지 않는다.
-  await hireProfileIntoBoundChannels(result.profile.id);
+  //
+  // 고용은 **부수효과**지 성공 조건이 아니다. 여기서 던지면 프로필은 이미 만들어진
+  // 채로 500 이 나가고, 사용자는 같은 이름으로 다시 시도하다 충돌만 본다.
+  // channels/route.ts 의 게이트웨이 바인딩과 같은 규약으로 삼킨다.
+  try {
+    await hireProfileIntoBoundChannels(result.profile.id);
+  } catch (hireErr) {
+    console.error(`Failed to hire new profile ${result.profile.id} into bound channels:`, hireErr);
+  }
 
   // Never serialize tokenEncrypted — it is ciphertext of a credential.
   const { tokenEncrypted: _tokenEncrypted, ...safeProfile } = result.profile;
