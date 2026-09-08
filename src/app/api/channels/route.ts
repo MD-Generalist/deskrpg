@@ -186,15 +186,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const {
-      name,
-      description,
-      isPublic,
-      mapTemplateId,
-      password,
-      gatewayConfig,
-      groupId,
-    } = body;
+    const { name, description, isPublic, mapTemplateId, password, gatewayConfig, groupId } = body;
 
     if (!name || typeof name !== "string" || name.length < 1 || name.length > 100) {
       return NextResponse.json(
