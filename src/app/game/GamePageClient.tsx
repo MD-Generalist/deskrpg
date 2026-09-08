@@ -15,7 +15,6 @@ import {
   PhoneCall,
   Bell,
   ChevronDown,
-  UserPlus,
   UserMinus,
   Settings,
   Share2,
@@ -31,9 +30,11 @@ import type { Socket } from "socket.io-client";
 import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
+import { buildPlacementRequest } from "@/game/npc-placement-request";
 import ChatPanel, { type ChannelChatMessage } from "@/components/ChatPanel";
+import NpcRoster, { type RosterNpc } from "@/components/NpcRoster";
+import RosterAvatar from "@/components/RosterAvatar";
 import MeetingRoom from "@/components/MeetingRoom";
-import NpcHireModal from "@/components/NpcHireModal";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
@@ -53,6 +54,13 @@ const THIRD_PARTY_LICENSES_URL = "/third-party-licenses.html";
 const AVATAR_ASSET_CREDITS_URL = "/assets/spritesheets/CREDITS.md";
 const AVATAR_ASSET_LICENSE_URL = "/assets/spritesheets/LICENSE-assets.md";
 const INSTANCE_ID_STORAGE_KEY = "deskrpg.instanceId";
+
+/**
+ * 진행 중인 토론의 참가자 명단은 회의방(`MeetingRoom`) 안에만 있고, 출근부가 뜨는
+ * 사무실 화면에서는 보이지 않는다. 그래서 여기서는 비워 두고, 회의 중 퇴근 차단은
+ * 서버(`npc:set-active` → `npc_in_meeting`)에 맡겨 토스트로 알린다.
+ */
+const NO_MEETING_NPC_IDS: ReadonlySet<string> = new Set<string>();
 
 function GameEngineLoading() {
   const t = useT();
@@ -85,6 +93,7 @@ interface GameNotification {
 
 interface ChannelInfo {
   id: string;
+  ownerId?: string;
   name: string;
   description: string | null;
   inviteCode: string | null;
@@ -147,56 +156,6 @@ type RosterActionMenuInput =
       npcId: string;
       npcName: string;
     };
-
-function RosterAvatar({
-  appearance,
-  size = 28,
-}: {
-  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
-  size?: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current || !appearance) return;
-
-    const canvas = canvasRef.current;
-    const offscreen = document.createElement("canvas");
-
-    compositeCharacter(offscreen, appearance)
-      .then(() => {
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        canvas.width = size;
-        canvas.height = size;
-        ctx.clearRect(0, 0, size, size);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(offscreen, 0, 128, 64, 64, 0, 0, size, size);
-      })
-      .catch(() => {});
-  }, [appearance, size]);
-
-  if (!appearance) {
-    return (
-      <div
-        className="rounded-full bg-surface-raised flex items-center justify-center text-text-secondary text-micro font-bold shrink-0"
-        style={{ width: size, height: size }}
-      >
-        ?
-      </div>
-    );
-  }
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      className="rounded-full bg-surface-raised shrink-0"
-      style={{ width: size, height: size, imageRendering: "pixelated" }}
-    />
-  );
-}
 
 function getSocketServerUrl(): string | undefined {
   if (typeof window === "undefined") return undefined;
@@ -264,6 +223,9 @@ function GamePageInner() {
       agentConfig?: unknown;
     }[]
   >([]);
+  // 맵용 목록(`channelNpcs`)은 배치·출근한 것만이다. 출근부는 자리 없는·퇴근한 NPC 도
+  // 보여야 하므로 `?roster=1` 로 따로 읽는다.
+  const [rosterNpcs, setRosterNpcs] = useState<RosterNpc[]>([]);
   const [channelPlayers, setChannelPlayers] = useState<ChannelPlayerSummary[]>([]);
 
   // Ref to track current dialogNpc for use inside socket listeners (must be declared before sync effect)
@@ -332,33 +294,11 @@ function GamePageInner() {
 
   // Owner & NPC management state
   const [isOwner, setIsOwner] = useState(false);
-  const [showHireModal, setShowHireModal] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
   const [spawnSetMode, setSpawnSetMode] = useState(false);
-  const [pendingNpc, setPendingNpc] = useState<{
-    presetId?: string;
-    name: string;
-    persona: string;
-    appearance: unknown;
-    direction: string;
-    agentId?: string;
-    agentAction?: "select" | "create";
-    identity?: string;
-    soul?: string;
-    locale?: string;
-    adapterType?: string;
-    hermesProfileId?: string;
-  } | null>(null);
-  const [editingNpc, setEditingNpc] = useState<{
-    id: string;
-    name: string;
-    persona: string;
-    appearance: unknown;
-    direction?: string;
-    agentId?: string | null;
-    adapterType?: string | null;
-    hermesProfileId?: string | null;
-  } | null>(null);
+  // 배치할 NPC 는 **이미 존재하는 행** 이다. 만드는 것이 아니라 자리를 주는 것이라
+  // id 하나면 된다(이름·페르소나·외형은 프로필이 정본이다).
+  const [pendingNpc, setPendingNpc] = useState<{ id: string } | null>(null);
   // npcMenu removed — Edit/Fire now in ChatPanel gear menu
 
   // NPC context menu (right-click) state
@@ -1329,14 +1269,36 @@ function GamePageInner() {
     [closeRosterMenus],
   );
 
-  const handleEditNpcById = useCallback(
+  /**
+   * NPC 의 이름·외형·페르소나는 게이트웨이 프로필이 정본이라 맵에서 고치지 않는다.
+   * 맵에서 할 수 있는 것은 **자리 이동** 뿐이다.
+   */
+  const handleMoveNpcById = useCallback(
     (npcId: string) => {
-      EventBus.emit("npc:edit", { npcId });
+      setPendingNpc({ id: npcId });
+      setPlacementMode(true);
       setContextMenu(null);
       closeRosterMenus();
     },
     [closeRosterMenus],
   );
+
+  const gatewayId = channel?.gatewayConfig?.gatewayId ?? null;
+
+  const openProfileSettings = useCallback(() => {
+    if (!gatewayId) return;
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    setContextMenu(null);
+    closeRosterMenus();
+    router.push(`/gateways?gateway=${gatewayId}&returnTo=${encodeURIComponent(returnTo)}`);
+  }, [closeRosterMenus, gatewayId, router]);
+
+  const handleHireNpc = useCallback(() => {
+    if (!gatewayId) return;
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    closeRosterMenus();
+    router.push(`/gateways?gateway=${gatewayId}&new=1&returnTo=${encodeURIComponent(returnTo)}`);
+  }, [closeRosterMenus, gatewayId, router]);
 
   const handleResetNpcChatById = useCallback(
     (npcId: string) => {
@@ -1353,13 +1315,26 @@ function GamePageInner() {
     [characterId, closeRosterMenus],
   );
 
-  const handleFireNpcById = useCallback(
-    (npcId: string) => {
-      EventBus.emit("npc:fire", { npcId });
+  /**
+   * 해고가 아니라 **퇴근** 이다. NPC 행을 지우면 다시 출근시킬 때 자리를 잃는다.
+   * REST 가 아니라 소켓인 이유는 회의 중 차단이 소켓 쪽에만 보이기 때문이다.
+   */
+  const setNpcActiveById = useCallback(
+    (npcId: string, active: boolean) => {
+      if (!socketRef.current || !channelId) return;
+      socketRef.current.emit("npc:set-active", { channelId, npcId, active });
       setContextMenu(null);
       closeRosterMenus();
     },
-    [closeRosterMenus],
+    [channelId, closeRosterMenus],
+  );
+
+  const handleSleepNpcById = useCallback(
+    (npcId: string) => {
+      if (!confirm(t("game.fireNpcConfirm"))) return;
+      setNpcActiveById(npcId, false);
+    },
+    [setNpcActiveById, t],
   );
 
   const handleOpenPlayerChat = useCallback(() => {
@@ -1648,24 +1623,50 @@ function GamePageInner() {
     })();
   }, [characterId, channelId, t]);
 
-  // Fetch NPCs for this channel (for meeting room)
+  /**
+   * 맵 목록과 출근부를 함께 읽는다. 하나만 갱신하면 화면 두 곳이 서로 다른 사실을
+   * 말한다 — 출근부에서 퇴근시켰는데 헤더의 "출근 N명" 이 그대로인 식이다.
+   */
+  const refreshNpcLists = useCallback(async () => {
+    if (!channelId) return;
+    try {
+      const [mapRes, rosterRes] = await Promise.all([
+        fetch(`/api/npcs?channelId=${channelId}`),
+        fetch(`/api/npcs?channelId=${channelId}&roster=1`),
+      ]);
+      if (!mapRes.ok) {
+        const errorData = await mapRes.json().catch(() => ({}));
+        throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchNpcs"));
+      }
+      const mapData = await mapRes.json();
+      if (mapData.npcs) setChannelNpcs(mapData.npcs);
+      if (rosterRes.ok) {
+        const rosterData = await rosterRes.json();
+        if (Array.isArray(rosterData.npcs)) {
+          setRosterNpcs(
+            rosterData.npcs.map(
+              (npc: RosterNpc & { positionX?: number | null; placed?: boolean }) => ({
+                id: npc.id,
+                name: npc.name,
+                appearance: npc.appearance,
+                active: !!npc.active,
+                placed: !!npc.placed,
+                profile: npc.profile ?? null,
+              }),
+            ),
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch channel NPCs:", err);
+    }
+  }, [channelId, t]);
+
+  // Fetch NPCs for this channel (for meeting room + roster)
   useEffect(() => {
     if (!channelId || (!channel?.isMember && !channel?.isOwner)) return;
-    fetch(`/api/npcs?channelId=${channelId}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchNpcs"));
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data.npcs) setChannelNpcs(data.npcs);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch channel NPCs:", err);
-      });
-  }, [channelId, channel?.isMember, channel?.isOwner, t]);
+    void refreshNpcLists();
+  }, [channelId, channel?.isMember, channel?.isOwner, refreshNpcLists]);
 
   useEffect(() => {
     if (!channelId || (!channel?.isMember && !channel?.isOwner)) return;
@@ -1710,43 +1711,21 @@ function GamePageInner() {
     const onPlacementComplete = async (data: { col: number; row: number }) => {
       if (!pendingNpc) return;
       try {
-        const res = await fetch("/api/npcs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            channelId,
-            name: pendingNpc.name,
-            persona: pendingNpc.persona,
-            appearance: pendingNpc.appearance,
-            direction: pendingNpc.direction,
-            positionX: data.col,
-            positionY: data.row,
-            presetId: pendingNpc.presetId,
-            agentId: pendingNpc.agentId,
-            agentAction: pendingNpc.agentAction,
-            identity: pendingNpc.identity,
-            soul: pendingNpc.soul,
-            locale: pendingNpc.locale,
-            // 모달이 이 둘을 골라 넘겨주는데 여기서 본문에 담지 않아, NPC 가 DB 기본값
-            // openclaw + 프로필 없음으로 저장됐다. 고른 엔진과 프로필이 조용히 버려지고
-            // 대화를 걸어야 비로소 드러난다.
-            adapterType: pendingNpc.adapterType,
-            hermesProfileId: pendingNpc.hermesProfileId,
-          }),
-        });
+        // NPC 를 새로 만들지 않는다 — 이미 있는 행에 **자리를 준다**. 생성 라우트는
+        // 없어졌고, 자리·방향 말고는 이 라우트가 받지 않는다(프로필이 정본).
+        const request = buildPlacementRequest(pendingNpc.id, data.col, data.row);
+        const res = await fetch(request.url, request.init);
         if (res.status === 409) return; // tile occupied, stay in placement mode
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToCreateNpc"));
         }
-        if (res.ok) {
-          const result = await res.json();
-          const npcsRes = await fetch(`/api/npcs?channelId=${channelId}`);
-          const npcsData = await npcsRes.json();
-          setChannelNpcs(npcsData.npcs || []);
-          // Spawn NPC locally in GameScene
+        const result = await res.json();
+        await refreshNpcLists();
+        if (result?.npc) {
+          // 이미 서 있던 NPC 를 옮긴 경우 먼저 빼야 두 번 그려지지 않는다.
+          EventBus.emit("npc:remove-local", { npcId: pendingNpc.id });
           EventBus.emit("npc:spawn-local", result.npc);
-          // Broadcast to other players
           if (socket) socket.emit("npc:broadcast-add", result.npc);
         }
       } catch (err) {
@@ -1771,7 +1750,31 @@ function GamePageInner() {
       EventBus.off("placement-complete", onPlacementComplete);
       EventBus.off("placement-cancel", onPlacementCancel);
     };
-  }, [placementMode, pendingNpc, channelId, showToastNotification, socket, t]);
+  }, [placementMode, pendingNpc, refreshNpcLists, showToastNotification, socket, t]);
+
+  /**
+   * 출근부 토글의 결과는 소켓으로 온다. 성공은 채널 전체 브로드캐스트(`npc:updated`)
+   * 이고, 실패는 요청한 소켓에만 온다(`npc:set-active:error`) — 회의 중이라 막힌 것을
+   * 토스트로 알리지 않으면 버튼이 아무 일도 안 한 것처럼 보인다.
+   */
+  useEffect(() => {
+    if (!socket) return;
+    const onNpcUpdated = () => {
+      void refreshNpcLists();
+    };
+    const onSetActiveError = (data: { npcId: string; errorCode: string }) => {
+      showToastNotification(
+        `npc-set-active-${data.npcId}`,
+        getLocalizedErrorMessage(t, data, "errors.failedToUpdateNpc"),
+      );
+    };
+    socket.on("npc:updated", onNpcUpdated);
+    socket.on("npc:set-active:error", onSetActiveError);
+    return () => {
+      socket.off("npc:updated", onNpcUpdated);
+      socket.off("npc:set-active:error", onSetActiveError);
+    };
+  }, [socket, refreshNpcLists, showToastNotification, t]);
 
   // Spawn set mode coordination
   useEffect(() => {
@@ -1828,61 +1831,6 @@ function GamePageInner() {
       EventBus.off("spawn-set-cancel", onSpawnCancel);
     };
   }, [spawnSetMode, channelId, channel, showToastNotification, t]);
-
-  // NPC management listeners (edit / fire)
-  useEffect(() => {
-    const onNpcEdit = (data: { npcId: string }) => {
-      const npc = channelNpcs.find((n) => n.id === data.npcId);
-      if (!npc) return;
-      setEditingNpc({
-        id: npc.id,
-        name: npc.name,
-        persona: ((npc as Record<string, unknown>).persona as string) || "",
-        appearance: npc.appearance,
-        direction:
-          typeof (npc as Record<string, unknown>).direction === "string"
-            ? ((npc as Record<string, unknown>).direction as string)
-            : "down",
-        agentId: ((npc as Record<string, unknown>).agentId as string | null) || null,
-        adapterType: ((npc as Record<string, unknown>).adapterType as string | null) || null,
-        hermesProfileId:
-          ((npc as Record<string, unknown>).hermesProfileId as string | null) || null,
-      });
-      setShowHireModal(true);
-    };
-    const onNpcFire = async (data: { npcId: string }) => {
-      if (!confirm(t("game.fireNpcConfirm"))) return;
-      const firedNpcId = data.npcId;
-      try {
-        const deleteRes = await fetch(`/api/npcs/${firedNpcId}`, { method: "DELETE" });
-        if (!deleteRes.ok) {
-          const errorData = await deleteRes.json().catch(() => ({}));
-          throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToDeleteNpc"));
-        }
-        const res = await fetch(`/api/npcs?channelId=${channelId}`);
-        const npcsData = await res.json();
-        setChannelNpcs(npcsData.npcs || []);
-        // Remove NPC locally in GameScene
-        EventBus.emit("npc:remove-local", { npcId: firedNpcId });
-        // Broadcast to other players
-        if (socket) socket.emit("npc:broadcast-remove", { npcId: firedNpcId });
-        // Clean up tasks for the fired NPC
-        setAllTasks((prev) => prev.filter((t) => t.npcId !== firedNpcId));
-      } catch (err) {
-        console.error("Failed to fire NPC:", err);
-        showToastNotification(
-          `npc-fire-error-${firedNpcId}`,
-          err instanceof Error ? err.message : t("errors.failedToDeleteNpc"),
-        );
-      }
-    };
-    EventBus.on("npc:edit", onNpcEdit);
-    EventBus.on("npc:fire", onNpcFire);
-    return () => {
-      EventBus.off("npc:edit", onNpcEdit);
-      EventBus.off("npc:fire", onNpcFire);
-    };
-  }, [channelNpcs, channelId, showToastNotification, socket, t]);
 
   // NPC context menu handlers
   const handleCallNpc = useCallback(() => {
@@ -2041,110 +1989,70 @@ function GamePageInner() {
               </button>
             </div>
 
-            {showRosterMenu && (
+            {showRosterMenu === "players" && (
               <div className="absolute top-full left-0 mt-2 w-64 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
                 <div className="px-3 py-2 border-b border-border text-caption text-text-dim flex items-center justify-between gap-2">
-                  <span>
-                    {showRosterMenu === "players"
-                      ? t("game.playersOnlineCount", { count: channelPlayers.length })
-                      : t("game.npcsAtWorkCount", { count: channelNpcs.length })}
-                  </span>
-                  {showRosterMenu === "players" && (
-                    <button
-                      onClick={() => {
-                        setShowSharePopup(true);
-                        closeRosterMenus();
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold"
-                    >
-                      <Share2 className="w-3 h-3" />
-                      <span>{t("game.inviteFriend")}</span>
-                    </button>
-                  )}
-                  {showRosterMenu === "npcs" && isOwner && mode === "office" && (
-                    <button
-                      onClick={() => {
-                        setShowHireModal(true);
-                        closeRosterMenus();
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold"
-                    >
-                      <UserPlus className="w-3 h-3" />
-                      <span>{t("game.hireNpc")}</span>
-                    </button>
-                  )}
+                  <span>{t("game.playersOnlineCount", { count: channelPlayers.length })}</span>
+                  <button
+                    onClick={() => {
+                      setShowSharePopup(true);
+                      closeRosterMenus();
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold"
+                  >
+                    <Share2 className="w-3 h-3" />
+                    <span>{t("game.inviteFriend")}</span>
+                  </button>
                 </div>
                 <div className="max-h-64 overflow-y-auto py-1">
-                  {showRosterMenu === "players" ? (
-                    channelPlayers.length > 0 ? (
-                      channelPlayers.map((player) =>
-                        player.id === "__self__" ? (
-                          <button
-                            key={player.id}
-                            onClick={(event) =>
-                              openRosterActionMenu(event.currentTarget, {
-                                type: "player",
-                                playerId: player.id,
-                                playerName: player.name,
-                              })
-                            }
-                            className="w-full px-3 py-2 text-body text-text-secondary hover:bg-surface-raised flex items-center gap-2 text-left"
-                          >
-                            <RosterAvatar appearance={player.appearance} />
-                            <span className="truncate">{player.name}</span>
-                            <span className="ml-auto text-micro text-text-dim">
-                              {t("game.you")}
-                            </span>
-                          </button>
-                        ) : (
-                          <button
-                            key={player.id}
-                            onClick={(event) =>
-                              openRosterActionMenu(event.currentTarget, {
-                                type: "player",
-                                playerId: player.id,
-                                playerName: player.name,
-                              })
-                            }
-                            className="w-full px-3 py-2 text-body text-text-secondary hover:bg-surface-raised flex items-center gap-2 text-left"
-                          >
-                            <RosterAvatar appearance={player.appearance} />
-                            <span className="truncate">{player.name}</span>
-                          </button>
-                        ),
-                      )
-                    ) : (
-                      <div className="px-3 py-3 text-caption text-text-dim">
-                        {t("game.noPlayersOnline")}
-                      </div>
-                    )
-                  ) : channelNpcs.length > 0 ? (
-                    channelNpcs.map((npc) => (
+                  {channelPlayers.length > 0 ? (
+                    channelPlayers.map((player) => (
                       <button
-                        key={npc.id}
+                        key={player.id}
                         onClick={(event) =>
                           openRosterActionMenu(event.currentTarget, {
-                            type: "npc",
-                            npcId: npc.id,
-                            npcName: npc.name,
+                            type: "player",
+                            playerId: player.id,
+                            playerName: player.name,
                           })
                         }
                         className="w-full px-3 py-2 text-body text-text-secondary hover:bg-surface-raised flex items-center gap-2 text-left"
                       >
-                        <RosterAvatar
-                          appearance={
-                            npc.appearance as CharacterAppearance | LegacyCharacterAppearance | null
-                          }
-                        />
-                        <span className="truncate">{npc.name}</span>
+                        <RosterAvatar appearance={player.appearance} />
+                        <span className="truncate">{player.name}</span>
+                        {player.id === "__self__" && (
+                          <span className="ml-auto text-micro text-text-dim">{t("game.you")}</span>
+                        )}
                       </button>
                     ))
                   ) : (
                     <div className="px-3 py-3 text-caption text-text-dim">
-                      {t("game.noNpcsAtWork")}
+                      {t("game.noPlayersOnline")}
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {showRosterMenu === "npcs" && (
+              <div className="absolute top-full left-0 mt-2 w-72 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+                <NpcRoster
+                  npcs={rosterNpcs}
+                  meetingNpcIds={NO_MEETING_NPC_IDS as Set<string>}
+                  isOwner={isOwner && mode === "office"}
+                  currentUserId={channel?.isOwner ? (channel?.ownerId ?? "") : ""}
+                  onToggle={setNpcActiveById}
+                  onPlace={handleMoveNpcById}
+                  onHire={handleHireNpc}
+                  hireDisabled={!gatewayId}
+                  onOpenMenu={(anchor, npc) =>
+                    openRosterActionMenu(anchor, {
+                      type: "npc",
+                      npcId: npc.id,
+                      npcName: npc.name,
+                    })
+                  }
+                />
               </div>
             )}
           </div>
@@ -2506,60 +2414,6 @@ function GamePageInner() {
         </div>
       )}
 
-      {/* NPC Hire Modal */}
-      <NpcHireModal
-        channelId={channelId!}
-        isOpen={showHireModal}
-        onClose={() => {
-          setShowHireModal(false);
-          setEditingNpc(null);
-        }}
-        onPlaceOnMap={(npcData) => {
-          setPendingNpc(npcData);
-          setPlacementMode(true);
-          setShowHireModal(false);
-        }}
-        onSaveEdit={async (npcId, updates) => {
-          try {
-            const patchRes = await fetch(`/api/npcs/${npcId}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(updates),
-            });
-            if (!patchRes.ok) {
-              const errorData = await patchRes.json().catch(() => ({}));
-              throw new Error(getLocalizedErrorMessage(t, errorData, "npc.saveEditFailed"));
-            }
-            const patchData = await patchRes.json().catch(() => ({}));
-            const res = await fetch(`/api/npcs?channelId=${channelId}`);
-            const data = await res.json();
-            setChannelNpcs(data.npcs || []);
-            setShowHireModal(false);
-            setEditingNpc(null);
-            const localUpdate = patchData?.npc
-              ? {
-                  npcId,
-                  name: patchData.npc.name,
-                  appearance: patchData.npc.appearance,
-                  direction: patchData.npc.direction,
-                }
-              : { npcId, ...updates };
-            EventBus.emit("npc:update-local", localUpdate);
-            if (socket) socket.emit("npc:broadcast-update", localUpdate);
-          } catch (error) {
-            console.error("Failed to save NPC edit:", error);
-            showToastNotification(
-              `npc-edit-error-${npcId}`,
-              error instanceof Error ? error.message : t("npc.saveEditFailed"),
-            );
-          }
-        }}
-        editingNpc={editingNpc}
-        currentNpcCount={channelNpcs.length}
-        hasGateway={!!channel?.hasGateway}
-        gatewayId={channel?.gatewayConfig?.gatewayId ?? undefined}
-      />
-
       {showPasswordModal && channelId && (
         <PasswordModal
           channelName={channel?.name || t("channels.privateChannel")}
@@ -2696,8 +2550,8 @@ function GamePageInner() {
             npcSelectList={npcSelectList}
             onSelectNpc={handleSelectNpc}
             isOwner={isOwner}
-            onEditNpc={(npcId) => EventBus.emit("npc:edit", { npcId })}
-            onFireNpc={(npcId) => EventBus.emit("npc:fire", { npcId })}
+            onEditNpc={handleMoveNpcById}
+            onFireNpc={handleSleepNpcById}
             onResetNpcChat={(npcId) => {
               if (socketRef.current)
                 socketRef.current.emit("npc:reset-chat", {
@@ -2791,13 +2645,24 @@ function GamePageInner() {
                     {t("context.talk")}
                   </button>
                   {isOwner && (
-                    <button
-                      onClick={() => handleEditNpcById(contextMenu.npcId)}
-                      className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
-                    >
-                      <Pencil className="w-3.5 h-3.5 inline mr-1" />
-                      {t("context.edit")}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleMoveNpcById(contextMenu.npcId)}
+                        className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
+                      >
+                        <Footprints className="w-3.5 h-3.5 inline mr-1" />
+                        {t("npc.move")}
+                      </button>
+                      <button
+                        onClick={openProfileSettings}
+                        disabled={!gatewayId}
+                        title={!gatewayId ? t("game.roster.needsGateway") : undefined}
+                        className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised disabled:text-text-dim disabled:cursor-not-allowed"
+                      >
+                        <Pencil className="w-3.5 h-3.5 inline mr-1" />
+                        {t("npc.profileSettings")}
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => handleResetNpcChatById(contextMenu.npcId)}
@@ -2808,11 +2673,11 @@ function GamePageInner() {
                   </button>
                   {isOwner && (
                     <button
-                      onClick={() => handleFireNpcById(contextMenu.npcId)}
+                      onClick={() => handleSleepNpcById(contextMenu.npcId)}
                       className="w-full text-left px-3 py-2 text-body text-danger hover:bg-surface-raised"
                     >
                       <UserMinus className="w-3.5 h-3.5 inline mr-1" />
-                      {t("context.fire")}
+                      {t("npc.sleep")}
                     </button>
                   )}
                 </div>
@@ -2929,13 +2794,24 @@ function GamePageInner() {
                     {t("context.talk")}
                   </button>
                   {isOwner && (
-                    <button
-                      onClick={() => handleEditNpcById(rosterActionMenu.npcId)}
-                      className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
-                    >
-                      <Pencil className="w-3.5 h-3.5 inline mr-1" />
-                      {t("context.edit")}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleMoveNpcById(rosterActionMenu.npcId)}
+                        className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
+                      >
+                        <Footprints className="w-3.5 h-3.5 inline mr-1" />
+                        {t("npc.move")}
+                      </button>
+                      <button
+                        onClick={openProfileSettings}
+                        disabled={!gatewayId}
+                        title={!gatewayId ? t("game.roster.needsGateway") : undefined}
+                        className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised disabled:text-text-dim disabled:cursor-not-allowed"
+                      >
+                        <Pencil className="w-3.5 h-3.5 inline mr-1" />
+                        {t("npc.profileSettings")}
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => handleResetNpcChatById(rosterActionMenu.npcId)}
@@ -2946,11 +2822,11 @@ function GamePageInner() {
                   </button>
                   {isOwner && (
                     <button
-                      onClick={() => handleFireNpcById(rosterActionMenu.npcId)}
+                      onClick={() => handleSleepNpcById(rosterActionMenu.npcId)}
                       className="w-full text-left px-3 py-2 text-body text-danger hover:bg-surface-raised"
                     >
                       <UserMinus className="w-3.5 h-3.5 inline mr-1" />
-                      {t("context.fire")}
+                      {t("npc.sleep")}
                     </button>
                   )}
                 </div>

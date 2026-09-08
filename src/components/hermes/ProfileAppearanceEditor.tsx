@@ -21,7 +21,7 @@ interface ProfileAppearanceEditorProps {
  *
  * `useCharacterAppearance` 는 훅이라 행마다 조건부로 부를 수 없다 — 그래서 열려 있는
  * 행에만 마운트되는 자식으로 뽑았다. 배선(`AppearanceEditor` 에 넘기는 props)은
- * `NpcHireModal` 의 custom 모드와 같다.
+ * 삭제된 NPC 고용 모달의 custom 모드와 같다.
  */
 export default function ProfileAppearanceEditor({
   gatewayId,

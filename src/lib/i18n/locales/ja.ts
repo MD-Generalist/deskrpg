@@ -1423,7 +1423,14 @@ const ja: Record<string, string> = {
   "game.settings": "チャンネル設定",
   "game.members": "メンバー",
   "game.meetingRoom": "会議室",
-  "game.hireNpc": "NPC雇用",
+  "game.roster.title": "NPC出勤簿",
+  "game.roster.hire": "新しい社員",
+  "game.roster.placed": "配置済み",
+  "game.roster.unplaced": "席が未定",
+  "game.roster.dormant": "休憩中",
+  "game.roster.shared": "共有",
+  "game.roster.inMeeting": "会議中のため退勤できません",
+  "game.roster.needsGateway": "先にチャンネルにゲートウェイを接続してください",
   "game.inviteFriend": "友だちを招待",
   "game.setStartPosition": "開始位置を設定",
   "game.inviteCode": "招待コード",
@@ -1501,7 +1508,10 @@ const ja: Record<string, string> = {
   // NPC
   "npc.hire": "NPC雇用",
   "npc.fire": "NPC解雇",
-  "npc.edit": "NPC編集",
+  "npc.sleep": "退勤",
+  "npc.wake": "出勤",
+  "npc.move": "席を移動",
+  "npc.profileSettings": "プロフィール設定",
   "npc.call": "呼び出し",
   "npc.return": "帰還",
   "npc.moving": "移動中...",
@@ -1521,7 +1531,6 @@ const ja: Record<string, string> = {
   "npc.tooManyFiles": "ファイルは最大3つまで添付できます。",
   "npc.configure": "NPC設定",
   "npc.creatingAgent": "エージェント作成中...",
-  "npc.placeOnMap": "マップに配置",
   "npc.persona": "ペルソナ",
   "npc.passPolicy": "会議PASSポリシー",
   "npc.passPolicyPlaceholder": "このNPCはいつPASSすべきですか？",
@@ -1538,9 +1547,7 @@ const ja: Record<string, string> = {
   "context.call": "呼び出す",
   "context.talk": "話しかける",
   "context.return": "帰還させる",
-  "context.edit": "修正する",
   "context.resetChat": "会話を初期化",
-  "context.fire": "解雇する",
   "context.calledByOther": "他のユーザーが呼び出し中",
 
   // Task
@@ -1685,10 +1692,6 @@ const ja: Record<string, string> = {
   "settings.gatewayNoSaved": "利用可能な保存済みゲートウェイがありません。直接入力で接続できます。",
   "settings.gatewaySharedReadOnly":
     "このチャンネルは共有ゲートウェイを使用しています。認証情報を変更できるのは所有者のみです。",
-  "settings.gatewayChangeResetWarning":
-    "ゲートウェイを変更すると、このチャンネルの既存NPCと関連するタスク/会議コンテキストがすべて削除されます。続行しますか？",
-  "settings.gatewayDisconnectResetWarning":
-    "ゲートウェイ接続を削除すると、このチャンネルの既存NPCと関連するタスク/会議コンテキストがすべて削除されます。続行しますか？",
   "gateways.nav": "マイゲートウェイ",
   "gateways.title": "マイゲートウェイ",
   "gateways.subtitle": "Hermes ゲートウェイを登録、接続テスト、共有できます。",
@@ -2100,7 +2103,9 @@ const ja: Record<string, string> = {
     "NPCの上限に達しました ({count}/{max})。新しいNPCを雇うには既存のNPCを削除してください。",
   "meeting.npcLabel": "NPC:",
   "game.spawnSetMode": "スポーン位置を設定するタイルをクリックしてください",
-  "game.fireNpcConfirm": "このNPCを解雇しますか?",
+  "game.fireNpcConfirm": "このNPCを退勤させますか?",
+  "channel.gateway.directInputHint":
+    "直接入力したゲートウェイにはプロフィールがないため、NPCは出勤しません。「マイゲートウェイ」でプロフィールを登録してください。",
   "mapEditor.layers.characterNpcDivider": "キャラクター / NPC",
   "mapEditor.layers.layerNamePrompt": "レイヤー名:",
   "mapEditor.layers.cannotDeleteCoreLayer": "コアレイヤー「{name}」は削除できません。",

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
@@ -300,7 +301,7 @@ export default function ChannelSettingsModal({
     }
   };
 
-  const handleSaveGateway = async (confirmNpcReset = false) => {
+  const handleSaveGateway = async () => {
     if (gatewayMode === "resource" && !selectedGatewayId) {
       setGatewayError(t("settings.gatewaySelect"));
       return;
@@ -315,9 +316,6 @@ export default function ChannelSettingsModal({
         reportWaitSeconds: Math.max(5, Math.floor(reportWaitSeconds) || 20),
       },
     };
-    if (confirmNpcReset) {
-      gatewayConfig.confirmNpcReset = true;
-    }
     if (gatewayMode === "resource" && selectedGatewayId) {
       gatewayConfig.gatewayId = selectedGatewayId;
     } else {
@@ -331,15 +329,9 @@ export default function ChannelSettingsModal({
         body: JSON.stringify(gatewayConfig),
       });
       if (!res.ok) {
+        // 게이트웨이를 바꿔도 NPC 를 지우지 않는다 — NPC 는 프로필의 자리이고,
+        // 서버는 더 이상 "NPC 를 초기화할까요" 409 를 돌려주지 않는다.
         const data = await res.json().catch(() => ({}));
-        if (
-          data?.errorCode === "gateway_change_requires_npc_reset" &&
-          !confirmNpcReset &&
-          window.confirm(t("settings.gatewayChangeResetWarning"))
-        ) {
-          await handleSaveGateway(true);
-          return;
-        }
         setGatewayError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
       } else {
         const data = await res.json().catch(() => ({}));
@@ -387,24 +379,13 @@ export default function ChannelSettingsModal({
     setGatewaySaving(false);
   };
 
-  const handleDeleteGateway = async (confirmNpcReset = false) => {
+  const handleDeleteGateway = async () => {
     setGatewaySaving(true);
     setGatewayError("");
     try {
-      const res = await fetch(
-        `/api/channels/${channelId}/gateway${confirmNpcReset ? "?confirmNpcReset=1" : ""}`,
-        { method: "DELETE" },
-      );
+      const res = await fetch(`/api/channels/${channelId}/gateway`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (
-          data?.errorCode === "gateway_disconnect_requires_npc_reset" &&
-          !confirmNpcReset &&
-          window.confirm(t("settings.gatewayDisconnectResetWarning"))
-        ) {
-          await handleDeleteGateway(true);
-          return;
-        }
         setGatewayError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
       } else {
         setGatewayId(null);
@@ -765,6 +746,12 @@ export default function ChannelSettingsModal({
                           </button>
                         </div>
                       </div>
+                      <p className="text-xs text-amber-300">
+                        {t("channel.gateway.directInputHint")}{" "}
+                        <Link href="/gateways" className="underline hover:text-amber-200">
+                          {t("gateways.title")}
+                        </Link>
+                      </p>
                     </>
                   )}
                   <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 space-y-3">

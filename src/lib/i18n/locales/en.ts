@@ -1420,7 +1420,14 @@ const en: Record<string, string> = {
   "game.settings": "Channel Settings",
   "game.members": "Members",
   "game.meetingRoom": "Meeting Room",
-  "game.hireNpc": "Hire NPC",
+  "game.roster.title": "NPC roster",
+  "game.roster.hire": "New hire",
+  "game.roster.placed": "On the map",
+  "game.roster.unplaced": "Needs a spot",
+  "game.roster.dormant": "Off duty",
+  "game.roster.shared": "Shared",
+  "game.roster.inMeeting": "In a meeting — cannot clock out",
+  "game.roster.needsGateway": "Connect a gateway to this channel first",
   "game.inviteFriend": "Invite Friend",
   "game.setStartPosition": "Set Start Position",
   "game.inviteCode": "Invite Code",
@@ -1497,7 +1504,10 @@ const en: Record<string, string> = {
   // NPC
   "npc.hire": "Hire NPC",
   "npc.fire": "Fire NPC",
-  "npc.edit": "Edit NPC",
+  "npc.sleep": "Clock out",
+  "npc.wake": "Clock in",
+  "npc.move": "Move spot",
+  "npc.profileSettings": "Profile settings",
   "npc.call": "Call",
   "npc.return": "Return",
   "npc.moving": "Moving...",
@@ -1517,7 +1527,6 @@ const en: Record<string, string> = {
   "npc.tooManyFiles": "You can attach up to 3 files.",
   "npc.configure": "Configure NPC",
   "npc.creatingAgent": "Creating agent...",
-  "npc.placeOnMap": "Place on map",
   "npc.persona": "Persona",
   "npc.passPolicy": "Meeting PASS Policy",
   "npc.passPolicyPlaceholder": "When should this NPC PASS in meetings?",
@@ -1535,9 +1544,7 @@ const en: Record<string, string> = {
   "context.call": "Call",
   "context.talk": "Talk",
   "context.return": "Return",
-  "context.edit": "Edit",
   "context.resetChat": "Reset Chat",
-  "context.fire": "Fire",
   "context.calledByOther": "Called by another user",
 
   // Task
@@ -1683,10 +1690,6 @@ const en: Record<string, string> = {
     "No accessible saved gateways yet. You can still connect with direct credentials.",
   "settings.gatewaySharedReadOnly":
     "This channel is using a shared gateway. Only the owner can change its credentials.",
-  "settings.gatewayChangeResetWarning":
-    "Changing the gateway removes this channel's existing NPCs and their related task or meeting context. Continue?",
-  "settings.gatewayDisconnectResetWarning":
-    "Disconnecting the gateway removes this channel's existing NPCs and their related task or meeting context. Continue?",
   "gateways.nav": "My Gateways",
   "gateways.title": "My Gateways",
   "gateways.subtitle": "Register, test, and share your Hermes gateways with other users.",
@@ -2097,7 +2100,9 @@ const en: Record<string, string> = {
     "NPC limit reached ({count}/{max}). Remove an existing NPC to hire a new one.",
   "meeting.npcLabel": "NPC:",
   "game.spawnSetMode": "Click the tile where you want to set the spawn position",
-  "game.fireNpcConfirm": "Are you sure you want to fire this NPC?",
+  "game.fireNpcConfirm": "Send this NPC off duty?",
+  "channel.gateway.directInputHint":
+    'A directly entered gateway has no profiles, so no NPC reports for work. Register a profile under "My gateways".',
   "mapEditor.layers.characterNpcDivider": "Character / NPC",
   "mapEditor.layers.layerNamePrompt": "Layer name:",
   "mapEditor.layers.cannotDeleteCoreLayer": 'Cannot delete core layer "{name}".',

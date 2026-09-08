@@ -3,7 +3,6 @@ import { db, isPostgres } from "@/db";
 import { npcs, channels } from "@/db";
 import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import { setNpcActive } from "@/lib/npc-roster";
 import { selectNpcById } from "@/lib/npc-projection";
 
 async function verifyNpcOwnership(req: NextRequest, npcId: string) {
@@ -86,34 +85,4 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return PATCH(req, { params });
-}
-
-/**
- * 임시 shim — NPC 행을 지우지 않고 **퇴근**시킨다.
- *
- * NPC 는 프로필의 자리이고, 행을 지우면 다시 출근시킬 때 자리를 잃는다. 정본 경로는
- * 소켓 `npc:set-active` (회의 중 차단을 위해 회의 상태가 보이는 곳에 있어야 한다)이고,
- * 이 라우트는 아직 그 소켓을 쓰지 않는 GamePageClient 의 "해고" 버튼이 죽지 않게
- * 남겨 둔 것이다. Task 9 에서 클라이언트가 소켓으로 옮겨 가면 함께 지운다.
- */
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const result = await verifyNpcOwnership(req, id);
-    if ("error" in result) {
-      return NextResponse.json(
-        { errorCode: result.errorCode, error: result.error },
-        { status: result.status },
-      );
-    }
-
-    await setNpcActive(id, false);
-    return NextResponse.json({ ok: true, active: false });
-  } catch (err) {
-    console.error("Failed to retire NPC:", err);
-    return NextResponse.json(
-      { errorCode: "failed_to_delete_npc", error: "Failed to retire NPC" },
-      { status: 500 },
-    );
-  }
 }

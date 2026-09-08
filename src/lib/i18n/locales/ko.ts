@@ -1417,7 +1417,14 @@ const ko: Record<string, string> = {
   "game.settings": "채널 설정",
   "game.members": "멤버",
   "game.meetingRoom": "회의실",
-  "game.hireNpc": "NPC 고용",
+  "game.roster.title": "NPC 출근부",
+  "game.roster.hire": "새 직원",
+  "game.roster.placed": "자리 있음",
+  "game.roster.unplaced": "자리 미정",
+  "game.roster.dormant": "쉬는 중",
+  "game.roster.shared": "공유됨",
+  "game.roster.inMeeting": "회의 중이라 퇴근시킬 수 없습니다",
+  "game.roster.needsGateway": "채널에 게이트웨이를 연결해야 직원을 만들 수 있습니다",
   "game.inviteFriend": "친구 초대",
   "game.setStartPosition": "시작 위치 설정",
   "game.inviteCode": "초대 코드",
@@ -1494,7 +1501,10 @@ const ko: Record<string, string> = {
   // NPC
   "npc.hire": "NPC 고용",
   "npc.fire": "NPC 해고",
-  "npc.edit": "NPC 수정",
+  "npc.sleep": "퇴근",
+  "npc.wake": "출근",
+  "npc.move": "자리 이동",
+  "npc.profileSettings": "프로필 설정",
   "npc.call": "호출",
   "npc.return": "복귀",
   "npc.moving": "이동 중...",
@@ -1514,7 +1524,6 @@ const ko: Record<string, string> = {
   "npc.tooManyFiles": "파일은 최대 3개까지 첨부할 수 있습니다.",
   "npc.configure": "NPC 설정",
   "npc.creatingAgent": "에이전트 생성 중...",
-  "npc.placeOnMap": "맵에 배치",
   "npc.persona": "페르소나",
   "npc.passPolicy": "회의 PASS 정책",
   "npc.passPolicyPlaceholder": "이 NPC가 언제 PASS해야 하나요?",
@@ -1531,9 +1540,7 @@ const ko: Record<string, string> = {
   "context.call": "호출하기",
   "context.talk": "대화하기",
   "context.return": "복귀하기",
-  "context.edit": "수정하기",
   "context.resetChat": "대화 초기화",
-  "context.fire": "해고하기",
   "context.calledByOther": "다른 사용자가 호출 중",
 
   // Task
@@ -1679,10 +1686,6 @@ const ko: Record<string, string> = {
     "접근 가능한 저장된 게이트웨이가 없습니다. 직접 입력으로 연결할 수 있습니다.",
   "settings.gatewaySharedReadOnly":
     "이 채널은 공유된 게이트웨이를 사용 중입니다. 자격증명은 소유자만 수정할 수 있습니다.",
-  "settings.gatewayChangeResetWarning":
-    "게이트웨이를 변경하면 이 채널의 기존 NPC와 관련 태스크/회의 문맥이 모두 제거됩니다. 계속하시겠습니까?",
-  "settings.gatewayDisconnectResetWarning":
-    "게이트웨이 연결을 삭제하면 이 채널의 기존 NPC와 관련 태스크/회의 문맥이 모두 제거됩니다. 계속하시겠습니까?",
   "gateways.nav": "내 게이트웨이",
   "gateways.title": "내 게이트웨이",
   "gateways.subtitle":
@@ -2093,7 +2096,9 @@ const ko: Record<string, string> = {
     "NPC 한도에 도달했습니다 ({count}/{max}). 새 NPC를 고용하려면 기존 NPC를 제거하세요.",
   "meeting.npcLabel": "NPC:",
   "game.spawnSetMode": "스폰 위치를 설정할 타일을 클릭하세요",
-  "game.fireNpcConfirm": "이 NPC를 해고할까요?",
+  "game.fireNpcConfirm": "이 NPC를 퇴근시킬까요?",
+  "channel.gateway.directInputHint":
+    "직접 입력한 게이트웨이에는 프로필이 없어 NPC 가 출근하지 않습니다. '내 게이트웨이' 에서 프로필을 등록하세요.",
   "mapEditor.layers.characterNpcDivider": "캐릭터 / NPC",
   "mapEditor.layers.layerNamePrompt": "레이어 이름:",
   "mapEditor.layers.cannotDeleteCoreLayer": '"{name}" 코어 레이어는 삭제할 수 없습니다.',

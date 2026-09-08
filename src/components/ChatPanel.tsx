@@ -231,7 +231,7 @@ export default function ChatPanel({
                           className="w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-raised"
                         >
                           <Pencil className="w-3.5 h-3.5 inline mr-1" />
-                          {t("context.edit")}
+                          {t("npc.move")}
                         </button>
                         <button
                           onClick={() => {
@@ -241,7 +241,7 @@ export default function ChatPanel({
                           className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-raised"
                         >
                           <UserMinus className="w-3.5 h-3.5 inline mr-1" />
-                          {t("context.fire")}
+                          {t("npc.sleep")}
                         </button>
                       </>
                     )}

@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { fetchChannelNpcs } from "../npc-prefetch";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
+import { decideNpcUpdate, type NpcUpdatedPayload } from "@/game/npc-updated-dispatch";
 import type { Socket } from "socket.io-client";
 import {
   MapObject,
@@ -2703,14 +2704,26 @@ export class GameScene extends Phaser.Scene {
       this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
     });
 
-    this.socket.on(
-      "npc:updated",
-      (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
-        const npc = this.npcSprites.find((n) => n.id === data.npcId);
+    // 두 가지 모양이 온다 — 옛 `{ npcId, … }`(외형·방향 편집)와 새 `{ npc }`(출근부
+    // 토글). 판단은 `decideNpcUpdate` 가 한다(node 에서 테스트되는 순수 함수).
+    this.socket.on("npc:updated", (data: NpcUpdatedPayload) => {
+      const action = decideNpcUpdate(data, (id) => this.npcSprites.some((n) => n.id === id));
+      if (action.kind === "ignore") return;
+      if (action.kind === "remove") {
+        this.removeNpcById(action.npcId);
+        return;
+      }
+      if (action.kind === "update") {
+        const npc = this.npcSprites.find((n) => n.id === action.npcId);
         if (!npc) return;
-        npc.updateFromData(data);
-      },
-    );
+        npc.updateFromData(action.fields);
+        return;
+      }
+      const npcData: NpcData = { ...action.npc };
+      const npc = new NpcSprite(this, npcData);
+      this.npcSprites.push(npc);
+      this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
+    });
 
     this.socket.on("npc:removed", (data: { npcId: string }) => {
       this.removeNpcById(data.npcId);
