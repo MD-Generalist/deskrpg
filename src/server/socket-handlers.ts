@@ -2415,7 +2415,6 @@ export function setupSocketHandlers(io: Server) {
       io,
       socket,
       deps: {
-        meetingRooms,
         activeBrokers,
         user,
         isChannelOwner,

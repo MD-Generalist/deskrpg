@@ -11,16 +11,15 @@ type RosterIo = {
   to(room: string): { emit(event: string, payload: unknown): void };
 };
 
-type MeetingRoomLike = { participants: Set<string> };
+/** 토론 브로커 — `config.participants` 가 이 회의에 실제로 앉은 NPC 의 정본이다. */
+type MeetingBrokerLike = { config: { participants: Array<{ npcId: string }> } };
 
 export type RegisterNpcRosterHandlersArgs = {
   io: RosterIo;
   socket: RosterSocket;
   deps: {
-    /** 진행 중인 회의방 — 참가자 집합은 **사람의 socket.id** 를 담는다. */
-    meetingRooms: Map<string, MeetingRoomLike>;
-    /** 토론이 돌고 있는 채널 — `channelId` 하나가 키다. 이것이 "회의 중"의 정본이다. */
-    activeBrokers: Map<string, unknown>;
+    /** 토론이 돌고 있는 채널 — `channelId` 하나가 키다. 값이 참가자 명단을 들고 있다. */
+    activeBrokers: Map<string, MeetingBrokerLike>;
     user: { userId: string };
     isChannelOwner: (channelId: string, userId: string) => Promise<boolean>;
     setNpcActive?: (npcId: string, active: boolean) => Promise<void>;
@@ -31,18 +30,21 @@ export type RegisterNpcRosterHandlersArgs = {
 /**
  * NPC 하나를 출근/퇴근시킨다.
  *
- * REST 가 아니라 소켓인 이유는 회의 상태가 소켓 핸들러의 클로저(`meetingRooms`·
- * `activeBrokers`)에만 있기 때문이다 — 라우트에서는 보이지 않는다. 회의 도중 참가자를
- * 맵에서 빼면 진행 중인 턴이 갈 곳을 잃으므로, 퇴근만 막는다(출근은 언제나 허용).
+ * REST 가 아니라 소켓인 이유는 회의 상태가 소켓 핸들러의 클로저(`activeBrokers`)에만
+ * 있기 때문이다 — 라우트에서는 보이지 않는다. 회의 도중 참가자를 맵에서 빼면 진행 중인
+ * 턴이 갈 곳을 잃으므로, 퇴근만 막는다(출근은 언제나 허용).
  *
- * "회의 중"의 판정은 `activeBrokers.has(channelId)` 다. `meetingRooms` 의 participants 는
- * 사람의 socket.id 만 담아서 NPC id 로 조회하면 **영원히 false** 이고, 그 검사만으로는
- * 가드가 한 번도 걸리지 않는다. 토론은 채널의 NPC 전체를 참가자로 잡으므로
- * (`getNpcConfigsForChannel(channelId)`), 채널 단위 판정이 곧 NPC 단위 판정이다.
+ * "이 NPC 가 회의 중인가" 의 정본은 **브로커의 `config.participants`** 다. 토론은 채널의
+ * NPC 전체를 잡지 않는다 — `start-discussion` 이 `selectedNpcIds` 로 걸러낸 부분집합만
+ * 참가자가 된다(meeting-discussion.ts:477-480). 그래서 채널 단위 판정
+ * (`activeBrokers.has(channelId)`)은 회의에 부르지 않은 NPC 까지 함께 묶어 버린다.
+ *
+ * `meetingRooms` 의 participants 는 **사람의 socket.id** 이고 여기에 쓰면 안 된다.
+ * NPC id 로 조회하면 영원히 false 이고, 반대로 "비어 있지 않은가" 로 보면 회의 패널을
+ * 열어 둔 사람 하나가 소유자의 퇴근을 무기한 막는다(방은 지워지지 않는다).
  */
 export function registerNpcRosterHandlers({ io, socket, deps }: RegisterNpcRosterHandlersArgs) {
   const {
-    meetingRooms,
     activeBrokers,
     user,
     isChannelOwner,
@@ -71,7 +73,7 @@ export function registerNpcRosterHandlers({ io, socket, deps }: RegisterNpcRoste
       return;
     }
 
-    if (!active && isMeetingInProgress(meetingRooms, activeBrokers, channelId)) {
+    if (!active && isNpcInMeeting(activeBrokers, channelId, npcId)) {
       socket.emit("npc:set-active:error", { npcId, errorCode: "npc_in_meeting" });
       return;
     }
@@ -83,12 +85,11 @@ export function registerNpcRosterHandlers({ io, socket, deps }: RegisterNpcRoste
   });
 }
 
-function isMeetingInProgress(
-  meetingRooms: Map<string, MeetingRoomLike>,
-  activeBrokers: Map<string, unknown>,
+function isNpcInMeeting(
+  activeBrokers: Map<string, MeetingBrokerLike>,
   channelId: string,
+  npcId: string,
 ): boolean {
-  if (activeBrokers.has(channelId)) return true;
-  // 사람이 회의방에 앉아 있는 동안에도 NPC 를 빼지 않는다 — 다음 발언이 곧 시작된다.
-  return (meetingRooms.get(channelId)?.participants.size ?? 0) > 0;
+  const participants = activeBrokers.get(channelId)?.config.participants;
+  return participants?.some((p) => p.npcId === npcId) ?? false;
 }
