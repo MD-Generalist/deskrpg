@@ -2237,6 +2237,8 @@ const ja: Record<string, string> = {
   "errors.onlyChannelOwnerCanModifyNpcs": "チャンネル所有者のみ NPC を変更できます",
   "errors.failedToUpdateNpc": "NPC の更新に失敗しました",
   "errors.failedToDeleteNpc": "NPC の削除に失敗しました",
+  "errors.npcInMeeting": "この NPC は会議中です。先に会議を終了してください。",
+  "errors.unsupportedNpcField": "この項目は NPC 側では変更できません — 名前と外見は Hermes プロファイルが正本です。",
   "errors.internalServerError": "サーバー内部エラーが発生しました",
   "errors.failedToFetchProjects": "プロジェクト一覧の取得に失敗しました",
   "errors.projectNameRequired": "プロジェクト名が必要です",

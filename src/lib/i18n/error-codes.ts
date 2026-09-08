@@ -114,6 +114,8 @@ export type ErrorCode =
   | "only_channel_owner_can_modify_npcs"
   | "failed_to_update_npc"
   | "failed_to_delete_npc"
+  | "npc_in_meeting"
+  | "unsupported_npc_field"
   | "internal_server_error"
   | "failed_to_fetch_projects"
   | "project_name_required"
@@ -274,6 +276,8 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   only_channel_owner_can_modify_npcs: "errors.onlyChannelOwnerCanModifyNpcs",
   failed_to_update_npc: "errors.failedToUpdateNpc",
   failed_to_delete_npc: "errors.failedToDeleteNpc",
+  npc_in_meeting: "errors.npcInMeeting",
+  unsupported_npc_field: "errors.unsupportedNpcField",
   internal_server_error: "errors.internalServerError",
   failed_to_fetch_projects: "errors.failedToFetchProjects",
   project_name_required: "errors.projectNameRequired",

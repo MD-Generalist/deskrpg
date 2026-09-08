@@ -42,6 +42,7 @@ function chatLog(...args: unknown[]) {
 }
 
 import { selectChannelNpcs, selectNpcById } from "../lib/npc-projection";
+import { registerNpcRosterHandlers } from "./npc-roster-socket";
 import {
   buildChannelAccessDeniedPayload,
   type ChannelAccessDeniedReason,
@@ -2407,6 +2408,17 @@ export function setupSocketHandlers(io: Server) {
           });
           await Promise.allSettled(promises);
         },
+      },
+    });
+
+    registerNpcRosterHandlers({
+      io,
+      socket,
+      deps: {
+        meetingRooms,
+        activeBrokers,
+        user,
+        isChannelOwner,
       },
     });
 

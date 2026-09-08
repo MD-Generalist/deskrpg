@@ -2229,6 +2229,8 @@ const ko: Record<string, string> = {
   "errors.onlyChannelOwnerCanModifyNpcs": "채널 소유자만 NPC를 수정할 수 있습니다",
   "errors.failedToUpdateNpc": "NPC를 수정하지 못했습니다",
   "errors.failedToDeleteNpc": "NPC를 삭제하지 못했습니다",
+  "errors.npcInMeeting": "이 NPC 는 회의 중입니다. 회의를 먼저 끝내세요.",
+  "errors.unsupportedNpcField": "이 항목은 NPC 에서 바꿀 수 없습니다 — 이름과 외형은 Hermes 프로필이 정본입니다.",
   "errors.internalServerError": "서버 내부 오류가 발생했습니다",
   "errors.failedToFetchProjects": "프로젝트 목록을 불러오지 못했습니다",
   "errors.projectNameRequired": "프로젝트 이름이 필요합니다",

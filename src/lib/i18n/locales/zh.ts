@@ -2193,6 +2193,8 @@ const zh: Record<string, string> = {
   "errors.onlyChannelOwnerCanModifyNpcs": "只有频道所有者可以修改 NPC",
   "errors.failedToUpdateNpc": "无法更新 NPC",
   "errors.failedToDeleteNpc": "无法删除 NPC",
+  "errors.npcInMeeting": "该 NPC 正在会议中，请先结束会议。",
+  "errors.unsupportedNpcField": "该字段无法在 NPC 上修改 — 名称与外观以 Hermes 配置文件为准。",
   "errors.internalServerError": "服务器内部错误",
   "errors.failedToFetchProjects": "无法获取项目列表",
   "errors.projectNameRequired": "需要项目名称",

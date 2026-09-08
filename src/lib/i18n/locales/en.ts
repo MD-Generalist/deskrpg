@@ -2233,6 +2233,8 @@ const en: Record<string, string> = {
   "errors.onlyChannelOwnerCanModifyNpcs": "Only the channel owner can modify NPCs",
   "errors.failedToUpdateNpc": "Failed to update NPC",
   "errors.failedToDeleteNpc": "Failed to delete NPC",
+  "errors.npcInMeeting": "This NPC is in a meeting. End the meeting first.",
+  "errors.unsupportedNpcField": "This field cannot be changed on the NPC — name and appearance belong to the Hermes profile.",
   "errors.internalServerError": "Internal server error",
   "errors.failedToFetchProjects": "Failed to fetch projects",
   "errors.projectNameRequired": "Project name is required",

@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, isPostgres, jsonForDb } from "@/db";
+import { db, isPostgres } from "@/db";
 import { npcs, channels } from "@/db";
 import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import {
-  buildPersonaConfig,
-  getDefaultMeetingProtocol,
-  getNpcPresetDefaults,
-  hasNpcPresetDefaults,
-  localizeNpcPromptDocument,
-} from "@/lib/npc-agent-defaults";
-import { normalizeLocale } from "@/lib/i18n/server";
-import { parseDbJson, parseDbObject } from "@/lib/db-json";
+import { setNpcActive } from "@/lib/npc-roster";
 import { selectNpcById } from "@/lib/npc-projection";
 
 async function verifyNpcOwnership(req: NextRequest, npcId: string) {
@@ -33,137 +25,56 @@ async function verifyNpcOwnership(req: NextRequest, npcId: string) {
   return { npc, channel, userId };
 }
 
+/**
+ * NPC 는 이제 "프로필의 채널별 자리" 다. 이 라우트가 바꿀 수 있는 것도 자리뿐이다 —
+ * 이름·외형·페르소나는 Hermes 프로필이 정본이고 프로필 API 로만 바뀐다.
+ *
+ * 옛 필드를 조용히 무시하지 않고 400 으로 거절한다: 예전 PATCH 는 `body.name` 을
+ * `npcs.name` 에 쓰면서 응답에는 투영된(프로필의) 이름을 실어, 이름을 바꿨다는 화면과
+ * 아무것도 안 바뀐 DB 가 어긋난 채로 성공처럼 보였다.
+ */
+const PLACEMENT_FIELDS = new Set(["positionX", "positionY", "direction"]);
+const DIRECTIONS = ["up", "down", "left", "right"];
+
+async function updatePlacement(req: NextRequest, id: string) {
+  const result = await verifyNpcOwnership(req, id);
+  if ("error" in result) {
+    return NextResponse.json(
+      { errorCode: result.errorCode, error: result.error },
+      { status: result.status },
+    );
+  }
+
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const rejected = Object.keys(body).filter((k) => !PLACEMENT_FIELDS.has(k));
+  if (rejected.length > 0) {
+    return NextResponse.json(
+      {
+        errorCode: "unsupported_npc_field",
+        error: `Unsupported NPC field(s): ${rejected.join(", ")}`,
+        fields: rejected,
+      },
+      { status: 400 },
+    );
+  }
+
+  const updates: Record<string, unknown> = {
+    updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
+  };
+  if (typeof body.positionX === "number") updates.positionX = body.positionX;
+  if (typeof body.positionY === "number") updates.positionY = body.positionY;
+  if (typeof body.direction === "string") {
+    updates.direction = DIRECTIONS.includes(body.direction) ? body.direction : "down";
+  }
+
+  await db.update(npcs).set(updates).where(eq(npcs.id, id));
+  return NextResponse.json({ npc: await selectNpcById(id) });
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const result = await verifyNpcOwnership(req, id);
-    if ("error" in result) {
-      return NextResponse.json(
-        { errorCode: result.errorCode, error: result.error },
-        { status: result.status },
-      );
-    }
-
-    const { npc } = result;
-    const body = await req.json();
-    const updates: Record<string, unknown> = {
-      updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
-    };
-    // 이름은 프로필이 정본이다 — 페르소나 문서를 조립할 때 쓰는 "지금 이름"도
-    // `npcs.name` 이 아니라 투영에서 가져온다.
-    const projected = await selectNpcById(id);
-    const nextName = body.name?.trim() || projected?.name || "";
-    const normalizedLocale = normalizeLocale(body.locale);
-
-    if (body.name?.trim()) updates.name = body.name.trim().slice(0, 100);
-    if (body.appearance) updates.appearance = jsonForDb(body.appearance);
-    if (typeof body.direction === "string") {
-      updates.direction = ["up", "down", "left", "right"].includes(body.direction)
-        ? body.direction
-        : "down";
-    }
-    if (body.presetId && !hasNpcPresetDefaults(body.presetId)) {
-      return NextResponse.json(
-        {
-          errorCode: "unknown_preset_id",
-          error: `Unknown presetId: ${body.presetId}`,
-        },
-        { status: 400 },
-      );
-    }
-
-    // Handle persona/identity/soul updates
-    const existingConfig = parseDbObject(npc.agentConfig) || {};
-    const presetDefaults = hasNpcPresetDefaults(body.presetId)
-      ? getNpcPresetDefaults({
-          presetId: body.presetId,
-          npcName: nextName,
-          locale: normalizedLocale,
-        })
-      : null;
-    const resolvedIdentity =
-      body.identity?.trim() ?? body.persona?.trim() ?? presetDefaults?.identity ?? "";
-    const resolvedSoul = body.soul?.trim() ?? presetDefaults?.soul ?? "";
-
-    // 예전에는 여기서 body.agentAction(select/create)을 받아 OpenClaw 게이트웨이에
-    // 에이전트를 만들고 ~/.openclaw/workspace-<id> 에 페르소나 파일을 써 넣었다.
-    // OpenClaw 가 사라지면서 그 개념 전체가 없어졌다 — Hermes 는 프로필이 이미 그
-    // 자리에 있고 우리는 바인딩만 한다. 고용 모달도 agentAction 을 더는 보내지 않는다.
-
-    if (body.passPolicy !== undefined) {
-      const currentConfig = (updates.agentConfig as Record<string, unknown>) || existingConfig;
-      updates.agentConfig = {
-        ...currentConfig,
-        passPolicy: body.passPolicy?.trim() || null,
-        locale: normalizedLocale,
-      };
-
-      // passPolicy 는 DB(agent config)에만 남는다. 예전에는 게이트웨이의 IDENTITY.md
-      // 에도 같은 내용을 써 넣었지만, 그 파일은 OpenClaw 워크스페이스의 것이었다.
-    }
-
-    if (
-      body.identity !== undefined ||
-      body.soul !== undefined ||
-      body.persona !== undefined ||
-      body.locale !== undefined ||
-      body.presetId !== undefined
-    ) {
-      const newIdentity = resolvedIdentity;
-      const newSoul = resolvedSoul;
-      const personaConfig = hasNpcPresetDefaults(body.presetId)
-        ? buildPersonaConfig({
-            presetId: body.presetId,
-            npcName: nextName,
-            locale: normalizedLocale,
-            identityOverride: body.identity?.trim(),
-            soulOverride: body.soul?.trim(),
-            fallbackPersona: body.persona?.trim(),
-          })
-        : {
-            identity: localizeNpcPromptDocument(newIdentity, normalizedLocale, "identity"),
-            soul: localizeNpcPromptDocument(newSoul, normalizedLocale, "soul"),
-          };
-
-      // 페르소나는 DB(agent config)에만 남는다. 예전에는 게이트웨이 워크스페이스의
-      // IDENTITY.md / SOUL.md / AGENTS.md 에도 같은 내용을 써 넣었지만, 그 파일들은
-      // OpenClaw 에이전트의 것이었다. Hermes 프로필은 자기 홈을 직접 들고 있다.
-
-      // Update agentConfig in DB
-      updates.agentConfig = {
-        ...existingConfig,
-        persona: newIdentity.slice(0, 500), // backward compat
-        personaConfig,
-        locale: normalizedLocale,
-        meetingProtocol: hasNpcPresetDefaults(body.presetId)
-          ? getNpcPresetDefaults({
-              presetId: body.presetId,
-              npcName: nextName,
-              locale: normalizedLocale,
-            }).meetingProtocol
-          : getDefaultMeetingProtocol(normalizedLocale),
-      };
-    }
-
-    if (updates.agentConfig !== undefined) {
-      updates.agentConfig = jsonForDb(updates.agentConfig);
-    }
-
-    const [updated] = await db.update(npcs).set(updates).where(eq(npcs.id, id)).returning();
-    // 응답의 name/appearance 는 투영(프로필)이 낸 값이다. 갱신된 행을 그대로 실으면
-    // `npcs.name` 의 옛 값이 화면으로 돌아간다.
-    const reprojected = await selectNpcById(id);
-    return NextResponse.json({
-      npc: {
-        ...updated,
-        ...(reprojected
-          ? { name: reprojected.name, appearance: reprojected.appearance }
-          : {
-              appearance: parseDbJson(updated.appearance) ?? updated.appearance,
-            }),
-        agentConfig: parseDbObject(updated.agentConfig) ?? updated.agentConfig,
-      },
-    });
+    return await updatePlacement(req, id);
   } catch (err) {
     console.error("Failed to update NPC:", err);
     return NextResponse.json(
@@ -173,6 +84,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return PATCH(req, { params });
+}
+
+/**
+ * 임시 shim — NPC 행을 지우지 않고 **퇴근**시킨다.
+ *
+ * NPC 는 프로필의 자리이고, 행을 지우면 다시 출근시킬 때 자리를 잃는다. 정본 경로는
+ * 소켓 `npc:set-active` (회의 중 차단을 위해 회의 상태가 보이는 곳에 있어야 한다)이고,
+ * 이 라우트는 아직 그 소켓을 쓰지 않는 GamePageClient 의 "해고" 버튼이 죽지 않게
+ * 남겨 둔 것이다. Task 9 에서 클라이언트가 소켓으로 옮겨 가면 함께 지운다.
+ */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -184,15 +107,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       );
     }
 
-    // 예전에는 NPC 를 지울 때 게이트웨이의 OpenClaw 에이전트도 함께 지웠다. Hermes
-    // 프로필은 NPC 보다 오래 사는 자원이고 다른 NPC 가 다시 바인딩할 수 있으므로,
-    // NPC 삭제가 프로필을 건드려서는 안 된다.
-    await db.delete(npcs).where(eq(npcs.id, id));
-    return NextResponse.json({ success: true });
+    await setNpcActive(id, false);
+    return NextResponse.json({ ok: true, active: false });
   } catch (err) {
-    console.error("Failed to delete NPC:", err);
+    console.error("Failed to retire NPC:", err);
     return NextResponse.json(
-      { errorCode: "failed_to_delete_npc", error: "Failed to delete NPC" },
+      { errorCode: "failed_to_delete_npc", error: "Failed to retire NPC" },
       { status: 500 },
     );
   }
