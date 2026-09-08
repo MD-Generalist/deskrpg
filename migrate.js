@@ -7,7 +7,7 @@ const { Pool } = require("pg");
 const { drizzle } = require("drizzle-orm/node-postgres");
 const { migrate } = require("drizzle-orm/node-postgres/migrator");
 
-const MIGRATIONS_DIR = path.join(__dirname, "drizzle");
+const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR || path.join(__dirname, "drizzle");
 
 async function runMigrations() {
   const databaseUrl = process.env.DATABASE_URL;

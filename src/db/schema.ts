@@ -132,6 +132,8 @@ export const hermesProfiles = pgTable(
     tokenEncrypted: text("token_encrypted").notNull(),
     displayName: varchar("display_name", { length: 120 }),
     description: text("description"),
+    /** 캐릭터 외형. NPC 의 정본이다 — npcs.appearance 는 이번 릴리스에 남기지만 쓰지 않는다. */
+    appearance: jsonb("appearance"),
     provisionedByDeskrpg: boolean("provisioned_by_deskrpg").notNull().default(false),
     lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
     lastValidationStatus: varchar("last_validation_status", { length: 40 }),
@@ -386,23 +388,26 @@ export const npcs = pgTable(
     channelId: uuid("channel_id")
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 100 }).notNull(),
-    positionX: integer("position_x").notNull(),
-    positionY: integer("position_y").notNull(),
+    name: varchar("name", { length: 100 }),
+    positionX: integer("position_x"),
+    positionY: integer("position_y"),
     direction: varchar("direction", { length: 10 }).default("down"),
-    appearance: jsonb("appearance").notNull(),
+    appearance: jsonb("appearance"),
     adapterType: varchar("adapter_type", { length: 20 }).notNull().default("hermes"),
     adapterConfig: jsonb("adapter_config"),
-    hermesProfileId: uuid("hermes_profile_id").references(() => hermesProfiles.id, {
-      onDelete: "set null",
-    }),
+    hermesProfileId: uuid("hermes_profile_id")
+      .notNull()
+      .references(() => hermesProfiles.id, { onDelete: "cascade" }),
     agentConfig: jsonb("agent_config"),
+    /** 이 채널에 출근 중인가. false 면 자리는 기억한 채 맵에서 빠진다. */
+    active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (table) => [
     index("idx_npcs_channel_id").on(table.channelId),
     unique("npcs_channel_position_unique").on(table.channelId, table.positionX, table.positionY),
+    uniqueIndex("npcs_channel_profile_idx").on(table.channelId, table.hermesProfileId),
   ],
 );
 
