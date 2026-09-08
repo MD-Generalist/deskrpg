@@ -1,6 +1,6 @@
 {
   "name": "deskrpg",
-  "version": "2026.5.29",
+  "version": "2026.9.9",
   "private": false,
   "bin": {
     "deskrpg": "bin/deskrpg.js"
@@ -30,7 +30,7 @@
     "dev": "npx tsx dev-server.ts",
     "dev:debug": "DEBUG_CHAT=1 npx tsx dev-server.ts",
     "dev:next": "next dev",
-    "setup": "docker compose up -d deskrpg-db && dotenv -e .env.local -- drizzle-kit migrate && echo '\u2713 Ready \u2014 run: npm run dev'",
+    "setup": "docker compose up -d deskrpg-db && dotenv -e .env.local -- drizzle-kit migrate && echo '✓ Ready — run: npm run dev'",
     "setup:lite": "node scripts/setup/setup-lite.js",
     "build": "next build",
     "pack:npm": "mkdir -p .artifacts/npm .artifacts/.npm-cache && npm_config_cache=.artifacts/.npm-cache npm pack --pack-destination .artifacts/npm",

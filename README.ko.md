@@ -10,7 +10,7 @@ DeskRPG는 평범한 채팅방 대신, 조금 더 살아 있는 업무 공간을
 
 - 웹사이트: `https://deskrpg.com` (예정)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.5.29`
+- 버전: `v2026.9.9`
 
 ## 무엇을 할 수 있나요
 

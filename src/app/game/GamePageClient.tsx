@@ -50,7 +50,7 @@ import type { MentionSkipReason } from "@/lib/conversation/floor-controller";
 import { resolveNpcResponseChunk, type NpcResponsePayload } from "@/lib/npc-response-messages";
 import { sanitizeNpcResponseText } from "@/lib/task-block-utils.js";
 
-const APP_VERSION = "2026.5.29";
+const APP_VERSION = "2026.9.9";
 const BUG_REPORT_BASE_URL = "https://github.com/dandacompany/deskrpg/issues/new";
 const SOURCE_CODE_URL = "https://github.com/dandacompany/deskrpg";
 const LICENSE_URL = `${SOURCE_CODE_URL}/blob/main/LICENSE.md`;

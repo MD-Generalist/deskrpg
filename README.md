@@ -10,7 +10,7 @@ DeskRPG is built for people who want a playful, self-hosted workspace rather tha
 
 - Website: `https://deskrpg.com` (planned)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.5.29`
+- Version: `v2026.9.9`
 
 ## What You Can Do
 
