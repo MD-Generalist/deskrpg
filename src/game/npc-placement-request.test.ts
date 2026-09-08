@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPlacementRequest } from "./npc-placement-request";
+import { buildPlacementRequest, placementBroadcastPlan } from "./npc-placement-request";
 
 test("배치는 이미 있는 NPC 에 PUT 으로 자리만 준다", () => {
   const { url, init } = buildPlacementRequest("npc-1", 7, 3);
@@ -16,4 +16,12 @@ test("자리 말고는 아무 필드도 보내지 않는다", () => {
   const { init } = buildPlacementRequest("npc-1", 0, 0);
   const body = JSON.parse(init.body as string) as Record<string, unknown>;
   assert.deepEqual(Object.keys(body).sort(), ["positionX", "positionY"]);
+});
+
+test("자리 이동은 빼고 다시 넣는다 — add 만 보내면 다른 화면이 옛 칸에 남는다", () => {
+  assert.deepEqual(placementBroadcastPlan(true), ["remove", "add"]);
+});
+
+test("첫 배치는 뺄 것이 없다", () => {
+  assert.deepEqual(placementBroadcastPlan(false), ["add"]);
 });

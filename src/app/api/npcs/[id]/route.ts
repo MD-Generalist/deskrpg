@@ -4,6 +4,7 @@ import { npcs, channels } from "@/db";
 import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
 import { selectNpcById } from "@/lib/npc-projection";
+import { isUniqueViolation } from "@/lib/db-unique-violation";
 
 async function verifyNpcOwnership(req: NextRequest, npcId: string) {
   const userId = getUserId(req);
@@ -75,6 +76,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     return await updatePlacement(req, id);
   } catch (err) {
+    // 한 타일에 두 NPC 를 세울 수 없다 — `npcs_channel_position_unique` 가 막는다.
+    // 클라이언트는 이 409 를 보고 배치 모드를 유지한 채 조용히 다른 칸을 기다린다.
+    // 이 매핑이 없으면 같은 상황이 500 으로 나가 "배치 실패" 토스트만 뜬다.
+    if (isUniqueViolation(err)) {
+      return NextResponse.json(
+        { errorCode: "tile_already_occupied", error: "This tile is already occupied" },
+        { status: 409 },
+      );
+    }
     console.error("Failed to update NPC:", err);
     return NextResponse.json(
       { errorCode: "failed_to_update_npc", error: "Failed to update NPC" },

@@ -13,6 +13,7 @@ import {
 import { parseDbJson } from "@/lib/db-json";
 import { HermesClient, HermesError } from "@/lib/hermes/hermes-client";
 import type { HermesCapabilities } from "@/lib/hermes/types";
+import { isUniqueViolation } from "./db-unique-violation";
 
 export type ProfileValidationStatus =
   "valid" | "unauthorized" | "unknown_profile" | "unreachable" | "error";
@@ -24,19 +25,6 @@ export function mapValidationError(err: unknown): Exclude<ProfileValidationStatu
     if (err.code === "unreachable") return "unreachable";
   }
   return "error";
-}
-
-// PostgreSQL raises SQLSTATE 23505 (unique_violation); better-sqlite3 raises a
-// SqliteError with code SQLITE_CONSTRAINT_UNIQUE (or _PRIMARYKEY). Detect both so a
-// lost registration race converges to an update instead of throwing.
-function isUniqueViolation(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-  const code = (err as { code?: unknown }).code;
-  return (
-    code === "23505" ||
-    code === "SQLITE_CONSTRAINT_UNIQUE" ||
-    code === "SQLITE_CONSTRAINT_PRIMARYKEY"
-  );
 }
 
 async function updateHermesProfileToken(

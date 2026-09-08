@@ -30,7 +30,7 @@ import type { Socket } from "socket.io-client";
 import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
-import { buildPlacementRequest } from "@/game/npc-placement-request";
+import { buildPlacementRequest, placementBroadcastPlan } from "@/game/npc-placement-request";
 import ChatPanel, { type ChannelChatMessage } from "@/components/ChatPanel";
 import NpcRoster, { type RosterNpc } from "@/components/NpcRoster";
 import RosterAvatar from "@/components/RosterAvatar";
@@ -298,7 +298,7 @@ function GamePageInner() {
   const [spawnSetMode, setSpawnSetMode] = useState(false);
   // 배치할 NPC 는 **이미 존재하는 행** 이다. 만드는 것이 아니라 자리를 주는 것이라
   // id 하나면 된다(이름·페르소나·외형은 프로필이 정본이다).
-  const [pendingNpc, setPendingNpc] = useState<{ id: string } | null>(null);
+  const [pendingNpc, setPendingNpc] = useState<{ id: string; wasPlaced: boolean } | null>(null);
   // npcMenu removed — Edit/Fire now in ChatPanel gear menu
 
   // NPC context menu (right-click) state
@@ -1275,12 +1275,14 @@ function GamePageInner() {
    */
   const handleMoveNpcById = useCallback(
     (npcId: string) => {
-      setPendingNpc({ id: npcId });
+      // 맵 목록(`channelNpcs`)에 있다 = 이미 자리가 있다 = 다른 화면에도 스프라이트가
+      // 있다. 배치가 끝난 뒤 무엇을 브로드캐스트할지가 여기서 갈린다.
+      setPendingNpc({ id: npcId, wasPlaced: channelNpcs.some((n) => n.id === npcId) });
       setPlacementMode(true);
       setContextMenu(null);
       closeRosterMenus();
     },
-    [closeRosterMenus],
+    [channelNpcs, closeRosterMenus],
   );
 
   const gatewayId = channel?.gatewayConfig?.gatewayId ?? null;
@@ -1715,7 +1717,9 @@ function GamePageInner() {
         // 없어졌고, 자리·방향 말고는 이 라우트가 받지 않는다(프로필이 정본).
         const request = buildPlacementRequest(pendingNpc.id, data.col, data.row);
         const res = await fetch(request.url, request.init);
-        if (res.status === 409) return; // tile occupied, stay in placement mode
+        // 그 칸에 이미 다른 NPC 가 있다(`npcs_channel_position_unique`). 배치 모드를
+        // 유지한 채 조용히 다음 클릭을 기다린다.
+        if (res.status === 409) return;
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToCreateNpc"));
@@ -1723,10 +1727,17 @@ function GamePageInner() {
         const result = await res.json();
         await refreshNpcLists();
         if (result?.npc) {
-          // 이미 서 있던 NPC 를 옮긴 경우 먼저 빼야 두 번 그려지지 않는다.
-          EventBus.emit("npc:remove-local", { npcId: pendingNpc.id });
-          EventBus.emit("npc:spawn-local", result.npc);
-          if (socket) socket.emit("npc:broadcast-add", result.npc);
+          // 이동은 로컬에서도 원격에서도 **빼고 다시 넣는다**. add 만 보내면 받는 쪽
+          // `npc:added` 가 "이미 있는 NPC" 라며 무시해서 옛 칸에 그대로 남는다.
+          for (const step of placementBroadcastPlan(pendingNpc.wasPlaced)) {
+            if (step === "remove") {
+              EventBus.emit("npc:remove-local", { npcId: pendingNpc.id });
+              if (socket) socket.emit("npc:broadcast-remove", { npcId: pendingNpc.id });
+            } else {
+              EventBus.emit("npc:spawn-local", result.npc);
+              if (socket) socket.emit("npc:broadcast-add", result.npc);
+            }
+          }
         }
       } catch (err) {
         console.error("Failed to place NPC:", err);
