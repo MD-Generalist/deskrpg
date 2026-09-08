@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { db, npcs, hermesProfiles, channelGatewayBindings } from "@/db";
+import { db, npcs, hermesProfiles, channelGatewayBindings, nowForDb } from "@/db";
 
 /**
  * 채널에 묶인 게이트웨이의 프로필을 전부 "출근" 시킨다 — `(channel_id, hermes_profile_id)`
@@ -26,10 +26,15 @@ export async function hireGatewayProfilesIntoChannel(
       .limit(1);
 
     if (!existing) {
-      await db.insert(npcs).values({ channelId, hermesProfileId: profile.id, active: true });
+      await db
+        .insert(npcs)
+        .values({ channelId, hermesProfileId: profile.id, active: true, updatedAt: nowForDb() });
       created += 1;
     } else if (!existing.active) {
-      await db.update(npcs).set({ active: true }).where(eq(npcs.id, existing.id));
+      await db
+        .update(npcs)
+        .set({ active: true, updatedAt: nowForDb() })
+        .where(eq(npcs.id, existing.id));
       reactivated += 1;
     }
   }
@@ -62,9 +67,12 @@ export async function hireProfileIntoBoundChannels(
       .where(and(eq(npcs.channelId, binding.channelId), eq(npcs.hermesProfileId, profileId)))
       .limit(1);
     if (!existing) {
-      await db
-        .insert(npcs)
-        .values({ channelId: binding.channelId, hermesProfileId: profileId, active: true });
+      await db.insert(npcs).values({
+        channelId: binding.channelId,
+        hermesProfileId: profileId,
+        active: true,
+        updatedAt: nowForDb(),
+      });
       created += 1;
     }
   }
@@ -90,11 +98,13 @@ export async function sleepChannelNpcs(
   if (targets.length === 0) return { slept: 0 };
 
   const ids = targets.map((t) => t.id);
-  await db.update(npcs).set({ active: false }).where(inArray(npcs.id, ids));
+  await db.update(npcs).set({ active: false, updatedAt: nowForDb() }).where(inArray(npcs.id, ids));
   return { slept: ids.length };
 }
 
 /** NPC 하나의 출근 상태를 직접 토글한다. */
 export async function setNpcActive(npcId: string, active: boolean): Promise<void> {
-  await db.update(npcs).set({ active }).where(eq(npcs.id, npcId));
+  // `updated_at` 은 마이그레이션이 "최신 하나" 를 고르는 기준이다 — 상태를 바꾸는
+  // 경로가 전부 같이 갱신해야 그 판단이 낡은 값 위에서 이뤄지지 않는다.
+  await db.update(npcs).set({ active, updatedAt: nowForDb() }).where(eq(npcs.id, npcId));
 }

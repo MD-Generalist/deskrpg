@@ -54,3 +54,44 @@ test("새 프로필은 이미 묶인 채널 전부에 출근한다", async () =>
     assert.equal((await selectChannelNpcs(c, { roster: true })).length, 1);
   }
 });
+
+test("M3: 출근·퇴근·토글이 updated_at 을 갱신한다", async () => {
+  const { hireGatewayProfilesIntoChannel, sleepChannelNpcs, setNpcActive } =
+    await import("./npc-roster");
+  const { selectChannelNpcs } = await import("./npc-projection");
+  const { db, npcs } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const { isPostgres } = await import("@/db");
+  const STALE = (isPostgres
+    ? new Date("2020-01-01T00:00:00Z")
+    : "2020-01-01T00:00:00.000Z") as unknown as Date;
+
+  // `updated_at` 은 마이그레이션이 "최신 하나" 를 고르는 기준이다. 상태를 바꾸는
+  // 경로가 이것을 놔두면 그 판단이 낡은 값 위에서 이뤄진다.
+  const { channelId, gatewayId } = await seedChannelWithProfiles({ placedActive: 1 });
+  const [seeded] = await selectChannelNpcs(channelId, { roster: true });
+
+  async function updatedAt(id: string) {
+    const [row] = await db
+      .select({ updatedAt: npcs.updatedAt })
+      .from(npcs)
+      .where(eq(npcs.id, id))
+      .limit(1);
+    return row.updatedAt;
+  }
+
+  await db.update(npcs).set({ updatedAt: STALE }).where(eq(npcs.id, seeded.id));
+  const stale = await updatedAt(seeded.id);
+
+  await sleepChannelNpcs(channelId, gatewayId);
+  const afterSleep = await updatedAt(seeded.id);
+  assert.notDeepEqual(afterSleep, stale, "퇴근이 updated_at 을 갱신한다");
+
+  await db.update(npcs).set({ updatedAt: STALE }).where(eq(npcs.id, seeded.id));
+  await hireGatewayProfilesIntoChannel(channelId, gatewayId);
+  assert.notDeepEqual(await updatedAt(seeded.id), stale, "재출근이 updated_at 을 갱신한다");
+
+  await db.update(npcs).set({ updatedAt: STALE }).where(eq(npcs.id, seeded.id));
+  await setNpcActive(seeded.id, false);
+  assert.notDeepEqual(await updatedAt(seeded.id), stale, "토글이 updated_at 을 갱신한다");
+});

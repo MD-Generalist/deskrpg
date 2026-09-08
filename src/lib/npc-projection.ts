@@ -74,9 +74,18 @@ async function joined(where: ReturnType<typeof eq>) {
   return rows.map((r) => projectNpcRow(r.npc, r.profile, r.ownerUserId));
 }
 
-export async function selectChannelNpcs(channelId: string, opts: { roster?: boolean } = {}) {
+/**
+ * `roster` 는 "출근부" — 자리 미정과 휴면까지 전부 준다(관리 화면용).
+ * `includeDormant: false` 는 그중 휴면만 뺀다 — 대화 참가자 명단이 이것이다.
+ * 자리 미정은 남는다: 맵 밖에 있을 뿐 출근 중이고, 스펙상 휴면만 대화를 떠난다.
+ */
+export async function selectChannelNpcs(
+  channelId: string,
+  opts: { roster?: boolean; includeDormant?: boolean } = {},
+) {
   const all = await joined(eq(npcs.channelId, channelId));
-  return opts.roster ? all : filterForMap(all);
+  if (!opts.roster) return filterForMap(all);
+  return opts.includeDormant === false ? all.filter((n) => n.active) : all;
 }
 
 export async function selectNpcById(npcId: string): Promise<ProjectedNpc | null> {

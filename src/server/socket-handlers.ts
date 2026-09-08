@@ -17,6 +17,7 @@ import {
 } from "../db";
 import { describeActivity } from "@/lib/npc-activity";
 import { composeNpcInstructions } from "@/lib/npc-prompt-layers";
+import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
 import { buildTaskCorePrompt } from "@/lib/task-prompt";
 import {
   appendNpcChatMessage,
@@ -724,6 +725,19 @@ async function scanProgressNudges(io: Server) {
 // NPC config loader
 // ---------------------------------------------------------------------------
 
+/**
+ * 새 고용 경로(`hireGatewayProfilesIntoChannel`·`hireProfileIntoBoundChannels`)는
+ * `agent_config` 를 NULL 로 둔다 — 이름·외형·인격의 정본이 프로필로 옮겨갔기 때문이다.
+ * 그래서 폴백이 없으면 이 릴리스 이후 만들어지는 모든 NPC 가 `<team-instructions>`
+ * 없이 회의에 들어간다. 기존 행은 옛 `agent_config` 를 그대로 쓴다.
+ */
+function resolveMeetingProtocol(oc: Record<string, unknown>): string {
+  if (typeof oc.meetingProtocol === "string" && oc.meetingProtocol.trim()) {
+    return oc.meetingProtocol;
+  }
+  return getDefaultMeetingProtocol(typeof oc.locale === "string" ? oc.locale : undefined);
+}
+
 async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
   try {
     // 이름은 프로필이 정본이다 — `npcs.name` 을 읽으면 프로필에서 이름을 바꾼 뒤에도
@@ -749,7 +763,7 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
       meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
       locale: typeof oc.locale === "string" ? oc.locale : null,
       instructions: composeNpcInstructions({
-        meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+        meetingProtocol: resolveMeetingProtocol(oc),
         taskProtocol: buildTaskCorePrompt(typeof oc.locale === "string" ? oc.locale : null),
       }),
     };
@@ -759,11 +773,11 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
   }
 }
 
-async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> {
+export async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> {
   try {
-    // 회의·자유채팅 참가자 명단이다. `roster: true` 로 전부 읽는다 — 맵 밖(자리 미정)에
-    // 있는 NPC 를 대화에서 지우는 것은 이 함수의 일이 아니다(예전 동작 유지).
-    const rows = await selectChannelNpcs(channelId, { roster: true });
+    // 회의·자유채팅 참가자 명단이다. 자리 미정(맵 밖)은 남기고 휴면만 뺀다 —
+    // 출근부에서 퇴근시킨 NPC 가 자유채팅에 계속 답하면 토글이 아무 효과가 없다.
+    const rows = await selectChannelNpcs(channelId, { roster: true, includeDormant: false });
 
     return rows.map((npc) => {
       const oc = (npc.agentConfig ?? {}) as Record<string, unknown>;
@@ -781,7 +795,7 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
         meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
         locale: typeof oc.locale === "string" ? oc.locale : null,
         instructions: composeNpcInstructions({
-          meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
+          meetingProtocol: resolveMeetingProtocol(oc),
           taskProtocol: buildTaskCorePrompt(typeof oc.locale === "string" ? oc.locale : null),
         }),
         role: "Participant",

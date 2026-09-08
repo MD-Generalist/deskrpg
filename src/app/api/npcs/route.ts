@@ -3,11 +3,26 @@
 // 프로필 등록(hireProfileIntoBoundChannels)이 만든다. 여기서 다시 만들 수 있으면
 // 프로필 없는 NPC 나 중복 자리가 생긴다.
 import { NextRequest, NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
+import { db, channelMembers, channels } from "@/db";
+import { getUserId } from "@/lib/internal-rpc";
 import { getGatewayRuntimeStateForChannel } from "@/lib/gateway-resources";
 import { selectChannelNpcs } from "@/lib/npc-projection";
+import { resolveMeetingMinutesAccess } from "../meetings/meeting-access";
 
 export async function GET(req: NextRequest) {
   try {
+    // 이 라우트는 오래도록 로그인만 확인하고 채널 소속은 보지 않았다. `roster=1` 이
+    // 프로필의 소유자·게이트웨이까지 싣게 된 뒤로는 채널 UUID 만 알면 남의 사무실
+    // 명부를 읽을 수 있었다. 회의록 라우트가 쓰는 것과 같은 경계를 건다.
+    const userId = getUserId(req);
+    if (!userId) {
+      return NextResponse.json(
+        { errorCode: "unauthorized", error: "unauthorized" },
+        { status: 401 },
+      );
+    }
+
     const channelId = req.nextUrl.searchParams.get("channelId");
     // roster=1 은 "고용 명부" — 아직 자리를 못 잡았거나 퇴근한 NPC 까지 준다.
     // 기본 응답(맵용)은 예전 그대로 배치·출근한 것만 낸다.
@@ -18,6 +33,35 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { errorCode: "channel_id_required", error: "channelId required" },
         { status: 400 },
+      );
+    }
+
+    const access = await resolveMeetingMinutesAccess({
+      userId,
+      channelId,
+      deps: {
+        loadChannelOwner: async (id) => {
+          const [channel] = await db
+            .select({ ownerId: channels.ownerId })
+            .from(channels)
+            .where(eq(channels.id, id))
+            .limit(1);
+          return channel?.ownerId ?? null;
+        },
+        loadMembership: async (id, uid) => {
+          const [member] = await db
+            .select({ role: channelMembers.role })
+            .from(channelMembers)
+            .where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, uid)))
+            .limit(1);
+          return Boolean(member);
+        },
+      },
+    });
+    if (!access.ok) {
+      return NextResponse.json(
+        { errorCode: access.errorCode, error: access.error },
+        { status: access.status },
       );
     }
 
