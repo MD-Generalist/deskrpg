@@ -30,7 +30,11 @@ import type { Socket } from "socket.io-client";
 import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
-import { buildPlacementRequest, placementBroadcastPlan } from "@/game/npc-placement-request";
+import {
+  buildPlacementRequest,
+  keepsPlacementMode,
+  placementBroadcastPlan,
+} from "@/game/npc-placement-request";
 import ChatPanel, { type ChannelChatMessage } from "@/components/ChatPanel";
 import NpcRoster, { type RosterNpc } from "@/components/NpcRoster";
 import RosterAvatar from "@/components/RosterAvatar";
@@ -1712,14 +1716,22 @@ function GamePageInner() {
     }
     const onPlacementComplete = async (data: { col: number; row: number }) => {
       if (!pendingNpc) return;
+      // 409(타일 점유)일 때만 배치 모드를 유지한다. `return` 은 finally 를 건너뛰지
+      // 않으므로 플래그로 알린다 — 예전에는 주석만 "유지한다" 고 적혀 있고 실제로는
+      // 배치 모드가 조용히 꺼졌다(칸을 찍었는데 아무 일도 안 일어났다).
+      let keepPlacementMode = false;
       try {
         // NPC 를 새로 만들지 않는다 — 이미 있는 행에 **자리를 준다**. 생성 라우트는
         // 없어졌고, 자리·방향 말고는 이 라우트가 받지 않는다(프로필이 정본).
         const request = buildPlacementRequest(pendingNpc.id, data.col, data.row);
         const res = await fetch(request.url, request.init);
         // 그 칸에 이미 다른 NPC 가 있다(`npcs_channel_position_unique`). 배치 모드를
-        // 유지한 채 조용히 다음 클릭을 기다린다.
-        if (res.status === 409) return;
+        // 유지한 채 다른 칸을 기다리되, 왜 안 됐는지는 알려 준다.
+        if (keepsPlacementMode(res.status)) {
+          keepPlacementMode = true;
+          showToastNotification("npc-place-occupied", t("errors.tileAlreadyOccupied"));
+          return;
+        }
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToCreateNpc"));
@@ -1746,9 +1758,11 @@ function GamePageInner() {
           err instanceof Error ? err.message : t("errors.failedToCreateNpc"),
         );
       } finally {
-        setPlacementMode(false);
-        setPendingNpc(null);
-        EventBus.emit("placement-mode-end");
+        if (!keepPlacementMode) {
+          setPlacementMode(false);
+          setPendingNpc(null);
+          EventBus.emit("placement-mode-end");
+        }
       }
     };
     const onPlacementCancel = () => {

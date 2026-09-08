@@ -2659,6 +2659,11 @@ export class GameScene extends Phaser.Scene {
     this.npcTilePositions.delete(`${col},${row}`);
     npc.destroy();
     this.npcSprites.splice(idx, 1);
+    // 말풍선은 스프라이트의 자식이 아니라 씬 레벨 맵에 npcId 로 들어 있다. 여기서
+    // 지우지 않으면 update() 가 "스프라이트가 없으니 위치만 갱신 안 함" 으로 넘어가
+    // 컨테이너가 마지막 좌표에 영구히 남는다 — 퇴근에도, npc:removed 에도 같다.
+    this.clearNpcBubble(npcId);
+    this.activityBubbles.delete(npcId);
   }
 
   // ---------------------------------------------------------------------------

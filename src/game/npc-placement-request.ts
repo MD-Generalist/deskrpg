@@ -34,3 +34,15 @@ export type PlacementBroadcastStep = "remove" | "add";
 export function placementBroadcastPlan(prevPlaced: boolean): PlacementBroadcastStep[] {
   return prevPlaced ? ["remove", "add"] : ["add"];
 }
+
+/**
+ * 배치 요청 응답 상태 → 배치 모드를 유지할 것인가.
+ *
+ * 409 는 "그 칸에 이미 다른 직원이 있다" 다. 사용자는 다른 칸을 찍으면 되므로 배치
+ * 모드를 유지한다. 예전에는 주석만 그렇게 적혀 있고 `return` 이 `finally` 의
+ * 정리(setPlacementMode(false))를 건너뛰지 못해, 칸을 찍으면 아무 일도 안 일어난
+ * 채 배치 모드만 사라졌다 — 이 브랜치가 없애려던 조용한 실패의 전형이다.
+ */
+export function keepsPlacementMode(status: number): boolean {
+  return status === 409;
+}

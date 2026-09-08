@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPlacementRequest, placementBroadcastPlan } from "./npc-placement-request";
+import {
+  buildPlacementRequest,
+  keepsPlacementMode,
+  placementBroadcastPlan,
+} from "./npc-placement-request";
 
 test("배치는 이미 있는 NPC 에 PUT 으로 자리만 준다", () => {
   const { url, init } = buildPlacementRequest("npc-1", 7, 3);
@@ -24,4 +28,14 @@ test("자리 이동은 빼고 다시 넣는다 — add 만 보내면 다른 화�
 
 test("첫 배치는 뺄 것이 없다", () => {
   assert.deepEqual(placementBroadcastPlan(false), ["add"]);
+});
+
+test("타일이 점유돼 409 가 나면 배치 모드를 유지한다", () => {
+  assert.equal(keepsPlacementMode(409), true);
+});
+
+test("성공도 실패도 배치 모드를 끝낸다", () => {
+  for (const status of [200, 400, 403, 404, 500]) {
+    assert.equal(keepsPlacementMode(status), false, `${status} 는 배치 모드를 끝낸다`);
+  }
 });
