@@ -161,12 +161,14 @@ export async function seedChannelWithProfiles(opts: {
   placedActive?: number;
   unplaced?: number;
   dormant?: number;
+  /** 게이트웨이에 등록만 하고 NPC 행은 만들지 않는 프로필 수 — "고용 전" 상태. */
+  profiles?: number;
   /** `npcs.name` 에 남겨 둘 옛 값 — 응답에 새면 안 된다. */
   staleNpcName?: string;
   /** 첫 프로필의 표시 이름 — 응답의 `name` 은 이것이어야 한다. */
   displayName?: string;
 }) {
-  const { placedActive = 0, unplaced = 0, dormant = 0 } = opts;
+  const { placedActive = 0, unplaced = 0, dormant = 0, profiles = 0 } = opts;
 
   const user = await seedUser("channel-owner");
   const gateway = await seedGateway(user.id, await sharedStubBaseUrl());
@@ -207,6 +209,13 @@ export async function seedChannelWithProfiles(opts: {
   for (let i = 0; i < placedActive; i += 1) await add("placedActive");
   for (let i = 0; i < unplaced; i += 1) await add("unplaced");
   for (let i = 0; i < dormant; i += 1) await add("dormant");
+  for (let i = 0; i < profiles; i += 1) {
+    const profile = await seedHermesProfile(gateway.id, {
+      displayName: isFirst ? (opts.displayName ?? null) : null,
+    });
+    profileIds.push(profile.id);
+    isFirst = false;
+  }
 
   return {
     channelId: channel.id,
@@ -215,4 +224,30 @@ export async function seedChannelWithProfiles(opts: {
     npcIds,
     userId: user.id,
   };
+}
+
+/** 게이트웨이 하나를 새 채널 여러 개에 바인딩한다 — `hireProfileIntoBoundChannels` 씨앗용. */
+export async function seedGatewayBoundToChannels(opts: { channels: number }) {
+  const user = await seedUser("gateway-owner");
+  const gateway = await seedGateway(user.id, await sharedStubBaseUrl());
+
+  const { bindGatewayToChannel } = await import("@/lib/gateway-resources");
+  const channelIds: string[] = [];
+  for (let i = 0; i < opts.channels; i += 1) {
+    const channel = await seedChannel(user.id);
+    await bindGatewayToChannel({
+      channelId: channel.id,
+      gatewayId: gateway.id,
+      boundByUserId: user.id,
+    });
+    channelIds.push(channel.id);
+  }
+
+  return { gatewayId: gateway.id, channelIds, userId: user.id };
+}
+
+/** 게이트웨이에 프로필 하나를 등록만 한다(NPC 행 없음). */
+export async function seedProfile(gatewayId: string) {
+  const profile = await seedHermesProfile(gatewayId);
+  return profile.id;
 }
