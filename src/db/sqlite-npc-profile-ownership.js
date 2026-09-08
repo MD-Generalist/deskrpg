@@ -151,7 +151,8 @@ function migrateNpcsToProfileOwnership(sqlite) {
     sqlite.pragma("foreign_keys = ON");
   }
 
-  const broken = sqlite.pragma("foreign_key_check");
+  // npcs 로 좁힌다 — DB 전체를 훑으면 npcs 와 무관한 낡은 고아 행 하나에 기동이 막힌다.
+  const broken = sqlite.pragma("foreign_key_check(npcs)");
   if (broken.length > 0) {
     throw new Error(
       `npcs 재생성 후 외래키 무결성이 깨졌습니다(${broken.length}건): ` +
