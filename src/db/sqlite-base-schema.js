@@ -90,6 +90,7 @@ function ensureSqliteBaseSchema(sqlite) {
       token_encrypted TEXT NOT NULL,
       display_name TEXT,
       description TEXT,
+      appearance TEXT,
       provisioned_by_deskrpg INTEGER NOT NULL DEFAULT 0,
       last_validated_at TEXT,
       last_validation_status TEXT,
@@ -259,18 +260,20 @@ function ensureSqliteBaseSchema(sqlite) {
     CREATE TABLE IF NOT EXISTS npcs (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      position_x INTEGER NOT NULL,
-      position_y INTEGER NOT NULL,
+      name TEXT,
+      position_x INTEGER,
+      position_y INTEGER,
       direction TEXT DEFAULT 'down',
-      appearance TEXT NOT NULL,
+      appearance TEXT,
       adapter_type TEXT NOT NULL DEFAULT 'hermes',
       adapter_config TEXT,
-      hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL,
+      hermes_profile_id TEXT NOT NULL REFERENCES hermes_profiles(id) ON DELETE CASCADE,
       agent_config TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT,
       updated_at TEXT,
-      UNIQUE(channel_id, position_x, position_y)
+      UNIQUE(channel_id, position_x, position_y),
+      UNIQUE(channel_id, hermes_profile_id)
     );
     CREATE INDEX IF NOT EXISTS idx_npcs_channel_id ON npcs(channel_id);
 

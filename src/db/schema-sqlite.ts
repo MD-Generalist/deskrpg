@@ -138,6 +138,8 @@ export const hermesProfiles = sqliteTable(
     tokenEncrypted: text("token_encrypted").notNull(),
     displayName: text("display_name"),
     description: text("description"),
+    /** 캐릭터 외형. NPC 의 정본이다 — npcs.appearance 는 이번 릴리스에 남기지만 쓰지 않는다. */
+    appearance: text("appearance"),
     provisionedByDeskrpg: integer("provisioned_by_deskrpg", { mode: "boolean" })
       .notNull()
       .default(false),
@@ -430,23 +432,26 @@ export const npcs = sqliteTable(
     channelId: text("channel_id")
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    positionX: integer("position_x").notNull(),
-    positionY: integer("position_y").notNull(),
+    name: text("name"),
+    positionX: integer("position_x"),
+    positionY: integer("position_y"),
     direction: text("direction").default("down"),
-    appearance: text("appearance").notNull(),
+    appearance: text("appearance"),
     adapterType: text("adapter_type").notNull().default("hermes"),
     adapterConfig: text("adapter_config"),
-    hermesProfileId: text("hermes_profile_id").references(() => hermesProfiles.id, {
-      onDelete: "set null",
-    }),
+    hermesProfileId: text("hermes_profile_id")
+      .notNull()
+      .references(() => hermesProfiles.id, { onDelete: "cascade" }),
     agentConfig: text("agent_config"),
+    /** 이 채널에 출근 중인가. false 면 자리는 기억한 채 맵에서 빠진다. */
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   },
   (table) => [
     index("idx_npcs_channel_id").on(table.channelId),
     unique("npcs_channel_position_unique").on(table.channelId, table.positionX, table.positionY),
+    uniqueIndex("npcs_channel_profile_idx").on(table.channelId, table.hermesProfileId),
   ],
 );
 

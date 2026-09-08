@@ -14,6 +14,10 @@ const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js") as {
 const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js") as {
   ensureSqliteBaseSchema: (sqlite: BetterSqlite3.Database) => void;
 };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { migrateNpcsToProfileOwnership } = require("./sqlite-npc-profile-ownership.js") as {
+  migrateNpcsToProfileOwnership: (sqlite: BetterSqlite3.Database) => unknown;
+};
 
 const DB_TYPE = (
   process.env.DB_TYPE || (process.env.DATABASE_URL ? "postgresql" : "sqlite")
@@ -449,6 +453,11 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   ]);
   // 컬럼이 갖춰진 다음에 은퇴 마이그레이션을 돌린다(이관 대상 열이 둘 다 있어야 한다).
   retireOpenclawConfig(sqlite);
+  // hermes_profiles.appearance 는 ALTER 로 되지만 npcs 의 NOT NULL·FK·유니크는 재생성이 필요하다.
+  applySqliteAlterStatements(sqlite, "hermes_profiles", [
+    "ALTER TABLE hermes_profiles ADD COLUMN appearance TEXT",
+  ]);
+  migrateNpcsToProfileOwnership(sqlite);
   // 이 함수와 server-db.js 의 동명 함수는 **서로 다른 경로**다 — API 라우트는 이쪽,
   // 소켓 서버는 저쪽을 탄다. 한쪽에만 컬럼을 더하면 그 경로에서만 조용히
   // "no such column" 이 난다(실제로 그렇게 났다). 새 컬럼은 양쪽에 넣을 것.

@@ -147,6 +147,7 @@ const hermesProfiles = sqliteTable(
     tokenEncrypted: text("token_encrypted").notNull(),
     displayName: text("display_name"),
     description: text("description"),
+    appearance: text("appearance"),
     provisionedByDeskrpg: integer("provisioned_by_deskrpg", { mode: "boolean" })
       .notNull()
       .default(false),
@@ -427,23 +428,25 @@ const npcs = sqliteTable(
     channelId: text("channel_id")
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    positionX: integer("position_x").notNull(),
-    positionY: integer("position_y").notNull(),
+    name: text("name"),
+    positionX: integer("position_x"),
+    positionY: integer("position_y"),
     direction: text("direction").default("down"),
-    appearance: text("appearance").notNull(),
+    appearance: text("appearance"),
     adapterType: text("adapter_type").notNull().default("hermes"),
     adapterConfig: text("adapter_config"),
-    hermesProfileId: text("hermes_profile_id").references(() => hermesProfiles.id, {
-      onDelete: "set null",
-    }),
+    hermesProfileId: text("hermes_profile_id")
+      .notNull()
+      .references(() => hermesProfiles.id, { onDelete: "cascade" }),
     agentConfig: text("agent_config"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at").$defaultFn(isoNow),
     updatedAt: text("updated_at").$defaultFn(isoNow),
   },
   (table) => [
     index("idx_npcs_channel_id").on(table.channelId),
     unique("npcs_channel_position_unique").on(table.channelId, table.positionX, table.positionY),
+    uniqueIndex("npcs_channel_profile_idx").on(table.channelId, table.hermesProfileId),
   ],
 );
 

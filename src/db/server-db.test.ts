@@ -201,4 +201,19 @@ test("server-db sqlite bootstraps base tables for a fresh empty database", () =>
   assert.ok(tableNames.includes("meeting_minutes"));
   assert.ok(tableNames.includes("map_templates"));
   assert.ok(tableNames.includes("tileset_images"));
+
+  const npcCols = sqlite.prepare("PRAGMA table_info(npcs)").all() as Array<{
+    name: string;
+    notnull: number;
+  }>;
+  const npcColsByName = Object.fromEntries(npcCols.map((c) => [c.name, c.notnull]));
+  assert.equal(npcColsByName.active, 1, "신규 DB 의 npcs 에는 active 가 NOT NULL 로 있어야 한다");
+
+  const hermesProfileCols = sqlite.prepare("PRAGMA table_info(hermes_profiles)").all() as Array<{
+    name: string;
+  }>;
+  assert.ok(
+    hermesProfileCols.some((c) => c.name === "appearance"),
+    "신규 DB 의 hermes_profiles 에는 appearance 가 있어야 한다",
+  );
 });
