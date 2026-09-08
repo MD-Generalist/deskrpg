@@ -22,8 +22,14 @@ function transitiveLocalDeps(entry: string): Set<string> {
     const src = readFileSync(path.join(repoRoot, file), "utf8");
     // 상대경로와 `@/` 별칭을 모두 본다. 별칭을 빠뜨리면 조용히 구멍이 난다 —
     // open-chat-formatter 가 `@/lib/...` 로 들어와 처음엔 추적되지 않았다.
-    for (const m of src.matchAll(/from\s+"((?:\.|@\/)[^"]+)"/g)) {
-      const spec = m[1];
+    // `from "..."` 만 보면 CommonJS 진입점을 놓친다 — src/db/index.ts 와 server-db.js 는
+    // 이관 모듈을 `require("./sqlite-...js")` 로 부르고, 그 파일들은 COPY 줄 없이
+    // Next 의 standalone 추적에 얹혀 살아 있었다.
+    const specs = [
+      ...[...src.matchAll(/from\s+"((?:\.|@\/)[^"]+)"/g)].map((m) => m[1]),
+      ...[...src.matchAll(/require\(\s*"((?:\.|@\/)[^"]+)"\s*\)/g)].map((m) => m[1]),
+    ];
+    for (const spec of specs) {
       const raw = spec.startsWith("@/")
         ? path.join("src", spec.slice(2))
         : path.join(path.dirname(file), spec);

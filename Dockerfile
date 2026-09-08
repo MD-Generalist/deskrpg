@@ -44,11 +44,6 @@ COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
 COPY --from=builder /app/src/lib/task-parser.js ./src/lib/task-parser.js
 COPY --from=builder /app/src/lib/task-block-utils.js ./src/lib/task-block-utils.js
 COPY --from=builder /app/src/lib/task-manager.js ./src/lib/task-manager.js
-COPY --from=builder /app/src/db/server-db.js ./src/db/server-db.js
-COPY --from=builder /app/src/db/schema.pg.cjs ./src/db/schema.pg.cjs
-COPY --from=builder /app/src/db/schema.sqlite.cjs ./src/db/schema.sqlite.cjs
-COPY --from=builder /app/src/db/sqlite-base-schema.js ./src/db/sqlite-base-schema.js
-COPY --from=builder /app/src/db/normalize.js ./src/db/normalize.js
 COPY --from=builder /app/src/lib/task-prompt.js ./src/lib/task-prompt.js
 COPY --from=builder /app/src/lib/i18n/task-prompt-messages.js ./src/lib/i18n/task-prompt-messages.js
 COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
@@ -70,9 +65,11 @@ COPY --from=builder /app/src/lib/conversation ./src/lib/conversation
 COPY --from=builder /app/src/server ./src/server
 COPY --from=builder /app/src/lib/open-chat-formatter.ts ./src/lib/open-chat-formatter.ts
 
-COPY --from=builder /app/src/db/index.ts ./src/db/index.ts
-COPY --from=builder /app/src/db/schema.ts ./src/db/schema.ts
-COPY --from=builder /app/src/db/schema-sqlite.ts ./src/db/schema-sqlite.ts
+# DB 경계는 통째로 옮긴다. 파일 목록으로 두면 `require("./sqlite-...js")` 처럼
+# 정적 추적에 안 걸리는 진입점이 생길 때마다 조용히 빠진다 — 실제로 이관 모듈
+# 둘(sqlite-npc-profile-ownership.js, sqlite-openclaw-retirement.js)이 COPY 줄
+# 없이 Next 의 standalone 추적에 얹혀 살아 있었다.
+COPY --from=builder /app/src/db ./src/db
 COPY --from=builder /app/src/lib/file-extractor.ts ./src/lib/file-extractor.ts
 COPY --from=builder /app/src/lib/db-json.ts ./src/lib/db-json.ts
 COPY --from=builder /app/src/lib/db-unique-violation.ts ./src/lib/db-unique-violation.ts
@@ -89,6 +86,13 @@ COPY --from=builder /app/src/lib/gateway-runtime-cache.ts ./src/lib/gateway-runt
 COPY --from=builder /app/src/lib/npc-response-messages.ts ./src/lib/npc-response-messages.ts
 COPY --from=builder /app/src/lib/dev-constants.ts ./src/lib/dev-constants.ts
 COPY --from=builder /app/src/lib/i18n/error-codes.ts ./src/lib/i18n/error-codes.ts
+# 회의 규약 폴백(getDefaultMeetingProtocol)이 끌어오는 프리셋·로케일 트리.
+COPY --from=builder /app/src/lib/npc-agent-defaults.ts ./src/lib/npc-agent-defaults.ts
+COPY --from=builder /app/src/lib/npc-persona-presets.ts ./src/lib/npc-persona-presets.ts
+COPY --from=builder /app/src/lib/office-presets.ts ./src/lib/office-presets.ts
+COPY --from=builder /app/src/lib/lpc-registry.ts ./src/lib/lpc-registry.ts
+COPY --from=builder /app/src/lib/i18n/server.ts ./src/lib/i18n/server.ts
+COPY --from=builder /app/src/lib/i18n/locales ./src/lib/i18n/locales
 # Whole-directory copies (not per-file): this project has missed individual files in
 # these two directories five times (most recently local-discovery-gate.ts and
 # profile-name.ts, neither of which had its own COPY line before this fix).

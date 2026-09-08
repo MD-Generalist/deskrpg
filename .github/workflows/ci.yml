@@ -15,6 +15,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # 마이그레이션 테스트(src/db/npc-profile-migration.test.ts)는 임시 PostgreSQL 이
+    # 있을 때만 돈다. 그 서비스가 없어서 이 테스트는 어디서도 실행되지 않았고,
+    # 스위트는 skipped 1 로 초록이었다 — 프로덕션이 PostgreSQL 이고 NPC 삭제·백필이
+    # 걸린 곳이 바로 이 마이그레이션인데도.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: deskrpg
+          POSTGRES_PASSWORD: migtest
+          POSTGRES_DB: deskrpg
+        ports:
+          - 55437:5432
+        options: >-
+          --health-cmd "pg_isready -U deskrpg"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +48,8 @@ jobs:
       # "고치고 다시 밀고 다음 실패를 본다"를 반복하는 것보다 싸다.
       - name: 단위 테스트
         if: always()
+        env:
+          MIGRATION_TEST_DATABASE_URL: postgres://deskrpg:migtest@127.0.0.1:55437/deskrpg
         run: npm run test
 
       - name: 타입 검사
