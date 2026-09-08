@@ -1689,8 +1689,9 @@ const zh: Record<string, string> = {
   "gateways.unbound": "已断开 {name} 频道的连接。",
   "gateways.unbindNotOwner": "只有频道所有者才能断开连接",
   "gateways.backToOffice": "← 返回办公室",
+  "gateways.deleteBlockedByChannels": "此网关仍连接到频道，无法删除。请先在频道中断开连接。",
   "gateways.deleteConfirmWithUsage":
-    "要删除这个网关吗？{profiles} 个配置文件及其在 {channels} 个频道的 {npcs} 个 NPC 席位也会一并消失。",
+    "要删除这个网关吗？{profiles} 个配置文件及其 {npcs} 个 NPC 席位也会一并消失。",
   "gateways.shareTitle": "共享管理",
   "gateways.shareHelp": "输入其他用户的登录 ID，即可共享此网关的使用权限。",
   "gateways.selectGatewayFirst": "请先选择一个网关。",

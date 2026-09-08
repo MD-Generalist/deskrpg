@@ -1719,8 +1719,10 @@ const en: Record<string, string> = {
   "gateways.unbound": "Disconnected the gateway from {name}.",
   "gateways.unbindNotOwner": "Only the channel owner can disconnect it",
   "gateways.backToOffice": "← Back to the office",
+  "gateways.deleteBlockedByChannels":
+    "This gateway is still connected to channels and cannot be deleted. Disconnect it from those channels first.",
   "gateways.deleteConfirmWithUsage":
-    "Delete this gateway? {profiles} profile(s) and their {npcs} NPC seat(s) across {channels} channel(s) go with it.",
+    "Delete this gateway? {profiles} profile(s) and their {npcs} NPC seat(s) go with it.",
   "gateways.shareTitle": "Share Access",
   "gateways.shareHelp": "Enter another user's login ID to let them use this gateway.",
   "gateways.selectGatewayFirst": "Select a gateway first.",

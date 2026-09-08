@@ -1716,8 +1716,10 @@ const ko: Record<string, string> = {
   "gateways.unbound": "{name} 채널의 연결을 해제했습니다.",
   "gateways.unbindNotOwner": "채널 소유자만 연결을 해제할 수 있습니다",
   "gateways.backToOffice": "← 사무실로 돌아가기",
+  "gateways.deleteBlockedByChannels":
+    "이 게이트웨이는 채널에 연결돼 있어 삭제할 수 없습니다. 먼저 채널에서 연결을 해제하세요.",
   "gateways.deleteConfirmWithUsage":
-    "이 게이트웨이를 삭제하시겠습니까? 프로필 {profiles}개와 그 프로필의 NPC 자리 {npcs}개({channels}개 채널)가 함께 사라집니다.",
+    "이 게이트웨이를 삭제하시겠습니까? 프로필 {profiles}개와 그 프로필의 NPC 자리 {npcs}개가 함께 사라집니다.",
   "gateways.shareTitle": "공유 관리",
   "gateways.shareHelp": "다른 사용자의 로그인 ID를 입력해 이 게이트웨이 사용 권한을 공유합니다.",
   "gateways.selectGatewayFirst": "먼저 게이트웨이를 선택하세요.",

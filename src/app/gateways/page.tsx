@@ -11,6 +11,7 @@ import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
 
+import { planGatewayDelete } from "./gateway-delete-plan";
 import { backLinkTarget } from "./return-target";
 
 type GatewayRow = {
@@ -299,12 +300,19 @@ function GatewayManagementPageInner() {
     } catch {
       // 수치를 못 읽어도 삭제를 막지는 않는다 — 0 으로 물어본다.
     }
+    const plan = planGatewayDelete(usage);
+    if (plan.blocked) {
+      // 서버가 409 로 거절할 삭제다. 확인을 띄우면 사용자는 일어나지 않을 일에
+      // 동의하게 된다 — 묻지 말고 먼저 해야 할 일을 말한다.
+      setError(t("gateways.deleteBlockedByChannels"));
+      setNotice("");
+      return;
+    }
     if (
       !window.confirm(
         t("gateways.deleteConfirmWithUsage", {
-          profiles: String(usage.profiles),
-          npcs: String(usage.npcs),
-          channels: String(usage.channels),
+          profiles: String(plan.profiles),
+          npcs: String(plan.npcs),
         }),
       )
     ) {

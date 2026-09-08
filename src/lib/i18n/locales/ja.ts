@@ -1722,8 +1722,10 @@ const ja: Record<string, string> = {
   "gateways.unbound": "{name} チャンネルの接続を解除しました。",
   "gateways.unbindNotOwner": "チャンネルの所有者のみが接続を解除できます",
   "gateways.backToOffice": "← オフィスに戻る",
+  "gateways.deleteBlockedByChannels":
+    "このゲートウェイはチャンネルに接続されているため削除できません。先にチャンネル側で接続を解除してください。",
   "gateways.deleteConfirmWithUsage":
-    "このゲートウェイを削除しますか？ プロファイル {profiles} 件と、その NPC の席 {npcs} 件（{channels} チャンネル）も一緒に消えます。",
+    "このゲートウェイを削除しますか？ プロファイル {profiles} 件と、その NPC の席 {npcs} 件も一緒に消えます。",
   "gateways.shareTitle": "共有管理",
   "gateways.shareHelp":
     "他のユーザーのログイン ID を入力すると、このゲートウェイの利用権限を共有できます。",
