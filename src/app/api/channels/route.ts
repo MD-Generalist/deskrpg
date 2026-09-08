@@ -6,7 +6,6 @@ import {
   groupPermissions,
   groups,
   mapTemplates,
-  npcs,
   userPermissionOverrides,
   users,
 } from "@/db";
@@ -20,8 +19,7 @@ import {
   getAccessibleGatewayResource,
   upsertOwnedGatewayResource,
 } from "@/lib/gateway-resources";
-import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
-import { normalizeLocale } from "@/lib/i18n/server";
+import { hireGatewayProfilesIntoChannel } from "@/lib/npc-roster";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
 import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
 import { isChannelPasswordValid } from "@/lib/security-policy";
@@ -195,7 +193,6 @@ export async function POST(req: NextRequest) {
       mapTemplateId,
       password,
       gatewayConfig,
-      defaultNpc,
       groupId,
     } = body;
 
@@ -376,6 +373,8 @@ export async function POST(req: NextRequest) {
           gatewayId: resource.id,
           boundByUserId: userId,
         });
+        // 연결 = 출근. 채널의 NPC 명단은 이 게이트웨이의 프로필이 정한다.
+        await hireGatewayProfilesIntoChannel(channel.id, resource.id);
       } catch (gatewayErr) {
         console.error("Failed to bind gateway resource during channel creation:", gatewayErr);
       }
@@ -387,70 +386,6 @@ export async function POST(req: NextRequest) {
       userId,
       role: "owner",
     });
-
-    // --- Default NPC creation ---
-    // NPC 는 이제 Hermes 프로필 없이 존재할 수 없다(`npcs.hermes_profile_id` NOT NULL).
-    // 프로필을 지정하지 않은 defaultNpc 요청은 예전이라면 프로필 없는 NPC 를 만들었을
-    // 자리다 — 조용히 건너뛴다(채널 생성 자체는 성공한다).
-    const defaultNpcProfileId =
-      typeof defaultNpc?.hermesProfileId === "string" && defaultNpc.hermesProfileId.trim()
-        ? defaultNpc.hermesProfileId.trim()
-        : null;
-
-    if (defaultNpc && defaultNpcProfileId && (gatewayConfig?.gatewayId || gatewayConfig?.url)) {
-      try {
-        const agentId = defaultNpc.agentId || "main";
-        const defaultNpcLocale = normalizeLocale(defaultNpc.locale);
-        const meetingProtocol =
-          defaultNpc.meetingProtocol || getDefaultMeetingProtocol(defaultNpcLocale);
-
-        // 예전에는 여기서 OpenClaw 게이트웨이에 에이전트를 만들고
-        // ~/.openclaw/workspace-<id> 에 IDENTITY/SOUL/AGENTS/USER.md 를 써 넣었다.
-        // OpenClaw 가 사라지면서 그 개념이 없어졌다 — 페르소나는 DB 에만 남고,
-        // Hermes 프로필은 자기 홈을 직접 들고 있다.
-
-        // Insert NPC into database (always, even if agent setup failed)
-        const npcPositionX = template.spawnCol + 2;
-        const npcPositionY = template.spawnRow;
-
-        await db.insert(npcs).values({
-          channelId: channel.id,
-          hermesProfileId: defaultNpcProfileId,
-          name: defaultNpc.name || "AI Assistant",
-          positionX: npcPositionX,
-          positionY: npcPositionY,
-          direction: "down",
-          appearance: jsonForDb(
-            defaultNpc.appearance || {
-              bodyType: "female",
-              layers: {
-                body: { itemKey: "body", variant: "light" },
-                eyes: { itemKey: "eye_color", variant: "blue" },
-                hair: { itemKey: "hair_pixie", variant: "blonde" },
-                torso: {
-                  itemKey: "torso_clothes_longsleeve2_buttoned",
-                  variant: "white",
-                },
-                legs: { itemKey: "legs_formal", variant: "teal" },
-                feet: { itemKey: "feet_shoes_basic", variant: "brown" },
-              },
-            },
-          ),
-          agentConfig: jsonForDb({
-            agentId,
-            sessionKeyPrefix: `ot-${channel.id.slice(0, 8)}-${agentId}`,
-            locale: defaultNpcLocale,
-            meetingProtocol,
-            personaConfig: {
-              identity: defaultNpc.identity || "",
-              soul: defaultNpc.soul || "",
-            },
-          }),
-        });
-      } catch (npcErr) {
-        console.error("Failed to create default NPC:", npcErr);
-      }
-    }
 
     // Return channel without password hash
     const { password: channelPassword, ...channelWithoutPassword } = channel;

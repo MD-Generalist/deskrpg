@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { listHermesProfiles, registerHermesProfile } from "@/lib/hermes-profiles";
 import { getUserId } from "@/lib/internal-rpc";
+import { hireProfileIntoBoundChannels } from "@/lib/npc-roster";
 
 import { validateProfileRegistration } from "./validation";
 
@@ -62,6 +63,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in result) {
     return NextResponse.json({ errorCode: result.error, error: result.error }, { status: 403 });
   }
+
+  // 프로필 = NPC 다. 이 게이트웨이가 이미 묶여 있는 채널에는 지금 바로 출근시킨다 —
+  // 채널을 다시 열거나 게이트웨이를 다시 연결할 때까지 기다리지 않는다.
+  await hireProfileIntoBoundChannels(result.profile.id);
 
   // Never serialize tokenEncrypted — it is ciphertext of a credential.
   const { tokenEncrypted: _tokenEncrypted, ...safeProfile } = result.profile;

@@ -2112,7 +2112,6 @@ const zh: Record<string, string> = {
     "DeskRPG 运行在容器内，这里的 127.0.0.1 指向容器本身而不是 Hermes — 请使用宿主机的实际 IP 地址",
   "errors.gatewayInUseByChannels": "有频道正在使用此网关，无法删除。请先在频道中断开连接",
   "errors.gatewayAccessDenied": "您无权访问此网关",
-  "errors.gatewayChangeRequiresNpcReset": "更换网关前需要先解除此频道 NPC 的绑定",
   "errors.gatewayDisconnectRequiresNpcReset": "断开连接前需要先解除此频道 NPC 的绑定",
   "errors.localDiscoveryUnavailable": "无法使用本地配置文件发现",
   "errors.notOptedIn": "尚未启用此功能",

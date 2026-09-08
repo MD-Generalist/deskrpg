@@ -251,3 +251,49 @@ export async function seedProfile(gatewayId: string) {
   const profile = await seedHermesProfile(gatewayId);
   return profile.id;
 }
+
+/** 라우트 핸들러에 넘길 인증 헤더 — `getUserId` 는 `x-user-id` 하나만 본다. */
+export function authHeaders(userId: string): Record<string, string> {
+  return { "x-user-id": userId, "Content-Type": "application/json" };
+}
+
+/**
+ * 채널 하나 + 게이트웨이 둘. 둘 다 아직 채널에 묶여 있지 않다 — 묶는 것은
+ * 테스트가 `PUT /api/channels/:id/gateway` 로 직접 한다(그게 검증 대상이다).
+ */
+export async function seedTwoGateways(opts: { profilesEach: number }) {
+  const user = await seedUser("two-gateways-owner");
+  const baseUrl = await sharedStubBaseUrl();
+  const gatewayA = await seedGateway(user.id, baseUrl);
+  const gatewayB = await seedGateway(user.id, baseUrl);
+  for (const gateway of [gatewayA, gatewayB]) {
+    for (let i = 0; i < opts.profilesEach; i += 1) await seedHermesProfile(gateway.id);
+  }
+  const channel = await seedChannel(user.id);
+  return {
+    userId: user.id,
+    channelId: channel.id,
+    gatewayA: gatewayA.id,
+    gatewayB: gatewayB.id,
+  };
+}
+
+/** 채널에 회의록 한 건. 게이트웨이를 바꿔도 살아남아야 한다. */
+export async function seedMeetingMinutes(channelId: string, topic = "주간 회의") {
+  const { db, meetingMinutes } = await loadDb();
+  const [row] = await db
+    .insert(meetingMinutes)
+    .values({ channelId, topic, transcript: "..." })
+    .returning();
+  return row;
+}
+
+export async function countMeetingMinutes(channelId: string): Promise<number> {
+  const { db, meetingMinutes } = await loadDb();
+  const { eq } = await import("drizzle-orm");
+  const rows = await db
+    .select({ id: meetingMinutes.id })
+    .from(meetingMinutes)
+    .where(eq(meetingMinutes.channelId, channelId));
+  return rows.length;
+}

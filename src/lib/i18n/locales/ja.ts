@@ -2156,8 +2156,6 @@ const ja: Record<string, string> = {
   "errors.gatewayInUseByChannels":
     "このゲートウェイを使用中のチャンネルがあるため削除できません。先にチャンネルの接続を解除してください",
   "errors.gatewayAccessDenied": "このゲートウェイにアクセスする権限がありません",
-  "errors.gatewayChangeRequiresNpcReset":
-    "ゲートウェイを変更するには、このチャンネルの NPC の接続を先に解除してください",
   "errors.gatewayDisconnectRequiresNpcReset":
     "接続を解除するには、このチャンネルの NPC の接続を先に解除してください",
   "errors.localDiscoveryUnavailable": "ローカルプロファイルの検出を利用できません",

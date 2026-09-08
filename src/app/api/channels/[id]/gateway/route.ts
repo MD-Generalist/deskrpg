@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
 import { selectChannelNpcs } from "@/lib/npc-projection";
+import { hireGatewayProfilesIntoChannel, sleepChannelNpcs } from "@/lib/npc-roster";
 import {
   bindGatewayToChannel,
   decryptGatewayToken,
@@ -149,26 +150,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const previousGatewayId = currentBinding?.resource.id ?? null;
-  const isBindingChanging = previousGatewayId !== nextGatewayId;
-
-  if (isBindingChanging) {
-    const npcCount = (await selectChannelNpcs(id, { roster: true })).length;
-
-    if (npcCount > 0 && body.confirmNpcReset !== true) {
-      return NextResponse.json(
-        {
-          errorCode: "gateway_change_requires_npc_reset",
-          error:
-            "Changing the channel gateway removes existing NPCs and their task or meeting context.",
-        },
-        { status: 409 },
-      );
-    }
-
-    if (npcCount > 0) {
-      await deleteChannelGatewayArtifacts(id);
-    }
-  }
 
   if (nextGatewayId) {
     await bindGatewayToChannel({
@@ -178,6 +159,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
   } else {
     await unbindGatewayFromChannel(id);
+  }
+
+  // 게이트웨이 교체는 더 이상 NPC 를 지우지 않는다. 옛 게이트웨이의 NPC 는 자리를
+  // 기억한 채 휴면하고(다시 연결하면 그 자리로 돌아온다), 새 게이트웨이의 프로필이
+  // 출근한다. 회의록·작업 같은 채널 아티팩트도 그대로 남는다.
+  if (previousGatewayId && previousGatewayId !== nextGatewayId) {
+    await sleepChannelNpcs(id, previousGatewayId);
+  }
+  if (nextGatewayId) {
+    await hireGatewayProfilesIntoChannel(id, nextGatewayId);
   }
 
   await updateChannelTaskAutomationSettings(id, {

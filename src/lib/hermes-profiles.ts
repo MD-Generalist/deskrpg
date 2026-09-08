@@ -4,7 +4,7 @@
 
 import { and, eq } from "drizzle-orm";
 
-import { db, hermesProfiles, nowForDb, npcs, gatewayResources } from "@/db";
+import { db, hermesProfiles, jsonForDb, nowForDb, npcs, gatewayResources } from "@/db";
 import {
   decryptGatewayToken,
   encryptGatewayToken,
@@ -179,7 +179,7 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
 export async function updateHermesProfile(
   userId: string,
   profileId: string,
-  input: { token?: string; displayName?: string },
+  input: { token?: string; displayName?: string; appearance?: unknown },
 ): Promise<{ ok: true } | { ok: false; errorCode: "profile_not_found" | "forbidden" }> {
   const [row] = await db
     .select()
@@ -193,6 +193,13 @@ export async function updateHermesProfile(
 
   const patch: Record<string, unknown> = { updatedAt: nowForDb() };
   if (typeof input.displayName === "string") patch.displayName = input.displayName;
+  // 외형은 프로필이 정본이고 그 프로필이 나가는 **모든** 채널의 NPC 모습을 한꺼번에
+  // 바꾼다. 공유받은 사용자가 남의 게이트웨이 인격의 얼굴을 갈아치울 수는 없다 —
+  // 소유자만 쓴다.
+  if (input.appearance !== undefined) {
+    if (!access.isOwner) return { ok: false, errorCode: "forbidden" };
+    patch.appearance = jsonForDb(input.appearance);
+  }
   if (typeof input.token === "string" && input.token.trim()) {
     patch.tokenEncrypted = encryptGatewayToken(input.token.trim());
     // 자격증명이 바뀌었으므로 예전 검증 결과는 더 이상 이 토큰에 대한 것이 아니다.
@@ -206,16 +213,29 @@ export async function updateHermesProfile(
   return { ok: true };
 }
 
+/** 이 프로필이 몇 개의 NPC 로, 몇 개의 채널에 나가 있는지 — 삭제 확인 문구가 쓴다. */
+export async function profileUsage(profileId: string): Promise<{
+  npcs: number;
+  channels: number;
+}> {
+  const rows = await db
+    .select({ channelId: npcs.channelId })
+    .from(npcs)
+    .where(eq(npcs.hermesProfileId, profileId));
+  return { npcs: rows.length, channels: new Set(rows.map((r) => r.channelId)).size };
+}
+
 /**
- * 프로필 삭제. 이 프로필을 쓰던 NPC 는 지워지지 않고 연결만 풀린다
- * (`npcs.hermes_profile_id` 가 `set null`). 다만 그 NPC 들은 다시 묶기 전까지
- * 대화할 수 없으므로, 호출부가 사용자에게 그 수를 먼저 보여줘야 한다.
+ * 프로필 삭제. 프로필이 NPC 의 정본이 된 뒤로 이것은 **해고**다 — `npcs.hermes_profile_id`
+ * 의 CASCADE 가 그 프로필의 NPC 행을 함께 지운다. 몇 개가 몇 채널에서 사라지는지는
+ * 지우기 전에 세어 돌려준다(지운 뒤에는 셀 수 없다).
  */
 export async function deleteHermesProfile(
   userId: string,
   profileId: string,
 ): Promise<
-  { ok: true; unboundNpcs: number } | { ok: false; errorCode: "profile_not_found" | "forbidden" }
+  | { ok: true; deletedNpcs: number; channels: number }
+  | { ok: false; errorCode: "profile_not_found" | "forbidden" }
 > {
   const [row] = await db
     .select()
@@ -227,13 +247,10 @@ export async function deleteHermesProfile(
   const access = await getAccessibleGatewayResource(userId, row.gatewayId);
   if (!access) return { ok: false, errorCode: "forbidden" };
 
-  const bound = await db
-    .select({ id: npcs.id })
-    .from(npcs)
-    .where(eq(npcs.hermesProfileId, profileId));
+  const usage = await profileUsage(profileId);
 
   await db.delete(hermesProfiles).where(eq(hermesProfiles.id, profileId));
-  return { ok: true, unboundNpcs: bound.length };
+  return { ok: true, deletedNpcs: usage.npcs, channels: usage.channels };
 }
 
 export async function validateHermesProfile(

@@ -7,6 +7,7 @@ import { registerHermesProfile } from "@/lib/hermes-profiles";
 import { createPluginClient } from "@/lib/hermes/plugin-client";
 import { attachKeyStorage, stripApiKey } from "@/lib/hermes/plugin-provision";
 import { getUserId } from "@/lib/internal-rpc";
+import { hireProfileIntoBoundChannels } from "@/lib/npc-roster";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
 import { validateCreatableProfileName } from "../validation";
@@ -132,7 +133,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 다른 파일)은 이 인자를 넘기지 않아 false 로 남는다.
       provisionedByDeskrpg: true,
     });
-    keyStorage = "error" in stored ? { ok: false, reason: "key_store_forbidden" } : { ok: true };
+    if ("error" in stored) {
+      keyStorage = { ok: false, reason: "key_store_forbidden" };
+    } else {
+      // 마법사가 만든 프로필도 곧바로 출근시킨다(수동 등록과 같은 규약).
+      await hireProfileIntoBoundChannels(stored.profile.id);
+      keyStorage = { ok: true };
+    }
   }
 
   return NextResponse.json(attachKeyStorage(stripApiKey(res.data), keyStorage), { status: 201 });
