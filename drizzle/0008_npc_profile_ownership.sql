@@ -33,6 +33,19 @@ ALTER TABLE "npcs" ADD COLUMN IF NOT EXISTS "active" boolean NOT NULL DEFAULT tr
 -- 4) 프로필 없는 NPC 는 백업하고 지운다 (되돌릴 수 없는 삭제 전에 남긴다)
 CREATE TABLE IF NOT EXISTS "npcs_unprofiled_backup" AS
 SELECT * FROM "npcs" WHERE hermes_profile_id IS NULL;
+
+-- 4a) `npcs.id` 를 ON DELETE CASCADE 로 참조하는 자식 테이블도 함께 남긴다.
+--     DELETE 한 줄이 그 NPC 의 1:1 대화 이력·태스크·세션·보고를 통째로 지운다 —
+--     npcs 행만 백업하면 "되돌릴 수 있다"가 절반만 참이다.
+CREATE TABLE IF NOT EXISTS "npcs_removed_chat_messages_backup" AS
+SELECT * FROM "chat_messages" WHERE npc_id IN (SELECT id FROM "npcs_unprofiled_backup");
+CREATE TABLE IF NOT EXISTS "npcs_removed_tasks_backup" AS
+SELECT * FROM "tasks" WHERE npc_id IN (SELECT id FROM "npcs_unprofiled_backup");
+CREATE TABLE IF NOT EXISTS "npcs_removed_npc_sessions_backup" AS
+SELECT * FROM "npc_sessions" WHERE npc_id IN (SELECT id FROM "npcs_unprofiled_backup");
+CREATE TABLE IF NOT EXISTS "npcs_removed_npc_reports_backup" AS
+SELECT * FROM "npc_reports" WHERE npc_id IN (SELECT id FROM "npcs_unprofiled_backup");
+
 DELETE FROM "npcs" WHERE hermes_profile_id IS NULL;
 
 -- 5) 같은 (channel, profile) 중복은 가장 최근 하나만 남긴다 — 7) 의 유니크 제약 전제
@@ -44,6 +57,16 @@ WHERE n.id <> (
   ORDER BY m.updated_at DESC NULLS LAST, m.created_at DESC NULLS LAST
   LIMIT 1
 );
+-- 5a) 중복 쪽 자식 행도 같은 백업 테이블에 담는다(위에서 이미 만들어졌다).
+INSERT INTO "npcs_removed_chat_messages_backup"
+SELECT * FROM "chat_messages" WHERE npc_id IN (SELECT id FROM "npcs_duplicate_backup");
+INSERT INTO "npcs_removed_tasks_backup"
+SELECT * FROM "tasks" WHERE npc_id IN (SELECT id FROM "npcs_duplicate_backup");
+INSERT INTO "npcs_removed_npc_sessions_backup"
+SELECT * FROM "npc_sessions" WHERE npc_id IN (SELECT id FROM "npcs_duplicate_backup");
+INSERT INTO "npcs_removed_npc_reports_backup"
+SELECT * FROM "npc_reports" WHERE npc_id IN (SELECT id FROM "npcs_duplicate_backup");
+
 DELETE FROM "npcs" WHERE id IN (SELECT id FROM "npcs_duplicate_backup");
 
 -- 6) 프로필은 필수, 프로필이 지워지면 배치도 지워진다

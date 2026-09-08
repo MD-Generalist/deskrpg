@@ -68,6 +68,22 @@ test("0008 은 외형을 프로필로 옮기고 미연결 NPC 를 백업 후 지
            ('55555555-5555-5555-5555-555555555552','44444444-4444-4444-4444-444444444444','new',2,2,'{"v":"new"}','33333333-3333-3333-3333-333333333333', now()),
            ('55555555-5555-5555-5555-555555555553','44444444-4444-4444-4444-444444444444','orphan',3,3,'{"v":"orphan"}',NULL, now())`);
 
+  // 자식 행: 미연결 NPC 와 중복 NPC 에 대화 이력·태스크를 하나씩 매단다.
+  // 이것들이 CASCADE 로 함께 지워지므로 백업이 없으면 영구 소실이다.
+  await pool.query(
+    `INSERT INTO characters(id, user_id, name, appearance) VALUES ('66666666-6666-6666-6666-666666666666','11111111-1111-1111-1111-111111111111','ch','{}')`,
+  );
+  await pool.query(
+    `INSERT INTO chat_messages(character_id, npc_id, role, content) VALUES
+       ('66666666-6666-6666-6666-666666666666','55555555-5555-5555-5555-555555555553','user','orphan chat'),
+       ('66666666-6666-6666-6666-666666666666','55555555-5555-5555-5555-555555555551','user','dup chat')`,
+  );
+  await pool.query(
+    `INSERT INTO tasks(channel_id, npc_id, assigner_id, npc_task_id, title) VALUES
+       ('44444444-4444-4444-4444-444444444444','55555555-5555-5555-5555-555555555553','66666666-6666-6666-6666-666666666666','t-orphan','orphan task'),
+       ('44444444-4444-4444-4444-444444444444','55555555-5555-5555-5555-555555555551','66666666-6666-6666-6666-666666666666','t-dup','dup task')`,
+  );
+
   // 0008 까지 적용 — 저장소의 실제 drizzle/ 을 그대로 쓴다.
   execFileSync("node", [MIGRATE_JS], {
     env: { ...process.env, DATABASE_URL: URL },
@@ -104,6 +120,86 @@ test("0008 은 외형을 프로필로 옮기고 미연결 NPC 를 백업 후 지
     rows: [{ count: conflicts }],
   } = await pool.query(`SELECT count(*) FROM npcs_appearance_conflicts`);
   assert.equal(Number(conflicts), 1, "외형이 갈린 나머지는 conflicts 에 남는다");
+
+  // C1: CASCADE 로 함께 지워진 자식 행이 백업 테이블에 남아야 한다 — 미연결(1) + 중복(1)
+  for (const [table, label] of [
+    ["npcs_removed_chat_messages_backup", "대화 이력"],
+    ["npcs_removed_tasks_backup", "태스크"],
+  ] as const) {
+    const {
+      rows: [{ count: n }],
+    } = await pool.query(`SELECT count(*) FROM ${table}`);
+    assert.equal(Number(n), 2, `${label} 는 지워지기 전에 ${table} 로 백업된다`);
+  }
+  for (const table of ["npcs_removed_npc_sessions_backup", "npcs_removed_npc_reports_backup"]) {
+    const {
+      rows: [{ count: n }],
+    } = await pool.query(`SELECT count(*) FROM ${table}`);
+    assert.equal(Number(n), 0, `${table} 는 비어 있어도 존재해야 한다`);
+  }
+
+  await pool.end();
+});
+
+test("0009 는 이미 묶인 게이트웨이의 프로필을 채널에 출근시킨다", { skip: !URL }, async (t) => {
+  const tmpMigrationsDir = makeTruncatedMigrationsDir("0008_npc_profile_ownership");
+  t.after(() => fs.rmSync(tmpMigrationsDir, { recursive: true, force: true }));
+
+  const pool = new Pool({ connectionString: URL });
+  await pool.query(
+    "DROP SCHEMA public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS drizzle CASCADE;",
+  );
+
+  // 0008 까지 적용
+  execFileSync("node", [MIGRATE_JS], {
+    env: { ...process.env, DATABASE_URL: URL, MIGRATIONS_DIR: tmpMigrationsDir },
+    stdio: "pipe",
+  });
+
+  await pool.query(
+    `INSERT INTO users(id, login_id, nickname, password_hash) VALUES ('11111111-1111-1111-1111-111111111111','u','u','x')`,
+  );
+  await pool.query(
+    `INSERT INTO gateway_resources(id, owner_user_id, base_url, token_encrypted, display_name) VALUES ('22222222-2222-2222-2222-222222222222','11111111-1111-1111-1111-111111111111','http://x','t','g')`,
+  );
+  await pool.query(
+    `INSERT INTO hermes_profiles(id, gateway_id, profile_name, token_encrypted) VALUES
+         ('33333333-3333-3333-3333-333333333331','22222222-2222-2222-2222-222222222222','hired','t'),
+         ('33333333-3333-3333-3333-333333333332','22222222-2222-2222-2222-222222222222','unhired','t'),
+         ('33333333-3333-3333-3333-333333333333','22222222-2222-2222-2222-222222222222','dormant','t')`,
+  );
+  await pool.query(
+    `INSERT INTO channels(id, name, owner_id) VALUES ('44444444-4444-4444-4444-444444444444','c','11111111-1111-1111-1111-111111111111')`,
+  );
+  await pool.query(
+    `INSERT INTO channel_gateway_bindings(channel_id, gateway_id, bound_by_user_id) VALUES ('44444444-4444-4444-4444-444444444444','22222222-2222-2222-2222-222222222222','11111111-1111-1111-1111-111111111111')`,
+  );
+  // 이미 출근한 프로필 하나와, 사용자가 재운 프로필 하나
+  await pool.query(`INSERT INTO npcs(id, channel_id, hermes_profile_id, position_x, position_y, active) VALUES
+      ('55555555-5555-5555-5555-555555555551','44444444-4444-4444-4444-444444444444','33333333-3333-3333-3333-333333333331',1,1,true),
+      ('55555555-5555-5555-5555-555555555553','44444444-4444-4444-4444-444444444444','33333333-3333-3333-3333-333333333333',3,3,false)`);
+
+  // 0009 적용
+  execFileSync("node", [MIGRATE_JS], {
+    env: { ...process.env, DATABASE_URL: URL },
+    stdio: "pipe",
+  });
+
+  const {
+    rows: [added],
+  } = await pool.query(
+    `SELECT active, position_x FROM npcs WHERE hermes_profile_id='33333333-3333-3333-3333-333333333332'`,
+  );
+  assert.ok(added, "미고용 프로필이 출근부에 나타나야 한다");
+  assert.equal(added.active, true);
+  assert.equal(added.position_x, null, "자리는 미정으로 만든다");
+
+  const {
+    rows: [dormant],
+  } = await pool.query(
+    `SELECT active FROM npcs WHERE hermes_profile_id='33333333-3333-3333-3333-333333333333'`,
+  );
+  assert.equal(dormant.active, false, "사용자가 재운 NPC 를 되살리지 않는다");
 
   await pool.end();
 });

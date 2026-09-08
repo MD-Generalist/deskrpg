@@ -64,6 +64,13 @@
       "when": 1788868038142,
       "tag": "0008_npc_profile_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788868038143,
+      "tag": "0009_npc_backfill_bound_profiles",
+      "breakpoints": true
     }
   ]
 }
