@@ -175,10 +175,12 @@ const ja: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "表示名（任意）",
   "gateway.profile.newTokenPlaceholder": "新しいプロファイルトークン（16文字以上）",
   "gateway.profile.tokenKeepHint": "トークンを空のままにすると既存のトークンを維持します。",
-  "gateway.profile.deleteConfirm":
-    "{name} プロファイルを削除しますか？ 使用中の NPC は接続が解除されるだけで削除されません。",
-  "gateway.profile.deletedUnbound":
-    "プロファイルを削除しました。NPC {count} 件の接続が解除され、再度紐付けるまで会話できません。",
+  "gateway.profile.appearance": "外見",
+  "gateway.profile.appearanceSave": "外見を保存",
+  "gateway.profile.deleteConfirmWithUsage":
+    "{name} プロファイルを削除しますか？ 現在 {channels} チャンネルで NPC の席を {npcs} 件持っており、削除するとその席とタスクも一緒に消えます。",
+  "gateway.profile.deletedNpcs":
+    "プロファイルを削除しました。NPC の席 {npcs} 件が {channels} チャンネルから一緒に消えました。",
   "gateway.profile.ownerOnly": "プロファイルの登録はゲートウェイ所有者のみ可能です。",
   "gateway.profile.status.valid": "正常",
   "gateway.profile.status.unauthorized": "認証エラー",
@@ -1714,13 +1716,14 @@ const ja: Record<string, string> = {
   "gateways.unbind": "接続を解除",
   "gateways.unbindHint":
     "以下のチャンネルの接続をすべて解除すると、このゲートウェイを削除できます。",
-  "gateways.unbindLoses": "NPC {npcs} 件・議事録 {minutes} 件が削除されます",
+  "gateways.unbindLoses": "NPC {npcs} 件が退勤します・議事録 {minutes} 件はそのまま残ります",
   "gateways.unbindConfirm":
-    "{name} チャンネルの接続を解除しますか？ そのチャンネルの NPC と議事録が削除されます。",
+    "{name} チャンネルの接続を解除しますか？ そのチャンネルの NPC は退勤し、再接続すれば同じ席に戻ります。議事録は残ります。",
   "gateways.unbound": "{name} チャンネルの接続を解除しました。",
   "gateways.unbindNotOwner": "チャンネルの所有者のみが接続を解除できます",
-  "gateways.deleteConfirm":
-    "このゲートウェイを削除しますか？ チャンネルに接続されたゲートウェイは削除できません。",
+  "gateways.backToOffice": "← オフィスに戻る",
+  "gateways.deleteConfirmWithUsage":
+    "このゲートウェイを削除しますか？ プロファイル {profiles} 件と、その NPC の席 {npcs} 件（{channels} チャンネル）も一緒に消えます。",
   "gateways.shareTitle": "共有管理",
   "gateways.shareHelp":
     "他のユーザーのログイン ID を入力すると、このゲートウェイの利用権限を共有できます。",
@@ -2238,7 +2241,8 @@ const ja: Record<string, string> = {
   "errors.failedToUpdateNpc": "NPC の更新に失敗しました",
   "errors.failedToDeleteNpc": "NPC の削除に失敗しました",
   "errors.npcInMeeting": "この NPC は会議中です。先に会議を終了してください。",
-  "errors.unsupportedNpcField": "この項目は NPC 側では変更できません — 名前と外見は Hermes プロファイルが正本です。",
+  "errors.unsupportedNpcField":
+    "この項目は NPC 側では変更できません — 名前と外見は Hermes プロファイルが正本です。",
   "errors.internalServerError": "サーバー内部エラーが発生しました",
   "errors.failedToFetchProjects": "プロジェクト一覧の取得に失敗しました",
   "errors.projectNameRequired": "プロジェクト名が必要です",

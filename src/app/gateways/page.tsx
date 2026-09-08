@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
@@ -9,6 +10,8 @@ import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/Gate
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
+
+import { backLinkTarget } from "./return-target";
 
 type GatewayRow = {
   id: string;
@@ -67,10 +70,21 @@ export default function GatewayManagementPage() {
 
 function GatewayManagementPageInner() {
   const t = useT();
+  const router = useRouter();
+  // 사무실(채널 화면)에서 "인격을 하나 더 만들자"로 넘어온 왕복. `gateway` 는 어느
+  // 게이트웨이를 열지, `new=1` 은 만들기 화면을 바로 펼칠지, `returnTo` 는 만든 뒤
+  // 어디로 돌아갈지를 말한다. `returnTo` 는 그대로 믿지 않는다 — safeReturnTo 가
+  // 같은 오리진 경로만 통과시킨다(열린 리다이렉트).
+  const searchParams = useSearchParams();
+  const requestedGatewayId = searchParams.get("gateway") ?? "";
+  const autoOpenCreate = searchParams.get("new") === "1";
+  const returnToParam = searchParams.get("returnTo");
+  const returnTo = backLinkTarget(returnToParam);
+
   const [gateways, setGateways] = useState<GatewayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedGatewayId, setSelectedGatewayId] = useState("");
+  const [selectedGatewayId, setSelectedGatewayId] = useState(requestedGatewayId);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -235,9 +249,10 @@ function GatewayManagementPageInner() {
     setUnbinding(channel.channelId);
     setError("");
     try {
-      // confirmNpcReset=1: 이 해제는 그 채널의 NPC 와 회의록을 삭제한다. 위 confirm 이
-      // 사용자에게 그 사실을 알린 뒤에만 여기에 온다.
-      const res = await fetch(`/api/channels/${channel.channelId}/gateway?confirmNpcReset=1`, {
+      // 해제는 더 이상 지우는 것이 아니라 재우는 것이다 — NPC 는 자리를 기억한 채
+      // 퇴근하고 회의록은 그대로 남는다. 그래서 예전의 confirmNpcReset=1 도 없앴다
+      // (서버가 그 확인을 요구하지 않는데도 붙어 있던 유물이다).
+      const res = await fetch(`/api/channels/${channel.channelId}/gateway`, {
         method: "DELETE",
       });
       const data = await res.json().catch(() => ({}));
@@ -251,9 +266,50 @@ function GatewayManagementPageInner() {
     }
   };
 
+  /** 이 게이트웨이의 프로필들이 데리고 있는 NPC 자리·채널 수를 합산한다. */
+  const sumGatewayUsage = async (gatewayId: string) => {
+    const res = await fetch(`/api/gateways/${gatewayId}/profiles`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw data;
+    const rows: { id: string }[] = Array.isArray(data.profiles) ? data.profiles : [];
+    const usages = await Promise.all(
+      rows.map(async (row) => {
+        const usageRes = await fetch(`/api/gateways/${gatewayId}/profiles/${row.id}`);
+        const usageData = await usageRes.json().catch(() => ({}));
+        const usage = (usageData as { usage?: { npcs?: unknown; channels?: unknown } }).usage;
+        return usageRes.ok && usage
+          ? { npcs: Number(usage.npcs ?? 0), channels: Number(usage.channels ?? 0) }
+          : { npcs: 0, channels: 0 };
+      }),
+    );
+    return {
+      profiles: rows.length,
+      npcs: usages.reduce((sum, u) => sum + u.npcs, 0),
+      channels: usages.reduce((sum, u) => sum + u.channels, 0),
+    };
+  };
+
   const handleDelete = async () => {
     if (!selectedGateway) return;
-    if (!window.confirm(t("gateways.deleteConfirm"))) return;
+    // 게이트웨이 삭제는 프로필 → NPC → 태스크까지 연쇄한다. 무엇이 얼마나
+    // 사라지는지 말하지 않는 확인은 확인이 아니다 — 수치를 먼저 세어 문구에 넣는다.
+    let usage = { profiles: 0, npcs: 0, channels: 0 };
+    try {
+      usage = await sumGatewayUsage(selectedGateway.id);
+    } catch {
+      // 수치를 못 읽어도 삭제를 막지는 않는다 — 0 으로 물어본다.
+    }
+    if (
+      !window.confirm(
+        t("gateways.deleteConfirmWithUsage", {
+          profiles: String(usage.profiles),
+          npcs: String(usage.npcs),
+          channels: String(usage.channels),
+        }),
+      )
+    ) {
+      return;
+    }
     setDeleting(true);
     setError("");
     setNotice("");
@@ -392,6 +448,14 @@ function GatewayManagementPageInner() {
             <p className="mt-1 text-text-muted">{t("gateways.subtitle")}</p>
           </div>
           <div className="flex items-center gap-3">
+            {returnTo && (
+              <Link
+                href={returnTo}
+                className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+              >
+                {t("gateways.backToOffice")}
+              </Link>
+            )}
             <Link
               href="/channels"
               className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
@@ -636,6 +700,8 @@ function GatewayManagementPageInner() {
               <HermesProfileList
                 gatewayId={selectedGateway.id}
                 canRegister={!!selectedGateway.isOwner}
+                autoOpenCreate={autoOpenCreate}
+                onCreated={returnTo ? () => router.push(returnTo) : undefined}
               />
             )}
 

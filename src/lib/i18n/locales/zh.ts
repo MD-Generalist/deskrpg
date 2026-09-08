@@ -171,10 +171,12 @@ const zh: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "显示名称（可选）",
   "gateway.profile.newTokenPlaceholder": "新的配置文件令牌（16 位以上）",
   "gateway.profile.tokenKeepHint": "令牌留空则保留现有令牌。",
-  "gateway.profile.deleteConfirm":
-    "要删除配置文件 {name} 吗？使用它的 NPC 只会解除绑定，不会被删除。",
-  "gateway.profile.deletedUnbound":
-    "已删除配置文件。{count} 个 NPC 已解除绑定，重新绑定前无法对话。",
+  "gateway.profile.appearance": "外观",
+  "gateway.profile.appearanceSave": "保存外观",
+  "gateway.profile.deleteConfirmWithUsage":
+    "要删除配置文件 {name} 吗？它目前在 {channels} 个频道占有 {npcs} 个 NPC 席位，删除后这些席位和任务也会一起消失。",
+  "gateway.profile.deletedNpcs":
+    "已删除配置文件。{channels} 个频道中的 {npcs} 个 NPC 席位也一并消失。",
   "gateway.profile.ownerOnly": "只有网关所有者才能注册配置文件。",
   "gateway.profile.status.valid": "正常",
   "gateway.profile.status.unauthorized": "认证失败",
@@ -1681,11 +1683,14 @@ const zh: Record<string, string> = {
   "gateways.deleted": "网关已删除。",
   "gateways.unbind": "断开连接",
   "gateways.unbindHint": "断开以下所有频道的连接后即可删除此网关。",
-  "gateways.unbindLoses": "将删除 {npcs} 个 NPC 和 {minutes} 条会议记录",
-  "gateways.unbindConfirm": "要断开 {name} 频道的连接吗？该频道的 NPC 和会议记录将被删除。",
+  "gateways.unbindLoses": "{npcs} 个 NPC 会下班 · {minutes} 条会议记录会保留",
+  "gateways.unbindConfirm":
+    "要断开 {name} 频道的连接吗？该频道的 NPC 会下班，重新连接后会带着原来的座位回来。会议记录会保留。",
   "gateways.unbound": "已断开 {name} 频道的连接。",
   "gateways.unbindNotOwner": "只有频道所有者才能断开连接",
-  "gateways.deleteConfirm": "要删除这个网关吗？已绑定到频道的网关无法删除。",
+  "gateways.backToOffice": "← 返回办公室",
+  "gateways.deleteConfirmWithUsage":
+    "要删除这个网关吗？{profiles} 个配置文件及其在 {channels} 个频道的 {npcs} 个 NPC 席位也会一并消失。",
   "gateways.shareTitle": "共享管理",
   "gateways.shareHelp": "输入其他用户的登录 ID，即可共享此网关的使用权限。",
   "gateways.selectGatewayFirst": "请先选择一个网关。",

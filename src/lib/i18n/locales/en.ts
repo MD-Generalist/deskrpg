@@ -175,10 +175,12 @@ const en: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "Display name (optional)",
   "gateway.profile.newTokenPlaceholder": "New profile token (16+ chars)",
   "gateway.profile.tokenKeepHint": "Leave the token blank to keep the existing one.",
-  "gateway.profile.deleteConfirm":
-    "Delete the profile {name}? NPCs using it are unbound, not deleted.",
-  "gateway.profile.deletedUnbound":
-    "Profile deleted. {count} NPC(s) were unbound and cannot talk until rebound.",
+  "gateway.profile.appearance": "Appearance",
+  "gateway.profile.appearanceSave": "Save appearance",
+  "gateway.profile.deleteConfirmWithUsage":
+    "Delete the profile {name}? It currently holds {npcs} NPC seat(s) across {channels} channel(s); deleting it removes those seats and their tasks.",
+  "gateway.profile.deletedNpcs":
+    "Profile deleted. {npcs} NPC seat(s) across {channels} channel(s) went with it.",
   "gateway.profile.ownerOnly": "Only the gateway owner can register profiles.",
   "gateway.profile.status.valid": "Valid",
   "gateway.profile.status.unauthorized": "Unauthorized",
@@ -1711,13 +1713,14 @@ const en: Record<string, string> = {
   "gateways.deleted": "Gateway deleted.",
   "gateways.unbind": "Disconnect",
   "gateways.unbindHint": "Disconnect every channel below to delete this gateway.",
-  "gateways.unbindLoses": "deletes {npcs} NPC(s) and {minutes} meeting record(s)",
+  "gateways.unbindLoses": "{npcs} NPC(s) clock out · {minutes} meeting record(s) stay",
   "gateways.unbindConfirm":
-    "Disconnect the gateway from {name}? That channel's NPCs and meeting records will be deleted.",
+    "Disconnect the gateway from {name}? That channel's NPCs clock out and come back to their seats if you reconnect. Meeting records stay.",
   "gateways.unbound": "Disconnected the gateway from {name}.",
   "gateways.unbindNotOwner": "Only the channel owner can disconnect it",
-  "gateways.deleteConfirm":
-    "Delete this gateway? A gateway still bound to channels cannot be deleted.",
+  "gateways.backToOffice": "← Back to the office",
+  "gateways.deleteConfirmWithUsage":
+    "Delete this gateway? {profiles} profile(s) and their {npcs} NPC seat(s) across {channels} channel(s) go with it.",
   "gateways.shareTitle": "Share Access",
   "gateways.shareHelp": "Enter another user's login ID to let them use this gateway.",
   "gateways.selectGatewayFirst": "Select a gateway first.",
@@ -2234,7 +2237,8 @@ const en: Record<string, string> = {
   "errors.failedToUpdateNpc": "Failed to update NPC",
   "errors.failedToDeleteNpc": "Failed to delete NPC",
   "errors.npcInMeeting": "This NPC is in a meeting. End the meeting first.",
-  "errors.unsupportedNpcField": "This field cannot be changed on the NPC — name and appearance belong to the Hermes profile.",
+  "errors.unsupportedNpcField":
+    "This field cannot be changed on the NPC — name and appearance belong to the Hermes profile.",
   "errors.internalServerError": "Internal server error",
   "errors.failedToFetchProjects": "Failed to fetch projects",
   "errors.projectNameRequired": "Project name is required",

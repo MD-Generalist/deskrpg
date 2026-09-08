@@ -13,7 +13,10 @@ import {
   type DiscoveryRow,
   type ProbeStatus,
 } from "./discovery-rows";
+import type { CharacterAppearance } from "@/lib/lpc-registry";
+
 import NpcHireWizard from "./NpcHireWizard";
+import ProfileAppearanceEditor from "./ProfileAppearanceEditor";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -22,15 +25,26 @@ type HermesProfileRow = {
   profileName: string;
   displayName: string | null;
   lastValidationStatus: string | null;
+  /** 외형은 프로필이 정본이다 — 편집기를 이 값에서 열어야 한다. */
+  appearance?: CharacterAppearance | null;
 };
 
 interface HermesProfileListProps {
   gatewayId: string;
   /** Registering a profile requires gateway ownership; a shared-access user can only view + test. */
   canRegister: boolean;
+  /** `?new=1` 로 들어왔을 때 고용 마법사를 바로 연다. */
+  autoOpenCreate?: boolean;
+  /** 프로필이 실제로 하나 생겼을 때만 부른다(닫기·삭제는 해당 없음). */
+  onCreated?: () => void;
 }
 
-export default function HermesProfileList({ gatewayId, canRegister }: HermesProfileListProps) {
+export default function HermesProfileList({
+  gatewayId,
+  canRegister,
+  autoOpenCreate = false,
+  onCreated,
+}: HermesProfileListProps) {
   const t = useT();
 
   const [profiles, setProfiles] = useState<HermesProfileRow[]>([]);
@@ -43,6 +57,8 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [editToken, setEditToken] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [busyId, setBusyId] = useState("");
+  /** 외형 편집기를 펼친 프로필. 편집기는 훅을 쓰므로 자식 컴포넌트로 마운트한다. */
+  const [appearanceId, setAppearanceId] = useState("");
 
   const [profileName, setProfileName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -75,7 +91,9 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   // 쓰고, 오래됐거나 없으면 그때만 `/test` 를 쏜다(원격 왕복 2회, 최대 10초) — 예전엔
   // 이 화면을 열 때마다(마법사를 열지 않아도) 무조건 다시 찔렀다.
   const [pluginStatus, setPluginStatus] = useState<PluginStatus>("unknown");
-  const [wizardOpen, setWizardOpen] = useState(false);
+  // `?new=1` 은 "지금 새 인격을 만들러 왔다" 는 뜻이다 — 소유자가 아니면 마법사
+  // 자체가 없으므로 열지 않는다.
+  const [wizardOpen, setWizardOpen] = useState(autoOpenCreate && canRegister);
 
   const reprobePlugin = useCallback(async () => {
     try {
@@ -122,17 +140,20 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
     };
   }, [gatewayId, reprobePlugin]);
 
-  const loadProfiles = useCallback(async () => {
+  const loadProfiles = useCallback(async (): Promise<HermesProfileRow[]> => {
     setLoading(true);
     setError("");
     try {
       const res = await fetch(`/api/gateways/${gatewayId}/profiles`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw data;
-      setProfiles(Array.isArray(data.profiles) ? data.profiles : []);
+      const rows: HermesProfileRow[] = Array.isArray(data.profiles) ? data.profiles : [];
+      setProfiles(rows);
+      return rows;
     } catch (nextError) {
       setError(getLocalizedErrorMessage(t, nextError, "common.error"));
       setProfiles([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -179,6 +200,7 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
       setDisplayName("");
       setToken("");
       await loadProfiles();
+      onCreated?.();
     } catch (nextError) {
       setAddError(getLocalizedErrorMessage(t, nextError, "common.error"));
     } finally {
@@ -219,7 +241,38 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   };
 
   const handleDelete = async (profile: HermesProfileRow) => {
-    if (!window.confirm(t("gateway.profile.deleteConfirm", { name: profile.profileName }))) return;
+    // 프로필 삭제는 해고다 — 그 프로필의 NPC 자리가 CASCADE 로 함께 사라진다.
+    // 몇 자리가 몇 채널에서 없어지는지 **묻기 전에** 서버에서 세어 온다. 개수를
+    // 모른 채 누르는 확인은 사실상 확인이 아니다.
+    let npcs = 0;
+    let channels = 0;
+    setBusyId(profile.id);
+    try {
+      const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profile.id}`);
+      const data = await res.json().catch(() => ({}));
+      const usage = (data as { usage?: { npcs?: unknown; channels?: unknown } }).usage;
+      if (res.ok && usage) {
+        npcs = Number(usage.npcs ?? 0);
+        channels = Number(usage.channels ?? 0);
+      }
+    } catch {
+      // 수치를 못 읽어도 삭제 자체는 막지 않는다 — 0 으로 물어본다.
+    } finally {
+      setBusyId("");
+    }
+
+    if (
+      !window.confirm(
+        t("gateway.profile.deleteConfirmWithUsage", {
+          name: profile.profileName,
+          npcs: String(npcs),
+          channels: String(channels),
+        }),
+      )
+    ) {
+      return;
+    }
+
     setBusyId(profile.id);
     setError("");
     try {
@@ -228,11 +281,22 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw data;
-      const unbound = Number((data as { unboundNpcs?: unknown }).unboundNpcs ?? 0);
-      // NPC 는 지워지지 않고 연결만 풀린다. 다만 다시 묶기 전까지 대화할 수 없으므로
-      // 몇 개가 그렇게 됐는지 알린다.
-      if (unbound > 0) setError(t("gateway.profile.deletedUnbound", { count: String(unbound) }));
+      // 서버 필드는 `deletedNpcs`/`channels` 다. 예전 이름(`unboundNpcs`)을 읽고 있어
+      // 이 알림은 늘 0 으로 계산돼 조용히 사라졌다 — NPC 가 지워졌다는 사실이
+      // 화면에 한 번도 뜨지 않았다.
+      const deletedNpcs = Number((data as { deletedNpcs?: unknown }).deletedNpcs ?? 0);
+      const lostChannels = Number((data as { channels?: unknown }).channels ?? 0);
+      // 알림은 **재조회 뒤에** 세운다 — `loadProfiles` 가 맨 앞에서 `setError("")` 를
+      // 하므로, 먼저 세우면 그 자리에서 지워진다(예전 코드가 그랬다).
       await loadProfiles();
+      if (deletedNpcs > 0) {
+        setError(
+          t("gateway.profile.deletedNpcs", {
+            npcs: String(deletedNpcs),
+            channels: String(lostChannels),
+          }),
+        );
+      }
     } catch (err) {
       setError(getLocalizedErrorMessage(t, err, "common.error"));
     } finally {
@@ -300,7 +364,13 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
             onDone={() => {
               setWizardOpen(false);
               setWizardProfile(null);
-              void loadProfiles();
+              // 마법사의 `onDone` 은 "만들었다" 가 아니라 "끝났다" 다 — 그냥 닫아도,
+              // 만든 프로필을 도로 지워도 같은 콜백이 온다. 목록이 실제로 늘었을
+              // 때만 생성으로 친다(안 그러면 닫기만 해도 화면이 튕겨 나간다).
+              const before = profiles.length;
+              void loadProfiles().then((rows) => {
+                if (rows.length > before) onCreated?.();
+              });
             }}
           />
         </div>
@@ -364,6 +434,15 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                         </button>
                         <button
                           type="button"
+                          onClick={() =>
+                            setAppearanceId((prev) => (prev === profile.id ? "" : profile.id))
+                          }
+                          className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
+                        >
+                          {t("gateway.profile.appearance")}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void handleDelete(profile)}
                           disabled={busyId === profile.id}
                           className="rounded bg-danger/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-danger disabled:opacity-60"
@@ -376,10 +455,12 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                 </div>
                 {editingId === profile.id && (
                   <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                    {/* 표시 이름이 비면 프로필 이름이 그대로 표시된다 — 그 폴백을
+                        placeholder 로 눈에 보이게 한다. */}
                     <input
                       value={editDisplayName}
                       onChange={(e) => setEditDisplayName(e.target.value)}
-                      placeholder={t("gateway.profile.displayNamePlaceholder")}
+                      placeholder={profile.profileName}
                       className="w-full rounded bg-surface-raised px-3 py-2 text-sm"
                     />
                     <input
@@ -399,6 +480,17 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                       {t("gateway.profile.save")}
                     </button>
                   </div>
+                )}
+                {canRegister && appearanceId === profile.id && (
+                  <ProfileAppearanceEditor
+                    gatewayId={gatewayId}
+                    profileId={profile.id}
+                    initialAppearance={profile.appearance ?? null}
+                    onSaved={() => {
+                      setAppearanceId("");
+                      void loadProfiles();
+                    }}
+                  />
                 )}
                 {testErrors[profile.id] && (
                   <p className="mt-1 text-xs text-danger">{testErrors[profile.id]}</p>

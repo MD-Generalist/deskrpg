@@ -173,10 +173,12 @@ const ko: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "표시 이름 (선택)",
   "gateway.profile.newTokenPlaceholder": "새 프로필 토큰 (16자 이상)",
   "gateway.profile.tokenKeepHint": "토큰을 비워 두면 기존 토큰을 유지합니다.",
-  "gateway.profile.deleteConfirm":
-    "{name} 프로필을 삭제하시겠습니까? 이 프로필을 쓰던 NPC 는 연결만 해제되고 삭제되지 않습니다.",
-  "gateway.profile.deletedUnbound":
-    "프로필을 삭제했습니다. NPC {count}개의 연결이 해제되어 다시 묶기 전까지 대화할 수 없습니다.",
+  "gateway.profile.appearance": "외형",
+  "gateway.profile.appearanceSave": "외형 저장",
+  "gateway.profile.deleteConfirmWithUsage":
+    "{name} 프로필을 삭제하시겠습니까? 지금 {channels}개 채널에서 NPC 자리 {npcs}개를 쓰고 있고, 삭제하면 그 자리와 태스크도 함께 사라집니다.",
+  "gateway.profile.deletedNpcs":
+    "프로필을 삭제했습니다. NPC 자리 {npcs}개가 {channels}개 채널에서 함께 사라졌습니다.",
   "gateway.profile.ownerOnly": "프로필 등록은 게이트웨이 소유자만 가능합니다.",
   "gateway.profile.status.valid": "정상",
   "gateway.profile.status.unauthorized": "인증 실패",
@@ -1708,13 +1710,14 @@ const ko: Record<string, string> = {
   "gateways.deleted": "게이트웨이를 삭제했습니다.",
   "gateways.unbind": "연결 해제",
   "gateways.unbindHint": "아래 채널의 연결을 모두 해제하면 이 게이트웨이를 삭제할 수 있습니다.",
-  "gateways.unbindLoses": "NPC {npcs}개 · 회의록 {minutes}건이 함께 삭제됩니다",
+  "gateways.unbindLoses": "NPC {npcs}개가 퇴근합니다 · 회의록 {minutes}건은 그대로 남습니다",
   "gateways.unbindConfirm":
-    "{name} 채널의 연결을 해제하시겠습니까? 그 채널의 NPC 와 회의록이 삭제됩니다.",
+    "{name} 채널의 연결을 해제하시겠습니까? 그 채널의 NPC 는 퇴근하고, 다시 연결하면 자리를 그대로 들고 돌아옵니다. 회의록은 남습니다.",
   "gateways.unbound": "{name} 채널의 연결을 해제했습니다.",
   "gateways.unbindNotOwner": "채널 소유자만 연결을 해제할 수 있습니다",
-  "gateways.deleteConfirm":
-    "이 게이트웨이를 삭제하시겠습니까? 채널에 연결된 게이트웨이는 삭제할 수 없습니다.",
+  "gateways.backToOffice": "← 사무실로 돌아가기",
+  "gateways.deleteConfirmWithUsage":
+    "이 게이트웨이를 삭제하시겠습니까? 프로필 {profiles}개와 그 프로필의 NPC 자리 {npcs}개({channels}개 채널)가 함께 사라집니다.",
   "gateways.shareTitle": "공유 관리",
   "gateways.shareHelp": "다른 사용자의 로그인 ID를 입력해 이 게이트웨이 사용 권한을 공유합니다.",
   "gateways.selectGatewayFirst": "먼저 게이트웨이를 선택하세요.",
@@ -2230,7 +2233,8 @@ const ko: Record<string, string> = {
   "errors.failedToUpdateNpc": "NPC를 수정하지 못했습니다",
   "errors.failedToDeleteNpc": "NPC를 삭제하지 못했습니다",
   "errors.npcInMeeting": "이 NPC 는 회의 중입니다. 회의를 먼저 끝내세요.",
-  "errors.unsupportedNpcField": "이 항목은 NPC 에서 바꿀 수 없습니다 — 이름과 외형은 Hermes 프로필이 정본입니다.",
+  "errors.unsupportedNpcField":
+    "이 항목은 NPC 에서 바꿀 수 없습니다 — 이름과 외형은 Hermes 프로필이 정본입니다.",
   "errors.internalServerError": "서버 내부 오류가 발생했습니다",
   "errors.failedToFetchProjects": "프로젝트 목록을 불러오지 못했습니다",
   "errors.projectNameRequired": "프로젝트 이름이 필요합니다",

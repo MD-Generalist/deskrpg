@@ -10,6 +10,7 @@ import {
   encryptGatewayToken,
   getAccessibleGatewayResource,
 } from "@/lib/gateway-resources";
+import { parseDbJson } from "@/lib/db-json";
 import { HermesClient, HermesError } from "@/lib/hermes/hermes-client";
 import type { HermesCapabilities } from "@/lib/hermes/types";
 
@@ -165,6 +166,9 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
     profileName: row.profileName,
     displayName: row.displayName,
     lastValidationStatus: row.lastValidationStatus,
+    // 외형은 프로필이 정본이다. 목록에 실어 주지 않으면 게이트웨이 화면의 외형
+    // 편집기가 기본값에서 시작해, 저장 한 번에 그 인격의 생김새를 조용히 갈아 치운다.
+    appearance: parseDbJson<unknown>(row.appearance) ?? null,
     inUse: bound.has(row.id),
   }));
 }
