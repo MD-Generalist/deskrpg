@@ -1469,6 +1469,14 @@ const ko: Record<string, string> = {
   "game.channelChatDisconnected":
     "실시간 연결이 끊겨 채팅을 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
   "game.channelChatNotJoined": "연결이 복구돼 다시 입장했습니다. 메시지를 한 번 더 보내 주세요.",
+  // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
+  "game.room.error.forbidden": "이 방에 들어갈 권한이 없습니다.",
+  "game.room.error.not_found": "방을 찾을 수 없습니다. 목록을 새로 불러왔습니다.",
+  "game.room.error.not_open": "방이 열려 있지 않습니다. 다시 들어와 주세요.",
+  "game.room.error.empty": "빈 메시지는 보낼 수 없습니다.",
+  "game.room.error.cooldown": "너무 빠릅니다. 잠시 후 다시 보내 주세요.",
+  "game.room.error.not_joined": "연결이 복구돼 다시 입장했습니다. 메시지를 한 번 더 보내 주세요.",
+  "game.room.error.invalid": "요청이 올바르지 않습니다.",
   "game.channelChatFailed": "채팅을 보내지 못했습니다. 잠시 후 다시 시도하세요.",
   "game.spawnSetSuccess": "스폰 위치가 설정되었습니다 ({col}, {row})",
 

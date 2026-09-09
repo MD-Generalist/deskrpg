@@ -13,20 +13,15 @@ import {
 import { isUniqueViolation } from "./db-unique-violation";
 import { uuidv7 } from "./uuid-v7";
 import { projectNpcRow } from "./npc-projection";
-import { sortRooms, type ReplyPolicy, type RoomSummary } from "./chat-rooms-policy";
+import {
+  sortRooms,
+  type ReplyPolicy,
+  type RoomMessage,
+  type RoomSummary,
+} from "./chat-rooms-policy";
 
-export type { RoomRow } from "./chat-rooms-policy";
+export type { RoomMessage, RoomRow } from "./chat-rooms-policy";
 import type { RoomRow } from "./chat-rooms-policy";
-
-export type RoomMessage = {
-  id: string;
-  roomId: string;
-  senderKind: "user" | "npc" | "system";
-  senderId: string | null;
-  senderName: string;
-  content: string;
-  createdAt: string;
-};
 
 function toIso(value: Date | string | null): string | null {
   if (value == null) return null;

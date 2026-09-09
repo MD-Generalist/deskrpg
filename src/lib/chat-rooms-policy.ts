@@ -9,6 +9,21 @@ export type RoomRow = {
   createdAt: Date;
   lastMessageAt: Date | null;
 };
+/**
+ * 방의 한 줄. `chat-rooms.ts`(서버 전용, `@/db` 를 끈다) 가 아니라 여기 있다 —
+ * 클라이언트가 이 타입을 필요로 하는데, 서버 모듈에서 `import type` 으로 가져와도
+ * `client-bundle-boundary.test.ts` 의 import 추적에 걸린다.
+ */
+export type RoomMessage = {
+  id: string;
+  roomId: string;
+  senderKind: "user" | "npc" | "system";
+  senderId: string | null;
+  senderName: string;
+  content: string;
+  createdAt: string;
+};
+
 export type RoomSummary = {
   id: string;
   kind: "office" | "group";

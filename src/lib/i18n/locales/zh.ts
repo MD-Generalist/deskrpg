@@ -1449,6 +1449,14 @@ const zh: Record<string, string> = {
   "game.npcChatDisconnected": "实时连接已断开，无法向 NPC 发送消息。请刷新后重试。",
   "game.channelChatDisconnected": "实时连接已断开，无法发送聊天消息。请刷新后重试。",
   "game.channelChatNotJoined": "连接已恢复并重新进入办公室，请再发送一次消息。",
+  // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
+  "game.room.error.forbidden": "你没有访问该房间的权限。",
+  "game.room.error.not_found": "找不到该房间，已重新加载列表。",
+  "game.room.error.not_open": "房间尚未打开，请重新进入。",
+  "game.room.error.empty": "无法发送空消息。",
+  "game.room.error.cooldown": "发送过快，请稍后再试。",
+  "game.room.error.not_joined": "连接已恢复并重新加入，请再发送一次消息。",
+  "game.room.error.invalid": "请求无效。",
   "game.channelChatFailed": "消息发送失败，请稍后重试。",
   "game.spawnSetSuccess": "已设置出生点 ({col}, {row})",
 

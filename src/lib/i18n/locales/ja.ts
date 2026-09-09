@@ -1477,6 +1477,15 @@ const ja: Record<string, string> = {
     "リアルタイム接続が切れているためチャットを送れません。再読み込みしてもう一度お試しください。",
   "game.channelChatNotJoined":
     "接続が復旧しオフィスに再入場しました。メッセージをもう一度送ってください。",
+  // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
+  "game.room.error.forbidden": "このルームにアクセスする権限がありません。",
+  "game.room.error.not_found": "ルームが見つかりません。一覧を読み込み直しました。",
+  "game.room.error.not_open": "ルームが開いていません。もう一度入り直してください。",
+  "game.room.error.empty": "空のメッセージは送信できません。",
+  "game.room.error.cooldown": "送信が速すぎます。少し待ってからもう一度お送りください。",
+  "game.room.error.not_joined":
+    "接続が復旧し、再入室しました。メッセージをもう一度送ってください。",
+  "game.room.error.invalid": "リクエストが正しくありません。",
   "game.channelChatFailed":
     "メッセージを送信できませんでした。しばらくしてからもう一度お試しください。",
   "game.spawnSetSuccess": "スポーン位置を設定しました ({col}, {row})",

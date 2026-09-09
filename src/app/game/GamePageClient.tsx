@@ -2,7 +2,7 @@
 
 import { MapChatWalkers } from "./map-chat-walkers";
 import { MapChatParticipants } from "./map-chat-participants";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -32,12 +32,14 @@ import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-regist
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
+import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
+import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import {
   buildPlacementRequest,
   keepsPlacementMode,
   placementBroadcastPlan,
 } from "@/game/npc-placement-request";
-import ChatPanel, { type ChannelChatMessage } from "@/components/ChatPanel";
+import ChatPanel from "@/components/ChatPanel";
 import NpcRoster, { type RosterNpc } from "@/components/NpcRoster";
 import RosterAvatar from "@/components/RosterAvatar";
 import MeetingRoom from "@/components/MeetingRoom";
@@ -264,8 +266,20 @@ function GamePageInner() {
     { id: string; name: string; type: "npc" | "player" }[] | null
   >(null);
 
-  // Channel chat state
-  const [channelMessages, setChannelMessages] = useState<ChannelChatMessage[]>([]);
+  // Channel chat state — 방(room)별로 갈린다. 서버는 `room:*` 만 말한다.
+  const [roomState, dispatchRoom] = useReducer(reduceRoomState, initialRoomState);
+  const currentRoomId = roomState.currentRoomId;
+  /**
+   * 지금 `room:open` 을 걸어 둔 방. 방을 옮길 때 이전 방을 닫으려면 필요하고,
+   * 재접속하면 서버의 `openRooms` 가 비므로 null 로 되돌려 다시 열게 한다.
+   */
+  const openedRoomRef = useRef<string | null>(null);
+  /**
+   * 내가 만든 방인가. 서버가 돌려주는 `room:created` 에는 `createdBy` 가 있지만
+   * 클라이언트는 자기 user id 를 모른다(뷰어 신원 엔드포인트가 없다). 그래서
+   * "이 클라이언트가 방금 만들기를 눌렀다" 를 이름으로 기억해 두고 그때만 들어간다.
+   */
+  const pendingCreateRef = useRef<Set<string>>(new Set());
   const [channelChatOpen, setChannelChatOpen] = useState(false);
   const [channelChatInputDisabled, setChannelChatInputDisabled] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -321,9 +335,11 @@ function GamePageInner() {
 
   const [npcMoveStates, setNpcMoveStates] = useState<Record<string, string>>({});
   const npcMoveStatesRef = useRef<Record<string, string>>({});
+  // 씬은 "지금 어느 방이 보이는가" 를 본다 — 패널이 닫혔거나 방이 없으면 null 이다.
+  // 두 값 중 하나만 바뀌어도 항상 최신 조합을 보내야 하므로 한 effect 에서 낸다.
   useEffect(() => {
-    EventBus.emit("channel-chat:visible", { visible: channelChatVisible });
-  }, [channelChatVisible]);
+    EventBus.emit("room:visible", { roomId: channelChatVisible ? currentRoomId : null });
+  }, [channelChatVisible, currentRoomId]);
   useEffect(() => {
     npcMoveStatesRef.current = npcMoveStates;
   }, [npcMoveStates]);
@@ -567,17 +583,25 @@ function GamePageInner() {
         setIsNpcStreaming(false);
         if (channelId) {
           socketInstance?.emit("task:list", { channelId });
+          socketInstance?.emit("room:list", { channelId });
         }
       });
       socketInstance.on("disconnect", (reason: string) => {
         setSocketConnected(false);
         setIsNpcStreaming(false);
+        // 서버의 openRooms 는 소켓별 상태다 — 끊기면 비므로 다시 열어야 한다.
+        openedRoomRef.current = null;
         showToastNotification("socket-disconnected", t("game.socketDisconnected", { reason }));
       });
-      socketInstance.on("chat:error", (payload: unknown) => {
-        const { toastKey, rejoin } = decideChatError(payload);
+      socketInstance.on("room:error", (payload: unknown) => {
+        const { toastKey, rejoin, backToList } = decideChatError(payload);
         showToastNotification("channel-chat-error", t(toastKey));
         if (rejoin) EventBus.emit("socket-rejoin");
+        if (backToList) {
+          // 그 방은 사라졌거나 권한을 잃었다 — 목록으로 돌아가 서버에서 새로 받는다.
+          dispatchRoom({ type: "showList" });
+          if (channelId) socketInstance?.emit("room:list", { channelId });
+        }
       });
       socketInstance.on("connect_error", (error: Error) => {
         setSocketConnected(false);
@@ -635,9 +659,33 @@ function GamePageInner() {
         setChannelPlayers((prev) => prev.filter((player) => player.id !== id));
       });
 
-      // Channel chat history (sent on join)
-      socketInstance.on("chat:history", (data: { messages: ChannelChatMessage[] }) => {
-        setChannelMessages(data.messages || []);
+      // 방 목록과 히스토리 — 목록은 connect 뒤에, 히스토리는 room:open 의 응답이다.
+      socketInstance.on("room:list-response", (data: { rooms: RoomSummary[] }) => {
+        let preferRoomId: string | null = null;
+        try {
+          preferRoomId = channelId ? window.localStorage.getItem(lastRoomKey(channelId)) : null;
+        } catch {
+          preferRoomId = null;
+        }
+        dispatchRoom({ type: "list", rooms: data.rooms || [], preferRoomId });
+      });
+
+      socketInstance.on("room:history", (data: { roomId: string; messages: RoomMessage[] }) => {
+        dispatchRoom({ type: "history", roomId: data.roomId, messages: data.messages || [] });
+      });
+
+      socketInstance.on("room:created", (data: { room: RoomSummary }) => {
+        const enter = pendingCreateRef.current.delete(data.room.name);
+        dispatchRoom({ type: "created", room: data.room, enter });
+      });
+
+      socketInstance.on("room:updated", (data: { room: RoomSummary }) => {
+        dispatchRoom({ type: "updated", room: data.room, enter: false });
+      });
+
+      socketInstance.on("room:deleted", (data: { roomId: string }) => {
+        if (openedRoomRef.current === data.roomId) openedRoomRef.current = null;
+        dispatchRoom({ type: "deleted", roomId: data.roomId });
       });
 
       // NPC chat history (sent on demand) — only apply if it matches the current dialog
@@ -666,18 +714,17 @@ function GamePageInner() {
         });
       });
 
-      // Channel chat messages
-      socketInstance.on("chat:message", (msg: ChannelChatMessage) => {
-        setChannelMessages((prev) => {
-          const next = [...prev, msg];
-          return next;
-        });
+      // Room messages
+      socketInstance.on("room:message", (data: { roomId: string; message: RoomMessage }) => {
+        const msg = data.message;
+        dispatchRoom({ type: "message", roomId: data.roomId, message: msg });
+        if (msg.senderKind === "system") return;
         // Show speech bubble on map
-        EventBus.emit("chat:bubble", { senderId: msg.senderId });
+        if (msg.senderId) EventBus.emit("chat:bubble", { senderId: msg.senderId });
         // Add notification + toast if not from self
-        if (msg.sender !== characterNameRef.current) {
+        if (msg.senderName !== characterNameRef.current) {
           const preview = msg.content.length > 30 ? msg.content.slice(0, 30) + "..." : msg.content;
-          showToastNotification(msg.id, `${msg.sender}: ${preview}`);
+          showToastNotification(msg.id, `${msg.senderName}: ${preview}`);
         }
       });
 
@@ -686,7 +733,8 @@ function GamePageInner() {
       // 사건이 진행 중인 회의 트랜스크립트에 삽입된다.
       socketInstance.on(
         "room:mention-skipped",
-        (data: { npcId: string; npcName: string; reason: MentionSkipReason }) => {
+        (data: { roomId: string; npcId: string; npcName: string; reason: MentionSkipReason }) => {
+          if (data.roomId !== openedRoomRef.current) return;
           showToastNotification(
             `chat-mention-skipped-${data.npcId}-${Date.now()}`,
             t(mentionSkipI18nKey(data.reason), { name: data.npcName }),
@@ -698,7 +746,8 @@ function GamePageInner() {
       // 없으면 사용자에게는 자기 말풍선 하나만 남는다.
       socketInstance.on(
         "room:npc-aborted",
-        (data: { npcId: string; npcName: string; reason: string }) => {
+        (data: { roomId: string; npcId: string; npcName: string; reason: string }) => {
+          if (data.roomId !== openedRoomRef.current) return;
           showToastNotification(
             `chat-npc-aborted-${data.npcId}-${Date.now()}`,
             t("chat.npcNoResponse", { name: data.npcName }),
@@ -745,7 +794,7 @@ function GamePageInner() {
       // NPC movement socket events — relay to GameScene via EventBus
       socketInstance.on(
         "npc:come-to-player",
-        (data: { npcId: string; targetPlayerId: string; reason?: string }) => {
+        (data: { npcId: string; targetPlayerId: string; reason?: string; roomId?: string }) => {
           setNpcCallers((prev) => ({ ...prev, [data.npcId]: data.targetPlayerId }));
           // Only the caller runs local A* pathfinding; other clients follow npc:position-sync
           if (socketInstance && data.targetPlayerId === socketInstance.id) {
@@ -756,8 +805,12 @@ function GamePageInner() {
             // GameScene 은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
             // 걷기로 일어나고 항목은 그때까지 살아 있다.
             mapChatWalkersRef.current.noteCall(data.npcId, data.reason);
-            mapChatParticipantsRef.current.noteCalled(data.npcId, data.reason);
-            EventBus.emit("npc:call-to-player", { npcId: data.npcId, reason: data.reason });
+            mapChatParticipantsRef.current.noteCalled(data.roomId, data.npcId, data.reason);
+            EventBus.emit("npc:call-to-player", {
+              npcId: data.npcId,
+              reason: data.reason,
+              roomId: data.roomId,
+            });
           }
         },
       );
@@ -990,16 +1043,25 @@ function GamePageInner() {
         },
       );
 
-      // Request initial task list for this channel
+      // Request initial task list + room list for this channel
       if (channelId) {
         socketInstance.emit("task:list", { channelId });
+        socketInstance.emit("room:list", { channelId });
       }
     });
 
     return () => {
       cancelled = true;
       if (socketInstance) {
-        socketInstance.off("chat:error");
+        socketInstance.off("room:error");
+        socketInstance.off("room:list-response");
+        socketInstance.off("room:history");
+        socketInstance.off("room:message");
+        socketInstance.off("room:created");
+        socketInstance.off("room:updated");
+        socketInstance.off("room:deleted");
+        socketInstance.off("room:mention-skipped");
+        socketInstance.off("room:npc-aborted");
         socketInstance.off("task:updated");
         socketInstance.off("task:deleted");
         socketInstance.off("task:list-response");
@@ -1476,13 +1538,14 @@ function GamePageInner() {
     [socket, dialogNpc],
   );
 
-  const handleChannelChatSend = useCallback(
+  const handleRoomSend = useCallback(
     (message: string) => {
       if (!socket || !socket.connected) {
         showToastNotification("channel-chat-disconnected", t("game.channelChatDisconnected"));
         return;
       }
-      socket.emit("chat:send", { message });
+      if (!currentRoomId) return;
+      socket.emit("room:send", { roomId: currentRoomId, message });
       // 대화를 다시 시작하는 메시지 — 자리로 돌아갔던 참여자를 다시 곁으로 부른다.
       // 지명된 NPC 는 서버가 따로 부르고, 이미 곁에 있거나 걷는 중이면 씬이 재호출을 무시한다.
       const present = new Set(
@@ -1490,11 +1553,98 @@ function GamePageInner() {
           .filter(([, st]) => st === "waiting" || st === "moving-to-player")
           .map(([id]) => id),
       );
-      for (const npcId of mapChatParticipantsRef.current.recallTargets(present)) {
-        socket.emit("npc:call", { channelId, npcId, reason: "map-chat" });
+      // 그룹 방의 참여자는 명단이 정본이다(지명하지 않아도 전원이 대답한다).
+      // office 는 명단이 채널 전원이라 그럴 수 없어 지명 이력을 쓴다.
+      const room = roomState.rooms.find((candidate) => candidate.id === currentRoomId);
+      const targets =
+        room?.kind === "group"
+          ? room.members
+              .filter((member) => member.kind === "npc")
+              .map((member) => member.id)
+              .filter((npcId) => !present.has(npcId))
+          : mapChatParticipantsRef.current.recallTargets(currentRoomId, present);
+      for (const npcId of targets) {
+        socket.emit("npc:call", { channelId, npcId, reason: "map-chat", roomId: currentRoomId });
       }
     },
-    [socket, channelId, showToastNotification, t],
+    [socket, channelId, currentRoomId, roomState.rooms, showToastNotification, t],
+  );
+
+  /** 방을 옮기면 이전 방을 닫고 새 방을 연다. 마지막 방은 채널별로 기억한다. */
+  useEffect(() => {
+    const socketInstance = socketRef.current;
+    if (!socketInstance || !socketConnected || !currentRoomId) return;
+    const previous = openedRoomRef.current;
+    if (previous === currentRoomId) return;
+    if (previous) socketInstance.emit("room:close", { roomId: previous });
+    socketInstance.emit("room:open", { roomId: currentRoomId });
+    openedRoomRef.current = currentRoomId;
+    if (channelId) {
+      try {
+        window.localStorage.setItem(lastRoomKey(channelId), currentRoomId);
+      } catch {
+        // 시크릿 모드·차단된 저장소 — 마지막 방을 기억하지 못할 뿐이다.
+      }
+    }
+  }, [currentRoomId, socketConnected, channelId]);
+
+  const handleRoomAction = useCallback(
+    (action: Parameters<typeof reduceRoomState>[1]) => dispatchRoom(action),
+    [],
+  );
+
+  const handleRoomCreate = useCallback(
+    (name: string, npcIds: string[], userIds: string[]) => {
+      if (!socket || !socket.connected || !channelId) return;
+      // 서버가 `room:created` 를 돌려줄 때 "내가 만든 것" 을 가릴 근거는 이 표시뿐이다.
+      pendingCreateRef.current.add(name);
+      socket.emit("room:create", { channelId, name, npcIds, userIds });
+    },
+    [socket, channelId],
+  );
+
+  const handleRoomInvite = useCallback(
+    (roomId: string, npcIds: string[], userIds: string[]) => {
+      socket?.emit("room:invite", { roomId, npcIds, userIds });
+    },
+    [socket],
+  );
+
+  const handleRoomLeave = useCallback(
+    (roomId: string) => {
+      socket?.emit("room:leave", { roomId });
+    },
+    [socket],
+  );
+
+  const handleRoomRename = useCallback(
+    (roomId: string, name: string) => {
+      socket?.emit("room:rename", { roomId, name });
+    },
+    [socket],
+  );
+
+  const handleRoomDelete = useCallback(
+    (roomId: string) => {
+      socket?.emit("room:delete", { roomId });
+    },
+    [socket],
+  );
+
+  /** `@` 로 지명할 수 있는 NPC — office 는 출근 중 전원, group 은 그중 방 멤버만. */
+  const mentionCandidatesFor = useCallback(
+    (roomId: string | null) => {
+      const active = rosterNpcs
+        .filter((npc) => npc.active)
+        .map((npc) => ({ id: npc.id, name: npc.name }));
+      const room = roomState.rooms.find((candidate) => candidate.id === roomId);
+      if (!room || room.kind === "office") return active;
+      const memberIds = new Set(
+        room.members.filter((member) => member.kind === "npc").map((member) => member.id),
+      );
+      return active.filter((npc) => memberIds.has(npc.id));
+    },
+    [rosterNpcs, roomState.rooms],
   );
 
   const handleGamePasswordSubmit = useCallback(
@@ -2615,14 +2765,19 @@ function GamePageInner() {
                 });
               setNpcMessages([]);
             }}
-            channelMessages={channelMessages}
+            roomState={roomState}
             channelChatOpen={channelChatOpen}
             channelChatInputDisabled={channelChatInputDisabled || !socketConnected}
             onChannelChatVisibleChange={setChannelChatVisible}
-            channelMentionCandidates={rosterNpcs
-              .filter((n) => n.active)
-              .map((n) => ({ id: n.id, name: n.name }))}
-            onSendChannelChat={handleChannelChatSend}
+            mentionCandidatesFor={mentionCandidatesFor}
+            onlinePlayers={channelPlayers.map((player) => ({ id: player.id, name: player.name }))}
+            onRoomSend={handleRoomSend}
+            onRoomAction={handleRoomAction}
+            onRoomCreate={handleRoomCreate}
+            onRoomInvite={handleRoomInvite}
+            onRoomLeave={handleRoomLeave}
+            onRoomRename={handleRoomRename}
+            onRoomDelete={handleRoomDelete}
             currentPlayerName={character?.name}
             npcMoveState={dialogNpc ? npcMoveStates[dialogNpc.npcId] : undefined}
             onReturnNpc={

@@ -1473,6 +1473,14 @@ const en: Record<string, string> = {
     "Cannot send chat because the real-time connection is lost. Refresh and try again.",
   "game.channelChatNotJoined":
     "Reconnected and rejoined the office. Please send your message again.",
+  // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
+  "game.room.error.forbidden": "You don't have access to this room.",
+  "game.room.error.not_found": "That room is gone. The list has been refreshed.",
+  "game.room.error.not_open": "The room isn't open. Please enter it again.",
+  "game.room.error.empty": "An empty message can't be sent.",
+  "game.room.error.cooldown": "Too fast — please wait a moment and send again.",
+  "game.room.error.not_joined": "Reconnected and rejoined. Please send the message once more.",
+  "game.room.error.invalid": "That request wasn't valid.",
   "game.channelChatFailed": "Couldn't send the message. Please try again in a moment.",
   "game.spawnSetSuccess": "Spawn position set ({col}, {row})",
 
