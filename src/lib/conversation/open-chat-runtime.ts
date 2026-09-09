@@ -41,6 +41,8 @@ export type OpenChatDeps = {
   historyLimit?: number;
   budget?: number;
   now?: () => number;
+  /** 방 정책. 없으면 지명만 — 사무실 전체 방과 같다. */
+  selectResponders?: (mentionedIds: string[]) => string[];
 };
 
 export class OpenChatRuntime {
@@ -91,7 +93,8 @@ export class OpenChatRuntime {
   ): Promise<void> {
     this.quota.resetByHuman();
     this.currentCallerSocketId = callerSocketId;
-    const targets = parseAllMentions(text, this.participantsView(), null);
+    const mentioned = parseAllMentions(text, this.participantsView(), null);
+    const targets = this.deps.selectResponders ? this.deps.selectResponders(mentioned) : mentioned;
     await this.dispatch(targets, senderName, /* fromHuman */ true);
   }
 

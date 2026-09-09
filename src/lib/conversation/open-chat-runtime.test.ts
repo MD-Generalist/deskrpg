@@ -271,4 +271,22 @@ describe("OpenChatRuntime", () => {
 
     assert.deepEqual(spoke, [], "지명 전용이므로 그냥 하는 말에는 반응하지 않는다");
   });
+
+  test("selectResponders 가 있으면 지명 대신 그 결과를 깨운다 — 지명 없는 메시지에도 전원 대답", async () => {
+    const spoke: string[] = [];
+    const rt = new OpenChatRuntime(
+      {
+        participants: [p("a", "소피", always("a!")), p("b", "올리버", always("b!"))],
+        recent: () => [],
+        turnTimeout: TIMEOUT,
+        selectResponders: (mentioned) => (mentioned.length ? mentioned : ["a", "b"]),
+      },
+      { onTurnEnd: (id) => spoke.push(id) },
+    );
+    await rt.handleHumanMessage("단테", "다들 안녕");
+    assert.deepEqual(spoke.sort(), ["a", "b"]);
+    spoke.length = 0;
+    await rt.handleHumanMessage("단테", "@[소피] 너만");
+    assert.deepEqual(spoke, ["a"]);
+  });
 });
