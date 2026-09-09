@@ -290,6 +290,9 @@ function GamePageInner() {
   const [notifications, setNotifications] = useState<GameNotification[]>([]);
   const [notificationsExpanded, setNotificationsExpanded] = useState(false);
   const characterNameRef = useRef<string>("");
+  const characterAppearanceRef = useRef<CharacterAppearance | LegacyCharacterAppearance | null>(
+    null,
+  );
 
   // NPC greeting messages (stored until dialog opens)
   const npcGreetings = useRef<Map<string, string>>(new Map());
@@ -624,8 +627,8 @@ function GamePageInner() {
         setChannelPlayers([
           {
             id: "__self__",
-            name: characterNameRef.current || character?.name || t("game.you"),
-            appearance: character?.appearance ?? null,
+            name: characterNameRef.current || t("game.you"),
+            appearance: characterAppearanceRef.current ?? null,
           },
           ...(
             (data.players || []) as {
@@ -1082,21 +1085,15 @@ function GamePageInner() {
         socketInstance.removeAllListeners();
         socketInstance.disconnect();
       }
+      // removeAllListeners() 가 disconnect 핸들러를 먼저 떼므로 그 안의 리셋이 안 돈다.
+      // 소켓이 재생성되면 room:open 이펙트가 새 소켓에 무조건 다시 열도록 여기서 리셋한다.
+      openedRoomRef.current = null;
       setSocket(null);
       setSocketConnected(false);
       setChannelPlayers([]);
       socketRef.current = null;
     };
-  }, [
-    appendPendingReportToDialog,
-    channelId,
-    character?.appearance,
-    character?.name,
-    characterId,
-    router,
-    showToastNotification,
-    t,
-  ]);
+  }, [appendPendingReportToDialog, channelId, characterId, router, showToastNotification, t]);
 
   useEffect(() => {
     if (!showTaskBoard) return;
@@ -1738,6 +1735,7 @@ function GamePageInner() {
           }
           setCharacter(found);
           characterNameRef.current = found.name;
+          characterAppearanceRef.current = found.appearance ?? null;
 
           // Channel
           if (channelData.error) {
