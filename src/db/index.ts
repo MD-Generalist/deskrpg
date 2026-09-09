@@ -86,6 +86,9 @@ export const tilesetImages = activeSchema.tilesetImages;
 export const projects = activeSchema.projects;
 export const projectTilesets = activeSchema.projectTilesets;
 export const projectStamps = activeSchema.projectStamps;
+export const chatRooms = activeSchema.chatRooms;
+export const chatRoomMembers = activeSchema.chatRoomMembers;
+export const chatRoomMessages = activeSchema.chatRoomMessages;
 
 // Use PG type for all API routes — Drizzle's runtime API is identical across dialects.
 type DbInstance = NodePgDatabase<typeof pgSchema>;

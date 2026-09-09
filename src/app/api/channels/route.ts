@@ -20,6 +20,7 @@ import {
   upsertOwnedGatewayResource,
 } from "@/lib/gateway-resources";
 import { hireGatewayProfilesIntoChannel } from "@/lib/npc-roster";
+import { ensureOfficeRoom } from "@/lib/chat-rooms";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
 import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
 import { isChannelPasswordValid } from "@/lib/security-policy";
@@ -331,6 +332,8 @@ export async function POST(req: NextRequest) {
         ),
       })
       .returning();
+
+    await ensureOfficeRoom(channel.id, userId);
 
     if (gatewayConfig?.gatewayId || gatewayConfig?.url) {
       try {

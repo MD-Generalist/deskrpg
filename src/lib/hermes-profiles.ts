@@ -2,9 +2,17 @@
 // live gateway, and assembles authenticated HermesClient instances. Sits between the
 // DB (hermesProfiles/npcs/gatewayResources) and callers (API routes, socket dispatch).
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-import { db, hermesProfiles, jsonForDb, nowForDb, npcs, gatewayResources } from "@/db";
+import {
+  db,
+  hermesProfiles,
+  jsonForDb,
+  nowForDb,
+  npcs,
+  gatewayResources,
+  chatRoomMembers,
+} from "@/db";
 import {
   decryptGatewayToken,
   encryptGatewayToken,
@@ -240,6 +248,20 @@ export async function deleteHermesProfile(
   if (!access) return { ok: false, errorCode: "forbidden" };
 
   const usage = await profileUsage(profileId);
+
+  // 프로필 삭제는 npcs 를 cascade 로 지운다 — 그 NPC 가 대화방 멤버로 남아 있던
+  // chat_room_members 행은 cascade 대상이 아니므로(멤버 테이블은 npcs 를 FK 로 물지
+  // 않는다) 지우기 전에 NPC id 를 먼저 걷어 직접 정리한다.
+  const affectedNpcs = await db
+    .select({ id: npcs.id })
+    .from(npcs)
+    .where(eq(npcs.hermesProfileId, profileId));
+  const npcIds = affectedNpcs.map((n) => n.id);
+  if (npcIds.length > 0) {
+    await db
+      .delete(chatRoomMembers)
+      .where(and(eq(chatRoomMembers.memberKind, "npc"), inArray(chatRoomMembers.memberId, npcIds)));
+  }
 
   await db.delete(hermesProfiles).where(eq(hermesProfiles.id, profileId));
   return { ok: true, deletedNpcs: usage.npcs, channels: usage.channels };
