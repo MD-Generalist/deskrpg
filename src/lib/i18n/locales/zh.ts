@@ -1448,6 +1448,8 @@ const zh: Record<string, string> = {
   "game.npcGreeting": "{name} 向你打了招呼！",
   "game.npcChatDisconnected": "实时连接已断开，无法向 NPC 发送消息。请刷新后重试。",
   "game.channelChatDisconnected": "实时连接已断开，无法发送聊天消息。请刷新后重试。",
+  "game.channelChatNotJoined": "连接已恢复并重新进入办公室，请再发送一次消息。",
+  "game.channelChatFailed": "消息发送失败，请稍后重试。",
   "game.spawnSetSuccess": "已设置出生点 ({col}, {row})",
 
   // Chat

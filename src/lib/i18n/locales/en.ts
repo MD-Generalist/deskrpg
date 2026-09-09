@@ -1471,6 +1471,9 @@ const en: Record<string, string> = {
     "Cannot send NPC messages because the real-time connection is lost. Refresh and try again.",
   "game.channelChatDisconnected":
     "Cannot send chat because the real-time connection is lost. Refresh and try again.",
+  "game.channelChatNotJoined":
+    "Reconnected and rejoined the office. Please send your message again.",
+  "game.channelChatFailed": "Couldn't send the message. Please try again in a moment.",
   "game.spawnSetSuccess": "Spawn position set ({col}, {row})",
 
   // Chat

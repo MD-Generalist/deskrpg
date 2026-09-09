@@ -1468,6 +1468,8 @@ const ko: Record<string, string> = {
     "실시간 연결이 끊겨 NPC 메시지를 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
   "game.channelChatDisconnected":
     "실시간 연결이 끊겨 채팅을 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
+  "game.channelChatNotJoined": "연결이 복구돼 다시 입장했습니다. 메시지를 한 번 더 보내 주세요.",
+  "game.channelChatFailed": "채팅을 보내지 못했습니다. 잠시 후 다시 시도하세요.",
   "game.spawnSetSuccess": "스폰 위치가 설정되었습니다 ({col}, {row})",
 
   // Chat

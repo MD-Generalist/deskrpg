@@ -1475,6 +1475,10 @@ const ja: Record<string, string> = {
     "リアルタイム接続が切れているためNPCにメッセージを送れません。再読み込みしてもう一度お試しください。",
   "game.channelChatDisconnected":
     "リアルタイム接続が切れているためチャットを送れません。再読み込みしてもう一度お試しください。",
+  "game.channelChatNotJoined":
+    "接続が復旧しオフィスに再入場しました。メッセージをもう一度送ってください。",
+  "game.channelChatFailed":
+    "メッセージを送信できませんでした。しばらくしてからもう一度お試しください。",
   "game.spawnSetSuccess": "スポーン位置を設定しました ({col}, {row})",
 
   // Chat

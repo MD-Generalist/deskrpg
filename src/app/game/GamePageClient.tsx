@@ -30,6 +30,7 @@ import type { Socket } from "socket.io-client";
 import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
+import { decideChatError } from "./chat-error-dispatch";
 import {
   buildPlacementRequest,
   keepsPlacementMode,
@@ -562,6 +563,11 @@ function GamePageInner() {
         setIsNpcStreaming(false);
         showToastNotification("socket-disconnected", t("game.socketDisconnected", { reason }));
       });
+      socketInstance.on("chat:error", (payload: unknown) => {
+        const { toastKey, rejoin } = decideChatError(payload);
+        showToastNotification("channel-chat-error", t(toastKey));
+        if (rejoin) EventBus.emit("socket-rejoin");
+      });
       socketInstance.on("connect_error", (error: Error) => {
         setSocketConnected(false);
         setIsNpcStreaming(false);
@@ -981,6 +987,7 @@ function GamePageInner() {
     return () => {
       cancelled = true;
       if (socketInstance) {
+        socketInstance.off("chat:error");
         socketInstance.off("task:updated");
         socketInstance.off("task:deleted");
         socketInstance.off("task:list-response");
