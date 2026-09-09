@@ -54,6 +54,8 @@ interface ChatPanelProps {
   onSendChannelChat: (message: string) => void;
   /** `@` 로 지명할 수 있는 NPC — 출근 중인 것(자리 미정 포함). 서버가 응답하는 집합과 같다. */
   channelMentionCandidates?: { id: string; name: string }[];
+  /** 채널 채팅 뷰(패널 열림 + DM/선택목록 아님)가 보이는지 — 맵의 NPC 대기 규칙이 이걸 본다. */
+  onChannelChatVisibleChange?: (visible: boolean) => void;
   currentPlayerName?: string;
 }
 
@@ -81,6 +83,7 @@ export default function ChatPanel({
   channelChatInputDisabled,
   onSendChannelChat,
   channelMentionCandidates,
+  onChannelChatVisibleChange,
   currentPlayerName,
   npcMoveState,
   onReturnNpc,
@@ -113,6 +116,10 @@ export default function ChatPanel({
   const activeNpcId = dialogNpc?.npcId ?? null;
   const activeTab = activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat";
   const isOpen = manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
+  const channelChatVisible = isOpen && !dialogNpc && !npcSelectList;
+  useEffect(() => {
+    onChannelChatVisibleChange?.(channelChatVisible);
+  }, [channelChatVisible, onChannelChatVisibleChange]);
 
   // Auto-scroll NPC messages
   useEffect(() => {

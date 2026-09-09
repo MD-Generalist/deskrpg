@@ -1,6 +1,7 @@
 "use client";
 
 import { MapChatWalkers } from "./map-chat-walkers";
+import { MapChatParticipants } from "./map-chat-participants";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -284,6 +285,9 @@ function GamePageInner() {
    * 컨텍스트 메뉴로 부른 경우(자동으로 대화창을 여는 기존 동작)와는 다른 사건이다.
    */
   const mapChatWalkersRef = useRef<MapChatWalkers>(new MapChatWalkers());
+  const mapChatParticipantsRef = useRef<MapChatParticipants>(new MapChatParticipants());
+  /** 채널 채팅 패널이 지금 보이는가(ChatPanel 이 알려 준다) — 씬에 전달한다. */
+  const [channelChatVisible, setChannelChatVisible] = useState(false);
   const consumedNpcReportIdsRef = useRef<Set<string>>(new Set());
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -315,6 +319,13 @@ function GamePageInner() {
   } | null>(null);
 
   const [npcMoveStates, setNpcMoveStates] = useState<Record<string, string>>({});
+  const npcMoveStatesRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    EventBus.emit("channel-chat:visible", { visible: channelChatVisible });
+  }, [channelChatVisible]);
+  useEffect(() => {
+    npcMoveStatesRef.current = npcMoveStates;
+  }, [npcMoveStates]);
   const [npcCallers, setNpcCallers] = useState<Record<string, string>>({}); // npcId → callerSocketId
 
   // Ref to accumulate streaming text (avoids setState-in-effect issues)
@@ -739,7 +750,8 @@ function GamePageInner() {
             // GameScene 은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
             // 걷기로 일어나고 항목은 그때까지 살아 있다.
             mapChatWalkersRef.current.noteCall(data.npcId, data.reason);
-            EventBus.emit("npc:call-to-player", { npcId: data.npcId });
+            mapChatParticipantsRef.current.noteCalled(data.npcId, data.reason);
+            EventBus.emit("npc:call-to-player", { npcId: data.npcId, reason: data.reason });
           }
         },
       );
@@ -1464,8 +1476,18 @@ function GamePageInner() {
         return;
       }
       socket.emit("chat:send", { message });
+      // 대화를 다시 시작하는 메시지 — 자리로 돌아갔던 참여자를 다시 곁으로 부른다.
+      // 지명된 NPC 는 서버가 따로 부르고, 이미 곁에 있거나 걷는 중이면 씬이 재호출을 무시한다.
+      const present = new Set(
+        Object.entries(npcMoveStatesRef.current)
+          .filter(([, st]) => st === "waiting" || st === "moving-to-player")
+          .map(([id]) => id),
+      );
+      for (const npcId of mapChatParticipantsRef.current.recallTargets(present)) {
+        socket.emit("npc:call", { channelId, npcId, reason: "map-chat" });
+      }
     },
-    [socket, showToastNotification, t],
+    [socket, channelId, showToastNotification, t],
   );
 
   const handleGamePasswordSubmit = useCallback(
@@ -1872,6 +1894,7 @@ function GamePageInner() {
     (npcId: string) => {
       if (!socket) return;
       socket.emit("npc:return-home", { channelId, npcId });
+      mapChatParticipantsRef.current.dismiss(npcId);
       setContextMenu(null);
       closeRosterMenus();
     },
@@ -2588,6 +2611,7 @@ function GamePageInner() {
             channelMessages={channelMessages}
             channelChatOpen={channelChatOpen}
             channelChatInputDisabled={channelChatInputDisabled || !socketConnected}
+            onChannelChatVisibleChange={setChannelChatVisible}
             channelMentionCandidates={rosterNpcs
               .filter((n) => n.active)
               .map((n) => ({ id: n.id, name: n.name }))}
