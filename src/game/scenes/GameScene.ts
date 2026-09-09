@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { fetchChannelNpcs } from "../npc-prefetch";
-import { shouldAutoReturn, shouldReturnOnChatClose, type CalledBy } from "../npc-auto-return";
+import { shouldAutoReturn, shouldReturnOnRoomChange } from "../npc-auto-return";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
 import { decideNpcUpdate, type NpcUpdatedPayload } from "@/game/npc-updated-dispatch";
@@ -343,8 +343,8 @@ class NpcSprite {
   pendingReportKind: string | null = null;
   arrivalBubbleText: string | null = null;
   waitDurationMs = 10000;
-  /** 누가 불렀나 — 맵 채팅으로 온 NPC 는 채널 채팅이 보이는 동안 자리로 돌아가지 않는다. */
-  calledBy: CalledBy = "direct";
+  /** 어느 방에서 불렀나 — null 이면 직접 부른 것. "r1" 같은 roomId 면 방에서 불렀으므로 그 방이 보이는 동안 자리로 돌아가지 않는다. */
+  calledForRoom: string | null = null;
   private pathRecalcTimer = 0; // ms accumulated
   private stuckFrames = 0;
   private lastDist = Infinity;
@@ -853,8 +853,8 @@ export class GameScene extends Phaser.Scene {
   private nearbyNpcs: NpcSprite[] = [];
   private nearbyPlayers: { id: string; name: string }[] = [];
   private dialogOpen = false;
-  /** 채널 채팅 패널이 보이는가 — GamePageClient 가 channel-chat:visible 로 알려 준다. */
-  private channelChatVisible = false;
+  /** 어느 방의 대화가 보이는가 — GamePageClient 가 room:visible 로 알려 준다. null 이면 보이는 방이 없음. */
+  private visibleRoomId: string | null = null;
   private lastToastMessage: string | null = null;
   private lastChatInputEnabled: boolean | null = null;
   private editorKeys: {
@@ -1272,12 +1272,11 @@ export class GameScene extends Phaser.Scene {
     EventBus.on("dialog:close", () => {
       this.dialogOpen = false;
     });
-    // 채널 채팅이 닫히면 맵 채팅으로 온 NPC 는 타이머 없이 바로 자리로 간다.
-    EventBus.on("channel-chat:visible", (data: { visible: boolean }) => {
-      this.channelChatVisible = data.visible;
-      if (data.visible) return;
+    // 보이는 방이 바뀌면, 그 방이 아닌 호출된 NPC 는 타이머 없이 바로 자리로 간다.
+    EventBus.on("room:visible", (data: { roomId: string | null }) => {
+      this.visibleRoomId = data.roomId;
       for (const npc of this.npcSprites) {
-        if (!shouldReturnOnChatClose(npc)) continue;
+        if (!shouldReturnOnRoomChange(npc, data.roomId)) continue;
         this.sendNpcHome(npc);
       }
     });
@@ -1366,13 +1365,14 @@ export class GameScene extends Phaser.Scene {
         bubbleText?: string;
         npcName?: string;
         reason?: string;
+        roomId?: string;
       }) => {
         if (!this.player) return;
         const playerCol = Math.floor(this.player.x / TILE_SIZE);
         const playerRow = Math.floor(this.player.y / TILE_SIZE);
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
         if (!npc || npc.moveState !== "idle") return;
-        npc.calledBy = data.reason === "map-chat" ? "map-chat" : "direct";
+        npc.calledForRoom = data.reason === "map-chat" ? (data.roomId ?? null) : null;
 
         const dist = npc.distanceTo(this.player.x, this.player.y);
         if (dist < TILE_SIZE + 4) {
@@ -3382,7 +3382,7 @@ export class GameScene extends Phaser.Scene {
         if (
           shouldAutoReturn(npc, {
             dialogOpen: this.dialogOpen,
-            channelChatVisible: this.channelChatVisible,
+            visibleRoomId: this.visibleRoomId,
           })
         ) {
           npc.waitTimer += this.game.loop.delta;
