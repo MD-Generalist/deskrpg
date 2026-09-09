@@ -181,6 +181,64 @@ test("room:create 는 만든 사람을 멤버로 넣고 room:created 를 주며,
   assert.equal(t.woke.at(-1)?.roomId, created.room.id);
 });
 
+test("room:created 의 requestId 는 요청한 소켓에만 되돌아온다 — 초대된 사람에게는 없다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const invitee = await seedUser("room-invitee");
+  const t = setup();
+  await t.register(seeded);
+  // 초대받을 사람의 소켓. `socketIdsForUsers` 가 이 목록에서 대상 소켓을 고른다.
+  t.players.set("s2", {
+    id: "s2",
+    userId: invitee.id,
+    characterId: "c2",
+    characterName: "손님",
+    appearance: null,
+    mapId: seeded.channelId,
+    x: 0,
+    y: 0,
+    direction: "down",
+    animation: "idle",
+  });
+
+  await t.socket.trigger("room:create", {
+    channelId: seeded.channelId,
+    name: "기획",
+    npcIds: [seeded.npcIds[0]],
+    userIds: [invitee.id],
+    requestId: "r1",
+  });
+
+  // `ev` 는 접두어로 걸러서 `room:created@s2` 까지 잡는다 — 여기서는 두 갈래를 갈라야 한다.
+  const mine = t.emitted.filter(([e]) => e === "room:created").map(([, p]) => p);
+  const theirs = t.emitted.filter(([e]) => e === "room:created@s2").map(([, p]) => p);
+  assert.deepEqual(
+    mine.map((p) => (p as { requestId?: string }).requestId),
+    ["r1"],
+  );
+  assert.equal(theirs.length, 1, "초대된 사람도 방이 생긴 것을 알아야 한다");
+  assert.equal(
+    (theirs[0] as { requestId?: string }).requestId,
+    undefined,
+    "남의 표를 받으면 그 사람 화면이 남의 방으로 끌려 들어간다",
+  );
+});
+
+test("쓸 수 없는 requestId 는 무시한다 — 표 없이 방만 만든다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  await t.socket.trigger("room:create", {
+    channelId: seeded.channelId,
+    name: "기획",
+    npcIds: [seeded.npcIds[0]],
+    userIds: [],
+    requestId: "x".repeat(65),
+  });
+  const [created] = t.emitted.filter(([e]) => e === "room:created").map(([, p]) => p);
+  assert.equal((created as { requestId?: string }).requestId, undefined);
+  assert.ok((created as { room: { id: string } }).room.id, "방은 정상으로 만들어진다");
+});
+
 test("room:delete 는 만든 사람만, office 는 invalid", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();

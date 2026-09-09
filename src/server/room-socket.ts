@@ -252,12 +252,20 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         name,
         npcIds: rawNpcIds,
         userIds: rawUserIds,
+        requestId: rawRequestId,
       } = (payload ?? {}) as {
         channelId?: unknown;
         name?: unknown;
         npcIds?: unknown;
         userIds?: unknown;
+        requestId?: unknown;
       };
+      // 만든 사람의 화면만 새 방으로 들어간다. 클라이언트는 자기 user id 를 모르므로
+      // 요청에 실어 보낸 표를 그대로 되돌려 준다 — 초대된 사람의 알림에는 넣지 않는다.
+      const requestId =
+        typeof rawRequestId === "string" && rawRequestId.length > 0 && rawRequestId.length <= 64
+          ? rawRequestId
+          : null;
       const id = asString(channelId);
       if (!id) return fail(null, "invalid");
       const npcIds = asStringArray(rawNpcIds);
@@ -277,7 +285,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const summary = await summaryFor(id, room.id);
       if (!summary) return fail(room.id, "not_found");
 
-      socket.emit("room:created", { room: summary });
+      socket.emit("room:created", requestId ? { room: summary, requestId } : { room: summary });
       for (const socketId of socketIdsForUsers(new Set(userIds))) {
         roomIo.to(socketId).emit("room:created", { room: summary });
       }

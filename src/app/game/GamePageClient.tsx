@@ -275,11 +275,11 @@ function GamePageInner() {
    */
   const openedRoomRef = useRef<string | null>(null);
   /**
-   * 내가 만든 방인가. 서버가 돌려주는 `room:created` 에는 `createdBy` 가 있지만
-   * 클라이언트는 자기 user id 를 모른다(뷰어 신원 엔드포인트가 없다). 그래서
-   * "이 클라이언트가 방금 만들기를 눌렀다" 를 이름으로 기억해 두고 그때만 들어간다.
+   * 내가 만든 방인가. 클라이언트는 자기 user id 를 모르므로(뷰어 신원 엔드포인트가 없다)
+   * `room:create` 에 일회용 표를 실어 보내고, 서버가 **요청한 소켓에만** 그 표를 되돌려 준다.
+   * 이름으로 가르면 같은 이름을 동시에 만든 두 사람이 서로의 방으로 끌려 들어간다.
    */
-  const pendingCreateRef = useRef<Set<string>>(new Set());
+  const pendingCreateRef = useRef<string | null>(null);
   const [channelChatOpen, setChannelChatOpen] = useState(false);
   const [channelChatInputDisabled, setChannelChatInputDisabled] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -674,8 +674,9 @@ function GamePageInner() {
         dispatchRoom({ type: "history", roomId: data.roomId, messages: data.messages || [] });
       });
 
-      socketInstance.on("room:created", (data: { room: RoomSummary }) => {
-        const enter = pendingCreateRef.current.delete(data.room.name);
+      socketInstance.on("room:created", (data: { room: RoomSummary; requestId?: string }) => {
+        const enter = data.requestId != null && data.requestId === pendingCreateRef.current;
+        if (enter) pendingCreateRef.current = null;
         dispatchRoom({ type: "created", room: data.room, enter });
       });
 
@@ -1596,9 +1597,10 @@ function GamePageInner() {
   const handleRoomCreate = useCallback(
     (name: string, npcIds: string[], userIds: string[]) => {
       if (!socket || !socket.connected || !channelId) return;
-      // 서버가 `room:created` 를 돌려줄 때 "내가 만든 것" 을 가릴 근거는 이 표시뿐이다.
-      pendingCreateRef.current.add(name);
-      socket.emit("room:create", { channelId, name, npcIds, userIds });
+      // 서버가 `room:created` 를 돌려줄 때 "내가 만든 것" 을 가릴 근거는 이 표뿐이다.
+      const requestId = crypto.randomUUID();
+      pendingCreateRef.current = requestId;
+      socket.emit("room:create", { channelId, name, npcIds, userIds, requestId });
     },
     [socket, channelId],
   );
