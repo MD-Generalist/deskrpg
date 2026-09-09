@@ -1,0 +1,60 @@
+import "../test-setup/dom";
+
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+
+import { I18nProvider } from "@/lib/i18n";
+import ChatInput from "./ChatInput";
+
+async function mount(node: React.ReactElement): Promise<HTMLElement> {
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+  const root = createRoot(el);
+  await act(async () => {
+    root.render(node);
+  });
+  return el;
+}
+
+test("후보가 없으면 지금처럼 textarea 다", async () => {
+  const el = await mount(
+    <I18nProvider>
+      <ChatInput onSend={() => {}} />
+    </I18nProvider>,
+  );
+  assert.ok(el.querySelector("textarea"));
+  assert.equal(el.querySelector('[contenteditable="true"]'), null);
+});
+
+test("후보가 있으면 멘션 편집기를 쓰고, 전송값은 @[이름] 으로 직렬화된다", async () => {
+  const sent: string[] = [];
+  const el = await mount(
+    <I18nProvider>
+      <ChatInput onSend={(m) => sent.push(m)} mentionCandidates={[{ id: "a", name: "소피" }]} />
+    </I18nProvider>,
+  );
+  const ed = el.querySelector('[contenteditable="true"]') as HTMLElement;
+  assert.ok(ed);
+  assert.equal(el.querySelector("textarea"), null);
+  await act(async () => {
+    ed.appendChild(document.createTextNode("@소"));
+    ed.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    (el.querySelector('[role="option"]') as HTMLElement).click();
+  });
+  await act(async () => {
+    ed.appendChild(document.createTextNode("안녕"));
+    ed.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    ed.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+  });
+  assert.deepEqual(sent, ["@[소피] 안녕"]);
+  assert.equal(ed.textContent, "", "전송 후 편집기가 비워져야 한다");
+});

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { fetchChannelNpcs } from "../npc-prefetch";
+import { shouldAutoReturn, shouldReturnOnChatClose, type CalledBy } from "../npc-auto-return";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
 import { decideNpcUpdate, type NpcUpdatedPayload } from "@/game/npc-updated-dispatch";
@@ -342,6 +343,8 @@ class NpcSprite {
   pendingReportKind: string | null = null;
   arrivalBubbleText: string | null = null;
   waitDurationMs = 10000;
+  /** 누가 불렀나 — 맵 채팅으로 온 NPC 는 채널 채팅이 보이는 동안 자리로 돌아가지 않는다. */
+  calledBy: CalledBy = "direct";
   private pathRecalcTimer = 0; // ms accumulated
   private stuckFrames = 0;
   private lastDist = Infinity;
@@ -850,6 +853,8 @@ export class GameScene extends Phaser.Scene {
   private nearbyNpcs: NpcSprite[] = [];
   private nearbyPlayers: { id: string; name: string }[] = [];
   private dialogOpen = false;
+  /** 채널 채팅 패널이 보이는가 — GamePageClient 가 channel-chat:visible 로 알려 준다. */
+  private channelChatVisible = false;
   private lastToastMessage: string | null = null;
   private lastChatInputEnabled: boolean | null = null;
   private editorKeys: {
@@ -1267,6 +1272,15 @@ export class GameScene extends Phaser.Scene {
     EventBus.on("dialog:close", () => {
       this.dialogOpen = false;
     });
+    // 채널 채팅이 닫히면 맵 채팅으로 온 NPC 는 타이머 없이 바로 자리로 간다.
+    EventBus.on("channel-chat:visible", (data: { visible: boolean }) => {
+      this.channelChatVisible = data.visible;
+      if (data.visible) return;
+      for (const npc of this.npcSprites) {
+        if (!shouldReturnOnChatClose(npc)) continue;
+        this.sendNpcHome(npc);
+      }
+    });
 
     // Placement mode events
     EventBus.on("placement-mode-start", () => {
@@ -1351,12 +1365,14 @@ export class GameScene extends Phaser.Scene {
         reportKind?: string;
         bubbleText?: string;
         npcName?: string;
+        reason?: string;
       }) => {
         if (!this.player) return;
         const playerCol = Math.floor(this.player.x / TILE_SIZE);
         const playerRow = Math.floor(this.player.y / TILE_SIZE);
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
         if (!npc || npc.moveState !== "idle") return;
+        npc.calledBy = data.reason === "map-chat" ? "map-chat" : "direct";
 
         const dist = npc.distanceTo(this.player.x, this.player.y);
         if (dist < TILE_SIZE + 4) {
@@ -3341,6 +3357,18 @@ export class GameScene extends Phaser.Scene {
   // Update loop
   // ---------------------------------------------------------------------------
 
+  /** 대기 중인 NPC 를 자리로 보낸다 — 타이머 만료와 채널 채팅 닫힘이 같은 경로를 쓴다. */
+  private sendNpcHome(npc: NpcSprite): void {
+    npc.waitTimer = 0;
+    this.clearNpcBubble(npc.id);
+    npc.returnToHome(
+      findPath,
+      (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
+    );
+    EventBus.emit("npc:movement-returned", { npcId: npc.id });
+    this.socket?.emit("npc:return-home", { channelId: this.channelId, npcId: npc.id });
+  }
+
   update(): void {
     // Lerp remote players every frame
     for (const remote of this.remotePlayers.values()) {
@@ -3351,18 +3379,14 @@ export class GameScene extends Phaser.Scene {
     if (this.player) {
       // Auto-return NPCs that have been waiting long enough without an open dialog
       for (const npc of this.npcSprites) {
-        if (npc.moveState === "waiting" && !this.dialogOpen) {
+        if (
+          shouldAutoReturn(npc, {
+            dialogOpen: this.dialogOpen,
+            channelChatVisible: this.channelChatVisible,
+          })
+        ) {
           npc.waitTimer += this.game.loop.delta;
-          if (npc.waitTimer >= npc.waitDurationMs) {
-            npc.waitTimer = 0;
-            this.clearNpcBubble(npc.id);
-            npc.returnToHome(
-              findPath,
-              (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
-            );
-            EventBus.emit("npc:movement-returned", { npcId: npc.id });
-            this.socket?.emit("npc:return-home", { channelId: this.channelId, npcId: npc.id });
-          }
+          if (npc.waitTimer >= npc.waitDurationMs) this.sendNpcHome(npc);
         }
       }
 

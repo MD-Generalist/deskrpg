@@ -1901,15 +1901,21 @@ export function setupSocketHandlers(io: Server) {
     });
 
     // ----- NPC movement -----
-    socket.on("npc:call", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
-      if (!channelId || !npcId) return;
-      const player = players.get(socket.id);
-      if (!player) return;
-      io.to(channelId).emit("npc:come-to-player", {
-        npcId,
-        targetPlayerId: socket.id,
-      });
-    });
+    socket.on(
+      "npc:call",
+      ({ channelId, npcId, reason }: { channelId: string; npcId: string; reason?: string }) => {
+        if (!channelId || !npcId) return;
+        const player = players.get(socket.id);
+        if (!player) return;
+        // reason 은 "map-chat" 만 통과 — 클라이언트가 이 값으로 "도착해도 1:1 대화창을 열지
+        // 않는다 / 채널 채팅이 보이는 동안 머문다" 를 가른다. 그룹 채팅 참여자 재호출이 쓴다.
+        io.to(channelId).emit("npc:come-to-player", {
+          npcId,
+          targetPlayerId: socket.id,
+          ...(reason === "map-chat" ? { reason } : {}),
+        });
+      },
+    );
 
     socket.on("npc:return-home", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
       if (!channelId || !npcId) return;

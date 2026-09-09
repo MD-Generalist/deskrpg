@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useT } from "@/lib/i18n";
+import MentionEditor, { type MentionEditorHandle } from "./mention-input/MentionEditor";
+import type { MentionCandidate } from "./mention-input/mention-model";
 
 interface ChatInputProps {
   onSend: (message: string, files?: File[]) => void;
@@ -13,6 +15,11 @@ interface ChatInputProps {
   autoFocus?: boolean;
   showFileUpload?: boolean;
   accentColor?: string; // tailwind color class for button, e.g. "amber" or "indigo"
+  /**
+   * 있으면 textarea 대신 `@` 멘션 편집기를 쓴다. 후보는 서버가 응답하는 집합과 같아야 한다
+   * (채널 채팅: 출근 중 NPC, 회의: 참가 NPC). 전송값은 `@[이름]` 으로 직렬화된다.
+   */
+  mentionCandidates?: MentionCandidate[];
 }
 
 export default function ChatInput({
@@ -25,12 +32,15 @@ export default function ChatInput({
   autoFocus = false,
   showFileUpload = false,
   accentColor = "amber",
+  mentionCandidates,
 }: ChatInputProps) {
   const t = useT();
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mentionRef = useRef<MentionEditorHandle>(null);
+  const useMentions = Array.isArray(mentionCandidates);
 
   // Auto-resize textarea
   const adjustHeight = useCallback(() => {
@@ -65,6 +75,7 @@ export default function ChatInput({
     onSend(trimmed, files.length > 0 ? files : undefined);
     setInput("");
     setFiles([]);
+    mentionRef.current?.clear();
     // Reset height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -165,30 +176,50 @@ export default function ChatInput({
           </>
         )}
 
-        {/* Textarea */}
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => {
-            if (!disabled) setInput(e.target.value.slice(0, maxLength));
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            cooldown
-              ? t("chat.cooldown")
-              : disabled
-                ? resolvedDisabledPlaceholder
-                : resolvedPlaceholder
-          }
-          rows={1}
-          readOnly={disabled}
-          className={`flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border focus:outline-none text-sm min-w-0 resize-none overflow-hidden leading-5 ${
-            disabled
-              ? "border-gray-700 text-gray-500"
-              : `border-gray-600 focus:border-${accentColor}-500`
-          }`}
-          style={{ maxHeight: "120px" }}
-        />
+        {/* Textarea or mention editor */}
+        {useMentions ? (
+          <MentionEditor
+            ref={mentionRef}
+            candidates={mentionCandidates ?? []}
+            value={input}
+            onChange={(v) => setInput(v.slice(0, maxLength))}
+            onSubmit={handleSend}
+            placeholder={
+              cooldown
+                ? t("chat.cooldown")
+                : disabled
+                  ? resolvedDisabledPlaceholder
+                  : resolvedPlaceholder
+            }
+            disabled={disabled}
+            autoFocus={autoFocus}
+            accentColor={accentColor}
+          />
+        ) : (
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => {
+              if (!disabled) setInput(e.target.value.slice(0, maxLength));
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              cooldown
+                ? t("chat.cooldown")
+                : disabled
+                  ? resolvedDisabledPlaceholder
+                  : resolvedPlaceholder
+            }
+            rows={1}
+            readOnly={disabled}
+            className={`flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border focus:outline-none text-sm min-w-0 resize-none overflow-hidden leading-5 ${
+              disabled
+                ? "border-gray-700 text-gray-500"
+                : `border-gray-600 focus:border-${accentColor}-500`
+            }`}
+            style={{ maxHeight: "120px" }}
+          />
+        )}
 
         {/* Send button */}
         <button

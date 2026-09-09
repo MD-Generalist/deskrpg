@@ -1476,6 +1476,7 @@ const ko: Record<string, string> = {
   "chat.title": "채팅",
   "chat.openChat": "채팅 열기",
   "chat.placeholder": "메시지를 입력하세요...",
+  "chat.mentionNoMatch": "해당하는 직원이 없습니다",
   "chat.tab": "채팅",
   "chat.npcPlaceholder": "{name}에게 인사하세요...",
   "chat.noMessages": "아직 메시지가 없습니다.",

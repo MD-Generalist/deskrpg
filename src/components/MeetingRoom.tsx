@@ -1119,6 +1119,9 @@ export default function MeetingRoom({
                   placeholder={t("meeting.speakToMeeting")}
                   cooldown={cooldown}
                   accentColor="indigo"
+                  mentionCandidates={npcs
+                    .filter((n) => selectedNpcIds.has(n.id))
+                    .map((n) => ({ id: n.id, name: n.name }))}
                   autoFocus
                 />
               </div>
