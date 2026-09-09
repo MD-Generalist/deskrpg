@@ -15,7 +15,13 @@ const office: RoomSummary = {
   lastMessageAt: null,
   members: [],
 };
-const g1: RoomSummary = { ...office, id: "g1", kind: "group", name: "기획", replyPolicy: "members" };
+const g1: RoomSummary = {
+  ...office,
+  id: "g1",
+  kind: "group",
+  name: "기획",
+  replyPolicy: "members",
+};
 
 test("목록이 오면 마지막 방(있으면)으로, 없으면 office 로 들어간다", () => {
   const s1 = reduceRoomState(initialRoomState, {
@@ -34,7 +40,11 @@ test("목록이 오면 마지막 방(있으면)으로, 없으면 office 로 들�
 });
 
 test("방이 office 하나뿐이면 목록을 건너뛴다, 둘 이상이면 showList 가 목록을 보인다", () => {
-  const s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
+  const s = reduceRoomState(initialRoomState, {
+    type: "list",
+    rooms: [office],
+    preferRoomId: null,
+  });
   assert.equal(reduceRoomState(s, { type: "showList" }).view, "room", "방이 하나면 목록이 없다");
   const s2 = reduceRoomState(initialRoomState, {
     type: "list",

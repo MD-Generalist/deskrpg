@@ -22,6 +22,7 @@ for (const key of [
   "document",
   "navigator",
   "HTMLElement",
+  "HTMLInputElement",
   "Element",
   "Node",
   "Event",

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { useT } from "@/lib/i18n";
 import { Pencil, UserMinus, RotateCcw, MessageSquare, ClipboardList, Undo2 } from "lucide-react";
@@ -9,14 +9,11 @@ import TaskChatView, { type TaskMessage } from "./TaskChatView";
 import ChatInput from "./ChatInput";
 import Tab from "./ui/Tab";
 import ChatBubble from "./ui/ChatBubble";
-
-export interface ChannelChatMessage {
-  id: string;
-  sender: string;
-  senderId: string;
-  content: string;
-  timestamp: number;
-}
+import RoomList from "./rooms/RoomList";
+import RoomHeader from "./rooms/RoomHeader";
+import RoomComposer from "./rooms/RoomComposer";
+import SystemMessage from "./rooms/SystemMessage";
+import type { RoomAction, RoomState } from "@/app/game/room-state";
 
 interface ChatPanelProps {
   dialogNpc: { npcId: string; npcName: string } | null;
@@ -47,14 +44,27 @@ interface ChatPanelProps {
   onTaskSend?: (taskId: string, message: string, files?: File[]) => void;
   activeTaskId?: string | null;
   onSetActiveTaskId?: (taskId: string | null) => void;
-  // Channel chat
-  channelMessages: ChannelChatMessage[];
+  // Channel chat — 방(room) 단위. 목록·방 안·새 방/초대 세 화면이다.
+  roomState: RoomState;
   channelChatOpen?: boolean;
   channelChatInputDisabled?: boolean;
-  onSendChannelChat: (message: string) => void;
-  /** `@` 로 지명할 수 있는 NPC — 출근 중인 것(자리 미정 포함). 서버가 응답하는 집합과 같다. */
-  channelMentionCandidates?: { id: string; name: string }[];
-  /** 채널 채팅 뷰(패널 열림 + DM/선택목록 아님)가 보이는지 — 맵의 NPC 대기 규칙이 이걸 본다. */
+  onRoomSend: (message: string) => void;
+  onRoomAction: (action: RoomAction) => void;
+  onRoomCreate: (name: string, npcIds: string[], userIds: string[]) => void;
+  onRoomInvite: (roomId: string, npcIds: string[], userIds: string[]) => void;
+  onRoomLeave: (roomId: string) => void;
+  onRoomRename: (roomId: string, name: string) => void;
+  onRoomDelete: (roomId: string) => void;
+  /** `@` 로 지명할 수 있는 NPC — 방마다 다르다(office 는 출근 중 전원, group 은 멤버). */
+  mentionCandidatesFor: (roomId: string | null) => { id: string; name: string }[];
+  /** 지금 접속 중인 사람들 — 새 방/초대 화면의 사람 후보. */
+  onlinePlayers: { id: string; name: string }[];
+  /**
+   * 이 브라우저의 사용자 id. 클라이언트는 자기 신원을 정확히 모르므로 채널 소유자일 때만
+   * 채워진다 — `room.createdBy` 와 맞춰 이름 변경·삭제 권한을 가린다.
+   */
+  currentUserId?: string;
+  /** 방 안 화면(패널 열림 + DM/선택목록 아님)이 보이는지 — 맵의 NPC 대기 규칙이 이걸 본다. */
   onChannelChatVisibleChange?: (visible: boolean) => void;
   currentPlayerName?: string;
 }
@@ -78,11 +88,19 @@ export default function ChatPanel({
   onEditNpc,
   onFireNpc,
   onResetNpcChat,
-  channelMessages,
+  roomState,
   channelChatOpen,
   channelChatInputDisabled,
-  onSendChannelChat,
-  channelMentionCandidates,
+  onRoomSend,
+  onRoomAction,
+  onRoomCreate,
+  onRoomInvite,
+  onRoomLeave,
+  onRoomRename,
+  onRoomDelete,
+  mentionCandidatesFor,
+  onlinePlayers,
+  currentUserId,
   onChannelChatVisibleChange,
   currentPlayerName,
   npcMoveState,
@@ -116,7 +134,8 @@ export default function ChatPanel({
   const activeNpcId = dialogNpc?.npcId ?? null;
   const activeTab = activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat";
   const isOpen = manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
-  const channelChatVisible = isOpen && !dialogNpc && !npcSelectList;
+  // NPC 는 "방이 보이는 동안" 만 곁에 머문다 — 목록·새 방 화면은 대화가 아니다.
+  const channelChatVisible = isOpen && !dialogNpc && !npcSelectList && roomState.view === "room";
   useEffect(() => {
     onChannelChatVisibleChange?.(channelChatVisible);
   }, [channelChatVisible, onChannelChatVisibleChange]);
@@ -128,12 +147,19 @@ export default function ChatPanel({
     }
   }, [npcMessages]);
 
+  const currentRoom = roomState.rooms.find((room) => room.id === roomState.currentRoomId) ?? null;
+  // useMemo 로 감싼다 — 삼항이 매 렌더마다 새 배열을 만들면 스크롤 useEffect 가 계속 돈다.
+  const roomMessages = useMemo(
+    () => (roomState.currentRoomId ? (roomState.messages[roomState.currentRoomId] ?? []) : []),
+    [roomState.currentRoomId, roomState.messages],
+  );
+
   // Auto-scroll channel messages
   useEffect(() => {
     if (channelScrollRef.current) {
       channelScrollRef.current.scrollTop = channelScrollRef.current.scrollHeight;
     }
-  }, [channelMessages]);
+  }, [roomMessages]);
 
   // ESC to close NPC dialog (return to channel chat)
   useEffect(() => {
@@ -188,91 +214,129 @@ export default function ChatPanel({
   const inNpcDialog = !!dialogNpc;
   const inNpcSelect = !!npcSelectList && !dialogNpc;
 
+  const composeMode: "create" | "invite" = roomState.compose?.inviteTo ? "invite" : "create";
+
+  /** 방 안에서 뒤로 — 방이 하나뿐이면 목록이 빈 화면이므로 패널을 접는다. */
+  const backFromRoom = () => {
+    if (roomState.rooms.length > 1) onRoomAction({ type: "showList" });
+    else setManualOpen(false);
+  };
+  const backFromList = () => {
+    if (roomState.currentRoomId) onRoomAction({ type: "open", roomId: roomState.currentRoomId });
+    else setManualOpen(false);
+  };
+
   return (
     <div ref={panelRef} className="fixed left-0 top-[40px] bottom-0 z-20 flex" style={{ width }}>
       {/* Panel content */}
       <div className="flex-1 flex flex-col bg-bg/95 backdrop-blur border-r border-border min-w-0">
-        {/* Panel header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface/80">
-          <button
-            onClick={() => {
-              if (inNpcDialog) {
-                onClose(); // Return to channel chat
-              } else {
-                setManualOpen(false);
-              }
-            }}
-            className="text-text-muted hover:text-text text-sm"
-          >
-            &#9664;
-          </button>
-          <span className="text-sm font-bold text-text-secondary">
-            {inNpcDialog ? dialogNpc.npcName : t("chat.title")}
-          </span>
-          {inNpcDialog ? (
-            <>
-              {npcMoveState === "waiting" && onReturnNpc && (
-                <button
-                  onClick={() => onReturnNpc(dialogNpc!.npcId)}
-                  className="text-xs px-2 py-1 rounded bg-surface-raised hover:brightness-125 text-npc font-medium"
-                  title={t("chat.returnNpcToOrigin")}
-                >
-                  <Undo2 className="w-3.5 h-3.5 inline mr-1" />
-                  {t("npc.return")}
-                </button>
-              )}
-              <div className="relative">
-                <button
-                  onClick={() => setShowGearMenu(!showGearMenu)}
-                  className="text-text-muted hover:text-text text-sm px-1"
-                  title={t("chat.options")}
-                >
-                  &#9881;
-                </button>
-                {showGearMenu && (
-                  <div className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl py-1 min-w-[140px] z-50">
-                    {isOwner && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setShowGearMenu(false);
-                            onEditNpc?.(dialogNpc!.npcId);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-raised"
-                        >
-                          <Pencil className="w-3.5 h-3.5 inline mr-1" />
-                          {t("npc.move")}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowGearMenu(false);
-                            onFireNpc?.(dialogNpc!.npcId);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-raised"
-                        >
-                          <UserMinus className="w-3.5 h-3.5 inline mr-1" />
-                          {t("npc.sleep")}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => {
-                        setShowGearMenu(false);
-                        onResetNpcChat?.(dialogNpc!.npcId);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm text-npc hover:bg-surface-raised"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 inline mr-1" />
-                      {t("context.resetChat")}
-                    </button>
-                  </div>
+        {/* Panel header — 방 안에서는 RoomHeader 가 이 자리를 대신한다(화살표가 두 줄이 되지 않게). */}
+        {!inNpcDialog && !inNpcSelect && roomState.view === "room" && currentRoom ? (
+          <RoomHeader
+            room={currentRoom}
+            canManage={!!currentUserId && currentRoom.createdBy === currentUserId}
+            onBack={backFromRoom}
+            onInvite={() =>
+              onRoomAction({ type: "compose", presetNpcIds: [], inviteTo: currentRoom.id })
+            }
+            onRename={(name) => onRoomRename(currentRoom.id, name)}
+            onLeave={() => onRoomLeave(currentRoom.id)}
+            onDelete={() => onRoomDelete(currentRoom.id)}
+          />
+        ) : (
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface/80">
+            <button
+              onClick={() => {
+                if (inNpcDialog) {
+                  onClose(); // Return to channel chat
+                } else if (inNpcSelect) {
+                  setManualOpen(false);
+                } else if (roomState.view === "compose") {
+                  onRoomAction({ type: "showList" });
+                } else {
+                  backFromList();
+                }
+              }}
+              className="text-text-muted hover:text-text text-sm"
+            >
+              &#9664;
+            </button>
+            <span className="text-sm font-bold text-text-secondary">
+              {inNpcDialog
+                ? dialogNpc.npcName
+                : inNpcSelect
+                  ? t("chat.title")
+                  : roomState.view === "compose"
+                    ? composeMode === "invite"
+                      ? t("room.invite")
+                      : t("room.new")
+                    : t("room.list")}
+            </span>
+            {inNpcDialog ? (
+              <>
+                {npcMoveState === "waiting" && onReturnNpc && (
+                  <button
+                    onClick={() => onReturnNpc(dialogNpc!.npcId)}
+                    className="text-xs px-2 py-1 rounded bg-surface-raised hover:brightness-125 text-npc font-medium"
+                    title={t("chat.returnNpcToOrigin")}
+                  >
+                    <Undo2 className="w-3.5 h-3.5 inline mr-1" />
+                    {t("npc.return")}
+                  </button>
                 )}
-              </div>
-            </>
-          ) : (
-            <div className="w-4" />
-          )}
-        </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowGearMenu(!showGearMenu)}
+                    className="text-text-muted hover:text-text text-sm px-1"
+                    title={t("chat.options")}
+                  >
+                    &#9881;
+                  </button>
+                  {showGearMenu && (
+                    <div className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl py-1 min-w-[140px] z-50">
+                      {isOwner && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setShowGearMenu(false);
+                              onEditNpc?.(dialogNpc!.npcId);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-raised"
+                          >
+                            <Pencil className="w-3.5 h-3.5 inline mr-1" />
+                            {t("npc.move")}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowGearMenu(false);
+                              onFireNpc?.(dialogNpc!.npcId);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-raised"
+                          >
+                            <UserMinus className="w-3.5 h-3.5 inline mr-1" />
+                            {t("npc.sleep")}
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowGearMenu(false);
+                          onResetNpcChat?.(dialogNpc!.npcId);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-npc hover:bg-surface-raised"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 inline mr-1" />
+                        {t("context.resetChat")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="w-4" />
+            )}
+          </div>
+        )}
 
         {/* Chat content */}
         {inNpcSelect ? (
@@ -382,22 +446,46 @@ export default function ChatPanel({
               />
             )}
           </>
+        ) : roomState.view === "list" ? (
+          <RoomList
+            rooms={roomState.rooms}
+            currentRoomId={roomState.currentRoomId}
+            onOpen={(roomId) => onRoomAction({ type: "open", roomId })}
+            onNew={() => onRoomAction({ type: "compose", presetNpcIds: [] })}
+          />
+        ) : roomState.view === "compose" ? (
+          <RoomComposer
+            mode={composeMode}
+            npcCandidates={mentionCandidatesFor(null)}
+            userCandidates={onlinePlayers.map((player) => ({ ...player, online: true }))}
+            presetNpcIds={roomState.compose?.presetNpcIds ?? []}
+            onSubmit={({ name, npcIds, userIds }) => {
+              const inviteTo = roomState.compose?.inviteTo;
+              if (inviteTo) onRoomInvite(inviteTo, npcIds, userIds);
+              else onRoomCreate(name, npcIds, userIds);
+              onRoomAction({ type: "showList" });
+            }}
+            onCancel={() => onRoomAction({ type: "showList" })}
+          />
         ) : (
-          // Channel chat mode
+          // 방 안 — 메시지 + 입력
           <>
             <div ref={channelScrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
-              {channelMessages.length === 0 && (
+              {roomMessages.length === 0 && (
                 <div className="text-text-dim text-sm italic py-4 text-center">
-                  {t("chat.noMessages")}
+                  {t("room.empty")}
                 </div>
               )}
-              {channelMessages.map((msg) => {
-                const isMe = msg.sender === currentPlayerName;
+              {roomMessages.map((msg) => {
+                if (msg.senderKind === "system") {
+                  return <SystemMessage key={msg.id} content={msg.content} />;
+                }
+                const isMe = msg.senderKind === "user" && msg.senderName === currentPlayerName;
                 return (
                   <ChatBubble
                     key={msg.id}
                     sender={isMe ? "player" : "npc"}
-                    name={!isMe ? msg.sender : undefined}
+                    name={!isMe ? msg.senderName : undefined}
                   >
                     {msg.content}
                   </ChatBubble>
@@ -405,11 +493,11 @@ export default function ChatPanel({
               })}
             </div>
             <ChatInput
-              onSend={onSendChannelChat}
+              onSend={onRoomSend}
               placeholder={t("chat.placeholder")}
               disabledPlaceholder={t("chat.moveCloser")}
               disabled={!!channelChatInputDisabled}
-              mentionCandidates={channelMentionCandidates}
+              mentionCandidates={mentionCandidatesFor(roomState.currentRoomId)}
               autoFocus
             />
           </>

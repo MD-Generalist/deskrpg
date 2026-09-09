@@ -2773,6 +2773,7 @@ function GamePageInner() {
             onChannelChatVisibleChange={setChannelChatVisible}
             mentionCandidatesFor={mentionCandidatesFor}
             onlinePlayers={channelPlayers.map((player) => ({ id: player.id, name: player.name }))}
+            currentUserId={channel?.isOwner ? (channel?.ownerId ?? "") : ""}
             onRoomSend={handleRoomSend}
             onRoomAction={handleRoomAction}
             onRoomCreate={handleRoomCreate}
