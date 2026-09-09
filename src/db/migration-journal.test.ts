@@ -3,6 +3,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import test from "node:test";
+import { getTableName } from "drizzle-orm";
+import * as schema from "./schema";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const drizzleDir = path.join(repoRoot, "drizzle");
@@ -88,5 +90,42 @@ test("마지막 마이그레이션에 짝이 되는 스냅샷이 있다", () => 
     `스냅샷이 뒤처졌습니다(마지막 마이그레이션 idx ${lastMigration}, 스냅샷 ${snapshots.join(",")}). ` +
       "이 상태에서 `drizzle-kit generate` 는 이미 적용된 변경을 다시 만들어 내고, " +
       "거기엔 데이터 이전 단계가 빠진 DROP 이 섞일 수 있습니다.",
+  );
+});
+
+/**
+ * "마지막 마이그레이션에 짝이 되는 스냅샷이 있다" 는 스냅샷 *파일이 존재하는지* 만 본다 —
+ * `drizzle-kit generate --custom` 은 새 SQL 은 손으로 쓰고 스냅샷만 자동 생성하게 해 주는데,
+ * 그 스냅샷은 (custom 이므로 diff 할 스키마 변경이 없다고 보고) **직전 스냅샷을 그대로 복사**한다.
+ * 즉 새 테이블을 스키마에 추가하고 SQL 도 손으로 잘 썼어도, `--custom` 으로 스냅샷을 만들면
+ * 파일은 있지만 내용이 이전 것과 같아 이 시점부터 `drizzle-kit generate` 를 다시 돌리는 사람은
+ * "아직 반영 안 된 변경"으로 오인해 이미 존재하는 테이블을 다시 만드는 SQL 을 뱉는다.
+ * (2026-09-10 실측: 0010 스냅샷이 이 방식으로 만들어져 chat_rooms 3 테이블이 빠져 있었다.)
+ */
+test("최신 스냅샷의 테이블 이름이 schema.ts 가 export 하는 테이블과 같다", () => {
+  const snapshots = snapshotIdxs();
+  const lastIdx = snapshots[snapshots.length - 1];
+  const padded = String(lastIdx).padStart(4, "0");
+  const snapshotPath = path.join(drizzleDir, "meta", `${padded}_snapshot.json`);
+  const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8")) as {
+    tables: Record<string, unknown>;
+  };
+  const snapshotTableNames = Object.keys(snapshot.tables)
+    .map((k) => k.replace(/^public\./, ""))
+    .sort();
+
+  const schemaTableNames = Object.values(schema)
+    .map((t) => getTableName(t as never))
+    .sort();
+
+  assert.deepEqual(
+    snapshotTableNames,
+    schemaTableNames,
+    "최신 스냅샷의 테이블 목록이 schema.ts 의 export 와 다릅니다 — " +
+      "`drizzle-kit generate --custom` 이 직전 스냅샷을 그대로 복사했을 가능성이 큽니다. " +
+      "`drizzle-kit generate`(--custom 없이) 로 스냅샷을 다시 만들고 생성된 SQL 은 버린 뒤 " +
+      "손으로 쓴 SQL 을 유지하세요.\n" +
+      `  스냅샷: ${JSON.stringify(snapshotTableNames)}\n` +
+      `  schema.ts: ${JSON.stringify(schemaTableNames)}`,
   );
 });
