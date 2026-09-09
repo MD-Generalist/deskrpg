@@ -461,9 +461,15 @@ export default function ChatPanel({
             presetNpcIds={roomState.compose?.presetNpcIds ?? []}
             onSubmit={({ name, npcIds, userIds }) => {
               const inviteTo = roomState.compose?.inviteTo;
-              if (inviteTo) onRoomInvite(inviteTo, npcIds, userIds);
-              else onRoomCreate(name, npcIds, userIds);
-              onRoomAction({ type: "showList" });
+              if (inviteTo) {
+                onRoomInvite(inviteTo, npcIds, userIds);
+                // 초대는 이미 그 방에 있던 사람이 하는 일이다 — 목록이 아니라 방으로 돌아간다.
+                onRoomAction({ type: "open", roomId: inviteTo });
+              } else {
+                onRoomCreate(name, npcIds, userIds);
+                // 새 방은 서버의 `room:created` 가 들어오면 그 방으로 데려간다.
+                onRoomAction({ type: "showList" });
+              }
             }}
             onCancel={() => onRoomAction({ type: "showList" })}
           />
