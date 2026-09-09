@@ -685,7 +685,7 @@ function GamePageInner() {
       // 회의 중인 사람에게도 닿는데(회의 참가자는 맵 룸을 떠나지 않는다), 그러면 남의 맵
       // 사건이 진행 중인 회의 트랜스크립트에 삽입된다.
       socketInstance.on(
-        "chat:mention-skipped",
+        "room:mention-skipped",
         (data: { npcId: string; npcName: string; reason: MentionSkipReason }) => {
           showToastNotification(
             `chat-mention-skipped-${data.npcId}-${Date.now()}`,
@@ -697,7 +697,7 @@ function GamePageInner() {
       // 실패한 턴(타임아웃·어댑터 에러·빈 응답). 맵에는 스트리밍 말풍선이 없어 이 신호가
       // 없으면 사용자에게는 자기 말풍선 하나만 남는다.
       socketInstance.on(
-        "chat:npc-aborted",
+        "room:npc-aborted",
         (data: { npcId: string; npcName: string; reason: string }) => {
           showToastNotification(
             `chat-npc-aborted-${data.npcId}-${Date.now()}`,

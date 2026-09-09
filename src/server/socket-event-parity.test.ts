@@ -22,12 +22,26 @@ import path from "node:path";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-function socketEventsIn(relPath: string): string[] {
-  const src = readFileSync(path.join(repoRoot, relPath), "utf8");
+function socketEventsIn(...relPaths: string[]): string[] {
   const events = new Set<string>();
-  for (const m of src.matchAll(/socket\.on\(\s*"([^"]+)"/g)) events.add(m[1]);
+  for (const relPath of relPaths) {
+    const src = readFileSync(path.join(repoRoot, relPath), "utf8");
+    for (const m of src.matchAll(/socket\.on\(\s*"([^"]+)"/g)) events.add(m[1]);
+  }
   return [...events].sort();
 }
+
+/**
+ * 소켓 핸들러는 더 이상 한 파일에 있지 않다. socket-handlers.ts 가 방·출근부 핸들러를
+ * 각 모듈에 위임하고, 그 모듈이 자기 `socket.on` 을 등록한다 — 그래서 "이 이벤트가
+ * 배선돼 있는가" 는 세 파일의 합집합으로 봐야 한다. socket-handlers.ts 안에 이름만
+ * 다시 늘어놓아 이 가드를 만족시키는 것은 등록 지점을 둘로 만드는 꼼수다.
+ */
+const HANDLER_FILES = [
+  "src/server/socket-handlers.ts",
+  "src/server/room-socket.ts",
+  "src/server/npc-roster-socket.ts",
+];
 
 test("server.js registers no socket handlers of its own", () => {
   const events = socketEventsIn("server.js");
@@ -50,11 +64,13 @@ test("server.js delegates to setupSocketHandlers", () => {
 });
 
 test("socket-handlers still registers the events server.js used to own", () => {
-  const events = socketEventsIn("src/server/socket-handlers.ts");
+  const events = socketEventsIn(...HANDLER_FILES);
   for (const required of [
     "player:join",
     "player:move",
-    "chat:send",
+    "room:send",
+    "room:open",
+    "room:create",
     "map:object-add",
     "map:object-remove",
     "map:tiles-update",
@@ -63,7 +79,8 @@ test("socket-handlers still registers the events server.js used to own", () => {
   ]) {
     assert.ok(
       events.includes(required),
-      `socket-handlers.ts에 "${required}" 핸들러가 없습니다 — 프로덕션에서 그 기능이 사라집니다.`,
+      `"${required}" 핸들러가 어디에도 없습니다(${HANDLER_FILES.join(", ")}) — ` +
+        "프로덕션에서 그 기능이 사라집니다.",
     );
   }
 });
@@ -131,7 +148,7 @@ test("socket-handlers extraction regex captures multi-line socket.on() registrat
 // 이름이 있어도 소비자가 없으면 검증할 수 없는 죽은 배선이므로, 이름 존재만이라도 묶어 둔다.
 test("map chat events emitted by the server have a listener in the map client", () => {
   const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
-  for (const event of ["npc:come-to-player", "chat:mention-skipped", "chat:npc-aborted"]) {
+  for (const event of ["npc:come-to-player", "room:mention-skipped", "room:npc-aborted"]) {
     // 공백에 둔감하게 — 포매터가 `socketInstance.on(` 다음에서 줄을 바꿔도
     // 리스너는 그대로 있다. 형식이 바뀌었을 뿐인데 빨개지는 가드는 신뢰를 잃는다.
     assert.ok(
@@ -187,7 +204,7 @@ test("the map client still gates A* on being the caller", () => {
 // 달리 종료 시점이 없다). NPC 가 추가·수정·해고될 때 캐시를 버리지 않으면 해고된 NPC 가
 // 계속 대답하고 새 NPC 는 불러도 오지 않는다 — 에러가 아니라 "왜 아직 대답하지" 로만
 // 드러나므로 배선 자체를 붙들어 둔다.
-test("every npc:broadcast-* handler drops the open-chat runtime cache", () => {
+test("every npc:broadcast-* handler drops the room runtime cache", () => {
   const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
   for (const event of ["npc:broadcast-add", "npc:broadcast-update", "npc:broadcast-remove"]) {
     const start = src.indexOf(`socket.on("${event}"`);
@@ -198,8 +215,8 @@ test("every npc:broadcast-* handler drops the open-chat runtime cache", () => {
     const next = src.indexOf("socket.on(", start + 1);
     const body = src.slice(start, next === -1 ? undefined : next);
     assert.ok(
-      /openChats\.delete\(/.test(body),
-      `${event} 가 openChats 캐시를 버리지 않습니다 — 해고된 NPC 가 계속 대답합니다.`,
+      /invalidateRoomRuntimesForChannel\(/.test(body),
+      `${event} 가 방 런타임 캐시를 버리지 않습니다 — 해고된 NPC 가 계속 대답합니다.`,
     );
   }
 });

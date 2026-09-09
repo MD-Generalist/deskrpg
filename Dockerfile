@@ -73,6 +73,8 @@ COPY --from=builder /app/src/db ./src/db
 COPY --from=builder /app/src/lib/file-extractor.ts ./src/lib/file-extractor.ts
 COPY --from=builder /app/src/lib/db-json.ts ./src/lib/db-json.ts
 COPY --from=builder /app/src/lib/db-unique-violation.ts ./src/lib/db-unique-violation.ts
+COPY --from=builder /app/src/lib/chat-rooms.ts ./src/lib/chat-rooms.ts
+COPY --from=builder /app/src/lib/chat-rooms-policy.ts ./src/lib/chat-rooms-policy.ts
 # NPC 의 이름·외형은 Hermes 프로필이 정본이다 — 소켓 서버의 NPC 로더가 이 투영을 거친다.
 COPY --from=builder /app/src/lib/npc-projection.ts ./src/lib/npc-projection.ts
 # npc:set-active 소켓 핸들러가 출근/퇴근 토글에 쓴다.
