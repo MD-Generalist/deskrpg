@@ -4,6 +4,7 @@ import {
   chatRooms,
   chatRoomMembers,
   chatRoomMessages,
+  channels,
   users,
   npcs,
   hermesProfiles,
@@ -92,6 +93,20 @@ export async function ensureOfficeRoom(channelId: string, ownerId: string): Prom
     if (!row) throw err;
     return toRoomRow(row);
   }
+}
+
+/**
+ * office 방의 `created_by` 는 **채널 소유자**여야 한다(스펙 ①). 방을 만드는 계기는
+ * 아무나 부를 수 있는 `room:list` 라서, 부른 사람을 그대로 쓰면 마이그레이션 이전
+ * 채널에 처음 들어온 손님이 사무실 방의 주인이 된다.
+ */
+export async function getChannelOwnerId(channelId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ ownerId: channels.ownerId })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+  return row?.ownerId ?? null;
 }
 
 export async function getRoom(roomId: string): Promise<RoomRow | null> {

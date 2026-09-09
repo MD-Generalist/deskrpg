@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { setupThrowawaySqlite, seedChannelWithProfiles } from "@/test-setup/npc-seed";
+import { setupThrowawaySqlite, seedChannelWithProfiles, seedUser } from "@/test-setup/npc-seed";
 
 setupThrowawaySqlite("room-socket-test");
 
@@ -49,7 +49,7 @@ function fakeIo(emitted: Emitted[]) {
 
 type Seeded = Awaited<ReturnType<typeof seedChannelWithProfiles>>;
 
-function setup(opts: { allowed?: boolean; player?: boolean } = {}) {
+function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = {}) {
   const emitted: Emitted[] = [];
   const socket = fakeSocket(emitted);
   const io = fakeIo(emitted);
@@ -61,10 +61,12 @@ function setup(opts: { allowed?: boolean; player?: boolean } = {}) {
     players,
     woke,
     async register(seeded: Seeded) {
+      // 기본 신원은 채널 소유자. `userId` 를 주면 그 사람인 척 등록한다 — 권한 갈래용.
+      const actingUserId = opts.userId ?? seeded.userId;
       if (opts.player !== false) {
         players.set("s1", {
           id: "s1",
-          userId: seeded.userId,
+          userId: actingUserId,
           characterId: "c",
           characterName: "단테",
           appearance: null,
@@ -79,7 +81,7 @@ function setup(opts: { allowed?: boolean; player?: boolean } = {}) {
         io: io as never,
         socket: socket as never,
         deps: {
-          user: { userId: seeded.userId, nickname: "dante" },
+          user: { userId: actingUserId, nickname: "dante" },
           players,
           lastChatTime: new Map(),
           cooldownMs: 2000,
@@ -186,4 +188,84 @@ test("room:delete 는 만든 사람만, office 는 invalid", async () => {
   const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
   await t.socket.trigger("room:delete", { roomId: office.id });
   assert.deepEqual(ev(t.emitted, "room:error").at(-1), { roomId: office.id, code: "invalid" });
+});
+
+test("room:rename 은 만든 사람만 — 멤버라도 남의 방 이름은 못 바꾼다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const owner = setup();
+  await owner.register(seeded);
+  await owner.socket.trigger("room:create", {
+    channelId: seeded.channelId,
+    name: "기획",
+    npcIds: [seeded.npcIds[0]],
+    userIds: [],
+  });
+  const [created] = ev(owner.emitted, "room:created") as { room: { id: string } }[];
+
+  // 같은 방의 user 멤버지만 만든 사람은 아닌 두 번째 사람.
+  const other = await seedUser("room-member");
+  await rooms.addMembers(created.room.id, seeded.userId, [], [other.id]);
+  const guest = setup({ userId: other.id });
+  await guest.register(seeded);
+  await guest.socket.trigger("room:rename", { roomId: created.room.id, name: "가로채기" });
+  assert.deepEqual(ev(guest.emitted, "room:error").at(-1), {
+    roomId: created.room.id,
+    code: "forbidden",
+  });
+  assert.equal((await rooms.getRoom(created.room.id))?.name, "기획", "이름이 바뀌면 안 된다");
+
+  await owner.socket.trigger("room:rename", { roomId: created.room.id, name: "기획 2팀" });
+  const [updated] = ev(owner.emitted, `room:updated@room-${created.room.id}`) as {
+    room: { name: string };
+  }[];
+  assert.equal(updated.room.name, "기획 2팀");
+  assert.equal((await rooms.getRoom(created.room.id))?.name, "기획 2팀");
+});
+
+test("room:open 은 최근 60줄만 돌려준다 — 그보다 오래된 줄은 잘린다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  // created_at 은 밀리초 ISO 문자열이고 recentRoomMessages 의 정렬 타이브레이커가 없다 —
+  // 한 밀리초 안에 몰아 넣으면 "무엇이 잘렸는가" 를 단언할 수 없다. 1ms 씩 벌린다.
+  for (let i = 0; i <= 60; i += 1) {
+    await rooms.appendRoomMessage({
+      roomId: office.id,
+      senderKind: "user",
+      senderId: seeded.userId,
+      senderName: "단테",
+      content: `m${i}`,
+    });
+    await new Promise((r) => setTimeout(r, 2));
+  }
+  await t.socket.trigger("room:open", { roomId: office.id });
+  const [history] = ev(t.emitted, "room:history") as { messages: { content: string }[] }[];
+  assert.equal(history.messages.length, 60);
+  assert.equal(history.messages[0].content, "m1", "가장 오래된 m0 가 잘린다");
+  assert.equal(history.messages.at(-1)?.content, "m60", "오래된 순으로 온다");
+});
+
+test("office 방의 주인은 채널 소유자다 — 먼저 들어온 손님이 아니다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const visitor = await seedUser("room-visitor");
+  const t = setup({ userId: visitor.id });
+  await t.register(seeded);
+  await t.socket.trigger("room:list", { channelId: seeded.channelId });
+  const [res] = ev(t.emitted, "room:list-response") as {
+    rooms: { kind: string; createdBy: string }[];
+  }[];
+  const officeSummary = res.rooms.find((r) => r.kind === "office");
+  assert.ok(officeSummary, "office 방이 목록에 있어야 한다");
+  assert.equal(officeSummary.createdBy, seeded.userId);
+  assert.notEqual(officeSummary.createdBy, visitor.id);
+});
+
+test("채널이 없으면 room:list 는 방을 만들지 않고 not_found 를 준다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  await t.socket.trigger("room:list", { channelId: "00000000-0000-0000-0000-000000000000" });
+  assert.deepEqual(ev(t.emitted, "room:error").at(-1), { roomId: null, code: "not_found" });
+  assert.deepEqual(ev(t.emitted, "room:list-response"), []);
 });

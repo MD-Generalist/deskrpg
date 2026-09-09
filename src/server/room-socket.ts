@@ -20,7 +20,7 @@ export type RoomErrorCode =
 /** 사람 메시지 한 건의 최대 길이. 예전 `handleChatSend` 의 규칙을 그대로 옮겼다. */
 const MAX_MESSAGE_LENGTH = 500;
 /** `room:open` 이 되돌려 주는 지난 대화 줄 수. */
-const HISTORY_LIMIT = 50;
+const HISTORY_LIMIT = 60;
 
 type RoomSocket = {
   id: string;
@@ -166,7 +166,11 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       if (!(await channelAllowed(id))) return fail(null, "forbidden");
       // 사무실 방은 채널의 기본값이라 목록을 물을 때 존재를 보장한다 — 채널을 만든
       // 시점에 만들지 않으므로(마이그레이션 이전 채널이 있다) 여기가 유일한 보장 지점이다.
-      await rooms.ensureOfficeRoom(id, user.userId);
+      // 주인은 **채널 소유자**다. 부른 사람을 쓰면 먼저 들어온 손님이 사무실 방의
+      // createdBy 가 된다.
+      const ownerId = await rooms.getChannelOwnerId(id);
+      if (!ownerId) return fail(null, "not_found");
+      await rooms.ensureOfficeRoom(id, ownerId);
       socket.emit("room:list-response", {
         channelId: id,
         rooms: await rooms.listRoomsForUser(id, user.userId),
@@ -356,6 +360,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const access = await resolveAccess(id);
       if (!access.ok) return fail(id, access.code);
       if (access.room.kind !== "group") return fail(id, "invalid");
+      // 개명·삭제는 만든 사람만 — 멤버 전원이 할 수 있으면 남의 방 이름이 계속 바뀐다.
+      if (access.room.createdBy !== user.userId) return fail(id, "forbidden");
 
       const next = String(name ?? "")
         .trim()
