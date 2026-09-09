@@ -56,6 +56,9 @@ function hasColumn(sqlite, table, column) {
 function ensureChatRoomTables(sqlite) {
   sqlite.exec(CHAT_ROOM_TABLES);
   if (!tableExists(sqlite, "channels") || !hasColumn(sqlite, "channels", "owner_id")) {
+    console.warn(
+      "[chat-rooms] channels.owner_id 가 없어 office 방 백필을 건너뜁니다 — 이 DB 의 채널 채팅이 비어 보일 수 있습니다",
+    );
     return;
   }
   sqlite

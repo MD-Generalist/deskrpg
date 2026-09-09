@@ -68,3 +68,37 @@ test("방을 지우면 메시지·멤버가 cascade 로 사라진다", () => {
     0,
   );
 });
+
+test("channels.owner_id 가 없으면 백필을 건너뛰고 경고한다", () => {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL);
+    CREATE TABLE channels (id TEXT PRIMARY KEY NOT NULL);
+  `);
+  db.prepare(`INSERT INTO users (id) VALUES ('u1')`).run();
+  db.prepare(`INSERT INTO channels (id) VALUES ('c1')`).run();
+
+  const warnings: unknown[][] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args);
+  };
+  try {
+    ensureChatRoomTables(db);
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  for (const t of ["chat_rooms", "chat_room_members", "chat_room_messages"]) {
+    assert.ok(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(t), t);
+  }
+  assert.equal(
+    (db.prepare(`SELECT count(*) AS n FROM chat_rooms`).get() as { n: number }).n,
+    0,
+    "owner_id 가 없으니 office 백필은 일어나지 않아야 한다",
+  );
+  const matching = warnings.filter((args) =>
+    args.some((a) => typeof a === "string" && a.includes("office 방 백필")),
+  );
+  assert.equal(matching.length, 1, "office 방 백필 스킵 경고가 정확히 한 번 찍혀야 한다");
+});
