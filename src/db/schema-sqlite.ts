@@ -1,5 +1,14 @@
 // src/db/schema-sqlite.ts
-import { sqliteTable, text, integer, index, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import {
+  sqliteTable,
+  text,
+  integer,
+  index,
+  unique,
+  uniqueIndex,
+  primaryKey,
+} from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id")
@@ -534,6 +543,64 @@ export const chatMessages = sqliteTable(
   (table) => [
     index("idx_chat_messages_lookup").on(table.characterId, table.npcId, table.createdAt),
   ],
+);
+
+export const chatRooms = sqliteTable(
+  "chat_rooms",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    replyPolicy: text("reply_policy").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+    lastMessageAt: text("last_message_at"),
+  },
+  (t) => [
+    index("idx_chat_rooms_channel").on(t.channelId, t.lastMessageAt),
+    uniqueIndex("uq_chat_rooms_office_per_channel")
+      .on(t.channelId)
+      .where(sql`kind = 'office'`),
+  ],
+);
+
+export const chatRoomMembers = sqliteTable(
+  "chat_room_members",
+  {
+    roomId: text("room_id")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    memberKind: text("member_kind").notNull(),
+    memberId: text("member_id").notNull(),
+    invitedBy: text("invited_by").references(() => users.id),
+    joinedAt: text("joined_at").$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [primaryKey({ columns: [t.roomId, t.memberKind, t.memberId] })],
+);
+
+export const chatRoomMessages = sqliteTable(
+  "chat_room_messages",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    senderKind: text("sender_kind").notNull(),
+    senderId: text("sender_id"),
+    senderName: text("sender_name").notNull(),
+    content: text("content").notNull(),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [index("idx_chat_room_messages_room").on(t.roomId, t.createdAt)],
 );
 
 export const meetingMinutes = sqliteTable(

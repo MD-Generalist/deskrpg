@@ -1,7 +1,6 @@
 "use strict";
 
-function ensureSqliteBaseSchema(sqlite) {
-  sqlite.exec(`
+const SQLITE_BASE_SCHEMA = `
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY NOT NULL,
       login_id TEXT NOT NULL UNIQUE,
@@ -342,6 +341,37 @@ function ensureSqliteBaseSchema(sqlite) {
     );
     CREATE INDEX IF NOT EXISTS idx_chat_messages_lookup ON chat_messages(character_id, npc_id, created_at);
 
+    CREATE TABLE IF NOT EXISTS chat_rooms (
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      name TEXT NOT NULL,
+      reply_policy TEXT NOT NULL,
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at TEXT NOT NULL,
+      last_message_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_rooms_channel ON chat_rooms(channel_id, last_message_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_chat_rooms_office_per_channel ON chat_rooms(channel_id) WHERE kind = 'office';
+    CREATE TABLE IF NOT EXISTS chat_room_members (
+      room_id TEXT NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+      member_kind TEXT NOT NULL,
+      member_id TEXT NOT NULL,
+      invited_by TEXT REFERENCES users(id),
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (room_id, member_kind, member_id)
+    );
+    CREATE TABLE IF NOT EXISTS chat_room_messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      room_id TEXT NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+      sender_kind TEXT NOT NULL,
+      sender_id TEXT,
+      sender_name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_room_messages_room ON chat_room_messages(room_id, created_at);
+
     CREATE TABLE IF NOT EXISTS meeting_minutes (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
@@ -415,7 +445,10 @@ function ensureSqliteBaseSchema(sqlite) {
       added_at TEXT NOT NULL,
       UNIQUE(project_id, stamp_id)
     );
-  `);
+  `;
+
+function ensureSqliteBaseSchema(sqlite) {
+  sqlite.exec(SQLITE_BASE_SCHEMA);
 }
 
-module.exports = { ensureSqliteBaseSchema };
+module.exports = { ensureSqliteBaseSchema, SQLITE_BASE_SCHEMA };

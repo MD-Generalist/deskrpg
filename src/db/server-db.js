@@ -11,6 +11,7 @@ const { randomUUID } = require("node:crypto");
 const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js");
 const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js");
 const { migrateNpcsToProfileOwnership } = require("./sqlite-npc-profile-ownership.js");
+const { ensureChatRoomTables } = require("./sqlite-chat-rooms.js");
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -383,6 +384,7 @@ function ensureSqliteCompatibility(sqlite) {
     "ALTER TABLE hermes_profiles ADD COLUMN appearance TEXT",
   ]);
   migrateNpcsToProfileOwnership(sqlite);
+  ensureChatRoomTables(sqlite);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",
