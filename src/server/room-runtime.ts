@@ -24,37 +24,61 @@ const RECENT_LIMIT = 10;
  * `OpenChatDeps.recent()` 는 **동기**다. 메시지는 이제 메모리 배열이 아니라 DB 에 있으므로
  * 생성 시점에 마지막 몇 줄을 읽어 두고, 이후는 오가는 말마다 밀어 넣어 최신으로 유지한다.
  *
- * `push` 는 **직전과 같은 (보낸이, 내용)** 을 무시한다. 사람 메시지는 소켓 계층이 DB 에
- * 먼저 저장하므로, 런타임이 그 메시지 때문에 처음 만들어지는 순간에는 씨앗에도 들어 있고
- * 뒤이은 `handleHumanMessage` 도 같은 줄을 밀어 넣는다 — 그대로 두면 프롬프트에 같은 말이
- * 두 번 보인다. 2초 쿨다운 때문에 사람이 똑같은 말을 연달아 저장하는 경우는 없다.
+ * 중복 판정은 **메시지 id** 로 한다. 내용으로 가르면 "네" 를 3초 간격으로 두 번 보낸 사람의
+ * 두 번째 말이 프롬프트에서 조용히 사라진다 — 쿨다운은 2초뿐이라 정당한 반복이다.
  */
-class RecentCache {
-  private lines: ChatLine[] = [];
+type RecentEntry = { id: string; sender: string; content: string };
 
-  seed(lines: ChatLine[]) {
-    this.lines = lines.slice(-RECENT_LIMIT);
+class RecentCache {
+  private entries: RecentEntry[] = [];
+
+  seed(entries: RecentEntry[]) {
+    this.entries = entries.slice(-RECENT_LIMIT);
   }
 
-  push(sender: string, content: string) {
-    const last = this.lines.at(-1);
-    if (last && last.sender === sender && last.content === content) return;
-    this.lines.push({ sender, content });
-    if (this.lines.length > RECENT_LIMIT) this.lines = this.lines.slice(-RECENT_LIMIT);
+  push(id: string, sender: string, content: string) {
+    if (this.entries.some((e) => e.id === id)) return;
+    this.entries.push({ id, sender, content });
+    if (this.entries.length > RECENT_LIMIT) this.entries = this.entries.slice(-RECENT_LIMIT);
   }
 
   read(): ChatLine[] {
-    return [...this.lines];
+    return this.entries.map(({ sender, content }) => ({ sender, content }));
   }
 }
 
-/** 사람의 말도 캐시에 남겨야 다음 턴의 프롬프트에 보인다 — 그 한 줄을 위한 얇은 껍데기. */
+/**
+ * DB 의 최근 줄을 캐시가 먹을 수 있는 모양으로. 시스템 메시지는 JSON 구조라 뺀다.
+ *
+ * **거르고 나서 자른다.** 10줄만 읽어 놓고 거기서 시스템 메시지를 빼면, 초대·개명이
+ * 잦았던 방은 대본에 실리는 대화가 그만큼 줄어든다. 넉넉히 읽어 거른 뒤 꼬리를 자른다.
+ */
+async function loadRecentEntries(roomId: string): Promise<RecentEntry[]> {
+  return (await recentRoomMessages(roomId, RECENT_LIMIT * 3))
+    .filter((m) => m.senderKind !== "system")
+    .slice(-RECENT_LIMIT)
+    .map((m) => ({ id: m.id, sender: m.senderName, content: m.content }));
+}
+
+/**
+ * 사람의 말은 소켓 계층이 **먼저 DB 에 저장한 뒤** 이 런타임을 깨운다 — 그래서 사람의 턴이
+ * 열릴 때마다 DB 꼬리를 다시 읽어 캐시를 맞춘다. 사람 메시지의 id 를 인자로 받지 않고도
+ * 정확하고, 다른 소켓이 그 사이에 넣은 말도 함께 따라온다. NPC 의 답은 `onTurnEnd` 가
+ * id 와 함께 밀어 넣으므로 한 사슬 안에서는 DB 를 다시 읽지 않는다.
+ */
 class RoomChatRuntime extends OpenChatRuntime {
   private readonly recent: RecentCache;
+  private readonly roomId: string;
 
-  constructor(recent: RecentCache, deps: OpenChatDeps, callbacks: OpenChatCallbacks) {
+  constructor(
+    recent: RecentCache,
+    roomId: string,
+    deps: OpenChatDeps,
+    callbacks: OpenChatCallbacks,
+  ) {
     super(deps, callbacks);
     this.recent = recent;
+    this.roomId = roomId;
   }
 
   override async handleHumanMessage(
@@ -62,7 +86,12 @@ class RoomChatRuntime extends OpenChatRuntime {
     text: string,
     callerSocketId: string | null = null,
   ): Promise<void> {
-    this.recent.push(senderName, text);
+    try {
+      this.recent.seed(await loadRecentEntries(this.roomId));
+    } catch (err) {
+      // 프롬프트가 조금 낡을 뿐이라 턴 자체를 막지는 않는다.
+      console.error("[room] failed to refresh recent cache:", err);
+    }
     await super.handleHumanMessage(senderName, text, callerSocketId);
   }
 }
@@ -76,13 +105,25 @@ const roomRuntimes = new Map<string, Promise<OpenChatRuntime | null>>();
 /** roomId → channelId. 채널 단위 무효화(NPC 고용·해고)가 어느 방을 버릴지 알아야 한다. */
 const roomChannels = new Map<string, string>();
 
+/**
+ * 어댑터 해석과 NPC 명단 조회의 주입점. 기본값이 실제 배선이다 — 테스트가 게이트웨이나
+ * CLI 없이 이 파일의 조립 규칙(참가자 거르기·정책 배선·캐시·콜백)을 관찰하기 위한 것이다.
+ */
+export type RoomRuntimeDeps = {
+  getNpcConfigs?: typeof getNpcConfigsForChannel;
+  resolveAdapter?: typeof resolveNpcAdapter;
+};
+
 export function getOrCreateRoomRuntime(
   io: Server,
   room: RoomRow,
   callerUserId: string,
+  deps: RoomRuntimeDeps = {},
 ): Promise<OpenChatRuntime | null> {
   roomChannels.set(room.id, room.channelId);
-  return getOrCreateCached(roomRuntimes, room.id, () => createRoomRuntime(io, room, callerUserId));
+  return getOrCreateCached(roomRuntimes, room.id, () =>
+    createRoomRuntime(io, room, callerUserId, deps),
+  );
 }
 
 /** 멤버가 바뀌거나 방이 사라지면 부른다. 다음 지명에서 DB 를 다시 읽어 새로 만든다. */
@@ -106,15 +147,18 @@ async function createRoomRuntime(
   io: Server,
   room: RoomRow,
   callerUserId: string,
+  deps: RoomRuntimeDeps,
 ): Promise<OpenChatRuntime | null> {
-  const npcConfigs = await getNpcConfigsForChannel(room.channelId);
+  const loadNpcConfigs = deps.getNpcConfigs ?? getNpcConfigsForChannel;
+  const resolveAdapter = deps.resolveAdapter ?? resolveNpcAdapter;
+  const npcConfigs = await loadNpcConfigs(room.channelId);
   // 사무실 방은 채널의 출근 NPC 전부, 그룹 방은 초대된 NPC 만.
   const allowed = room.kind === "group" ? new Set(await roomNpcMemberIds(room.id)) : null;
   const candidates = allowed ? npcConfigs.filter((npc) => allowed.has(npc.id)) : npcConfigs;
 
   const participants: EngineParticipant[] = [];
   for (const npc of candidates) {
-    const resolved = await resolveNpcAdapter(npc, {
+    const resolved = await resolveAdapter(npc, {
       sessionScope: `room-${room.id}`,
       userId: callerUserId,
       adapterRegistry,
@@ -136,18 +180,14 @@ async function createRoomRuntime(
   if (participants.length === 0) return null;
 
   const recent = new RecentCache();
-  recent.seed(
-    (await recentRoomMessages(room.id, RECENT_LIMIT))
-      // 시스템 메시지는 JSON 구조라 프롬프트에 넣을 문장이 아니다.
-      .filter((m) => m.senderKind !== "system")
-      .map((m) => ({ sender: m.senderName, content: m.content })),
-  );
+  recent.seed(await loadRecentEntries(room.id));
 
   const memberNpcIds = participants.map((p) => p.npcId);
   const socketRoom = `room-${room.id}`;
 
   return new RoomChatRuntime(
     recent,
+    room.id,
     {
       participants,
       recent: () => recent.read(),
@@ -189,7 +229,7 @@ async function createRoomRuntime(
             senderName: npc?.displayName || npcId,
             content: fullResponse,
           });
-          recent.push(message.senderName, message.content);
+          recent.push(message.id, message.senderName, message.content);
           io.to(socketRoom).emit("room:message", { roomId: room.id, message });
         })().catch((err) => console.error("[room] failed to persist npc message:", err));
       },
