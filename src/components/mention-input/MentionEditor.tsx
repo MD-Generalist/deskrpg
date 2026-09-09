@@ -93,12 +93,13 @@ function makeChip(c: MentionCandidate, accent: string): HTMLElement {
   return chip;
 }
 
-function placeCaretAfter(node: Node) {
+/** 캐럿을 텍스트 노드 안 offset 에 둔다 — 칩 뒤 공백 "다음" 이어야 이어 치는 글자가 공백 뒤에 붙는다. */
+function placeCaretIn(node: Text, offset: number) {
   const sel = typeof window !== "undefined" ? window.getSelection?.() : null;
   if (!sel || typeof document.createRange !== "function") return;
   try {
     const range = document.createRange();
-    range.setStartAfter(node);
+    range.setStart(node, offset);
     range.collapse(true);
     sel.removeAllRanges();
     sel.addRange(range);
@@ -169,7 +170,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
       node.textContent = before;
       node.after(chip, space);
       if (!before) node.remove();
-      placeCaretAfter(chip);
+      placeCaretIn(space, 1);
       setQuery(null);
       sync();
     },
