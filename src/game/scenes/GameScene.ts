@@ -3,7 +3,7 @@ import { fetchChannelNpcs } from "../npc-prefetch";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
 import { decideNpcUpdate, type NpcUpdatedPayload } from "@/game/npc-updated-dispatch";
-import { createRejoinTracker, registerOnce } from "../socket-rejoin";
+import { createRejoinTracker, registerOnce, shouldRejoinForError } from "../socket-rejoin";
 import type { Socket } from "socket.io-client";
 import {
   MapObject,
@@ -817,14 +817,21 @@ export class GameScene extends Phaser.Scene {
   // Multiplayer
   private socket: Socket | null = null;
   private rejoin = createRejoinTracker();
+  private joinedSocketId: string | undefined = undefined;
   private handleSocketDisconnect = () => this.rejoin.onDisconnect();
   private handleSocketConnect = () => {
     if (this.rejoin.shouldRejoin(this.playerReady && !!this.player) && this.player) {
       this.joinMultiplayer(this.player.x, this.player.y);
     }
   };
+  // 이 경로는 connect 트래커와 경쟁한다: 재연결 시 socket.io-client 가 버퍼링된
+  // chat:send 를 유저 connect 리스너보다 먼저 플러시해, 서버의 chat:error not_joined 가
+  // connect 핸들러의 join 뒤에 도착할 수 있다. 소켓 id 로 중복을 걸러낸다
+  // (src/game/socket-rejoin.ts 의 shouldRejoinForError 주석 참조).
   private handleSocketRejoin = () => {
-    if (this.playerReady && this.player) this.joinMultiplayer(this.player.x, this.player.y);
+    if (!this.playerReady || !this.player) return;
+    if (!shouldRejoinForError(this.socket?.id, this.joinedSocketId)) return;
+    this.joinMultiplayer(this.player.x, this.player.y);
   };
   private remotePlayers = new Map<string, RemotePlayer>();
   private lastMoveSent = 0;
@@ -3055,6 +3062,7 @@ export class GameScene extends Phaser.Scene {
       x,
       y,
     });
+    this.joinedSocketId = this.socket.id;
   }
 
   // ---------------------------------------------------------------------------

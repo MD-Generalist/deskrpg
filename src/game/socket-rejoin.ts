@@ -25,6 +25,26 @@ export function registerOnce<E extends string>(
   bus.on(event, handler);
 }
 
+/**
+ * `EventBus "socket-rejoin"` 경로(Task 3 이 `chat:error not_joined` 를 받으면 emit)는
+ * `connect` 트래커와 경쟁한다: 실제 순서는 disconnect → 유저가 chat 을 보냄(socket.io 가
+ * 버퍼링) → reconnect: socket.io-client 는 버퍼링된 `chat:send` 를 **유저 `connect`
+ * 리스너보다 먼저** 플러시한다 → 서버가 `chat:error not_joined` 로 응답 → 그제서야 connect
+ * 핸들러가 join(#1) → 뒤늦게 도착한 chat:error 핸들러가 또 join(#2). 같은 소켓에 두 번.
+ *
+ * "이 소켓 id 로 이미 join 했는가" 만 보면 된다 — 같은 id 면 #1 이 이미 처리했으니 건너뛰고,
+ * id 가 다르면(또는 아직 없으면, 즉 disconnected 상태) 이 join 은 아직 안 나간 것이므로
+ * 내보낸다. `currentSocketId` 가 undefined(연결 끊긴 순간)인 경우도 "이 id 로는 아직
+ * join 안 함" 으로 취급해 내보낸다 — socket.io 가 버퍼링해 뒀다가 재연결 시 보낸다.
+ */
+export function shouldRejoinForError(
+  currentSocketId: string | undefined,
+  joinedSocketId: string | undefined,
+): boolean {
+  if (currentSocketId === undefined || joinedSocketId === undefined) return true;
+  return currentSocketId !== joinedSocketId;
+}
+
 export function createRejoinTracker() {
   let disconnected = false;
   return {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRejoinTracker, registerOnce } from "./socket-rejoin";
+import { createRejoinTracker, registerOnce, shouldRejoinForError } from "./socket-rejoin";
 
 test("첫 connect 는 재조인이 아니다 — 스폰 경로가 이미 join 을 보냈다", () => {
   const t = createRejoinTracker();
@@ -46,4 +46,24 @@ test("registerOnce 는 같은 핸들러를 두 번 등록해도 한 번만 걸�
     1,
     "setupSocketListeners 가 두 번 불려도 핸들러는 하나여야 한다",
   );
+});
+
+test("shouldRejoinForError: 같은 소켓 id 면 이미 join 했으니 재조인하지 않는다", () => {
+  assert.equal(
+    shouldRejoinForError("abc", "abc"),
+    false,
+    "connect 핸들러가 이미 이 id 로 join 했다",
+  );
+});
+
+test("shouldRejoinForError: 다른 소켓 id 면 아직 join 안 한 것이므로 재조인한다", () => {
+  assert.equal(shouldRejoinForError("new-id", "old-id"), true);
+});
+
+test("shouldRejoinForError: 현재 소켓 id 가 없으면(연결 끊김) 이 id 로는 join 한 적이 없으니 재조인한다", () => {
+  assert.equal(shouldRejoinForError(undefined, "old-id"), true);
+});
+
+test("shouldRejoinForError: 이번 세션에서 한 번도 join 한 적 없으면 재조인한다", () => {
+  assert.equal(shouldRejoinForError("abc", undefined), true);
 });
