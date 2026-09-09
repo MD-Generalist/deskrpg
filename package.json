@@ -1,6 +1,14 @@
 {
   "name": "deskrpg",
   "version": "2026.9.9",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dandacompany/deskrpg.git"
+  },
+  "homepage": "https://deskrpg.com",
+  "bugs": {
+    "url": "https://github.com/dandacompany/deskrpg/issues"
+  },
   "private": false,
   "bin": {
     "deskrpg": "bin/deskrpg.js"
