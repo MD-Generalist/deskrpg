@@ -215,7 +215,6 @@ test("최근 대화는 10줄까지만 실리고, 같은 말이라도 다른 메�
     { id: seeded.npcIds[0], name: "소피", adapter: mockAdapter("응", prompts) },
   ]);
 
-  // created_at 은 밀리초 ISO 문자열이고 recentRoomMessages 에 타이브레이커가 없다 — 벌린다.
   const contents = ["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "네", "네"];
   for (const content of contents) {
     await rooms.appendRoomMessage({
@@ -225,7 +224,6 @@ test("최근 대화는 10줄까지만 실리고, 같은 말이라도 다른 메�
       senderName: "단테",
       content,
     });
-    await new Promise((r) => setTimeout(r, 2));
   }
   // 시스템 메시지는 프롬프트에 실리지 않아야 한다.
   await rooms.appendRoomMessage({
@@ -235,7 +233,6 @@ test("최근 대화는 10줄까지만 실리고, 같은 말이라도 다른 메�
     senderName: "",
     content: JSON.stringify({ kind: "renamed", name: "기획 2팀" }),
   });
-  await new Promise((r) => setTimeout(r, 2));
   // 사람의 말은 소켓 계층이 먼저 저장한다 — 런타임은 그 뒤에 깨어난다.
   await rooms.appendRoomMessage({
     roomId: room.id,
@@ -276,7 +273,6 @@ test("같은 말을 두 번 보내면 두 번 다 대본에 남는다 — 쿨다
       senderName: "단테",
       content,
     });
-    await new Promise((r) => setTimeout(r, 2));
   };
 
   invalidateRoomRuntime(room.id);

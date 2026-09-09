@@ -11,6 +11,7 @@ import {
   nowForDb,
 } from "@/db";
 import { isUniqueViolation } from "./db-unique-violation";
+import { uuidv7 } from "./uuid-v7";
 import { projectNpcRow } from "./npc-projection";
 import { sortRooms, type ReplyPolicy, type RoomSummary } from "./chat-rooms-policy";
 
@@ -183,9 +184,11 @@ async function memberDisplayNames(
  * 방마다 최신 메시지 1건 — 방 개수만큼 쿼리를 날리던 N+1 을 단일 쿼리로 줄인다.
  * "이 행보다 (created_at, id) 사전식으로 더 뒤인 같은 방 행이 없다" 는 상관
  * 서브쿼리(NOT EXISTS)로 방마다 최신 행 하나만 골라낸다 — PG/SQLite 모두 표준
- * SQL 이라 방언 분기가 필요 없다. 같은 방·같은 타임스탬프로 동시에 쓰인 메시지가
- * 있으면(정밀도 한계로 드물게 가능) id 가 더 큰(= 나중에 만들어진) 쪽을 최신으로
- * 친다 — 생성 순서를 보장하는 다른 컬럼이 없어 결정적 타이브레이커로 id 를 쓴다.
+ * SQL 이라 방언 분기가 필요 없다. 같은 방·같은 타임스탬프로 쓰인 메시지가 있으면
+ * (SQLite 의 created_at 은 밀리초라 흔하다) id 가 더 큰 쪽을 최신으로 친다 —
+ * `appendRoomMessage` 가 **UUIDv7**(앞 48비트가 유닉스 밀리초 + 같은 밀리초 안에서는
+ * 단조 증가 카운터)을 박아 넣으므로 id 순서가 곧 생성 순서다. v4 이던 시절에는 이 규칙이
+ * 승자를 무작위로 골랐다.
  * 서브쿼리 안의 `chat_room_messages`/컬럼명은 raw SQL 이지만 사용자 입력이 섞이지
  * 않는 고정 문자열이라 바인딩 안전성 문제가 없다.
  */
@@ -384,6 +387,9 @@ export async function appendRoomMessage(args: {
   const [created] = await db
     .insert(chatRoomMessages)
     .values({
+      // DB 기본값(randomUUID / defaultRandom)은 v4 라 정렬 키가 되지 못한다.
+      // 방언 양쪽에서 같은 규칙을 쓰도록 앱에서 박는다.
+      id: uuidv7(),
       roomId: args.roomId,
       senderKind: args.senderKind,
       senderId: args.senderId,
@@ -401,23 +407,19 @@ export async function appendRoomMessage(args: {
 /**
  * 최근 `limit` 개를 오래된 순으로 돌려준다.
  *
- * **`id` 를 타이브레이커로 쓰지 않는다.** `lastMessages()` 의 상관 서브쿼리와 규칙을 맞추려
- * `(created_at, id)` 로 정렬해 봤더니, `chat_room_messages.id` 가 `crypto.randomUUID()` /
- * `defaultRandom()` 이라 **넣은 순서와 무관**해서 같은 밀리초에 들어온 줄들의 순서가
- * 무작위가 됐다(chat-rooms.test.ts 의 "최근 N 줄" 단언이 재현성 있게 깨졌다). 타이브레이커가
- * 없으면 SQLite 는 rowid(=삽입 순서)로 훑어 대개 맞는 답을 준다 — 보장은 아니지만 무작위
- * UUID 로 덮어쓰는 것보다 낫다.
+ * 정렬은 `(created_at, id)` 사전식 — `lastMessages()` 의 상관 서브쿼리와 **같은 규칙**이다.
+ * 두 함수가 다른 규칙을 쓰면 목록의 "마지막 메시지" 와 방을 열었을 때의 마지막 줄이
+ * 어긋난다. id 가 UUIDv7 이라 이 타이브레이커는 생성 순서와 일치한다.
  *
- * 정본 수정은 단조 증가하는 정렬 키(시퀀스 컬럼, 또는 같은 밀리초 안에서도 증가하는 id)
- * 가 있어야 한다. `lastMessages()` 의 같은 결함(주석은 "id 가 큰 쪽이 나중" 이라고 적었지만
- * 사실이 아니다)과 함께 고쳐야 하는 한 덩어리다.
+ * v7 도입 이전에 쌓인 행은 v4 라 그들끼리의 동률은 여전히 무작위다 — 새 메시지에는
+ * 영향이 없고, 옛 대화의 한 밀리초 안 순서가 흔들릴 뿐이다.
  */
 export async function recentRoomMessages(roomId: string, limit: number): Promise<RoomMessage[]> {
   const rows = await db
     .select()
     .from(chatRoomMessages)
     .where(eq(chatRoomMessages.roomId, roomId))
-    .orderBy(desc(chatRoomMessages.createdAt))
+    .orderBy(desc(chatRoomMessages.createdAt), desc(chatRoomMessages.id))
     .limit(limit);
   return rows.reverse().map(toRoomMessage);
 }

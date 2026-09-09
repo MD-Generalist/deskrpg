@@ -227,11 +227,8 @@ test("room:open 은 최근 60줄만 돌려준다 — 그보다 오래된 줄은 
   const t = setup();
   await t.register(seeded);
   const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
-  // `recentRoomMessages` 는 이제 `(created_at, id)` 로 결정적으로 정렬한다 — 하지만
-  // `id` 가 randomUUID 라 그 순서가 **넣은 순서와 같다는 보장은 없다**. SQLite 의
-  // created_at 은 밀리초 문자열이어서 한 밀리초에 여러 줄이 들어가면 승자를 UUID 가
-  // 정한다. "무엇이 잘렸는가" 를 단언하려면 타임스탬프가 실제로 갈려야 한다.
-  // (정본 수정은 단조 증가 id 나 더 높은 정밀도가 필요하다 — 보고서 참조.)
+  // sleep 이 없다. 메시지 id 가 UUIDv7 이라 같은 밀리초에 몰아 넣어도
+  // `(created_at, id)` 정렬이 넣은 순서를 그대로 돌려준다.
   for (let i = 0; i <= 60; i += 1) {
     await rooms.appendRoomMessage({
       roomId: office.id,
@@ -240,7 +237,6 @@ test("room:open 은 최근 60줄만 돌려준다 — 그보다 오래된 줄은 
       senderName: "단테",
       content: `m${i}`,
     });
-    await new Promise((r) => setTimeout(r, 2));
   }
   await t.socket.trigger("room:open", { roomId: office.id });
   const [history] = ev(t.emitted, "room:history") as { messages: { content: string }[] }[];
