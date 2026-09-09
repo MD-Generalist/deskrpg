@@ -1493,6 +1493,7 @@ const en: Record<string, string> = {
   "room.name.placeholder": "Room name (blank uses member names)",
   "room.members": "Members",
   "room.alreadyMember": "Already a member of this room.",
+  "room.mentionNoMatch": "No one answered — the mention matched no member of this room.",
   "room.npcs": "Staff",
   "room.people": "People",
   "room.online": "Online",

@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseMention, parseAllMentions, MentionParticipant } from "./mention";
+import { parseMention, parseAllMentions, extractMentionNames, MentionParticipant } from "./mention";
 
 const P = [
   { npcId: "n-danbi", displayName: "단비" },
@@ -175,5 +175,24 @@ describe("parseAllMentions — 지명 전부를 등장 순서대로", () => {
 
   test("문자열이 아니면 빈 배열", () => {
     assert.deepEqual(parseAllMentions(null as unknown as string, people, null), []);
+  });
+});
+
+describe("extractMentionNames — 해석 전 원문 이름", () => {
+  test("참가자가 아닌 이름도 그대로 센다", () => {
+    // 오타·비멤버 지목도 "지목하려 했다"는 신호이므로 남긴다.
+    assert.deepEqual(extractMentionNames("@[없는사람] @[단비]"), ["없는사람", "단비"]);
+  });
+
+  test("지목이 없으면 빈 배열", () => {
+    assert.deepEqual(extractMentionNames("그냥 인사"), []);
+  });
+
+  test("TO: 라인도 이름으로 센다", () => {
+    assert.deepEqual(extractMentionNames("TO: 하늘\n@[단비] 너도"), ["하늘", "단비"]);
+  });
+
+  test("문자열이 아니면 빈 배열", () => {
+    assert.deepEqual(extractMentionNames(null as unknown as string), []);
   });
 });

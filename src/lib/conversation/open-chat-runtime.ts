@@ -7,7 +7,7 @@
 
 import { NpcRuntime } from "./npc-runtime";
 import { Transcript } from "./transcript";
-import { parseAllMentions } from "./mention";
+import { extractMentionNames, parseAllMentions } from "./mention";
 import { ChatQuota, DEFAULT_CHAT_BUDGET } from "./chat-quota";
 import { formatOpenChatMessage, type ChatLine } from "@/lib/open-chat-formatter";
 import type { EngineParticipant } from "./types";
@@ -30,6 +30,11 @@ export type OpenChatCallbacks = {
   ) => void;
   /** 지명받았으나 게이트웨이가 죽어 건너뛴 NPC. 회의의 같은 이름 콜백과 짝이다. */
   onMentionSkipped?: (npcId: string, reason: "backend_failing") => void;
+  /**
+   * 사람이 누군가를 지목했지만 그 지목이 응답자를 하나도 만들지 못했다(비멤버·오타).
+   * 맵에는 말풍선이 없어 이대로면 완전 침묵이다 — 부른 사람에게만 신호를 준다.
+   */
+  onMentionNoMatch?: (callerSocketId: string | null) => void;
   onError?: (err: unknown, npcId: string) => void;
 };
 
@@ -95,6 +100,10 @@ export class OpenChatRuntime {
     this.currentCallerSocketId = callerSocketId;
     const mentioned = parseAllMentions(text, this.participantsView(), null);
     const targets = this.deps.selectResponders ? this.deps.selectResponders(mentioned) : mentioned;
+    // 지목 표기는 있었는데(오타·비멤버) 아무도 답하지 않으면 완전 침묵이다 — 부른 사람에게 알린다.
+    if (targets.length === 0 && extractMentionNames(text).length > 0) {
+      this.callbacks.onMentionNoMatch?.(callerSocketId);
+    }
     await this.dispatch(targets, senderName, /* fromHuman */ true);
   }
 

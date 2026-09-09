@@ -1469,6 +1469,7 @@ const zh: Record<string, string> = {
   "room.name.placeholder": "聊天室名称（留空则用成员名）",
   "room.members": "成员",
   "room.alreadyMember": "已经是该聊天室的成员。",
+  "room.mentionNoMatch": "被点名的对象不在该聊天室，因此无人回应。",
   "room.npcs": "员工",
   "room.people": "成员用户",
   "room.online": "在线",

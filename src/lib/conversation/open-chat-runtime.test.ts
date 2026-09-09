@@ -289,4 +289,45 @@ describe("OpenChatRuntime", () => {
     await rt.handleHumanMessage("단테", "@[소피] 너만");
     assert.deepEqual(spoke, ["a"]);
   });
+
+  test("지명했지만 아무 멤버에도 안 맞으면 onMentionNoMatch 를 부른다 (M-7)", async () => {
+    const spoke: string[] = [];
+    const noMatch: (string | null)[] = [];
+    const rt = new OpenChatRuntime(
+      { participants: [p("n1", "단비", always("네"))], recent: () => [], turnTimeout: TIMEOUT },
+      {
+        onTurnEnd: (id) => spoke.push(id),
+        onMentionNoMatch: (caller) => noMatch.push(caller),
+      },
+    );
+
+    await rt.handleHumanMessage("지호", "@[없는사람] 안녕", "sock-1");
+
+    assert.deepEqual(spoke, [], "아무도 답하지 않는다");
+    assert.deepEqual(noMatch, ["sock-1"], "부른 사람의 소켓 id 를 싣는다");
+  });
+
+  test("지명이 없으면 onMentionNoMatch 를 부르지 않는다 (M-7)", async () => {
+    const noMatch: (string | null)[] = [];
+    const rt = new OpenChatRuntime(
+      { participants: [p("n1", "단비", always("네"))], recent: () => [], turnTimeout: TIMEOUT },
+      { onMentionNoMatch: (caller) => noMatch.push(caller) },
+    );
+
+    await rt.handleHumanMessage("지호", "그냥 인사", "sock-1");
+
+    assert.deepEqual(noMatch, [], "지목 표기가 없으면 침묵이 정상이다");
+  });
+
+  test("유효한 지명이면 onMentionNoMatch 를 부르지 않는다 (M-7)", async () => {
+    const noMatch: (string | null)[] = [];
+    const rt = new OpenChatRuntime(
+      { participants: [p("n1", "단비", always("네"))], recent: () => [], turnTimeout: TIMEOUT },
+      { onMentionNoMatch: (caller) => noMatch.push(caller) },
+    );
+
+    await rt.handleHumanMessage("지호", "@[단비] 안녕", "sock-1");
+
+    assert.deepEqual(noMatch, [], "맞는 지명이면 알림이 없다");
+  });
 });

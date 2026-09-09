@@ -1498,6 +1498,7 @@ const ja: Record<string, string> = {
   "room.name.placeholder": "ルーム名（空ならメンバー名）",
   "room.members": "メンバー",
   "room.alreadyMember": "すでにこのルームのメンバーです。",
+  "room.mentionNoMatch": "指名した相手がこのルームにいないため、誰も応答しませんでした。",
   "room.npcs": "社員",
   "room.people": "ユーザー",
   "room.online": "オンライン",

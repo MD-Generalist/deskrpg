@@ -80,6 +80,20 @@ export function parseMention(
  *
  * speakerNpcId 가 null 이면 사람이 말한 것이다 — 제외할 자기 자신이 없다.
  */
+/**
+ * 발언에 담긴 지목 이름을 **해석 전 원문 그대로** 등장 순서대로 돌려준다.
+ *
+ * `parseAllMentions` 는 참가자와 일치하는 것만 남기지만, 이쪽은 참가자가 아닌 이름도
+ * 그대로 둔다 — "사용자가 누군가를 지목하려 했는가" 를 판정하려면 오타·비멤버 지목까지
+ * 세야 하기 때문이다(예: 아무 멤버에도 안 맞는 지목은 완전 침묵 대신 알림을 띄운다).
+ */
+export function extractMentionNames(text: string): string[] {
+  if (typeof text !== "string") return [];
+  const to = splitToLine(text);
+  if (to) return [to[0], ...bracketMentions(to[1])];
+  return bracketMentions(text);
+}
+
 export function parseAllMentions(
   text: string,
   participants: MentionParticipant[],
@@ -87,14 +101,7 @@ export function parseAllMentions(
 ): string[] {
   if (typeof text !== "string") return [];
 
-  const names: string[] = [];
-  const to = splitToLine(text);
-  if (to) {
-    names.push(to[0]);
-    names.push(...bracketMentions(to[1]));
-  } else {
-    names.push(...bracketMentions(text));
-  }
+  const names = extractMentionNames(text);
 
   const out: string[] = [];
   for (const name of names) {

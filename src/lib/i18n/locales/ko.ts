@@ -1489,6 +1489,7 @@ const ko: Record<string, string> = {
   "room.name.placeholder": "방 이름(비우면 멤버 이름)",
   "room.members": "멤버",
   "room.alreadyMember": "이미 이 방의 멤버입니다.",
+  "room.mentionNoMatch": "지목한 상대가 이 방에 없어 아무도 답하지 않았습니다.",
   "room.npcs": "직원",
   "room.people": "사람",
   "room.online": "접속 중",

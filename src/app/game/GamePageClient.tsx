@@ -746,11 +746,21 @@ function GamePageInner() {
       // 사건이 진행 중인 회의 트랜스크립트에 삽입된다.
       socketInstance.on(
         "room:mention-skipped",
-        (data: { roomId: string; npcId: string; npcName: string; reason: MentionSkipReason }) => {
+        (data: {
+          roomId: string;
+          npcId?: string;
+          npcName?: string;
+          reason: MentionSkipReason | "no_match";
+        }) => {
           if (data.roomId !== openedRoomRef.current) return;
+          if (data.reason === "no_match") {
+            // 지목이 아무 멤버에도 안 맞았다 — 특정 NPC 가 없으므로 이름 없는 토스트.
+            showToastNotification(`chat-mention-no-match-${Date.now()}`, t("room.mentionNoMatch"));
+            return;
+          }
           showToastNotification(
             `chat-mention-skipped-${data.npcId}-${Date.now()}`,
-            t(mentionSkipI18nKey(data.reason), { name: data.npcName }),
+            t(mentionSkipI18nKey(data.reason), { name: data.npcName ?? "" }),
           );
         },
       );

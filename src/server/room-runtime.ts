@@ -242,6 +242,11 @@ async function createRoomRuntime(
           reason,
         });
       },
+      onMentionNoMatch: (callerSocketId) => {
+        // 아무 멤버에도 안 맞는 지목 — 부른 사람에게만 알린다(방 전체에 뿌리지 않는다).
+        const target = callerSocketId ? io.to(callerSocketId) : io.to(socketRoom);
+        target.emit("room:mention-skipped", { roomId: room.id, reason: "no_match" });
+      },
       onError: (err, npcId) => {
         console.error("[room]", room.id, npcId, err);
       },
