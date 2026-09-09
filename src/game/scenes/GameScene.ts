@@ -3,6 +3,7 @@ import { fetchChannelNpcs } from "../npc-prefetch";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
 import { decideNpcUpdate, type NpcUpdatedPayload } from "@/game/npc-updated-dispatch";
+import { createRejoinTracker } from "../socket-rejoin";
 import type { Socket } from "socket.io-client";
 import {
   MapObject,
@@ -815,6 +816,7 @@ export class GameScene extends Phaser.Scene {
 
   // Multiplayer
   private socket: Socket | null = null;
+  private rejoin = createRejoinTracker();
   private remotePlayers = new Map<string, RemotePlayer>();
   private lastMoveSent = 0;
   private lastSentX = 0;
@@ -2672,6 +2674,24 @@ export class GameScene extends Phaser.Scene {
 
   private setupSocketListeners(): void {
     if (!this.socket) return;
+
+    // 재연결 = 새 socket.id. 서버 players 맵에 없으므로 다시 join 한다.
+    // (docs/BACKLOG.md "소켓이 재연결되면 채널 채팅·NPC 지명이 조용히 죽는다")
+    this.socket.on("disconnect", () => this.rejoin.onDisconnect());
+    this.socket.on("connect", () => {
+      if (this.rejoin.shouldRejoin(this.playerReady && !!this.player) && this.player) {
+        this.joinMultiplayer(this.player.x, this.player.y);
+      }
+    });
+    const handleSocketRejoin = () => {
+      if (this.playerReady && this.player) this.joinMultiplayer(this.player.x, this.player.y);
+    };
+    EventBus.on("socket-rejoin", handleSocketRejoin);
+    const cleanupSocketRejoinListener = () => {
+      EventBus.off("socket-rejoin", handleSocketRejoin);
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupSocketRejoinListener);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanupSocketRejoinListener);
 
     this.socket.on("players:state", (data: { players: RemotePlayerData[] }) => {
       for (const p of data.players) {
