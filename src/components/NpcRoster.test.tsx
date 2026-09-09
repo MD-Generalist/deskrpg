@@ -80,6 +80,40 @@ test("자리 미정을 누르면 onPlace, 회의 중이면 토글이 비활성�
   assert.equal(toggleB.disabled, false);
 });
 
+test("여러 명 선택 모드에서 체크한 출근 NPC 로 그룹 대화를 시작한다", async () => {
+  const started: string[][] = [];
+  const { el } = await mount(
+    <I18nProvider>
+      <NpcRoster
+        npcs={roster}
+        meetingNpcIds={new Set()}
+        isOwner
+        currentUserId="me"
+        onToggle={() => {}}
+        onPlace={() => {}}
+        onHire={() => {}}
+        onStartGroupChat={(ids) => started.push(ids)}
+      />
+    </I18nProvider>,
+  );
+  buttonByText(el, "여러 명 선택").click();
+  await act(async () => {});
+  const boxes = [
+    ...el.querySelectorAll('input[type="checkbox"][data-npc-id]'),
+  ] as HTMLInputElement[];
+  assert.deepEqual(
+    boxes.map((b) => b.dataset.npcId),
+    ["a", "b"],
+    "쉬는 중(c) 은 후보가 아니다",
+  );
+  await act(async () => {
+    boxes[0].click();
+    boxes[1].click();
+  });
+  buttonByText(el, "그룹 대화 시작").click();
+  assert.deepEqual(started, [["a", "b"]]);
+});
+
 test("남의 프로필은 소유자를 표시한다", async () => {
   const { el } = await mount(
     <I18nProvider initialLocale="ko">

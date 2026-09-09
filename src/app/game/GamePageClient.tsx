@@ -2057,6 +2057,18 @@ function GamePageInner() {
     handleTalkNpcById(contextMenu.npcId, contextMenu.npcName);
   }, [contextMenu, handleTalkNpcById]);
 
+  const handleContextInviteToRoom = useCallback(() => {
+    if (!contextMenu) return;
+    const currentRoom = roomState.rooms.find((room) => room.id === roomState.currentRoomId);
+    if (roomState.view === "room" && currentRoom?.kind === "group") {
+      handleRoomInvite(roomState.currentRoomId as string, [contextMenu.npcId], []);
+    } else {
+      handleRoomAction({ type: "compose", presetNpcIds: [contextMenu.npcId] });
+      setChannelChatOpen(true);
+    }
+    setContextMenu(null);
+  }, [contextMenu, roomState, handleRoomInvite, handleRoomAction]);
+
   const handleReturnNpc = useCallback(
     (npcId: string) => {
       if (!socket) return;
@@ -2267,6 +2279,10 @@ function GamePageInner() {
                       npcName: npc.name,
                     })
                   }
+                  onStartGroupChat={(npcIds) => {
+                    handleRoomAction({ type: "compose", presetNpcIds: npcIds });
+                    setChannelChatOpen(true);
+                  }}
                 />
               </div>
             )}
@@ -2867,6 +2883,13 @@ function GamePageInner() {
                   >
                     <MessageSquare className="w-3.5 h-3.5 inline mr-1" />
                     {t("context.talk")}
+                  </button>
+                  <button
+                    onClick={handleContextInviteToRoom}
+                    className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
+                  >
+                    <Users className="w-3.5 h-3.5 inline mr-1" />
+                    {t("npc.inviteToRoom")}
                   </button>
                   {isOwner && (
                     <>

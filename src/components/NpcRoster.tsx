@@ -1,6 +1,7 @@
 "use client";
 
-import { UserPlus } from "lucide-react";
+import { useState } from "react";
+import { UserPlus, Users } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import RosterAvatar from "./RosterAvatar";
@@ -35,6 +36,8 @@ export type NpcRosterProps = {
   hireDisabled?: boolean;
   /** 행을 눌렀을 때 여는 동작 메뉴(대화·호출 등). 없으면 행은 버튼이 아니다. */
   onOpenMenu?: (anchor: HTMLElement, npc: RosterNpc) => void;
+  /** 있으면 헤더에 "여러 명 선택" 토글이 뜨고, 체크한 출근 NPC 로 그룹 대화를 시작한다. */
+  onStartGroupChat?: (npcIds: string[]) => void;
 };
 
 export default function NpcRoster({
@@ -47,24 +50,63 @@ export default function NpcRoster({
   onHire,
   hireDisabled = false,
   onOpenMenu,
+  onStartGroupChat,
 }: NpcRosterProps) {
   const t = useT();
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelectMode = () => {
+    setSelectMode((prev) => !prev);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelected = (npcId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(npcId)) next.delete(npcId);
+      else next.add(npcId);
+      return next;
+    });
+  };
+
+  const startGroupChat = () => {
+    if (!onStartGroupChat || selectedIds.size === 0) return;
+    onStartGroupChat([...selectedIds]);
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
 
   return (
     <div>
       <div className="px-3 py-2 border-b border-border text-caption text-text-dim flex items-center justify-between gap-2">
         <span>{t("game.roster.title")}</span>
-        {isOwner && (
-          <button
-            onClick={onHire}
-            disabled={hireDisabled}
-            title={hireDisabled ? t("game.roster.needsGateway") : undefined}
-            className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <UserPlus className="w-3 h-3" />
-            <span>{t("game.roster.hire")}</span>
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {onStartGroupChat && (
+            <button
+              onClick={toggleSelectMode}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-micro font-semibold ${
+                selectMode
+                  ? "bg-primary/80 hover:bg-primary text-white"
+                  : "bg-surface-raised hover:brightness-125 text-text-secondary"
+              }`}
+            >
+              <Users className="w-3 h-3" />
+              <span>{t("game.roster.selectMode")}</span>
+            </button>
+          )}
+          {isOwner && (
+            <button
+              onClick={onHire}
+              disabled={hireDisabled}
+              title={hireDisabled ? t("game.roster.needsGateway") : undefined}
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <UserPlus className="w-3 h-3" />
+              <span>{t("game.roster.hire")}</span>
+            </button>
+          )}
+        </div>
       </div>
       <div className="max-h-64 overflow-y-auto py-1">
         {npcs.length === 0 ? (
@@ -83,6 +125,15 @@ export default function NpcRoster({
                 key={npc.id}
                 className="px-3 py-2 flex items-center gap-2 text-body text-text-secondary"
               >
+                {selectMode && npc.active && (
+                  <input
+                    type="checkbox"
+                    data-npc-id={npc.id}
+                    checked={selectedIds.has(npc.id)}
+                    onChange={() => toggleSelected(npc.id)}
+                    className="shrink-0"
+                  />
+                )}
                 <RosterAvatar
                   appearance={
                     (npc.appearance ?? null) as
@@ -134,6 +185,17 @@ export default function NpcRoster({
           })
         )}
       </div>
+      {selectMode && onStartGroupChat && (
+        <div className="px-3 py-2 border-t border-border">
+          <button
+            onClick={startGroupChat}
+            disabled={selectedIds.size === 0}
+            className="w-full px-2 py-1.5 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t("game.roster.startGroupChat")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
