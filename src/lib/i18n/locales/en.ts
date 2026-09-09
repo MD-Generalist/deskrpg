@@ -1477,6 +1477,7 @@ const en: Record<string, string> = {
   "chat.title": "Chat",
   "chat.openChat": "Open chat",
   "chat.placeholder": "Type a message...",
+  "chat.mentionNoMatch": "No matching teammate",
   "chat.tab": "Chat",
   "chat.npcPlaceholder": "Say hello to {name}...",
   "chat.noMessages": "No messages yet. Say something!",

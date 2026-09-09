@@ -1481,6 +1481,7 @@ const ja: Record<string, string> = {
   "chat.title": "チャット",
   "chat.openChat": "チャットを開く",
   "chat.placeholder": "メッセージを入力...",
+  "chat.mentionNoMatch": "該当する社員がいません",
   "chat.tab": "チャット",
   "chat.npcPlaceholder": "{name}に挨拶...",
   "chat.noMessages": "まだメッセージはありません",

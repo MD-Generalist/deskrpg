@@ -2588,6 +2588,9 @@ function GamePageInner() {
             channelMessages={channelMessages}
             channelChatOpen={channelChatOpen}
             channelChatInputDisabled={channelChatInputDisabled || !socketConnected}
+            channelMentionCandidates={rosterNpcs
+              .filter((n) => n.active)
+              .map((n) => ({ id: n.id, name: n.name }))}
             onSendChannelChat={handleChannelChatSend}
             currentPlayerName={character?.name}
             npcMoveState={dialogNpc ? npcMoveStates[dialogNpc.npcId] : undefined}

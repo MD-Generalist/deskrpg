@@ -52,6 +52,8 @@ interface ChatPanelProps {
   channelChatOpen?: boolean;
   channelChatInputDisabled?: boolean;
   onSendChannelChat: (message: string) => void;
+  /** `@` 로 지명할 수 있는 NPC — 출근 중인 것(자리 미정 포함). 서버가 응답하는 집합과 같다. */
+  channelMentionCandidates?: { id: string; name: string }[];
   currentPlayerName?: string;
 }
 
@@ -78,6 +80,7 @@ export default function ChatPanel({
   channelChatOpen,
   channelChatInputDisabled,
   onSendChannelChat,
+  channelMentionCandidates,
   currentPlayerName,
   npcMoveState,
   onReturnNpc,
@@ -399,6 +402,7 @@ export default function ChatPanel({
               placeholder={t("chat.placeholder")}
               disabledPlaceholder={t("chat.moveCloser")}
               disabled={!!channelChatInputDisabled}
+              mentionCandidates={channelMentionCandidates}
               autoFocus
             />
           </>

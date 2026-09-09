@@ -1454,6 +1454,7 @@ const zh: Record<string, string> = {
   "chat.title": "聊天",
   "chat.openChat": "打开聊天",
   "chat.placeholder": "输入消息...",
+  "chat.mentionNoMatch": "没有匹配的员工",
   "chat.tab": "聊天",
   "chat.npcPlaceholder": "向{name}打招呼...",
   "chat.noMessages": "还没有消息",
