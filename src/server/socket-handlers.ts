@@ -75,6 +75,7 @@ import {
 } from "./meeting-socket";
 import { registerMeetingDiscussionHandlers, resolveNpcAdapter } from "./meeting-discussion";
 import { getOrCreateCached } from "./promise-cache";
+import { handleChatSend } from "./channel-chat";
 import { OpenChatRuntime } from "../lib/conversation/open-chat-runtime";
 import type { EngineParticipant } from "../lib/conversation/types";
 import { AdapterRegistry } from "../lib/adapters/types.js";
@@ -178,7 +179,7 @@ export interface PlayerState {
   animation: string;
 }
 
-interface ChannelChatMessage {
+export interface ChannelChatMessage {
   id: string;
   sender: string;
   senderId: string;
@@ -1542,37 +1543,33 @@ export function setupSocketHandlers(io: Server) {
 
     // ----- chat:send (channel chat, user-to-user) -----
     socket.on("chat:send", ({ message }: { message: string }) => {
-      const player = players.get(socket.id);
-      if (!player) return;
-      const trimmed = String(message || "")
-        .trim()
-        .slice(0, 500);
-      if (!trimmed) return;
-      const now = Date.now();
-      if (now - (lastChatTime.get(socket.id) || 0) < CHAT_COOLDOWN_MS) return;
-      lastChatTime.set(socket.id, now);
-
-      const chatMessage: ChannelChatMessage = {
-        id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        sender: player.characterName || user.nickname,
-        senderId: socket.id,
-        content: trimmed,
-        timestamp: now,
-      };
-      // Store in channel chat history
-      const history = channelChatHistory.get(player.mapId) || [];
-      history.push(chatMessage);
-      channelChatHistory.set(player.mapId, history);
-      io.to(player.mapId).emit("chat:message", chatMessage);
-
-      // NPC 는 지명받을 때만 깨어난다. 지명이 없으면 여기서 끝 — 맵에 NPC 가 열 명이어도
-      // 조용하고, 비용도 호출한 만큼만 든다. (parseAllMentions 가 런타임 안에서 다시 정확히
-      // 판정한다 — 이 정규식은 DB 조회·어댑터 해석을 건너뛰기 위한 최적화일 뿐이다.)
-      if (/@\[|^TO:/i.test(trimmed)) {
+      const result = handleChatSend({
+        socketId: socket.id,
+        player: players.get(socket.id),
+        message,
+        now: Date.now(),
+        lastChatTime,
+        channelChatHistory,
+        fallbackSender: user.nickname,
+        cooldownMs: CHAT_COOLDOWN_MS,
+      });
+      if (result.kind === "not_joined") {
+        // 재연결 뒤 새 socket.id — 클라이언트가 이걸 받고 player:join 을 다시 보낸다.
+        socket.emit("chat:error", { code: "not_joined" });
+        return;
+      }
+      if (result.kind !== "sent") return;
+      const player = players.get(socket.id)!;
+      io.to(player.mapId).emit("chat:message", result.message);
+      if (result.mentions) {
         void (async () => {
           const runtime = await getOrCreateOpenChat(io, player.mapId, user.userId);
           if (!runtime) return;
-          await runtime.handleHumanMessage(chatMessage.sender, trimmed, socket.id);
+          await runtime.handleHumanMessage(
+            result.message.sender,
+            result.message.content,
+            socket.id,
+          );
         })().catch((err) => console.error("[openchat] dispatch failed:", err));
       }
     });
