@@ -215,6 +215,7 @@ export default function ChatPanel({
     roomState.rooms.find((room) => room.id === roomState.compose?.inviteTo) ?? null,
     mentionCandidatesFor(null),
     onlinePlayers.map((player) => ({ ...player, online: true })),
+    roomState.viewerUserId,
   );
 
   /** 방 안에서 뒤로 — 방이 하나뿐이면 목록이 빈 화면이므로 패널을 접는다. */
@@ -222,10 +223,8 @@ export default function ChatPanel({
     if (roomState.rooms.length > 1) onRoomAction({ type: "showList" });
     else setManualOpen(false);
   };
-  const backFromList = () => {
-    if (roomState.currentRoomId) onRoomAction({ type: "open", roomId: roomState.currentRoomId });
-    else setManualOpen(false);
-  };
+  // 목록이 최상위 화면이다 — 그 위는 "닫힘". 방이 여러 개여도 여기서 패널을 접을 수 있어야 한다.
+  const backFromList = () => setManualOpen(false);
 
   return (
     <div ref={panelRef} className="fixed left-0 top-[40px] bottom-0 z-20 flex" style={{ width }}>
