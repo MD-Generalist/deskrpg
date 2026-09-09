@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   chatRooms,
@@ -164,17 +164,38 @@ async function memberDisplayNames(
   return result;
 }
 
+/**
+ * 방마다 최신 메시지 1건 — 방 개수만큼 쿼리를 날리던 N+1 을 단일 쿼리로 줄인다.
+ * "이 행보다 (created_at, id) 사전식으로 더 뒤인 같은 방 행이 없다" 는 상관
+ * 서브쿼리(NOT EXISTS)로 방마다 최신 행 하나만 골라낸다 — PG/SQLite 모두 표준
+ * SQL 이라 방언 분기가 필요 없다. 같은 방·같은 타임스탬프로 동시에 쓰인 메시지가
+ * 있으면(정밀도 한계로 드물게 가능) id 가 더 큰(= 나중에 만들어진) 쪽을 최신으로
+ * 친다 — 생성 순서를 보장하는 다른 컬럼이 없어 결정적 타이브레이커로 id 를 쓴다.
+ * 서브쿼리 안의 `chat_room_messages`/컬럼명은 raw SQL 이지만 사용자 입력이 섞이지
+ * 않는 고정 문자열이라 바인딩 안전성 문제가 없다.
+ */
 async function lastMessages(roomIds: string[]): Promise<Map<string, RoomMessage>> {
   const result = new Map<string, RoomMessage>();
-  for (const roomId of roomIds) {
-    const [row] = await db
-      .select()
-      .from(chatRoomMessages)
-      .where(eq(chatRoomMessages.roomId, roomId))
-      .orderBy(desc(chatRoomMessages.createdAt))
-      .limit(1);
-    if (row) result.set(roomId, toRoomMessage(row));
-  }
+  if (roomIds.length === 0) return result;
+
+  const rows = await db
+    .select()
+    .from(chatRoomMessages)
+    .where(
+      and(
+        inArray(chatRoomMessages.roomId, roomIds),
+        sql`NOT EXISTS (
+          SELECT 1 FROM chat_room_messages m2
+          WHERE m2.room_id = chat_room_messages.room_id
+            AND (
+              m2.created_at > chat_room_messages.created_at
+              OR (m2.created_at = chat_room_messages.created_at AND m2.id > chat_room_messages.id)
+            )
+        )`,
+      ),
+    );
+
+  for (const row of rows) result.set(row.roomId, toRoomMessage(row));
   return result;
 }
 

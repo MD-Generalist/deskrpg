@@ -92,8 +92,20 @@ test("메시지를 쌓으면 last_message_at 이 오르고 최근 N 줄을 오�
     recent.map((m) => m.content),
     ["2", "3"],
   );
-  const [summary] = (await listRoomsForUser(ch.id, owner.id)).filter((r) => r.id === room.id);
-  assert.equal(summary.lastMessage?.content, "3");
+  // 메시지가 하나도 없는 방을 같은 목록 조회에 섞어, 배치 조회(N+1 제거)가 메시지
+  // 있는 방과 없는 방을 뒤섞지 않고 각각 올바로 매칭하는지 본다.
+  const emptyRoom = await createRoom({
+    channelId: ch.id,
+    name: "빈 방",
+    createdBy: owner.id,
+    npcIds: [],
+    userIds: [],
+  });
+  const rooms = await listRoomsForUser(ch.id, owner.id);
+  const summary = rooms.find((r) => r.id === room.id);
+  const emptySummary = rooms.find((r) => r.id === emptyRoom.id);
+  assert.equal(summary?.lastMessage?.content, "3");
+  assert.equal(emptySummary?.lastMessage, undefined);
 });
 
 test("NPC 멤버 초대는 중복 무시, 방 삭제는 cascade", async () => {

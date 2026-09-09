@@ -252,6 +252,14 @@ export async function deleteHermesProfile(
   // 프로필 삭제는 npcs 를 cascade 로 지운다 — 그 NPC 가 대화방 멤버로 남아 있던
   // chat_room_members 행은 cascade 대상이 아니므로(멤버 테이블은 npcs 를 FK 로 물지
   // 않는다) 지우기 전에 NPC id 를 먼저 걷어 직접 정리한다.
+  // 이 저장소에는 공유 트랜잭션 헬퍼가 없다 — better-sqlite3 의 drizzle 트랜잭션은
+  // 동기, PG 쪽은 비동기라 두 드라이버를 같은 헬퍼로 감쌀 수 없다(다른 자원 모듈들도
+  // 같은 이유로 트랜잭션을 안 쓴다). 그래서 두 delete 를 트랜잭션 없이 순서대로
+  // 실행한다. 순서가 유일한 안전장치다: 멤버 정리 → 프로필/NPC cascade. 이 순서면
+  // 중간에 실패해도 최악의 경우 "지워진 NPC 를 여전히 멤버로 가리키는 방"이 아니라
+  // "멤버는 지워졌는데 NPC 는 남은" 상태만 생긴다 — 후자는 다음 조회에서 그냥 무해한
+  // 유령 멤버가 없는 정상 상태이고, 전자(멤버 정리를 나중에 했다면 생겼을 상태)처럼
+  // 존재하지 않는 NPC 를 참조하는 깨진 멤버 행을 만들지 않는다.
   const affectedNpcs = await db
     .select({ id: npcs.id })
     .from(npcs)
