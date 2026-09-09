@@ -398,7 +398,20 @@ export async function appendRoomMessage(args: {
   return toRoomMessage(created);
 }
 
-/** 최근 `limit` 개를 오래된 순으로 돌려준다. */
+/**
+ * 최근 `limit` 개를 오래된 순으로 돌려준다.
+ *
+ * **`id` 를 타이브레이커로 쓰지 않는다.** `lastMessages()` 의 상관 서브쿼리와 규칙을 맞추려
+ * `(created_at, id)` 로 정렬해 봤더니, `chat_room_messages.id` 가 `crypto.randomUUID()` /
+ * `defaultRandom()` 이라 **넣은 순서와 무관**해서 같은 밀리초에 들어온 줄들의 순서가
+ * 무작위가 됐다(chat-rooms.test.ts 의 "최근 N 줄" 단언이 재현성 있게 깨졌다). 타이브레이커가
+ * 없으면 SQLite 는 rowid(=삽입 순서)로 훑어 대개 맞는 답을 준다 — 보장은 아니지만 무작위
+ * UUID 로 덮어쓰는 것보다 낫다.
+ *
+ * 정본 수정은 단조 증가하는 정렬 키(시퀀스 컬럼, 또는 같은 밀리초 안에서도 증가하는 id)
+ * 가 있어야 한다. `lastMessages()` 의 같은 결함(주석은 "id 가 큰 쪽이 나중" 이라고 적었지만
+ * 사실이 아니다)과 함께 고쳐야 하는 한 덩어리다.
+ */
 export async function recentRoomMessages(roomId: string, limit: number): Promise<RoomMessage[]> {
   const rows = await db
     .select()
