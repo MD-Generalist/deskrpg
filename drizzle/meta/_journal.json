@@ -71,6 +71,13 @@
       "when": 1788868038143,
       "tag": "0009_npc_backfill_bound_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788868038144,
+      "tag": "0010_chat_rooms",
+      "breakpoints": true
     }
   ]
 }

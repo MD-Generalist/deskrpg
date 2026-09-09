@@ -203,3 +203,57 @@ test("0009 는 이미 묶인 게이트웨이의 프로필을 채널에 출근시
 
   await pool.end();
 });
+
+test(
+  "0010 은 채널마다 office 방을 정확히 하나 만들고, 다시 돌려도 늘지 않는다",
+  { skip: !URL },
+  async (t) => {
+    const tmpMigrationsDir = makeTruncatedMigrationsDir("0009_npc_backfill_bound_profiles");
+    t.after(() => fs.rmSync(tmpMigrationsDir, { recursive: true, force: true }));
+
+    const pool = new Pool({ connectionString: URL });
+    await pool.query(
+      "DROP SCHEMA public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS drizzle CASCADE;",
+    );
+
+    // 0009 까지 적용 — 저장소 저널이 아니라 임시 사본을 가리킨다.
+    execFileSync("node", [MIGRATE_JS], {
+      env: { ...process.env, DATABASE_URL: URL, MIGRATIONS_DIR: tmpMigrationsDir },
+      stdio: "pipe",
+    });
+
+    await pool.query(
+      `INSERT INTO users (id, login_id, nickname, password_hash) VALUES ('11111111-1111-1111-1111-111111111111','u','u','x')`,
+    );
+    await pool.query(
+      `INSERT INTO channels (id, name, owner_id) VALUES ('22222222-2222-2222-2222-222222222222','c','11111111-1111-1111-1111-111111111111')`,
+    );
+
+    // 0010 적용 — 실제 저장소 저널을 가리킨다(이 테스트가 추가하는 마이그레이션 포함).
+    execFileSync("node", [MIGRATE_JS], {
+      env: { ...process.env, DATABASE_URL: URL },
+      stdio: "pipe",
+    });
+
+    const { rows } = await pool.query(
+      `SELECT kind, name, reply_policy, created_by FROM chat_rooms WHERE channel_id='22222222-2222-2222-2222-222222222222'`,
+    );
+    assert.deepEqual(rows, [
+      {
+        kind: "office",
+        name: "office",
+        reply_policy: "mention",
+        created_by: "11111111-1111-1111-1111-111111111111",
+      },
+    ]);
+
+    // 두 번째 office 는 부분 유니크 인덱스가 막는다
+    await assert.rejects(
+      pool.query(
+        `INSERT INTO chat_rooms (channel_id, kind, name, reply_policy, created_by) VALUES ('22222222-2222-2222-2222-222222222222','office','office','mention','11111111-1111-1111-1111-111111111111')`,
+      ),
+    );
+
+    await pool.end();
+  },
+);

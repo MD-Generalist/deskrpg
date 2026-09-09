@@ -1,4 +1,5 @@
 // src/db/schema.ts
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -11,6 +12,7 @@ import {
   index,
   unique,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -478,6 +480,60 @@ export const chatMessages = pgTable(
   (table) => [
     index("idx_chat_messages_lookup").on(table.characterId, table.npcId, table.createdAt),
   ],
+);
+
+export const chatRooms = pgTable(
+  "chat_rooms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 10 }).notNull(), // "office" | "group"
+    name: varchar("name", { length: 60 }).notNull(),
+    replyPolicy: varchar("reply_policy", { length: 10 }).notNull(), // "mention" | "members"
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("idx_chat_rooms_channel").on(t.channelId, t.lastMessageAt),
+    uniqueIndex("uq_chat_rooms_office_per_channel")
+      .on(t.channelId)
+      .where(sql`kind = 'office'`),
+  ],
+);
+
+export const chatRoomMembers = pgTable(
+  "chat_room_members",
+  {
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    memberKind: varchar("member_kind", { length: 8 }).notNull(), // "user" | "npc"
+    memberId: uuid("member_id").notNull(),
+    invitedBy: uuid("invited_by").references(() => users.id),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.roomId, t.memberKind, t.memberId] })],
+);
+
+export const chatRoomMessages = pgTable(
+  "chat_room_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    senderKind: varchar("sender_kind", { length: 8 }).notNull(), // "user" | "npc" | "system"
+    senderId: uuid("sender_id"),
+    senderName: varchar("sender_name", { length: 100 }).notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_chat_room_messages_room").on(t.roomId, t.createdAt)],
 );
 
 export const meetingMinutes = pgTable(
