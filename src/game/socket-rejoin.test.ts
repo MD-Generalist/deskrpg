@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRejoinTracker } from "./socket-rejoin";
+import { createRejoinTracker, registerOnce } from "./socket-rejoin";
 
 test("첫 connect 는 재조인이 아니다 — 스폰 경로가 이미 join 을 보냈다", () => {
   const t = createRejoinTracker();
@@ -23,4 +23,27 @@ test("플레이어가 아직 스폰 전이면 재조인하지 않고 플래그�
   t.onDisconnect();
   assert.equal(t.shouldRejoin(false), false);
   assert.equal(t.shouldRejoin(true), true, "스폰 뒤 다음 connect 에서 잡아야 한다");
+});
+
+test("registerOnce 는 같은 핸들러를 두 번 등록해도 한 번만 걸린다", () => {
+  const handlers = new Map<string, Set<() => void>>();
+  const bus = {
+    on(event: string, handler: () => void) {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event)!.add(handler);
+    },
+    off(event: string, handler: () => void) {
+      handlers.get(event)?.delete(handler);
+    },
+  };
+  const handler = () => {};
+
+  registerOnce(bus, "socket-rejoin", handler);
+  registerOnce(bus, "socket-rejoin", handler);
+
+  assert.equal(
+    handlers.get("socket-rejoin")?.size,
+    1,
+    "setupSocketListeners 가 두 번 불려도 핸들러는 하나여야 한다",
+  );
 });

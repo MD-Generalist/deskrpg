@@ -3,7 +3,7 @@ import { fetchChannelNpcs } from "../npc-prefetch";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { decideNpcClick, shouldRememberTarget } from "@/game/npc-click-intent";
 import { decideNpcUpdate, type NpcUpdatedPayload } from "@/game/npc-updated-dispatch";
-import { createRejoinTracker } from "../socket-rejoin";
+import { createRejoinTracker, registerOnce } from "../socket-rejoin";
 import type { Socket } from "socket.io-client";
 import {
   MapObject,
@@ -817,6 +817,15 @@ export class GameScene extends Phaser.Scene {
   // Multiplayer
   private socket: Socket | null = null;
   private rejoin = createRejoinTracker();
+  private handleSocketDisconnect = () => this.rejoin.onDisconnect();
+  private handleSocketConnect = () => {
+    if (this.rejoin.shouldRejoin(this.playerReady && !!this.player) && this.player) {
+      this.joinMultiplayer(this.player.x, this.player.y);
+    }
+  };
+  private handleSocketRejoin = () => {
+    if (this.playerReady && this.player) this.joinMultiplayer(this.player.x, this.player.y);
+  };
   private remotePlayers = new Map<string, RemotePlayer>();
   private lastMoveSent = 0;
   private lastSentX = 0;
@@ -2677,18 +2686,18 @@ export class GameScene extends Phaser.Scene {
 
     // 재연결 = 새 socket.id. 서버 players 맵에 없으므로 다시 join 한다.
     // (docs/BACKLOG.md "소켓이 재연결되면 채널 채팅·NPC 지명이 조용히 죽는다")
-    this.socket.on("disconnect", () => this.rejoin.onDisconnect());
-    this.socket.on("connect", () => {
-      if (this.rejoin.shouldRejoin(this.playerReady && !!this.player) && this.player) {
-        this.joinMultiplayer(this.player.x, this.player.y);
-      }
-    });
-    const handleSocketRejoin = () => {
-      if (this.playerReady && this.player) this.joinMultiplayer(this.player.x, this.player.y);
-    };
-    EventBus.on("socket-rejoin", handleSocketRejoin);
+    //
+    // setupSocketListeners() 는 정상 흐름에서 두 번 불린다 — create() 의 request-socket →
+    // socket-ready 1차, spawnPlayer() 의 player-spawned → PhaserGame.tsx 가 같은 소켓으로
+    // socket-ready 를 재발행하는 2차. off-then-on 으로 멱등하게 만들어, 재조인 1회에
+    // player:join 이 두 번 나가지 않게 한다 (핸들러는 인스턴스 필드라 참조가 안정적이다).
+    this.socket.off("disconnect", this.handleSocketDisconnect);
+    this.socket.on("disconnect", this.handleSocketDisconnect);
+    this.socket.off("connect", this.handleSocketConnect);
+    this.socket.on("connect", this.handleSocketConnect);
+    registerOnce(EventBus, "socket-rejoin", this.handleSocketRejoin);
     const cleanupSocketRejoinListener = () => {
-      EventBus.off("socket-rejoin", handleSocketRejoin);
+      EventBus.off("socket-rejoin", this.handleSocketRejoin);
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupSocketRejoinListener);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanupSocketRejoinListener);
