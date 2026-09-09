@@ -33,6 +33,7 @@ import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
+import { decideContextInvite } from "./context-invite-decision";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import {
   buildPlacementRequest,
@@ -2060,14 +2061,15 @@ function GamePageInner() {
   const handleContextInviteToRoom = useCallback(() => {
     if (!contextMenu) return;
     const currentRoom = roomState.rooms.find((room) => room.id === roomState.currentRoomId);
-    if (roomState.view === "room" && currentRoom?.kind === "group") {
-      handleRoomInvite(roomState.currentRoomId as string, [contextMenu.npcId], []);
+    const decision = decideContextInvite({ visible: channelChatVisible, currentRoom });
+    if (decision.kind === "invite") {
+      handleRoomInvite(decision.roomId, [contextMenu.npcId], []);
     } else {
       handleRoomAction({ type: "compose", presetNpcIds: [contextMenu.npcId] });
       setChannelChatOpen(true);
     }
     setContextMenu(null);
-  }, [contextMenu, roomState, handleRoomInvite, handleRoomAction]);
+  }, [contextMenu, roomState, channelChatVisible, handleRoomInvite, handleRoomAction]);
 
   const handleReturnNpc = useCallback(
     (npcId: string) => {
