@@ -1468,6 +1468,7 @@ const zh: Record<string, string> = {
   "room.delete": "删除",
   "room.name.placeholder": "聊天室名称（留空则用成员名）",
   "room.members": "成员",
+  "room.alreadyMember": "已经是该聊天室的成员。",
   "room.npcs": "员工",
   "room.people": "成员用户",
   "room.online": "在线",

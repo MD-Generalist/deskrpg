@@ -2059,15 +2059,29 @@ function GamePageInner() {
   const handleContextInviteToRoom = useCallback(() => {
     if (!contextMenu) return;
     const currentRoom = roomState.rooms.find((room) => room.id === roomState.currentRoomId);
-    const decision = decideContextInvite({ visible: channelChatVisible, currentRoom });
+    const decision = decideContextInvite({
+      visible: channelChatVisible,
+      currentRoom,
+      npcId: contextMenu.npcId,
+    });
     if (decision.kind === "invite") {
       handleRoomInvite(decision.roomId, [contextMenu.npcId], []);
+    } else if (decision.kind === "already-member") {
+      showToastNotification(`room-already-member-${contextMenu.npcId}`, t("room.alreadyMember"));
     } else {
       handleRoomAction({ type: "compose", presetNpcIds: [contextMenu.npcId] });
       setChannelChatOpen(true);
     }
     setContextMenu(null);
-  }, [contextMenu, roomState, channelChatVisible, handleRoomInvite, handleRoomAction]);
+  }, [
+    contextMenu,
+    roomState,
+    channelChatVisible,
+    handleRoomInvite,
+    handleRoomAction,
+    showToastNotification,
+    t,
+  ]);
 
   const handleReturnNpc = useCallback(
     (npcId: string) => {
@@ -2796,7 +2810,12 @@ function GamePageInner() {
             channelChatInputDisabled={channelChatInputDisabled || !socketConnected}
             onChannelChatVisibleChange={setChannelChatVisible}
             mentionCandidatesFor={mentionCandidatesFor}
-            onlinePlayers={channelPlayers.map((player) => ({ id: player.id, name: player.name }))}
+            onlinePlayers={channelPlayers.map((player) => ({
+              // 본인 엔트리는 `__self__` 센티넬 대신 실제 userId 로 넘긴다 —
+              // 초대 후보에서 본인을 viewerUserId 로 걸러 내려면 id 공간이 맞아야 한다.
+              id: player.id === "__self__" ? (roomState.viewerUserId ?? player.id) : player.id,
+              name: player.name,
+            }))}
             onRoomSend={handleRoomSend}
             onRoomAction={handleRoomAction}
             onRoomCreate={handleRoomCreate}

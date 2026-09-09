@@ -52,3 +52,22 @@ test("방이 없으면(새 방 만들기) 후보를 그대로 돌려준다", () 
   assert.equal(got.npcs.length, 2);
   assert.equal(got.users.length, 2);
 });
+
+test("selfUserId 를 주면 본인은 새 방 후보에서 빠진다 (M-6)", () => {
+  const got = candidatesForInvite(null, npcs, users, "u3");
+  assert.deepEqual(
+    got.users.map((user) => user.id),
+    ["u2"],
+    "본인(u3)이 빠져야 한다",
+  );
+  assert.equal(got.npcs.length, 2, "NPC 후보는 영향받지 않는다");
+});
+
+test("selfUserId 는 기존 멤버 필터와 함께 걸린다 (M-6)", () => {
+  const got = candidatesForInvite(room, npcs, users, "u3");
+  assert.deepEqual(
+    got.users.map((user) => user.id),
+    [],
+    "u2 는 멤버라 빠지고 u3 는 본인이라 빠진다",
+  );
+});

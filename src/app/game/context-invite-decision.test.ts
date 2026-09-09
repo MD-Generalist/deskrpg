@@ -39,3 +39,26 @@ test("현재 방이 없으면 새로 작성한다", () => {
   const decision = decideContextInvite({ visible: true, currentRoom: null });
   assert.deepEqual(decision, { kind: "compose" });
 });
+
+const groupRoomWithSophie: RoomSummary = {
+  ...groupRoom,
+  members: [{ kind: "npc", id: "npc-sophie", name: "소피" }],
+};
+
+test("이미 그 방 멤버인 NPC 를 초대하면 already-member 로 알린다 (M-5)", () => {
+  const decision = decideContextInvite({
+    visible: true,
+    currentRoom: groupRoomWithSophie,
+    npcId: "npc-sophie",
+  });
+  assert.deepEqual(decision, { kind: "already-member", roomId: "room-1" });
+});
+
+test("멤버가 아닌 NPC 는 그대로 초대한다 (M-5)", () => {
+  const decision = decideContextInvite({
+    visible: true,
+    currentRoom: groupRoomWithSophie,
+    npcId: "npc-other",
+  });
+  assert.deepEqual(decision, { kind: "invite", roomId: "room-1" });
+});

@@ -1492,6 +1492,7 @@ const en: Record<string, string> = {
   "room.delete": "Delete",
   "room.name.placeholder": "Room name (blank uses member names)",
   "room.members": "Members",
+  "room.alreadyMember": "Already a member of this room.",
   "room.npcs": "Staff",
   "room.people": "People",
   "room.online": "Online",

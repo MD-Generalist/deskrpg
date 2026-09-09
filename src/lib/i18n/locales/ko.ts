@@ -1488,6 +1488,7 @@ const ko: Record<string, string> = {
   "room.delete": "삭제",
   "room.name.placeholder": "방 이름(비우면 멤버 이름)",
   "room.members": "멤버",
+  "room.alreadyMember": "이미 이 방의 멤버입니다.",
   "room.npcs": "직원",
   "room.people": "사람",
   "room.online": "접속 중",

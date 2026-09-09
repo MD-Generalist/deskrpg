@@ -1497,6 +1497,7 @@ const ja: Record<string, string> = {
   "room.delete": "削除",
   "room.name.placeholder": "ルーム名（空ならメンバー名）",
   "room.members": "メンバー",
+  "room.alreadyMember": "すでにこのルームのメンバーです。",
   "room.npcs": "社員",
   "room.people": "ユーザー",
   "room.online": "オンライン",
