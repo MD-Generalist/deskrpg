@@ -660,15 +660,23 @@ function GamePageInner() {
       });
 
       // 방 목록과 히스토리 — 목록은 connect 뒤에, 히스토리는 room:open 의 응답이다.
-      socketInstance.on("room:list-response", (data: { rooms: RoomSummary[] }) => {
-        let preferRoomId: string | null = null;
-        try {
-          preferRoomId = channelId ? window.localStorage.getItem(lastRoomKey(channelId)) : null;
-        } catch {
-          preferRoomId = null;
-        }
-        dispatchRoom({ type: "list", rooms: data.rooms || [], preferRoomId });
-      });
+      socketInstance.on(
+        "room:list-response",
+        (data: { rooms: RoomSummary[]; viewerUserId?: string }) => {
+          let preferRoomId: string | null = null;
+          try {
+            preferRoomId = channelId ? window.localStorage.getItem(lastRoomKey(channelId)) : null;
+          } catch {
+            preferRoomId = null;
+          }
+          dispatchRoom({
+            type: "list",
+            rooms: data.rooms || [],
+            preferRoomId,
+            viewerUserId: data.viewerUserId ?? null,
+          });
+        },
+      );
 
       socketInstance.on("room:history", (data: { roomId: string; messages: RoomMessage[] }) => {
         dispatchRoom({ type: "history", roomId: data.roomId, messages: data.messages || [] });
@@ -2773,7 +2781,6 @@ function GamePageInner() {
             onChannelChatVisibleChange={setChannelChatVisible}
             mentionCandidatesFor={mentionCandidatesFor}
             onlinePlayers={channelPlayers.map((player) => ({ id: player.id, name: player.name }))}
-            currentUserId={channel?.isOwner ? (channel?.ownerId ?? "") : ""}
             onRoomSend={handleRoomSend}
             onRoomAction={handleRoomAction}
             onRoomCreate={handleRoomCreate}

@@ -108,11 +108,16 @@ test("room:list 는 office 를 포함해 내 방을 준다", async () => {
   const t = setup();
   await t.register(seeded);
   await t.socket.trigger("room:list", { channelId: seeded.channelId });
-  const [res] = ev(t.emitted, "room:list-response") as { rooms: { kind: string }[] }[];
+  const [res] = ev(t.emitted, "room:list-response") as {
+    rooms: { kind: string }[];
+    viewerUserId: string;
+  }[];
   assert.deepEqual(
     res.rooms.map((r) => r.kind),
     ["office"],
   );
+  // 클라이언트는 이 값으로만 "내가 만든 방" 을 가릴 수 있다.
+  assert.equal(res.viewerUserId, seeded.userId);
 });
 
 test("room:send 는 open 하지 않은 방이면 not_open, 빈 메시지면 empty, 쿨다운이면 cooldown — 전부 room:error 로", async () => {

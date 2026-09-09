@@ -8,6 +8,11 @@ import { sortRooms, type RoomMessage, type RoomSummary } from "@/lib/chat-rooms-
  */
 export type RoomState = {
   rooms: RoomSummary[];
+  /**
+   * 이 브라우저를 쓰는 사람의 user id. 서버가 `room:list-response` 에 실어 준다 —
+   * 클라이언트는 달리 자기 신원을 알 수 없고, 이게 없으면 "내가 만든 방" 을 가릴 수 없다.
+   */
+  viewerUserId: string | null;
   currentRoomId: string | null;
   messages: Record<string, RoomMessage[]>;
   view: "list" | "room" | "compose";
@@ -15,7 +20,12 @@ export type RoomState = {
 };
 
 export type RoomAction =
-  | { type: "list"; rooms: RoomSummary[]; preferRoomId: string | null }
+  | {
+      type: "list";
+      rooms: RoomSummary[];
+      preferRoomId: string | null;
+      viewerUserId?: string | null;
+    }
   | { type: "history"; roomId: string; messages: RoomMessage[] }
   | { type: "message"; roomId: string; message: RoomMessage }
   | { type: "created" | "updated"; room: RoomSummary; enter: boolean }
@@ -26,6 +36,7 @@ export type RoomAction =
 
 export const initialRoomState: RoomState = {
   rooms: [],
+  viewerUserId: null,
   currentRoomId: null,
   messages: {},
   view: "list",
@@ -51,6 +62,8 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
       return {
         ...state,
         rooms,
+        // 옛 서버는 이 값을 보내지 않는다 — 그때는 이미 알던 것을 지우지 않는다.
+        viewerUserId: action.viewerUserId ?? state.viewerUserId,
         currentRoomId,
         view: currentRoomId ? "room" : "list",
         compose: undefined,

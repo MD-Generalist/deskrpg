@@ -173,6 +173,9 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       await rooms.ensureOfficeRoom(id, ownerId);
       socket.emit("room:list-response", {
         channelId: id,
+        // 클라이언트는 자기 user id 를 알 길이 없다(뷰어 신원 엔드포인트가 없다).
+        // 방을 만든 사람인지 가리려면 이 값이 필요하다.
+        viewerUserId: user.userId,
         rooms: await rooms.listRoomsForUser(id, user.userId),
       });
     },

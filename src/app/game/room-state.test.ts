@@ -152,3 +152,15 @@ test("open/compose 는 뷰를 옮긴다", () => {
 test("lastRoomKey 는 채널별로 갈린다", () => {
   assert.equal(lastRoomKey("c1"), "deskrpg.lastRoom.c1");
 });
+
+test("목록이 실어 준 viewerUserId 를 기억하고, 없는 응답은 그것을 지우지 않는다", () => {
+  const s1 = reduceRoomState(initialRoomState, {
+    type: "list",
+    rooms: [office],
+    preferRoomId: null,
+    viewerUserId: "u1",
+  });
+  assert.equal(s1.viewerUserId, "u1");
+  const s2 = reduceRoomState(s1, { type: "list", rooms: [office], preferRoomId: null });
+  assert.equal(s2.viewerUserId, "u1", "옛 서버 응답이 신원을 지우면 안 된다");
+});

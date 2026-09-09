@@ -13,6 +13,7 @@ import RoomList from "./rooms/RoomList";
 import RoomHeader from "./rooms/RoomHeader";
 import RoomComposer from "./rooms/RoomComposer";
 import SystemMessage from "./rooms/SystemMessage";
+import { candidatesForInvite } from "./rooms/compose-candidates";
 import type { RoomAction, RoomState } from "@/app/game/room-state";
 
 interface ChatPanelProps {
@@ -59,11 +60,6 @@ interface ChatPanelProps {
   mentionCandidatesFor: (roomId: string | null) => { id: string; name: string }[];
   /** 지금 접속 중인 사람들 — 새 방/초대 화면의 사람 후보. */
   onlinePlayers: { id: string; name: string }[];
-  /**
-   * 이 브라우저의 사용자 id. 클라이언트는 자기 신원을 정확히 모르므로 채널 소유자일 때만
-   * 채워진다 — `room.createdBy` 와 맞춰 이름 변경·삭제 권한을 가린다.
-   */
-  currentUserId?: string;
   /** 방 안 화면(패널 열림 + DM/선택목록 아님)이 보이는지 — 맵의 NPC 대기 규칙이 이걸 본다. */
   onChannelChatVisibleChange?: (visible: boolean) => void;
   currentPlayerName?: string;
@@ -100,7 +96,6 @@ export default function ChatPanel({
   onRoomDelete,
   mentionCandidatesFor,
   onlinePlayers,
-  currentUserId,
   onChannelChatVisibleChange,
   currentPlayerName,
   npcMoveState,
@@ -215,6 +210,12 @@ export default function ChatPanel({
   const inNpcSelect = !!npcSelectList && !dialogNpc;
 
   const composeMode: "create" | "invite" = roomState.compose?.inviteTo ? "invite" : "create";
+  // 초대 화면은 이미 그 방에 있는 사람을 후보에서 뺀다 — 고를 수는 있지만 아무 일도 안 일어난다.
+  const inviteCandidates = candidatesForInvite(
+    roomState.rooms.find((room) => room.id === roomState.compose?.inviteTo) ?? null,
+    mentionCandidatesFor(null),
+    onlinePlayers.map((player) => ({ ...player, online: true })),
+  );
 
   /** 방 안에서 뒤로 — 방이 하나뿐이면 목록이 빈 화면이므로 패널을 접는다. */
   const backFromRoom = () => {
@@ -234,7 +235,7 @@ export default function ChatPanel({
         {!inNpcDialog && !inNpcSelect && roomState.view === "room" && currentRoom ? (
           <RoomHeader
             room={currentRoom}
-            canManage={!!currentUserId && currentRoom.createdBy === currentUserId}
+            canManage={!!roomState.viewerUserId && currentRoom.createdBy === roomState.viewerUserId}
             onBack={backFromRoom}
             onInvite={() =>
               onRoomAction({ type: "compose", presetNpcIds: [], inviteTo: currentRoom.id })
@@ -456,8 +457,8 @@ export default function ChatPanel({
         ) : roomState.view === "compose" ? (
           <RoomComposer
             mode={composeMode}
-            npcCandidates={mentionCandidatesFor(null)}
-            userCandidates={onlinePlayers.map((player) => ({ ...player, online: true }))}
+            npcCandidates={inviteCandidates.npcs}
+            userCandidates={inviteCandidates.users}
             presetNpcIds={roomState.compose?.presetNpcIds ?? []}
             onSubmit={({ name, npcIds, userIds }) => {
               const inviteTo = roomState.compose?.inviteTo;
