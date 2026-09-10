@@ -7,7 +7,14 @@ export default function LocaleSwitcher({ className }: { className?: string }) {
     <select
       value={locale}
       onChange={(e) => setLocale(e.target.value as typeof locale)}
-      className={`bg-gray-700 text-gray-200 text-xs border border-gray-600 rounded px-1.5 py-0.5 cursor-pointer ${className ?? ""}`}
+      aria-label={locale === "ko" ? "언어" : "Language"}
+      style={{
+        background: "var(--color-primary-muted)",
+        color: "var(--text)",
+        borderColor: "#ccd6c4",
+        colorScheme: "light",
+      }}
+      className={`text-xs border rounded px-1.5 py-0.5 cursor-pointer ${className ?? ""}`}
     >
       {LOCALES.map((l) => (
         <option key={l.code} value={l.code}>

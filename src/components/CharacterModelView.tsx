@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import * as T from "three";
 import { createActor, cylinder } from "@/game/three/characters";
+import type { OfficeLook } from "@/game/three/office-looks";
 import { spritePalette } from "@/game/three/appearance";
 import { disposeTree } from "@/game/three/office-renderer";
 
@@ -11,24 +12,28 @@ export default function CharacterModelView({
   direction,
   active,
   onUnavailable,
+  look,
+  walking = true,
 }: {
   source: HTMLCanvasElement | null;
   size: number;
   direction: string;
   active: boolean;
   onUnavailable: () => void;
+  look?: OfficeLook;
+  walking?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null),
-    current = useRef({ direction, active });
+    current = useRef({ direction, active, walking });
   useLayoutEffect(() => {
-    current.current = { direction, active };
-  }, [direction, active]);
+    current.current = { direction, active, walking };
+  }, [direction, active, walking]);
   const failed = useRef(onUnavailable);
   useLayoutEffect(() => {
     failed.current = onUnavailable;
   }, [onUnavailable]);
   useEffect(() => {
-    if (!host.current || !source) return;
+    if (!host.current || (!source && !look)) return;
     let renderer: T.WebGLRenderer;
     try {
       renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
@@ -42,15 +47,15 @@ export default function CharacterModelView({
     host.current.append(renderer.domElement);
     const scene = new T.Scene(),
       camera = new T.PerspectiveCamera(32, 1, 0.1, 20),
-      palette = spritePalette(source);
-    camera.position.set(2, 1.8, 3.7);
-    camera.lookAt(0, 0.8, 0);
+      palette = spritePalette(source ?? undefined);
+    camera.position.set(2, 1.8, look ? 4.9 : 3.7);
+    camera.lookAt(0, look ? 1 : 0.8, 0);
     scene.add(new T.HemisphereLight("#fff7e4", "#839b78", 2.5));
     const light = new T.DirectionalLight("#fff2d5", 3);
     light.position.set(2, 5, 4);
     scene.add(light);
     cylinder(scene, 0.65, 0.7, 0.1, "#d3bd96", 0, -0.08, 0);
-    const actor = createActor("character-preview", palette.shirt, 0, palette);
+    const actor = createActor("character-preview", palette.shirt, 0, palette, look);
     scene.add(actor.root);
     let frame = 0;
     const render = (time: number) => {
@@ -60,7 +65,12 @@ export default function CharacterModelView({
         { up: Math.PI, down: 0, left: -Math.PI / 2, right: Math.PI / 2 }[
           current.current.direction
         ] ?? 0;
-      actor.update(time / 1000, true, "walking", false);
+      actor.update(
+        time / 1000,
+        current.current.walking && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        "idle",
+        false,
+      );
       renderer.render(scene, camera);
     };
     render(0);
@@ -68,8 +78,9 @@ export default function CharacterModelView({
       cancelAnimationFrame(frame);
       disposeTree(scene);
       renderer.dispose();
+      renderer.forceContextLoss();
       renderer.domElement.remove();
     };
-  }, [source, size]);
+  }, [source, size, look]);
   return <div ref={host} style={{ width: size, height: size }} aria-hidden="true" />;
 }

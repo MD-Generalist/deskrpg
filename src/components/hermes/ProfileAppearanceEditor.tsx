@@ -1,67 +1,44 @@
 "use client";
 
 import { useState } from "react";
-
-import AppearanceEditor from "@/components/AppearanceEditor";
-import { useCharacterAppearance } from "@/hooks/useCharacterAppearance";
+import CharacterPreview from "@/components/CharacterPreview";
+import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
-import { useT } from "@/lib/i18n";
-import type { AppearanceSelection, CharacterAppearance } from "@/lib/lpc-registry";
+import { useT, useLocale } from "@/lib/i18n";
+import type { CharacterAppearance } from "@/lib/lpc-registry";
 
 interface ProfileAppearanceEditorProps {
   gatewayId: string;
   profileId: string;
-  /** 프로필이 지금 들고 있는 외형. 없으면 훅의 기본값에서 시작한다. */
   initialAppearance: CharacterAppearance | null;
   onSaved: () => void;
 }
 
-/**
- * 프로필 행에서 펼치는 외형 편집기.
- *
- * `useCharacterAppearance` 는 훅이라 행마다 조건부로 부를 수 없다 — 그래서 열려 있는
- * 행에만 마운트되는 자식으로 뽑았다. 배선(`AppearanceEditor` 에 넘기는 props)은
- * 삭제된 NPC 고용 모달의 custom 모드와 같다.
- */
+/** Keep the loaded appearance (including unknown IDs) until a replacement is chosen. */
 export default function ProfileAppearanceEditor({
   gatewayId,
   profileId,
   initialAppearance,
   onSaved,
 }: ProfileAppearanceEditorProps) {
-  const t = useT();
-  const {
-    bodyType,
-    layers,
-    activeCategory,
-    setActiveCategory,
-    handleBodyTypeChange,
-    selectItem,
-    clearCategory,
-    setVariant,
-    setSkin,
-    isItemCompatible,
-    getItemBodyTypes,
-    compatibleCount,
-    randomize,
-    buildAppearance,
-  } = useCharacterAppearance(
-    initialAppearance?.bodyType ?? "male",
-    (initialAppearance?.layers as Record<string, AppearanceSelection | null> | undefined) ??
-      undefined,
+  const t = useT(),
+    { locale } = useLocale(),
+    ko = locale === "ko";
+  const [appearance, setAppearance] = useState(
+    () => initialAppearance ?? officeLookAppearance(OFFICE_LOOKS[0].id),
   );
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
+  const selected = resolveOfficeLook(appearance);
+  const [saving, setSaving] = useState(false),
+    [error, setError] = useState("");
   const save = async () => {
+    if (saving) return;
     setSaving(true);
     setError("");
     try {
       const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profileId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appearance: buildAppearance() }),
+        body: JSON.stringify({ appearance }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw data;
@@ -72,34 +49,35 @@ export default function ProfileAppearanceEditor({
       setSaving(false);
     }
   };
-
   return (
-    <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-      <AppearanceEditor
-        bodyType={bodyType}
-        layers={layers}
-        activeCategory={activeCategory}
-        onBodyTypeChange={(bt) => handleBodyTypeChange(bt)}
-        onSkinChange={setSkin}
-        onSelectItem={selectItem}
-        onClearCategory={clearCategory}
-        onSetVariant={setVariant}
-        onSetActiveCategory={setActiveCategory}
-        isItemCompatible={isItemCompatible}
-        getItemBodyTypes={getItemBodyTypes}
-        compatibleCount={compatibleCount}
-        variant="compact"
-        presetsSlot={
-          <button
-            type="button"
-            onClick={randomize}
-            className="mb-1 w-full rounded bg-indigo-900/60 px-2 py-1 text-center text-xs font-semibold text-indigo-300 hover:bg-indigo-800"
-          >
-            {t("characters.random")}
-          </button>
-        }
-      />
-      {error && <p className="text-xs text-danger">{error}</p>}
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <CharacterPreview appearance={appearance} scale={2.5} />
+      <label className="block text-xs text-text-secondary">
+        {ko ? "오피스 캐릭터" : "Office character"}
+        <select
+          className="mt-2 w-full rounded border border-border bg-surface p-2 text-text"
+          value={selected?.id ?? ""}
+          onChange={(e) => {
+            if (e.target.value) setAppearance(officeLookAppearance(e.target.value));
+          }}
+        >
+          {!selected && (
+            <option value="">{ko ? "기존 외형 유지" : "Keep current appearance"}</option>
+          )}
+          {OFFICE_LOOKS.map((look) => (
+            <option key={look.id} value={look.id}>
+              {ko
+                ? `${look.name} · ${look.subtitle.split(" · ")[1]}`
+                : `${look.nameEn} · ${look.subtitleEn.split(" · ")[1]}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      {error && (
+        <p className="text-xs text-danger" role="alert">
+          {error}
+        </p>
+      )}
       <button
         type="button"
         onClick={() => void save()}

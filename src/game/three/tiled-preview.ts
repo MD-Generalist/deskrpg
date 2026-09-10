@@ -1,6 +1,7 @@
 import type { TiledMap, TilesetImageInfo } from "../../components/map-editor/hooks/useMapEditor";
 import { computeOccupiedTiles, OBJECT_TYPES } from "../../lib/object-types";
 import type { MapSnapshot } from "./bridge";
+import { resolveOfficeEnvironment } from "./office-environment-theme";
 
 /** Project editor and game both keep server coordinates at 32 pixels per logical tile. */
 export function tiledSnapshot(map: TiledMap): MapSnapshot {
@@ -52,6 +53,7 @@ export function tiledSnapshot(map: TiledMap): MapSnapshot {
     objects,
     blocked: [...blocked],
     tiled: true,
+    environment: resolveOfficeEnvironment(map),
   };
 }
 

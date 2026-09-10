@@ -5,6 +5,7 @@ import * as T from "three";
 import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import { createActor, round, cylinder } from "@/game/three/characters";
+import { resolveOfficeLook } from "@/game/three/office-looks";
 import { spritePalette } from "@/game/three/appearance";
 import { disposeTree } from "@/game/three/office-renderer";
 import type { MeetingSeatLayout, MeetingTableLayout } from "./layout";
@@ -98,6 +99,7 @@ export default function MeetingTableScene({
           source ? palette.shirt : seat.isChair ? "#67876c" : "#a68c73",
           i % 4,
           palette,
+          resolveOfficeLook(seat.appearance),
         );
       actor.root.position.copy(position(seat));
       actor.rig.rotation.y = { top: 0, bottom: Math.PI, left: Math.PI / 2, right: -Math.PI / 2 }[
@@ -118,7 +120,7 @@ export default function MeetingTableScene({
       round(chair, 0.7, 0.65, 0.12, "#7e9b7c", 0, 0.72, -0.32);
       cylinder(chair, 0.08, 0.1, 0.4, "#526a57", 0, 0.2, 0);
       addActor(seat, i);
-      if (seat.appearance) {
+      if (seat.appearance && !resolveOfficeLook(seat.appearance)) {
         const canvas = document.createElement("canvas");
         compositeCharacter(canvas, seat.appearance)
           .then(() => addActor(seat, i, canvas))

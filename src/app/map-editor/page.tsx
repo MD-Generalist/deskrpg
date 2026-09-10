@@ -7,6 +7,7 @@ import { Download, Trash2, Copy, Search, ArrowLeft } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import ProjectBrowser from "@/components/map-editor/ProjectBrowser";
+import { applyOfficePreset } from "@/game/three/office-presets";
 
 export default function MapEditorPage() {
   const t = useT();
@@ -209,9 +210,9 @@ function MapEditorListPage() {
       {/* Project Browser Section */}
       <ProjectBrowser
         onOpenProject={(id, userId) => router.push(`/map-editor/${userId}/${id}`)}
-        onCreateProject={async (name, cols, rows, tw, th) => {
+        onCreateProject={async (name, cols, rows, tw, th, preset = "blank") => {
           const { createDefaultMap } = await import("@/components/map-editor/hooks/useMapEditor");
-          const mapData = createDefaultMap(name, cols, rows, tw);
+          const mapData = applyOfficePreset(createDefaultMap(name, cols, rows, tw), preset);
           const res = await fetch("/api/projects", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

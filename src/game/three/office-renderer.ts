@@ -1,3 +1,5 @@
+import { resolveOfficeLook } from "./office-looks";
+import { isOfficeEnvironmentId } from "./office-environment-theme";
 import * as T from "three";
 import { spritePalette } from "./appearance";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -40,6 +42,13 @@ const palettes = {
   cafe: { floor: "#cbb49b", wall: "#dcc4ae", wood: "#895c43", outside: "#f1e5d8" },
 };
 export type OfficeTheme = keyof typeof palettes;
+const environmentPalettes = {
+  trading: { floor: "#e3d0aa", wall: "#dae2d2", wood: "#b48a60", outside: "#e9eee2" },
+  agency: { floor: "#ecd2c1", wall: "#e5b5a3", wood: "#b77962", outside: "#f3e7df" },
+  tech: { floor: "#d5e0db", wall: "#b1cbc6", wood: "#719389", outside: "#e5efed" },
+  executive: { floor: "#c8c7b5", wall: "#a7b2a3", wood: "#655e4c", outside: "#e1e5dd" },
+  publishing: { floor: "#ecdfbf", wall: "#dfd0ab", wood: "#a17b4f", outside: "#f2ecda" },
+};
 
 type RenderedActor = {
   model: ReturnType<typeof createActor>;
@@ -47,6 +56,7 @@ type RenderedActor = {
   name: HTMLSpanElement;
   bubble: HTMLSpanElement;
   texture?: CanvasImageSource;
+  lookId?: string;
 };
 
 /** Three.js presentation consumes the existing gameplay state; it never emits socket payloads. */
@@ -227,7 +237,9 @@ export class OfficeRenderer {
   }
   private buildMap(map: MapSnapshot) {
     disposeTree(this.world);
-    const p = palettes[this.theme];
+    const p = isOfficeEnvironmentId(map.environment)
+      ? environmentPalettes[map.environment]
+      : palettes[this.theme];
     this.renderer.setClearColor(p.outside);
     round(
       this.world,
@@ -424,6 +436,7 @@ export class OfficeRenderer {
       actor.texture ? palette.shirt : color,
       this.actors.size % 4,
       palette,
+      resolveOfficeLook(actor.appearance),
     );
     const label = document.createElement("button"),
       name = document.createElement("span"),
@@ -448,7 +461,14 @@ export class OfficeRenderer {
     });
     this.labels.append(label);
     this.scene.add(model.root);
-    return { model, label, name, bubble, texture: actor.texture };
+    return {
+      model,
+      label,
+      name,
+      bubble,
+      texture: actor.texture,
+      lookId: resolveOfficeLook(actor.appearance)?.id,
+    };
   }
   private tick = (time: number) => {
     if (this.disposed) return;
@@ -482,7 +502,11 @@ export class OfficeRenderer {
       this.controls.update();
       for (const actor of this.lastActors) {
         let rendered = this.actors.get(actor.id);
-        if (rendered && rendered.texture !== actor.texture) {
+        if (
+          rendered &&
+          (rendered.texture !== actor.texture ||
+            rendered.lookId !== resolveOfficeLook(actor.appearance)?.id)
+        ) {
           this.scene.remove(rendered.model.root);
           disposeTree(rendered.model.root);
           rendered.label.remove();
@@ -530,6 +554,7 @@ export class OfficeRenderer {
     this.renderer.domElement.removeEventListener("contextmenu", this.contextMenu);
     disposeTree(this.scene);
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.labels.replaceChildren();
     this.actors.clear();

@@ -3,7 +3,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Armchair, UsersRound, Map, Network, Cpu } from "lucide-react";
+import { Armchair, UsersRound, Network, Cpu } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 /** Navigation only: route-specific auth, role checks and actions stay with each page. */
@@ -15,7 +15,6 @@ export default function WorkspaceShell({ children }: { children: ReactNode }) {
   }
   const links = [
     { href: "/characters", label: t("characters.title"), icon: UsersRound },
-    { href: "/map-editor", label: t("mapEditor.toolbar.title"), icon: Map },
     { href: "/gateways", label: t("gateways.title"), icon: Network },
     { href: "/providers", label: t("providers.title"), icon: Cpu },
   ];

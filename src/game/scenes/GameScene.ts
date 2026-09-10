@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { resolveOfficeEnvironment } from "../three/office-environment-theme";
 import { createEventScope } from "../three/event-scope";
 import {
   matchesNpcTarget,
@@ -195,6 +196,7 @@ interface RemotePlayerData {
 }
 
 class RemotePlayer {
+  appearance: unknown;
   sprite: Phaser.GameObjects.Sprite;
   nameLabel: Phaser.GameObjects.Text;
   targetX: number;
@@ -205,6 +207,7 @@ class RemotePlayer {
 
   constructor(scene: Phaser.Scene, data: RemotePlayerData, textureKey: string) {
     this.textureKey = textureKey;
+    this.appearance = data.appearance;
     this.targetX = data.x;
     this.targetY = data.y;
     this.direction = data.direction || "down";
@@ -327,6 +330,7 @@ interface NpcData {
 }
 
 class NpcSprite {
+  appearance: unknown;
   id: string;
   name: string;
   sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Rectangle;
@@ -359,6 +363,7 @@ class NpcSprite {
 
   constructor(scene: Phaser.Scene, data: NpcData) {
     this.id = data.id;
+    this.appearance = data.appearance;
     this.name = data.name;
     this.scene = scene;
     this.pixelX = data.positionX * TILE_SIZE + TILE_SIZE / 2;
@@ -529,6 +534,7 @@ class NpcSprite {
 
   updateAppearance(appearance: unknown): void {
     if (!appearance) return;
+    this.appearance = appearance;
     const textureKey = `npc-${this.id}`;
     EventBus.emit("composite-remote-player", {
       id: this.id,
@@ -841,6 +847,7 @@ export class GameScene extends Phaser.Scene {
           direction: DIR_NUM_TO_NAME[npc.direction],
           walking: npc.moveState === "moving-to-player" || npc.moveState === "returning",
           texture: texture(npc.sprite),
+          appearance: npc.appearance,
           bubble: bubble ? label?.text || "···" : undefined,
           active: this.activityBubbles.has(npc.id),
         };
@@ -855,6 +862,7 @@ export class GameScene extends Phaser.Scene {
           direction: DIR_NUM_TO_NAME[this.currentDirection],
           walking: !!this.player.body?.velocity.length(),
           texture: texture(this.player),
+          appearance: this.appearance,
         });
       for (const [id, remote] of this.remotePlayers)
         actors.push({
@@ -866,6 +874,7 @@ export class GameScene extends Phaser.Scene {
           direction: remote.direction,
           walking: remote.animation !== "idle",
           texture: texture(remote.sprite),
+          appearance: remote.appearance,
         });
       return actors;
     },
@@ -877,6 +886,7 @@ export class GameScene extends Phaser.Scene {
         this.wallsData,
         this.mapObjects,
         this.tiledMode,
+        this.officeEnvironment,
         this.foregroundTileSprites.length,
         this.textures.getTextureKeys().length,
       ]),
@@ -965,6 +975,7 @@ export class GameScene extends Phaser.Scene {
         blocked,
         objects: this.mapObjects,
         tiled: this.tiledMode,
+        environment: this.officeEnvironment,
         artwork: this.tiledMode ? artwork : undefined,
       };
     },
@@ -1014,7 +1025,6 @@ export class GameScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private interactKey!: Phaser.Input.Keyboard.Key;
-  private tabKey!: Phaser.Input.Keyboard.Key;
   private currentDirection: number = DIR_DOWN;
   private playerReady = false;
 
@@ -1116,6 +1126,7 @@ export class GameScene extends Phaser.Scene {
   private channelId: string = "";
   private channelMapData: MapData | null = null;
   private tiledMode: boolean = false; // true when using Tiled JSON map (not legacy tilemap)
+  private officeEnvironment: string | undefined;
   private tiledSpawnCol: number | null = null;
   private tiledSpawnRow: number | null = null;
   private savedPosition: { x: number; y: number } | null = null;
@@ -1255,6 +1266,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   create(): void {
+    this.officeEnvironment = undefined;
     // Read pending channel data set by game page before scene creation
     let tiledJsonData: Record<string, unknown> | null = null;
     const initialChannelData = pendingChannelData;
@@ -1346,7 +1358,6 @@ export class GameScene extends Phaser.Scene {
         false,
         false,
       );
-      this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, false, false);
       this.editorKeys = {
         one: this.input.keyboard.addKey("ONE", false, false),
         two: this.input.keyboard.addKey("TWO", false, false),
@@ -1361,7 +1372,6 @@ export class GameScene extends Phaser.Scene {
       const kbd = this.input.keyboard;
       const capturedKeys = [
         Phaser.Input.Keyboard.KeyCodes.FORWARD_SLASH,
-        Phaser.Input.Keyboard.KeyCodes.TAB,
         Phaser.Input.Keyboard.KeyCodes.UP,
         Phaser.Input.Keyboard.KeyCodes.DOWN,
         Phaser.Input.Keyboard.KeyCodes.LEFT,
@@ -2044,6 +2054,7 @@ export class GameScene extends Phaser.Scene {
 
   private loadTiledMap(tiledJson: Record<string, unknown>): void {
     this.tiledMode = true;
+    this.officeEnvironment = resolveOfficeEnvironment(tiledJson);
     // Resolve external tileset references — Phaser doesn't support them
     const tilesetArr = tiledJson.tilesets as Array<Record<string, unknown>>;
     if (tilesetArr) {
@@ -3679,10 +3690,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Tab key to toggle editor
-    if (this.tabKey && Phaser.Input.Keyboard.JustDown(this.tabKey)) {
-      this.toggleEditor();
-    }
+    // Predefined environments: Tab remains available for browser focus navigation.
+    // The legacy editor implementation is retained for its dedicated authoring route.
 
     // Editor mode: handle layer/object switching with number keys and O key
     if (this.editorMode) {

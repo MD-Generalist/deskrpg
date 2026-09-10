@@ -44,8 +44,8 @@ export default function NewProjectModal({ open, onClose, onSubmit }: NewProjectM
       preset,
     );
     setName("");
-    setCols(20);
-    setRows(15);
+    setCols(preset === "trading" ? 30 : 20);
+    setRows(preset === "trading" ? 22 : 15);
     onClose();
   };
 
@@ -77,10 +77,20 @@ export default function NewProjectModal({ open, onClose, onSubmit }: NewProjectM
           <select
             id="office-preset"
             value={preset}
-            onChange={(e) => setPreset(e.target.value as OfficePreset)}
+            onChange={(e) => {
+              const nextPreset = e.target.value as OfficePreset;
+              setPreset(nextPreset);
+              if (nextPreset === "trading") {
+                setCols(30);
+                setRows(22);
+              }
+            }}
             className="w-full rounded border border-border bg-surface p-2 text-sm text-text"
           >
             <option value="blank">{locale === "ko" ? "빈 맵" : "Empty map"}</option>
+            <option value="trading">
+              {locale === "ko" ? "무역회사 오피스" : "Trading company office"}
+            </option>
             <option value="garden">{locale === "ko" ? "정원 오피스" : "Garden office"}</option>
             <option value="courtyard">
               {locale === "ko" ? "중정 작업실" : "Courtyard studio"}

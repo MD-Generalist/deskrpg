@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { ChevronRight } from "lucide-react";
-import MapTemplateGrid from "@/components/map-editor/MapTemplateGrid";
+import OfficeEnvironmentPicker from "@/components/OfficeEnvironmentPicker";
+import { ensureOfficeEnvironmentTemplate } from "@/lib/office-environment-template";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import { CHANNEL_PASSWORD_MIN_LENGTH } from "@/lib/security-policy";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
@@ -63,7 +64,7 @@ function CreateChannelPageInner() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-  const [mapTemplateId, setMapTemplateId] = useState("");
+  const [environmentId, setEnvironmentId] = useState("trading");
   const [groupId, setGroupId] = useState("");
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
@@ -86,12 +87,6 @@ function CreateChannelPageInner() {
   const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({
     status: "idle",
   });
-
-  // Auto-select template from URL param
-  useEffect(() => {
-    const urlTemplateId = searchParams.get("templateId");
-    if (urlTemplateId) setMapTemplateId(urlTemplateId);
-  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +225,7 @@ function CreateChannelPageInner() {
     setError("");
 
     try {
+      const mapTemplateId = await ensureOfficeEnvironmentTemplate(environmentId);
       const payload: Record<string, unknown> = {
         name: name.trim(),
         description: description.trim() || null,
@@ -389,18 +385,7 @@ function CreateChannelPageInner() {
             </div>
           )}
 
-          {/* Map Template */}
-          <div>
-            <label className="block text-sm font-semibold mb-2">
-              {t("channels.create.mapTemplate")} *
-            </label>
-            <MapTemplateGrid
-              selectedId={mapTemplateId}
-              onSelect={setMapTemplateId}
-              showActions
-              mapEditorQuery={`?from=create&characterId=${characterId}`}
-            />
-          </div>
+          <OfficeEnvironmentPicker value={environmentId} onChange={setEnvironmentId} />
 
           {/* ============================================================= */}
           {/* AI Gateway (Optional) */}

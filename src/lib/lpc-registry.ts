@@ -43,6 +43,8 @@ export interface AppearanceSelection {
 }
 
 export interface CharacterAppearance {
+  /** Optional frontend lookbook identity; legacy layer data stays compatible. */
+  officeLookId?: string;
   bodyType: string;
   layers: Record<string, AppearanceSelection | null>;
 }

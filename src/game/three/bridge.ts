@@ -10,6 +10,7 @@ export type ActorSnapshot = {
   direction: string;
   walking: boolean;
   texture?: CanvasImageSource;
+  appearance?: unknown;
   bubble?: string;
   active?: boolean;
 };
@@ -21,6 +22,8 @@ export type MapSnapshot = {
   blocked: string[];
   objects: MapObject[];
   tiled: boolean;
+  /** Validated office-template metadata, independent of actor appearance. */
+  environment?: string;
   /** Actual channel artwork; retained for custom tiles without semantic 3D equivalents. */
   artwork?: HTMLCanvasElement;
 };

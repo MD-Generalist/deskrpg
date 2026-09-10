@@ -62,8 +62,8 @@ export default function ThreeMapPreview({
       <p className="absolute bottom-4 right-4 rounded-lg bg-surface px-3 py-2 text-caption text-text-muted border border-border">
         {failed
           ? locale === "ko"
-            ? "WebGL을 사용할 수 없습니다. 2D 편집을 이용해 주세요."
-            : "WebGL is unavailable. Use the 2D editor."
+            ? "WebGL을 사용할 수 없어 3D 미리보기를 표시할 수 없습니다."
+            : "WebGL is unavailable. The 3D preview cannot be displayed."
           : locale === "ko"
             ? "우클릭 드래그: 회전 · 휠: 확대/축소 · 가운데 버튼: 이동"
             : "Right-drag: orbit · Wheel: zoom · Middle-drag: pan"}
