@@ -79,14 +79,14 @@ export default function StampPanel({
   return (
     <div className="flex flex-col">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-700 mb-2">
+      <div className="flex border-b border-border mb-2">
         {(["project", "myStamps", "builtIn"] as const).map((tab) => (
           <button
             key={tab}
             className={`flex-1 px-2 py-1.5 text-xs ${
               activeTab === tab
-                ? "border-b-2 border-blue-500 text-blue-400"
-                : "text-gray-400 hover:text-white"
+                ? "border-b-2 border-blue-500 text-blue-700"
+                : "text-text-muted hover:text-white"
             }`}
             onClick={() => setActiveTab(tab)}
           >

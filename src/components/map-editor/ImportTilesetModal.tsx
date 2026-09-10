@@ -385,14 +385,14 @@ export default function ImportTilesetModal({
     <Modal open={open} onClose={onClose} title={t("mapEditor.importTileset.title")} size="lg">
       <Modal.Body>
         {/* Tab bar */}
-        <div className="flex border-b border-gray-700 mb-4">
+        <div className="flex border-b border-border mb-4">
           {(["upload", "myTilesets", "builtIn"] as const).map((tab) => (
             <button
               key={tab}
               className={`px-4 py-2 text-sm ${
                 activeTab === tab
-                  ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-gray-400 hover:text-white"
+                  ? "border-b-2 border-blue-500 text-blue-700"
+                  : "text-text-muted hover:text-white"
               }`}
               onClick={() => setActiveTab(tab)}
             >
@@ -416,7 +416,7 @@ export default function ImportTilesetModal({
                 type="file"
                 accept="image/png,image/jpeg"
                 onChange={handleFileChange}
-                className="text-caption text-text file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-primary file:text-white file:text-caption file:cursor-pointer file:font-semibold"
+                className="text-caption text-text file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-primary file:text-text file:text-caption file:cursor-pointer file:font-semibold"
               />
             </div>
 
@@ -512,16 +512,16 @@ export default function ImportTilesetModal({
         {activeTab !== "upload" && (
           <div className="grid grid-cols-3 gap-3 max-h-80 overflow-auto p-4">
             {libraryLoading ? (
-              <div className="col-span-3 text-center text-gray-500 py-8">{t("common.loading")}</div>
+              <div className="col-span-3 text-center text-text-dim py-8">{t("common.loading")}</div>
             ) : libraryTilesets.length === 0 ? (
-              <div className="col-span-3 text-center text-gray-500 py-8">
+              <div className="col-span-3 text-center text-text-dim py-8">
                 {t("mapEditor.assets.noTilesets")}
               </div>
             ) : (
               libraryTilesets.map((ts) => (
                 <button
                   key={ts.id}
-                  className="flex flex-col items-center p-2 bg-gray-800 rounded border border-gray-700 hover:border-blue-500"
+                  className="flex flex-col items-center p-2 bg-surface rounded border border-border hover:border-blue-500"
                   onClick={async () => {
                     const nextFirstgid = existingTilesets.reduce(
                       (max, t) => Math.max(max, t.firstgid + t.tilecount),
@@ -567,12 +567,12 @@ export default function ImportTilesetModal({
                   <img
                     src={ts.image}
                     alt={ts.name}
-                    className="w-16 h-16 object-contain bg-gray-900 rounded"
+                    className="w-16 h-16 object-contain bg-bg rounded"
                   />
-                  <span className="text-xs text-gray-300 mt-1 truncate w-full text-center">
+                  <span className="text-xs text-text-secondary mt-1 truncate w-full text-center">
                     {ts.name}
                   </span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-text-dim">
                     {ts.tilewidth}×{ts.tileheight}
                   </span>
                 </button>

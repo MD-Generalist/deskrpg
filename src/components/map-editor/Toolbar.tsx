@@ -324,14 +324,14 @@ export default function Toolbar({
                   cancelEditName();
                 }
               }}
-              className="text-sm font-medium text-white bg-surface border border-primary-light/50 rounded px-1.5 py-0 h-6 outline-none focus:border-primary-light min-w-0 w-40"
+              className="text-sm font-medium text-text bg-surface border border-primary-light/50 rounded px-1.5 py-0 h-6 outline-none focus:border-primary-light min-w-0 w-40"
               style={{ maxWidth: 240 }}
             />
           ) : (
             <>
               <span className="text-text-muted text-sm select-none">·</span>
               <span
-                className="text-sm font-medium text-text-muted hover:text-white cursor-pointer select-none transition-colors"
+                className="text-sm font-medium text-text-muted hover:text-text cursor-pointer select-none transition-colors"
                 onDoubleClick={startEditName}
                 title={t("common.renameOnDoubleClick")}
               >
@@ -472,7 +472,7 @@ export default function Toolbar({
               <Save className="w-4 h-4" />
             </Button>
             {dirty && (
-              <span className="absolute top-0.5 left-0.5 w-2 h-2 rounded-full bg-primary" />
+              <span className="absolute top-0.5 left-0.5 w-2 h-2 rounded-full bg-primary text-white" />
             )}
           </div>
         </Tooltip>

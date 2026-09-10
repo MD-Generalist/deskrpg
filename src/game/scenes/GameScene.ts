@@ -1,4 +1,11 @@
 import Phaser from "phaser";
+import { createEventScope } from "../three/event-scope";
+import {
+  matchesNpcTarget,
+  worldToCamera,
+  type OfficeBridge,
+  type ActorSnapshot,
+} from "../three/bridge";
 import { fetchChannelNpcs } from "../npc-prefetch";
 import { shouldAutoReturn, shouldReturnOnRoomChange } from "../npc-auto-return";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
@@ -810,6 +817,200 @@ class NpcSprite {
 // ---------------------------------------------------------------------------
 
 export class GameScene extends Phaser.Scene {
+  private eventScope = createEventScope();
+  private presentationPointer: { x: number; y: number } | null = null;
+  private presentationActorId: string | undefined;
+
+  /** Reuse authoritative frontend simulation while Three.js owns presentation. */
+  readonly officeBridge: OfficeBridge = {
+    actors: () => {
+      const texture = (sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Rectangle) =>
+        sprite instanceof Phaser.GameObjects.Sprite
+          ? (sprite.texture.getSourceImage() as CanvasImageSource)
+          : undefined;
+      const actors: ActorSnapshot[] = this.npcSprites.map((npc) => {
+        const bubble = this.npcBubbles.get(npc.id);
+        const label = bubble?.list.find((child) => child instanceof Phaser.GameObjects.Text) as
+          Phaser.GameObjects.Text | undefined;
+        return {
+          id: npc.id,
+          name: npc.name,
+          kind: "npc",
+          x: npc.pixelX,
+          y: npc.pixelY,
+          direction: DIR_NUM_TO_NAME[npc.direction],
+          walking: npc.moveState === "moving-to-player" || npc.moveState === "returning",
+          texture: texture(npc.sprite),
+          bubble: bubble ? label?.text || "···" : undefined,
+          active: this.activityBubbles.has(npc.id),
+        };
+      });
+      if (this.playerReady && this.player)
+        actors.push({
+          id: this.socket?.id || this.characterId || "local",
+          name: this.characterName,
+          kind: "player",
+          x: this.player.x,
+          y: this.player.y,
+          direction: DIR_NUM_TO_NAME[this.currentDirection],
+          walking: !!this.player.body?.velocity.length(),
+          texture: texture(this.player),
+        });
+      for (const [id, remote] of this.remotePlayers)
+        actors.push({
+          id,
+          name: remote.nameLabel.text,
+          kind: "remote",
+          x: remote.sprite.x,
+          y: remote.sprite.y,
+          direction: remote.direction,
+          walking: remote.animation !== "idle",
+          texture: texture(remote.sprite),
+        });
+      return actors;
+    },
+    mapKey: () =>
+      JSON.stringify([
+        this.effectiveMapCols,
+        this.effectiveMapRows,
+        this.floorData,
+        this.wallsData,
+        this.mapObjects,
+        this.tiledMode,
+        this.foregroundTileSprites.length,
+        this.textures.getTextureKeys().length,
+      ]),
+    save: () => (this.isChannelOwner && !this.tiledMode ? this.saveMap() : Promise.resolve(false)),
+    map: () => {
+      const blocked: string[] = [];
+      for (let row = 0; row < this.effectiveMapRows; row++)
+        for (let col = 0; col < this.effectiveMapCols; col++) {
+          if (!this.isWalkable(col, row)) blocked.push(`${col},${row}`);
+        }
+      // Preserve custom tileset artwork using the already loaded, same-origin assets.
+      const artwork = document.createElement("canvas");
+      artwork.width = this.effectiveMapCols * TILE_SIZE;
+      artwork.height = this.effectiveMapRows * TILE_SIZE;
+      const ctx = artwork.getContext("2d");
+      if (ctx && this.tiledMode) {
+        ctx.imageSmoothingEnabled = false;
+        const foreground = new Set<Phaser.GameObjects.GameObject>(this.foregroundTileSprites);
+        for (const child of [...this.children.list].sort(
+          (a, b) =>
+            ((a as unknown as { depth?: number }).depth || 0) -
+            ((b as unknown as { depth?: number }).depth || 0),
+        )) {
+          if (child instanceof Phaser.GameObjects.Sprite && foreground.has(child)) {
+            const frame = child.frame;
+            ctx.save();
+            ctx.globalAlpha = child.alpha;
+            ctx.translate(child.x, child.y);
+            ctx.rotate(child.rotation);
+            ctx.scale(child.flipX ? -1 : 1, child.flipY ? -1 : 1);
+            ctx.drawImage(
+              child.texture.getSourceImage() as CanvasImageSource,
+              frame.cutX,
+              frame.cutY,
+              frame.cutWidth,
+              frame.cutHeight,
+              -child.displayWidth * child.originX,
+              -child.displayHeight * child.originY,
+              child.displayWidth,
+              child.displayHeight,
+            );
+            ctx.restore();
+            continue;
+          }
+          if (
+            !(child instanceof Phaser.Tilemaps.TilemapLayer) ||
+            child.layer.name.toLowerCase() === "collision" ||
+            !child.visible
+          )
+            continue;
+          for (const row of child.layer.data)
+            for (const tile of row) {
+              if (!tile || tile.index < 0 || !tile.tileset?.image) continue;
+              const tileset = tile.tileset;
+              const source = tileset.image!.getSourceImage() as CanvasImageSource;
+              const uv = tileset.getTileTextureCoordinates(tile.index) as {
+                x: number;
+                y: number;
+              } | null;
+              if (!uv) continue;
+              ctx.save();
+              ctx.globalAlpha = child.alpha * tile.alpha;
+              ctx.translate(tile.x * TILE_SIZE + 16, tile.y * TILE_SIZE + 16);
+              ctx.rotate(tile.rotation);
+              ctx.scale(tile.flipX ? -1 : 1, tile.flipY ? -1 : 1);
+              ctx.drawImage(
+                source,
+                uv.x,
+                uv.y,
+                tileset.tileWidth,
+                tileset.tileHeight,
+                -16,
+                -16,
+                32,
+                32,
+              );
+              ctx.restore();
+            }
+        }
+      }
+      return {
+        cols: this.effectiveMapCols,
+        rows: this.effectiveMapRows,
+        floor: this.floorData,
+        walls: this.wallsData,
+        blocked,
+        objects: this.mapObjects,
+        tiled: this.tiledMode,
+        artwork: this.tiledMode ? artwork : undefined,
+      };
+    },
+    editor: () => ({
+      enabled: this.editorMode,
+      objects: this.editorObjectMode,
+      tile: this.selectedTile,
+      layer: this.selectedLayer,
+      objectType: this.selectedObjectType,
+      placement: this.placementMode,
+      spawn: this.spawnSetMode,
+      owner: this.isChannelOwner,
+      tiled: this.tiledMode,
+    }),
+    edit: (options) => {
+      if (!this.isChannelOwner) return;
+      if (options.enabled !== undefined && options.enabled !== this.editorMode) this.toggleEditor();
+      if (options.objects !== undefined) this.editorObjectMode = options.objects;
+      if (options.tile !== undefined) this.selectedTile = Math.max(0, Math.min(15, options.tile));
+      if (options.layer !== undefined) this.selectedLayer = options.layer === 1 ? 1 : 0;
+      if (options.objectType && OBJECT_TYPES[options.objectType])
+        this.selectedObjectType = options.objectType;
+      this.updateLayerText();
+    },
+    pointer: (kind, x, y, button, screenX, screenY, actorId) => {
+      if (this.editorMode && this.tiledMode) return;
+      this.cameras.main.preRender();
+      const point = worldToCamera(x, y, this.cameras.main);
+      this.input.activePointer.position.set(point.x, point.y);
+      const pointer = {
+        ...point,
+        rightButtonDown: () => button === 2,
+        leftButtonDown: () => button === 0,
+      };
+      this.presentationPointer = { x: screenX, y: screenY };
+      this.presentationActorId = actorId;
+      this.input.emit(kind === "down" ? "pointerdown" : "pointermove", pointer);
+      this.presentationPointer = null;
+      this.presentationActorId = undefined;
+    },
+    walkable: (col, row) => this.isWalkable(col, row) && !this.isTileOccupied(col, row),
+    setPresentation: (active) => {
+      this.sys.settings.visible = !active;
+    },
+  };
+
   private player!: Phaser.Physics.Arcade.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private interactKey!: Phaser.Input.Keyboard.Key;
@@ -1127,7 +1328,7 @@ export class GameScene extends Phaser.Scene {
         this.scene.restart();
       };
 
-      EventBus.on("channel-data-ready", handleChannelDataReady);
+      this.eventScope.on("channel-data-ready", handleChannelDataReady);
       const cleanupChannelDataListener = () => {
         EventBus.off("channel-data-ready", handleChannelDataReady);
         if (waitingText.active) waitingText.destroy();
@@ -1180,14 +1381,14 @@ export class GameScene extends Phaser.Scene {
       };
       // Editor keys (ONE, TWO, THREE, O) are NOT captured globally —
       // they only work in editor mode which is not active during dialogs
-      document.addEventListener("focusin", (e) => {
+      const handleFocusIn = (e: FocusEvent) => {
         if (!kbd) return;
         if (shouldReleaseKeyboardCapture(e.target)) {
           kbd.enabled = false;
           kbd.removeCapture(capturedKeys);
         }
-      });
-      document.addEventListener("focusout", () => {
+      };
+      const handleFocusOut = () => {
         if (!kbd) return;
         kbd.enabled = false;
         this.time.delayedCall(50, () => {
@@ -1198,6 +1399,12 @@ export class GameScene extends Phaser.Scene {
           kbd.addCapture(capturedKeys);
           kbd.enabled = true;
         });
+      };
+      document.addEventListener("focusin", handleFocusIn);
+      document.addEventListener("focusout", handleFocusOut);
+      this.eventScope.addCleanup(() => {
+        document.removeEventListener("focusin", handleFocusIn);
+        document.removeEventListener("focusout", handleFocusOut);
       });
     }
 
@@ -1266,14 +1473,14 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Dialog events
-    EventBus.on("dialog:open", () => {
+    this.eventScope.on("dialog:open", () => {
       this.dialogOpen = true;
     });
-    EventBus.on("dialog:close", () => {
+    this.eventScope.on("dialog:close", () => {
       this.dialogOpen = false;
     });
     // 보이는 방이 바뀌면, 그 방이 아닌 호출된 NPC 는 타이머 없이 바로 자리로 간다.
-    EventBus.on("room:visible", (data: { roomId: string | null }) => {
+    this.eventScope.on("room:visible", (data: { roomId: string | null }) => {
       this.visibleRoomId = data.roomId;
       for (const npc of this.npcSprites) {
         if (!shouldReturnOnRoomChange(npc, data.roomId)) continue;
@@ -1282,35 +1489,35 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Placement mode events
-    EventBus.on("placement-mode-start", () => {
+    this.eventScope.on("placement-mode-start", () => {
       this.placementMode = true;
     });
-    EventBus.on("placement-mode-end", () => {
+    this.eventScope.on("placement-mode-end", () => {
       this.placementMode = false;
       this.placementHighlight?.destroy();
       this.placementHighlight = null;
     });
 
     // Spawn set mode events
-    EventBus.on("spawn-set-mode-start", () => {
+    this.eventScope.on("spawn-set-mode-start", () => {
       this.spawnSetMode = true;
     });
-    EventBus.on("spawn-set-mode-end", () => {
+    this.eventScope.on("spawn-set-mode-end", () => {
       this.spawnSetMode = false;
       this.spawnHighlight?.destroy();
       this.spawnHighlight = null;
     });
-    EventBus.on("task-automation-updated", (data: { reportWaitSeconds?: number }) => {
+    this.eventScope.on("task-automation-updated", (data: { reportWaitSeconds?: number }) => {
       if (typeof data.reportWaitSeconds === "number") {
         this.reportWaitMs = Math.max(5000, data.reportWaitSeconds * 1000);
       }
     });
-    EventBus.on("owner-status", (data: { isOwner: boolean }) => {
+    this.eventScope.on("owner-status", (data: { isOwner: boolean }) => {
       this.isChannelOwner = data.isOwner;
     });
 
     // Local NPC spawn/remove (from own hire/fire actions)
-    EventBus.on(
+    this.eventScope.on(
       "npc:spawn-local",
       (raw: {
         id: string;
@@ -1327,10 +1534,10 @@ export class GameScene extends Phaser.Scene {
         this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
       },
     );
-    EventBus.on("npc:remove-local", (data: { npcId: string }) => {
+    this.eventScope.on("npc:remove-local", (data: { npcId: string }) => {
       this.removeNpcById(data.npcId);
     });
-    EventBus.on(
+    this.eventScope.on(
       "npc:update-local",
       (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
@@ -1339,7 +1546,7 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    EventBus.on(
+    this.eventScope.on(
       "npc:start-move",
       (data: { npcId: string; targetCol: number; targetRow: number; message?: string }) => {
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
@@ -1355,7 +1562,7 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    EventBus.on(
+    this.eventScope.on(
       "npc:call-to-player",
       (data: {
         npcId: string;
@@ -1416,7 +1623,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     // NPC finished responding — if far from player, walk to deliver the response
-    EventBus.on("npc:deliver-response", (data: { npcId: string; npcName: string }) => {
+    this.eventScope.on("npc:deliver-response", (data: { npcId: string; npcName: string }) => {
       if (!this.player) return;
       const npc = this.npcSprites.find((n) => n.id === data.npcId);
       if (!npc) return;
@@ -1444,7 +1651,7 @@ export class GameScene extends Phaser.Scene {
       );
     });
 
-    EventBus.on("npc:start-return", (data: { npcId: string }) => {
+    this.eventScope.on("npc:start-return", (data: { npcId: string }) => {
       const npc = this.npcSprites.find((n) => n.id === data.npcId);
       if (!npc || npc.moveState !== "waiting") return;
       npc.returnToHome(
@@ -1453,7 +1660,7 @@ export class GameScene extends Phaser.Scene {
       );
     });
 
-    EventBus.on("npc:approach-and-interact", (data: { npcId: string; npcName?: string }) => {
+    this.eventScope.on("npc:approach-and-interact", (data: { npcId: string; npcName?: string }) => {
       this.approachNpcAndInteract(data.npcId, data.npcName);
     });
 
@@ -1536,7 +1743,12 @@ export class GameScene extends Phaser.Scene {
       // places the visual top ~40 px above pixelY, so TILE_SIZE alone misses head clicks
       let hoveredNpc: NpcSprite | null = null;
       for (const npc of this.npcSprites) {
-        if (npc.distanceTo(worldPoint.x, worldPoint.y) < TILE_SIZE * 1.5) {
+        if (
+          matchesNpcTarget(
+            { id: npc.id, x: npc.pixelX, y: npc.pixelY },
+            { x: worldPoint.x, y: worldPoint.y, actorId: this.presentationActorId },
+          )
+        ) {
           hoveredNpc = npc;
           break;
         }
@@ -1640,12 +1852,17 @@ export class GameScene extends Phaser.Scene {
       if (pointer.rightButtonDown()) {
         const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         for (const npc of this.npcSprites) {
-          if (npc.distanceTo(worldPoint.x, worldPoint.y) < TILE_SIZE * 1.5) {
+          if (
+            matchesNpcTarget(
+              { id: npc.id, x: npc.pixelX, y: npc.pixelY },
+              { x: worldPoint.x, y: worldPoint.y, actorId: this.presentationActorId },
+            )
+          ) {
             EventBus.emit("npc:context-menu", {
               npcId: npc.id,
               npcName: npc.name,
-              screenX: pointer.x,
-              screenY: pointer.y,
+              screenX: this.presentationPointer?.x ?? pointer.x,
+              screenY: this.presentationPointer?.y ?? pointer.y,
               moveState: npc.moveState,
             });
             return;
@@ -1663,7 +1880,12 @@ export class GameScene extends Phaser.Scene {
 
       let clickedNpc: NpcSprite | null = null;
       for (const npc of this.npcSprites) {
-        if (npc.distanceTo(worldX, worldY) < TILE_SIZE * 1.5) {
+        if (
+          matchesNpcTarget(
+            { id: npc.id, x: npc.pixelX, y: npc.pixelY },
+            { x: worldX, y: worldY, actorId: this.presentationActorId },
+          )
+        ) {
           clickedNpc = npc;
           break;
         }
@@ -1740,7 +1962,7 @@ export class GameScene extends Phaser.Scene {
 
     // Listen for spritesheet texture from React (only process once)
     let playerTextureLoaded = false;
-    EventBus.on("spritesheet-ready", (dataUrl: string) => {
+    this.eventScope.on("spritesheet-ready", (dataUrl: string) => {
       if (playerTextureLoaded) return;
       playerTextureLoaded = true;
       this.loadPlayerTexture(dataUrl);
@@ -1763,23 +1985,23 @@ export class GameScene extends Phaser.Scene {
         this.joinMultiplayer(this.player.x, this.player.y);
       }
     };
-    EventBus.on("socket-ready", handleSocketReady);
+    this.eventScope.on("socket-ready", handleSocketReady);
 
     // Speech bubble listeners
-    EventBus.on("chat:bubble", (data: { senderId: string }) => {
+    this.eventScope.on("chat:bubble", (data: { senderId: string }) => {
       this.showPlayerBubble(data.senderId);
     });
-    EventBus.on("npc:bubble", (data: { npcId: string; text?: string }) => {
+    this.eventScope.on("npc:bubble", (data: { npcId: string; text?: string }) => {
       this.showNpcBubbleIcon(data.npcId, data.text);
     });
-    EventBus.on("npc:bubble-clear", (data: { npcId: string }) => {
+    this.eventScope.on("npc:bubble-clear", (data: { npcId: string }) => {
       this.clearNpcBubble(data.npcId);
       this.activityBubbles.delete(data.npcId);
     });
     // 작업 중 표시. "할 말 있음"(점 세 개) 말풍선과 자리는 같지만 뜻이 다르므로,
     // 활동으로 띄운 것만 따로 기억해 두었다가 활동이 끝날 때 그것만 지운다 —
     // 그러지 않으면 NPC 가 정말 할 말이 있어 띄운 말풍선까지 같이 사라진다.
-    EventBus.on("npc:activity-bubble", (data: { npcId: string; text?: string }) => {
+    this.eventScope.on("npc:activity-bubble", (data: { npcId: string; text?: string }) => {
       if (data.text) {
         this.activityBubbles.add(data.npcId);
         this.showNpcBubbleIcon(data.npcId, data.text);
@@ -1791,7 +2013,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Respond to position requests from React (for save-on-leave)
-    EventBus.on("request-player-position", () => {
+    this.eventScope.on("request-player-position", () => {
       if (this.player) {
         EventBus.emit("player-position-response", { x: this.player.x, y: this.player.y });
       }
@@ -1799,40 +2021,18 @@ export class GameScene extends Phaser.Scene {
 
     // Tell React the scene is ready
     EventBus.emit("scene-ready");
+    EventBus.emit("three:bridge-ready", this.officeBridge);
 
     // Clean up GameScene's own EventBus listeners when this scene is destroyed.
     // This prevents stale listeners from accumulating across game recreations
     // (e.g. React Strict Mode double-invocation).
-    this.events.once("destroy", () => {
-      const gameSceneEvents = [
-        "dialog:open",
-        "dialog:close",
-        "placement-mode-start",
-        "placement-mode-end",
-        "spawn-set-mode-start",
-        "spawn-set-mode-end",
-        "task-automation-updated",
-        "owner-status",
-        "npc:spawn-local",
-        "npc:remove-local",
-        "npc:update-local",
-        "npc:start-move",
-        "npc:call-to-player",
-        "npc:deliver-response",
-        "npc:start-return",
-        "npc:approach-and-interact",
-        "spritesheet-ready",
-        "socket-ready",
-        "chat:bubble",
-        "npc:bubble",
-        "npc:bubble-clear",
-        "npc:activity-bubble",
-        "request-player-position",
-      ];
-      for (const ev of gameSceneEvents) {
-        EventBus.removeAllListeners(ev);
-      }
-    });
+    const cleanupEvents = () => {
+      this.eventScope.dispose();
+      this.events.off("shutdown", cleanupEvents);
+      this.events.off("destroy", cleanupEvents);
+    };
+    this.events.once("shutdown", cleanupEvents);
+    this.events.once("destroy", cleanupEvents);
 
     // Also re-request socket in case it was already sent before we registered
     EventBus.emit("request-socket");
@@ -2607,7 +2807,7 @@ export class GameScene extends Phaser.Scene {
     this.socket?.emit("map:tiles-update", { layer: layerName, row: tileY, col: tileX, tileId });
   }
 
-  private saveMap(): void {
+  private saveMap(): Promise<boolean> {
     const mapData: MapData = {
       layers: {
         floor: this.floorData,
@@ -2629,7 +2829,7 @@ export class GameScene extends Phaser.Scene {
     const saveUrl = this.channelId ? `/api/channels/${this.channelId}` : "/api/maps/office";
     const saveMethod = this.channelId ? "PUT" : "POST";
     const saveBody = this.channelId ? { mapData } : { mapId: "office", layers: mapData };
-    fetch(saveUrl, {
+    return fetch(saveUrl, {
       method: saveMethod,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(saveBody),
@@ -2646,12 +2846,15 @@ export class GameScene extends Phaser.Scene {
               if (saveBtn.active) saveBtn.setText("[ SAVE MAP ]");
             });
           }
+          return true;
         } else {
           console.error("[MapEditor] Server save failed:", res.status);
+          return false;
         }
       })
       .catch((err) => {
         console.error("[MapEditor] Server save error:", err);
+        return false;
       });
   }
 
@@ -2879,7 +3082,7 @@ export class GameScene extends Phaser.Scene {
       img.src = result.dataUrl;
     };
 
-    EventBus.on("remote-spritesheet-ready", handler);
+    this.eventScope.on("remote-spritesheet-ready", handler);
   }
 
   private createRemoteAnimations(textureKey: string): void {

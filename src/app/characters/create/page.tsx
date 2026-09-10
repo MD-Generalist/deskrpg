@@ -17,7 +17,7 @@ export default function CharacterCreatePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="min-h-screen flex items-center justify-center bg-bg text-text">
           {t("common.loading")}
         </div>
       }
@@ -135,7 +135,7 @@ function CharacterCreatePageInner() {
 
   if (loadingEdit) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      <div className="min-h-screen flex items-center justify-center bg-bg text-text">
         {t("common.loading")}
       </div>
     );
@@ -143,13 +143,13 @@ function CharacterCreatePageInner() {
 
   const presetsSlot = (
     <div>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+      <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2">
         {t("characters.presets")}
       </h3>
       <div className="grid grid-cols-2 gap-1.5">
         <button
           onClick={randomize}
-          className="col-span-2 px-3 py-2 bg-indigo-900/60 hover:bg-indigo-800 rounded text-sm text-indigo-300 text-center font-semibold mb-0.5"
+          className="col-span-2 px-3 py-2 bg-indigo-900/60 hover:bg-indigo-800 rounded text-sm text-primary text-center font-semibold mb-0.5"
         >
           {t("characters.random")}
         </button>
@@ -157,7 +157,7 @@ function CharacterCreatePageInner() {
           <button
             key={preset.id}
             onClick={() => applyPreset(preset)}
-            className="px-2.5 py-2 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300 text-left whitespace-nowrap"
+            className="px-2.5 py-2 bg-surface-raised hover:bg-border rounded text-xs text-text-secondary text-left whitespace-nowrap"
             title={t(preset.nameKey)}
           >
             {t(preset.nameKey)}
@@ -168,7 +168,7 @@ function CharacterCreatePageInner() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex">
+    <div className="min-h-screen bg-bg text-text flex">
       <AppearanceEditor
         bodyType={bodyType}
         layers={layers}
@@ -199,22 +199,22 @@ function CharacterCreatePageInner() {
           maxLength={50}
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-64 px-4 py-2 rounded bg-gray-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-64 px-4 py-2 rounded bg-surface border border-border text-text focus:outline-none focus:ring-2 focus:ring-primary"
         />
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-red-700 text-sm">{error}</p>}
 
         <div className="flex gap-3">
           <button
             onClick={() => router.back()}
-            className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded font-semibold"
+            className="px-6 py-2 bg-surface-raised hover:bg-border rounded font-semibold"
           >
             {t("common.cancel")}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded font-semibold"
+            className="px-6 py-2 bg-primary hover:bg-primary-hover disabled:opacity-50 rounded font-semibold text-white"
           >
             {saving ? t("common.loading") : isEditMode ? t("common.save") : t("characters.create")}
           </button>

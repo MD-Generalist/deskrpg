@@ -50,11 +50,11 @@ export default function TaskChatView({
   return (
     <div className="flex flex-col h-full">
       {/* Header: back + task title + status */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-700 bg-gray-800/50">
-        <button onClick={onBack} className="text-gray-400 hover:text-white text-sm">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-surface/50">
+        <button onClick={onBack} className="text-text-muted hover:text-text text-sm">
           ←
         </button>
-        <span className="text-sm font-semibold text-amber-400 truncate flex-1">{taskTitle}</span>
+        <span className="text-sm font-semibold text-npc truncate flex-1">{taskTitle}</span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
           {taskStatus}
         </span>
@@ -63,7 +63,7 @@ export default function TaskChatView({
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
         {messages.length === 0 && (
-          <div className="text-gray-500 text-sm italic text-center py-4">
+          <div className="text-text-dim text-sm italic text-center py-4">
             {t("task.chatPlaceholder")}
           </div>
         )}
@@ -74,7 +74,7 @@ export default function TaskChatView({
           >
             <div
               className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
-                msg.role === "player" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-100"
+                msg.role === "player" ? "bg-indigo-600 text-text" : "bg-surface-raised text-text"
               }`}
             >
               {msg.role === "npc" ? <MarkdownContent content={msg.content} /> : msg.content}

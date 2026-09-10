@@ -681,11 +681,11 @@ export default function NpcHireWizard({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("hermes.wizard.profile.namePlaceholder")}
-                className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
               />
               <p className="text-xs text-text-muted">{t("hermes.wizard.profile.nameHint")}</p>
               {existingProfiles.length > 0 && (
-                <div className="space-y-1 border-t border-gray-700 pt-3">
+                <div className="space-y-1 border-t border-border pt-3">
                   <p className="text-xs text-text-muted">{t("hermes.wizard.profile.resumeHint")}</p>
                   <div className="flex flex-wrap gap-2">
                     {existingProfiles.map((profileName) => (
@@ -895,7 +895,7 @@ export default function NpcHireWizard({
                 }}
                 placeholder={t("hermes.wizard.identity.placeholder")}
                 rows={8}
-                className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
               />
               {identitySaved && (
                 <p className="text-xs text-emerald-300">{t("hermes.wizard.identity.saved")}</p>
@@ -947,7 +947,7 @@ export default function NpcHireWizard({
                       // 남겨 두면 저장 시점에야 실패한다.
                       setModel("");
                     }}
-                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">{t("hermes.wizard.config.provider")}</option>
                     {catalog.providers.map((p) => (
@@ -963,7 +963,7 @@ export default function NpcHireWizard({
                     value={provider}
                     onChange={(e) => setProvider(e.target.value)}
                     placeholder={t("hermes.wizard.config.provider")}
-                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
                   />
                 )}
 
@@ -971,7 +971,7 @@ export default function NpcHireWizard({
                   <select
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">{t("hermes.wizard.config.model")}</option>
                     {(catalog.models[provider] ?? []).map((m) => (
@@ -986,7 +986,7 @@ export default function NpcHireWizard({
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     placeholder={t("hermes.wizard.config.model")}
-                    className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
                   />
                 )}
               </div>
@@ -995,7 +995,7 @@ export default function NpcHireWizard({
                 <select
                   value={effort}
                   onChange={(e) => setEffort(e.target.value)}
-                  className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">{t("hermes.wizard.config.effort")}</option>
                   {catalog.reasoningEfforts.map((e2) => (
@@ -1010,7 +1010,7 @@ export default function NpcHireWizard({
                 value={toolsetsText}
                 onChange={(e) => setToolsetsText(e.target.value)}
                 placeholder={t("hermes.wizard.config.toolsets")}
-                className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
               />
               <p className="text-xs text-text-muted">{t("hermes.wizard.config.toolsetsHint")}</p>
               {configSaved && (

@@ -2442,7 +2442,7 @@ export default function PixelEditorModal({
                 rows: expandedRows,
               })}
               {isExpanded && (
-                <span className="text-amber-400 ml-1">{t("mapEditor.pixel.expanded")}</span>
+                <span className="text-amber-700 ml-1">{t("mapEditor.pixel.expanded")}</span>
               )}
             </span>
           </div>

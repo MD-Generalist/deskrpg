@@ -510,7 +510,7 @@ function GatewayManagementPageInner() {
           </div>
         )}
         {notice && (
-          <div className="mb-6 rounded-lg border border-emerald-400/30 bg-surface px-4 py-3 text-sm text-emerald-300">
+          <div className="mb-6 rounded-lg border border-emerald-400/30 bg-surface px-4 py-3 text-sm text-emerald-700">
             {notice}
           </div>
         )}
@@ -602,7 +602,7 @@ function GatewayManagementPageInner() {
 
               <div className="grid gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
                     {t("gateways.displayName")}
                   </label>
                   <input
@@ -610,11 +610,11 @@ function GatewayManagementPageInner() {
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     disabled={!!selectedGateway && !selectedGateway.isOwner}
-                    className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                    className="w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
                     {t("settings.gatewayUrl")}
                   </label>
                   <input
@@ -622,12 +622,12 @@ function GatewayManagementPageInner() {
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
                     disabled={!!selectedGateway && !selectedGateway.isOwner}
-                    className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                    className="w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
                     placeholder={t("settings.gatewayUrlPlaceholder")}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
                     {formMode === "create" ? t("settings.gatewayToken") : t("gateways.rotateToken")}
                   </label>
                   <div className="flex gap-2">
@@ -636,13 +636,13 @@ function GatewayManagementPageInner() {
                       value={token}
                       onChange={(e) => setToken(e.target.value)}
                       disabled={!!selectedGateway && !selectedGateway.isOwner}
-                      className="flex-1 rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                      className="flex-1 rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
                       placeholder={t("settings.gatewayTokenPlaceholder")}
                     />
                     <button
                       type="button"
                       onClick={() => setShowToken((prev) => !prev)}
-                      className="rounded bg-surface-raised px-3 py-2 text-sm text-white hover:bg-surface-raised/80"
+                      className="rounded bg-surface-raised px-3 py-2 text-sm text-text hover:bg-surface-raised/80"
                     >
                       {showToken ? t("common.hide") : t("common.show")}
                     </button>
@@ -730,7 +730,7 @@ function GatewayManagementPageInner() {
                       type="text"
                       value={shareLoginId}
                       onChange={(e) => setShareLoginId(e.target.value)}
-                      className="flex-1 rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                      className="flex-1 rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary"
                       placeholder={t("gateways.shareLoginId")}
                     />
                     <button
@@ -755,7 +755,7 @@ function GatewayManagementPageInner() {
                           className="flex items-center justify-between rounded-lg bg-bg px-3 py-3"
                         >
                           <div>
-                            <p className="font-medium text-white">
+                            <p className="font-medium text-text">
                               {share.nickname || share.loginId}
                             </p>
                             <p className="text-xs text-text-muted">{share.loginId}</p>

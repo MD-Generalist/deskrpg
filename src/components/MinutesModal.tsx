@@ -147,7 +147,7 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
             <BookOpen className="w-4 h-4" />
             {t("minutes.title")}
           </h2>
-          <button onClick={onClose} className="text-text-muted hover:text-white">
+          <button onClick={onClose} className="text-text-muted hover:text-text">
             <X className="w-5 h-5" />
           </button>
         </div>

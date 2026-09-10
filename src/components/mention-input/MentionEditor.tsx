@@ -237,10 +237,10 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
       {open && (
         <ul
           role="listbox"
-          className="absolute bottom-full left-0 mb-1 max-h-48 w-56 overflow-auto rounded-lg border border-gray-600 bg-gray-800 py-1 shadow-xl z-50"
+          className="absolute bottom-full left-0 mb-1 max-h-48 w-56 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-xl z-50"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-1.5 text-xs text-gray-500">{t("chat.mentionNoMatch")}</li>
+            <li className="px-3 py-1.5 text-xs text-text-dim">{t("chat.mentionNoMatch")}</li>
           ) : (
             filtered.map((c, i) => (
               <li
@@ -252,7 +252,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
                 className={`cursor-pointer px-3 py-1.5 text-sm ${
                   i === index
                     ? `bg-${accentColor}-500/20 text-white`
-                    : "text-gray-200 hover:bg-white/5"
+                    : "text-text hover:bg-white/5"
                 }`}
               >
                 {c.name}
@@ -277,11 +277,11 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
           sync();
         }}
         onBlur={() => setQuery(null)}
-        className={`min-h-[36px] max-h-[120px] overflow-y-auto whitespace-pre-wrap break-words bg-gray-800 text-white px-3 py-2 rounded-lg border focus:outline-none text-sm leading-5 ${
+        className={`min-h-[36px] max-h-[120px] overflow-y-auto whitespace-pre-wrap break-words bg-surface text-text px-3 py-2 rounded-lg border focus:outline-none text-sm leading-5 ${
           disabled
-            ? "border-gray-700 text-gray-500"
-            : `border-gray-600 focus:border-${accentColor}-500`
-        } ${empty ? "before:content-[attr(data-placeholder)] before:text-gray-500 before:pointer-events-none" : ""}`}
+            ? "border-border text-text-dim"
+            : `border-border focus:border-${accentColor}-500`
+        } ${empty ? "before:content-[attr(data-placeholder)] before:text-text-dim before:pointer-events-none" : ""}`}
       />
     </div>
   );

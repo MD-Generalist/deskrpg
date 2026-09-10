@@ -28,6 +28,8 @@ import LayerPanel from "./LayerPanel";
 import TilePalette from "./TilePalette";
 import Minimap from "./Minimap";
 import { MapCanvas } from "./MapCanvas";
+import ThreeMapPreview from "./ThreeMapPreview";
+import { useLocale } from "@/lib/i18n";
 import HelpModal from "./HelpModal";
 import ImportTilesetModal from "./ImportTilesetModal";
 import PixelEditorModal from "./PixelEditorModal";
@@ -77,6 +79,8 @@ export default function MapEditorLayout({
   characterId: _characterId,
 }: MapEditorLayoutProps) {
   const router = useRouter();
+  const { locale } = useLocale();
+  const [threePreview, setThreePreview] = useState(false);
   const t = useT();
   const { state, dispatch, findTileset } = useMapEditor();
   const displayProjectName = state.projectName || t("mapEditor.newMap.defaultName");
@@ -324,6 +328,15 @@ export default function MapEditorLayout({
     },
     [state.dirty, t],
   );
+
+  // The application sidebar must honor the same dirty-map guard as the editor toolbar.
+  useEffect(() => {
+    const guard = (event: Event) => {
+      if (!confirmIfDirty()) event.preventDefault();
+    };
+    window.addEventListener("workspace:before-navigate", guard);
+    return () => window.removeEventListener("workspace:before-navigate", guard);
+  }, [confirmIfDirty]);
 
   // === Image loader util ===
 
@@ -1806,8 +1819,8 @@ export default function MapEditorLayout({
         onOpenProject={(id, userId) => {
           router.push(`/map-editor/${userId}/${id}`);
         }}
-        onCreateProject={async (name, cols, rows, tw, th) => {
-          const result = await createProject(name, cols, rows, tw, th);
+        onCreateProject={async (name, cols, rows, tw, th, preset) => {
+          const result = await createProject(name, cols, rows, tw, th, preset);
           router.push(`/map-editor/${result.createdBy}/${result.id}`);
         }}
       />
@@ -1816,7 +1829,7 @@ export default function MapEditorLayout({
 
   if (loadError) {
     return (
-      <div className="h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-6 text-center">
+      <div className="h-screen bg-bg flex flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-danger text-sm">{loadError}</p>
         <Link
           href="/map-editor"
@@ -1830,14 +1843,14 @@ export default function MapEditorLayout({
 
   if (!projectLoaded) {
     return (
-      <div className="h-screen bg-gray-900 flex items-center justify-center text-gray-500">
+      <div className="h-screen bg-bg flex items-center justify-center text-text-dim">
         {t("common.loading")}
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-surface-base text-text overflow-hidden">
+    <div className="h-screen w-full flex flex-col bg-bg text-text overflow-hidden">
       {/* Toolbar */}
       <Toolbar
         activeTool={state.tool}
@@ -2167,8 +2180,28 @@ export default function MapEditorLayout({
         />
 
         {/* Canvas Area */}
-        <div ref={canvasAreaRef} className="flex-1 min-w-0 min-h-0">
-          {state.mapData ? (
+        <div ref={canvasAreaRef} className="relative flex-1 min-w-0 min-h-0">
+          <div className="absolute right-3 top-3 z-20 flex rounded-lg bg-surface border border-border p-1 shadow-sm text-caption">
+            <button
+              type="button"
+              className={`rounded-md px-3 py-1.5 ${!threePreview ? "bg-primary text-white" : "text-text"}`}
+              aria-pressed={!threePreview}
+              onClick={() => setThreePreview(false)}
+            >
+              {locale === "ko" ? "2D 편집" : "2D editor"}
+            </button>
+            <button
+              type="button"
+              className={`rounded-md px-3 py-1.5 ${threePreview ? "bg-primary text-white" : "text-text"}`}
+              aria-pressed={threePreview}
+              onClick={() => setThreePreview(true)}
+            >
+              {locale === "ko" ? "3D 미리보기" : "3D preview"}
+            </button>
+          </div>
+          {state.mapData && threePreview ? (
+            <ThreeMapPreview map={state.mapData} images={state.tilesetImages} />
+          ) : state.mapData ? (
             <MapCanvas
               state={state}
               dispatch={dispatch}

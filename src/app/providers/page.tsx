@@ -576,31 +576,31 @@ function ProvidersPageInner() {
           </div>
         )}
         {notice && (
-          <div className="rounded-lg border border-emerald-400/30 bg-surface px-4 py-3 text-sm text-emerald-300">
+          <div className="rounded-lg border border-emerald-400/30 bg-surface px-4 py-3 text-sm text-emerald-700">
             {notice}
           </div>
         )}
 
-        <section className="rounded-xl border border-amber-500/40 bg-gray-900 p-5">
+        <section className="rounded-xl border border-amber-500/40 bg-bg p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-amber-400">
+              <h2 className="text-lg font-semibold text-amber-700">
                 {t("providers.adapterStatus")}
               </h2>
-              <p className="mt-1 text-sm text-gray-300">{t("providers.adapterStatusHelp")}</p>
+              <p className="mt-1 text-sm text-text-secondary">{t("providers.adapterStatusHelp")}</p>
             </div>
             <button
               type="button"
               onClick={() => void loadAdapterStatuses()}
               disabled={adapterLoading}
-              className="rounded-lg border border-amber-500/40 bg-gray-950 px-4 py-2 text-sm font-medium text-amber-200 hover:border-amber-400 hover:text-amber-100 disabled:opacity-60"
+              className="rounded-lg border border-amber-500/40 bg-bg-deep px-4 py-2 text-sm font-medium text-amber-700 hover:border-amber-400 hover:text-amber-700 disabled:opacity-60"
             >
               {adapterLoading ? t("common.loading") : t("common.retry")}
             </button>
           </div>
 
           {adapterError && (
-            <div className="mb-4 rounded-lg border border-danger/40 bg-gray-950 px-4 py-3 text-sm text-danger">
+            <div className="mb-4 rounded-lg border border-danger/40 bg-bg-deep px-4 py-3 text-sm text-danger">
               {adapterError}
             </div>
           )}
@@ -614,27 +614,27 @@ function ProvidersPageInner() {
               return (
                 <div
                   key={option.value}
-                  className="rounded-lg border border-amber-500/30 bg-gray-950 px-4 py-4"
+                  className="rounded-lg border border-amber-500/30 bg-bg-deep px-4 py-4"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-white">{t(option.labelKey)}</p>
+                    <p className="font-medium text-text">{t(option.labelKey)}</p>
                     <span
-                      className={`text-xs ${status?.installed ? "text-emerald-300" : "text-amber-300"}`}
+                      className={`text-xs ${status?.installed ? "text-emerald-700" : "text-amber-700"}`}
                     >
                       {installedLabel}
                     </span>
                   </div>
                   {status?.version && (
-                    <p className="mt-2 text-xs text-gray-400">
+                    <p className="mt-2 text-xs text-text-muted">
                       {t("providers.version")}: {status.version}
                     </p>
                   )}
                   {status?.model && (
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-xs text-text-muted">
                       {t("providers.model")}: {status.model}
                     </p>
                   )}
-                  <p className="mt-2 text-xs text-gray-400">
+                  <p className="mt-2 text-xs text-text-muted">
                     {status?.message ||
                       (status?.status === "ok" ? t("providers.ready") : t("common.unknown"))}
                   </p>
@@ -645,9 +645,9 @@ function ProvidersPageInner() {
         </section>
 
         <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="rounded-xl border border-amber-500/40 bg-gray-900 p-4">
+          <aside className="rounded-xl border border-amber-500/40 bg-bg p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-amber-400">{t("providers.title")}</h2>
+              <h2 className="text-lg font-semibold text-amber-700">{t("providers.title")}</h2>
               <button
                 type="button"
                 onClick={resetForm}
@@ -658,7 +658,7 @@ function ProvidersPageInner() {
             </div>
             <div className="space-y-2">
               {providers.length === 0 ? (
-                <div className="rounded-lg border border-amber-500/20 bg-gray-950 px-3 py-4 text-sm text-gray-300">
+                <div className="rounded-lg border border-amber-500/20 bg-bg-deep px-3 py-4 text-sm text-text-secondary">
                   {t("providers.empty")}
                 </div>
               ) : (
@@ -671,23 +671,23 @@ function ProvidersPageInner() {
                       onClick={() => setSelectedProviderId(provider.id)}
                       className={`w-full rounded-lg border px-3 py-3 text-left transition ${
                         selectedProviderId === provider.id
-                          ? "border-amber-400 bg-amber-500/10 text-amber-100"
-                          : "border-amber-500/20 bg-gray-950 hover:border-amber-400/50"
+                          ? "border-amber-400 bg-amber-500/10 text-amber-700"
+                          : "border-amber-500/20 bg-bg-deep hover:border-amber-400/50"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium text-white">
+                        <span className="font-medium text-text">
                           {provider.displayName || getProviderLabel(provider.providerType)}
                         </span>
-                        <span className="text-[11px] text-gray-400">
+                        <span className="text-[11px] text-text-muted">
                           {provider.isOwner ? t("gateways.owner") : t("gateways.shared")}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-gray-400">
+                      <p className="mt-1 text-xs text-text-muted">
                         {getProviderLabel(provider.providerType)} ·{" "}
                         {getAuthMethodLabel(provider.authMethod)}
                       </p>
-                      <p className="mt-1 text-xs text-gray-400">
+                      <p className="mt-1 text-xs text-text-muted">
                         {testState?.message ||
                           cliLoginStates[provider.id] ||
                           (provider.lastValidationStatus === "valid"
@@ -704,15 +704,15 @@ function ProvidersPageInner() {
           </aside>
 
           <main className="space-y-6">
-            <section className="rounded-xl border border-amber-500/40 bg-gray-900 p-5">
+            <section className="rounded-xl border border-amber-500/40 bg-bg p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-amber-400">
+                  <h2 className="text-lg font-semibold text-amber-700">
                     {formMode === "create"
                       ? t("providers.addNew")
                       : `${t("common.edit")} · ${selectedProvider?.displayName || getProviderLabel(selectedProvider?.providerType ?? providerType)}`}
                   </h2>
-                  <p className="mt-1 text-sm text-gray-300">{t("providers.formHelp")}</p>
+                  <p className="mt-1 text-sm text-text-secondary">{t("providers.formHelp")}</p>
                 </div>
                 {selectedProvider && (
                   <div className="flex flex-wrap gap-2">
@@ -720,7 +720,7 @@ function ProvidersPageInner() {
                       type="button"
                       onClick={() => void handleTest(selectedProvider)}
                       disabled={testingProviderId === selectedProvider.id}
-                      className="rounded-lg border border-amber-500/40 bg-gray-950 px-4 py-2 text-sm font-medium text-amber-200 hover:border-amber-400 hover:text-amber-100 disabled:opacity-60"
+                      className="rounded-lg border border-amber-500/40 bg-bg-deep px-4 py-2 text-sm font-medium text-amber-700 hover:border-amber-400 hover:text-amber-700 disabled:opacity-60"
                     >
                       {testingProviderId === selectedProvider.id
                         ? t("gateway.testing")
@@ -734,7 +734,7 @@ function ProvidersPageInner() {
                         !selectedProvider.isOwner ||
                         !selectedProviderSupportsCliLogin
                       }
-                      className="rounded-lg border border-amber-500/40 bg-gray-950 px-4 py-2 text-sm font-medium text-amber-200 hover:border-amber-400 hover:text-amber-100 disabled:opacity-60"
+                      className="rounded-lg border border-amber-500/40 bg-bg-deep px-4 py-2 text-sm font-medium text-amber-700 hover:border-amber-400 hover:text-amber-700 disabled:opacity-60"
                     >
                       {cliLoginProviderId === selectedProvider.id
                         ? t("common.loading")
@@ -746,7 +746,7 @@ function ProvidersPageInner() {
 
               <div className="grid gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
                     {t("providers.displayName")}
                   </label>
                   <input
@@ -754,19 +754,19 @@ function ProvidersPageInner() {
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     disabled={!!selectedProvider && !selectedProvider.isOwner}
-                    className="w-full rounded border border-amber-500/30 bg-gray-950 px-3 py-2 text-white focus:border-amber-400 focus:outline-none disabled:opacity-60"
+                    className="w-full rounded border border-amber-500/30 bg-bg-deep px-3 py-2 text-text focus:border-amber-400 focus:outline-none disabled:opacity-60"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
                     {t("providers.type")}
                   </label>
                   <select
                     value={providerType}
                     onChange={(e) => setProviderType(e.target.value)}
                     disabled={!!selectedProvider && !selectedProvider.isOwner}
-                    className="w-full rounded border border-amber-500/30 bg-gray-950 px-3 py-2 text-white focus:border-amber-400 focus:outline-none disabled:opacity-60"
+                    className="w-full rounded border border-amber-500/30 bg-bg-deep px-3 py-2 text-text focus:border-amber-400 focus:outline-none disabled:opacity-60"
                   >
                     {PROVIDER_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -777,14 +777,14 @@ function ProvidersPageInner() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
                     {t("providers.authMethod")}
                   </label>
                   <select
                     value={authMethod}
                     onChange={(e) => setAuthMethod(normalizeAuthMethod(e.target.value))}
                     disabled={!!selectedProvider && !selectedProvider.isOwner}
-                    className="w-full rounded border border-amber-500/30 bg-gray-950 px-3 py-2 text-white focus:border-amber-400 focus:outline-none disabled:opacity-60"
+                    className="w-full rounded border border-amber-500/30 bg-bg-deep px-3 py-2 text-text focus:border-amber-400 focus:outline-none disabled:opacity-60"
                   >
                     <option value="api_key">{t("providers.apiKey")}</option>
                     <option value="cli_login">{t("providers.cliLogin")}</option>
@@ -793,7 +793,7 @@ function ProvidersPageInner() {
 
                 {authMethod === "api_key" && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-300">
+                    <label className="mb-1 block text-sm font-semibold text-text-secondary">
                       {t("providers.apiKey")}
                     </label>
                     <div className="flex gap-2">
@@ -802,24 +802,24 @@ function ProvidersPageInner() {
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
                         disabled={!!selectedProvider && !selectedProvider.isOwner}
-                        className="flex-1 rounded border border-amber-500/30 bg-gray-950 px-3 py-2 text-white focus:border-amber-400 focus:outline-none disabled:opacity-60"
+                        className="flex-1 rounded border border-amber-500/30 bg-bg-deep px-3 py-2 text-text focus:border-amber-400 focus:outline-none disabled:opacity-60"
                       />
                       <button
                         type="button"
                         onClick={() => setShowApiKey((prev) => !prev)}
-                        className="rounded border border-amber-500/40 bg-gray-950 px-3 py-2 text-sm text-amber-200 hover:border-amber-400 hover:text-amber-100"
+                        className="rounded border border-amber-500/40 bg-bg-deep px-3 py-2 text-sm text-amber-700 hover:border-amber-400 hover:text-amber-700"
                       >
                         {showApiKey ? t("common.hide") : t("common.show")}
                       </button>
                     </div>
                     {formMode === "edit" && (
-                      <p className="mt-1 text-xs text-gray-400">{t("providers.apiKeyHint")}</p>
+                      <p className="mt-1 text-xs text-text-muted">{t("providers.apiKeyHint")}</p>
                     )}
                   </div>
                 )}
 
                 {authMethod === "cli_login" && !supportsCliLogin(providerType) && (
-                  <p className="text-xs text-amber-300">{t("providers.cliLoginUnavailable")}</p>
+                  <p className="text-xs text-amber-700">{t("providers.cliLoginUnavailable")}</p>
                 )}
               </div>
 
@@ -827,8 +827,8 @@ function ProvidersPageInner() {
                 <div
                   className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
                     selectedProviderStatus?.status === "error"
-                      ? "border-danger/40 bg-gray-950 text-danger"
-                      : "border-emerald-400/30 bg-gray-950 text-emerald-300"
+                      ? "border-danger/40 bg-bg-deep text-danger"
+                      : "border-emerald-400/30 bg-bg-deep text-emerald-700"
                   }`}
                 >
                   {selectedProviderMessage}

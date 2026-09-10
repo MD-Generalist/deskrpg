@@ -1,10 +1,8 @@
-/* src/styles/theme-game.css — Game UI surfaces (in-game HUD) */
-
 .theme-game {
-  --bg: #0a0f1e;
-  --bg-deep: #060b18;
-  --surface: #0d1b3e;
-  --surface-raised: #16213e;
-  --border: #0f3460;
-  --border-subtle: #1e3a5f;
+  --bg: #f5f5ee;
+  --bg-deep: #eeeee5;
+  --surface: #fcfcf8;
+  --surface-raised: #eaf0e5;
+  --border: #d6ddcf;
+  --border-subtle: #e4e8df;
 }

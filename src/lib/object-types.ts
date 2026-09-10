@@ -170,7 +170,7 @@ export function getObjectDimensions(
 // ---------------------------------------------------------------------------
 // GameScene T constants: 3=DESK, 4=CHAIR, 5=COMPUTER, 6=PLANT, 8=MEETING_TABLE,
 // 9=COFFEE, 10=WATER_COOLER, 11=BOOKSHELF, 13=WHITEBOARD, 14=RECEPTION_DESK, 15=CUBICLE_WALL
-const TILE_ID_TO_OBJECT: Record<number, string> = {
+export const TILE_ID_TO_OBJECT: Record<number, string> = {
   3: "desk",
   4: "chair",
   5: "computer",

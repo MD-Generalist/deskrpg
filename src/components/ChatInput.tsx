@@ -111,25 +111,25 @@ export default function ChatInput({
 
   const btnColor = canSend
     ? `bg-${accentColor}-500 hover:bg-${accentColor}-600 text-black`
-    : "bg-gray-700 text-gray-500 cursor-not-allowed";
+    : "bg-surface-raised text-text-dim cursor-not-allowed";
   const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
   const resolvedDisabledPlaceholder = disabledPlaceholder ?? t("chat.responding");
 
   return (
-    <div className="border-t border-gray-700 px-3 py-2">
+    <div className="border-t border-border px-3 py-2">
       {/* File preview */}
       {files.length > 0 && (
         <div className="flex gap-2 mb-2 flex-wrap">
           {files.map((f, i) => (
             <div
               key={i}
-              className="flex items-center gap-1 bg-gray-800 rounded px-2 py-1 text-xs text-gray-300"
+              className="flex items-center gap-1 bg-surface rounded px-2 py-1 text-xs text-text-secondary"
             >
               <span className="truncate max-w-[120px]">{f.name}</span>
-              <span className="text-gray-500">({(f.size / 1024).toFixed(0)}KB)</span>
+              <span className="text-text-dim">({(f.size / 1024).toFixed(0)}KB)</span>
               <button
                 onClick={() => removeFile(i)}
-                className="text-gray-500 hover:text-red-400 ml-1"
+                className="text-text-dim hover:text-red-400 ml-1"
                 aria-label={t("chat.removeFile")}
                 title={t("chat.removeFile")}
               >
@@ -147,7 +147,7 @@ export default function ChatInput({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
-              className="p-2 text-gray-400 hover:text-white rounded hover:bg-white/10 shrink-0 self-end"
+              className="p-2 text-text-muted hover:text-text rounded hover:bg-white/10 shrink-0 self-end"
               title={t("chat.attachFile")}
               aria-label={t("chat.attachFile")}
             >
@@ -212,10 +212,10 @@ export default function ChatInput({
             }
             rows={1}
             readOnly={disabled}
-            className={`flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border focus:outline-none text-sm min-w-0 resize-none overflow-hidden leading-5 ${
+            className={`flex-1 bg-surface text-text px-3 py-2 rounded-lg border focus:outline-none text-sm min-w-0 resize-none overflow-hidden leading-5 ${
               disabled
-                ? "border-gray-700 text-gray-500"
-                : `border-gray-600 focus:border-${accentColor}-500`
+                ? "border-border text-text-dim"
+                : `border-border focus:border-${accentColor}-500`
             }`}
             style={{ maxHeight: "120px" }}
           />
@@ -235,7 +235,7 @@ export default function ChatInput({
       {input.length > maxLength * 0.8 && (
         <div className="text-right mt-1">
           <span
-            className={`text-[10px] ${input.length >= maxLength ? "text-red-400" : "text-gray-500"}`}
+            className={`text-[10px] ${input.length >= maxLength ? "text-red-400" : "text-text-dim"}`}
           >
             {input.length}/{maxLength}
           </span>

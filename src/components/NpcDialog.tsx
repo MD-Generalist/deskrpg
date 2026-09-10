@@ -111,18 +111,18 @@ export default function NpcDialog({
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center pointer-events-none">
       <div className="w-full max-w-[800px] pointer-events-auto">
-        <div className="bg-gray-900 border-t-2 border-x-2 border-amber-500 rounded-t-lg shadow-2xl">
+        <div className="bg-bg border-t-2 border-x-2 border-amber-500 rounded-t-lg shadow-2xl">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700 bg-gray-800 rounded-t-lg">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-surface rounded-t-lg">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-700 flex items-center justify-center text-white font-bold text-lg">
                 {npcName[0]}
               </div>
-              <span className="text-amber-400 font-bold text-lg">{npcName}</span>
+              <span className="text-npc font-bold text-lg">{npcName}</span>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white px-2 py-1 text-sm"
+              className="text-text-muted hover:text-text px-2 py-1 text-sm"
               title={t("common.closeEsc")}
             >
               ESC
@@ -130,13 +130,13 @@ export default function NpcDialog({
           </div>
 
           {/* Tab Bar */}
-          <div className="flex border-b border-gray-700">
+          <div className="flex border-b border-border">
             <button
               onClick={() => {
                 setTab("chat");
                 onSetActiveTaskId?.(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold text-center ${tab === "chat" ? "text-amber-400 border-b-2 border-amber-400" : "text-gray-500 hover:text-gray-300"}`}
+              className={`flex-1 py-2 text-xs font-semibold text-center ${tab === "chat" ? "text-npc border-b-2 border-amber-400" : "text-text-dim hover:text-text-secondary"}`}
             >
               💬 {t("chat.tab")}
             </button>
@@ -145,7 +145,7 @@ export default function NpcDialog({
                 setTab("task");
                 onSetActiveTaskId?.(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold text-center relative ${tab === "task" ? "text-amber-400 border-b-2 border-amber-400" : "text-gray-500 hover:text-gray-300"}`}
+              className={`flex-1 py-2 text-xs font-semibold text-center relative ${tab === "task" ? "text-npc border-b-2 border-amber-400" : "text-text-dim hover:text-text-secondary"}`}
             >
               📋 {t("task.tab")}
               {activeTaskCount > 0 && (
@@ -162,7 +162,7 @@ export default function NpcDialog({
               {/* Chat messages */}
               <div ref={scrollRef} className="h-48 overflow-y-auto px-4 py-3 space-y-2">
                 {messages.length === 0 && (
-                  <div className="text-gray-500 text-sm italic">
+                  <div className="text-text-dim text-sm italic">
                     {t("chat.npcPlaceholder", { name: npcName })}
                   </div>
                 )}
@@ -188,7 +188,7 @@ export default function NpcDialog({
                           className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
                             msg.role === "player"
                               ? "bg-indigo-600 text-white"
-                              : "bg-gray-700 text-gray-100"
+                              : "bg-surface-raised text-text"
                           }`}
                         >
                           {msg.role === "npc" ? (
@@ -228,18 +228,18 @@ export default function NpcDialog({
                 disabledPlaceholder={t("chat.responding")}
               />
               {/* Footer info bar — new conversation + adapter info */}
-              <div className="flex items-center justify-between px-3 py-1.5 border-t border-gray-700 text-[11px] text-gray-500">
+              <div className="flex items-center justify-between px-3 py-1.5 border-t border-border text-[11px] text-text-dim">
                 <button
                   onClick={onResetChat}
                   disabled={isStreaming || !onResetChat}
-                  className="flex items-center gap-1 text-gray-400 hover:text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1 text-text-muted hover:text-npc disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title={t("chat.newConversation")}
                 >
                   <span>🔄</span>
                   <span>{t("chat.newConversation")}</span>
                 </button>
                 {adapterInfo && (
-                  <span className="text-gray-500">
+                  <span className="text-text-dim">
                     {adapterInfo.type === "openclaw"
                       ? "OpenClaw"
                       : adapterInfo.type.charAt(0).toUpperCase() + adapterInfo.type.slice(1)}

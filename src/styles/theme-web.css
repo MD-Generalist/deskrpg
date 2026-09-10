@@ -1,11 +1,9 @@
-/* src/styles/theme-web.css — Web UI surfaces (lobby, admin) */
-
 .theme-web,
 :root {
-  --bg: #111827;
-  --bg-deep: #030712;
-  --surface: #1f2937;
-  --surface-raised: #374151;
-  --border: #374151;
-  --border-subtle: #1f2937;
+  --bg: #f5f5ee;
+  --bg-deep: #eeeee5;
+  --surface: #fcfcf8;
+  --surface-raised: #eaf0e5;
+  --border: #d6ddcf;
+  --border-subtle: #e4e8df;
 }

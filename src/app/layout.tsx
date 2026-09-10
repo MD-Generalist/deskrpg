@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies, headers } from "next/headers";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import Providers from "@/components/Providers";
 import { LOCALE_COOKIE_NAME } from "@/lib/i18n/constants";
 import { normalizeLocale, translateServer } from "@/lib/i18n/server";
@@ -53,7 +54,9 @@ export default async function RootLayout({
   return (
     <html lang={locale} className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <Providers initialLocale={locale}>{children}</Providers>
+        <Providers initialLocale={locale}>
+          <WorkspaceShell>{children}</WorkspaceShell>
+        </Providers>
       </body>
     </html>
   );

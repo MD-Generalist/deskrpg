@@ -83,14 +83,14 @@ function GameEngineLoading() {
   const t = useT();
 
   return (
-    <div className="fixed inset-0 bg-gray-800 flex items-center justify-center text-gray-400">
+    <div className="fixed inset-0 bg-surface flex items-center justify-center text-text-muted">
       {t("game.loadingEngine")}
     </div>
   );
 }
 
-// Import PhaserGame with SSR disabled — Phaser requires browser APIs
-const PhaserGame = dynamic(() => import("@/components/PhaserGame"), {
+// Load the Three.js office presentation on the client.
+const ThreeGame = dynamic(() => import("@/components/ThreeGame"), {
   ssr: false,
   loading: () => <GameEngineLoading />,
 });
@@ -194,7 +194,7 @@ export default function GamePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="min-h-screen flex items-center justify-center bg-bg text-text">
           {t("common.loading")}
         </div>
       }
@@ -2223,10 +2223,10 @@ function GamePageInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      <div className="min-h-screen flex items-center justify-center bg-bg text-text">
         <div className="text-center">
           <div className="text-xl mb-2">{t("common.loadingGame")}</div>
-          <div className="text-gray-400">{t("common.preparingCharacter")}</div>
+          <div className="text-text-muted">{t("common.preparingCharacter")}</div>
         </div>
       </div>
     );
@@ -2234,7 +2234,7 @@ function GamePageInner() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      <div className="min-h-screen flex items-center justify-center bg-bg text-text">
         <div className="text-center">
           <div className="text-xl mb-4 text-red-400">{error}</div>
           <Link
@@ -2249,7 +2249,7 @@ function GamePageInner() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gray-900 text-white">
+    <div className="theme-game ui2-game h-screen w-screen overflow-hidden bg-bg text-text">
       {/* Game canvas — full screen background (hidden when in meeting mode) */}
       <div
         style={{
@@ -2259,7 +2259,7 @@ function GamePageInner() {
         }}
       >
         {spritesheetDataUrl && character && gameChannelData && (
-          <PhaserGame
+          <ThreeGame
             spritesheetDataUrl={spritesheetDataUrl}
             socket={socket}
             characterId={character.id}
@@ -2288,7 +2288,7 @@ function GamePageInner() {
       )}
 
       {/* Top bar — floating over game */}
-      <div className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 bg-black/50 backdrop-blur-sm">
+      <div className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 ui2-game-header">
         {/* Left: Channel name — Character name */}
         <h1 className="text-lg font-bold">
           {channel?.name || "DeskRPG"} &mdash; {character?.name}
@@ -2300,7 +2300,7 @@ function GamePageInner() {
           {channel?.hasGateway ? (
             <button
               onClick={() => openChannelSettings("gateway")}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-sky-500/10 border border-sky-400/20 text-caption text-sky-200 hover:bg-sky-500/20"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-sky-500/10 border border-sky-400/20 text-caption text-sky-700 hover:bg-sky-500/20"
             >
               <span className="w-2 h-2 rounded-full bg-sky-300" />
               <span>{t("game.aiGateway")}</span>
@@ -2308,7 +2308,7 @@ function GamePageInner() {
           ) : (
             <button
               onClick={() => openChannelSettings("gateway")}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-400/20 text-caption text-amber-200 hover:bg-amber-500/20"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-400/20 text-caption text-amber-700 hover:bg-amber-500/20"
             >
               <span className="w-2 h-2 rounded-full bg-amber-300" />
               <span>{t("game.gatewayConnect")}</span>
@@ -2323,7 +2323,7 @@ function GamePageInner() {
                   setRosterActionMenu(null);
                   setShowRosterMenu((prev) => (prev === "players" ? null : "players"));
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-caption text-text-secondary"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-raised hover:bg-surface border border-border text-caption text-text-secondary"
               >
                 <span className="w-2 h-2 rounded-full bg-sky-400" />
                 <span>{t("game.playersOnlineCount", { count: channelPlayers.length })}</span>
@@ -2333,7 +2333,7 @@ function GamePageInner() {
                   setRosterActionMenu(null);
                   setShowRosterMenu((prev) => (prev === "npcs" ? null : "npcs"));
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-caption text-text-secondary"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-raised hover:bg-surface border border-border text-caption text-text-secondary"
               >
                 <span className="w-2 h-2 rounded-full bg-violet-400" />
                 <span>{t("game.npcsAtWorkCount", { count: channelNpcs.length })}</span>
@@ -2452,7 +2452,7 @@ function GamePageInner() {
                 setShowUserMenu(!showUserMenu);
                 setShowSharePopup(false);
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-caption text-text-secondary hover:text-white hover:bg-white/10 relative"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-raised border border-border text-caption text-text-secondary hover:text-text hover:bg-surface relative"
             >
               <Settings className="w-3.5 h-3.5" />
               {t("game.menuSettings")}
@@ -2469,7 +2469,7 @@ function GamePageInner() {
                       openChannelSettings("settings");
                       setShowUserMenu(false);
                     }}
-                    className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
+                    className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
                   >
                     <Settings className="w-3.5 h-3.5" />
                     {t("game.settings")}
@@ -2560,7 +2560,7 @@ function GamePageInner() {
                     setShowUserMenu(false);
                     openBugReport();
                   }}
-                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
                 >
                   <Bug className="w-3.5 h-3.5" />
                   {t("game.reportBug")}
@@ -2609,7 +2609,7 @@ function GamePageInner() {
                     }
                     window.location.href = `/channels?characterId=${characterId}`;
                   }}
-                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   {t("game.leaveChannel")}
@@ -2631,7 +2631,7 @@ function GamePageInner() {
                     setShowUserMenu(false);
                     setShowAboutModal(true);
                   }}
-                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
                 >
                   <Info className="w-3.5 h-3.5" />
                   {t("game.aboutDeskRpg")}

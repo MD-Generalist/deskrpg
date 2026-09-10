@@ -634,21 +634,21 @@ export default function HermesProfileList({
                 setProbeStatus(toProbeStatus(r.status));
               }}
               placeholder={t("gateway.profile.profileNamePlaceholder")}
-              className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
             />
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder={t("gateway.profile.displayName")}
-              className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
             />
             <input
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder={t("gateway.profile.tokenPlaceholder")}
-              className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
             />
           </div>
           {probeStatus !== "idle" && (

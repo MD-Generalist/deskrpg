@@ -416,34 +416,34 @@ export default function ChannelSettingsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-800 rounded-xl w-full max-w-lg border border-gray-700 max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+      <div className="bg-surface rounded-xl w-full max-w-lg border border-border max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 className="text-lg font-bold text-white">{t("settings.title")}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-xl"
+            className="text-text-muted hover:text-text text-xl"
             aria-label={t("common.close")}
           >
             &times;
           </button>
         </div>
 
-        <div className="flex border-b border-gray-700">
+        <div className="flex border-b border-border">
           <button
             onClick={() => setTab("settings")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "settings" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "settings" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-text-muted"}`}
           >
             {t("settings.general")}
           </button>
           <button
             onClick={() => setTab("members")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "members" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "members" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-text-muted"}`}
           >
             {t("settings.members")}
           </button>
           <button
             onClick={() => setTab("gateway")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "gateway" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "gateway" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-text-muted"}`}
           >
             {t("settings.gateway")}
           </button>
@@ -453,7 +453,7 @@ export default function ChannelSettingsModal({
           {tab === "settings" ? (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                <label className="block text-sm font-semibold text-text-secondary mb-1">
                   {t("settings.channelName")}
                 </label>
                 <input
@@ -461,11 +461,11 @@ export default function ChannelSettingsModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={100}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                <label className="block text-sm font-semibold text-text-secondary mb-1">
                   {t("settings.description")}
                 </label>
                 <textarea
@@ -473,43 +473,43 @@ export default function ChannelSettingsModal({
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={500}
                   rows={2}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-indigo-500 resize-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                <label className="block text-sm font-semibold text-text-secondary mb-1">
                   {t("settings.visibility")}
                 </label>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setVisibility(true)}
-                    className={`px-3 py-1 rounded text-sm ${visibility ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-400"}`}
+                    className={`px-3 py-1 rounded text-sm ${visibility ? "bg-indigo-600 text-text" : "bg-surface-raised text-text-muted"}`}
                   >
                     {t("channels.public")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setVisibility(false)}
-                    className={`px-3 py-1 rounded text-sm ${!visibility ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-400"}`}
+                    className={`px-3 py-1 rounded text-sm ${!visibility ? "bg-indigo-600 text-text" : "bg-surface-raised text-text-muted"}`}
                   >
                     {t("channels.private")}
                   </button>
                 </div>
                 {!visibility && isPublic && (
-                  <p className="text-amber-400 text-xs mt-1">
+                  <p className="text-npc text-xs mt-1">
                     {t("settings.switchToPrivateWarning")}
                   </p>
                 )}
                 {visibility && !isPublic && (
-                  <p className="text-amber-400 text-xs mt-1">
+                  <p className="text-npc text-xs mt-1">
                     {t("settings.switchToPublicWarning")}
                   </p>
                 )}
               </div>
               {!visibility && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                  <label className="block text-sm font-semibold text-text-secondary mb-1">
                     {isPublic ? t("settings.setPassword") : t("settings.changePassword")}
                   </label>
                   <input
@@ -522,28 +522,28 @@ export default function ChannelSettingsModal({
                         ? t("settings.passwordPlaceholderNew")
                         : t("settings.passwordPlaceholderKeep")
                     }
-                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 bg-bg border border-border rounded text-text placeholder-gray-500 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                <label className="block text-sm font-semibold text-text-secondary mb-1">
                   {t("settings.inviteCode")}
                 </label>
                 <div className="flex gap-2">
-                  <code className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-amber-400 font-mono text-sm">
+                  <code className="flex-1 px-3 py-2 bg-bg border border-border rounded text-npc font-mono text-sm">
                     {inviteCode || "—"}
                   </code>
                   <button
                     onClick={copyInviteCode}
-                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                    className="px-3 py-2 bg-surface-raised hover:bg-gray-600 rounded text-sm text-text"
                   >
                     {copied ? t("game.copied") : t("common.copy")}
                   </button>
                 </div>
               </div>
               {saveError && <p className="text-red-400 text-sm">{saveError}</p>}
-              {saveSuccess && <p className="text-green-400 text-sm">{t("settings.saved")}</p>}
+              {saveSuccess && <p className="text-success text-sm">{t("settings.saved")}</p>}
               <button
                 onClick={handleSave}
                 disabled={saving}
@@ -555,19 +555,19 @@ export default function ChannelSettingsModal({
           ) : tab === "members" ? (
             <div>
               {membersLoading ? (
-                <p className="text-gray-400 text-sm py-4 text-center">
+                <p className="text-text-muted text-sm py-4 text-center">
                   {t("settings.loadingMembers")}
                 </p>
               ) : membersError ? (
                 <p className="text-red-400 text-sm py-4 text-center">{membersError}</p>
               ) : members.length === 0 ? (
-                <p className="text-gray-400 text-sm py-4 text-center">{t("settings.noMembers")}</p>
+                <p className="text-text-muted text-sm py-4 text-center">{t("settings.noMembers")}</p>
               ) : (
                 <div className="space-y-2">
                   {members.map((m) => (
                     <div
                       key={m.userId}
-                      className="flex items-center justify-between px-3 py-2 bg-gray-900 rounded"
+                      className="flex items-center justify-between px-3 py-2 bg-bg rounded"
                     >
                       <div className="flex items-center gap-2">
                         <span
@@ -575,7 +575,7 @@ export default function ChannelSettingsModal({
                         />
                         <span className="text-white text-sm">{m.nickname}</span>
                         <span
-                          className={`text-xs px-1.5 py-0.5 rounded ${m.role === "owner" ? "bg-amber-600/30 text-amber-400" : "bg-gray-700 text-gray-400"}`}
+                          className={`text-xs px-1.5 py-0.5 rounded ${m.role === "owner" ? "bg-amber-600/30 text-npc" : "bg-surface-raised text-text-muted"}`}
                         >
                           {m.role === "owner" ? t("settings.roleOwner") : t("settings.roleMember")}
                         </span>
@@ -607,7 +607,7 @@ export default function ChannelSettingsModal({
                     </button>
                     <button
                       onClick={() => setConfirmKick(null)}
-                      className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300"
+                      className="px-3 py-1 bg-surface-raised hover:bg-gray-600 rounded text-sm text-text-secondary"
                     >
                       {t("common.cancel")}
                     </button>
@@ -618,13 +618,13 @@ export default function ChannelSettingsModal({
           ) : (
             <div className="space-y-4">
               {gatewayLoading ? (
-                <p className="text-gray-400 text-sm py-4 text-center">
+                <p className="text-text-muted text-sm py-4 text-center">
                   {t("settings.loadingGateway")}
                 </p>
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
+                    <label className="block text-sm font-semibold text-text-secondary mb-2">
                       {t("settings.gatewaySource")}
                     </label>
                     <div className="flex gap-2">
@@ -638,7 +638,7 @@ export default function ChannelSettingsModal({
                         className={`px-3 py-2 rounded text-sm font-semibold ${
                           gatewayMode === "resource"
                             ? "bg-indigo-600 text-white"
-                            : "bg-gray-700 text-gray-300"
+                            : "bg-surface-raised text-text-secondary"
                         }`}
                       >
                         {t("settings.gatewayUseSaved")}
@@ -654,7 +654,7 @@ export default function ChannelSettingsModal({
                         className={`px-3 py-2 rounded text-sm font-semibold ${
                           gatewayMode === "direct"
                             ? "bg-indigo-600 text-white"
-                            : "bg-gray-700 text-gray-300"
+                            : "bg-surface-raised text-text-secondary"
                         }`}
                       >
                         {t("settings.gatewayUseCustom")}
@@ -664,7 +664,7 @@ export default function ChannelSettingsModal({
                   {gatewayMode === "resource" ? (
                     <>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-300 mb-1">
+                        <label className="block text-sm font-semibold text-text-secondary mb-1">
                           {t("settings.gatewaySaved")}
                         </label>
                         <select
@@ -682,7 +682,7 @@ export default function ChannelSettingsModal({
                             setGatewayConnectionState({ status: "idle" });
                             setGatewayNotice(null);
                           }}
-                          className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500"
+                          className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-indigo-500"
                         >
                           <option value="">{t("settings.gatewaySelect")}</option>
                           {gatewayOptions.map((option) => (
@@ -692,7 +692,7 @@ export default function ChannelSettingsModal({
                           ))}
                         </select>
                         {selectedGatewayId && (
-                          <p className="mt-2 text-xs text-gray-400">
+                          <p className="mt-2 text-xs text-text-muted">
                             {gatewayOptions.find((option) => option.id === selectedGatewayId)
                               ?.baseUrl ?? ""}
                           </p>
@@ -712,7 +712,7 @@ export default function ChannelSettingsModal({
                   ) : (
                     <>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-300 mb-1">
+                        <label className="block text-sm font-semibold text-text-secondary mb-1">
                           {t("settings.gatewayUrl")}
                         </label>
                         <input
@@ -721,11 +721,11 @@ export default function ChannelSettingsModal({
                           onChange={(e) => setGatewayUrl(e.target.value)}
                           placeholder={t("settings.gatewayUrlPlaceholder")}
                           disabled={!gatewayCanEditCredentials}
-                          className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                          className="w-full px-3 py-2 bg-bg border border-border rounded text-text placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-300 mb-1">
+                        <label className="block text-sm font-semibold text-text-secondary mb-1">
                           {t("settings.gatewayToken")}
                         </label>
                         <div className="flex gap-2">
@@ -735,12 +735,12 @@ export default function ChannelSettingsModal({
                             onChange={(e) => setGatewayToken(e.target.value)}
                             placeholder={t("settings.gatewayTokenPlaceholder")}
                             disabled={!gatewayCanEditCredentials}
-                            className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                            className="flex-1 px-3 py-2 bg-bg border border-border rounded text-text placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
                           />
                           <button
                             type="button"
                             onClick={() => setShowToken((v) => !v)}
-                            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300"
+                            className="px-3 py-2 bg-surface-raised hover:bg-gray-600 rounded text-sm text-text-secondary"
                           >
                             {showToken ? t("common.hide") : t("common.show")}
                           </button>
@@ -754,13 +754,13 @@ export default function ChannelSettingsModal({
                       </p>
                     </>
                   )}
-                  <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 space-y-3">
+                  <div className="rounded-lg border border-border bg-bg/60 p-3 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-gray-200">
+                        <p className="text-sm font-semibold text-text">
                           {t("settings.taskAutomation")}
                         </p>
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-text-muted mt-1">
                           {t("settings.autoProgressNudgeHelp")}
                         </p>
                       </div>
@@ -768,7 +768,7 @@ export default function ChannelSettingsModal({
                         type="button"
                         onClick={() => setAutoProgressNudgeEnabled((prev) => !prev)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                          autoProgressNudgeEnabled ? "bg-indigo-600" : "bg-gray-700"
+                          autoProgressNudgeEnabled ? "bg-indigo-600" : "bg-surface-raised"
                         }`}
                         aria-pressed={autoProgressNudgeEnabled}
                       >
@@ -781,7 +781,7 @@ export default function ChannelSettingsModal({
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-gray-400 mb-1">
+                        <label className="block text-xs font-semibold text-text-muted mb-1">
                           {t("settings.progressNudgeMinutes")}
                         </label>
                         <input
@@ -791,11 +791,11 @@ export default function ChannelSettingsModal({
                           value={autoProgressNudgeMinutes}
                           onChange={(e) => setAutoProgressNudgeMinutes(Number(e.target.value) || 1)}
                           disabled={!autoProgressNudgeEnabled}
-                          className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
+                          className="w-full px-3 py-2 bg-bg-deep border border-border rounded text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-400 mb-1">
+                        <label className="block text-xs font-semibold text-text-muted mb-1">
                           {t("settings.autoProgressNudgeMax")}
                         </label>
                         <input
@@ -805,11 +805,11 @@ export default function ChannelSettingsModal({
                           value={autoProgressNudgeMax}
                           onChange={(e) => setAutoProgressNudgeMax(Number(e.target.value) || 1)}
                           disabled={!autoProgressNudgeEnabled}
-                          className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
+                          className="w-full px-3 py-2 bg-bg-deep border border-border rounded text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-400 mb-1">
+                        <label className="block text-xs font-semibold text-text-muted mb-1">
                           {t("settings.reportWaitSeconds")}
                         </label>
                         <input
@@ -818,7 +818,7 @@ export default function ChannelSettingsModal({
                           step={1}
                           value={reportWaitSeconds}
                           onChange={(e) => setReportWaitSeconds(Number(e.target.value) || 5)}
-                          className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded text-white focus:outline-none focus:border-indigo-500"
+                          className="w-full px-3 py-2 bg-bg-deep border border-border rounded text-white focus:outline-none focus:border-indigo-500"
                         />
                       </div>
                     </div>
@@ -836,7 +836,7 @@ export default function ChannelSettingsModal({
                   )}
                   {gatewayNotice && (
                     <p
-                      className={`text-sm ${gatewayNotice.success ? "text-green-400" : "text-red-400"}`}
+                      className={`text-sm ${gatewayNotice.success ? "text-success" : "text-red-400"}`}
                     >
                       {gatewayNotice.message}
                     </p>
@@ -860,7 +860,7 @@ export default function ChannelSettingsModal({
                         gatewayTesting ||
                         (gatewayMode === "resource" ? !selectedGatewayId : !gatewayUrl.trim())
                       }
-                      className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded font-semibold text-white disabled:opacity-50"
+                      className="flex-1 px-4 py-2 bg-surface-raised hover:bg-gray-600 rounded font-semibold text-text disabled:opacity-50"
                     >
                       {gatewayTesting ? t("common.loading") : t("settings.testConnection")}
                     </button>

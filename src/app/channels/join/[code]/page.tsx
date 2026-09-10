@@ -11,7 +11,7 @@ export default function JoinChannelPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="min-h-screen flex items-center justify-center bg-bg text-text">
           {t("common.loading")}
         </div>
       }
@@ -57,12 +57,12 @@ function JoinChannelPageInner() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      <div className="min-h-screen flex items-center justify-center bg-bg text-text">
         <div className="text-center">
-          <div className="text-xl mb-4 text-red-400">{error}</div>
+          <div className="text-xl mb-4 text-red-700">{error}</div>
           <Link
             href="/channels"
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold"
+            className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"
           >
             {t("channels.backToChannels")}
           </Link>
@@ -72,7 +72,7 @@ function JoinChannelPageInner() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+    <div className="min-h-screen flex items-center justify-center bg-bg text-text">
       {t("password.joining")}
     </div>
   );

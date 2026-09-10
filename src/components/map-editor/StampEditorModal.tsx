@@ -749,7 +749,7 @@ export default function StampEditorModal({
                 >
                   {layer.name}
                 </span>
-                {isOwner && selectedTile && <span className="text-micro text-amber-400">●</span>}
+                {isOwner && selectedTile && <span className="text-micro text-amber-700">●</span>}
                 <span className="text-micro text-text-dim ml-auto">{count}</span>
               </button>
             );

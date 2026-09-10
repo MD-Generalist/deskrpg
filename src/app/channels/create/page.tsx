@@ -547,7 +547,7 @@ function CreateChannelPageInner() {
                       testingConnection ||
                       (gatewayMode === "stored" ? !selectedGatewayId : !gatewayUrl.trim())
                     }
-                    className="px-4 py-2 bg-primary hover:bg-primary-hover rounded text-sm font-semibold disabled:opacity-50"
+                    className="px-4 py-2 bg-primary hover:bg-primary-hover rounded text-sm font-semibold disabled:opacity-50 text-white"
                   >
                     {testingConnection ? t("gateway.testing") : t("gateway.testConnection")}
                   </button>
@@ -575,7 +575,7 @@ function CreateChannelPageInner() {
             <button
               type="submit"
               disabled={submitting || loadingGroups || !hasAvailableGroups}
-              className="px-6 py-2 bg-primary hover:bg-primary-hover rounded font-semibold disabled:opacity-50"
+              className="px-6 py-2 bg-primary hover:bg-primary-hover rounded font-semibold disabled:opacity-50 text-white"
             >
               {submitting ? t("channels.create.creating") : t("common.create")}
             </button>

@@ -221,7 +221,7 @@ export default function ChatPanel({
     return (
       <button
         onClick={() => setManualOpen(true)}
-        className="fixed left-0 top-1/2 -translate-y-1/2 z-20 bg-surface/80 hover:bg-surface-raised text-white px-1 py-4 rounded-r-lg"
+        className="fixed left-0 top-1/2 -translate-y-1/2 z-20 bg-surface/80 hover:bg-surface-raised text-text px-1 py-4 rounded-r-lg"
         title={t("chat.openChat")}
       >
         &#9654;
@@ -250,7 +250,7 @@ export default function ChatPanel({
   const backFromList = () => setManualOpen(false);
 
   return (
-    <div ref={panelRef} className="fixed left-0 top-[40px] bottom-0 z-20 flex" style={{ width }}>
+    <div ref={panelRef} className="fixed left-0 top-[48px] bottom-0 z-20 flex" style={{ width }}>
       {/* Panel content */}
       <div className="flex-1 flex flex-col bg-bg/95 backdrop-blur border-r border-border min-w-0">
         {/* Panel header — 방 안에서는 RoomHeader 가 이 자리를 대신한다(화살표가 두 줄이 되지 않게). */}

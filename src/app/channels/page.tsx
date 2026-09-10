@@ -246,7 +246,7 @@ function ChannelsPageInner() {
             {canCreateChannels ? (
               <Link
                 href={`/channels/create?characterId=${characterId}`}
-                className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold"
+                className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"
               >
                 {t("channels.createChannel")}
               </Link>

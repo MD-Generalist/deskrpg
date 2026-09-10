@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { Plus, Copy, Trash2, Search } from "lucide-react";
+import type { OfficePreset } from "@/game/three/office-presets";
 import NewProjectModal from "./NewProjectModal";
 
 interface ProjectItem {
@@ -26,6 +27,7 @@ interface ProjectBrowserProps {
     rows: number,
     tileWidth: number,
     tileHeight: number,
+    preset?: OfficePreset,
   ) => void;
 }
 
@@ -98,9 +100,10 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
     rows: number,
     tileWidth: number,
     tileHeight: number,
+    preset?: OfficePreset,
   ) => {
     setShowNewProject(false);
-    onCreateProject(name, cols, rows, tileWidth, tileHeight);
+    onCreateProject(name, cols, rows, tileWidth, tileHeight, preset);
   };
 
   const formatDate = (dateStr: string) => {
@@ -109,9 +112,9 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
   };
 
   return (
-    <div className="flex flex-col bg-gray-900 text-white">
+    <div className="flex flex-col bg-bg text-text">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
         <h1 className="text-xl font-bold">{t("mapEditor.project.browserTitle")}</h1>
         <button
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm"
@@ -123,18 +126,18 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
       </div>
 
       {/* Search + Sort */}
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-800">
+      <div className="flex items-center gap-3 px-6 py-3 border-b border-border-subtle">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" />
           <input
-            className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500"
+            className="w-full pl-9 pr-3 py-2 bg-surface border border-border rounded text-sm text-text placeholder-gray-500"
             placeholder={t("mapEditor.project.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <select
-          className="px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+          className="px-3 py-2 bg-surface border border-border rounded text-sm text-text-secondary"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortKey)}
         >
@@ -147,13 +150,13 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
       {/* Project Grid */}
       <div className="flex-1 overflow-auto p-6">
         {loading ? (
-          <div className="flex items-center justify-center h-40 text-gray-500">
+          <div className="flex items-center justify-center h-40 text-text-dim">
             {t("common.loading")}
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center h-40 text-red-400">{error}</div>
+          <div className="flex items-center justify-center h-40 text-red-700">{error}</div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+          <div className="flex flex-col items-center justify-center h-40 text-text-dim">
             <p className="text-lg">{t("mapEditor.project.noProjects")}</p>
             <p className="text-sm mt-1">{t("mapEditor.project.noProjectsHint")}</p>
             <button
@@ -169,10 +172,10 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
             {filtered.map((project) => (
               <div
                 key={project.id}
-                className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
+                className="group relative bg-surface rounded-lg border border-border hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
                 onClick={() => onOpenProject(project.id, project.createdBy)}
               >
-                <div className="aspect-video bg-gray-900 flex items-center justify-center">
+                <div className="aspect-video bg-bg flex items-center justify-center">
                   {project.thumbnail ? (
                     <img
                       src={project.thumbnail}
@@ -185,20 +188,20 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
                 </div>
                 <div className="p-3">
                   <div className="text-sm font-medium truncate">{project.name}</div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-text-dim mt-1">
                     {t("mapEditor.project.modified")}: {formatDate(project.updatedAt)}
                   </div>
                 </div>
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    className="p-1.5 bg-surface-raised/80 rounded hover:bg-border text-text-secondary"
                     onClick={(e) => handleDuplicate(e, project.id)}
                     title={t("mapEditor.project.duplicate")}
                   >
                     <Copy size={14} />
                   </button>
                   <button
-                    className="p-1.5 bg-gray-700/80 rounded hover:bg-red-600 text-gray-300"
+                    className="p-1.5 bg-surface-raised/80 rounded hover:bg-red-600 text-text-secondary"
                     onClick={(e) => handleDelete(e, project.id)}
                     title={t("common.delete")}
                   >

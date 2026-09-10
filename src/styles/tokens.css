@@ -1,31 +1,22 @@
-/* src/styles/tokens.css — DeskRPG Design Tokens */
-
+/* DeskRPG UI 2.0 — warm miniature-office palette */
 :root {
-  /* Primary — Emerald */
-  --color-primary: #059669;
-  --color-primary-light: #10b981;
-  --color-primary-hover: #047857;
-  --color-primary-muted: rgba(5, 150, 105, 0.15);
-
-  /* NPC — Amber */
-  --color-npc: #f59e0b;
-  --color-npc-dark: #92400e;
-
-  /* Semantic */
-  --color-danger: #ef4444;
-  --color-danger-hover: #dc2626;
-  --color-danger-bg: #991b1b;
-  --color-info: #3b82f6;
-  --color-success: #22c55e;
-  --color-meeting: #8b5cf6;
-
-  /* Text */
-  --text: #ffffff;
-  --text-secondary: #d1d5db;
-  --text-muted: #9ca3af;
-  --text-dim: #6b7280;
-
-  /* Spacing aliases */
+  color-scheme: light;
+  --color-primary: #365e4b;
+  --color-primary-light: #426c54;
+  --color-primary-hover: #294a3a;
+  --color-primary-muted: #e6eee2;
+  --color-npc: #93632e;
+  --color-npc-dark: #704619;
+  --color-danger: #b53939;
+  --color-danger-hover: #932828;
+  --color-danger-bg: #fbe7e4;
+  --color-info: #356a91;
+  --color-success: #327649;
+  --color-meeting: #735b8f;
+  --text: #34483e;
+  --text-secondary: #526459;
+  --text-muted: #667468;
+  --text-dim: #727a6b;
   --gap-tight: 4px;
   --gap-normal: 8px;
   --gap-loose: 16px;

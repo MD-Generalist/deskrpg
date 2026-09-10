@@ -129,10 +129,10 @@ export default function AppearanceEditor({
   return (
     <>
       {/* Left sidebar */}
-      <div className="min-w-60 w-max bg-gray-800 p-4 flex flex-col gap-4 overflow-y-auto">
+      <div className="min-w-60 w-max bg-surface p-4 flex flex-col gap-4 overflow-y-auto">
         {/* Body type toggle */}
         <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2">
             {t("characters.bodyType")}
           </h3>
           <div className="flex gap-1.5">
@@ -142,8 +142,8 @@ export default function AppearanceEditor({
                 onClick={() => onBodyTypeChange(bt.id)}
                 className={`flex-1 px-3 py-2 rounded text-sm font-medium ${
                   bodyType === bt.id
-                    ? "bg-indigo-600 text-white"
-                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    ? "bg-primary text-white"
+                    : "bg-surface-raised text-text-secondary hover:bg-border"
                 }`}
               >
                 {bt.id === "male" ? t("characters.male") : t("characters.female")}
@@ -154,7 +154,7 @@ export default function AppearanceEditor({
 
         {/* Skin color */}
         <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2">
             {t("characters.skin")}
           </h3>
           <div className="flex gap-1.5">
@@ -164,7 +164,7 @@ export default function AppearanceEditor({
                 onClick={() => onSkinChange(v)}
                 className={`flex-1 py-3 rounded ${
                   layers.body?.variant === v
-                    ? "ring-2 ring-indigo-500"
+                    ? "ring-2 ring-primary"
                     : "hover:ring-1 hover:ring-gray-500"
                 }`}
                 style={{ background: SKIN_COLORS[v] }}
@@ -188,7 +188,7 @@ export default function AppearanceEditor({
             if (groupCats.length === 0) return null;
             return (
               <div key={group.labelKey}>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-1.5">
                   {t(group.labelKey)}
                 </h3>
                 <div className="flex flex-col [@media(max-height:800px)]:grid [@media(max-height:800px)]:grid-cols-2 gap-1">
@@ -201,13 +201,13 @@ export default function AppearanceEditor({
                         onClick={() => onSetActiveCategory(isActive ? "" : cat.id)}
                         className={`text-left px-3 py-2 rounded text-sm ${
                           isActive
-                            ? "bg-indigo-600 text-white"
-                            : "bg-gray-700/60 text-gray-300 hover:bg-gray-600"
+                            ? "bg-primary text-white"
+                            : "bg-surface-raised/60 text-text-secondary hover:bg-border"
                         }`}
                       >
                         {t("characters.cat." + cat.id) || cat.label}
-                        {layers[cat.id] && <span className="ml-1 text-indigo-300">*</span>}
-                        {!isActive && <span className="ml-1 text-gray-500">{count}</span>}
+                        {layers[cat.id] && <span className="ml-1 text-primary">*</span>}
+                        {!isActive && <span className="ml-1 text-text-dim">{count}</span>}
                       </button>
                     );
                   })}
@@ -291,8 +291,8 @@ function CompactEditor({
               onClick={() => onBodyTypeChange(bt.id)}
               className={`flex-1 px-2 py-1 rounded text-xs ${
                 bodyType === bt.id
-                  ? "bg-indigo-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  ? "bg-primary text-white"
+                  : "bg-surface-raised text-text-secondary hover:bg-border"
               }`}
             >
               {bt.id === "male" ? t("characters.male") : t("characters.female")}
@@ -308,7 +308,7 @@ function CompactEditor({
               onClick={() => onSkinChange(v)}
               className={`flex-1 py-2 rounded ${
                 layers.body?.variant === v
-                  ? "ring-2 ring-indigo-500"
+                  ? "ring-2 ring-primary"
                   : "hover:ring-1 hover:ring-gray-500"
               }`}
               style={{ background: SKIN_COLORS[v] }}
@@ -327,12 +327,12 @@ function CompactEditor({
               onClick={() => onSetActiveCategory(cat.id)}
               className={`text-left px-2 py-1.5 rounded text-xs ${
                 activeCategory === cat.id
-                  ? "bg-indigo-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  ? "bg-primary text-white"
+                  : "bg-surface-raised text-text-secondary hover:bg-border"
               }`}
             >
               {t("characters.cat." + cat.id) || cat.label}
-              {layers[cat.id] && <span className="ml-1 text-indigo-300">*</span>}
+              {layers[cat.id] && <span className="ml-1 text-primary">*</span>}
             </button>
           ))}
         </div>
@@ -342,17 +342,17 @@ function CompactEditor({
       <div className="flex-1 max-h-[40vh] overflow-y-auto">
         {activeCat && !HIDDEN_CATEGORY_IDS.includes(activeCategory) && (
           <>
-            <h4 className="text-xs font-semibold text-gray-400 mb-2">
+            <h4 className="text-xs font-semibold text-text-muted mb-2">
               {t("characters.cat." + activeCat.id) || activeCat.label}
-              <span className="ml-1 text-gray-500">({activeCat.items.length})</span>
+              <span className="ml-1 text-text-dim">({activeCat.items.length})</span>
             </h4>
 
             <button
               onClick={() => onClearCategory(activeCategory)}
               className={`w-full text-left px-2 py-1.5 rounded text-xs mb-1 ${
                 currentSelection === null || currentSelection === undefined
-                  ? "bg-indigo-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  ? "bg-primary text-white"
+                  : "bg-surface-raised text-text-secondary hover:bg-border"
               }`}
             >
               {t("characters.none")}
@@ -379,8 +379,8 @@ function CompactEditor({
                         }
                         className={`w-full text-left px-2 py-1.5 rounded text-xs ${
                           isSelected
-                            ? "bg-indigo-600 text-white"
-                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                            ? "bg-primary text-white"
+                            : "bg-surface-raised text-text-secondary hover:bg-border"
                         }`}
                       >
                         {t("characters.item." + item.key) || item.name}
@@ -394,8 +394,8 @@ function CompactEditor({
                               onClick={() => onSetVariant(activeCategory, v)}
                               className={`px-1.5 py-0.5 rounded text-[10px] ${
                                 currentSelection?.variant === v
-                                  ? "bg-indigo-500 text-white"
-                                  : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                                  ? "bg-primary text-white"
+                                  : "bg-border text-text-secondary hover:bg-gray-500"
                               }`}
                             >
                               {t("color." + v)}
@@ -445,12 +445,12 @@ function ItemDrawer({
   const t = useT();
 
   return (
-    <div className="w-56 bg-[#1a1f2e] border-l border-gray-700 p-3 sticky top-0 self-start h-screen overflow-y-auto scrollbar-hide">
+    <div className="w-56 bg-surface border-l border-border p-3 sticky top-0 self-start h-screen overflow-y-auto scrollbar-hide">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-300">
+        <h3 className="text-sm font-semibold text-text-secondary">
           {t("characters.cat." + activeCat.id) || activeCat.label}
         </h3>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-300 px-2">
+        <button onClick={onClose} className="text-text-dim hover:text-text-secondary px-2">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -460,8 +460,8 @@ function ItemDrawer({
           onClick={() => onClearCategory(activeCategory)}
           className={`w-full text-left px-3 py-2 rounded text-sm mb-2 ${
             currentSelection === null || currentSelection === undefined
-              ? "bg-indigo-600 text-white"
-              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              ? "bg-primary text-white"
+              : "bg-surface-raised text-text-secondary hover:bg-border"
           }`}
         >
           {t("characters.none")}
@@ -495,15 +495,15 @@ function ItemDrawer({
                   }}
                   className={`w-full text-left px-3 py-2 rounded text-sm flex items-center justify-between ${
                     !compatible
-                      ? "bg-gray-800/50 text-gray-600 cursor-not-allowed"
+                      ? "bg-surface/50 text-gray-600 cursor-not-allowed"
                       : isSelected
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-700/60 text-gray-300 hover:bg-gray-600"
+                        ? "bg-primary text-white"
+                        : "bg-surface-raised/60 text-text-secondary hover:bg-border"
                   }`}
                 >
                   <span className="truncate">{t("characters.item." + item.key) || item.name}</span>
                   {!compatible && (
-                    <span className="text-[10px] px-1.5 rounded bg-gray-700 text-gray-500 ml-1 shrink-0">
+                    <span className="text-[10px] px-1.5 rounded bg-surface-raised text-text-dim ml-1 shrink-0">
                       {supportedTypes.join(",")}
                     </span>
                   )}
@@ -518,8 +518,8 @@ function ItemDrawer({
                         onClick={() => onSetVariant(activeCategory, v)}
                         className={`px-2 py-1 rounded text-xs ${
                           currentSelection?.variant === v
-                            ? "bg-indigo-500 text-white"
-                            : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                            ? "bg-primary text-white"
+                            : "bg-border text-text-secondary hover:bg-gray-500"
                         }`}
                       >
                         {t("color." + v)}

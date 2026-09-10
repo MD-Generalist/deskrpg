@@ -70,6 +70,8 @@ export default function PhaserGame({
       });
     }
 
+    let cancelled = false;
+
     // Hoist listener refs so the cleanup closure can access them
     // (they are set inside the async import callback below)
     let onSceneReady: (() => void) | null = null;
@@ -84,7 +86,7 @@ export default function PhaserGame({
 
     // Dynamically import to avoid SSR issues with Phaser
     import("@/game/main").then(({ createGame }) => {
-      if (gameRef.current) return; // Guard against double-invoke in StrictMode
+      if (cancelled || gameRef.current || !containerRef.current) return; // Guard against double-invoke in StrictMode
 
       const game = createGame("game-container");
       gameRef.current = game;
@@ -133,6 +135,7 @@ export default function PhaserGame({
     });
 
     return () => {
+      cancelled = true;
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;

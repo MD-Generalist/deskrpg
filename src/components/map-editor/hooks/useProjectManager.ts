@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import type { TiledMap, TiledTileset } from "./useMapEditor";
 import type { TilesetImageInfo } from "./useMapEditor";
+import { applyOfficePreset, type OfficePreset } from "@/game/three/office-presets";
 import { createDefaultMap } from "./useMapEditor";
 import { getProjectMapDataForLoad } from "../project-load";
 
@@ -159,9 +160,10 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
       rows: number,
       tileWidth: number,
       tileHeight: number,
+      preset: OfficePreset = 'blank',
     ): Promise<{ id: string; createdBy: string | null }> => {
       void tileHeight;
-      const mapData = createDefaultMap(name, cols, rows, tileWidth);
+      const mapData = applyOfficePreset(createDefaultMap(name, cols, rows, tileWidth), preset);
 
       const res = await fetch("/api/projects", {
         method: "POST",

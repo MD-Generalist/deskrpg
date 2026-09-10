@@ -240,24 +240,24 @@ function MapEditorListPage() {
           </Link>
         )}
 
-        <div className="flex items-center justify-between mb-4 border-b border-gray-700 pb-3">
+        <div className="flex items-center justify-between mb-4 border-b border-border pb-3">
           <h2 className="text-xl font-bold">{t("mapEditor.template.title")}</h2>
         </div>
 
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dim" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("mapEditor.template.search")}
-            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 bg-surface border border-border rounded text-sm text-text placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         {loading ? (
-          <div className="text-gray-500">{t("common.loading")}</div>
+          <div className="text-text-dim">{t("common.loading")}</div>
         ) : filteredTemplates.length === 0 ? (
-          <div className="text-gray-500 text-center py-12">
+          <div className="text-text-dim text-center py-12">
             {search ? t("mapEditor.template.noResults") : t("mapEditor.template.noTemplates")}
           </div>
         ) : (
@@ -265,10 +265,10 @@ function MapEditorListPage() {
             {filteredTemplates.map((tmpl) => (
               <div
                 key={tmpl.id}
-                className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
+                className="group relative bg-surface rounded-lg border border-border hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
                 onClick={() => handleEditTemplate(tmpl.id)}
               >
-                <div className="aspect-video bg-gray-900 flex items-center justify-center">
+                <div className="aspect-video bg-bg flex items-center justify-center">
                   {thumbnails[tmpl.id] ? (
                     <img
                       src={thumbnails[tmpl.id]}
@@ -285,22 +285,22 @@ function MapEditorListPage() {
                     <span className="text-sm font-medium truncate">{tmpl.name}</span>
                   </div>
                   {tmpl.description && (
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{tmpl.description}</p>
+                    <p className="text-xs text-text-dim mt-0.5 truncate">{tmpl.description}</p>
                   )}
                   <div className="text-xs text-gray-600 mt-1">
                     {tmpl.cols}×{tmpl.rows}
                   </div>
                 </div>
                 {creatingFrom === tmpl.id && (
-                  <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center">
-                    <span className="text-sm text-blue-400">
+                  <div className="absolute inset-0 bg-bg/80 flex items-center justify-center">
+                    <span className="text-sm text-blue-700">
                       {t("mapEditor.template.creating")}
                     </span>
                   </div>
                 )}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    className="p-1.5 bg-surface-raised/80 rounded hover:bg-border text-text-secondary"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDownload(tmpl.id);
@@ -311,7 +311,7 @@ function MapEditorListPage() {
                     <Download size={14} />
                   </button>
                   <button
-                    className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    className="p-1.5 bg-surface-raised/80 rounded hover:bg-border text-text-secondary"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDuplicate(tmpl.id);
@@ -321,7 +321,7 @@ function MapEditorListPage() {
                     <Copy size={14} />
                   </button>
                   <button
-                    className="p-1.5 bg-gray-700/80 rounded hover:bg-red-600 text-gray-300"
+                    className="p-1.5 bg-surface-raised/80 rounded hover:bg-red-600 text-text-secondary"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(tmpl.id, tmpl.name);

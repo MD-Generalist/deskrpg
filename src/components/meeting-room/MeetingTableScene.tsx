@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import * as T from "three";
 import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
-
+import { compositeCharacter } from "@/lib/sprite-compositor";
+import { createActor, round, cylinder } from "@/game/three/characters";
+import { spritePalette } from "@/game/three/appearance";
+import { disposeTree } from "@/game/three/office-renderer";
 import type { MeetingSeatLayout, MeetingTableLayout } from "./layout";
-import { computeMeetingSceneFrameWidth, computeMeetingSceneScale } from "./responsive";
-import MeetingAvatar from "./MeetingAvatar";
 import MeetingSpeechBubble from "./MeetingSpeechBubble";
 
 export interface MeetingSceneSeat extends MeetingSeatLayout {
@@ -17,31 +20,13 @@ export interface MeetingSceneSeat extends MeetingSeatLayout {
   isClickable: boolean;
   onClick?: () => void;
 }
-
 export function buildMeetingSceneModel(layout: MeetingTableLayout) {
-  return {
-    tableWidth: layout.table.width,
-    seats: layout.seats,
-  };
+  return { tableWidth: layout.table.width, seats: layout.seats };
 }
-
 interface MeetingTableSceneProps {
   layout: MeetingTableLayout;
   seats: MeetingSceneSeat[];
   availableWidth: number;
-}
-
-function getSeatTranslate(side: MeetingSceneSeat["side"]) {
-  if (side === "top") return "translate(-50%, -16%)";
-  if (side === "bottom") return "translate(-50%, -84%)";
-  if (side === "left") return "translate(-20%, -50%)";
-  return "translate(-80%, -50%)";
-}
-
-function getNameplateClassName(seat: MeetingSceneSeat) {
-  if (seat.isChair) return "bg-primary/15 text-primary-light border-primary/30";
-  if (seat.isNpc) return "bg-npc/10 text-npc border-npc/25";
-  return "bg-surface-raised/90 text-text-secondary border-border";
 }
 
 export default function MeetingTableScene({
@@ -49,132 +34,172 @@ export default function MeetingTableScene({
   seats,
   availableWidth,
 }: MeetingTableSceneProps) {
-  const scene = buildMeetingSceneModel(layout);
-  const sceneFrameWidth = computeMeetingSceneFrameWidth(scene.tableWidth);
-  const sceneScale = computeMeetingSceneScale(availableWidth, sceneFrameWidth);
-
+  const host = useRef<HTMLDivElement>(null),
+    labelRefs = useRef(new Map<string, HTMLDivElement>());
+  const latest = useRef(seats);
+  useLayoutEffect(() => {
+    latest.current = seats;
+  }, [seats]);
+  const [fallback, setFallback] = useState(false);
+  const arrangement = JSON.stringify(layout.seats);
+  const appearances = JSON.stringify(seats.map((seat) => [seat.participantId, seat.appearance]));
+  useEffect(() => {
+    if (!host.current) return;
+    const element = host.current;
+    let renderer: T.WebGLRenderer;
+    try {
+      renderer = new T.WebGLRenderer({ antialias: true });
+    } catch {
+      // WebGL allocation is an external capability check, not derived component state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFallback(true);
+      return;
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setClearColor("#e8eee0");
+    renderer.outputColorSpace = T.SRGBColorSpace;
+    element.append(renderer.domElement);
+    const scene = new T.Scene(),
+      camera = new T.PerspectiveCamera(34, 1, 0.1, 100);
+    scene.add(new T.HemisphereLight("#fff7e5", "#859577", 2.6));
+    const light = new T.DirectionalLight("#fff4d8", 3);
+    light.position.set(-5, 12, 8);
+    scene.add(light);
+    const tableWidth = Math.max(5.6, latest.current.filter((s) => s.side === "top").length * 1.5);
+    camera.position.set(0, 10, 12);
+    camera.lookAt(0, 0.4, 0);
+    round(scene, tableWidth + 5, 0.3, 9, "#d9c7a8", 0, -0.25, 0);
+    round(scene, tableWidth, 0.22, 2.8, "#b98e61", 0, 0.84, 0, 0.2);
+    for (const x of [-1, 1])
+      for (const z of [-1, 1])
+        round(scene, 0.15, 0.75, 0.15, "#56715c", x * tableWidth * 0.4, 0.37, z * 1.05);
+    const models = new Map<string, ReturnType<typeof createActor>>();
+    let disposed = false,
+      frame = 0;
+    const position = (seat: MeetingSceneSeat) => {
+      if (seat.side === "left" || seat.side === "right")
+        return new T.Vector3((seat.side === "left" ? -1 : 1) * (tableWidth / 2 + 0.8), 0, 0);
+      return new T.Vector3(
+        ((seat.x - 50) / 32) * tableWidth * 1.6,
+        0,
+        seat.side === "top" ? -2 : 2,
+      );
+    };
+    const addActor = (seat: MeetingSceneSeat, i: number, source?: CanvasImageSource) => {
+      if (disposed) return;
+      const old = models.get(seat.participantId);
+      if (old) {
+        scene.remove(old.root);
+        disposeTree(old.root);
+      }
+      const palette = spritePalette(source),
+        actor = createActor(
+          seat.participantId,
+          source ? palette.shirt : seat.isChair ? "#67876c" : "#a68c73",
+          i % 4,
+          palette,
+        );
+      actor.root.position.copy(position(seat));
+      actor.rig.rotation.y = { top: 0, bottom: Math.PI, left: Math.PI / 2, right: -Math.PI / 2 }[
+        seat.side
+      ];
+      scene.add(actor.root);
+      models.set(seat.participantId, actor);
+    };
+    latest.current.forEach((seat, i) => {
+      const p = position(seat),
+        chair = new T.Group();
+      chair.position.copy(p);
+      scene.add(chair);
+      chair.rotation.y = { top: 0, bottom: Math.PI, left: Math.PI / 2, right: -Math.PI / 2 }[
+        seat.side
+      ];
+      round(chair, 0.7, 0.12, 0.65, "#7e9b7c", 0, 0.4, 0);
+      round(chair, 0.7, 0.65, 0.12, "#7e9b7c", 0, 0.72, -0.32);
+      cylinder(chair, 0.08, 0.1, 0.4, "#526a57", 0, 0.2, 0);
+      addActor(seat, i);
+      if (seat.appearance) {
+        const canvas = document.createElement("canvas");
+        compositeCharacter(canvas, seat.appearance)
+          .then(() => addActor(seat, i, canvas))
+          .catch(() => {});
+      }
+    });
+    const resize = new ResizeObserver(() => {
+      const width = element.clientWidth,
+        height = element.clientHeight;
+      if (!width || !height) return;
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      const distance = Math.max(12, ((tableWidth + 3) / Math.max(0.4, camera.aspect)) * 1.4);
+      camera.position.set(0, distance * 0.68, distance * 0.8);
+      camera.lookAt(0, 0.4, 0);
+      camera.updateProjectionMatrix();
+    });
+    resize.observe(element);
+    const render = (time: number) => {
+      if (disposed) return;
+      frame = requestAnimationFrame(render);
+      for (const seat of latest.current) {
+        const actor = models.get(seat.participantId);
+        if (!actor) continue;
+        actor.update(time / 1000, false, seat.isSpeaking ? "streaming" : "idle", true);
+        const label = labelRefs.current.get(seat.participantId);
+        if (!label) continue;
+        const p = actor.root.position
+          .clone()
+          .add(new T.Vector3(0, 1.75, 0))
+          .project(camera);
+        label.style.left = `${((p.x + 1) / 2) * element.clientWidth}px`;
+        label.style.top = `${((1 - p.y) / 2) * element.clientHeight}px`;
+      }
+      renderer.render(scene, camera);
+    };
+    render(0);
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      disposeTree(scene);
+      renderer.dispose();
+      renderer.domElement.remove();
+    };
+  }, [arrangement, appearances]);
   return (
-    <div className="relative w-full h-full min-h-[420px] overflow-hidden rounded-[28px] border border-border/70 bg-[radial-gradient(circle_at_top,#1d2842_0%,#111827_58%,#0b1120_100%)]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_65%)]" />
-
-      <div
-        className="absolute left-1/2 top-1/2 h-[86%] transition-transform duration-150 ease-out"
-        style={{
-          width: `${sceneFrameWidth}px`,
-          transform: `translate(-50%, -50%) scale(${sceneScale})`,
-          transformOrigin: "center center",
-        }}
-      >
-        <div className="absolute inset-x-10 top-1/2 h-[68%] -translate-y-1/2 rounded-[40px] bg-[linear-gradient(180deg,rgba(30,41,59,0.28),rgba(15,23,42,0.58))] blur-2xl" />
-
-        <svg
-          viewBox={`0 0 ${scene.tableWidth} 420`}
-          className="absolute left-1/2 top-1/2 h-[68%] w-auto max-w-[92%] -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_16px_36px_rgba(15,23,42,0.38)]"
-          role="presentation"
-          aria-hidden="true"
+    <div
+      className="relative w-full h-full min-h-[420px] overflow-hidden rounded-2xl border border-border bg-surface-raised"
+      style={{ maxWidth: availableWidth || undefined }}
+    >
+      <div ref={host} className="absolute inset-0" aria-hidden="true" />
+      {seats.map((seat) => (
+        <div
+          key={seat.participantId}
+          ref={(node) => {
+            if (node) labelRefs.current.set(seat.participantId, node);
+            else labelRefs.current.delete(seat.participantId);
+          }}
+          className={
+            fallback ? "relative inline-flex m-4" : "absolute -translate-x-1/2 -translate-y-full"
+          }
         >
-          <defs>
-            <linearGradient id="meeting-table-surface" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#566b8f" />
-              <stop offset="52%" stopColor="#3f5374" />
-              <stop offset="100%" stopColor="#2a3547" />
-            </linearGradient>
-            <linearGradient id="meeting-table-edge" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#cbd5e1" stopOpacity="0.16" />
-            </linearGradient>
-          </defs>
-
-          <rect
-            x="28"
-            y="116"
-            width={scene.tableWidth - 56}
-            height="188"
-            rx="52"
-            fill="url(#meeting-table-surface)"
-            stroke="url(#meeting-table-edge)"
-            strokeWidth="5"
-          />
-          <rect
-            x="62"
-            y="146"
-            width={scene.tableWidth - 124}
-            height="128"
-            rx="34"
-            fill="rgba(148,163,184,0.08)"
-            stroke="rgba(226,232,240,0.16)"
-            strokeWidth="2"
-          />
-          <g opacity="0.85">
-            <rect
-              x="94"
-              y="184"
-              width={scene.tableWidth - 188}
-              height="6"
-              rx="3"
-              fill="rgba(255,255,255,0.08)"
-            />
-            <rect
-              x="94"
-              y="228"
-              width={scene.tableWidth - 188}
-              height="6"
-              rx="3"
-              fill="rgba(15,23,42,0.18)"
-            />
-          </g>
-        </svg>
-
-        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8 bg-white/5 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-300/60">
-          Meeting Table
-        </div>
-
-        {seats.map((seat) => (
-          <div
-            key={seat.participantId}
-            className="absolute z-20"
-            style={{
-              left: `${seat.x}%`,
-              top: `${seat.y}%`,
-              transform: getSeatTranslate(seat.side),
-            }}
-          >
-            <div className="relative flex flex-col items-center gap-2">
-              <div
-                className={`relative rounded-full p-1.5 transition ${
-                  seat.isSpeaking
-                    ? "bg-npc/20 shadow-[0_0_0_6px_rgba(52,211,153,0.12)]"
-                    : seat.isChair
-                      ? "bg-primary/15"
-                      : "bg-transparent"
-                } ${seat.isClickable ? "cursor-pointer hover:scale-[1.02]" : ""}`}
-                onClick={seat.onClick}
-              >
-                <MeetingAvatar
-                  appearance={seat.appearance}
-                  facing={seat.facing}
-                  size={seat.side === "left" || seat.side === "right" ? 72 : 80}
-                  className={
-                    seat.isSpeaking ? "ring-2 ring-npc" : seat.isChair ? "ring-2 ring-primary" : ""
-                  }
-                />
-                {seat.isChair && (
-                  <div className="absolute -right-1 -top-1 rounded-full border border-primary/40 bg-primary px-1.5 py-0.5 text-[9px] font-black tracking-wide text-white">
-                    C
-                  </div>
-                )}
-                <MeetingSpeechBubble preview={seat.speechPreview} visible={seat.isSpeaking} />
-              </div>
-
-              <div
-                className={`max-w-[124px] rounded-full border px-3 py-1 text-center text-[11px] font-semibold shadow-sm backdrop-blur ${getNameplateClassName(seat)}`}
-              >
-                <span className="block truncate">{seat.name}</span>
-              </div>
-            </div>
+          <div className="relative flex flex-col items-center">
+            <MeetingSpeechBubble preview={seat.speechPreview} visible={seat.isSpeaking} />
+            <button
+              type="button"
+              onClick={seat.onClick}
+              disabled={!seat.isClickable}
+              className={`max-w-[140px] rounded-lg border px-3 py-1 text-[11px] font-semibold shadow-sm disabled:cursor-default ${seat.isChair ? "bg-primary text-white border-primary" : seat.isSpeaking ? "bg-surface border-npc text-npc" : "bg-surface border-border text-text"}`}
+            >
+              {seat.isChair && (
+                <span className="mr-1.5" aria-label="Chair">
+                  C
+                </span>
+              )}
+              {seat.name}
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }

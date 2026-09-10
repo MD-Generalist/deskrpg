@@ -67,27 +67,28 @@ function CharacterCard({
   }, [character.appearance]);
 
   return (
-    <div className="bg-gray-800 p-4 rounded-lg flex flex-col items-center">
+    <div className="bg-surface p-4 rounded-lg flex flex-col items-center">
       <canvas ref={hiddenCanvasRef} className="hidden" />
-      <div
+      <button
+        type="button"
         onClick={onClick}
-        className="cursor-pointer hover:ring-2 hover:ring-indigo-500 rounded p-2"
+        className="cursor-pointer hover:ring-2 hover:ring-primary rounded-xl p-4 w-full bg-bg-deep/60"
       >
         <canvas
           ref={previewCanvasRef}
           width={FRAME_WIDTH * PREVIEW_SCALE}
           height={FRAME_HEIGHT * PREVIEW_SCALE}
-          className="mb-2"
+          className="mb-2 mx-auto"
         />
-        <h3 className="font-bold text-center">{character.name}</h3>
-      </div>
+        <span className="block font-bold text-center">{character.name}</span>
+      </button>
       <div className="mt-2 flex gap-2">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onEdit();
           }}
-          className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300"
+          className="px-3 py-1 bg-surface-raised hover:bg-border rounded text-xs text-text-secondary"
         >
           {t("common.edit")}
         </button>
@@ -96,7 +97,7 @@ function CharacterCard({
             e.stopPropagation();
             onDelete();
           }}
-          className="px-3 py-1 bg-red-900/50 hover:bg-red-800 rounded text-xs text-red-300"
+          className="px-3 py-1 bg-danger-bg hover:bg-danger-bg/80 rounded text-xs text-red-700"
         >
           {t("common.delete")}
         </button>
@@ -110,7 +111,7 @@ export default function CharactersPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="min-h-screen flex items-center justify-center bg-bg text-text">
           {t("common.loading")}
         </div>
       }
@@ -172,14 +173,14 @@ function CharactersPageInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      <div className="min-h-screen flex items-center justify-center bg-bg text-text">
         {t("common.loading")}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-bg text-text p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{t("characters.title")}</h1>
         <div className="flex items-center gap-2">
@@ -191,18 +192,18 @@ function CharactersPageInner() {
       {characters.length < MAX_CHARACTERS ? (
         <Link
           href={createUrl}
-          className="inline-block mb-6 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold"
+          className="inline-block mb-6 px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"
         >
           {t("characters.createNew")}
         </Link>
       ) : (
-        <p className="mb-6 text-gray-400">{t("characters.maxReached")}</p>
+        <p className="mb-6 text-text-muted">{t("characters.maxReached")}</p>
       )}
 
       {characters.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-gray-400 mb-4">{t("characters.noCharacters")}</p>
-          <p className="text-gray-500">{t("characters.noCharactersHint")}</p>
+          <p className="text-text-muted mb-4">{t("characters.noCharacters")}</p>
+          <p className="text-text-dim">{t("characters.noCharactersHint")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">

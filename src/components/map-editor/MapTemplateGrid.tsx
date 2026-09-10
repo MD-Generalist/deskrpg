@@ -129,7 +129,7 @@ export default function MapTemplateGrid({
             onClick={() => onSelect?.(tpl.id)}
           >
             {/* Thumbnail */}
-            <div className="aspect-video bg-gray-900 flex items-center justify-center">
+            <div className="aspect-video bg-bg flex items-center justify-center">
               {thumbnails[tpl.id] ? (
                 <img
                   src={thumbnails[tpl.id]}
@@ -144,7 +144,7 @@ export default function MapTemplateGrid({
 
             {/* Info */}
             <div className="px-2 py-2">
-              <div className="font-semibold text-sm text-white truncate">{tpl.name}</div>
+              <div className="font-semibold text-sm text-text truncate">{tpl.name}</div>
               <div className="text-xs text-text-muted mt-0.5">
                 {tpl.cols}×{tpl.rows}
               </div>
@@ -156,15 +156,15 @@ export default function MapTemplateGrid({
                 <Link
                   href={`/map-editor${mapEditorQuery}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="p-1 rounded bg-gray-800/90 border border-gray-600 hover:border-primary-light"
+                  className="p-1 rounded bg-surface/90 border border-border hover:border-primary-light"
                   title={t("mapEditor.template.openInEditor")}
                 >
-                  <ExternalLink className="w-3 h-3 text-gray-300" />
+                  <ExternalLink className="w-3 h-3 text-text-secondary" />
                 </Link>
                 <button
                   type="button"
                   onClick={(e) => handleDelete(e, tpl)}
-                  className="p-1 rounded bg-gray-800/90 border border-gray-600 hover:border-red-500 text-red-400"
+                  className="p-1 rounded bg-surface/90 border border-border hover:border-red-500 text-red-700"
                   title={t("common.delete")}
                 >
                   <Trash2 className="w-3 h-3" />
