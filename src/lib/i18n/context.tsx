@@ -37,14 +37,22 @@ function readCookieLocale(): Locale | null {
 }
 
 function persistLocale(locale: Locale) {
-  localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Storage is optional; the locale cookie still keeps server and client aligned.
+  }
   document.cookie = `${LOCALE_COOKIE_NAME}=${locale}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
 }
 
 function detectLocale(initialLocale: Locale): Locale {
   if (typeof window === "undefined") return initialLocale;
-  const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
-  if (stored && translations[stored as Locale]) return stored as Locale;
+  try {
+    const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored && translations[stored as Locale]) return stored as Locale;
+  } catch {
+    // Restricted browser contexts may reject storage access.
+  }
   const cookieLocale = readCookieLocale();
   if (cookieLocale) return cookieLocale;
   const lang = navigator.language.slice(0, 2);
@@ -56,12 +64,14 @@ function detectLocale(initialLocale: Locale): Locale {
 
 export function I18nProvider({
   children,
-  initialLocale = "en",
+  initialLocale,
 }: {
   children: ReactNode;
   initialLocale?: Locale;
 }) {
-  const [locale, setLocaleState] = useState<Locale>(() => detectLocale(initialLocale));
+  // The server-selected locale must also be used for the first client render.
+  // Browser detection is only for standalone/client-only providers without that snapshot.
+  const [locale, setLocaleState] = useState<Locale>(() => initialLocale ?? detectLocale("en"));
 
   useEffect(() => {
     persistLocale(locale);
