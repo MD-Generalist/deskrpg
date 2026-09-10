@@ -4,6 +4,7 @@ import type { MouseEvent, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Armchair, UsersRound, Network, Cpu } from "lucide-react";
+import OfficeBuilding from "./OfficeBuilding";
 import { useT } from "@/lib/i18n";
 
 /** Navigation only: route-specific auth, role checks and actions stay with each page. */
@@ -56,9 +57,7 @@ export default function WorkspaceShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="workspace-sidebar-art" aria-hidden="true">
-          <span className="office-window" />
-          <span className="office-desk" />
-          <span className="office-plant" />
+          <OfficeBuilding />
         </div>
       </aside>
       <div className="workspace-content">{children}</div>

@@ -180,9 +180,10 @@ body {
 }
 .workspace-sidebar-art {
   position: relative;
-  height: 160px;
+  height: 200px;
+  flex-shrink: 0;
   margin-top: auto;
-  opacity: 0.8;
+  opacity: 1;
   overflow: hidden;
 }
 .office-window {
