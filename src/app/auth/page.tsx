@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import { Armchair } from "lucide-react";
+
+const AuthOfficeScene = dynamic(() => import("@/components/AuthOfficeScene"), { ssr: false });
 
 const isComingSoon = process.env.NEXT_PUBLIC_COMING_SOON === "true";
 const isRegistrationDisabled = process.env.NEXT_PUBLIC_REGISTRATION_DISABLED === "true";
@@ -85,11 +88,14 @@ export default function AuthPage() {
   return (
     <div className="theme-web auth-office">
       <div className="auth-office-scene" aria-hidden="true">
-        <div className="auth-office-model">
-          <span className="office-window" />
-          <span className="office-desk" />
-          <span className="office-plant" />
-          <Armchair size={100} strokeWidth={1.2} />
+        <div className="auth-office-visual">
+          <AuthOfficeScene />
+          <div className="auth-office-model">
+            <span className="office-window" />
+            <span className="office-desk" />
+            <span className="office-plant" />
+            <Armchair size={100} strokeWidth={1.2} />
+          </div>
         </div>
         <div className="auth-office-wordmark">
           DeskRPG<small>LITTLE OFFICE</small>
@@ -200,7 +206,7 @@ export default function AuthPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-2.5 rounded-lg text-text font-semibold text-sm disabled:opacity-50 mt-2"
+                    className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 mt-2"
                     style={{
                       background: "var(--color-primary)",
                       boxShadow: "0 3px 0 rgba(41,74,58,0.15)",

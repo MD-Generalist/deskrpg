@@ -391,3 +391,16 @@ body {
     transition: none;
   }
 }
+
+/* Auth miniature: load WebGL independently, retaining the illustration as fallback. */
+.auth-office-visual {
+  position: relative;
+  width: min(660px, 100%);
+  height: clamp(350px, 48vh, 510px);
+  display: grid;
+  place-items: center;
+}
+.auth-office-canvas { position: absolute; inset: 0; z-index: 1; }
+.auth-office-canvas canvas { display: block; width: 100%; height: 100%; }
+.auth-office-visual:has(.auth-office-canvas[data-ready="true"]) .auth-office-model { visibility: hidden; }
+.auth-office-visual + .auth-office-wordmark { margin-top: 0; }
