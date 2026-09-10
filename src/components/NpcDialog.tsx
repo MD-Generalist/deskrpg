@@ -12,6 +12,9 @@ import type { Task } from "./TaskCard";
 import type { Socket } from "socket.io-client";
 
 export interface NpcChatMessage {
+  id?: string;
+  responseRequestId?: string;
+  responseTransient?: boolean;
   role: "player" | "npc";
   content: string;
   taskCard?: { taskId: string; npcTaskId: string; title: string; status: string };

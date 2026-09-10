@@ -26,10 +26,7 @@ function fakeIo(emitted: Emitted[]) {
   };
 }
 
-/**
- * `onTurnEnd` 의 저장·방송은 일부러 fire-and-forget 이다(런타임은 콜백을 기다리지 않는다).
- * 그래서 사람의 턴이 끝난 뒤 그 꼬리가 흐를 틈을 준다.
- */
+/** Small settle window retained for legacy event assertions. */
 const settle = () => new Promise((r) => setTimeout(r, 30));
 
 const ev = (emitted: Emitted[], name: string) =>
@@ -293,4 +290,82 @@ test("같은 말을 두 번 보내면 두 번 다 대본에 남는다 — 쿨다
     2,
     "두 번째 '네' 가 사라지면 NPC 는 사람이 다시 물었다는 것을 모른다",
   );
+});
+
+test("room emits receipt, thinking and cumulative content before final persisted message", async () => {
+  const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
+  const emitted: Emitted[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let streamed!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    streamed = resolve;
+  });
+  const adapter = mockAdapter("안녕하세요");
+  adapter.execute = async (opts) => {
+    opts.onDelta?.("안녕");
+    streamed();
+    await gate;
+    opts.onDelta?.("하세요");
+    return { response: "안녕하세요", session: { sessionRef: "test" } };
+  };
+  const rt = await getOrCreateRoomRuntime(
+    fakeIo(emitted) as never,
+    room,
+    seeded.userId,
+    injected(seeded.channelId, [{ id: seeded.npcIds[0], name: "소피", adapter }]),
+  );
+  assert.ok(rt);
+  const result = rt.handleHumanMessage("단테", "안녕", "socket", "source-message");
+  await ready;
+  const responses = ev(emitted, "room:response-state") as {
+    response: import("@/lib/chat-response").ChatResponse;
+  }[];
+  const beforeFinalMessages = ev(emitted, "room:message").length;
+  release();
+  await result;
+  assert.deepEqual(
+    responses.map((r) => r.response.status),
+    ["queued", "thinking", "streaming"],
+  );
+  assert.equal(responses[2].response.content, "안녕");
+  assert.equal(responses[0].response.sourceMessageId, "source-message");
+  assert.equal(beforeFinalMessages, 0);
+  const final = (
+    ev(emitted, "room:response-state").at(-1) as {
+      response: import("@/lib/chat-response").ChatResponse;
+    }
+  ).response;
+  assert.equal(final.status, "complete");
+  assert.equal(final.content, "안녕하세요");
+  const messages = await rooms.recentRoomMessages(room.id, 10);
+  assert.equal(final.messageId, messages[0].id);
+});
+
+test("invalidated pending room construction cannot replace a newer response snapshot", async () => {
+  const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
+  const emitted: Emitted[] = [];
+  const deps = injected(seeded.channelId, [
+    { id: seeded.npcIds[0], name: "Sophie", adapter: mockAdapter("hello") },
+  ]);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const old = getOrCreateRoomRuntime(fakeIo(emitted) as never, room, seeded.userId, {
+    ...deps,
+    getNpcConfigs: async (...args) => {
+      await gate;
+      return deps.getNpcConfigs!(...args);
+    },
+  });
+  invalidateRoomRuntime(room.id);
+  const current = await getOrCreateRoomRuntime(fakeIo(emitted) as never, room, seeded.userId, deps);
+  await current!.handleHumanMessage("Dante", "hello", "socket", "source");
+  release();
+  assert.equal(await old, null);
+  const { getRoomResponseSnapshot } = await import("./room-runtime");
+  assert.equal(getRoomResponseSnapshot(room.id).length, 1);
 });

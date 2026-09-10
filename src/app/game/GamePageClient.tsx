@@ -54,6 +54,14 @@ import { mentionSkipI18nKey } from "@/components/meeting-room/mention-skip-notic
 import type { MentionSkipReason } from "@/lib/conversation/floor-controller";
 import { resolveNpcResponseChunk, type NpcResponsePayload } from "@/lib/npc-response-messages";
 import { sanitizeNpcResponseText } from "@/lib/task-block-utils.js";
+import type { ChatResponse } from "@/lib/chat-response";
+import {
+  initialChatResponseState,
+  reconcileNpcResponseMessages,
+  reduceChatResponseState,
+  responsesForScope,
+  upsertLegacyNpcChunk,
+} from "./chat-response-state";
 
 const APP_VERSION = "2026.9.9";
 const BUG_REPORT_BASE_URL = "https://github.com/dandacompany/deskrpg/issues/new";
@@ -249,6 +257,10 @@ function GamePageInner() {
   }, [dialogNpc]);
   const [npcMessages, setNpcMessages] = useState<NpcChatMessage[]>([]);
   const [isNpcStreaming, setIsNpcStreaming] = useState(false);
+  const [chatResponses, dispatchChatResponse] = useReducer(
+    reduceChatResponseState,
+    initialChatResponseState,
+  );
   // Task session state
   const [npcTaskMessages, setNpcTaskMessages] = useState<
     Map<string, Array<{ role: "player" | "npc"; content: string }>>
@@ -589,10 +601,20 @@ function GamePageInner() {
           socketInstance?.emit("task:list", { channelId });
           socketInstance?.emit("room:list", { channelId });
         }
+        const openNpc = dialogNpcRef.current;
+        if (openNpc) {
+          socketInstance?.emit("npc:history", {
+            npcId: openNpc.npcId,
+            characterId: characterId ?? undefined,
+          });
+        }
       });
       socketInstance.on("disconnect", (reason: string) => {
         setSocketConnected(false);
         setIsNpcStreaming(false);
+        setNpcActivityKey(null);
+        dispatchChatResponse({ type: "disconnect" });
+        setNpcMessages((previous) => previous.filter((message) => !message.responseTransient));
         // 서버의 openRooms 는 소켓별 상태다 — 끊기면 비므로 다시 열어야 한다.
         openedRoomRef.current = null;
         showToastNotification("socket-disconnected", t("game.socketDisconnected", { reason }));
@@ -704,11 +726,16 @@ function GamePageInner() {
       // NPC chat history (sent on demand) — only apply if it matches the current dialog
       socketInstance.on(
         "npc:history",
-        (data: { npcId: string; messages: { role: string; content: string }[] }) => {
+        (data: {
+          npcId: string;
+          messages: { id?: string; responseRequestId?: string; role: string; content: string }[];
+        }) => {
           if (!dialogNpcRef.current || dialogNpcRef.current.npcId !== data.npcId) return;
           const historyMessages = (data.messages || []).map<NpcChatMessage>((m) => ({
             role: m.role === "npc" ? "npc" : "player",
             content: m.role === "npc" ? sanitizeNpcResponseText(m.content) : m.content,
+            id: m.id,
+            responseRequestId: m.responseRequestId,
           }));
           setNpcMessages(appendPendingReportToDialog(data.npcId, historyMessages));
         },
@@ -740,6 +767,72 @@ function GamePageInner() {
           showToastNotification(msg.id, `${msg.senderName}: ${preview}`);
         }
       });
+
+      socketInstance.on(
+        "room:response-state",
+        (data: { roomId: string; response: ChatResponse }) => {
+          dispatchChatResponse({
+            type: "state",
+            scope: "room",
+            scopeId: data.roomId,
+            response: data.response,
+          });
+        },
+      );
+      socketInstance.on(
+        "room:response-snapshot",
+        (data: { roomId: string; responses: ChatResponse[] }) => {
+          dispatchChatResponse({
+            type: "snapshot",
+            scope: "room",
+            scopeId: data.roomId,
+            responses: data.responses || [],
+          });
+        },
+      );
+      socketInstance.on("npc:response-state", (data: { response: ChatResponse }) => {
+        dispatchChatResponse({
+          type: "state",
+          scope: "npc",
+          scopeId: data.response.npcId,
+          response: data.response,
+        });
+        if (dialogNpcRef.current?.npcId === data.response.npcId) {
+          setNpcMessages((previous) => reconcileNpcResponseMessages(previous, [data.response]));
+          if (
+            data.response.status === "complete" ||
+            data.response.status === "failed" ||
+            data.response.status === "cancelled"
+          ) {
+            setNpcActivityKey(null);
+          }
+        }
+      });
+      socketInstance.on(
+        "npc:response-snapshot",
+        (data: { npcId: string; responses: ChatResponse[] }) => {
+          dispatchChatResponse({
+            type: "snapshot",
+            scope: "npc",
+            scopeId: data.npcId,
+            responses: data.responses || [],
+          });
+          if (dialogNpcRef.current?.npcId === data.npcId) {
+            setNpcMessages((previous) =>
+              reconcileNpcResponseMessages(previous, data.responses || [], {
+                replaceTransient: true,
+              }),
+            );
+            const hasActive = (data.responses || []).some(
+              (response) =>
+                response.status === "queued" ||
+                response.status === "thinking" ||
+                response.status === "streaming",
+            );
+            if (!hasActive) setNpcActivityKey(null);
+          }
+        },
+      );
 
       // 자유채팅 전용 알림 — 회의 전용 이벤트를 맵 룸으로 재사용하지 않는다. 맵 룸 방송은
       // 회의 중인 사람에게도 닿는데(회의 참가자는 맵 룸을 떠나지 않는다), 그러면 남의 맵
@@ -773,7 +866,9 @@ function GamePageInner() {
           if (data.roomId !== openedRoomRef.current) return;
           showToastNotification(
             `chat-npc-aborted-${data.npcId}-${Date.now()}`,
-            t("chat.npcNoResponse", { name: data.npcName }),
+            t(data.reason === "queue_full" ? "chat.npcQueueFull" : "chat.npcNoResponse", {
+              name: data.npcName,
+            }),
           );
         },
       );
@@ -881,40 +976,37 @@ function GamePageInner() {
 
       // NPC response streaming — DM messages only
       socketInstance.on("npc:response", (data: NpcResponsePayload) => {
+        if (data.responseRequestId) return;
         const chunk = resolveNpcResponseChunk(data, t);
         // Ignore responses for NPCs not in the current dialog
         if (dialogNpcRef.current && dialogNpcRef.current.npcId !== data.npcId) return;
 
         if (chunk) {
+          const continuing = streamBufferRef.current.length > 0;
           streamBufferRef.current += chunk;
           const buffered = sanitizeNpcResponseText(streamBufferRef.current, {
             stripIncompleteTail: true,
           });
           setIsNpcStreaming(true);
-          setNpcMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (last && last.role === "npc") {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: "npc", content: buffered };
-              return updated;
-            }
-            return [...prev, { role: "npc", content: buffered }];
-          });
+          setNpcMessages((prev) => upsertLegacyNpcChunk(prev, buffered, continuing));
         }
         if (data.done) {
           setIsNpcStreaming(false);
+          const hadBufferedContent = streamBufferRef.current.length > 0;
           const cleaned = sanitizeNpcResponseText(streamBufferRef.current, {
             stripIncompleteTail: true,
           });
-          setNpcMessages((prev) => {
-            const lastIdx = prev.length - 1;
-            if (lastIdx >= 0 && prev[lastIdx].role === "npc") {
-              const updated = [...prev];
-              updated[lastIdx] = { role: "npc", content: cleaned };
-              return updated;
-            }
-            return prev;
-          });
+          if (hadBufferedContent) {
+            setNpcMessages((prev) => {
+              const lastIdx = prev.length - 1;
+              if (lastIdx >= 0 && prev[lastIdx].role === "npc") {
+                const updated = [...prev];
+                updated[lastIdx] = { ...updated[lastIdx], content: cleaned };
+                return updated;
+              }
+              return prev;
+            });
+          }
           streamBufferRef.current = "";
         }
       });
@@ -1080,6 +1172,10 @@ function GamePageInner() {
         socketInstance.off("room:list-response");
         socketInstance.off("room:history");
         socketInstance.off("room:message");
+        socketInstance.off("room:response-state");
+        socketInstance.off("room:response-snapshot");
+        socketInstance.off("npc:response-state");
+        socketInstance.off("npc:response-snapshot");
         socketInstance.off("room:created");
         socketInstance.off("room:updated");
         socketInstance.off("room:deleted");
@@ -1487,8 +1583,11 @@ function GamePageInner() {
         files && files.length > 0
           ? `${message}\n📎 ${files.map((f) => f.name).join(", ")}`
           : message;
-      setNpcMessages((prev) => [...prev, { role: "player", content: displayMessage }]);
-      streamBufferRef.current = "";
+      const sourceMessageId = crypto.randomUUID();
+      setNpcMessages((prev) => [
+        ...prev,
+        { id: sourceMessageId, role: "player", content: displayMessage },
+      ]);
 
       // Convert files to ArrayBuffers for socket transport
       let filePayloads:
@@ -1507,6 +1606,7 @@ function GamePageInner() {
       socket.emit("npc:chat", {
         npcId: dialogNpc.npcId,
         message,
+        sourceMessageId,
         // 재연결 직후에는 서버의 `players` 에 이 소켓이 아직 없어 캐릭터를 모른다.
         // 그 구간에서 나눈 대화가 사라지지 않도록 캐릭터를 함께 보낸다(서버가 소유를 검증한다).
         characterId: characterId ?? undefined,
@@ -2798,6 +2898,8 @@ function GamePageInner() {
             npcMessages={npcMessages}
             npcActivityKey={npcActivityKey}
             isNpcStreaming={isNpcStreaming}
+            npcResponses={responsesForScope(chatResponses, "npc", dialogNpc?.npcId ?? null)}
+            roomResponses={responsesForScope(chatResponses, "room", currentRoomId)}
             npcChatInputDisabled={!socketConnected}
             npcChatDisabledPlaceholder={t("chat.disconnected")}
             onSend={handleDialogSend}

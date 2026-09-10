@@ -108,3 +108,60 @@ test("방이 여러 개인 목록 뷰에서 ◀ 는 패널을 접는다 (I-2)", 
     "접힌 패널에는 ◀ 가 없어야 한다",
   );
 });
+
+test("shared room shows responder receipt under another user's source message", async () => {
+  const state: RoomState = {
+    ...listState(),
+    view: "room",
+    messages: {
+      g1: [
+        {
+          id: "source-other",
+          roomId: "g1",
+          senderKind: "user",
+          senderId: "u2",
+          senderName: "Other",
+          content: "@Sophie help",
+          createdAt: "2026-09-10T00:00:00Z",
+        },
+      ],
+    },
+  };
+  const el = await mount(
+    <I18nProvider>
+      <ChatPanel
+        dialogNpc={null}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={state}
+        channelChatOpen
+        roomResponses={[
+          {
+            requestId: "reply",
+            sourceMessageId: "source-other",
+            npcId: "n1",
+            npcName: "Sophie",
+            status: "thinking",
+            content: "",
+            updatedAt: 1,
+          },
+        ]}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+        currentPlayerName="Me"
+      />
+    </I18nProvider>,
+  );
+  assert.match(el.textContent ?? "", /👌 Sophie/);
+});

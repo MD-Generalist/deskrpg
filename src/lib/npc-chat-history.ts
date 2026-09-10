@@ -9,6 +9,9 @@ import { and, asc, eq } from "drizzle-orm";
 export type NpcHistoryRole = "player" | "npc";
 
 export type NpcHistoryMessage = {
+  /** Transient correlation IDs; retained alongside receipts until server restart. */
+  id?: string;
+  responseRequestId?: string;
   role: NpcHistoryRole;
   content: string;
   timestamp: number;

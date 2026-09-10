@@ -5,6 +5,8 @@
 // 해야 한다. 공유하는 것은 NpcRuntime.speakWithPrompt — 대본을 들고 가서 말을 시키고
 // 답을 받아오는 기계다.
 
+import { randomUUID } from "node:crypto";
+import { SessionQueue } from "./request-queue";
 import { NpcRuntime } from "./npc-runtime";
 import { Transcript } from "./transcript";
 import { extractMentionNames, parseAllMentions } from "./mention";
@@ -16,18 +18,33 @@ import type { EngineParticipant } from "./types";
 const UNUSED_TOPIC = "__open_chat_topic_should_never_be_read__";
 const UNUSED_MAX_TURNS = -1;
 
+export type TurnContext = {
+  requestId: string;
+  sourceMessageId: string;
+  callerSocketId: string | null;
+};
+
 export type OpenChatCallbacks = {
+  onTurnQueued?: (npcId: string, displayName: string, context: TurnContext) => void;
+  onDisposed?: () => void;
+  onQueueFull?: (npcId: string, sourceMessageId: string) => void;
   /**
    * 턴이 열렸다. `callerSocketId` 는 **이 사슬을 시작한 사람의 소켓 id** 다 — NPC 가
    * 누구 곁으로 걸어갈지를 정하는 값이라, NPC 가 NPC 를 부른 턴도 같은 값을 쓴다.
    */
-  onTurnStart?: (npcId: string, displayName: string, callerSocketId: string | null) => void;
-  onTurnChunk?: (npcId: string, chunk: string) => void;
+  onTurnStart?: (
+    npcId: string,
+    displayName: string,
+    callerSocketId: string | null,
+    context: TurnContext,
+  ) => void;
+  onTurnChunk?: (npcId: string, chunk: string, context: TurnContext) => void;
   onTurnEnd?: (
     npcId: string,
     fullResponse: string,
-    meta?: { aborted: true; reason: string },
-  ) => void;
+    meta: { aborted: true; reason: string } | undefined,
+    context: TurnContext,
+  ) => unknown;
   /** 지명받았으나 게이트웨이가 죽어 건너뛴 NPC. 회의의 같은 이름 콜백과 짝이다. */
   onMentionSkipped?: (npcId: string, reason: "backend_failing") => void;
   /**
@@ -42,6 +59,7 @@ export type OpenChatDeps = {
   participants: EngineParticipant[];
   /** 프롬프트에 실을 최근 대화. 소켓 계층의 채널 히스토리를 그대로 넘긴다. */
   recent: () => ChatLine[];
+  recentForSource?: (sourceMessageId: string) => ChatLine[];
   turnTimeout: { idleMs: number; maxMs: number };
   historyLimit?: number;
   budget?: number;
@@ -55,13 +73,8 @@ export class OpenChatRuntime {
   private readonly callbacks: OpenChatCallbacks;
   private readonly runtimes = new Map<string, NpcRuntime>();
   private readonly quota: ChatQuota;
-  /** 지금 말하는 중인 NPC. 한 NPC 는 한 번에 한 마디 — 사슬의 두 번째 브레이크다. */
-  private readonly speaking = new Set<string>();
-  /**
-   * 이 채널에서 마지막으로 NPC 를 부른 사람의 소켓 id. 런타임은 채널당 하나이고 여러 사람이
-   * 번갈아 부르므로 생성 시점에 박아 둘 수 없다 — 사람이 말할 때마다 갱신한다.
-   */
-  private currentCallerSocketId: string | null = null;
+  private readonly queue = new SessionQueue(8);
+  private disposed = false;
 
   constructor(deps: OpenChatDeps, callbacks: OpenChatCallbacks) {
     this.deps = deps;
@@ -87,102 +100,142 @@ export class OpenChatRuntime {
   }
 
   isSpeaking(npcId: string): boolean {
-    return this.speaking.has(npcId);
+    return this.queue.size(npcId) > 0;
   }
 
-  /** 사람이 말했다. 예산을 채우고, 지명된 NPC 들을 동시에 깨운다. */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.callbacks.onDisposed?.();
+    for (const [id, runtime] of this.runtimes) if (this.isSpeaking(id)) runtime.abort();
+  }
+
   async handleHumanMessage(
     senderName: string,
     text: string,
     callerSocketId: string | null = null,
+    sourceMessageId: string = randomUUID(),
   ): Promise<void> {
+    if (this.disposed) return;
     this.quota.resetByHuman();
-    this.currentCallerSocketId = callerSocketId;
     const mentioned = parseAllMentions(text, this.participantsView(), null);
     const targets = this.deps.selectResponders ? this.deps.selectResponders(mentioned) : mentioned;
-    // 지목 표기는 있었는데(오타·비멤버) 아무도 답하지 않으면 완전 침묵이다 — 부른 사람에게 알린다.
     if (targets.length === 0 && extractMentionNames(text).length > 0) {
       this.callbacks.onMentionNoMatch?.(callerSocketId);
     }
-    await this.dispatch(targets, senderName, /* fromHuman */ true);
+    const recent = (this.deps.recentForSource?.(sourceMessageId) ?? this.deps.recent()).map(
+      (line) => ({ ...line }),
+    );
+    await this.dispatch(targets, senderName, true, callerSocketId, sourceMessageId, recent);
   }
 
   private participantsView(): Array<{ npcId: string; displayName: string }> {
     return this.deps.participants.map((p) => ({ npcId: p.npcId, displayName: p.displayName }));
   }
 
-  /**
-   * 지명된 NPC 들을 **동시에** 깨운다. 순서대로 돌지 않는 것이 회의와의 핵심 차이다.
-   *
-   * fromHuman 이면 예산을 쓰지 않는다 — 사람이 여덟 명을 부르면 여덟이 다 대답해야 한다.
-   * 회의방의 규칙과 같다(user 부여는 쿼터 우회, mention 부여는 존중).
-   */
-  private async dispatch(targets: string[], calledBy: string, fromHuman: boolean): Promise<void> {
-    const admitted: string[] = [];
-    for (const npcId of targets) {
-      if (this.speaking.has(npcId)) continue;
+  private async dispatch(
+    targets: string[],
+    calledBy: string,
+    fromHuman: boolean,
+    callerSocketId: string | null,
+    sourceMessageId: string,
+    recent: ChatLine[],
+  ): Promise<void> {
+    if (this.disposed) return;
+    const work: Promise<void>[] = [];
+    for (const npcId of new Set(targets)) {
       const runtime = this.runtimes.get(npcId);
-      if (!runtime) continue;
+      if (!runtime || (!fromHuman && this.isSpeaking(npcId))) continue;
       if (runtime.isBurnedOut()) {
         this.callbacks.onMentionSkipped?.(npcId, "backend_failing");
         continue;
       }
+      if (this.queue.isFull(npcId)) {
+        this.callbacks.onQueueFull?.(npcId, sourceMessageId);
+        continue;
+      }
       if (!fromHuman && !this.quota.spend()) break;
-      admitted.push(npcId);
+      const context: TurnContext = { requestId: randomUUID(), sourceMessageId, callerSocketId };
+      this.callbacks.onTurnQueued?.(npcId, runtime.displayName, context);
+      // The chain runs after this job releases its queue slot, avoiding A -> B -> A deadlocks.
+      const job = this.queue.run(npcId, () => this.speakOne(npcId, calledBy, context, recent));
+      work.push(
+        job.then(async (result) => {
+          if (!result || this.disposed) return;
+          const next = parseAllMentions(result.text, this.participantsView(), npcId);
+          if (next.length)
+            await this.dispatch(
+              next,
+              runtime.displayName,
+              false,
+              callerSocketId,
+              result.messageId ?? sourceMessageId,
+              this.deps.recent().map((line) => ({ ...line })),
+            );
+        }),
+      );
     }
-    if (admitted.length === 0) return;
-
-    await Promise.all(admitted.map((npcId) => this.speakOne(npcId, calledBy)));
+    await Promise.all(work);
   }
 
-  private async speakOne(npcId: string, calledBy: string): Promise<void> {
+  private async speakOne(
+    npcId: string,
+    calledBy: string,
+    context: TurnContext,
+    recent: ChatLine[],
+  ): Promise<{ text: string; messageId?: string } | undefined> {
     const runtime = this.runtimes.get(npcId);
-    if (!runtime) return;
-
-    this.speaking.add(npcId);
-    let outcome: Awaited<ReturnType<typeof runtime.speakWithPrompt>>;
+    if (!runtime || this.disposed) return;
+    let closed = false;
     try {
-      this.callbacks.onTurnStart?.(npcId, runtime.displayName, this.currentCallerSocketId);
-
+      this.callbacks.onTurnStart?.(npcId, runtime.displayName, context.callerSocketId, context);
       const others = this.deps.participants
         .filter((p) => p.npcId !== npcId)
         .map((p) => ({ displayName: p.displayName, role: p.role || "동료" }));
       const prompt = formatOpenChatMessage(
         { displayName: runtime.displayName },
         others,
-        this.deps.recent(),
+        recent,
         calledBy,
       );
-
-      outcome = await runtime.speakWithPrompt(prompt, {
-        onChunk: (chunk) => this.callbacks.onTurnChunk?.(npcId, chunk),
+      const outcome = await runtime.speakWithPrompt(prompt, {
+        onChunk: (chunk) => {
+          if (!this.disposed && !closed) this.callbacks.onTurnChunk?.(npcId, chunk, context);
+        },
       });
-    } finally {
-      // finally 인 이유: onTurnStart·recent() 는 호출부가 주입하는 남의 코드다. io.emit 이나
-      // 히스토리 조회가 한 번 던지면 이 NPC 는 이 채널에서 영구히 잠긴다 — 런타임이 프로세스
-      // 수명 동안 살기 때문이다.
-      this.speaking.delete(npcId);
+      closed = true;
+      if (this.disposed) return;
+      if (outcome.kind === "spoke") {
+        const messageId = await this.callbacks.onTurnEnd?.(npcId, outcome.text, undefined, context);
+        return {
+          text: outcome.text,
+          messageId: typeof messageId === "string" ? messageId : undefined,
+        };
+      }
+      if (outcome.kind === "error") this.callbacks.onError?.(outcome.error, npcId);
+      await this.callbacks.onTurnEnd?.(
+        npcId,
+        outcome.partialText,
+        {
+          aborted: true,
+          reason:
+            outcome.kind === "empty"
+              ? "empty_response"
+              : outcome.timedOut
+                ? `timeout:${outcome.timedOut.kind}`
+                : "adapter_error",
+        },
+        context,
+      );
+    } catch (error) {
+      closed = true;
+      await this.callbacks.onTurnEnd?.(
+        npcId,
+        "",
+        { aborted: true, reason: "adapter_error" },
+        context,
+      );
+      throw error;
     }
-
-    if (outcome.kind === "spoke") {
-      this.callbacks.onTurnEnd?.(npcId, outcome.text);
-      const next = parseAllMentions(outcome.text, this.participantsView(), npcId);
-      if (next.length > 0) await this.dispatch(next, runtime.displayName, /* fromHuman */ false);
-      return;
-    }
-
-    if (outcome.kind === "empty") {
-      this.callbacks.onTurnEnd?.(npcId, outcome.partialText, {
-        aborted: true,
-        reason: outcome.mentionNpcId ? "empty_after_mention" : "empty_response",
-      });
-      return;
-    }
-
-    this.callbacks.onError?.(outcome.error, npcId);
-    this.callbacks.onTurnEnd?.(npcId, outcome.partialText, {
-      aborted: true,
-      reason: outcome.timedOut ? `timeout:${outcome.timedOut.kind}` : "adapter_error",
-    });
   }
 }

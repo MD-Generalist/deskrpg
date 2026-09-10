@@ -5,6 +5,7 @@
 // 세션 스코프도 방마다 갈라야 한다(`room-<id>`): 같은 NPC 가 두 방에서 같은 세션을 쓰면
 // 한 방의 대화가 다른 방 프롬프트에 섞인다.
 
+import { ChatResponseTracker } from "./chat-response-tracker";
 import type { Server } from "socket.io";
 import { OpenChatRuntime } from "@/lib/conversation/open-chat-runtime";
 import type { OpenChatCallbacks, OpenChatDeps } from "@/lib/conversation/open-chat-runtime";
@@ -42,6 +43,12 @@ class RecentCache {
     if (this.entries.length > RECENT_LIMIT) this.entries = this.entries.slice(-RECENT_LIMIT);
   }
 
+  readThrough(sourceMessageId: string): ChatLine[] {
+    const end = this.entries.findIndex((entry) => entry.id === sourceMessageId);
+    const entries = end < 0 ? this.entries : this.entries.slice(0, end + 1);
+    return entries.slice(-RECENT_LIMIT).map(({ sender, content }) => ({ sender, content }));
+  }
+
   read(): ChatLine[] {
     return this.entries.map(({ sender, content }) => ({ sender, content }));
   }
@@ -60,11 +67,8 @@ async function loadRecentEntries(roomId: string): Promise<RecentEntry[]> {
     .map((m) => ({ id: m.id, sender: m.senderName, content: m.content }));
 }
 
-/**
- * 사람의 말은 소켓 계층이 **먼저 DB 에 저장한 뒤** 이 런타임을 깨운다 — 그래서 사람의 턴이
- * 열릴 때마다 DB 꼬리를 다시 읽어 캐시를 맞춘다. 사람 메시지의 id 를 인자로 받지 않고도
- * 정확하고, 다른 소켓이 그 사이에 넣은 말도 함께 따라온다. NPC 의 답은 `onTurnEnd` 가
- * id 와 함께 밀어 넣으므로 한 사슬 안에서는 DB 를 다시 읽지 않는다.
+/** Saved human source IDs enter the cache synchronously before queue admission.
+ * Each request snapshots history through its own source, so later calls cannot rewrite its prompt.
  */
 class RoomChatRuntime extends OpenChatRuntime {
   private readonly recent: RecentCache;
@@ -85,14 +89,16 @@ class RoomChatRuntime extends OpenChatRuntime {
     senderName: string,
     text: string,
     callerSocketId: string | null = null,
+    sourceMessageId?: string,
   ): Promise<void> {
-    try {
+    if (sourceMessageId) {
+      // Admission must stay synchronous: an awaited refresh lets a later send overtake this one.
+      this.recent.push(sourceMessageId, senderName, text);
+    } else {
+      // Compatibility for callers predating source IDs; production room:send always supplies one.
       this.recent.seed(await loadRecentEntries(this.roomId));
-    } catch (err) {
-      // 프롬프트가 조금 낡을 뿐이라 턴 자체를 막지는 않는다.
-      console.error("[room] failed to refresh recent cache:", err);
     }
-    await super.handleHumanMessage(senderName, text, callerSocketId);
+    await super.handleHumanMessage(senderName, text, callerSocketId, sourceMessageId);
   }
 }
 
@@ -104,6 +110,12 @@ class RoomChatRuntime extends OpenChatRuntime {
 const roomRuntimes = new Map<string, Promise<OpenChatRuntime | null>>();
 /** roomId → channelId. 채널 단위 무효화(NPC 고용·해고)가 어느 방을 버릴지 알아야 한다. */
 const roomChannels = new Map<string, string>();
+const roomGenerations = new Map<string, symbol>();
+const responseTrackers = new Map<string, ChatResponseTracker>();
+
+export function getRoomResponseSnapshot(roomId: string) {
+  return responseTrackers.get(roomId)?.snapshot() ?? [];
+}
 
 /**
  * 어댑터 해석과 NPC 명단 조회의 주입점. 기본값이 실제 배선이다 — 테스트가 게이트웨이나
@@ -120,16 +132,25 @@ export function getOrCreateRoomRuntime(
   callerUserId: string,
   deps: RoomRuntimeDeps = {},
 ): Promise<OpenChatRuntime | null> {
+  const existing = roomRuntimes.get(room.id);
+  if (existing) return existing;
+  const generation = Symbol(room.id);
+  roomGenerations.set(room.id, generation);
   roomChannels.set(room.id, room.channelId);
   return getOrCreateCached(roomRuntimes, room.id, () =>
-    createRoomRuntime(io, room, callerUserId, deps),
+    createRoomRuntime(io, room, callerUserId, deps, generation),
   );
 }
 
 /** 멤버가 바뀌거나 방이 사라지면 부른다. 다음 지명에서 DB 를 다시 읽어 새로 만든다. */
 export function invalidateRoomRuntime(roomId: string): void {
+  roomGenerations.delete(roomId);
+  const pending = roomRuntimes.get(roomId);
+  responseTrackers.get(roomId)?.cancelAll();
+  responseTrackers.delete(roomId);
   roomRuntimes.delete(roomId);
   roomChannels.delete(roomId);
+  void pending?.then((runtime) => runtime?.dispose()).catch(() => {});
 }
 
 /**
@@ -148,6 +169,7 @@ async function createRoomRuntime(
   room: RoomRow,
   callerUserId: string,
   deps: RoomRuntimeDeps,
+  generation: symbol,
 ): Promise<OpenChatRuntime | null> {
   const loadNpcConfigs = deps.getNpcConfigs ?? getNpcConfigsForChannel;
   const resolveAdapter = deps.resolveAdapter ?? resolveNpcAdapter;
@@ -182,8 +204,16 @@ async function createRoomRuntime(
   const recent = new RecentCache();
   recent.seed(await loadRecentEntries(room.id));
 
+  if (roomGenerations.get(room.id) !== generation) return null;
+
   const memberNpcIds = participants.map((p) => p.npcId);
   const socketRoom = `room-${room.id}`;
+  const tracker = new ChatResponseTracker((response) => {
+    io.to(socketRoom).emit("room:response-state", { roomId: room.id, response });
+  });
+  responseTrackers.set(room.id, tracker);
+  const buffers = new Map<string, string>();
+  let disposed = false;
 
   return new RoomChatRuntime(
     recent,
@@ -191,12 +221,34 @@ async function createRoomRuntime(
     {
       participants,
       recent: () => recent.read(),
+      recentForSource: (sourceMessageId) => recent.readThrough(sourceMessageId),
       turnTimeout: { idleMs: 180_000, maxMs: 600_000 },
       // 사무실(mention)은 지명만, 그룹(members)은 지명이 없으면 멤버 전원이 답한다.
       selectResponders: (mentioned) => decideResponders(room.replyPolicy, mentioned, memberNpcIds),
     },
     {
-      onTurnStart: (npcId, _displayName, callerSocketId) => {
+      onTurnQueued: (npcId, npcName, context) => tracker.accept({ ...context, npcId, npcName }),
+      onDisposed: () => {
+        disposed = true;
+        tracker.cancelAll();
+        buffers.clear();
+      },
+      onQueueFull: (npcId) => {
+        io.to(socketRoom).emit("room:npc-aborted", {
+          roomId: room.id,
+          npcId,
+          npcName: participants.find((p) => p.npcId === npcId)?.displayName ?? npcId,
+          reason: "queue_full",
+        });
+      },
+      onTurnChunk: (_npcId, chunk, context) => {
+        if (!tracker.isActive(context.requestId)) return;
+        const content = (buffers.get(context.requestId) ?? "") + chunk;
+        buffers.set(context.requestId, content);
+        tracker.update(context.requestId, { status: "streaming", content });
+      },
+      onTurnStart: (npcId, _displayName, callerSocketId, context) => {
+        tracker.update(context.requestId, { status: "thinking" });
         // 걷기와 말하기는 동시에 시작한다 — 도착을 기다리지 않는다. targetPlayerId 가
         // 진짜 소켓 id 여야 클라이언트가 A* 를 돌린다(null 이면 아무도 걷지 않는다).
         if (!callerSocketId) return;
@@ -209,10 +261,15 @@ async function createRoomRuntime(
           roomId: room.id,
         });
       },
-      onTurnEnd: (npcId, fullResponse, meta) => {
+      onTurnEnd: async (npcId, fullResponse, meta, context) => {
+        buffers.delete(context.requestId);
+        if (disposed) return;
         const npc = participants.find((x) => x.npcId === npcId);
         if (meta?.aborted || !fullResponse) {
-          // 맵에는 스트리밍 말풍선이 없어서 실패가 곧 무음이다 — 신호를 하나 쏜다.
+          tracker.update(context.requestId, {
+            status: "failed",
+            error: meta?.reason ?? "empty_response",
+          });
           io.to(socketRoom).emit("room:npc-aborted", {
             roomId: room.id,
             npcId,
@@ -221,7 +278,7 @@ async function createRoomRuntime(
           });
           return;
         }
-        void (async () => {
+        try {
           const message = await appendRoomMessage({
             roomId: room.id,
             senderKind: "npc",
@@ -229,9 +286,20 @@ async function createRoomRuntime(
             senderName: npc?.displayName || npcId,
             content: fullResponse,
           });
+          if (disposed) return;
           recent.push(message.id, message.senderName, message.content);
+          // Deliver the persisted ID before the DB message so the client replaces the draft.
+          tracker.update(context.requestId, {
+            status: "complete",
+            content: fullResponse,
+            messageId: message.id,
+          });
           io.to(socketRoom).emit("room:message", { roomId: room.id, message });
-        })().catch((err) => console.error("[room] failed to persist npc message:", err));
+          return message.id;
+        } catch (error) {
+          tracker.update(context.requestId, { status: "failed", error: "persistence_error" });
+          throw error;
+        }
       },
       onMentionSkipped: (npcId, reason) => {
         const npc = participants.find((x) => x.npcId === npcId);

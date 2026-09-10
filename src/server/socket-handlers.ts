@@ -1,3 +1,5 @@
+import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
+import { runTrackedDm, executeDmAdapter } from "./dm-response-runtime";
 import { Server, Socket } from "socket.io";
 import type { NpcAdapter } from "../lib/adapters/types";
 import { jwtVerify } from "jose";
@@ -235,6 +237,30 @@ const discussionInitiators = new Map<string, string>();
 // 정본은 chat_messages 테이블이고 이 맵은 그 앞의 캐시다 — 프로세스가 죽으면 비지만,
 // 다음 조회에서 DB 로부터 다시 채워진다. 키는 npcHistoryKey() 하나로만 만든다.
 const npcChatHistory = new Map<string, NpcHistoryMessage[]>();
+const dmResponseQueue = new SessionQueue(8);
+const dmResetting = new Set<string>();
+const dmResponseTrackers = new Map<string, ChatResponseTracker>();
+const dmResponseScope = (userId: string, characterId: string, npcId: string) =>
+  `dm-response:${userId}:${characterId}:${npcId}`;
+function getDmResponseTracker(io: Server, scope: string): ChatResponseTracker {
+  const existing = dmResponseTrackers.get(scope);
+  if (existing) return existing;
+  // Evict only idle scopes; never lose the state of work currently queued/running.
+  if (dmResponseTrackers.size >= 256) {
+    const idle = [...dmResponseTrackers].find(([, tracker]) =>
+      tracker
+        .snapshot()
+        .every((r) => r.status === "complete" || r.status === "failed" || r.status === "cancelled"),
+    );
+    if (!idle) throw new Error("queue_full");
+    dmResponseTrackers.delete(idle[0]);
+  }
+  const tracker = new ChatResponseTracker((response) =>
+    io.to(scope).emit("npc:response-state", { response }),
+  );
+  dmResponseTrackers.set(scope, tracker);
+  return tracker;
+}
 
 // Gateway connections: gatewayId -> gateway instance
 
@@ -336,17 +362,21 @@ async function appendNpcHistoryMessage(
   npcId: string,
   content: string,
   role: "player" | "npc" = "npc",
+  correlation?: { id: string; responseRequestId?: string },
 ) {
   const sanitizedContent = role === "npc" ? sanitizeNpcResponseText(content) : content;
   if (!sanitizedContent.trim()) return null;
 
   const historyKey = npcHistoryKey(characterId, npcId);
   const history = npcChatHistory.get(historyKey) || [];
-  history.push({ role, content: sanitizedContent, timestamp: Date.now() });
-  npcChatHistory.set(historyKey, history);
+  const entry = { role, content: sanitizedContent, timestamp: Date.now(), ...correlation };
+  if (!correlation) {
+    history.push(entry);
+    npcChatHistory.set(historyKey, history);
+  }
 
   try {
-    await appendNpcChatMessage(
+    const persisted = await appendNpcChatMessage(
       db,
       { chatMessages },
       {
@@ -356,8 +386,17 @@ async function appendNpcHistoryMessage(
         content: sanitizedContent,
       },
     );
+    if (correlation) {
+      if (!persisted) throw new Error("message persistence returned no row");
+      // Fetch the latest array: another queued source may have completed its write meanwhile.
+      const current = npcChatHistory.get(historyKey) ?? [];
+      current.push(entry);
+      current.sort((a, b) => a.timestamp - b.timestamp);
+      npcChatHistory.set(historyKey, current);
+    }
   } catch (err) {
     console.error("[chat-history] failed to persist message", { characterId, npcId, role }, err);
+    if (correlation) throw err;
   }
   return sanitizedContent;
 }
@@ -807,6 +846,7 @@ async function streamNpcResponse(
   attachments?: GatewayAttachment[],
   sessionKeyOverride?: string,
   emitEvent?: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   const { _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
   const responseEvent = emitEvent || "npc:response";
@@ -840,27 +880,32 @@ async function streamNpcResponse(
     }
 
     try {
-      const { response, session } = await adapter.execute({
-        sessionKey,
-        prompt: message,
-        instructions: npcConfig.instructions,
-        onDelta: (delta: string) => {
-          socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+      const { response, session } = await executeDmAdapter(
+        adapter,
+        {
+          sessionKey,
+          prompt: message,
+          instructions: npcConfig.instructions,
+          onDelta: (delta: string) => {
+            socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+          },
+          // tool.progress 는 진행 신호이지 답변이 아니다. 그래서 **도구 이름만** 쓰고
+          // delta 본문은 버린다 — 실측(v0.20.2)에서 `_thinking` 툴은 완성된 답변 전체를
+          // delta 에 한 번 더 실어 보내는데, 예전에 이걸 채팅 청크로 흘리다가 1:1 대화에서
+          // 답이 정확히 두 번 보였다. 본문 경로(onDelta)와 활동 경로를 아예 갈라 두었으니
+          // 그 버그는 구조적으로 재발할 수 없다.
+          onToolProgress: (toolName: string) => {
+            // 빈 이름은 "도구가 끝났다"는 뜻이다(tool.completed) — 표시를 끈다.
+            const notice = describeActivity(toolName);
+            socket.emit("npc:activity", { npcId, activityKey: notice?.key ?? null });
+          },
+          onRunStarted: (runId: string) => {
+            registerHermesRun(sessionKey, runId);
+          },
         },
-        // tool.progress 는 진행 신호이지 답변이 아니다. 그래서 **도구 이름만** 쓰고
-        // delta 본문은 버린다 — 실측(v0.20.2)에서 `_thinking` 툴은 완성된 답변 전체를
-        // delta 에 한 번 더 실어 보내는데, 예전에 이걸 채팅 청크로 흘리다가 1:1 대화에서
-        // 답이 정확히 두 번 보였다. 본문 경로(onDelta)와 활동 경로를 아예 갈라 두었으니
-        // 그 버그는 구조적으로 재발할 수 없다.
-        onToolProgress: (toolName: string) => {
-          // 빈 이름은 "도구가 끝났다"는 뜻이다(tool.completed) — 표시를 끈다.
-          const notice = describeActivity(toolName);
-          socket.emit("npc:activity", { npcId, activityKey: notice?.key ?? null });
-        },
-        onRunStarted: (runId: string) => {
-          registerHermesRun(sessionKey, runId);
-        },
-      });
+        undefined,
+        signal,
+      );
       socket.emit(responseEvent, { npcId, chunk: "", done: true });
       await persistHermesSessionRef(
         npcId,
@@ -885,20 +930,25 @@ async function streamNpcResponse(
     const adapter = adapterRegistry.get(adapterType);
 
     try {
-      const { response } = await adapter.execute({
-        sessionKey,
-        prompt: message,
-        instructions: npcConfig.instructions,
-        attachments,
-        model:
-          typeof npcConfig.adapterConfig.model === "string"
-            ? npcConfig.adapterConfig.model
-            : undefined,
-        onDelta: (delta: string) => {
-          socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+      const { response } = await executeDmAdapter(
+        adapter,
+        {
+          sessionKey,
+          prompt: message,
+          instructions: npcConfig.instructions,
+          attachments,
+          model:
+            typeof npcConfig.adapterConfig.model === "string"
+              ? npcConfig.adapterConfig.model
+              : undefined,
+          onDelta: (delta: string) => {
+            socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+          },
+          timeoutMs: 180_000,
         },
-        timeoutMs: 180_000,
-      });
+        undefined,
+        signal,
+      );
       socket.emit(responseEvent, { npcId, chunk: "", done: true });
       return response || "";
     } catch (err) {
@@ -1437,6 +1487,7 @@ export function setupSocketHandlers(io: Server) {
         npcId: string;
         message: string;
         characterId?: string;
+        sourceMessageId?: string;
         files?: Array<{ name: string; type: string; size: number; data: ArrayBuffer }>;
       }) => {
         const { npcId, message, files } = data;
@@ -1469,104 +1520,173 @@ export function setupSocketHandlers(io: Server) {
           return;
         }
 
-        // --- File processing (text-based files only) ---
-        let extractedFiles: ExtractedFile[] = [];
-        let fileAttachments: GatewayAttachment[] | undefined;
-
-        if (files && files.length > 0) {
-          if (files.length > FILE_LIMITS.maxFileCount) {
-            emitNpcSystemResponse(socket, npcId, "too_many_files");
-            return;
-          }
-          for (const f of files) {
-            if (f.size > FILE_LIMITS.maxFileSize) {
-              emitNpcSystemResponse(socket, npcId, "file_too_large");
-              return;
-            }
-            if (!isAllowedFileType(f.name, f.type)) {
-              emitNpcSystemResponse(socket, npcId, "unsupported_file_type");
-              return;
-            }
-          }
-          extractedFiles = await Promise.all(
-            files.map((f) => extractFileContent(Buffer.from(f.data), f.name, f.type)),
-          );
-          fileAttachments = buildAttachments(extractedFiles);
-          chatLog(
-            "  extracted:",
-            extractedFiles
-              .map(
-                (f) =>
-                  `${f.name}(text=${f.textContent?.length ?? 0}, img=${f.imageBase64 ? (f.imageBase64.length / 1024).toFixed(0) + "KB" : "-"}, trunc=${f.truncated})`,
-              )
-              .join(", "),
-          );
-        }
-
-        // 이력은 캐릭터 소유다. `players` 에 없으면 클라이언트가 실어 보낸 캐릭터를 검증해
-        // 쓴다 — 그러지 않으면 재연결 직후 나눈 대화가 통째로 사라진다.
+        const access = await getSocketChannelParticipationAccess(npcConfig._channelId, user.userId);
         const historyCharacterId = await resolveHistoryCharacterId(
           socket,
           user.userId,
           data.characterId,
         );
-        if (historyCharacterId) {
-          await appendNpcHistoryMessage(historyCharacterId, npcId, trimmed, "player");
+        if (!access?.access.allowed || !historyCharacterId) {
+          emitNpcSystemResponse(socket, npcId, "npc_not_found");
+          return;
         }
+        const sourceMessageId =
+          typeof data.sourceMessageId === "string" && data.sourceMessageId.length <= 100
+            ? data.sourceMessageId
+            : crypto.randomUUID();
+        const requestId = crypto.randomUUID();
+        const scope = dmResponseScope(user.userId, historyCharacterId, npcId);
+        const queueKey = `${user.userId}:${npcId}`;
+        try {
+          if (dmResetting.has(queueKey) || dmResponseQueue.isFull(queueKey)) {
+            emitNpcSystemResponse(socket, npcId, "wait_before_sending");
+            return;
+          }
+          const tracker = getDmResponseTracker(io, scope);
+          await socket.join(scope);
+          await runTrackedDm({
+            tracker,
+            queue: dmResponseQueue,
+            queueKey,
+            identity: { requestId, sourceMessageId, npcId, npcName: npcConfig._name || npcId },
+            prepare: () =>
+              appendNpcHistoryMessage(historyCharacterId, npcId, trimmed, "player", {
+                id: sourceMessageId,
+              }),
+            work: async (capture, isActive, signal) => {
+              const responseSocket = new Proxy(socket, {
+                get(target, property) {
+                  if (property === "emit")
+                    return (event: string, payload: Record<string, unknown>) => {
+                      if (!isActive()) return target;
+                      capture(event, payload);
+                      target.emit(
+                        event,
+                        event === "npc:response" || event === "npc:activity"
+                          ? { ...payload, responseRequestId: requestId }
+                          : payload,
+                      );
+                      return target;
+                    };
+                  const value = Reflect.get(target, property, target);
+                  return typeof value === "function" ? value.bind(target) : value;
+                },
+              });
+              // --- File processing (text-based files only) ---
+              let extractedFiles: ExtractedFile[] = [];
+              let fileAttachments: GatewayAttachment[] | undefined;
 
-        // Inject task reminder on every NPC DM so task actions can be parsed consistently.
-        const fileSection = buildFilePromptSection(extractedFiles);
-        const taskDashboard = await dmHub.buildTaskDashboard(npcId, npcConfig._channelId);
-        const enrichedMessage = taskDashboard
-          ? `${taskDashboard}\n\n${trimmed + fileSection}`
-          : trimmed + fileSection;
-        const messageToSend = withTaskReminder(enrichedMessage, getSocketLocale(socket));
+              if (files && files.length > 0) {
+                if (files.length > FILE_LIMITS.maxFileCount) {
+                  emitNpcSystemResponse(responseSocket, npcId, "too_many_files");
+                  return;
+                }
+                for (const f of files) {
+                  if (f.size > FILE_LIMITS.maxFileSize) {
+                    emitNpcSystemResponse(responseSocket, npcId, "file_too_large");
+                    return;
+                  }
+                  if (!isAllowedFileType(f.name, f.type)) {
+                    emitNpcSystemResponse(responseSocket, npcId, "unsupported_file_type");
+                    return;
+                  }
+                }
+                extractedFiles = await Promise.all(
+                  files.map((f) => extractFileContent(Buffer.from(f.data), f.name, f.type)),
+                );
+                fileAttachments = buildAttachments(extractedFiles);
+                chatLog(
+                  "  extracted:",
+                  extractedFiles
+                    .map(
+                      (f) =>
+                        `${f.name}(text=${f.textContent?.length ?? 0}, img=${f.imageBase64 ? (f.imageBase64.length / 1024).toFixed(0) + "KB" : "-"}, trunc=${f.truncated})`,
+                    )
+                    .join(", "),
+                );
+              }
 
-        // Stream response via OpenClaw
-        chatLog(
-          `  → gateway (${npcConfig._name}): msgLen=${messageToSend.length}(${(messageToSend.length / 1024).toFixed(0)}KB)`,
-          fileAttachments
-            ? `+${fileAttachments.length} att(${fileAttachments.map((a) => `${a.fileName}:${(a.content.length / 1024).toFixed(0)}KB`).join(",")})`
-            : "",
-        );
-        const response = await streamNpcResponse(
-          socket,
-          npcId,
-          npcConfig,
-          user.userId,
-          messageToSend,
-          fileAttachments,
-        );
-        chatLog(
-          `  ← npc response (${npcConfig._name}):`,
-          response ? response.slice(0, 150) + (response.length > 150 ? "..." : "") : "(empty)",
-        );
-        if (response) {
-          const { finalResponse, markers } = dmHub.processResponseMarkers(response);
-          if (markers.length > 0) {
-            console.log("[dm-hub] Response markers:", markers);
-          }
-          const parsed = parseNpcResponse(finalResponse);
-          const sanitizedResponse = sanitizeNpcResponseText(finalResponse);
-          if (historyCharacterId) {
-            await appendNpcHistoryMessage(historyCharacterId, npcId, sanitizedResponse, "npc");
-          }
-          // 이력 저장과 **같은 값**을 쓴다. 예전에는 여기만 `players` 맵을 직접 봐서,
-          // 재연결 직후처럼 소켓이 그 맵에 없으면 이력은 남는데 태스크만 조용히
-          // 사라졌다 — 사용자는 승인까지 마쳤으므로 등록됐다고 믿는다.
-          if (historyCharacterId) {
-            await processNpcTaskActions(io, parsed, {
-              channelId: npcConfig._channelId,
-              npcId,
-              npcName: npcConfig._name,
-              assignerCharacterId: historyCharacterId,
-              targetUserId: user.userId,
-            });
-          } else {
-            console.warn("[TaskManager] No characterId for socket", socket.id);
-            emitNpcSystemResponse(socket, npcId, "task_owner_unknown");
-          }
-          socket.emit("npc:response-complete", { npcId, npcName: npcConfig._name || npcId });
+              // Inject task reminder on every NPC DM so task actions can be parsed consistently.
+              const fileSection = buildFilePromptSection(extractedFiles);
+              const taskDashboard = await dmHub.buildTaskDashboard(npcId, npcConfig._channelId);
+              const enrichedMessage = taskDashboard
+                ? `${taskDashboard}\n\n${trimmed + fileSection}`
+                : trimmed + fileSection;
+              if (!isActive()) return;
+              const messageToSend = withTaskReminder(
+                enrichedMessage,
+                getSocketLocale(responseSocket),
+              );
+
+              // Stream response via OpenClaw
+              chatLog(
+                `  → gateway (${npcConfig._name}): msgLen=${messageToSend.length}(${(messageToSend.length / 1024).toFixed(0)}KB)`,
+                fileAttachments
+                  ? `+${fileAttachments.length} att(${fileAttachments.map((a) => `${a.fileName}:${(a.content.length / 1024).toFixed(0)}KB`).join(",")})`
+                  : "",
+              );
+              const response = await streamNpcResponse(
+                responseSocket,
+                npcId,
+                npcConfig,
+                user.userId,
+                messageToSend,
+                fileAttachments,
+                undefined,
+                undefined,
+                signal,
+              );
+              if (!isActive()) return;
+              chatLog(
+                `  ← npc response (${npcConfig._name}):`,
+                response
+                  ? response.slice(0, 150) + (response.length > 150 ? "..." : "")
+                  : "(empty)",
+              );
+              if (response) {
+                const { finalResponse, markers } = dmHub.processResponseMarkers(response);
+                if (markers.length > 0) {
+                  console.log("[dm-hub] Response markers:", markers);
+                }
+                const parsed = parseNpcResponse(finalResponse);
+                const sanitizedResponse = sanitizeNpcResponseText(finalResponse);
+                if (historyCharacterId) {
+                  await appendNpcHistoryMessage(
+                    historyCharacterId,
+                    npcId,
+                    sanitizedResponse,
+                    "npc",
+                    { id: requestId, responseRequestId: requestId },
+                  );
+                }
+                // 이력 저장과 **같은 값**을 쓴다. 예전에는 여기만 `players` 맵을 직접 봐서,
+                // 재연결 직후처럼 소켓이 그 맵에 없으면 이력은 남는데 태스크만 조용히
+                // 사라졌다 — 사용자는 승인까지 마쳤으므로 등록됐다고 믿는다.
+                if (historyCharacterId) {
+                  await processNpcTaskActions(io, parsed, {
+                    channelId: npcConfig._channelId,
+                    npcId,
+                    npcName: npcConfig._name,
+                    assignerCharacterId: historyCharacterId,
+                    targetUserId: user.userId,
+                  });
+                } else {
+                  console.warn("[TaskManager] No characterId for socket", socket.id);
+                  emitNpcSystemResponse(responseSocket, npcId, "task_owner_unknown");
+                }
+                responseSocket.emit("npc:response-complete", {
+                  npcId,
+                  npcName: npcConfig._name || npcId,
+                });
+              }
+              return sanitizeNpcResponseText(
+                dmHub.processResponseMarkers(response || "").finalResponse,
+              );
+            },
+          });
+        } catch (error) {
+          console.error("[dm-response] unable to admit request", error);
+          emitNpcSystemResponse(socket, npcId, "gateway_error");
         }
       },
     );
@@ -1593,7 +1713,13 @@ export function setupSocketHandlers(io: Server) {
             history = [];
           }
         }
+        const scope = dmResponseScope(user.userId, characterId, npcId);
+        await socket.join(scope);
         socket.emit("npc:history", { npcId, messages: history });
+        socket.emit("npc:response-snapshot", {
+          npcId,
+          responses: dmResponseTrackers.get(scope)?.snapshot() ?? [],
+        });
       },
     );
 
@@ -1713,12 +1839,20 @@ export function setupSocketHandlers(io: Server) {
         const characterId = await resolveHistoryCharacterId(socket, user.userId, claimed);
         if (!characterId) return;
 
-        npcChatHistory.delete(npcHistoryKey(characterId, npcId));
-        // 캐시만 비우면 새로고침에 되살아난다 — 사용자에게는 초기화가 안 된 것으로 보인다.
+        const scope = dmResponseScope(user.userId, characterId, npcId);
+        const queueKey = `${user.userId}:${npcId}`;
+        dmResetting.add(queueKey);
         try {
+          dmResponseTrackers.get(scope)?.cancelAll();
+          await dmResponseQueue.idle(queueKey);
+          dmResponseTrackers.delete(scope);
+          npcChatHistory.delete(npcHistoryKey(characterId, npcId));
           await clearNpcChatHistory(db, { chatMessages }, { characterId, npcId });
+          socket.emit("npc:response-snapshot", { npcId, responses: [] });
         } catch (err) {
           console.error("[chat-history] failed to clear history", { characterId, npcId }, err);
+        } finally {
+          dmResetting.delete(queueKey);
         }
       },
     );

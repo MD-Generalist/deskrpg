@@ -22,6 +22,8 @@ export interface NpcResponsePayload {
   chunk: string;
   done: boolean;
   messageCode?: NpcResponseMessageCode;
+  /** Upgraded clients render this request through npc:response-state. */
+  responseRequestId?: string;
 }
 
 export function isNpcResponseMessageCode(value: unknown): value is NpcResponseMessageCode {

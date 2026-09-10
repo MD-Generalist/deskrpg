@@ -1,3 +1,4 @@
+import { getRoomResponseSnapshot } from "./room-runtime";
 // 방 단위 채팅의 소켓 계층. 예전 `chat:*`(채널 하나 = 대화 하나)를 대체한다.
 //
 // 소켓 룸 이름은 `room-<roomId>` 다. 채널 룸(`<channelId>`)과 겹치지 않게 접두어를 붙인다 —
@@ -192,6 +193,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         roomId: id,
         messages: await rooms.recentRoomMessages(id, HISTORY_LIMIT),
       });
+      socket.emit("room:response-snapshot", { roomId: id, responses: getRoomResponseSnapshot(id) });
     },
 
     async close(payload) {
@@ -241,7 +243,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         const runtime = await getRuntime(io, access.room, user.userId);
         if (runtime) {
           void runtime
-            .handleHumanMessage(senderName, content, socket.id)
+            .handleHumanMessage(senderName, content, socket.id, saved.id)
             .catch((err) => console.error("[room] turn failed:", err));
         }
       } catch (err) {

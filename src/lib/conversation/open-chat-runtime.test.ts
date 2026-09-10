@@ -125,7 +125,7 @@ describe("OpenChatRuntime", () => {
     );
   });
 
-  test("이미 말하는 중인 NPC 를 또 부르면 무시한다", async () => {
+  test("이미 말하는 중인 NPC 를 다시 부르면 순서대로 처리한다", async () => {
     const a = p("n1", "단비", delayed("네", 60));
     const starts: string[] = [];
     const rt = new OpenChatRuntime(
@@ -140,11 +140,7 @@ describe("OpenChatRuntime", () => {
     await rt.handleHumanMessage("지호", "@[단비] 둘");
     await first;
 
-    assert.deepEqual(
-      starts,
-      ["n1"],
-      "이미 말하는 중이므로 두 번째 지명은 새 턴을 만들지 않아야 한다",
-    );
+    assert.deepEqual(starts, ["n1", "n1"], "두 번째 사람 호출을 버리지 않고 다음 턴으로 처리한다");
   });
 
   test("어댑터가 터져도 다른 NPC 는 말한다", async () => {
@@ -330,4 +326,88 @@ describe("OpenChatRuntime", () => {
 
     assert.deepEqual(noMatch, [], "맞는 지명이면 알림이 없다");
   });
+});
+
+test("queued human calls retain their own source, caller and prompt; receipt precedes chunks", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const prompts: string[] = [];
+  let recent = [{ sender: "A", content: "first" }];
+  const adapter = always("answer");
+  adapter.execute = async (opts) => {
+    prompts.push(opts.prompt);
+    if (prompts.length === 1) await gate;
+    opts.onDelta?.("answer");
+    return { response: "answer", session: { sessionRef: "s" } } as never;
+  };
+  const accepted: string[] = [];
+  const started: (string | null)[] = [];
+  const chunks: string[] = [];
+  const rt = new OpenChatRuntime(
+    { participants: [p("n1", "단비", adapter)], recent: () => recent, turnTimeout: TIMEOUT },
+    {
+      onTurnQueued: (_id, _name, ctx) => accepted.push(ctx.sourceMessageId),
+      onTurnStart: (_id, _name, caller) => started.push(caller),
+      onTurnChunk: (_id, chunk) => chunks.push(chunk),
+    },
+  );
+  const first = rt.handleHumanMessage("A", "@[단비] first", "socket-a", "source-a");
+  recent = [{ sender: "B", content: "second" }];
+  const second = rt.handleHumanMessage("B", "@[단비] second", "socket-b", "source-b");
+  assert.deepEqual(accepted, ["source-a", "source-b"]);
+  assert.deepEqual(chunks, []);
+  await new Promise((r) => setTimeout(r, 0));
+  release();
+  await Promise.all([first, second]);
+  assert.deepEqual(started, ["socket-a", "socket-b"]);
+  assert.match(prompts[0], /first/);
+  assert.doesNotMatch(prompts[0], /second/);
+  assert.match(prompts[1], /second/);
+});
+
+test("disposing a runtime cancels queued calls and suppresses late answer chunks", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  const adapter = always("answer");
+  adapter.execute = async (opts) => {
+    calls++;
+    await gate;
+    opts.onDelta?.("late");
+    return { response: "late" } as never;
+  };
+  const chunks: string[] = [];
+  const rt = new OpenChatRuntime(
+    { participants: [p("n1", "단비", adapter)], recent: () => [], turnTimeout: TIMEOUT },
+    { onTurnChunk: (_id, chunk) => chunks.push(chunk) },
+  );
+  const first = rt.handleHumanMessage("A", "@[단비] first");
+  const second = rt.handleHumanMessage("A", "@[단비] second");
+  await new Promise((r) => setTimeout(r, 0));
+  rt.dispose();
+  release();
+  await Promise.all([first, second]);
+  assert.equal(calls, 1);
+  assert.deepEqual(chunks, []);
+});
+
+test("ordinary completion closes the chunk callback before a late adapter delta arrives", async () => {
+  let late!: () => void;
+  const chunks: string[] = [];
+  const adapter = always("answer");
+  adapter.execute = async (options) => {
+    late = () => options.onDelta?.("late");
+    return { response: "answer", session: { sessionRef: options.sessionKey } };
+  };
+  const runtime = new OpenChatRuntime(
+    { participants: [p("n1", "단비", adapter)], recent: () => [], turnTimeout: TIMEOUT },
+    { onTurnChunk: (_id, chunk) => chunks.push(chunk) },
+  );
+  await runtime.handleHumanMessage("Dante", "@[단비] hi");
+  late();
+  assert.deepEqual(chunks, []);
 });

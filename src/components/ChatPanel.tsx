@@ -15,6 +15,13 @@ import RoomComposer from "./rooms/RoomComposer";
 import SystemMessage from "./rooms/SystemMessage";
 import { candidatesForInvite } from "./rooms/compose-candidates";
 import type { RoomAction, RoomState } from "@/app/game/room-state";
+import type { ChatResponse } from "@/lib/chat-response";
+import {
+  isActiveChatResponse,
+  responsesForSource,
+  visibleResponseReplies,
+} from "@/app/game/chat-response-state";
+import ResponseProgress from "./chat/ResponseProgress";
 
 interface ChatPanelProps {
   dialogNpc: { npcId: string; npcName: string } | null;
@@ -22,6 +29,8 @@ interface ChatPanelProps {
   /** 지금 NPC 가 무엇을 하는 중인지 알려 주는 번역 키. 없으면 표시하지 않는다. */
   npcActivityKey?: string | null;
   isNpcStreaming: boolean;
+  npcResponses?: ChatResponse[];
+  roomResponses?: ChatResponse[];
   npcChatInputDisabled?: boolean;
   npcChatDisabledPlaceholder?: string;
   onSend: (message: string, files?: File[]) => void;
@@ -74,6 +83,8 @@ export default function ChatPanel({
   npcMessages,
   npcActivityKey = null,
   isNpcStreaming,
+  npcResponses = [],
+  roomResponses = [],
   npcChatInputDisabled,
   npcChatDisabledPlaceholder,
   onSend,
@@ -141,6 +152,12 @@ export default function ChatPanel({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [npcMessages]);
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (container && container.scrollHeight - container.clientHeight - container.scrollTop <= 80) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [npcResponses]);
 
   const currentRoom = roomState.rooms.find((room) => room.id === roomState.currentRoomId) ?? null;
   // useMemo 로 감싼다 — 삼항이 매 렌더마다 새 배열을 만들면 스크롤 useEffect 가 계속 돈다.
@@ -155,6 +172,12 @@ export default function ChatPanel({
       channelScrollRef.current.scrollTop = channelScrollRef.current.scrollHeight;
     }
   }, [roomMessages]);
+  useEffect(() => {
+    const container = channelScrollRef.current;
+    if (container && container.scrollHeight - container.clientHeight - container.scrollTop <= 80) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [roomResponses]);
 
   // ESC to close NPC dialog (return to channel chat)
   useEffect(() => {
@@ -383,16 +406,44 @@ export default function ChatPanel({
                     </div>
                   )}
                   {npcMessages.map((msg, i) => (
-                    <ChatBubble
-                      key={i}
-                      sender={msg.role === "player" ? "player" : "npc"}
-                      streaming={
-                        msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
-                      }
-                    >
-                      {msg.content}
-                    </ChatBubble>
+                    <div key={msg.id ?? `${msg.role}-${i}`}>
+                      {msg.responseRequestId &&
+                      npcResponses.some(
+                        (response) => response.requestId === msg.responseRequestId,
+                      ) ? (
+                        <ResponseProgress
+                          responses={npcResponses.filter(
+                            (response) => response.requestId === msg.responseRequestId,
+                          )}
+                        />
+                      ) : (
+                        <ChatBubble
+                          sender={msg.role === "player" ? "player" : "npc"}
+                          streaming={
+                            msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
+                          }
+                        >
+                          {msg.content}
+                        </ChatBubble>
+                      )}
+                      {msg.role === "player" && (
+                        <ResponseProgress
+                          responses={responsesForSource(npcResponses, msg.id)}
+                          receipt
+                          receiptOnly
+                        />
+                      )}
+                    </div>
                   ))}
+                  <ResponseProgress
+                    responses={visibleResponseReplies(npcResponses, {
+                      responseRequestIds: new Set(
+                        npcMessages
+                          .map((message) => message.responseRequestId)
+                          .filter((id): id is string => !!id),
+                      ),
+                    })}
+                  />
                 </div>
                 {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
                     예전에는 tool.progress 를 채팅 청크로 흘려서 답이 두 번 보였다. */}
@@ -400,7 +451,7 @@ export default function ChatPanel({
                     true 가 되는데, 도구는 그 전에 돈다. 실측(2026-08-28): web_search 가
                     3회 돌 동안 화면에 아무것도 뜨지 않았다. 활동 키가 있다는 것 자체가
                     "아직 진행 중"이라는 뜻이므로 그것만으로 충분하다. */}
-                {npcActivityKey && (
+                {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
                   <div
                     className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
                     role="status"
@@ -413,7 +464,7 @@ export default function ChatPanel({
                 <ChatInput
                   onSend={onSend}
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
-                  disabled={!!npcChatInputDisabled || isNpcStreaming}
+                  disabled={!!npcChatInputDisabled}
                   disabledPlaceholder={
                     npcChatInputDisabled
                       ? (npcChatDisabledPlaceholder ?? t("chat.disconnected"))
@@ -488,15 +539,28 @@ export default function ChatPanel({
                 }
                 const isMe = msg.senderKind === "user" && msg.senderName === currentPlayerName;
                 return (
-                  <ChatBubble
-                    key={msg.id}
-                    sender={isMe ? "player" : "npc"}
-                    name={!isMe ? msg.senderName : undefined}
-                  >
-                    {msg.content}
-                  </ChatBubble>
+                  <div key={msg.id}>
+                    <ChatBubble
+                      sender={isMe ? "player" : "npc"}
+                      name={!isMe ? msg.senderName : undefined}
+                    >
+                      {msg.content}
+                    </ChatBubble>
+                    {
+                      <ResponseProgress
+                        responses={responsesForSource(roomResponses, msg.id)}
+                        receipt
+                        receiptOnly
+                      />
+                    }
+                  </div>
                 );
               })}
+              <ResponseProgress
+                responses={visibleResponseReplies(roomResponses, {
+                  persistedMessageIds: new Set(roomMessages.map((message) => message.id)),
+                })}
+              />
             </div>
             <ChatInput
               onSend={onRoomSend}
