@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -8,10 +8,10 @@ import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-regist
 import { useT } from "@/lib/i18n";
 import LogoutButton from "@/components/LogoutButton";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
-import { FRAME_WIDTH, FRAME_HEIGHT, compositeCharacter } from "@/lib/sprite-compositor";
+import { compositeCharacter } from "@/lib/sprite-compositor";
+import { resolveOfficeLook } from "@/game/three/office-looks";
+import CharacterModelView from "@/components/CharacterModelView";
 
-const PREVIEW_SCALE = 2;
-const DIRECTION = 2; // facing down
 const MAX_CHARACTERS = 5;
 
 interface Character {
@@ -33,53 +33,51 @@ function CharacterCard({
   onDelete: () => void;
 }) {
   const t = useT();
-  const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const look = resolveOfficeLook(character.appearance);
+  const [source, setSource] = useState<HTMLCanvasElement | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
-    const hidden = hiddenCanvasRef.current;
-    const preview = previewCanvasRef.current;
-    if (!hidden || !preview) return;
-
-    compositeCharacter(hidden, character.appearance)
+    if (look) return;
+    let cancelled = false;
+    const canvas = document.createElement("canvas");
+    compositeCharacter(canvas, character.appearance)
       .then(() => {
-        const ctx = preview.getContext("2d");
-        if (!ctx) return;
-
-        preview.width = FRAME_WIDTH * PREVIEW_SCALE;
-        preview.height = FRAME_HEIGHT * PREVIEW_SCALE;
-        ctx.imageSmoothingEnabled = false;
-
-        ctx.clearRect(0, 0, preview.width, preview.height);
-        ctx.drawImage(
-          hidden,
-          0,
-          DIRECTION * FRAME_HEIGHT,
-          FRAME_WIDTH,
-          FRAME_HEIGHT,
-          0,
-          0,
-          FRAME_WIDTH * PREVIEW_SCALE,
-          FRAME_HEIGHT * PREVIEW_SCALE,
-        );
+        if (!cancelled) setSource(canvas);
       })
-      .catch(() => {});
-  }, [character.appearance]);
+      .catch(() => {
+        if (!cancelled) setUnavailable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [character.appearance, look]);
 
   return (
     <div className="bg-surface p-4 rounded-lg flex flex-col items-center">
-      <canvas ref={hiddenCanvasRef} className="hidden" />
       <button
         type="button"
         onClick={onClick}
         className="cursor-pointer hover:ring-2 hover:ring-primary rounded-xl p-4 w-full bg-bg-deep/60"
       >
-        <canvas
-          ref={previewCanvasRef}
-          width={FRAME_WIDTH * PREVIEW_SCALE}
-          height={FRAME_HEIGHT * PREVIEW_SCALE}
-          className="mb-2 mx-auto"
-        />
+        <div
+          className="mb-2 mx-auto flex h-48 items-center justify-center overflow-hidden pointer-events-none"
+          aria-hidden="true"
+        >
+          {unavailable ? (
+            <span className="text-sm text-text-muted">3D — {character.name}</span>
+          ) : (
+            <CharacterModelView
+              source={look ? null : source}
+              look={look}
+              size={192}
+              direction="down"
+              active
+              walking={false}
+              onUnavailable={() => setUnavailable(true)}
+            />
+          )}
+        </div>
         <span className="block font-bold text-center">{character.name}</span>
       </button>
       <div className="mt-2 flex gap-2">
