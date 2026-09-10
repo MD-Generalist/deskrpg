@@ -34,7 +34,7 @@ export default function AuthPage() {
     ])
       .then(([charRes, status]) => {
         if (charRes.ok) {
-          router.replace("/characters");
+          router.replace("/gateways");
         } else {
           setHasUsers(status.hasUsers);
           if (!status.hasUsers) setMode("register");
@@ -69,7 +69,7 @@ export default function AuthPage() {
         return;
       }
 
-      router.push("/characters");
+      router.push("/gateways");
     } catch {
       setError(t("common.networkError"));
     } finally {

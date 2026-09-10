@@ -3,20 +3,22 @@
 import type { MouseEvent, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Armchair, UsersRound, Network, Cpu } from "lucide-react";
+import { Armchair, UsersRound, Network, Cpu, Building2 } from "lucide-react";
 import OfficeBuilding from "./OfficeBuilding";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
 
 /** Navigation only: route-specific auth, role checks and actions stay with each page. */
 export default function WorkspaceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const t = useT();
+  const { locale } = useLocale();
   if (pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/game")) {
     return children;
   }
   const links = [
-    { href: "/characters", label: t("characters.title"), icon: UsersRound },
     { href: "/gateways", label: t("gateways.title"), icon: Network },
+    { href: "/profiles", label: locale === "ko" ? "내 NPC" : "My NPCs", icon: UsersRound },
+    { href: "/channels", label: locale === "ko" ? "사무환경" : "Offices", icon: Building2 },
     { href: "/providers", label: t("providers.title"), icon: Cpu },
   ];
   function guardNavigation(event: MouseEvent<HTMLAnchorElement>) {
@@ -30,7 +32,7 @@ export default function WorkspaceShell({ children }: { children: ReactNode }) {
     <div className={`workspace-shell${editing ? " workspace-shell--editing" : ""}`}>
       <aside className="workspace-sidebar">
         <Link
-          href="/characters"
+          href="/gateways"
           className="workspace-brand"
           aria-label="DeskRPG"
           onClick={guardNavigation}

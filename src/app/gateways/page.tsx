@@ -9,7 +9,7 @@ import LogoutButton from "@/components/LogoutButton";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
 
 import { planGatewayDelete } from "./gateway-delete-plan";
 import { backLinkTarget } from "./return-target";
@@ -71,6 +71,7 @@ export default function GatewayManagementPage() {
 
 function GatewayManagementPageInner() {
   const t = useT();
+  const { locale } = useLocale();
   const router = useRouter();
   // 사무실(채널 화면)에서 "인격을 하나 더 만들자"로 넘어온 왕복. `gateway` 는 어느
   // 게이트웨이를 열지, `new=1` 은 만들기 화면을 바로 펼칠지, `returnTo` 는 만든 뒤
@@ -474,6 +475,27 @@ function GatewayManagementPageInner() {
             <LocaleSwitcher />
           </div>
         </div>
+
+        <section className="mb-6 rounded-xl border border-border bg-surface p-5">
+          <p className="text-xs font-semibold tracking-wide text-text-muted">
+            {locale === "ko"
+              ? "01 게이트웨이 연결 → 02 프로필 확인 → 03 NPC 외형 설정"
+              : "01 Connect gateway → 02 Find profiles → 03 Set NPC appearance"}
+          </p>
+          <p className="mt-2 text-sm text-text-muted">
+            {locale === "ko"
+              ? "Hermes 게이트웨이를 먼저 연결하세요. NPC는 해당 게이트웨이의 에이전트 프로필에 연결되며, 이름과 외형도 프로필별로 관리합니다."
+              : "Connect your Hermes gateway first. Each NPC belongs to an agent profile; manage its name and appearance within that profile."}
+          </p>
+          {selectedGateway && (
+            <Link
+              href={`/profiles?gateway=${encodeURIComponent(selectedGateway.id)}`}
+              className="mt-3 inline-block font-semibold text-primary"
+            >
+              {locale === "ko" ? "이 게이트웨이의 NPC 보기 →" : "View this gateway’s NPCs →"}
+            </Link>
+          )}
+        </section>
 
         {error && (
           <div className="mb-6 rounded-lg border border-danger/40 bg-surface px-4 py-3 text-sm text-danger">

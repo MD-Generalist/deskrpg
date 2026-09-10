@@ -9,7 +9,7 @@ export default async function Home() {
   if (token) {
     const payload = await verifyJWT(token);
     if (payload) {
-      redirect("/characters");
+      redirect("/gateways");
     }
   }
 
