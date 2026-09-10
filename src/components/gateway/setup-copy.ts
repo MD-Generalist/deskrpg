@@ -1,0 +1,484 @@
+import type { Locale } from "../../lib/i18n/context";
+
+const ko = {
+  title: "Hermes 게이트웨이 연결",
+  selectProfiles: "가져올 기존 프로필",
+  selectedProfiles: "선택한 프로필",
+  profileNeedsToken: "API 인증 키를 먼저 설정해야 가져올 수 있습니다.",
+  profileProvisionToken: "연결 중 인증 키를 생성합니다.",
+  noSelectedProfiles:
+    "프로필을 선택하지 않았습니다. 게이트웨이는 연결되며 프로필은 연결 후 별도로 등록해야 합니다.",
+  intro: "Hermes가 실행되는 위치를 선택하세요.",
+  local: "로컬 연결",
+  remote: "원격 연결",
+  localHelp: "로컬은 이 브라우저의 컴퓨터가 아니라 DeskRPG 서버가 실행되는 호스트입니다.",
+  remoteHelp: "다른 서버의 Hermes에 연결합니다.",
+  unavailable:
+    "이 인스턴스에서는 호스트 접근이 허용되지 않습니다. 관리자에게 호스트 설정을 요청하거나 게이트웨이 주소로 연결하세요.",
+  ssh: "SSH로 연결",
+  url: "게이트웨이 주소로 연결",
+  sshHelp: "관리자가 허용한 SSH 호스트에서 설치를 확인합니다.",
+  urlHelp: "기존 주소와 인증 키로 연결합니다.",
+  host: "SSH 호스트",
+  chooseHost: "호스트 선택",
+  discover: "설치 찾기",
+  discovering: "Hermes 설치를 확인하고 있습니다…",
+  empty: "연결할 Hermes 설치를 찾지 못했습니다.",
+  inspect: "연결하기",
+  review: "설치 및 연결 검토",
+  service: "대상 게이트웨이 서비스",
+  changes: "예정된 변경",
+  noChanges: "설정 변경 없이 연결 상태를 검증합니다.",
+  prepare: "설치 및 연결",
+  verify: "검증 및 연결",
+  back: "뒤로",
+  retry: "다시 확인",
+  cancel: "취소",
+  cancelling: "현재 작업이 안전하게 끝나기를 기다리고 있습니다…",
+  cancelHelp:
+    "취소하면 현재 작업이 안전하게 끝난 뒤 다음 단계를 중단합니다. 이미 완료된 설치나 설정은 되돌려지지 않습니다.",
+  running: "게이트웨이 준비 중",
+  failed: "연결을 완료하지 못했습니다.",
+  cancelled: "설정 작업을 중단했습니다.",
+  connected: "게이트웨이가 연결되었습니다.",
+  profiles: "프로필 확인하기",
+  name: "표시 이름",
+  address: "게이트웨이 주소",
+  token: "API 인증 키",
+  connect: "주소로 연결",
+  loading: "확인 중…",
+  absent:
+    "API 연결은 저장되었지만 DeskRPG 플러그인이 없어 아직 준비되지 않았습니다. SSH로 설치하거나 설치 안내를 확인하세요.",
+  guide: "플러그인 설치 안내",
+  installSsh: "SSH로 설치하기",
+  ready: "플러그인 연결 확인 완료",
+  pluginAbsent: "플러그인 미설치",
+  disabled: "플러그인 비활성화",
+  pending: "서비스 재시작 필요",
+  unauthorized: "인증 키를 확인하세요. 인증 실패는 플러그인 미설치를 의미하지 않습니다.",
+  unreachable: "게이트웨이에 연결할 수 없습니다. 서비스와 네트워크를 확인하세요.",
+  unknown: "플러그인 상태를 확인하지 못했습니다.",
+  permission: "호스트 설정 권한이 없습니다. 관리자 설정을 확인하세요.",
+  busy: "이 대상의 설정 작업이 이미 진행 중입니다. 잠시 후 다시 확인하세요.",
+  invalid: "입력한 주소와 연결 대상을 확인하세요.",
+  hostKey: "SSH 호스트 신원을 확인할 수 없습니다. 관리자가 알려진 호스트 정보를 확인해야 합니다.",
+  inspecting: "설치 상태 확인",
+  installing_plugin: "DeskRPG 플러그인 설치",
+  enabling_plugin: "플러그인 활성화",
+  configuring_api: "API 설정",
+  restarting_gateway: "선택한 게이트웨이 서비스 시작 또는 재시작",
+  verifying_gateway: "실제 API 및 플러그인 검증",
+  importing_profiles: "프로필 가져오기",
+  saving_gateway: "게이트웨이 저장",
+  step: "설정 단계 진행",
+  pluginRevision: "플러그인 고정 버전",
+};
+type Copy = typeof ko;
+const en: Copy = {
+  title: "Connect a Hermes gateway",
+  selectProfiles: "Existing profiles to import",
+  selectedProfiles: "Selected profiles",
+  profileNeedsToken: "Configure an API credential before importing this profile.",
+  profileProvisionToken: "An API credential will be created during connection.",
+  noSelectedProfiles:
+    "No profiles selected. The gateway will connect; register profiles separately afterward.",
+  intro: "Where is Hermes running?",
+  local: "Local connection",
+  remote: "Remote connection",
+  localHelp:
+    "Local means the host running the DeskRPG server, which may differ from this browser’s computer.",
+  remoteHelp: "Connect to Hermes on another server.",
+  unavailable:
+    "Host access is unavailable on this instance. Ask an administrator to enable host setup, or connect by gateway address.",
+  ssh: "Connect over SSH",
+  url: "Connect by gateway address",
+  sshHelp: "Inspect an administrator-approved SSH host.",
+  urlHelp: "Use an existing address and API credential.",
+  host: "SSH host",
+  chooseHost: "Choose a host",
+  discover: "Find installations",
+  discovering: "Looking for Hermes installations…",
+  empty: "No Hermes installations were found.",
+  inspect: "Connect",
+  review: "Review setup",
+  service: "Target gateway service",
+  changes: "Planned changes",
+  noChanges: "Verify the connection without changing settings.",
+  prepare: "Install and connect",
+  verify: "Verify and connect",
+  back: "Back",
+  retry: "Check again",
+  cancel: "Cancel",
+  cancelling: "Waiting for the current operation to finish safely…",
+  cancelHelp:
+    "Cancellation stops before the next step after the current operation finishes safely. Completed installations or settings are not undone.",
+  running: "Preparing gateway",
+  failed: "Could not complete the connection.",
+  cancelled: "Setup was cancelled.",
+  connected: "Gateway connected.",
+  profiles: "View profiles",
+  name: "Display name",
+  address: "Gateway address",
+  token: "API credential",
+  connect: "Connect address",
+  loading: "Checking…",
+  absent:
+    "The API connection is saved, but it is not ready because the DeskRPG plugin is missing. Install over SSH or follow the installation guide.",
+  guide: "Plugin installation guide",
+  installSsh: "Install over SSH",
+  ready: "Plugin connection verified",
+  pluginAbsent: "Plugin not installed",
+  disabled: "Plugin disabled",
+  pending: "Service restart needed",
+  unauthorized:
+    "Check the API credential. Authentication failure does not mean the plugin is missing.",
+  unreachable: "Cannot reach the gateway. Check its service and network.",
+  unknown: "Could not determine plugin status.",
+  permission: "Host setup is not permitted. Check administrator settings.",
+  busy: "Setup is already running for this target. Check again shortly.",
+  invalid: "Check the address and selected target.",
+  hostKey: "SSH host identity could not be verified. Ask the administrator to check known hosts.",
+  inspecting: "Inspect installation",
+  installing_plugin: "Install DeskRPG plugin",
+  enabling_plugin: "Enable plugin",
+  configuring_api: "Configure API",
+  restarting_gateway: "Start or restart the selected gateway service",
+  verifying_gateway: "Verify live API and plugin",
+  importing_profiles: "Import profiles",
+  saving_gateway: "Save gateway",
+  step: "Setup step in progress",
+  pluginRevision: "Pinned plugin revision",
+};
+const ja: Copy = {
+  ...en,
+  title: "Hermesゲートウェイ接続",
+  intro: "Hermesの実行場所を選択してください。",
+  local: "ローカル接続",
+  remote: "リモート接続",
+  localHelp: "ローカルとはブラウザーのPCではなく、DeskRPGサーバーが動作するホストです。",
+  ssh: "SSHで接続",
+  url: "ゲートウェイURLで接続",
+  prepare: "インストールして接続",
+  back: "戻る",
+  retry: "再確認",
+  cancel: "キャンセル",
+  profiles: "プロファイルを確認",
+  connected: "ゲートウェイに接続しました。",
+};
+const zh: Copy = {
+  ...en,
+  title: "连接Hermes网关",
+  intro: "请选择Hermes运行的位置。",
+  local: "本地连接",
+  remote: "远程连接",
+  localHelp: "本地是指运行DeskRPG服务器的主机，而非浏览器所在的电脑。",
+  ssh: "通过SSH连接",
+  url: "通过网关地址连接",
+  prepare: "安装并连接",
+  back: "返回",
+  retry: "重新检查",
+  cancel: "取消",
+  profiles: "查看配置文件",
+  connected: "网关已连接。",
+};
+Object.assign(ja, {
+  selectProfiles: "取得する既存のプロファイル",
+  selectedProfiles: "選択したプロファイル",
+  profileNeedsToken: "取得するには、先にAPI認証キーを設定してください。",
+  profileProvisionToken: "接続中にAPI認証キーを生成します。",
+  noSelectedProfiles:
+    "プロファイルが選択されていません。ゲートウェイ接続後にプロファイルを別途登録してください。",
+  remoteHelp: "別のサーバーのHermesに接続します。",
+  unavailable:
+    "この環境ではホストにアクセスできません。管理者にホスト設定を依頼するか、ゲートウェイURLで接続してください。",
+  sshHelp: "管理者が許可したSSHホストのインストールを確認します。",
+  urlHelp: "既存のURLとAPI認証キーで接続します。",
+  host: "SSHホスト",
+  chooseHost: "ホストを選択",
+  discover: "インストールを検索",
+  discovering: "Hermesのインストールを確認中…",
+  empty: "Hermesのインストールが見つかりません。",
+  inspect: "接続",
+  review: "設定内容の確認",
+  service: "対象ゲートウェイサービス",
+  changes: "予定される変更",
+  noChanges: "設定を変更せずに接続を検証します。",
+  verify: "検証して接続",
+  cancelling: "現在の処理が安全に完了するのを待っています…",
+  cancelHelp:
+    "キャンセルすると現在の処理が安全に完了した後、次の処理を中止します。完了済みのインストールや設定は元に戻りません。",
+  running: "ゲートウェイを準備中",
+  failed: "接続を完了できませんでした。",
+  cancelled: "設定を中断しました。",
+  name: "表示名",
+  address: "ゲートウェイURL",
+  token: "API認証キー",
+  connect: "URLで接続",
+  loading: "確認中…",
+  absent:
+    "API接続は保存済みですが、DeskRPGプラグインが未インストールのため準備が完了していません。SSHまたはガイドに従ってインストールしてください。",
+  guide: "プラグインのインストールガイド",
+  installSsh: "SSHでインストール",
+  ready: "プラグイン接続を確認済み",
+  pluginAbsent: "プラグイン未インストール",
+  disabled: "プラグイン無効",
+  pending: "サービスの再起動が必要",
+  unauthorized: "API認証キーを確認してください。認証失敗はプラグインの不在を意味しません。",
+  unreachable: "ゲートウェイに接続できません。サービスとネットワークを確認してください。",
+  unknown: "プラグインの状態を確認できません。",
+  permission: "ホストの設定権限がありません。管理者の設定を確認してください。",
+  busy: "この対象の設定が進行中です。少し待って再確認してください。",
+  invalid: "URLと接続先を確認してください。",
+  hostKey: "SSHホストの身元を確認できません。管理者が既知のホスト情報を確認する必要があります。",
+  inspecting: "インストール状態を確認",
+  installing_plugin: "DeskRPGプラグインをインストール",
+  enabling_plugin: "プラグインを有効化",
+  configuring_api: "APIを設定",
+  restarting_gateway: "選択したゲートウェイサービスを起動または再起動",
+  verifying_gateway: "実際のAPIとプラグインを検証",
+  importing_profiles: "プロファイルを取得",
+  saving_gateway: "ゲートウェイを保存",
+  step: "設定処理を実行中",
+  pluginRevision: "固定プラグインリビジョン",
+});
+Object.assign(zh, {
+  selectProfiles: "要导入的现有配置文件",
+  selectedProfiles: "已选配置文件",
+  profileNeedsToken: "导入此配置文件前，请先配置API凭据。",
+  profileProvisionToken: "连接时将创建API凭据。",
+  noSelectedProfiles: "未选择配置文件。网关将被连接；之后请单独注册配置文件。",
+  remoteHelp: "连接其他服务器上的Hermes。",
+  unavailable: "此实例不允许访问主机。请联系管理员启用主机设置，或通过网关地址连接。",
+  sshHelp: "检查管理员批准的SSH主机。",
+  urlHelp: "使用现有地址和API凭据连接。",
+  host: "SSH主机",
+  chooseHost: "选择主机",
+  discover: "查找安装",
+  discovering: "正在检查Hermes安装…",
+  empty: "未找到Hermes安装。",
+  inspect: "连接",
+  review: "确认安装设置",
+  service: "目标网关服务",
+  changes: "计划的更改",
+  noChanges: "不修改设置，仅验证连接。",
+  verify: "验证并连接",
+  cancelling: "正在等待当前操作安全完成…",
+  cancelHelp: "取消会在当前操作安全完成后停止后续步骤。已完成的安装或设置不会被撤销。",
+  running: "正在准备网关",
+  failed: "未能完成连接。",
+  cancelled: "设置已取消。",
+  name: "显示名称",
+  address: "网关地址",
+  token: "API凭据",
+  connect: "连接地址",
+  loading: "正在检查…",
+  absent: "API连接已保存，但由于缺少DeskRPG插件，尚未准备就绪。请通过SSH安装或查看安装指南。",
+  guide: "插件安装指南",
+  installSsh: "通过SSH安装",
+  ready: "插件连接已验证",
+  pluginAbsent: "插件未安装",
+  disabled: "插件已禁用",
+  pending: "需要重启服务",
+  unauthorized: "请检查API凭据。身份验证失败并不表示插件未安装。",
+  unreachable: "无法连接网关。请检查服务和网络。",
+  unknown: "无法确定插件状态。",
+  permission: "没有主机设置权限。请检查管理员设置。",
+  busy: "此目标的设置正在进行中。请稍后重试。",
+  invalid: "请检查地址和所选目标。",
+  hostKey: "无法验证SSH主机身份。请管理员检查已知主机信息。",
+  inspecting: "检查安装状态",
+  installing_plugin: "安装DeskRPG插件",
+  enabling_plugin: "启用插件",
+  configuring_api: "配置API",
+  restarting_gateway: "启动或重启所选网关服务",
+  verifying_gateway: "验证实际API和插件",
+  importing_profiles: "导入配置文件",
+  saving_gateway: "保存网关",
+  step: "设置步骤进行中",
+  pluginRevision: "固定插件版本",
+});
+export const setupCopy: Record<Locale, Copy> = { ko, en, ja, zh };
+export function setupError(copy: Copy, code: unknown): string {
+  if (typeof code !== "string") return copy.failed;
+  if (/unauthorized/.test(code)) return copy.unauthorized;
+  if (/host_key|host_identity|known_host/.test(code)) return copy.hostKey;
+  if (/forbidden|bad_origin/.test(code)) return copy.permission;
+  if (/busy/.test(code)) return copy.busy;
+  if (/unreachable/.test(code)) return copy.unreachable;
+  if (/invalid|not_hermes/.test(code)) return copy.invalid;
+  return copy.failed;
+}
+export function setupStep(copy: Copy, code: string): string {
+  const aliases: Record<string, keyof Copy> = {
+    install_plugin: "installing_plugin",
+    enable_plugin: "enabling_plugin",
+    configure_api: "configuring_api",
+    restart_gateway: "restarting_gateway",
+    provision_api_key: "configuring_api",
+    start_gateway: "restarting_gateway",
+  };
+  const key = aliases[code] ?? code;
+  return Object.prototype.hasOwnProperty.call(copy, key) ? copy[key as keyof Copy] : copy.step;
+}
+
+// Browser-owned presentation codes only: never import the server host executor here.
+const hostErrorGroups: Record<string, string> = {
+  managed_service_required: "service",
+  service_identity_ambiguous: "identity",
+  service_identity_mismatch: "identity",
+  listener_owner_required: "identity",
+  listener_ownership_unverified: "identity",
+  gateway_identity_unverified: "identity",
+  candidate_changed: "identity",
+  invalid_candidate: "identity",
+  external_secret_provider: "secret",
+  api_key_invalid: "credential",
+  multiplex_override_present: "multiplex",
+  multiplex_conflict: "multiplex",
+  port_conflict: "port",
+  plugin_identity_ambiguous: "pluginIdentity",
+  plugin_install_failed: "install",
+  gateway_restart_failed: "restart",
+  gateway_verification_failed: "verify",
+  profile_verification_failed: "profile",
+  profile_import_failed: "profile",
+  host_operation_failed: "host",
+  unsafe_host_path: "config",
+  invalid_host_config: "config",
+  hermes_not_found: "missing",
+  ssh_unknown_host: "ssh",
+  ssh_connection_failed: "ssh",
+  command_timeout: "timeout",
+  output_limit: "host",
+};
+const hostRemediation: Record<Locale, Record<string, string>> = {
+  ko: {
+    service:
+      "관리되는 게이트웨이 서비스를 찾지 못했습니다. 관리자가 Hermes 서비스를 등록하고 실행 상태를 확인한 뒤 다시 확인하세요.",
+    identity:
+      "선택한 설치와 실행 중인 게이트웨이의 소유 관계를 확인할 수 없습니다. 관리자가 서비스의 Hermes 경로·프로필·API 포트를 확인한 뒤 설치를 다시 검색하세요.",
+    secret:
+      "외부 비밀 관리자가 API 인증 키를 관리합니다. 해당 관리자에서 키를 설정한 뒤 다시 확인하세요. 이 화면에서는 기존 비밀 제공자 설정을 덮어쓰지 않습니다.",
+    credential:
+      "호스트의 API 인증 키가 유효하지 않습니다. 관리자가 Hermes 인증 설정을 수정한 뒤 다시 확인하세요.",
+    multiplex:
+      "프로필의 API 포트 설정과 게이트웨이 multiplex 설정이 충돌합니다. 관리자가 리스너 소유 프로필과 프로필별 포트 설정을 정리한 뒤 다시 확인하세요.",
+    port: "선택한 API 포트를 다른 프로세스가 사용 중입니다. 관리자가 포트 사용자를 확인하고 Hermes 포트 충돌을 해결한 뒤 다시 확인하세요.",
+    pluginIdentity:
+      "DeskRPG 플러그인 설치를 하나로 식별할 수 없습니다. 관리자가 중복되거나 다른 출처의 플러그인을 확인한 뒤 다시 시도하세요.",
+    install:
+      "플러그인을 설치하지 못했습니다. 관리자가 호스트의 네트워크와 설치 권한을 확인한 뒤 다시 확인하세요.",
+    restart:
+      "선택한 게이트웨이 서비스를 시작하거나 재시작하지 못했습니다. 관리자가 해당 서비스의 상태와 로그를 확인한 뒤 다시 확인하세요.",
+    verify:
+      "설정 후 실제 게이트웨이 API 또는 플러그인을 검증하지 못했습니다. 관리자가 서비스와 API 인증 상태를 확인한 뒤 다시 확인하세요.",
+    profile:
+      "게이트웨이 프로필의 인증 또는 가져오기를 완료하지 못했습니다. 관리자가 프로필별 API 인증 설정을 확인한 뒤 다시 시도하세요.",
+    host: "호스트 작업을 완료하지 못했습니다. 관리자가 호스트 상태와 설정을 확인한 뒤 다시 시도하세요.",
+    config:
+      "안전하게 사용할 수 없는 호스트 경로나 설정이 발견되었습니다. 관리자가 Hermes 설치 경로·파일 권한·설정 형식을 확인해야 합니다.",
+    missing:
+      "Hermes 실행 파일을 찾지 못했습니다. 관리자가 해당 호스트의 Hermes 설치와 실행 경로를 확인한 뒤 다시 검색하세요.",
+    ssh: "허용된 SSH 호스트에 연결할 수 없습니다. 관리자가 호스트 별칭·네트워크·키 인증을 확인한 뒤 다시 시도하세요.",
+    timeout:
+      "호스트 작업 시간이 초과되었습니다. 관리자가 호스트와 네트워크 상태를 확인한 뒤 다시 시도하세요.",
+  },
+  en: {
+    service:
+      "No managed gateway service was found. Ask the administrator to register the Hermes service and check its state, then check again.",
+    identity:
+      "The selected installation cannot be matched safely to the running gateway. Ask the administrator to check its Hermes path, profile and API port, then discover installations again.",
+    secret:
+      "An external secret provider manages the API credential. Configure the credential through that provider, then check again. Existing provider settings will be preserved.",
+    credential:
+      "The host API credential is invalid. Ask the administrator to correct Hermes authentication settings, then check again.",
+    multiplex:
+      "Profile API port settings conflict with gateway multiplex settings. Ask the administrator to reconcile the listener-owner profile and profile port settings, then check again.",
+    port: "Another process is using the selected API port. Ask the administrator to identify the listener and resolve the Hermes port conflict, then check again.",
+    pluginIdentity:
+      "The DeskRPG plugin installation is ambiguous. Ask the administrator to check duplicate plugins or plugins from other sources, then retry.",
+    install:
+      "Plugin installation failed. Ask the administrator to check host network access and installation permissions, then check again.",
+    restart:
+      "The selected gateway service could not start or restart. Ask the administrator to check that service’s status and logs, then check again.",
+    verify:
+      "The live gateway API or plugin could not be verified after setup. Ask the administrator to check the service and API authentication, then check again.",
+    profile:
+      "Profile authentication or import could not be completed. Ask the administrator to check profile-scoped API credentials, then retry.",
+    host: "The host operation did not complete. Ask the administrator to check the host and its configuration, then retry.",
+    config:
+      "An unsafe host path or invalid configuration was found. Ask the administrator to check the Hermes installation path, file permissions and configuration format.",
+    missing:
+      "The Hermes executable was not found. Ask the administrator to check the host’s Hermes installation and executable path, then discover again.",
+    ssh: "Cannot connect to the approved SSH host. Ask the administrator to check the alias, network and key authentication, then retry.",
+    timeout:
+      "The host operation timed out. Ask the administrator to check the host and network, then retry.",
+  },
+  ja: {
+    service:
+      "管理対象のゲートウェイサービスが見つかりません。管理者がHermesサービスを登録し、実行状態を確認してから再確認してください。",
+    identity:
+      "選択したインストールと実行中のゲートウェイの対応を確認できません。管理者がHermesのパス、プロファイル、APIポートを確認してから再検索してください。",
+    secret:
+      "外部シークレットプロバイダーがAPI認証キーを管理しています。そのプロバイダーでキーを設定してから再確認してください。既存のプロバイダー設定は維持されます。",
+    credential:
+      "ホストのAPI認証キーが無効です。管理者がHermes認証設定を修正してから再確認してください。",
+    multiplex:
+      "プロファイルのAPIポートとゲートウェイのmultiplex設定が競合しています。管理者がリスナー所有プロファイルとポート設定を確認してから再試行してください。",
+    port: "別のプロセスが選択したAPIポートを使用しています。管理者がポートの使用者を確認し、競合を解決してから再確認してください。",
+    pluginIdentity:
+      "DeskRPGプラグインのインストールを特定できません。管理者が重複や別の配布元のプラグインを確認してから再試行してください。",
+    install:
+      "プラグインをインストールできませんでした。管理者がホストのネットワークとインストール権限を確認してから再試行してください。",
+    restart:
+      "選択したゲートウェイサービスを起動または再起動できません。管理者が該当サービスの状態とログを確認してから再試行してください。",
+    verify:
+      "設定後の実際のAPIまたはプラグインを検証できません。管理者がサービスとAPI認証を確認してから再試行してください。",
+    profile:
+      "プロファイルの認証または取得が完了していません。管理者がプロファイルごとのAPI認証設定を確認してから再試行してください。",
+    host: "ホストの処理を完了できません。管理者がホストと設定を確認してから再試行してください。",
+    config:
+      "安全に使用できないパスまたは無効な設定が見つかりました。管理者がHermesのパス、ファイル権限、設定形式を確認してください。",
+    missing:
+      "Hermesの実行ファイルが見つかりません。管理者がインストールと実行パスを確認してから再検索してください。",
+    ssh: "許可されたSSHホストに接続できません。管理者がホスト別名、ネットワーク、鍵認証を確認してから再試行してください。",
+    timeout:
+      "ホスト処理がタイムアウトしました。管理者がホストとネットワークを確認してから再試行してください。",
+  },
+  zh: {
+    service: "未找到受管理的网关服务。请管理员注册Hermes服务并检查运行状态，然后重新检查。",
+    identity:
+      "无法安全确认所选安装与运行中网关的对应关系。请管理员检查Hermes路径、配置文件和API端口，然后重新搜索安装。",
+    secret:
+      "API凭据由外部密钥提供程序管理。请通过该提供程序配置凭据，然后重新检查。现有提供程序设置将被保留。",
+    credential: "主机API凭据无效。请管理员修正Hermes身份验证设置，然后重新检查。",
+    multiplex:
+      "配置文件的API端口与网关multiplex设置冲突。请管理员调整监听器所属配置文件和各配置文件端口，然后重新检查。",
+    port: "其他进程正在使用所选API端口。请管理员确认端口使用者并解决Hermes端口冲突，然后重新检查。",
+    pluginIdentity:
+      "无法唯一识别DeskRPG插件安装。请管理员检查重复插件或来自其他来源的插件，然后重试。",
+    install: "插件安装失败。请管理员检查主机网络和安装权限，然后重新检查。",
+    restart: "无法启动或重启所选网关服务。请管理员检查该服务的状态和日志，然后重新检查。",
+    verify: "设置后无法验证实际网关API或插件。请管理员检查服务和API身份验证，然后重新检查。",
+    profile: "无法完成配置文件身份验证或导入。请管理员检查各配置文件的API凭据，然后重试。",
+    host: "主机操作未完成。请管理员检查主机及其配置，然后重试。",
+    config: "发现不安全的主机路径或无效配置。请管理员检查Hermes安装路径、文件权限和配置格式。",
+    missing: "未找到Hermes可执行文件。请管理员检查主机上的Hermes安装和执行路径，然后重新搜索。",
+    ssh: "无法连接已批准的SSH主机。请管理员检查别名、网络和密钥身份验证，然后重试。",
+    timeout: "主机操作超时。请管理员检查主机和网络，然后重试。",
+  },
+};
+export function setupHostError(locale: Locale, code: unknown): string | undefined {
+  return typeof code === "string" ? hostRemediation[locale][hostErrorGroups[code]] : undefined;
+}
+const repairableWarnings = new Set([
+  "gateway_unreachable",
+  "api_key_missing",
+  "plugin_pending_restart",
+  "pending_restart",
+  "plugin_disabled",
+  "plugin_absent",
+]);
+export function isSetupWarningBlocking(code: string | undefined): boolean {
+  return !!code && !repairableWarnings.has(code);
+}

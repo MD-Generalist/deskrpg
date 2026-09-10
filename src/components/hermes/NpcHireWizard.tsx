@@ -22,7 +22,7 @@ import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
-import type { CatalogPayload } from "@/lib/hermes/plugin-client";
+import type { CatalogPayload } from "@/lib/hermes/plugin-client-types";
 
 import {
   availableSteps,

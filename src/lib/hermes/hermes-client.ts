@@ -1,3 +1,4 @@
+import { transportFetch } from "./setup/transport";
 // Profile-scoped HTTP client for the Hermes API Server.
 // Knows URLs, auth and error shapes. Knows nothing about DeskRPG's DB.
 
@@ -51,7 +52,7 @@ export class HermesClient {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.profileName = config.profileName;
     this.token = config.token;
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    this.fetchImpl = config.fetchImpl ?? transportFetch;
     this.sleepImpl = config.sleepImpl ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   }
 

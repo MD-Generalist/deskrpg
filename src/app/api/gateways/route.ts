@@ -1,3 +1,4 @@
+import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getUserId } from "@/lib/internal-rpc";
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  if (isManagedSshUrl(body.url)) { return NextResponse.json({ errorCode: "setup_invalid_request", error: "setup_invalid_request" }, { status: 400 }); }
 
   const resource = await upsertOwnedGatewayResource({
     ownerUserId: userId,

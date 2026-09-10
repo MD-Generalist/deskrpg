@@ -1,4 +1,5 @@
 export type ErrorCode =
+  | "setup_invalid_request"
   | "invalid_credentials"
   | "login_id_password_required"
   | "login_id_nickname_password_required"
@@ -207,6 +208,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   register_failed: "errors.registerFailed",
   failed_to_delete_meeting: "errors.failedToDeleteMeeting",
   invalid_request_body: "errors.invalidRequestBody",
+  setup_invalid_request: "errors.badRequest",
   invalid_title: "errors.invalidTitle",
   missing_required_field: "errors.missingRequiredField",
   login_id_required: "errors.loginIdRequired",

@@ -1,3 +1,4 @@
+import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { NextRequest, NextResponse } from "next/server";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 
@@ -51,6 +52,8 @@ export async function POST(req: NextRequest) {
       error: "Invalid gateway URL format",
     });
   }
+
+  if (isManagedSshUrl(url)) { return NextResponse.json({ errorCode: "setup_invalid_request", error: "setup_invalid_request" }, { status: 400 }); }
 
   const probe = await probeHermesGateway(url);
 

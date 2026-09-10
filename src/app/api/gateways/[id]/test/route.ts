@@ -1,3 +1,4 @@
+import { transportFetch } from "@/lib/hermes/setup/transport";
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync } from "node:fs";
 
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Hermes 임이 확인된 뒤에만 플러그인을 찌른다 — API Server 가 아닌 곳에 우리
     // 경로를 보낼 이유가 없다.
     const plugin = await probeDeskrpgPlugin({
+      fetchImpl: transportFetch,
       baseUrl: accessible.resource.baseUrl,
       token: decryptGatewayToken(accessible.resource.tokenEncrypted),
     });

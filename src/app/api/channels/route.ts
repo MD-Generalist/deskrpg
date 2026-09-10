@@ -1,3 +1,4 @@
+import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { db, jsonForDb } from "@/db";
 import {
   channels,
@@ -188,6 +189,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { name, description, isPublic, mapTemplateId, password, gatewayConfig, groupId } = body;
+    if (!(typeof gatewayConfig?.gatewayId === "string" && gatewayConfig.gatewayId) && isManagedSshUrl(gatewayConfig?.url)) { return NextResponse.json({ errorCode: "setup_invalid_request", error: "setup_invalid_request" }, { status: 400 }); }
 
     if (!name || typeof name !== "string" || name.length < 1 || name.length > 100) {
       return NextResponse.json(

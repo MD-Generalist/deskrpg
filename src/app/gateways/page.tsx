@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
+import GatewaySetupWizard from "@/components/gateway/GatewaySetupWizard";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
@@ -186,34 +187,6 @@ function GatewayManagementPageInner() {
     }
     void loadShares(selectedGateway.id);
   }, [loadShares, selectedGateway]);
-
-  const handleCreate = async () => {
-    setSaving(true);
-    setError("");
-    setNotice("");
-    try {
-      const res = await fetch("/api/gateways", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, url: baseUrl, token }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw data;
-      }
-      await loadGateways();
-      setNotice(t("gateways.saved"));
-      if (data.gateway?.id) {
-        setSelectedGatewayId(data.gateway.id);
-      }
-      setToken("");
-      setFormMode("edit");
-    } catch (nextError) {
-      setError(getLocalizedErrorMessage(t, nextError, "common.error"));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleUpdate = async () => {
     if (!selectedGateway) return;
@@ -598,107 +571,109 @@ function GatewayManagementPageInner() {
           </aside>
 
           <main className="space-y-6">
-            <section className="rounded-xl border border-border bg-surface p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    {formMode === "create" ? t("gateways.createTitle") : t("gateways.editTitle")}
-                  </h2>
-                  <p className="mt-1 text-sm text-text-muted">
-                    {formMode === "create" ? t("gateways.createHelp") : t("gateways.editHelp")}
-                  </p>
-                </div>
-                {selectedGateway && (
-                  <button
-                    type="button"
-                    onClick={() => void handleTest(selectedGateway.id)}
-                    disabled={testingGatewayId === selectedGateway.id}
-                    className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80 disabled:opacity-60"
-                  >
-                    {testingGatewayId === selectedGateway.id
-                      ? t("gateway.testing")
-                      : t("gateway.testConnection")}
-                  </button>
-                )}
-              </div>
-
-              <div className="grid gap-4">
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
-                    {t("gateways.displayName")}
-                  </label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    disabled={!!selectedGateway && !selectedGateway.isOwner}
-                    className="w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
-                    {t("settings.gatewayUrl")}
-                  </label>
-                  <input
-                    type="text"
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    disabled={!!selectedGateway && !selectedGateway.isOwner}
-                    className="w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
-                    placeholder={t("settings.gatewayUrlPlaceholder")}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-text-secondary">
-                    {formMode === "create" ? t("settings.gatewayToken") : t("gateways.rotateToken")}
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type={showToken ? "text" : "password"}
-                      value={token}
-                      onChange={(e) => setToken(e.target.value)}
-                      disabled={!!selectedGateway && !selectedGateway.isOwner}
-                      className="flex-1 rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
-                      placeholder={t("settings.gatewayTokenPlaceholder")}
-                    />
+            {!selectedGateway ? (
+              <GatewaySetupWizard
+                onConnected={(gatewayId) => {
+                  setSelectedGatewayId(gatewayId);
+                  void loadGateways();
+                }}
+              />
+            ) : (
+              <section className="rounded-xl border border-border bg-surface p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      {formMode === "create" ? t("gateways.createTitle") : t("gateways.editTitle")}
+                    </h2>
+                    <p className="mt-1 text-sm text-text-muted">
+                      {formMode === "create" ? t("gateways.createHelp") : t("gateways.editHelp")}
+                    </p>
+                  </div>
+                  {selectedGateway && (
                     <button
                       type="button"
-                      onClick={() => setShowToken((prev) => !prev)}
-                      className="rounded bg-surface-raised px-3 py-2 text-sm text-text hover:bg-surface-raised/80"
+                      onClick={() => void handleTest(selectedGateway.id)}
+                      disabled={testingGatewayId === selectedGateway.id}
+                      className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80 disabled:opacity-60"
                     >
-                      {showToken ? t("common.hide") : t("common.show")}
+                      {testingGatewayId === selectedGateway.id
+                        ? t("gateway.testing")
+                        : t("gateway.testConnection")}
                     </button>
-                  </div>
-                  {formMode === "edit" && (
-                    <p className="mt-1 text-xs text-text-muted">{t("gateways.rotateTokenHint")}</p>
                   )}
                 </div>
-              </div>
 
-              {selectedGateway && testStates[selectedGateway.id] && (
-                <GatewayStatusCard
-                  className="mt-4"
-                  status={testStates[selectedGateway.id]?.status ?? "idle"}
-                  error={testStates[selectedGateway.id]?.error}
-                  detail={
-                    testStates[selectedGateway.id]?.status === "connected"
-                      ? t("gateways.testSuccess")
-                      : undefined
-                  }
-                />
-              )}
+                <div className="grid gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-text-secondary">
+                      {t("gateways.displayName")}
+                    </label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      disabled={!!selectedGateway && !selectedGateway.isOwner}
+                      className="w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-text-secondary">
+                      {t("settings.gatewayUrl")}
+                    </label>
+                    <input
+                      type="text"
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      disabled={!!selectedGateway && !selectedGateway.isOwner}
+                      className="w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
+                      placeholder={t("settings.gatewayUrlPlaceholder")}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-text-secondary">
+                      {formMode === "create"
+                        ? t("settings.gatewayToken")
+                        : t("gateways.rotateToken")}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type={showToken ? "text" : "password"}
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        disabled={!!selectedGateway && !selectedGateway.isOwner}
+                        className="flex-1 rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary disabled:opacity-60"
+                        placeholder={t("settings.gatewayTokenPlaceholder")}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowToken((prev) => !prev)}
+                        className="rounded bg-surface-raised px-3 py-2 text-sm text-text hover:bg-surface-raised/80"
+                      >
+                        {showToken ? t("common.hide") : t("common.show")}
+                      </button>
+                    </div>
+                    {formMode === "edit" && (
+                      <p className="mt-1 text-xs text-text-muted">
+                        {t("gateways.rotateTokenHint")}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-              <div className="mt-5 flex gap-3">
-                {formMode === "create" ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleCreate()}
-                    disabled={saving || !displayName.trim() || !baseUrl.trim() || !token.trim()}
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
-                  >
-                    {saving ? t("common.loading") : t("common.create")}
-                  </button>
-                ) : (
+                {selectedGateway && testStates[selectedGateway.id] && (
+                  <GatewayStatusCard
+                    className="mt-4"
+                    status={testStates[selectedGateway.id]?.status ?? "idle"}
+                    error={testStates[selectedGateway.id]?.error}
+                    detail={
+                      testStates[selectedGateway.id]?.status === "connected"
+                        ? t("gateways.testSuccess")
+                        : undefined
+                    }
+                  />
+                )}
+
+                <div className="mt-5 flex gap-3">
                   <>
                     <button
                       type="button"
@@ -722,9 +697,9 @@ function GatewayManagementPageInner() {
                       {deleting ? t("common.loading") : t("common.delete")}
                     </button>
                   </>
-                )}
-              </div>
-            </section>
+                </div>
+              </section>
+            )}
 
             {selectedGateway && (
               <HermesProfileList

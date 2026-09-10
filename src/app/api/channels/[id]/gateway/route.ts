@@ -1,3 +1,4 @@
+import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { db } from "@/db";
 import { channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
@@ -119,6 +120,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch {
     return NextResponse.json({ errorCode: "invalid_json", error: "invalid JSON" }, { status: 400 });
   }
+
+  if (!(typeof body.gatewayId === "string" && body.gatewayId.trim()) && isManagedSshUrl(body.url)) { return NextResponse.json({ errorCode: "setup_invalid_request", error: "setup_invalid_request" }, { status: 400 }); }
 
   const currentBinding = await getChannelGatewayBinding(id);
   const mergedGatewayConfig = mergeGatewayConfig(channel.gatewayConfig, body);
