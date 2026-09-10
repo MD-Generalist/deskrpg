@@ -48,3 +48,11 @@
 
 ## Verification result
 2026-09-10: full suite 1204 tests (1201 pass, 3 skip, zero failures); subsequent JSONB comparison regression suite 6/6 pass. TypeScript, scoped ESLint and production build pass. Chrome desktop/mobile: five environment choices and 3D previews; publishing channel created and reloaded with the saved office-eun character, no runtime console errors, primary editor controls absent. Remaining forty character looks are a later phase.
+
+## Phase 2: expand the approved cast to fifty
+- [x] Preserve original ten appearances; author forty distinct complete looks with original names and bilingual captions.
+- [x] Extend shared rig for bun/long/braided hair, double-breasted suit, hoodie/lab coat, neckwear, backpack and work props.
+- [x] Generate gallery thumbnails incrementally with cancellation and GPU cleanup.
+- [x] Validate all fifty saved appearances, poses, geometry, and disposal; Chrome selection/save/reload; typecheck/lint/build and review.
+
+Phase 2 result: 50 unique original looks; previous 10 IDs/data preserved. Full suite: 1210 tests, 1207 pass, 3 skip; final garment regression suite 7/7 pass. TypeScript, ESLint and build passed. Chrome: 50/50 thumbnails; search; bow blouse/knee skirt and labcoat rotation; new office-haena saved, reopened with same appearance and entered publishing channel. Review pinstripe-vest detail fixed and re-reviewed.

@@ -1,4 +1,5 @@
 import type { CharacterAppearance } from "../../lib/lpc-registry";
+import { EXTENDED_OFFICE_LOOKS } from "./office-looks-extended";
 
 export type OfficeLook = {
   id: string;
@@ -10,15 +11,27 @@ export type OfficeLook = {
   skin: string;
   skinVariant: string;
   hair: string;
-  hairStyle: "part" | "bob" | "pony" | "curls" | "wave" | "crop";
-  outfit: "suit" | "shirt" | "vest" | "blouse" | "coat" | "cardigan";
+  hairStyle: "part" | "bob" | "pony" | "curls" | "wave" | "crop" | "bun" | "long" | "braids";
+  outfit:
+    | "suit"
+    | "shirt"
+    | "vest"
+    | "blouse"
+    | "coat"
+    | "cardigan"
+    | "double-breasted"
+    | "hoodie"
+    | "labcoat";
   coat: string;
   shirt: string;
   trousers: string;
   shoes: string;
   tie?: string;
   glasses?: boolean;
-  bag?: "briefcase" | "shoulder";
+  bag?: "briefcase" | "shoulder" | "backpack";
+  neckwear?: "bow" | "scarf" | "turtleneck";
+  accessory?: "badge" | "headset" | "notebook";
+  skirtLength?: "knee" | "long";
   lower?: "wide" | "skirt";
   pattern?: "check" | "pinstripe" | "knit";
   build: number;
@@ -254,6 +267,7 @@ export const OFFICE_LOOKS: readonly OfficeLook[] = [
     stance: "composed",
     bodyType: "male",
   },
+  ...EXTENDED_OFFICE_LOOKS,
 ];
 
 export function resolveOfficeLook(appearance: unknown): OfficeLook | undefined {

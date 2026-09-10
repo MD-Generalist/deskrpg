@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "./office-looks";
 import { validateAppearance } from "../../lib/lpc-registry";
-test("all ten looks survive existing appearance validation and JSON roundtrip", () => {
-  assert.equal(OFFICE_LOOKS.length, 10);
-  assert.equal(new Set(OFFICE_LOOKS.map((l) => l.id)).size, 10);
+test("all fifty looks survive existing appearance validation and JSON roundtrip", () => {
+  assert.equal(OFFICE_LOOKS.length, 50);
+  assert.equal(new Set(OFFICE_LOOKS.map((l) => l.id)).size, 50);
   for (const look of OFFICE_LOOKS) {
     const appearance = officeLookAppearance(look.id);
     assert.equal(validateAppearance(appearance), null, look.id);
@@ -53,5 +53,92 @@ test("lookbook rigs have distinct geometry, stable identity and finite poses", (
     disposeTree(actor.root);
     assert.equal(disposed, geometry.length);
   }
-  assert.ok(silhouettes.size >= 9);
+  assert.ok(silhouettes.size >= 35);
+});
+
+test("expanded wardrobe offers distinct structural options beyond palette changes", () => {
+  for (const outfit of ["double-breasted", "hoodie", "labcoat"])
+    assert.ok(
+      OFFICE_LOOKS.some((look) => look.outfit === outfit),
+      outfit,
+    );
+  for (const hair of ["bun", "long", "braids"])
+    assert.ok(
+      OFFICE_LOOKS.some((look) => look.hairStyle === hair),
+      hair,
+    );
+  for (const accessory of ["badge", "headset", "notebook"])
+    assert.ok(
+      OFFICE_LOOKS.some((look) => look.accessory === accessory),
+      accessory,
+    );
+  assert.ok(OFFICE_LOOKS.some((look) => look.bag === "backpack"));
+  assert.ok(OFFICE_LOOKS.some((look) => look.skirtLength === "knee"));
+  assert.equal(new Set(OFFICE_LOOKS.map((look) => look.name)).size, 50);
+  for (const look of OFFICE_LOOKS) {
+    assert.ok(look.subtitle.includes(" · ") && look.subtitleEn.includes(" · "), look.id);
+    assert.ok(look.build >= 0.8 && look.build <= 1.4, look.id);
+  }
+});
+
+test("new garment and accessory options change rendered geometry", () => {
+  const base = OFFICE_LOOKS[0];
+  const signature = (look: typeof base) => {
+    const actor = createActor("test", look.coat, 0, undefined, look);
+    const shapes: string[] = [];
+    actor.root.updateMatrixWorld(true);
+    actor.root.traverse((object) => {
+      if (object instanceof T.Mesh)
+        shapes.push(
+          JSON.stringify([
+            object.geometry.getAttribute("position").count,
+            object.matrixWorld.elements,
+          ]),
+        );
+    });
+    disposeTree(actor.root);
+    return shapes.join("|");
+  };
+  const initial = signature(base);
+  for (const change of [
+    { hairStyle: "bun" },
+    { hairStyle: "long" },
+    { hairStyle: "braids" },
+    { outfit: "double-breasted" },
+    { outfit: "hoodie" },
+    { outfit: "labcoat" },
+    { neckwear: "bow" },
+    { neckwear: "scarf" },
+    { neckwear: "turtleneck" },
+    { accessory: "headset" },
+    { accessory: "notebook" },
+    { bag: "backpack" },
+    { lower: "skirt", skirtLength: "knee" },
+  ] as const)
+    assert.notEqual(signature({ ...base, ...change }), initial, JSON.stringify(change));
+});
+
+test("vest pinstripes and cardigan knit alter garment geometry independently of color", () => {
+  const signature = (look: (typeof OFFICE_LOOKS)[number]) => {
+    const actor = createActor("pattern", look.coat, 0, undefined, look);
+    const shapes: unknown[] = [];
+    actor.root.updateMatrixWorld(true);
+    actor.root.traverse((object) => {
+      if (object instanceof T.Mesh) {
+        object.geometry.computeBoundingBox();
+        shapes.push([
+          object.geometry.boundingBox?.min.toArray(),
+          object.geometry.boundingBox?.max.toArray(),
+          object.matrixWorld.elements,
+        ]);
+      }
+    });
+    disposeTree(actor.root);
+    return JSON.stringify(shapes);
+  };
+  const vest = OFFICE_LOOKS.find((look) => look.id === "office-kyung")!;
+  assert.notEqual(signature(vest), signature({ ...vest, pattern: undefined }));
+  assert.notEqual(signature(vest), signature({ ...vest, pattern: "knit" }));
+  const cardigan = OFFICE_LOOKS.find((look) => look.id === "office-eun")!;
+  assert.notEqual(signature(cardigan), signature({ ...cardigan, pattern: undefined }));
 });

@@ -10,3 +10,6 @@ Validation: persisted appearance passes existing validator; JSON roundtrip resol
 
 ## Approved map scope update
 Five fixed environments: trading, agency, tech, executive, publishing. Channel creation offers selection and a live 3D preview. Register/reuse exact version-tagged snapshots via existing map-template API, then use its ID with the unchanged channel creation API. No editor, furniture or palette controls in primary navigation/game. Preserve legacy editor routes and data. Standard dimensions 30×22; all entrances and seats reachable.
+
+## Phase 2 completed
+Expand to 50 original office characters using the supplied K-drama wardrobe direction. Existing first-ten identifiers/data remain stable. Added structural hair/garment/prop options and incremental cancellable thumbnail generation. All appearances retain the existing backend contract.

@@ -6,46 +6,82 @@ import { createActor, cylinder } from "@/game/three/characters";
 import { disposeTree } from "@/game/three/office-renderer";
 import { useLocale } from "@/lib/i18n";
 
-let cachedThumbnails: Record<string, string> | undefined;
-/** One temporary GPU context for the entire catalog, released after capture. */
-function thumbnails() {
-  if (cachedThumbnails) return cachedThumbnails;
-  const renderer = new T.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    preserveDrawingBuffer: true,
-  });
-  renderer.setSize(240, 280);
-  renderer.setPixelRatio(1);
-  renderer.outputColorSpace = T.SRGBColorSpace;
-  const result: Record<string, string> = {};
+const cachedThumbnails: Record<string, string> = {};
+
+function captureThumbnail(renderer: T.WebGLRenderer, look: OfficeLook, index: number) {
+  const scene = new T.Scene();
   try {
-    for (const [i, look] of OFFICE_LOOKS.entries()) {
-      const scene = new T.Scene();
-      try {
-        const camera = new T.PerspectiveCamera(30, 240 / 280, 0.1, 20);
-        camera.position.set(1.5, 1.8, 4.2);
-        camera.lookAt(0, 0.97, 0);
-        scene.add(new T.HemisphereLight("#fff8ed", "#89988b", 2.5));
-        const light = new T.DirectionalLight("#fff1dc", 3);
-        light.position.set(-2, 4, 4);
-        scene.add(light);
-        cylinder(scene, 0.46, 0.5, 0.06, "#d9cbb6", 0, 0.015, 0);
-        const actor = createActor(look.id, look.coat, i, undefined, look);
-        scene.add(actor.root);
-        actor.update(0, false, "idle", false);
-        renderer.render(scene, camera);
-        result[look.id] = renderer.domElement.toDataURL("image/png");
-      } finally {
-        disposeTree(scene);
-      }
-    }
-    cachedThumbnails = result;
-    return result;
+    const camera = new T.PerspectiveCamera(30, 240 / 280, 0.1, 20);
+    camera.position.set(1.5, 1.8, 4.2);
+    camera.lookAt(0, 0.97, 0);
+    scene.add(new T.HemisphereLight("#fff8ed", "#89988b", 2.5));
+    const light = new T.DirectionalLight("#fff1dc", 3);
+    light.position.set(-2, 4, 4);
+    scene.add(light);
+    cylinder(scene, 0.46, 0.5, 0.06, "#d9cbb6", 0, 0.015, 0);
+    const actor = createActor(look.id, look.coat, index, undefined, look);
+    scene.add(actor.root);
+    actor.update(0, false, "idle", false);
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL("image/png");
   } finally {
-    renderer.dispose();
-    renderer.forceContextLoss();
+    disposeTree(scene);
   }
+}
+
+/** One context per mounted generation; each frame captures at most one missing look. */
+function generateThumbnails(publish: (images: Record<string, string>) => void) {
+  let renderer: T.WebGLRenderer | undefined;
+  let cancelled = false;
+  let index = 0;
+  let frame = 0;
+  const release = () => {
+    const current = renderer;
+    renderer = undefined;
+    if (!current) return;
+    try {
+      current.dispose();
+    } finally {
+      current.forceContextLoss();
+    }
+  };
+  const captureNext = () => {
+    if (cancelled) return;
+    try {
+      // Always publish completed images, including an entirely cached remount.
+      publish({ ...cachedThumbnails });
+      while (index < OFFICE_LOOKS.length && cachedThumbnails[OFFICE_LOOKS[index].id]) index++;
+      if (index === OFFICE_LOOKS.length) {
+        release();
+        return;
+      }
+      if (!renderer) {
+        renderer = new T.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+          preserveDrawingBuffer: true,
+        });
+        renderer.setSize(240, 280);
+        renderer.setPixelRatio(1);
+        renderer.outputColorSpace = T.SRGBColorSpace;
+      }
+      const look = OFFICE_LOOKS[index];
+      const image = captureThumbnail(renderer, look, index++);
+      cachedThumbnails[look.id] = image;
+      publish({ ...cachedThumbnails });
+      if (index < OFFICE_LOOKS.length) frame = requestAnimationFrame(captureNext);
+      else release();
+    } catch {
+      // Retain completed images; all text cards remain selectable without WebGL.
+      release();
+    }
+  };
+  frame = requestAnimationFrame(captureNext);
+  return () => {
+    cancelled = true;
+    cancelAnimationFrame(frame);
+    release();
+  };
 }
 
 export default function OfficeLookGallery({
@@ -60,16 +96,7 @@ export default function OfficeLookGallery({
   const [images, setImages] = useState<Record<string, string>>({});
   const [category, setCategory] = useState("all"),
     [query, setQuery] = useState("");
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      try {
-        setImages(thumbnails());
-      } catch {
-        /* Text cards stay usable without WebGL. */
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  }, []);
+  useEffect(() => generateThumbnails(setImages), []);
   const filtered = OFFICE_LOOKS.filter(
     (l) =>
       (category === "all" || l.category === category) &&
@@ -82,7 +109,7 @@ export default function OfficeLookGallery({
       className="lookbook-catalog"
       aria-label={ko ? "오피스 캐릭터 컬렉션" : "Office character collection"}
     >
-      <div className="lookbook-eyebrow">THE OFFICE COLLECTION · VOL. 01</div>
+      <div className="lookbook-eyebrow">THE OFFICE COLLECTION · {OFFICE_LOOKS.length} LOOKS</div>
       <h1>{ko ? "함께 일하고 싶은 얼굴들" : "Meet your office cast"}</h1>
       <p className="lookbook-intro">
         {ko
