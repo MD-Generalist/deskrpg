@@ -19,6 +19,14 @@ import {
 } from "@/app/game/chat-response-state";
 import ResponseProgress from "./chat/ResponseProgress";
 import { ConversationSessionStore } from "@/app/game/conversation-session";
+import CronPanel, { type CronEventSource } from "./cron/CronPanel";
+
+/** NPC 대화창의 크론 탭(T9)에 필요한 것. 배선(GamePageClient)이 넘긴다 — 없으면 탭이 없다. */
+export type ChatPanelCronContext = {
+  channelId: string;
+  socket?: CronEventSource | null;
+  onToast?: (message: string) => void;
+};
 
 interface ChatPanelProps {
   /** Overlay keeps the legacy floating panel; workspace embeds it in the right column. */
@@ -62,6 +70,8 @@ interface ChatPanelProps {
   /** 방 안 화면(패널 열림 + DM/선택목록 아님)이 보이는지 — 맵의 NPC 대기 규칙이 이걸 본다. */
   onChannelChatVisibleChange?: (visible: boolean) => void;
   currentPlayerName?: string;
+  /** NPC DM 에 "크론" 탭을 붙인다 — 그 NPC 것만(R15). 없으면 대화만 보인다. */
+  cron?: ChatPanelCronContext | null;
 }
 
 const MIN_WIDTH = 250;
@@ -104,8 +114,18 @@ export default function ChatPanel({
   currentPlayerName,
   npcMoveState,
   onReturnNpc,
+  cron = null,
 }: ChatPanelProps) {
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
+  // NPC DM 의 탭 — 어느 NPC 의 선택인지 같이 기억해, 다른 NPC 로 바뀌면 대화 탭으로 돌아간다
+  // (effect 로 되돌리지 않는다 — 렌더 중 파생).
+  const [npcTabState, setNpcTabState] = useState<{ npcId: string | null; tab: "chat" | "cron" }>({
+    npcId: null,
+    tab: "chat",
+  });
+  const dialogNpcId = dialogNpc?.npcId ?? null;
+  const npcTab = npcTabState.npcId === dialogNpcId ? npcTabState.tab : "chat";
+  const setNpcTab = (tab: "chat" | "cron") => setNpcTabState({ npcId: dialogNpcId, tab });
   const width = controlledWidth ?? internalWidth;
   const setWidth = useCallback(
     (next: number) => {
@@ -396,86 +416,126 @@ export default function ChatPanel({
         ) : inNpcDialog ? (
           // NPC dialog mode
           <>
-            <div
-              ref={scrollRef}
-              onScroll={(event) =>
-                sessions.setScroll(conversationKey, event.currentTarget.scrollTop)
-              }
-              className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
-            >
-              {npcMessages.length === 0 && (
-                <div className="text-text-dim text-sm italic py-4">
-                  {t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
-                </div>
-              )}
-              {npcMessages.map((msg, i) => (
-                <div key={msg.id ?? `${msg.role}-${i}`}>
-                  {msg.responseRequestId &&
-                  npcResponses.some((response) => response.requestId === msg.responseRequestId) ? (
-                    <ResponseProgress
-                      responses={npcResponses.filter(
+            {cron && (
+              <div
+                role="tablist"
+                data-testid="npc-dialog-tabs"
+                className="flex border-b border-border bg-surface/60 text-xs"
+              >
+                {(["chat", "cron"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={npcTab === tab}
+                    onClick={() => setNpcTab(tab)}
+                    className={`px-3 py-1.5 ${
+                      npcTab === tab
+                        ? "text-text border-b-2 border-primary"
+                        : "text-text-muted hover:text-text"
+                    }`}
+                  >
+                    {t(`cron.tab.${tab}`)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {cron && npcTab === "cron" ? (
+              <div className="flex-1 min-h-0">
+                <CronPanel
+                  channelId={cron.channelId}
+                  npcs={[dialogNpc!]}
+                  npc={dialogNpc}
+                  socket={cron.socket ?? null}
+                  onToast={cron.onToast}
+                />
+              </div>
+            ) : (
+              <>
+                <div
+                  ref={scrollRef}
+                  onScroll={(event) =>
+                    sessions.setScroll(conversationKey, event.currentTarget.scrollTop)
+                  }
+                  className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
+                >
+                  {npcMessages.length === 0 && (
+                    <div className="text-text-dim text-sm italic py-4">
+                      {t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
+                    </div>
+                  )}
+                  {npcMessages.map((msg, i) => (
+                    <div key={msg.id ?? `${msg.role}-${i}`}>
+                      {msg.responseRequestId &&
+                      npcResponses.some(
                         (response) => response.requestId === msg.responseRequestId,
+                      ) ? (
+                        <ResponseProgress
+                          responses={npcResponses.filter(
+                            (response) => response.requestId === msg.responseRequestId,
+                          )}
+                        />
+                      ) : (
+                        <ChatBubble
+                          sender={msg.role === "player" ? "player" : "npc"}
+                          streaming={
+                            msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
+                          }
+                        >
+                          {msg.content}
+                        </ChatBubble>
                       )}
-                    />
-                  ) : (
-                    <ChatBubble
-                      sender={msg.role === "player" ? "player" : "npc"}
-                      streaming={
-                        msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
-                      }
-                    >
-                      {msg.content}
-                    </ChatBubble>
-                  )}
-                  {msg.role === "player" && (
-                    <ResponseProgress
-                      responses={responsesForSource(npcResponses, msg.id)}
-                      receipt
-                      receiptOnly
-                    />
-                  )}
+                      {msg.role === "player" && (
+                        <ResponseProgress
+                          responses={responsesForSource(npcResponses, msg.id)}
+                          receipt
+                          receiptOnly
+                        />
+                      )}
+                    </div>
+                  ))}
+                  <ResponseProgress
+                    responses={visibleResponseReplies(npcResponses, {
+                      responseRequestIds: new Set(
+                        npcMessages
+                          .map((message) => message.responseRequestId)
+                          .filter((id): id is string => !!id),
+                      ),
+                    })}
+                  />
                 </div>
-              ))}
-              <ResponseProgress
-                responses={visibleResponseReplies(npcResponses, {
-                  responseRequestIds: new Set(
-                    npcMessages
-                      .map((message) => message.responseRequestId)
-                      .filter((id): id is string => !!id),
-                  ),
-                })}
-              />
-            </div>
-            {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
+                {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
                     예전에는 tool.progress 를 채팅 청크로 흘려서 답이 두 번 보였다. */}
-            {/* isStreaming 을 함께 보지 않는다 — 그 값은 **첫 답변 청크**가 와야
+                {/* isStreaming 을 함께 보지 않는다 — 그 값은 **첫 답변 청크**가 와야
                     true 가 되는데, 도구는 그 전에 돈다. 실측(2026-08-28): web_search 가
                     3회 돌 동안 화면에 아무것도 뜨지 않았다. 활동 키가 있다는 것 자체가
                     "아직 진행 중"이라는 뜻이므로 그것만으로 충분하다. */}
-            {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
-              <div
-                className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
-                role="status"
-                aria-live="polite"
-              >
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                {t(npcActivityKey)}
-              </div>
+                {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
+                  <div
+                    className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    {t(npcActivityKey)}
+                  </div>
+                )}
+                <ChatInput
+                  onSend={onSend}
+                  value={conversationDraft}
+                  onValueChange={updateConversationDraft}
+                  placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
+                  disabled={!!npcChatInputDisabled}
+                  disabledPlaceholder={
+                    npcChatInputDisabled
+                      ? (npcChatDisabledPlaceholder ?? t("chat.disconnected"))
+                      : t("chat.responding")
+                  }
+                  autoFocus
+                  showFileUpload
+                />
+              </>
             )}
-            <ChatInput
-              onSend={onSend}
-              value={conversationDraft}
-              onValueChange={updateConversationDraft}
-              placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
-              disabled={!!npcChatInputDisabled}
-              disabledPlaceholder={
-                npcChatInputDisabled
-                  ? (npcChatDisabledPlaceholder ?? t("chat.disconnected"))
-                  : t("chat.responding")
-              }
-              autoFocus
-              showFileUpload
-            />
           </>
         ) : roomState.view === "list" ? (
           <RoomList

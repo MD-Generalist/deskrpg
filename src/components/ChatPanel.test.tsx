@@ -202,3 +202,98 @@ test("workspace presentation stays open and renders as an embedded conversation 
     false,
   );
 });
+
+// ---------------------------------------------------------------------------
+// T9 — NPC DM 의 크론 탭
+// ---------------------------------------------------------------------------
+
+function dmState(): RoomState {
+  return { ...listState(), view: "room" };
+}
+
+test("cron 컨텍스트가 없으면 NPC DM 에 탭이 없다 (배선 전 동작 그대로)", async () => {
+  const el = await mount(
+    <I18nProvider initialLocale="ko">
+      <ChatPanel
+        dialogNpc={{ npcId: "npc-a", npcName: "소피" }}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={dmState()}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+      />
+    </I18nProvider>,
+  );
+  assert.equal(el.querySelector('[data-testid="npc-dialog-tabs"]'), null);
+  assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
+});
+
+test("cron 컨텍스트가 있으면 '크론' 탭이 그 NPC 것만 단일 모드로 연다 (R15)", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    urls.push(typeof input === "string" ? input : input.toString());
+    return new Response(JSON.stringify({ jobs: [], timezone: "Asia/Seoul" }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const el = await mount(
+      <I18nProvider initialLocale="ko">
+        <ChatPanel
+          dialogNpc={{ npcId: "npc-a", npcName: "소피" }}
+          npcMessages={[]}
+          isNpcStreaming={false}
+          onSend={() => {}}
+          onClose={() => {}}
+          npcSelectList={null}
+          onSelectNpc={() => {}}
+          roomState={dmState()}
+          onRoomSend={() => {}}
+          onRoomAction={() => {}}
+          onRoomCreate={() => {}}
+          onRoomInvite={() => {}}
+          onRoomLeave={() => {}}
+          onRoomRename={() => {}}
+          onRoomDelete={() => {}}
+          mentionCandidatesFor={() => []}
+          onlinePlayers={[]}
+          cron={{ channelId: "ch1" }}
+        />
+      </I18nProvider>,
+    );
+    const tabs = el.querySelector('[data-testid="npc-dialog-tabs"]');
+    assert.ok(tabs, "탭 바가 있어야 한다");
+    // 기본은 대화 탭 — 크론은 아직 조회하지 않는다.
+    assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
+    assert.equal(urls.length, 0);
+
+    await click(buttonByText(el, "크론"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.ok(el.querySelector('[data-testid="cron-panel"]'));
+    assert.equal(
+      el.querySelector('[data-testid="cron-filter-npc"]'),
+      null,
+      "단일 모드는 필터 없음",
+    );
+    assert.deepEqual(urls, ["/api/channels/ch1/cron/jobs?npcId=npc-a"]);
+
+    // 대화 탭으로 돌아오면 입력창이 다시 보인다.
+    await click(buttonByText(el, "대화"));
+    assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
+    assert.ok(el.querySelector("textarea"), "대화 입력창");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
