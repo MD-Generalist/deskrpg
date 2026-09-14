@@ -1,3 +1,4 @@
+import { executiveSurface } from "./executive-surfaces";
 import { attachFurnitureAsset } from "./furniture-asset";
 import * as T from "three";
 import { round, sphere } from "./primitives";
@@ -6,15 +7,9 @@ import { EXECUTIVE_ZONES } from "./executive-room-layout";
 
 /** Fixed cutaway shell: no camera-dependent wall hiding or transparent depth flicker. */
 export function addExecutiveArchitecture(root: T.Group, cols: number, rows: number) {
-  const wood = new T.MeshStandardMaterial({
-    color: "#62422d",
-    roughness: 0.52,
-    map: surfaceTexture("wood", "color"),
-    bumpMap: surfaceTexture("wood"),
-    bumpScale: 0.025,
-  });
+  const wood = executiveSurface(root, "walnut");
   const brass = new T.MeshStandardMaterial({ color: "#b49355", metalness: 0.75, roughness: 0.3 });
-  const stone = new T.MeshStandardMaterial({ color: "#d9cbb5", roughness: 0.38 });
+  const stone = executiveSurface(root, "limestone");
   const frame = new T.MeshStandardMaterial({ color: "#454039", metalness: 0.55, roughness: 0.4 });
   const light = new T.MeshStandardMaterial({
     color: "#fff0c8",
@@ -27,16 +22,6 @@ export function addExecutiveArchitecture(root: T.Group, cols: number, rows: numb
   for (let z = 0; z < rows; z += 2)
     for (let x = 0; x < cols; x += 2) {
       box(1.992, 0.035, 1.992, stone, x + 1, 0.012, z + 1);
-      const points = Array.from(
-        { length: 9 },
-        (_, i) => new T.Vector3(x + i / 4, 0.032, z + 0.65 + 0.14 * Math.sin(i * 1.7 + x + z)),
-      );
-      root.add(
-        new T.Line(
-          new T.BufferGeometry().setFromPoints(points),
-          new T.LineBasicMaterial({ color: "#cbbda7", transparent: true, opacity: 0.22 }),
-        ),
-      );
     }
   for (const zone of EXECUTIVE_ZONES.filter((z) => z.id !== "meeting")) {
     const rug = new T.MeshStandardMaterial({
@@ -44,31 +29,23 @@ export function addExecutiveArchitecture(root: T.Group, cols: number, rows: numb
       map: surfaceTexture("fabric", "color"),
       roughness: 1,
     });
-    if (zone.id === "ceo") {
-      const asset = new T.Group();
-      asset.position.set(zone.x + zone.width / 2, 0.045, zone.z + zone.depth / 2);
-      round(asset, zone.width - 1, 0.026, zone.depth - 1, rug, 0, 0.013, 0);
-      root.add(asset);
-      void attachFurnitureAsset(asset, "rug");
-    } else {
-      box(
-        zone.width - 1,
-        0.035,
-        zone.depth - 1,
-        rug,
-        zone.x + zone.width / 2,
-        0.055,
-        zone.z + zone.depth / 2,
-      );
-    }
+    const asset = new T.Group();
+    asset.position.set(zone.x + zone.width / 2, 0.035, zone.z + zone.depth / 2);
+    asset.scale.set((zone.width - 1) / 5.9, 1, (zone.depth - 1) / 5.9);
+    round(asset, 5.9, 0.026, 5.9, rug, 0, 0.013, 0);
+    root.add(asset);
+    void attachFurnitureAsset(asset, "rug");
   }
+
   // Continuous walnut side walls, recessed flutes and a single dark top rail.
   for (const x of [0.5, cols - 0.5]) {
     box(0.32, 3.8, rows - 1, wood, x, 1.9, rows / 2);
     box(0.42, 0.13, rows - 0.8, frame, x, 3.84, rows / 2);
     box(0.4, 0.22, rows - 1, frame, x, 0.11, rows / 2);
     for (let z = 1; z < rows - 1; z += 0.38)
-      box(0.025, 3.55, 0.035, brass, x + (x < 1 ? 0.17 : -0.17), 1.9, z);
+      box(0.025, 3.55, 0.025, frame, x + (x < 1 ? 0.17 : -0.17), 1.9, z);
+    for (const y of [0.28, 3.58])
+      box(0.025, 0.018, rows - 1, brass, x + (x < 1 ? 0.18 : -0.18), y, rows / 2);
     for (const z of [3, 9, rows - 3]) {
       const inside = x + (x < 1 ? 0.25 : -0.25);
       box(0.13, 1.25, 0.14, brass, inside, 2.2, z);

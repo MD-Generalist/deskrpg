@@ -69,3 +69,23 @@ test("asset failure retains usable fallback but is not reported ready", async ()
   assert.equal(host.userData.assetStatus, "failed");
   disposeTree(host);
 });
+
+test("batching retains asynchronous surface material identity for late textures", () => {
+  const world = new T.Group();
+  const material = new T.MeshStandardMaterial();
+  material.userData.dynamicSurface = true;
+  const host = new T.Group();
+  world.add(host);
+  for (let i = 0; i < 3; i++) {
+    const mesh = new T.Mesh(new T.BoxGeometry(), material);
+    mesh.position.x = i;
+    host.add(mesh);
+  }
+  batchStaticFurniture(world, true, { vertexColors: true });
+  const texture = new T.Texture();
+  material.map = texture;
+  world.traverse((object) => {
+    if (object instanceof T.Mesh) assert.equal(object.material, material);
+  });
+  disposeTree(world);
+});

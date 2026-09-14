@@ -161,8 +161,68 @@ def rug_asset():
         line('Woven bound edge',[(-2.87,.028,v),(2.87,.028,v)],.008,T)
         line('Woven bound edge',[(v,.028,-2.87),(v,.028,2.87)],.008,T)
 
+# Shared cream upholstery and honed limestone for the second furniture pass.
+linen=image('linen-color',np.stack([.70+weave*.10,.64+weave*.09,.53+weave*.08],-1))
+F=pbr('Cream linen',(.7,.64,.53),.88,tex=linen,relief=weave)
+saddle=image('saddle-color',np.stack([.36+leather_h*.04,.17+leather_h*.03,.08+leather_h*.02],-1))
+SADDLE=pbr('Cognac leather',(.36,.17,.08),.5,tex=saddle,relief=leather_h)
+veins=np.exp(-np.abs(np.sin(x*9+y*4+np.sin(y*11)*.3+np.sin(x*29+y*13)*.06))*40)
+mineral=np.sin(x*30+y*17)*np.sin(y*21-x*13)*.025+noise*.015
+marble=image('limestone-color',np.stack([.71+mineral-veins*.09,.65+mineral-veins*.08,.55+mineral-veins*.065],-1))
+M=pbr('Honed limestone',(.71,.65,.55),.32,tex=marble,relief=mineral+veins*.03)
+
+def guest_chair():
+    for xx in [-.26,.26]:
+        for zz in [-.24,.24]:line('Tapered bronze leg',[(xx*1.1,.01,zz*1.12),(xx,.47,zz)],.017,D)
+    box('Seat upholstery',.66,.14,.65,0,.47,0,F,.065)
+    back=box('Rounded upholstered back',.66,.62,.13,0,.79,-.265,F,.06)
+    back.rotation_euler[0]=-.07
+    for xx in [-.29,.29]:line('Back piping',[(xx,.55,-.19),(xx,1.04,-.19)],.003,T)
+
+def lounge(single=False):
+    width=.9 if single else 1.8
+    mat=SADDLE if single else F
+    for xx in [-width/2+.09,width/2-.09]:
+        for zz in [-.28,.28]:rod('Bronze sofa foot',.025,.13,xx,.065,zz,D)
+    box('Upholstered base',width,.22,.8,0,.24,0,mat,.065)
+    centers=[0] if single else [-.38,.38]
+    for xx in centers:
+        cw=.66 if single else .735
+        box('Independent seat cushion',cw,.17,.65,xx,.445,.045,mat,.045)
+        back=box('Plump back cushion',cw,.54,.18,xx,.69,-.285,mat,.075)
+        back.rotation_euler[0]=-.08
+        line('Seat front piping',[(xx-cw/2+.025,.49,.376),(xx+cw/2-.025,.49,.376)],.003,T)
+    for xx in [-width/2+.055,width/2-.055]:
+        box('Rounded arm bolster',.11,.53,.8,xx,.45,0,mat,.05)
+    if not single:
+        pillow=box('Saddle accent pillow',.3,.3,.11,.56,.74,-.12,SADDLE,.06)
+        pillow.rotation_euler[1]=.16
+
+def meeting():
+    top=rod('Oval walnut conference top',.91,.105,0,.815,0,W);top.scale.x=2.05
+    lip=rod('Fine brass underside',.88,.012,0,.757,0,B);lip.scale.x=2.05
+    for xx in [-.9,.9]:rod('Fluted pedestal',.22,.74,xx,.37,0,W)
+    for xx in [-.9,.9]:
+        for i in range(16):
+            a=i*math.tau/16
+            rod('Pedestal fluting',.018,.65,xx+math.cos(a)*.215,.37,math.sin(a)*.215,W)
+    for xx in [-.7,.7]:
+        for zz in [-.53,.53]:
+            box('Leather conference mat',.53,.009,.3,xx,.873,zz,L,.015)
+            box('Agenda',.17,.008,.21,xx,.882,zz,P,.002)
+    plant(0,.874,0,1.25)
+
+def coffee():
+    rod('Stone beveled table top',.9,.095,0,.45,0,M)
+    rod('Bronze reveal',.85,.015,0,.395,0,B)
+    rod('Walnut drum pedestal',.42,.37,0,.19,0,W)
+    rod('Dark plinth',.44,.035,0,.02,0,D)
+    box('Art book',.33,.045,.25,-.2,.516,.1,P,.005)
+    plant(.15,.5,-.1,1.1)
+
+
 report={}
-for name,build in [('desk',desk),('chair',chair),('bookcase',bookcase),('rug',rug_asset)]:
+for name,build in [('desk',desk),('chair',chair),('bookcase',bookcase),('rug',rug_asset),('guest-chair',guest_chair),('sofa',lounge),('armchair',lambda:lounge(True)),('conference',meeting),('coffee',coffee)]:
     bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
     build()
     bpy.ops.object.select_all(action='SELECT')
@@ -183,3 +243,14 @@ for name,build in [('desk',desk),('chair',chair),('bookcase',bookcase),('rug',ru
     report[name]['bytes']=os.path.getsize(os.path.join(OUT,name+'-v1.glb'))
 with open(os.path.join(OUT,'build-report.json'),'w') as f:json.dump(report,f,indent=2)
 print(json.dumps(report))
+
+# Extract the already compressed, authored texture images for architectural surfaces.
+import struct
+for model, material_name, prefix in [('desk','Walnut veneer','walnut'),('coffee','Honed limestone','limestone')]:
+    blob=open(os.path.join(OUT,model+'-v1.glb'),'rb').read()
+    length=struct.unpack_from('<I',blob,12)[0]; doc=json.loads(blob[20:20+length]); data=blob[28+length:]
+    material=next(m for m in doc['materials'] if m['name']==material_name)
+    for key, info in [('color',material['pbrMetallicRoughness']['baseColorTexture']),('normal',material['normalTexture']),('roughness',material['pbrMetallicRoughness']['metallicRoughnessTexture'])]:
+        texture=doc['textures'][info['index']]; image_index=texture.get('extensions',{}).get('EXT_texture_webp',{}).get('source',texture.get('source'))
+        view=doc['bufferViews'][doc['images'][image_index]['bufferView']]; start=view.get('byteOffset',0)
+        with open(os.path.join(OUT,prefix+'-'+key+'.webp'),'wb') as f:f.write(data[start:start+view['byteLength']])

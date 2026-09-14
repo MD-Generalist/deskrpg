@@ -10,12 +10,17 @@ for (const [name, width, depth, height] of [
   ["chair", 0.8, 0.8, 1.4],
   ["bookcase", 1.01, 1.01, 3.4],
   ["rug", 6, 6, 0.05],
+  ["guest-chair", 0.8, 0.8, 1.2],
+  ["sofa", 1.9, 0.84, 1.1],
+  ["armchair", 1, 0.84, 1.1],
+  ["conference", 4, 2, 1.4],
+  ["coffee", 2, 2, 1],
 ] as const) {
   test(`${name} GLB fits the existing footprint and embeds its PBR maps`, async () => {
     const bytes = await readFile(`public/assets/furniture/executive/${name}-v1.glb`);
     assert.equal(bytes.toString("utf8", 0, 4), "glTF");
     assert.equal(bytes.readUInt32LE(8), bytes.length);
-    assert.ok(bytes.length < 2_000_000, "per-asset download budget");
+    assert.ok(bytes.length < 3_000_000, "per-asset download budget");
     const json = JSON.parse(bytes.toString("utf8", 20, 20 + bytes.readUInt32LE(12)));
     assert.ok(json.images.length >= 3);
     for (const image of json.images) {

@@ -2,7 +2,16 @@ import * as T from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { disposeTree } from "./dispose-tree";
 
-export type ExecutiveAsset = "desk" | "chair" | "bookcase" | "rug";
+export type ExecutiveAsset =
+  | "desk"
+  | "chair"
+  | "bookcase"
+  | "rug"
+  | "guest-chair"
+  | "sofa"
+  | "armchair"
+  | "conference"
+  | "coffee";
 export const executiveAssetUrl = (name: ExecutiveAsset) =>
   `/assets/furniture/executive/${name}-v1.glb`;
 

@@ -734,6 +734,11 @@ export class OfficeRenderer {
                 ? "bookcase"
                 : managerSeat
                   ? "chair"
+                  : type === "chair" ? "guest-chair"
+                  : type === "office_sofa" ? "sofa"
+                  : type === "office_armchair" ? "armchair"
+                  : type === "conference_table" ? "conference"
+                  : type === "meeting_table" ? "coffee"
                   : undefined;
           if (asset) void attachFurnitureAsset(roomFurniture, asset);
         }
