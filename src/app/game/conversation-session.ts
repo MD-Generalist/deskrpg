@@ -24,4 +24,3 @@ export class ConversationSessionStore {
     this.setDraft(key, "");
   }
 }
-

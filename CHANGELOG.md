@@ -7,6 +7,25 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [%s] - 2026-09-15
+
+### Added
+
+- 3D office client: three.js renderer on top of the existing Phaser simulation (movement, seating and collisions unchanged), 50 stylized office looks as GLB characters, five curated environments, 3D meeting room.
+- Hermes gateway setup wizard (`/gateways`): discover a local or SSH-reachable Hermes install, pre-check the DeskRPG plugin and services, register profiles. Off by default (`DESKRPG_HOST_SETUP_ENABLED=1`, `system_admin` only).
+- Chat rooms (`room:*`): office room with mention-only replies, invite-based group rooms, six-stage response receipts and per-session request queue.
+- Hostinger deployment recipe: `deploy/hostinger/docker-compose.yml` (single file, bundled Hermes gateway, Traefik labels) and a Deploy on Hostinger button.
+
+### Changed
+
+- OpenClaw runtime retired; DeskRPG now binds NPCs to Hermes Agent profiles only.
+- README rewritten for the 3D, Hermes-only office.
+
+### Removed
+
+- Development plans under `docs/superpowers/` are no longer tracked.
+
+
 ### Added
 
 - Channel owners can now delete meeting minutes from the minutes detail view.

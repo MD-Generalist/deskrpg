@@ -23,4 +23,3 @@ test("session values are bounded and returned as copies", () => {
   first.draft = "mutated";
   assert.equal(store.get("npc:n1").draft.length, 500);
 });
-

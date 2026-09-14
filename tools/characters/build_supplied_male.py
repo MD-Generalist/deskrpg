@@ -41,7 +41,7 @@ root.scale = (factor,)*3
 root.location.z = -original[2][0]*factor
 # Source faces Blender -Y, which the glTF Y-up conversion maps to +Z.
 root['source'] = 'User-supplied Google Drive ClothedMan.blend'
-root['license_status'] = 'CC0-1.0; verified official Quaternius Animated Man Pack download provenance' 
+root['license_status'] = 'CC0-1.0; verified official Quaternius Animated Man Pack download provenance'
 root['standing_height_m'] = 1.9
 root['clips_note'] = 'Original Idle/Walk plus authored static chair sit. Working is kneeling, excluded.'
 

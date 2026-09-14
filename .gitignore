@@ -81,6 +81,8 @@ deploy/pre-deploy-checklist.md
 
 # Character editing sources (Blender, supplied bases, review captures) — not shipped
 /art/
+__pycache__/
+*.py[cod]
 
 # Public deployment recipes (served via raw URL to Hostinger Docker Manager)
 !/deploy/
