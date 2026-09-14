@@ -1,4 +1,5 @@
 import * as T from "three";
+import { miniatureDistancePose } from "./commute-walk";
 import { sphere, round } from "./primitives";
 import { idleMotion } from "./idle-motion";
 import type { OfficeLook } from "./office-looks";
@@ -238,19 +239,20 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
     ring,
     phase: "idle" as ActorPhase,
     seated: false,
-    update(t: number, walking: boolean, phase: ActorPhase, seated: boolean) {
+    update(t: number, walking: boolean, phase: ActorPhase, seated: boolean, walkPhase?: number) {
+      const gait = walkPhase ?? t * 7;
       const sit = seated && !walking,
         motion = idleMotion(t, index, walking, phase);
       rig.position.y = sit
         ? -0.21
         : walking
-          ? Math.abs(Math.sin(t * 7)) * 0.009
+          ? Math.abs(Math.sin(gait)) * 0.009
           : Math.sin(t * 1.6 + index) * 0.003;
       head.rotation.set(motion.nod * 0.6, motion.yaw * 0.7, 0);
       torso.rotation.z = motion.sway * 0.4;
       arms.forEach((a, i) => {
         a.rotation.x = walking
-          ? Math.sin(t * 7 + i * Math.PI) * 0.28
+          ? Math.sin(gait + i * Math.PI) * 0.28
           : sit
             ? -0.34
             : phase === "thinking" && i === 0
@@ -266,7 +268,9 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
           (leg.rotation.x = sit
             ? -Math.PI / 2
             : walking
-              ? Math.sin(t * 7 + i * Math.PI) * 0.32
+              ? walkPhase === undefined
+                ? Math.sin(gait + i * Math.PI) * 0.32
+                : miniatureDistancePose(gait + i * Math.PI).leg
               : 0),
       );
       knees.forEach(
@@ -274,7 +278,9 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
           (k.rotation.x = sit
             ? Math.PI / 2
             : walking
-              ? Math.max(0, -Math.sin(t * 7 + i * Math.PI)) * 0.4
+              ? walkPhase === undefined
+                ? Math.max(0, -Math.sin(gait + i * Math.PI)) * 0.4
+                : miniatureDistancePose(gait + i * Math.PI).knee
               : 0),
       );
       if (sit !== lastSit) {
