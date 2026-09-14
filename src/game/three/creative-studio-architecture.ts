@@ -1,3 +1,4 @@
+import { captureStudioLabelOccluders } from "./studio-visibility";
 import * as T from "three";
 import {
   attachSceneAsset,
@@ -53,6 +54,9 @@ export function creativeStudioSurface(
     disposed = true;
   });
   const load = options.load ?? ((url: string) => new T.TextureLoader().loadAsync(url));
+  status.userData.sceneAssetUrls = ["color", "normal", "roughness"].map(
+    (kind) => `/assets/shared/surfaces/${surface}-${kind}.webp`,
+  );
   status.userData.assetReady = Promise.allSettled(
     ["color", "normal", "roughness"].map(async (kind) => {
       const texture = await load(`/assets/shared/surfaces/${surface}-${kind}.webp`);
@@ -95,8 +99,13 @@ export function creativeStudioOverview(
   aspect: number,
   fovDegrees = 38,
 ) {
-  const target = new T.Vector3(cols / 2, 1.2, rows / 2);
-  const direction = new T.Vector3(0.72, 0.92, 1).normalize();
+  // A foreground ground-plane pivot balances perspective foreshortening: the
+  // old geometric-center target left a large empty upper half of the frame.
+  const target = new T.Vector3(cols / 2, 1.2, rows / 2).addScaledVector(
+    new T.Vector3(0.72, 0, 1).normalize(),
+    Math.hypot(cols, rows) * 0.16,
+  );
+  const direction = new T.Vector3(0.72, 0.65, 1).normalize();
   const right = new T.Vector3().crossVectors(new T.Vector3(0, 1, 0), direction).normalize();
   const up = new T.Vector3().crossVectors(direction, right);
   const vertical = Math.tan(T.MathUtils.degToRad(fovDegrees / 2));
@@ -342,8 +351,15 @@ export function addCreativeStudioArchitecture(
   module("shared-cutaway-plinth", cols, -0.32, rows / 2, [rows / 3, 1, 1], Math.PI / 2);
   module("shared-cutaway-plinth", 0, -0.32, rows / 2, [rows / 3, 1, 1], Math.PI / 2);
   module("shared-cutaway-plinth", cols / 2, -0.32, 0, [cols / 3, 1, 1]);
-  for (let z = 11; z < rows; z += 2)
-    module("shared-glass-partition", cols, 0, Math.min(z + 1, 25), [1, 0.28, 1], Math.PI / 2);
+  for (let z = 10.5; z < rows; z += 2)
+    module(
+      "shared-glass-partition",
+      cols,
+      0,
+      z + Math.min(2, rows - z) / 2,
+      [Math.min(2, rows - z) / 2, 0.28, 1],
+      Math.PI / 2,
+    );
   const meeting = CREATIVE_STUDIO_MEETING_BOUNDARY;
   const west = meeting.westCol + 0.5,
     east = meeting.eastCol + 0.88;
@@ -447,6 +463,7 @@ export function addCreativeStudioArchitecture(
       material.dispose();
     }
     retiredTextures.forEach((texture) => texture.dispose());
+    shell.userData.studioLabelOccluders = captureStudioLabelOccluders(shell);
     batchCoplanarGlass(shell);
     batchStaticFurniture(shell, true);
     shell.userData.assetStatus = "ready";

@@ -61,3 +61,16 @@ outcomes/screenshots. Production composition, v3 gating, desktop monitor facing 
 chairs, shared rugs/plants, runtime batching, actors and final performance acceptance belong to
 Task 6. Its gallery's injected loads use their own readiness promises; renderer `assetsReady` is
 not meaningful for that fixture.
+
+## Integrated scene thumbnail
+
+`agency-v3.webp` is an 874×450 capture of the live version-3 scene adapter using
+`buildOfficeEnvironment('agency')` and the production overview camera. It contains
+no character fixture and is displayed by the environment picker. Regenerate with
+`node scripts/assets/verify-creative-studio-scene.cjs /tmp/studio-review --headed`,
+then copy `/tmp/studio-review/agency-v3.webp` here. The script also supports
+`--benchmark` (10s warmup + 30s orbit/walk with 12 real actors), `--review-ui`
+(actual React review controls), and `--smoke` (headless load/overview).
+`--generic-object --smoke` adds a collision-bearing legacy bookshelf to verify
+edited-v3 fallback rendering. `--review-ui` also exercises a real fractional floor
+click and an in-flight movement retarget through the component's pointer handler.

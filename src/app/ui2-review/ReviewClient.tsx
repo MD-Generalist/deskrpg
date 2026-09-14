@@ -6,14 +6,21 @@ import {
   buildOfficeEnvironment,
   type OfficeEnvironmentId,
 } from "@/game/three/office-environments";
-import { OFFICE_ROOMS, type OfficeRoom } from "@/game/three/office-room-layout";
+import { OFFICE_ROOMS } from "@/game/three/office-room-layout";
 import { tiledSnapshot } from "@/game/three/tiled-preview";
 import { OFFICE_LOOKS, officeLookAppearance } from "@/game/three/office-looks";
 import { furnitureSeats } from "@/game/three/seating";
-import { findPath } from "@/game/navigation";
+import { findPath, clearSegment } from "@/game/navigation";
 import type { ActorSnapshot, OfficeBridge } from "@/game/three/bridge";
 import type { BenchmarkReport, FrameMetrics } from "@/game/three/frame-benchmark";
 import "@/game/three/office.css";
+
+import {
+  studioReviewRooms,
+  studioReviewSeatIndices,
+  createReviewWalk,
+  sampleReviewWalk,
+} from "@/game/three/studio-review";
 
 type SceneMode = "overview" | "close" | "moving";
 const SCENES: SceneMode[] = ["overview", "close", "moving"];
@@ -49,7 +56,7 @@ function makeFixture(id: OfficeEnvironmentId) {
     x >= 1 && x < map.cols - 1 && y >= 1 && y < map.rows - 1 && !blocked.has(`${x},${y}`);
   const seats = furnitureSeats(map.objects);
   const actors: ActorSnapshot[] = Array.from({ length: 12 }, (_, i) => {
-    const seat = seats[i % seats.length];
+    const seat = seats[id === "agency" ? studioReviewSeatIndices[i] : i % seats.length];
     return {
       id: `fixture-${i}`,
       name: i < 10 ? `NPC fixture ${i + 1}` : `Player fixture ${i - 9}`,
@@ -65,7 +72,9 @@ function makeFixture(id: OfficeEnvironmentId) {
   const routes = actors.slice(0, 10).map((actor) => {
     const x = actor.x / 32 - 0.5,
       y = actor.y / 32 - 0.5;
-    const path = findPath(x, y, Math.floor(map.cols / 2), map.rows - 3, walkable);
+    const path = findPath(x, y, Math.floor(map.cols / 2), map.rows - 3, walkable, (a, b) =>
+      clearSegment(a, b, walkable),
+    );
     if (!path) throw new Error(`No fixture path for ${actor.id}`);
     const roundTrip = [...path, ...path.slice(0, -1).reverse()];
     const lengths = roundTrip
@@ -108,17 +117,28 @@ export default function ReviewClient() {
   const mounted = useRef(false);
   const matrixAbort = useRef<AbortController | null>(null);
   const [smallViewport, setSmallViewport] = useState(false);
+  const [referenceViewport, setReferenceViewport] = useState(false);
+  const playerWalk = useRef<{
+    route: NonNullable<ReturnType<typeof createReviewWalk>>;
+    start: number;
+  } | null>(null);
   const [showLabels, setShowLabels] = useState(true);
   const [matrix, setMatrix] = useState<MatrixProgress | null>(null);
   const [environment, setEnvironment] = useState<OfficeEnvironmentId>("publishing");
   const [mode, setMode] = useState<SceneMode>("overview");
-  const [auditRoom, setAuditRoom] = useState<OfficeRoom["id"] | "">("");
+  const [auditRoom, setAuditRoom] = useState<string>("");
   const [metrics, setMetrics] = useState<FrameMetrics | null>(null);
   const [busy, setBusy] = useState(false),
     [status, setStatus] = useState("렌더러 준비 중");
   const [report, setReport] = useState<unknown>(null);
 
-  const frameRoom = (id: OfficeEnvironmentId, roomId: OfficeRoom["id"]) => {
+  const frameRoom = (id: OfficeEnvironmentId, roomId: string) => {
+    if (id === "agency") {
+      const room = studioReviewRooms.find((r) => r.id === roomId);
+      if (room) renderer.current?.showRoom(room.x, room.z, room.distance);
+      else renderer.current?.showOverview();
+      return;
+    }
     const room = (OFFICE_ROOMS[id] ?? []).find((room) => room.id === roomId);
     if (!room) {
       renderer.current?.showOverview();
@@ -140,6 +160,7 @@ export default function ReviewClient() {
     if (!current) return;
     current.id = id;
     current.fixture = makeFixture(id);
+    playerWalk.current = null;
     current.generation++;
     setEnvironment(id);
     if (updateCamera) frameCamera(id, current.mode);
@@ -157,6 +178,13 @@ export default function ReviewClient() {
     const bridge: OfficeBridge = {
       actors: () => {
         const r = runtime.current!;
+        if (playerWalk.current) {
+          r.fixture.actors[10] = sampleReviewWalk(
+            playerWalk.current.route,
+            (performance.now() - playerWalk.current.start) / 1000,
+          );
+          if (!r.fixture.actors[10].walking) playerWalk.current = null;
+        }
         return r.mode === "moving"
           ? moveFixture(r.fixture, performance.now() / 1000)
           : r.fixture.actors;
@@ -177,7 +205,25 @@ export default function ReviewClient() {
         tiled: true,
       }),
       edit: () => {},
-      pointer: () => {},
+      pointer: (kind, x, y, button, _sx, _sy, actorId) => {
+        const r = runtime.current!;
+        if (
+          kind !== "down" ||
+          button !== 0 ||
+          r.mode === "moving" ||
+          (actorId && actorId !== "seat-target")
+        )
+          return;
+        const now = performance.now();
+        const current = playerWalk.current
+          ? sampleReviewWalk(playerWalk.current.route, (now - playerWalk.current.start) / 1000)
+          : r.fixture.actors[10];
+        const route = createReviewWalk(current, x, y, r.fixture.walkable);
+        if (route) {
+          r.fixture.actors[10] = sampleReviewWalk(route, 0);
+          playerWalk.current = { route, start: now };
+        }
+      },
       setPresentation: () => {},
     };
     instance.attach(bridge);
@@ -499,20 +545,34 @@ export default function ReviewClient() {
             value={auditRoom}
             disabled={busy}
             onChange={(e) => {
-              const roomId = e.target.value as OfficeRoom["id"] | "";
+              const roomId = e.target.value;
               setAuditRoom(roomId);
               if (roomId) frameRoom(environment, roomId);
               else frameCamera(environment, mode);
             }}
           >
             <option value="">장면 카메라 복원</option>
-            {(OFFICE_ROOMS[environment] ?? []).map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.label} 근접
-              </option>
-            ))}
+            {(environment === "agency" ? studioReviewRooms : (OFFICE_ROOMS[environment] ?? [])).map(
+              (room) => (
+                <option key={room.id} value={room.id}>
+                  {room.label} 근접
+                </option>
+              ),
+            )}
           </select>
         </label>
+        <button
+          disabled={busy}
+          aria-pressed={referenceViewport}
+          onClick={() => {
+            setReferenceViewport((v) => !v);
+            setSmallViewport(false);
+            selectEnvironment("agency");
+            setTimeout(() => renderer.current?.showOverview(), 100);
+          }}
+        >
+          크리에이티브 스튜디오 레퍼런스 1748×900
+        </button>
         <button disabled={busy || !metrics?.assetsReady || !showLabels} onClick={benchmark}>
           성능 측정
         </button>
@@ -534,6 +594,7 @@ export default function ReviewClient() {
           aria-pressed={smallViewport}
           onClick={() => {
             setSmallViewport((value) => !value);
+            setReferenceViewport(false);
             setStatus(
               "렌더러 컨테이너 크기를 바꿨습니다. 준비 상태와 실제 계측 크기를 확인하세요.",
             );
@@ -581,8 +642,8 @@ export default function ReviewClient() {
         style={{
           position: "relative",
           pointerEvents: busy ? "none" : undefined,
-          width: smallViewport ? 390 : "100%",
-          height: smallViewport ? 600 : "min(68vh, 760px)",
+          width: referenceViewport ? 1748 : smallViewport ? 390 : "100%",
+          height: referenceViewport ? 900 : smallViewport ? 600 : "min(68vh, 760px)",
           minHeight: smallViewport ? 600 : 400,
         }}
       >

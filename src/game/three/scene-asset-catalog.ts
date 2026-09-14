@@ -149,6 +149,7 @@ export function attachSceneAsset(
   options: AttachSceneAssetOptions = {},
 ) {
   const definition = sceneAsset(id);
+  host.userData.sceneAssetUrl = definition.url;
   const state = stateFor(host);
   if (state.disposed) return Promise.resolve(false);
   const generation = ++state.generation;

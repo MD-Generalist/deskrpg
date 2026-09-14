@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useLocale } from "@/lib/i18n";
@@ -39,6 +40,15 @@ export default function OfficeEnvironmentPicker({
             onClick={() => onChange(environment.id)}
             className={`text-left rounded-lg border p-3 transition-colors ${environment.id === value ? "border-accent bg-accent/10" : "border-border bg-surface hover:bg-surface-raised"}`}
           >
+            {environment.id === "agency" && (
+              <Image
+                src="/assets/environments/creative-studio/agency-v3.webp"
+                width={874}
+                height={450}
+                alt={ko ? "크리에이티브 스튜디오 실제 3D 장면" : "Creative studio rendered scene"}
+                className="mb-2 w-full h-auto"
+              />
+            )}
             <span className="block text-xs mb-2" style={{ color: environment.color }}>
               0{index + 1}
             </span>

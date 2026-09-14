@@ -84,3 +84,37 @@ test("asset failure, map swap or viewport/DPR changes invalidate the sample", ()
     assert.equal(benchmark.frame({ ...metrics, ...changed }, true)?.status, "invalid");
   }
 });
+
+test("studio scene budgets report every threshold and never pass unknown transfer or frame data", async () => {
+  const { evaluateSceneBudget, sceneTransferBytes } = await import("./frame-benchmark");
+  const good = {
+    triangles: 1_200_000,
+    drawCalls: 350,
+    loadedSceneBytes: 24_999_999,
+    medianFps: 55,
+    p95FrameMs: 24.9,
+  };
+  assert.equal(evaluateSceneBudget(good).status, "pass");
+  const bad = evaluateSceneBudget({
+    ...good,
+    triangles: 1_200_001,
+    drawCalls: 351,
+    loadedSceneBytes: 25_000_001,
+    medianFps: 54,
+    p95FrameMs: 25.1,
+  });
+  assert.equal(bad.status, "fail");
+  assert.equal(bad.failures.length, 5);
+  assert.equal(evaluateSceneBudget({ ...good, loadedSceneBytes: null }).status, "incomplete");
+  assert.equal(
+    sceneTransferBytes(
+      [
+        { name: "https://test/assets/a.glb", encodedBodySize: 120 },
+        { name: "https://test/assets/a.glb", encodedBodySize: 0 },
+      ],
+      ["/assets/a.glb"],
+    ),
+    120,
+  );
+  assert.equal(sceneTransferBytes([], ["/assets/a.glb"]), null);
+});

@@ -1,8 +1,6 @@
-import {
-  addCreativeStudioArchitecture,
-  isCreativeStudioMap,
-  creativeStudioOverview,
-} from "./creative-studio-architecture";
+import { studioLabelOccluded, captureStudioReflection } from "./studio-visibility";
+import { addCreativeStudioScene } from "./creative-studio-renderer";
+import { isCreativeStudioMap, creativeStudioOverview } from "./creative-studio-architecture";
 import { furnitureOffset } from "./executive-lounge-layout";
 import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
 import { disposeTree } from "./dispose-tree";
@@ -10,7 +8,12 @@ export { disposeTree } from "./dispose-tree";
 import { addExecutiveArchitecture } from "./executive-architecture";
 import { adaptRenderScale } from "./render-scale";
 import { layoutActorLabels, bubbleWidthFor, type ActorLabelAnchor } from "./label-layout";
-import { FrameBenchmark, type BenchmarkReport, type FrameMetrics } from "./frame-benchmark";
+import {
+  FrameBenchmark,
+  sceneTransferBytes,
+  type BenchmarkReport,
+  type FrameMetrics,
+} from "./frame-benchmark";
 import { turnToward } from "../navigation";
 import { addOfficePerimeter } from "./office-perimeter";
 import { buildRoomFurniture } from "./room-furniture";
@@ -72,6 +75,7 @@ type RenderedActor = {
   };
   texture?: CanvasImageSource;
   lookId?: string;
+  labelOcclusion?: { time: number; hidden: boolean };
 };
 
 /** Three.js presentation consumes the existing gameplay state; it never emits socket payloads. */
@@ -221,10 +225,19 @@ export class OfficeRenderer {
     const statuses = [...this.actors.values()].map(
       (actor) => actor.model.root.userData.assetStatus,
     );
+    const assetUrls = new Set<string>();
     this.world.traverse((object) => {
-      if (object.userData.dynamicAsset) statuses.push(object.userData.assetStatus);
+      if (object.userData.sceneAssetUrl) assetUrls.add(object.userData.sceneAssetUrl);
+      for (const url of object.userData.sceneAssetUrls ?? []) assetUrls.add(url);
+      if (object.userData.assetStatus) statuses.push(object.userData.assetStatus);
     });
     return {
+      loadedSceneBytes: sceneTransferBytes(
+        performance.getEntriesByType("resource") as PerformanceResourceTiming[],
+        [...assetUrls],
+      ),
+      sceneAssets: assetUrls.size,
+      failedAssets: statuses.filter((status) => status === "failed").length,
       pixelRatio: this.renderer.getPixelRatio(),
       drawCalls: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
@@ -234,7 +247,6 @@ export class OfficeRenderer {
         !!this.bridge &&
         this.lastMap === this.bridge.mapKey() &&
         this.actors.size === this.lastActors.length &&
-        this.actors.size > 0 &&
         statuses.every((status) => status === "ready" || status === undefined),
       actorCount: this.actors.size,
       viewport: { width: this.host.clientWidth, height: this.host.clientHeight },
@@ -286,8 +298,10 @@ export class OfficeRenderer {
     this.controls.maxDistance = Math.max(85, distance * 2);
     this.camera.far = Math.max(250, distance * 4);
     this.camera.updateProjectionMatrix();
-    if (preset) this.camera.position.copy(preset.position);
-    else
+    if (preset) {
+      this.controls.target.copy(preset.target);
+      this.camera.position.copy(preset.position);
+    } else
       this.camera.position
         .copy(this.controls.target)
         .add(new T.Vector3(0.45, 0.9, 1).normalize().multiplyScalar(distance));
@@ -436,6 +450,12 @@ export class OfficeRenderer {
     }
     this.bridge.pointer(kind, pixel.x, pixel.y, e.button, e.clientX, e.clientY, actorId);
     if (kind === "down" && e.button === 0) this.focus();
+  }
+  /** Capture the current composed scene only after real assets are ready. */
+  captureFrame(): string {
+    if (!this.readMetrics().assetsReady) throw new Error("Scene assets are not ready");
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL("image/webp", 0.9);
   }
   private buildMap(map: MapSnapshot) {
     disposeTree(this.world);
@@ -679,7 +699,15 @@ export class OfficeRenderer {
     const finishedPerimeter =
       !!map.environment && furniture.some((object) => object.type === "room_wall_h");
     const executive = map.environment === "executive";
-    if (studio) addCreativeStudioArchitecture(this.world, map.cols, map.rows);
+    let remainingFurniture = furniture;
+    if (studio) {
+      const composition = addCreativeStudioScene(this.world, map)!;
+      void composition.userData.assetReady.then(() => {
+        if (!this.disposed && composition.parent === this.world)
+          captureStudioReflection(this.renderer, this.scene, composition);
+      });
+      remainingFurniture = composition.userData.unhandledObjects;
+    }
     if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
     if (finishedPerimeter && !executive && !studio)
       addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
@@ -689,7 +717,7 @@ export class OfficeRenderer {
         hasLegacyPartitions: finishedPerimeter,
       });
     this.seats = furnitureSeats(furniture);
-    for (const object of furniture) {
+    for (const object of remainingFurniture) {
       if (studio && object.type === "glass_partition") continue;
       if (
         (finishedPerimeter || executive || studio) &&
@@ -713,6 +741,8 @@ export class OfficeRenderer {
           ? resolveSeat(object, furniture).direction
           : object.direction || "down"
       ];
+      group.name = `generic-object:${object.id}`;
+      group.userData.mapObjectId = object.id;
       this.world.add(group);
       const type = object.type;
       if (type === "room_wall_h" || type === "room_wall_v") {
@@ -867,6 +897,13 @@ export class OfficeRenderer {
           0.4,
           0,
         );
+    }
+    if (studio) {
+      // Batch only generic additions; the asynchronous studio owns its own resources.
+      for (const group of this.world.children)
+        if (group instanceof T.Group && group.name.startsWith("generic-object:"))
+          batchStaticFurniture(group, true, { vertexColors: true, batchSeats: true });
+      return;
     }
     detailSurfaces(
       this.world,
@@ -1043,8 +1080,25 @@ export class OfficeRenderer {
                 : "";
         const text = [indicator, message].filter(Boolean).join(" ");
         const screen = new T.Vector3(seat?.x ?? p.x, 0, seat?.z ?? p.z).project(this.camera);
+        if (
+          isCreativeStudioMap(this.bridge.map()) &&
+          (!rendered.labelOcclusion || time - rendered.labelOcclusion.time > 200)
+        ) {
+          rendered.labelOcclusion = {
+            time,
+            hidden: studioLabelOccluded(
+              this.camera.position,
+              new T.Vector3(seat?.x ?? p.x, seat ? 1.55 : 2.3, seat?.z ?? p.z),
+              this.world,
+            ),
+          };
+        }
         const visible =
-          screen.z >= -1 && screen.z <= 1 && Math.abs(screen.x) <= 1 && Math.abs(screen.y) <= 1;
+          !(isCreativeStudioMap(this.bridge.map()) && rendered.labelOcclusion?.hidden) &&
+          screen.z >= -1 &&
+          screen.z <= 1 &&
+          Math.abs(screen.x) <= 1 &&
+          Math.abs(screen.y) <= 1;
         label.hidden = !visible;
         bubble.hidden = !visible || !text;
         bubble.dataset.active = String(!!actor.active);

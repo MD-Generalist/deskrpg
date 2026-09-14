@@ -9,6 +9,9 @@ export interface FrameMetrics {
   viewport: { width: number; height: number };
   devicePixelRatio: number;
   mapKey: string;
+  loadedSceneBytes?: number | null;
+  sceneAssets?: number;
+  failedAssets?: number;
 }
 export interface BenchmarkReport {
   status: "complete" | "invalid";
@@ -25,6 +28,8 @@ export interface BenchmarkReport {
   drawCallsMax: number;
   trianglesMax: number;
   assetsReady: boolean;
+  loadedSceneBytesMax: number | null;
+  sceneBudget: SceneBudgetResult;
   start: FrameMetrics | null;
   end: FrameMetrics | null;
   intervalsMs: number[];
@@ -90,10 +95,76 @@ export class FrameBenchmark {
       drawCallsMax: Math.max(0, ...this.samples.map((sample) => sample.drawCalls)),
       trianglesMax: Math.max(0, ...this.samples.map((sample) => sample.triangles)),
       assetsReady: this.samples.length > 0 && this.samples.every((sample) => sample.assetsReady),
+      loadedSceneBytesMax:
+        this.samples.length &&
+        this.samples.every((s) => s.loadedSceneBytes !== undefined && s.loadedSceneBytes !== null)
+          ? Math.max(...this.samples.map((s) => s.loadedSceneBytes!))
+          : null,
+      sceneBudget: evaluateSceneBudget({
+        triangles: Math.max(0, ...this.samples.map((s) => s.triangles)),
+        drawCalls: Math.max(0, ...this.samples.map((s) => s.drawCalls)),
+        loadedSceneBytes: this.samples.at(-1)?.loadedSceneBytes ?? null,
+        medianFps: median && median > 0 ? 1000 / median : null,
+        p95FrameMs: quantile(0.95),
+      }),
       start: this.samples[0] ?? null,
       end: this.samples.at(-1) ?? null,
       intervalsMs: [...this.intervals],
     };
     return this.result;
   }
+}
+
+export type SceneBudgetResult = {
+  status: "pass" | "fail" | "incomplete";
+  failures: string[];
+  missing: string[];
+};
+/** Missing measurements are explicit; an unloaded scene never earns a budget pass. */
+export function evaluateSceneBudget(values: {
+  triangles: number;
+  drawCalls: number;
+  loadedSceneBytes: number | null;
+  medianFps: number | null;
+  p95FrameMs: number | null;
+}): SceneBudgetResult {
+  const failures: string[] = [],
+    missing: string[] = [];
+  const check = (name: string, value: number | null, valid: (v: number) => boolean) => {
+    if (value === null || !Number.isFinite(value)) missing.push(name);
+    else if (!valid(value)) failures.push(name);
+  };
+  check("triangles", values.triangles, (v) => v <= 1_200_000);
+  check("drawCalls", values.drawCalls, (v) => v <= 350);
+  check("loadedSceneBytes", values.loadedSceneBytes, (v) => v < 25_000_000);
+  check("medianFps", values.medianFps, (v) => v >= 55);
+  check("p95FrameMs", values.p95FrameMs, (v) => v < 25);
+  return {
+    status: failures.length ? "fail" : missing.length ? "incomplete" : "pass",
+    failures,
+    missing,
+  };
+}
+/** Compressed response bodies, once per URL; cache hits cannot erase a measured transfer. */
+export function sceneTransferBytes(
+  entries: readonly { name: string; encodedBodySize?: number }[],
+  urls: readonly string[],
+): number | null {
+  const sizes = new Map<string, number>();
+  for (const entry of entries) {
+    let path: string;
+    try {
+      path = new URL(entry.name, "http://local").pathname;
+    } catch {
+      continue;
+    }
+    sizes.set(path, Math.max(sizes.get(path) ?? 0, entry.encodedBodySize ?? 0));
+  }
+  let total = 0;
+  for (const url of new Set(urls)) {
+    const size = sizes.get(url);
+    if (!size) return null;
+    total += size;
+  }
+  return total;
 }
