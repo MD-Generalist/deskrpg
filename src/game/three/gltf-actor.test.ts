@@ -4,7 +4,112 @@ import * as T from "three";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createGltfActor, type ActorAssetLoader } from "./gltf-actor";
 import { OFFICE_LOOKS } from "./office-looks";
+import { COMMUTE_WALK_STRIDES, MINIATURE_WALK_STRIDE } from "./commute-walk";
 const look = OFFICE_LOOKS.find((item) => item.id === "office-eun")!;
+
+test("homepage phase follows scaled distance and survives late loading and pause", async () => {
+  const source = asset();
+  source.animations
+    .find((clip) => clip.name === "walk")!
+    .tracks.push(new T.NumberKeyframeTrack("body.position[x]", [0, 1], [0, 1]));
+  let finish!: (value: GLTF) => void;
+  const actor = createGltfActor(
+    "distance",
+    look,
+    0,
+    "distance",
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    { distanceWalk: true },
+  );
+  actor.root.scale.setScalar(1.15);
+  actor.rig.rotation.y = 1.23;
+  const distance = (MINIATURE_WALK_STRIDE * 1.15) / 4;
+  actor.update(0, true, "walking", false, { cumulativeDistance: distance });
+  await Promise.resolve();
+  finish(source);
+  await actor.ready;
+  actor.update(500, true, "walking", false, { cumulativeDistance: distance });
+  const body = actor.rig.getObjectByName("body")!;
+  assert.ok(Math.abs(body.position.x - 0.25) < 1e-6);
+  assert.equal(actor.rig.rotation.y, 1.23);
+  actor.update(900, true, "walking", false, { cumulativeDistance: distance });
+  assert.ok(Math.abs(body.position.x - 0.25) < 1e-6);
+  actor.update(901, true, "walking", false, {
+    cumulativeDistance: distance + (COMMUTE_WALK_STRIDES[look.id] * 1.15) / 4,
+  });
+  assert.ok(Math.abs(body.position.x - 0.5) < 1e-6);
+  actor.dispose();
+});
+
+test("homepage missing walk and load failures keep distance-driven fallback visible", async () => {
+  for (const failure of [false, true]) {
+    const source = asset();
+    source.animations = source.animations.filter((clip) => clip.name !== "walk");
+    const actor = createGltfActor(
+      "fallback",
+      look,
+      0,
+      `fallback-${failure}`,
+      async () => {
+        if (failure) throw new Error("expected");
+        return source;
+      },
+      { distanceWalk: true },
+    );
+    await actor.ready;
+    actor.update(1, true, "walking", false, { cumulativeDistance: 0 });
+    const visual = actor.rig.children[0];
+    const leg = visual.children.find(
+      (child) => Math.abs(child.position.x + 0.105) < 1e-6 && child.position.y === 0.89,
+    )!;
+    assert.ok(visual.visible);
+    assert.equal(leg.rotation.x, 0);
+    actor.update(2, true, "walking", false, { cumulativeDistance: MINIATURE_WALK_STRIDE / 4 });
+    assert.ok(Math.abs(leg.rotation.x - 0.32) < 1e-9);
+    actor.update(100, true, "walking", false, { cumulativeDistance: MINIATURE_WALK_STRIDE / 4 });
+    assert.ok(Math.abs(leg.rotation.x - 0.32) < 1e-9);
+    if (!failure) assert.equal(actor.rig.children[1].visible, false);
+    actor.dispose();
+  }
+});
+
+test("homepage retained fallback and a late model are released exactly once", async () => {
+  let finish!: (value: GLTF) => void;
+  const source = asset();
+  let sourceDisposals = 0,
+    fallbackDisposals = 0;
+  (source.scene.children[0] as T.Mesh).geometry.addEventListener(
+    "dispose",
+    () => sourceDisposals++,
+  );
+  const actor = createGltfActor(
+    "late",
+    look,
+    0,
+    "late-opt-in",
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    { distanceWalk: true },
+  );
+  let geometry: T.BufferGeometry | undefined;
+  actor.rig.traverse((node) => {
+    if (node instanceof T.Mesh) geometry ??= node.geometry;
+  });
+  geometry!.addEventListener("dispose", () => fallbackDisposals++);
+  await Promise.resolve();
+  actor.dispose();
+  actor.dispose();
+  finish(source);
+  assert.equal(await actor.ready, false);
+  assert.equal(fallbackDisposals, 1);
+  assert.equal(sourceDisposals, 1);
+  assert.equal(actor.root.children.length, 0);
+});
 function asset() {
   const scene = new T.Group();
   const body = new T.Mesh(new T.BoxGeometry(0.4, 1.9, 0.3), new T.MeshStandardMaterial());

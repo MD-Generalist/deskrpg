@@ -1,25 +1,79 @@
 import * as T from "three";
-import { round, sphere, cylinder } from "./primitives";
+import { round, cylinder } from "./primitives";
 import { createActor } from "./characters";
 import { OFFICE_LOOKS } from "./office-looks";
 import { batchStaticFurniture } from "./static-batching";
+import {
+  createCommuteMaterials,
+  type CommuteMaterialName,
+  type CommuteQuality,
+} from "./commute-materials";
+import { createCommuteTree } from "./commute-trees";
+import { createCommuteVehicles } from "./commute-vehicles";
+import { createCommuteMotion } from "./commute-motion";
+import { createCommuteWalker } from "./commute-walk";
 
 /** A miniature morning district. Only commuters move; architecture is batched once. */
-export function createCommuteCity() {
+export function createCommuteCity(
+  options: { quality?: CommuteQuality; actorFactory?: typeof createActor } = {},
+) {
+  let quality = options.quality ?? "desktop";
+  const palette = createCommuteMaterials({ quality });
+  const trees: ReturnType<typeof createCommuteTree>[] = [];
+  const signTextures: T.Texture[] = [];
+  let disposed = false,
+    initialized = false;
   const root = new T.Group();
   const streets = new T.Group();
   root.add(streets);
   const stone = "#e9e1cc",
     ink = "#39584e",
     glass = "#83b4b1";
-  const box = (w: number, h: number, d: number, color: string, x: number, y: number, z: number) =>
-    round(streets, w, h, d, color, x, y, z, Math.min(0.06, h / 4));
+  const box = (
+    w: number,
+    h: number,
+    d: number,
+    color: string,
+    x: number,
+    y: number,
+    z: number,
+    finish?: CommuteMaterialName,
+  ) => {
+    const name =
+      finish ??
+      ([glass, "#74a4a2", "#709d98", "#85a6a0"].includes(color)
+        ? "glass"
+        : color === "#b9966e"
+          ? "wood"
+          : color === ink
+            ? "metal"
+            : "facade");
+    // Static batching owns these clones; the palette retains texture ownership.
+    const material = palette.materials[name].clone();
+    material.color.set(color);
+    const mesh = round(streets, w, h, d, material, x, y, z, Math.min(0.06, h / 4));
+    // Project grain in world units on each box face before the meshes are baked.
+    const uv = mesh.geometry.getAttribute("uv");
+    const normal = mesh.geometry.getAttribute("normal");
+    const position = mesh.geometry.getAttribute("position");
+    const density = name === "asphalt" ? 2 : name === "paving" ? 0.5 : 1;
+    for (let i = 0; i < uv.count; i++) {
+      const nx = Math.abs(normal.getX(i)),
+        ny = Math.abs(normal.getY(i));
+      uv.setXY(
+        i,
+        (nx > 0.7 ? position.getZ(i) : position.getX(i)) * density,
+        (ny > 0.7 ? position.getZ(i) : position.getY(i)) * density,
+      );
+    }
+    return mesh;
+  };
 
   // A broad avenue, raised pavement and a small planted headquarters plaza.
   box(38, 0.65, 21, "#cfc8b7", 0, -0.5, 0);
-  box(38, 0.12, 6.2, "#879997", 0, -0.13, 5.8);
-  box(38, 0.2, 11.5, stone, 0, -0.1, -3);
-  box(38, 0.22, 2.5, "#e9e4d4", 0, -0.06, 10.1);
+  box(38, 0.12, 6.2, "#879997", 0, -0.13, 5.8, "asphalt");
+  box(38, 0.2, 11.5, stone, 0, -0.1, -3, "paving");
+  box(38, 0.22, 2.5, "#e9e4d4", 0, -0.06, 10.1, "paving");
   for (let x = -18; x < 19; x += 2.5) box(1.15, 0.015, 0.065, "#f7edd0", x, -0.055, 5.8);
   for (const z of [2.76, 8.8]) box(38, 0.03, 0.12, "#faf1dc", 0, 0.025, z);
   for (let z = 3.15; z < 8.7; z += 0.7) box(2.7, 0.022, 0.36, "#f6f0de", 2.4, -0.043, z);
@@ -39,6 +93,7 @@ export function createCommuteCity() {
     ctx.font = "600 66px sans-serif";
     ctx.fillText(text, 512, 100);
     const texture = new T.CanvasTexture(canvas);
+    signTextures.push(texture);
     texture.colorSpace = T.SRGBColorSpace;
     const mesh = new T.Mesh(
       new T.PlaneGeometry(width, (width * 192) / 1024),
@@ -113,20 +168,12 @@ export function createCommuteCity() {
   function tree(x: number, z: number, size = 1) {
     box(1.25, 0.24, 1.15, "#c0bd9f", x, 0.12, z);
     box(1.1, 0.03, 1, "#91a87a", x, 0.255, z);
-    cylinder(streets, 0.1, 0.15, 1.8 * size, "#9b8260", x, 0.9 * size, z);
-    for (let i = 0; i < 4; i++) {
-      sphere(
-        streets,
-        0.72 * size,
-        ["#78996c", "#92ae7a", "#a8bb81", "#88a875"][i],
-        x + Math.cos(i * 2.4) * 0.34 * size,
-        (2 + i * 0.17) * size,
-        z + Math.sin(i * 2.4) * 0.32 * size,
-        1,
-        1.2,
-        1,
-      );
-    }
+    const tree = createCommuteTree(palette, { seed: 47 + trees.length, size, quality });
+    tree.group.name = "commute-tree";
+    tree.group.position.set(x, 0.27, z);
+    tree.group.userData.size = size;
+    trees.push(tree);
+    root.add(tree.group);
   }
   for (const x of [-16.8, -10.3, -4.2, 4.5, 10.5, 17.2]) tree(x, 1.15, x === -4.2 ? 0.85 : 1);
   for (const x of [-13, -4, 8, 16]) tree(x, 10.1, 0.85);
@@ -140,50 +187,107 @@ export function createCommuteCity() {
     box(1.65, 0.45, 0.09, "#b9966e", x, 0.8, 0.7);
     for (const dx of [-0.6, 0.6]) box(0.08, 0.45, 0.42, ink, x + dx, 0.23, 0.9);
   }
-  // Parked vehicles keep the pedestrian crossing clear.
-  for (const [x, z, color] of [
-    [-11, 4.4, "#e8c486"],
-    [11, 7.2, "#bbcfc4"],
-  ] as const) {
-    box(3.1, 0.55, 1.3, color, x, 0.48, z);
-    box(1.65, 0.62, 1.12, glass, x - 0.15, 1.02, z);
-    box(1.8, 0.09, 1.2, color, x - 0.15, 1.37, z);
-    for (const dx of [-1, 1])
-      for (const dz of [-0.65, 0.65]) {
-        const tire = cylinder(streets, 0.3, 0.3, 0.16, "#465653", x + dx, 0.29, z + dz);
-        tire.rotation.x = Math.PI / 2;
-      }
-  }
   batchStaticFurniture(streets, true, { vertexColors: true });
+  const motion = createCommuteMotion();
+  let vehicles = createCommuteVehicles(palette, { quality });
+  vehicles.root.name = "commute-vehicles";
+  vehicles.root.position.y = -0.07;
+  root.add(vehicles.root);
+  vehicles.update(motion.vehicles);
 
   const commuters = [0, 2, 5, 8, 11, 3].map((lookIndex, index) => {
     const look = OFFICE_LOOKS[lookIndex];
-    const actor = createActor(`commuter-${index}`, look.coat, index, undefined, look);
+    const actor = (options.actorFactory ?? createActor)(
+      `commuter-${index}`,
+      look.coat,
+      index,
+      undefined,
+      look,
+      { distanceWalk: true },
+    );
     actor.ring.visible = false;
     actor.root.scale.setScalar(1.15);
     root.add(actor.root);
-    return {
+    const commuter = {
       actor,
       start: -15 + index * 5.3,
       direction: index % 3 === 0 ? -1 : 1,
       lane: index % 2 ? 9.3 : 2.1,
+      walker: createCommuteWalker(1.7),
+      frame: { cumulativeDistance: 0 },
     };
+    return commuter;
   });
   return {
     root,
     ready: Promise.all(
-      commuters.map(({ actor }) => ("ready" in actor ? actor.ready : Promise.resolve(true))),
+      commuters.map(async (commuter) => {
+        const { actor } = commuter;
+        const ready = "ready" in actor ? await actor.ready : true;
+        if (!disposed) actor.update(motion.elapsed, true, "walking", false, commuter.frame);
+        return ready;
+      }),
     ),
+    setQuality(next: CommuteQuality) {
+      if (disposed || next === quality) return;
+      quality = next;
+      // Preserve actors, gait phase, traffic state and camera across the breakpoint.
+      for (let i = 0; i < trees.length; i++) {
+        const previous = trees[i];
+        const replacement = createCommuteTree(palette, {
+          seed: 47 + i,
+          size: previous.group.userData.size,
+          quality,
+        });
+        replacement.group.name = "commute-tree";
+        replacement.group.position.copy(previous.group.position);
+        replacement.group.userData.size = previous.group.userData.size;
+        previous.dispose();
+        trees[i] = replacement;
+        root.add(replacement.group);
+      }
+      vehicles.dispose();
+      vehicles = createCommuteVehicles(palette, { quality });
+      vehicles.root.name = "commute-vehicles";
+      vehicles.root.position.y = -0.07;
+      root.add(vehicles.root);
+      vehicles.update(motion.vehicles);
+    },
     update(time: number, moving: boolean) {
-      for (const { actor, start, direction, lane } of commuters) {
-        const x = ((((start + direction * time * 0.58 + 18) % 36) + 36) % 36) - 18;
+      if (disposed) return;
+      motion.update(time, moving);
+      vehicles.update(motion.vehicles);
+      for (const commuter of commuters) {
+        const { actor, start, direction, lane, walker } = commuter;
+        const frame = walker.update(time, moving);
+        commuter.frame = frame;
+        if (!moving && initialized) continue;
+        const x = ((((start + direction * frame.cumulativeDistance + 18) % 36) + 36) % 36) - 18;
         actor.root.position.set(x, 0.03, lane);
         actor.rig.rotation.y = (direction * Math.PI) / 2;
-        actor.update(time, moving, moving ? "walking" : "idle", false);
+        actor.update(motion.elapsed, true, "walking", false, frame);
       }
+      initialized = true;
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
       for (const { actor } of commuters) if ("dispose" in actor) actor.dispose();
+      vehicles.dispose();
+      for (const tree of trees) tree.dispose();
+      const geometries = new Set<T.BufferGeometry>();
+      const materials = new Set<T.Material>();
+      streets.traverse((object) => {
+        if (!(object instanceof T.Mesh)) return;
+        geometries.add(object.geometry);
+        for (const material of Array.isArray(object.material) ? object.material : [object.material])
+          materials.add(material);
+      });
+      geometries.forEach((g) => g.dispose());
+      materials.forEach((m) => m.dispose());
+      signTextures.forEach((t) => t.dispose());
+      palette.dispose();
+      root.clear();
     },
   };
 }
