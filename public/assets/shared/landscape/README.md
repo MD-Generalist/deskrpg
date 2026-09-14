@@ -4,13 +4,13 @@ Original DeskRPG assets, authored with Blender; no third-party downloads.
 Distributed under the repository license. Authoring source:
 `scripts/assets/build-shared-landscape.py`.
 
-| ID | Use | Ground footprint | Height limit |
-|---|---|---|---|
-| ficus | broad-leaf indoor planter | 1 × 1 m | 1.7 m |
-| olive | narrow-leaf indoor planter | 1 × 1 m | 1.7 m |
-| street-tree | branching avenue tree | 3.5 × 3.5 m | 4 m |
-| glass-tower | glass office tower | 1.6 × 1.4 m | 8 m |
-| stone-tower | stone office tower | 1.6 × 1.4 m | 7 m |
+| ID          | Use                        | Ground footprint | Height limit |
+| ----------- | -------------------------- | ---------------- | ------------ |
+| ficus       | broad-leaf indoor planter  | 1 × 1 m          | 1.7 m        |
+| olive       | narrow-leaf indoor planter | 1 × 1 m          | 1.7 m        |
+| street-tree | branching avenue tree      | 3.5 × 3.5 m      | 4 m          |
+| glass-tower | glass office tower         | 1.6 × 1.4 m      | 8 m          |
+| stone-tower | stone office tower         | 1.6 × 1.4 m      | 7 m          |
 
 Meters, Y-up, +Z front. The tree root flare extends up to 0.06m below ground.
 Registry: `src/game/three/shared-scene-assets.ts`. Use `attachSceneAsset` for

@@ -734,12 +734,17 @@ export class OfficeRenderer {
                 ? "bookcase"
                 : managerSeat
                   ? "chair"
-                  : type === "chair" ? "guest-chair"
-                  : type === "office_sofa" ? "sofa"
-                  : type === "office_armchair" ? "armchair"
-                  : type === "conference_table" ? "conference"
-                  : type === "meeting_table" ? "coffee"
-                  : undefined;
+                  : type === "chair"
+                    ? "guest-chair"
+                    : type === "office_sofa"
+                      ? "sofa"
+                      : type === "office_armchair"
+                        ? "armchair"
+                        : type === "conference_table"
+                          ? "conference"
+                          : type === "meeting_table"
+                            ? "coffee"
+                            : undefined;
           if (asset) void attachFurnitureAsset(roomFurniture, asset);
         }
         continue;
@@ -778,11 +783,15 @@ export class OfficeRenderer {
         cylinder(group, 0.3, 0.22, 0.45, "#d4ae85", 0, 0.23, 0);
         cylinder(group, 0.035, 0.04, 0.7, p.wood, 0, 0.7, 0);
         for (const x of [-0.18, 0.18]) sphere(group, 0.35, "#668863", x, 1.0 + x, 0, 0.8, 1.2, 0.8);
-        if (executive) void attachSceneAsset(group, (object.col + object.row) % 2 ? "olive" : "ficus");
+        if (executive)
+          void attachSceneAsset(group, (object.col + object.row) % 2 ? "olive" : "ficus");
       } else if (type === "computer") {
-        const executiveDesk = executive && furniture.find(
-          (desk) => desk.type === "reception_desk" && desk.col === object.col && desk.row === object.row,
-        );
+        const executiveDesk =
+          executive &&
+          furniture.find(
+            (desk) =>
+              desk.type === "reception_desk" && desk.col === object.col && desk.row === object.row,
+          );
         if (executiveDesk) {
           group.position.x = executiveDesk.col + 1;
           group.position.y = 0.21;
