@@ -47,7 +47,8 @@ function limb(start: T.Vector3, end: T.Vector3, radius: number, bend: number): T
 }
 
 /**
- * A roughly 3m tall, 2m wide miniature street tree. The clear bole is ~1.8m.
+ * A roughly 3m tall, 2m wide miniature street tree. The clear bole is ~1.6m;
+ * staggered limbs carry foliage through a roughly 1.3m deep crown.
  * size is a uniform multiplier. Two renderables per tree at either quality;
  * the light tier thins twigs and leaves without changing the leaf silhouette.
  * Palette resources (including both alpha-cutout shadow materials) are borrowed.
@@ -69,23 +70,27 @@ export function createCommuteTree(
   group.scale.setScalar(size);
   const parts: T.BufferGeometry[] = [];
   const twigPaths: [T.Vector3, T.Vector3][] = [];
-  const trunkTop = new T.Vector3((random() - 0.5) * 0.13, 1.96, (random() - 0.5) * 0.13);
+  const trunkTop = new T.Vector3((random() - 0.5) * 0.13, 2.45, (random() - 0.5) * 0.13);
   parts.push(limb(new T.Vector3(), trunkTop, 0.075, 0.045));
   const mainCount = quality === "desktop" ? 7 : 5;
   const twigCount = quality === "desktop" ? 3 : 2;
   const leavesPerTwig = quality === "desktop" ? 18 : 13;
   const rotation = random() * Math.PI * 2;
   for (let i = 0; i < mainCount; i++) {
-    // Spiral attachment and staggered heights leave daylight between branch fans.
+    // Separate lower spreading limbs from upright upper growth. Stratifying
+    // heights avoids random seeds collapsing the crown into one umbrella fan.
+    const level = i / (mainCount - 1);
     const angle = rotation + i * 2.399963 + (random() - 0.5) * 0.3;
-    const reach = 0.49 + random() * 0.19;
-    const junction = trunkTop.clone().multiplyScalar(0.86 + random() * 0.14);
+    const reach = 0.66 - level * 0.29 + random() * 0.09;
+    const junction = trunkTop
+      .clone()
+      .multiplyScalar((1.61 + level * 0.66 + random() * 0.055) / trunkTop.y);
     const tip = new T.Vector3(
       Math.cos(angle) * reach,
-      2.31 + random() * 0.45,
+      1.94 + level * 0.83 + random() * 0.055,
       Math.sin(angle) * reach,
     );
-    parts.push(limb(junction, tip, 0.036, (random() - 0.5) * 0.14));
+    parts.push(limb(junction, tip, 0.036 - level * 0.014, (random() - 0.5) * 0.14));
     for (let j = 0; j < twigCount; j++) {
       const start = junction.clone().lerp(tip, 0.56 + j * 0.14);
       const twigAngle = angle + (j - (twigCount - 1) / 2) * 0.95;
@@ -94,7 +99,7 @@ export function createCommuteTree(
         .add(
           new T.Vector3(
             Math.cos(twigAngle) * (0.19 + random() * 0.17),
-            0.07 + random() * 0.18,
+            (j / (twigCount - 1) - 0.5) * 0.17 + 0.065 + random() * 0.06,
             Math.sin(twigAngle) * (0.19 + random() * 0.17),
           ),
         );
@@ -148,7 +153,7 @@ export function createCommuteTree(
       ).normalize();
       transform.quaternion.setFromUnitVectors(T.Object3D.DEFAULT_UP, direction);
       transform.rotateY((random() - 0.5) * Math.PI * 1.5);
-      const length = 0.16 + random() * 0.105;
+      const length = (quality === "light" ? 0.2 : 0.18) + random() * 0.105;
       transform.scale.set(length * (0.44 + random() * 0.2), length, length);
       transform.updateMatrix();
       leaves.setMatrixAt(index, transform.matrix);
