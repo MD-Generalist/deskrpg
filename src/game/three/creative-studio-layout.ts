@@ -3,6 +3,15 @@ import type { MapObject } from "../../lib/object-types";
 
 export const CREATIVE_STUDIO_SIZE = Object.freeze({ cols: 42, rows: 26 } as const);
 
+/** Collision/architecture contract for the enclosed meeting wing. */
+export const CREATIVE_STUDIO_MEETING_BOUNDARY = Object.freeze({
+  westCol: 32,
+  eastCol: 41,
+  frontRow: 10,
+  westSolidRows: Object.freeze([1, 2, 3, 4, 5, 6, 7, 10]),
+  doorRows: Object.freeze([8, 9]),
+});
+
 const area = (x: number, y: number, width: number, height: number): AmbientArea => ({
   x,
   y,
@@ -208,8 +217,19 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
   add("studio_shelf", 16, 21, { variant: "sample-rack", destinationTags: ["production"] });
 
   // Glass meeting enclosure. The opening at rows 8-9 connects to the east spine.
-  for (const row of [2, 3, 4, 5, 6, 7, 10])
-    add("glass_partition", 32, row, { direction: "right", variant: "black-frame" });
+  for (const row of CREATIVE_STUDIO_MEETING_BOUNDARY.westSolidRows)
+    add("glass_partition", CREATIVE_STUDIO_MEETING_BOUNDARY.westCol, row, {
+      direction: "right",
+      variant: "black-frame",
+    });
+  for (
+    let col = CREATIVE_STUDIO_MEETING_BOUNDARY.westCol + 1;
+    col < CREATIVE_STUDIO_MEETING_BOUNDARY.eastCol;
+    col++
+  )
+    add("glass_partition", col, CREATIVE_STUDIO_MEETING_BOUNDARY.frontRow, {
+      variant: "black-frame",
+    });
   add("conference_table", 35, 4, { variant: "studio-oak", destinationTags: ["meeting"] });
   for (const [col, row, direction] of [
     [35, 3, "down"],

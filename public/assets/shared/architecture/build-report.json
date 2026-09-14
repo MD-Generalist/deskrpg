@@ -1,0 +1,191 @@
+{
+  "oak-floor": {
+    "triangles": 188,
+    "bytes": 188108,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.5,
+        0.0,
+        -1.0
+      ],
+      "max": [
+        1.5,
+        0.03500000014901161,
+        1.0
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "brick-panel": {
+    "triangles": 188,
+    "bytes": 439588,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.0,
+        0.0,
+        -0.11999999731779099
+      ],
+      "max": [
+        1.0,
+        3.5999999046325684,
+        0.11999999731779099
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "plaster-panel": {
+    "triangles": 188,
+    "bytes": 104200,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.0,
+        0.0,
+        -0.09000000357627869
+      ],
+      "max": [
+        1.0,
+        3.5999999046325684,
+        0.09000000357627869
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "grid-window": {
+    "triangles": 1692,
+    "bytes": 228816,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -2.0,
+        0.0,
+        -0.10000000894069672
+      ],
+      "max": [
+        2.0,
+        2.5,
+        0.17000000178813934
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "glass-partition": {
+    "triangles": 940,
+    "bytes": 26516,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.0,
+        0.0,
+        -0.05000000074505806
+      ],
+      "max": [
+        0.9999999403953552,
+        3.5999999046325684,
+        0.05000000074505806
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "glass-corner": {
+    "triangles": 1880,
+    "bytes": 50720,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.5250000357627869,
+        0.0,
+        -0.5249999761581421
+      ],
+      "max": [
+        0.5250000357627869,
+        3.5999999046325684,
+        0.5249999761581421
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "glass-door": {
+    "triangles": 1316,
+    "bytes": 36196,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.0,
+        0.0,
+        -0.10000000149011612
+      ],
+      "max": [
+        0.9999999403953552,
+        3.5999999046325684,
+        0.10949999839067459
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "double-entrance": {
+    "triangles": 1692,
+    "bytes": 45852,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -2.0,
+        0.0,
+        -0.10000000149011612
+      ],
+      "max": [
+        2.0,
+        1.5,
+        0.10949999839067459
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  },
+  "cutaway-plinth": {
+    "triangles": 188,
+    "bytes": 188148,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.5,
+        0.0,
+        -0.15000000596046448
+      ],
+      "max": [
+        1.5,
+        0.3199999928474426,
+        0.15000000596046448
+      ]
+    },
+    "seed": 140926,
+    "source": "scripts/assets/build-creative-studio-architecture.py",
+    "license": "repository-original",
+    "invalidMesh": false
+  }
+}

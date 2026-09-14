@@ -39,3 +39,12 @@ export const OFFICE_FINISHES = {
 export function officeFinish(id?: OfficeEnvironmentId) {
   return OFFICE_FINISHES[id ?? "publishing"];
 }
+
+/** V3 styling is opt-in so edited v2 agency maps keep their saved visual identity. */
+export const CREATIVE_STUDIO_FINISH = {
+  upholstery: "#e7dfd1",
+  mat: "#b3aa96",
+  accent: "#c87b65",
+  floor: "wood",
+  prop: "swatches",
+} as const;

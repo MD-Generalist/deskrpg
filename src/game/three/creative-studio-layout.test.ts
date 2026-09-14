@@ -198,3 +198,11 @@ test("creative studio objects retain visual and destination metadata through Til
   assert.deepEqual(production.destinationTags, ["production", "worktable"]);
   assert.equal(production.variant, "dressed");
 });
+
+test("meeting enclosure joins rear and front boundaries with the two-tile west door retained", () => {
+  const snapshot = tiledSnapshot(buildOfficeEnvironment("agency"));
+  const blocked = new Set(snapshot.blocked);
+  for (let row = 0; row < 8; row++) assert.ok(blocked.has(`32,${row}`), `west boundary ${row}`);
+  for (let col = 32; col < 42; col++) assert.ok(blocked.has(`${col},10`), `front boundary ${col}`);
+  for (const row of [8, 9]) assert.equal(blocked.has(`32,${row}`), false, `meeting door ${row}`);
+});

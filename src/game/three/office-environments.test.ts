@@ -143,7 +143,10 @@ for (const environment of OFFICE_ENVIRONMENTS) {
           occupied.add(key);
           accessible ||= neighbors(col, row).some(([a, b]) => reached.has(`${a},${b}`));
         }
-      if (object.type !== "cubicle_wall") assert.ok(accessible, `Can approach ${object.type}`);
+      // Structural glass can have cabinets on both sides; it is not an interaction target.
+      // Connected empty tiles and every seat are asserted independently above.
+      if (!["cubicle_wall", "glass_partition"].includes(object.type))
+        assert.ok(accessible, `Can approach ${object.type}`);
     }
     const independent = buildOfficeEnvironment(environment.id);
     layer.objects!.length = 0;

@@ -1,3 +1,8 @@
+import {
+  addCreativeStudioArchitecture,
+  isCreativeStudioMap,
+  creativeStudioOverview,
+} from "./creative-studio-architecture";
 import { furnitureOffset } from "./executive-lounge-layout";
 import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
 import { disposeTree } from "./dispose-tree";
@@ -13,7 +18,7 @@ import { addRoomPartition, addRoomTJunction, addOfficeRoomSurfaces } from "./roo
 import { batchStaticFurniture, batchCoplanarGlass } from "./static-batching";
 import { officeFinish } from "./office-finishes";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { officeLighting, shadowExtent } from "./office-lighting";
+import { officeLighting, shadowExtent, applyOfficeShadowFilter } from "./office-lighting";
 import { detailSurfaces, surfaceTexture } from "./surface-detail";
 import { resolveSeat, seatAt, sofaSeats, furnitureSeats, type Seat } from "./seating";
 import { PointerGesture } from "./pointer-gesture";
@@ -272,16 +277,20 @@ export class OfficeRenderer {
   }
   overview(cols: number, rows: number) {
     this.following = false;
-    this.controls.target.set(cols / 2, 0, rows / 2);
+    const studio = this.bridge && isCreativeStudioMap(this.bridge.map());
+    this.controls.target.set(cols / 2, studio ? 1.2 : 0, rows / 2);
     this.overviewDimensions = { cols, rows };
     const aspect = this.host.clientWidth / Math.max(1, this.host.clientHeight);
-    const distance = overviewDistance(cols, rows, aspect);
+    const preset = studio ? creativeStudioOverview(cols, rows, aspect) : null;
+    const distance = preset?.distance ?? overviewDistance(cols, rows, aspect);
     this.controls.maxDistance = Math.max(85, distance * 2);
     this.camera.far = Math.max(250, distance * 4);
     this.camera.updateProjectionMatrix();
-    this.camera.position
-      .copy(this.controls.target)
-      .add(new T.Vector3(0.45, 0.9, 1).normalize().multiplyScalar(distance));
+    if (preset) this.camera.position.copy(preset.position);
+    else
+      this.camera.position
+        .copy(this.controls.target)
+        .add(new T.Vector3(0.45, 0.9, 1).normalize().multiplyScalar(distance));
   }
   showOverview() {
     if (this.bridge) {
@@ -430,14 +439,20 @@ export class OfficeRenderer {
   }
   private buildMap(map: MapSnapshot) {
     disposeTree(this.world);
-    const p = isOfficeEnvironmentId(map.environment)
-      ? environmentPalettes[map.environment]
-      : palettes[this.theme];
+    const studio = isCreativeStudioMap(map);
+    const p = studio
+      ? { floor: "#dfcdb0", wall: "#e5dfd2", wood: "#c9ae86", outside: "#f4f0e7" }
+      : isOfficeEnvironmentId(map.environment)
+        ? environmentPalettes[map.environment]
+        : palettes[this.theme];
     const lighting = officeLighting(
       isOfficeEnvironmentId(map.environment) ? map.environment : undefined,
+      studio ? 3 : undefined,
     );
     this.sun.color.set(lighting.sun);
     this.sun.intensity = lighting.sunIntensity;
+    applyOfficeShadowFilter(this.scene, this.renderer.shadowMap, lighting.shadowMapType);
+    this.sun.shadow.radius = lighting.shadowRadius;
     this.sky.color.set(lighting.sky);
     this.sky.groundColor.set("#8a8577");
     this.sky.intensity = lighting.hemisphereIntensity;
@@ -533,7 +548,7 @@ export class OfficeRenderer {
       tiles.receiveShadow = true;
       this.world.add(tiles);
     }
-    if (isOfficeEnvironmentId(map.environment) && map.environment !== "executive") {
+    if (isOfficeEnvironmentId(map.environment) && map.environment !== "executive" && !studio) {
       const finish = officeFinish(map.environment);
       const floorMap = surfaceTexture(finish.floor, "color");
       const floorBump = surfaceTexture(finish.floor);
@@ -664,18 +679,20 @@ export class OfficeRenderer {
     const finishedPerimeter =
       !!map.environment && furniture.some((object) => object.type === "room_wall_h");
     const executive = map.environment === "executive";
+    if (studio) addCreativeStudioArchitecture(this.world, map.cols, map.rows);
     if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
-    if (finishedPerimeter && !executive)
+    if (finishedPerimeter && !executive && !studio)
       addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
-    if (finishedPerimeter && map.environment && !executive)
+    if (finishedPerimeter && map.environment && !executive && !studio)
       addOfficeRoomSurfaces(this.world, map.environment, {
         environmentVersion: map.environmentVersion,
         hasLegacyPartitions: finishedPerimeter,
       });
     this.seats = furnitureSeats(furniture);
     for (const object of furniture) {
+      if (studio && object.type === "glass_partition") continue;
       if (
-        (finishedPerimeter || executive) &&
+        (finishedPerimeter || executive || studio) &&
         object.type === "cubicle_wall" &&
         (object.col === 0 ||
           object.col === map.cols - 1 ||

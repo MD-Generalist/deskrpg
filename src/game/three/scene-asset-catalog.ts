@@ -16,7 +16,9 @@ export type SceneAssetFallback =
   | "sofa"
   | "armchair"
   | "conference"
-  | "coffee";
+  | "coffee"
+  | "architecture-panel"
+  | "architecture-glass";
 
 export type SceneMaterialSlot =
   | "upholstery"
@@ -26,7 +28,9 @@ export type SceneMaterialSlot =
   | "leather"
   | "glass"
   | "foliage"
-  | "planter";
+  | "planter"
+  | "brick"
+  | "plaster";
 
 export type SceneAssetBounds = {
   units: "meters";
@@ -91,9 +95,7 @@ export type SceneAssetDefinition = {
   maxHeight: number;
   fallback: SceneAssetFallback;
   materialSlots?: Readonly<Partial<Record<SceneMaterialSlot, string>>>;
-  variants?: Readonly<
-    Record<string, Readonly<Partial<Record<SceneMaterialSlot, `#${string}`>>>>
-  >;
+  variants?: Readonly<Record<string, Readonly<Partial<Record<SceneMaterialSlot, `#${string}`>>>>>;
   seats?: readonly {
     anchor: readonly [number, number];
     visual: readonly [number, number, number];
@@ -109,21 +111,10 @@ export type SceneAssetDefinition = {
 
 type AssetRegistration = Omit<
   SceneAssetDefinition,
-  | "url"
-  | "category"
-  | "source"
-  | "license"
-  | "bounds"
-  | "destinationTags"
-  | "localCoordinates"
+  "url" | "category" | "source" | "license" | "bounds" | "destinationTags" | "localCoordinates"
 >;
 
-function worldBounds(
-  width: number,
-  height: number,
-  depth: number,
-  minY = 0,
-): SceneAssetBounds {
+function worldBounds(width: number, height: number, depth: number, minY = 0): SceneAssetBounds {
   return {
     units: "meters",
     min: [-width / 2, minY, -depth / 2],
@@ -166,7 +157,47 @@ const furnitureDefaults = {
   batch: "static",
 } as const;
 
+const architecture = (
+  name: string,
+  width: number,
+  height: number,
+  depth: number,
+  glass = false,
+): SceneAssetDefinition => ({
+  url: `/assets/shared/architecture/${name}-v1.glb`,
+  category: "architecture",
+  tags: glass ? ["architecture", "glass", name] : ["architecture", name],
+  destinationTags: NO_DESTINATION_TAGS,
+  localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  footprint: [Math.ceil(width), Math.ceil(depth)],
+  bounds: worldBounds(width, height, depth),
+  maxHeight: height,
+  fallback: glass ? "architecture-glass" : "architecture-panel",
+  materialSlots: {
+    oak: "oak",
+    brick: "brick",
+    plaster: "plaster",
+    glass: "glass",
+    "painted-metal": "painted-metal",
+  },
+  shadows: { cast: !glass, receive: true },
+  batch: "static",
+  lod: "standard",
+  budget: { maxTriangles: 12_000, maxBytes: 2_000_000 },
+  source: "scripts/assets/build-creative-studio-architecture.py",
+  license: "repository-original",
+});
+
 export const SCENE_ASSETS = {
+  "shared-oak-floor": architecture("oak-floor", 3, 0.035, 2),
+  "shared-brick-panel": architecture("brick-panel", 2, 3.6, 0.24),
+  "shared-plaster-panel": architecture("plaster-panel", 2, 3.6, 0.18),
+  "shared-grid-window": architecture("grid-window", 4, 2.5, 0.34, true),
+  "shared-glass-partition": architecture("glass-partition", 2, 3.6, 0.1, true),
+  "shared-glass-corner": architecture("glass-corner", 1.1, 3.6, 1.1, true),
+  "shared-glass-door": architecture("glass-door", 2, 3.6, 0.22, true),
+  "shared-double-entrance": architecture("double-entrance", 4, 1.5, 0.22, true),
+  "shared-cutaway-plinth": architecture("cutaway-plinth", 3, 0.32, 0.3),
   "shared-ficus": landscape("ficus", worldBounds(0.65, 1.45, 0.57), {
     tags: ["plant", "indoor", "planter"],
     footprint: [1, 1],
@@ -332,16 +363,10 @@ export const SCENE_ASSETS = {
 
 export type SceneAssetId = keyof typeof SCENE_ASSETS;
 
-export function validateSceneAssetCatalog(
-  assets: Readonly<Record<string, SceneAssetDefinition>>,
-) {
+export function validateSceneAssetCatalog(assets: Readonly<Record<string, SceneAssetDefinition>>) {
   for (const [id, asset] of Object.entries(assets)) {
     if (!/-v\d+\.glb$/.test(asset.url)) throw new Error(`Versioned URL required for ${id}`);
-    if (
-      asset.footprint.some(
-        (dimension) => !Number.isInteger(dimension) || dimension <= 0,
-      )
-    ) {
+    if (asset.footprint.some((dimension) => !Number.isInteger(dimension) || dimension <= 0)) {
       throw new Error(`Invalid footprint for ${id}`);
     }
     if (
@@ -431,11 +456,10 @@ function cachedSource(load: SceneAssetLoader, url: string) {
   } catch (error) {
     loaded = Promise.reject(error);
   }
-  const pending = loaded
-    .catch((error) => {
-      if (cache?.get(url) === pending) cache.delete(url);
-      throw error;
-    });
+  const pending = loaded.catch((error) => {
+    if (cache?.get(url) === pending) cache.delete(url);
+    throw error;
+  });
   cache.set(url, pending);
   return pending;
 }
