@@ -56,7 +56,11 @@ function recordingFixtureApi(
 ): FixtureApi {
   const mapTemplateId = options.mapTemplateId ?? "template-trading";
   return {
-    async request<T>(method: "GET" | "POST" | "PUT", requestPath: string, body?: unknown) {
+    async request<T>(
+      method: "GET" | "POST" | "PUT" | "PATCH",
+      requestPath: string,
+      body?: unknown,
+    ) {
       if (method === "POST" && requestPath === "/api/auth/register") {
         calls.push("register");
         assert.deepEqual(body, CAPTURE_ACCOUNT);
@@ -91,6 +95,22 @@ function recordingFixtureApi(
       if (method === "GET" && requestPath === "/api/groups") {
         calls.push("group");
         return { groups: [{ id: "group-1", name: "Default", isDefault: true }] } as T;
+      }
+      if (
+        method === "PATCH" &&
+        requestPath.startsWith("/api/gateways/gateway-1/profiles/profile-")
+      ) {
+        assert.ok((body as { appearance?: unknown }).appearance);
+        return { ok: true } as T;
+      }
+      if (method === "PUT" && requestPath.startsWith("/api/npcs/npc-")) {
+        const sophie = requestPath.endsWith("sophie");
+        assert.deepEqual(body, {
+          positionX: sophie ? 13 : 15,
+          positionY: sophie ? 17 : 18,
+          direction: "down",
+        });
+        return { npc: { id: sophie ? "npc-sophie" : "npc-noah" } } as T;
       }
       if (method === "GET" && requestPath === "/api/map-templates") {
         calls.push("template");
@@ -158,6 +178,41 @@ function withRuntime(): { root: string; sqlitePath: string } {
   return { root, sqlitePath };
 }
 
+test("places newly hired unplaced NPCs and sets deterministic profile appearances through the API", async (t) => {
+  const { root, sqlitePath } = withRuntime();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const delegate = recordingFixtureApi([]);
+  const writes: Array<{ method: string; path: string; body: unknown }> = [];
+  const api: FixtureApi = {
+    async request<T>(
+      method: "GET" | "POST" | "PUT" | "PATCH",
+      requestPath: string,
+      body?: unknown,
+    ): Promise<T> {
+      if (method === "PUT" || method === "PATCH") writes.push({ method, path: requestPath, body });
+      if (requestPath.includes("&roster=1"))
+        return {
+          npcs: [
+            { id: "npc-sophie", name: "Sophie", positionX: null, positionY: null },
+            { id: "npc-noah", name: "Noah", positionX: null, positionY: null },
+          ],
+        } as T;
+      return delegate.request<T>(method, requestPath, body);
+    },
+  };
+  await prepareFixture(api, "http://127.0.0.1:38642", sqlitePath);
+  assert.deepEqual(
+    writes.filter((w) => w.method === "PUT").map((w) => w.body),
+    [
+      { positionX: 13, positionY: 17, direction: "down" },
+      { positionX: 15, positionY: 18, direction: "down" },
+    ],
+  );
+  const appearances = writes.filter((w) => w.method === "PATCH");
+  assert.equal(appearances.length, 2);
+  assert.notDeepEqual(appearances[0].body, appearances[1].body);
+});
+
 test("creates a user, character, channel, gateway, profiles and NPCs in dependency order", async (t) => {
   const { root, sqlitePath } = withRuntime();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -224,7 +279,7 @@ test("an interrupted run reuses the fixed account character and channel", async 
   const base = recordingFixtureApi(calls);
   const api: FixtureApi = {
     async request<T>(
-      method: "GET" | "POST" | "PUT",
+      method: "GET" | "POST" | "PUT" | "PATCH",
       requestPath: string,
       body?: unknown,
     ): Promise<T> {

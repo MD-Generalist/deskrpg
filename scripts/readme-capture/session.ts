@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { prepareFixture, type FixtureApi } from "./fixture";
+import { prepareFixture, type FixtureApi, type CaptureFixture } from "./fixture";
 import { startMockHermes } from "./mock-hermes";
 
 export type SessionDeps = {
@@ -24,6 +24,20 @@ export type SignalSource = {
 
 const APP_URL = "http://127.0.0.1:3310";
 const CAPTURE_ARTIFACT_DIR = ".artifacts/readme-capture";
+
+export function captureStages(recordOnly: boolean): Array<"record" | "media" | "verify"> {
+  return recordOnly ? ["record"] : ["record", "media", "verify"];
+}
+
+export function persistFixture(root: string, fixture: CaptureFixture): string {
+  const target = path.join(root, CAPTURE_ARTIFACT_DIR, "fixture.json");
+  assertCaptureRuntimePath(root, target);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(fixture, null, 2), { mode: 0o600, flag: "wx" });
+  fs.renameSync(temporary, target);
+  return target;
+}
 
 function isLoopbackUrl(rawUrl: string): boolean {
   try {
@@ -94,7 +108,7 @@ export function createFixtureApi(
   let cookie: string | null = null;
 
   const send = async (
-    method: "GET" | "POST" | "PUT",
+    method: "GET" | "POST" | "PUT" | "PATCH",
     requestPath: string,
     body?: unknown,
   ): Promise<{ response: Response; data: unknown }> => {
@@ -118,7 +132,7 @@ export function createFixtureApi(
 
   return {
     async request<T>(
-      method: "GET" | "POST" | "PUT",
+      method: "GET" | "POST" | "PUT" | "PATCH",
       requestPath: string,
       body?: unknown,
     ): Promise<T> {
@@ -170,6 +184,7 @@ function safeChildEnvironment(
     JWT_SECRET: "readme-capture-jwt-secret-local-only-2026",
     COMING_SOON: "false",
     NEXT_PUBLIC_COMING_SOON: "false",
+    NEXT_PUBLIC_README_CAPTURE: "1",
     PORT: "3310",
     INTERNAL_PORT: "3311",
     HOSTNAME: "127.0.0.1",
@@ -177,6 +192,7 @@ function safeChildEnvironment(
     DESKRPG_CAPTURE_MODE: "1",
     DESKRPG_CAPTURE_INSTANCE_ID: instanceId,
     DESKRPG_PROJECT_ROOT: root,
+    README_CAPTURE_DRY_RUN: process.env.README_CAPTURE_DRY_RUN === "1" ? "1" : "0",
   };
   const browserCache =
     process.platform === "darwin"
@@ -375,7 +391,12 @@ export async function runCaptureSession(deps: Partial<SessionDeps> = {}): Promis
     ]);
     await waitForHealth(sessionFetch, app, instanceId, cancellation.signal);
     cancellation.signal.throwIfAborted();
-    await prepareFixture(createFixtureApi(APP_URL, sessionFetch), mockHermes.baseUrl, sqlitePath);
+    const fixture = await prepareFixture(
+      createFixtureApi(APP_URL, sessionFetch),
+      mockHermes.baseUrl,
+      sqlitePath,
+    );
+    persistFixture(root, fixture);
     cancellation.signal.throwIfAborted();
     await runStage("capture:readme:record", process.execPath, [
       path.join(root, "node_modules/@playwright/test/cli.js"),
@@ -383,16 +404,18 @@ export async function runCaptureSession(deps: Partial<SessionDeps> = {}): Promis
       "--config",
       path.join(root, "playwright.readme-capture.config.ts"),
     ]);
-    await runStage("capture:readme:media", process.execPath, [
-      "--import",
-      "tsx",
-      path.join(root, "scripts/readme-capture/media.ts"),
-    ]);
-    await runStage("capture:readme:verify", process.execPath, [
-      "--import",
-      "tsx",
-      path.join(root, "scripts/readme-capture/verify-readme.ts"),
-    ]);
+    if (captureStages(process.env.README_CAPTURE_RECORD_ONLY === "1").includes("media")) {
+      await runStage("capture:readme:media", process.execPath, [
+        "--import",
+        "tsx",
+        path.join(root, "scripts/readme-capture/media.ts"),
+      ]);
+      await runStage("capture:readme:verify", process.execPath, [
+        "--import",
+        "tsx",
+        path.join(root, "scripts/readme-capture/verify-readme.ts"),
+      ]);
+    }
   } finally {
     try {
       await Promise.all([...ownedChildren].map((child) => terminateOwnedChild(child, kill)));

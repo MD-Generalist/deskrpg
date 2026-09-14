@@ -7,7 +7,7 @@ import { OFFICE_LOOKS, officeLookAppearance } from "../../src/game/three/office-
 import { ensureOfficeEnvironmentTemplate } from "../../src/lib/office-environment-template";
 
 export type FixtureApi = {
-  request<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<T>;
+  request<T>(method: "GET" | "POST" | "PUT" | "PATCH", path: string, body?: unknown): Promise<T>;
 };
 
 export const CAPTURE_ACCOUNT = {
@@ -108,9 +108,6 @@ function findRosterNpc(npcs: RosterNpc[], profileName: "sophie" | "noah"): Roste
       entry.name === displayName,
   );
   if (!npc) throw new Error(`${displayName} is missing from the channel roster`);
-  if (npc.positionX == null || npc.positionY == null) {
-    throw new Error(`${displayName} is not placed in the channel`);
-  }
   return npc;
 }
 
@@ -242,8 +239,19 @@ export async function prepareFixture(
   });
   const gatewayId = requireId(gateway.gateway, "Gateway");
 
-  for (const profile of PROFILE_REGISTRATIONS) {
-    await api.request("POST", `/api/gateways/${encodeURIComponent(gatewayId)}/profiles`, profile);
+  for (const [index, profile] of PROFILE_REGISTRATIONS.entries()) {
+    const registered = await api.request<{ profile: Identified }>(
+      "POST",
+      `/api/gateways/${encodeURIComponent(gatewayId)}/profiles`,
+      profile,
+    );
+    await api.request(
+      "PATCH",
+      `/api/gateways/${encodeURIComponent(gatewayId)}/profiles/${requireId(registered.profile, "Profile")}`,
+      {
+        appearance: officeLookAppearance(OFFICE_LOOKS[index + 1].id),
+      },
+    );
   }
 
   const groups = await api.request<GroupsResponse>("GET", "/api/groups");
@@ -290,7 +298,17 @@ export async function prepareFixture(
     `/api/npcs?channelId=${encodeURIComponent(channelId)}&roster=1`,
   );
   const sophie = findRosterNpc(roster.npcs, "sophie");
-  findRosterNpc(roster.npcs, "noah");
+  const noah = findRosterNpc(roster.npcs, "noah");
+  await api.request("PUT", `/api/npcs/${sophie.id}`, {
+    positionX: 13,
+    positionY: 17,
+    direction: "down",
+  });
+  await api.request("PUT", `/api/npcs/${noah.id}`, {
+    positionX: 15,
+    positionY: 18,
+    direction: "down",
+  });
 
   seedCaptureTaskAndReport(sqlitePath, {
     channelId,

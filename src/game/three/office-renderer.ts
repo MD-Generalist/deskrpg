@@ -6,6 +6,7 @@ import { addExecutiveArchitecture } from "./executive-architecture";
 import { adaptRenderScale } from "./render-scale";
 import { layoutActorLabels, bubbleWidthFor, type ActorLabelAnchor } from "./label-layout";
 import { FrameBenchmark, type BenchmarkReport, type FrameMetrics } from "./frame-benchmark";
+import { showPerformanceHud } from "./performance-hud";
 import { turnToward } from "../navigation";
 import { addOfficePerimeter } from "./office-perimeter";
 import { buildRoomFurniture } from "./room-furniture";
@@ -141,7 +142,7 @@ export class OfficeRenderer {
     pmrem.dispose();
     this.renderer.setClearColor(palettes.office.outside);
     this.renderer.domElement.setAttribute("aria-label", "DeskRPG 3D");
-    if (process.env.NODE_ENV === "development") {
+    if (showPerformanceHud(process.env.NODE_ENV, process.env.NEXT_PUBLIC_README_CAPTURE)) {
       this.statsLabel = document.createElement("output");
       this.statsLabel.setAttribute("aria-label", "3D performance");
       this.statsLabel.style.cssText =

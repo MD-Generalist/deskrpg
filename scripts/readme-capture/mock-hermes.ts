@@ -45,10 +45,14 @@ async function writeSse(
 ) {
   response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
   for (const [index, delta] of chunks.entries()) {
-    response.write(`event: ${eventName}.delta\ndata: ${JSON.stringify({ delta, seq: index + 1 })}\n\n`);
+    response.write(
+      `event: ${eventName}.delta\ndata: ${JSON.stringify({ delta, seq: index + 1 })}\n\n`,
+    );
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
-  response.write(`event: ${eventName}.completed\ndata: ${JSON.stringify({ content: chunks.join("") })}\n\n`);
+  response.write(
+    `event: ${eventName}.completed\ndata: ${JSON.stringify({ content: chunks.join("") })}\n\n`,
+  );
   response.end(`event: run.completed\ndata: {}\n\n`);
 }
 
@@ -60,9 +64,14 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
 
   let sessionSequence = 0;
   let runSequence = 0;
-  const runs = new Map<string, MeetingProfile>();
+  const runs = new Map<string, { profile: MeetingProfile; room: boolean }>();
   const server = createServer((request, response) => {
     const handle = async () => {
+      if (request.method === "GET" && request.url === "/health") {
+        response.writeHead(200, { "Content-Type": "text/plain" });
+        response.end("ok");
+        return;
+      }
       if (!isAuthorized(request)) {
         writeJson(response, 401, { error: "unauthorized" });
         return;
@@ -112,7 +121,10 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
 
       if (request.method === "POST" && path === "/v1/runs") {
         const runId = `run-${++runSequence}`;
-        runs.set(runId, profile);
+        runs.set(runId, {
+          profile,
+          room: String(request.headers["x-hermes-session-key"] ?? "").includes("-room-"),
+        });
         writeJson(response, 202, { run_id: runId });
         return;
       }
@@ -120,11 +132,15 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
       const runEvents = /^\/v1\/runs\/([^/]+)\/events$/.exec(path);
       if (request.method === "GET" && runEvents) {
         const runId = decodeURIComponent(runEvents[1]);
-        if (runs.get(runId) !== profile) {
+        if (runs.get(runId)?.profile !== profile) {
           writeJson(response, 404, { error: "not_found" });
           return;
         }
-        await writeSse(response, "message", [MEETING_LINES[profile]]);
+        await writeSse(
+          response,
+          "message",
+          runs.get(runId)!.room ? CHAT_SCRIPT : [MEETING_LINES[profile]],
+        );
         return;
       }
 
@@ -143,7 +159,8 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
   });
 
   const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Mock Hermes did not expose a TCP address");
+  if (!address || typeof address === "string")
+    throw new Error("Mock Hermes did not expose a TCP address");
   const originHost = host.includes(":") ? `[${host}]` : host;
 
   return {

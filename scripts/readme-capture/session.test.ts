@@ -13,7 +13,32 @@ import {
   createFixtureApi,
   runCaptureSession,
   terminateOwnedChild,
+  persistFixture,
+  captureStages,
 } from "./session";
+
+test("capture development selects record only while the default retains all stages", () => {
+  assert.deepEqual(captureStages(false), ["record", "media", "verify"]);
+  assert.deepEqual(captureStages(true), ["record"]);
+});
+
+test("fixture manifest is atomically replaced before capture and has private permissions", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-manifest-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const fixture = {
+    loginId: "capture",
+    password: "local",
+    characterName: "Dante",
+    channelId: "one",
+    npcNames: ["Sophie", "Noah"] as ["Sophie", "Noah"],
+    profileNames: ["sophie", "noah"] as ["sophie", "noah"],
+  };
+  const target = persistFixture(root, fixture);
+  persistFixture(root, { ...fixture, channelId: "two" });
+  assert.equal(JSON.parse(fs.readFileSync(target, "utf8")).channelId, "two");
+  assert.equal(fs.statSync(target).mode & 0o777, 0o600);
+  assert.deepEqual(fs.readdirSync(path.dirname(target)), ["fixture.json"]);
+});
 
 function runningChild(): { child: ChildProcess; wasKilled(): boolean } {
   const child = new EventEmitter() as ChildProcess;
