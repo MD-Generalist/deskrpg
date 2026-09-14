@@ -30,6 +30,7 @@ test("fixture manifest is atomically replaced before capture and has private per
     password: "local",
     characterName: "Dante",
     channelId: "one",
+    reportCardId: "card-one",
     npcNames: ["Sophie", "Noah"] as ["Sophie", "Noah"],
     profileNames: ["sophie", "noah"] as ["sophie", "noah"],
   };
@@ -115,6 +116,47 @@ test("rejects a capture runtime that traverses a symlink", (t) => {
 test("rejects production app URLs", () => {
   assert.throws(() => createFixtureApi("https://deskrpg.com"), /loopback/i);
 });
+
+for (const component of ["data", "data/db.sqlite"]) {
+  for (const dangling of [false, true]) {
+    test(`rejects ${dangling ? "dangling" : "existing"} ${component} symlink before any startup side effects`, async (t) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-database-link-"));
+      t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+      const runtime = path.join(root, ".artifacts/readme-capture/runtime");
+      const link = path.join(runtime, component);
+      const target = path.join(root, "outside", component);
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      if (!dangling) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        if (component === "data") fs.mkdirSync(target);
+        else fs.writeFileSync(target, "untouched");
+      }
+      fs.symlinkSync(target, link);
+      let spawned = 0;
+      let requested = 0;
+      await assert.rejects(
+        () =>
+          runCaptureSession({
+            root,
+            spawn: (() => {
+              spawned += 1;
+              return runningChild().child;
+            }) as typeof nodeSpawn,
+            fetch: (async () => {
+              requested += 1;
+              return Response.json({});
+            }) as typeof fetch,
+          }),
+        /symlink/i,
+      );
+      assert.equal(spawned, 0);
+      assert.equal(requested, 0);
+      if (dangling) assert.equal(fs.existsSync(target), false);
+      else if (component === "data") assert.deepEqual(fs.readdirSync(target), []);
+      else assert.equal(fs.readFileSync(target, "utf8"), "untouched");
+    });
+  }
+}
 
 test("the local fixture client resumes an existing account and retains its auth cookie", async () => {
   const seen: Array<{ path: string; cookie: string | null }> = [];
@@ -249,11 +291,23 @@ test("terminates the whole owned process group instead of only the npm wrapper",
 });
 
 test("the real capture server ignores repository env files and listens on IPv4 loopback", async (t) => {
-  const root = path.resolve(import.meta.dirname, "../..");
+  const sourceRoot = path.resolve(import.meta.dirname, "../..");
+  const testArtifacts = path.join(sourceRoot, ".artifacts/readme-capture");
+  fs.mkdirSync(testArtifacts, { recursive: true });
+  const root = fs.mkdtempSync(path.join(testArtifacts, "env-project-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  // Copy the actual entry/config and reference read-only source/dependencies. All env files
+  // and Next build output belong to this test, regardless of the developer's local env files.
+  for (const file of ["dev-server.ts", "package.json", "tsconfig.json"])
+    fs.copyFileSync(path.join(sourceRoot, file), path.join(root, file));
+  for (const dir of ["src", "node_modules"])
+    fs.symlinkSync(path.join(sourceRoot, dir), path.join(root, dir));
+  fs.writeFileSync(
+    path.join(root, "next.config.js"),
+    `module.exports = { turbopack: { root: ${JSON.stringify(sourceRoot)} } };\n`,
+  );
   const sentinelPath = path.join(root, ".env.development.local");
-  assert.equal(fs.existsSync(sentinelPath), false, "test must not overwrite an existing env file");
   fs.writeFileSync(sentinelPath, "README_CAPTURE_ENV_SENTINEL=restored-from-repository\n");
-  t.after(() => fs.rmSync(sentinelPath, { force: true }));
 
   const portProbe = createServer();
   await new Promise<void>((resolve, reject) => {
@@ -270,11 +324,11 @@ test("the real capture server ignores repository env files and listens on IPv4 l
   const instanceId = "real-listener-sentinel-test";
   const child = spawnProcess(
     process.execPath,
-    ["--import", "tsx", path.join(root, "scripts/readme-capture/server-launcher.ts")],
+    ["--import", "tsx", path.join(sourceRoot, "scripts/readme-capture/server-launcher.ts")],
     {
       cwd: root,
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
       env: {
         PATH: process.env.PATH,
         HOME: runtime,
@@ -289,6 +343,13 @@ test("the real capture server ignores repository env files and listens on IPv4 l
       },
     },
   );
+  let output = "";
+  child.stdout?.on("data", (chunk) => {
+    output += String(chunk);
+  });
+  child.stderr?.on("data", (chunk) => {
+    output += String(chunk);
+  });
   t.after(async () => {
     if (child.pid && child.exitCode === null && child.signalCode === null) {
       try {
@@ -310,7 +371,7 @@ test("the real capture server ignores repository env files and listens on IPv4 l
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  assert.ok(health?.ok, "capture server did not expose its health sentinel");
+  assert.ok(health?.ok, `capture server did not expose its health sentinel: ${output}`);
   assert.deepEqual(await health.json(), {
     instanceId,
     listenerAddress: "127.0.0.1",

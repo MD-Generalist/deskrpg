@@ -4,51 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import Database from "better-sqlite3";
-
 import { buildOfficeEnvironment } from "../../src/game/three/office-environments";
 import { CAPTURE_ACCOUNT, prepareFixture, type FixtureApi } from "./fixture";
-
-function createCaptureDatabase(sqlitePath: string): void {
-  fs.mkdirSync(path.dirname(sqlitePath), { recursive: true });
-  const sqlite = new Database(sqlitePath);
-  sqlite.exec(`
-    CREATE TABLE tasks (
-      id TEXT PRIMARY KEY,
-      channel_id TEXT NOT NULL,
-      npc_id TEXT,
-      assigner_id TEXT NOT NULL,
-      npc_task_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT,
-      status TEXT NOT NULL,
-      auto_nudge_count INTEGER NOT NULL DEFAULT 0,
-      auto_nudge_max INTEGER NOT NULL DEFAULT 5,
-      last_nudged_at TEXT,
-      last_reported_at TEXT,
-      stalled_at TEXT,
-      stalled_reason TEXT,
-      created_at TEXT,
-      updated_at TEXT,
-      completed_at TEXT
-    );
-    CREATE UNIQUE INDEX idx_tasks_npc_task_id ON tasks(npc_id, npc_task_id);
-    CREATE TABLE npc_reports (
-      id TEXT PRIMARY KEY,
-      channel_id TEXT NOT NULL,
-      npc_id TEXT NOT NULL,
-      task_id TEXT NOT NULL,
-      target_user_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      message TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      delivered_at TEXT,
-      consumed_at TEXT
-    );
-  `);
-  sqlite.close();
-}
 
 function recordingFixtureApi(
   calls: string[],
@@ -162,9 +119,18 @@ function recordingFixtureApi(
           ],
         } as T;
       }
-      if (method === "GET" && requestPath === "/api/tasks?channelId=channel-1&npcId=npc-sophie") {
+      if (method === "GET" && requestPath === "/api/channels/channel-1/kanban/board") {
+        calls.push("board");
+        return { columns: [] } as T;
+      }
+      if (method === "POST" && requestPath === "/api/channels/channel-1/kanban/tasks") {
         calls.push("report");
-        return [{ npcTaskId: "readme-capture-task-001", status: "completed" }] as T;
+        assert.deepEqual(body, {
+          title: "시네마틱 캡처 준비",
+          body: "장면과 미디어 규격 점검을 완료했습니다.",
+          assignee: "npc-sophie",
+        });
+        return { task: { id: "capture-card-1", status: "todo" } } as T;
       }
       throw new Error(`Unexpected fixture request: ${method} ${requestPath}`);
     },
@@ -174,7 +140,7 @@ function recordingFixtureApi(
 function withRuntime(): { root: string; sqlitePath: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-fixture-"));
   const sqlitePath = path.join(root, ".artifacts/readme-capture/runtime/data/db.sqlite");
-  createCaptureDatabase(sqlitePath);
+  fs.mkdirSync(path.dirname(sqlitePath), { recursive: true });
   return { root, sqlitePath };
 }
 
@@ -234,41 +200,56 @@ test("creates a user, character, channel, gateway, profiles and NPCs in dependen
     "template",
     "channel",
     "roster",
+    "board",
     "report",
   ]);
   assert.equal(fixture.channelId, "channel-1");
   assert.deepEqual(fixture.npcNames, ["Sophie", "Noah"]);
 
-  const sqlite = new Database(sqlitePath, { readonly: true });
-  t.after(() => sqlite.close());
-  assert.deepEqual(sqlite.prepare("SELECT status, npc_id FROM tasks").get(), {
-    status: "completed",
-    npc_id: "npc-sophie",
-  });
-  assert.deepEqual(sqlite.prepare("SELECT status, target_user_id FROM npc_reports").get(), {
-    status: "pending",
-    target_user_id: "user-1",
-  });
+  assert.equal(
+    fs.existsSync(sqlitePath),
+    false,
+    "fixture must not create a local card/report database",
+  );
 });
 
-test("a second fixture run returns the same channel without duplicating capture rows", async (t) => {
+test("a second fixture run reuses an existing Hermes card without duplicating it", async (t) => {
   const { root, sqlitePath } = withRuntime();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const api = recordingFixtureApi([]);
-
+  const base = recordingFixtureApi([]);
+  let created = false;
+  let creations = 0;
+  const api: FixtureApi = {
+    async request<T>(
+      method: "GET" | "POST" | "PUT" | "PATCH",
+      requestPath: string,
+      body?: unknown,
+    ): Promise<T> {
+      if (requestPath.endsWith("/kanban/board") && created)
+        return {
+          columns: [
+            {
+              name: "todo",
+              tasks: [{ id: "capture-card-1", title: "시네마틱 캡처 준비", assignee: "sophie" }],
+            },
+          ],
+        } as T;
+      if (requestPath.endsWith("/kanban/tasks") && method === "POST") {
+        created = true;
+        creations += 1;
+      }
+      return base.request<T>(method, requestPath, body);
+    },
+  };
   const first = await prepareFixture(api, "http://127.0.0.1:38642", sqlitePath);
   const second = await prepareFixture(api, "http://127.0.0.1:38642", sqlitePath);
 
   assert.equal(second.channelId, first.channelId);
-  const sqlite = new Database(sqlitePath, { readonly: true });
-  t.after(() => sqlite.close());
+  assert.equal(creations, 1);
   assert.equal(
-    (sqlite.prepare("SELECT count(*) AS count FROM tasks").get() as { count: number }).count,
-    1,
-  );
-  assert.equal(
-    (sqlite.prepare("SELECT count(*) AS count FROM npc_reports").get() as { count: number }).count,
-    1,
+    fs.existsSync(sqlitePath),
+    false,
+    "fixture must not create a local card/report database",
   );
 });
 
@@ -316,6 +297,7 @@ test("an interrupted run reuses the fixed account character and channel", async 
     "template",
     "channel:list",
     "roster",
+    "board",
     "report",
   ]);
 });
@@ -377,6 +359,7 @@ test("a fresh runtime creates the tagged trading-company template through the AP
     "template:create",
     "channel",
     "roster",
+    "board",
     "report",
   ]);
 });

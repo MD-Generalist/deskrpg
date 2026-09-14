@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { isIP } from "node:net";
 import path from "node:path";
-import Database from "better-sqlite3";
+import type { KanbanBoard } from "../../src/lib/hermes/deskrpg-plugin-types";
 
 import { OFFICE_LOOKS, officeLookAppearance } from "../../src/game/three/office-looks";
 import { ensureOfficeEnvironmentTemplate } from "../../src/lib/office-environment-template";
@@ -21,6 +21,7 @@ export type CaptureFixture = {
   password: string;
   characterName: string;
   channelId: string;
+  reportCardId: string;
   npcNames: ["Sophie", "Noah"];
   profileNames: ["sophie", "noah"];
 };
@@ -57,9 +58,7 @@ const PROFILE_REGISTRATIONS = [
 ] as const;
 
 const CHANNEL_NAME = "Dante Labs Office";
-const TASK_ID = "readme-capture-completed-task";
-const REPORT_ID = "readme-capture-pending-report";
-const NPC_TASK_ID = "readme-capture-task-001";
+const REPORT_TITLE = "시네마틱 캡처 준비";
 
 function assertLoopbackUrl(rawUrl: string): void {
   let url: URL;
@@ -86,7 +85,7 @@ function assertCaptureSqlitePath(sqlitePath: string): void {
   let current = normalized.slice(0, markerIndex);
   for (const segment of normalized.slice(markerIndex + path.sep.length).split(path.sep)) {
     current = path.join(current, segment);
-    if (fs.existsSync(current) && fs.lstatSync(current).isSymbolicLink()) {
+    if (fs.lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) {
       throw new Error("SQLite path must not traverse symlinks in the readme-capture runtime");
     }
   }
@@ -127,75 +126,6 @@ function fixtureApiAsFetch(api: FixtureApi): typeof globalThis.fetch {
   }) as typeof globalThis.fetch;
 }
 
-function seedCaptureTaskAndReport(
-  sqlitePath: string,
-  ids: { channelId: string; characterId: string; npcId: string; userId: string },
-): void {
-  assertCaptureSqlitePath(sqlitePath);
-  const sqlite = new Database(sqlitePath);
-  try {
-    const now = new Date().toISOString();
-    sqlite.transaction(() => {
-      sqlite
-        .prepare(
-          `INSERT INTO tasks (
-             id, channel_id, npc_id, assigner_id, npc_task_id, title, summary, status,
-             created_at, updated_at, completed_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             channel_id = excluded.channel_id,
-             npc_id = excluded.npc_id,
-             assigner_id = excluded.assigner_id,
-             title = excluded.title,
-             summary = excluded.summary,
-             status = 'completed',
-             updated_at = excluded.updated_at,
-             completed_at = excluded.completed_at`,
-        )
-        .run(
-          TASK_ID,
-          ids.channelId,
-          ids.npcId,
-          ids.characterId,
-          NPC_TASK_ID,
-          "README 데모 캡처 준비",
-          "시네마틱 장면과 미디어 규격 점검을 완료했습니다.",
-          now,
-          now,
-          now,
-        );
-      sqlite
-        .prepare(
-          `INSERT INTO npc_reports (
-             id, channel_id, npc_id, task_id, target_user_id, kind, message, status, created_at
-           ) VALUES (?, ?, ?, ?, ?, 'completion', ?, 'pending', ?)
-           ON CONFLICT(id) DO UPDATE SET
-             channel_id = excluded.channel_id,
-             npc_id = excluded.npc_id,
-             task_id = excluded.task_id,
-             target_user_id = excluded.target_user_id,
-             kind = excluded.kind,
-             message = excluded.message,
-             status = 'pending',
-             created_at = excluded.created_at,
-             delivered_at = NULL,
-             consumed_at = NULL`,
-        )
-        .run(
-          REPORT_ID,
-          ids.channelId,
-          ids.npcId,
-          TASK_ID,
-          ids.userId,
-          "시네마틱 캡처 준비를 마쳤습니다. 결과를 확인해 주세요.",
-          now,
-        );
-    })();
-  } finally {
-    sqlite.close();
-  }
-}
-
 export async function prepareFixture(
   api: FixtureApi,
   gatewayBaseUrl: string,
@@ -230,7 +160,7 @@ export async function prepareFixture(
       })
     ).character;
   }
-  const characterId = requireId(character, "Character");
+  requireId(character, "Character");
 
   const gateway = await api.request<GatewayResponse>("POST", "/api/gateways", {
     url: gatewayBaseUrl,
@@ -310,25 +240,31 @@ export async function prepareFixture(
     direction: "down",
   });
 
-  seedCaptureTaskAndReport(sqlitePath, {
-    channelId,
-    characterId,
-    npcId: sophie.id,
-    userId,
-  });
-  const seededTasks = await api.request<Array<{ npcTaskId?: string; status?: string }>>(
-    "GET",
-    `/api/tasks?channelId=${encodeURIComponent(channelId)}&npcId=${encodeURIComponent(sophie.id)}`,
-  );
-  if (!seededTasks.some((task) => task.npcTaskId === NPC_TASK_ID && task.status === "completed")) {
-    throw new Error("Capture report task was not visible through the DeskRPG API");
-  }
+  // Cards remain in Hermes; DeskRPG creates only the board binding and room notices.
+  const boardPath = `/api/channels/${encodeURIComponent(channelId)}/kanban`;
+  const board = await api.request<KanbanBoard>("GET", `${boardPath}/board`);
+  const existingCard = board.columns
+    .flatMap((column) => column.tasks)
+    .find((card) => card.title === REPORT_TITLE && card.assignee === "sophie");
+  const reportCardId =
+    existingCard?.id ??
+    requireId(
+      (
+        await api.request<{ task: Identified }>("POST", `${boardPath}/tasks`, {
+          title: REPORT_TITLE,
+          body: "장면과 미디어 규격 점검을 완료했습니다.",
+          assignee: sophie.id,
+        })
+      ).task,
+      "Hermes card",
+    );
 
   return {
     loginId: CAPTURE_ACCOUNT.loginId,
     password: CAPTURE_ACCOUNT.password,
     characterName: "Dante",
     channelId,
+    reportCardId,
     npcNames: ["Sophie", "Noah"],
     profileNames: ["sophie", "noah"],
   };

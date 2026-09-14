@@ -51,24 +51,6 @@ export async function readFixture(): Promise<CaptureFixture> {
   return fixture;
 }
 
-export function stageReport(status: "pending" | "delivered") {
-  const db = new Database(path.join(ROOT, ".artifacts/readme-capture/runtime/data/db.sqlite"), {
-    fileMustExist: true,
-  });
-  try {
-    const result = db
-      .prepare("UPDATE npc_reports SET status = ?, consumed_at = ? WHERE id = ?")
-      .run(
-        status,
-        status === "pending" ? null : new Date().toISOString(),
-        "readme-capture-pending-report",
-      );
-    expect(result.changes).toBe(1);
-  } finally {
-    db.close();
-  }
-}
-
 function resetCaptureHistory(fixture: CaptureFixture) {
   const db = new Database(path.join(ROOT, ".artifacts/readme-capture/runtime/data/db.sqlite"), {
     fileMustExist: true,
@@ -152,45 +134,12 @@ export async function prepareScene(page: Page, scene: CaptureScene, fixture: Cap
       .toEqual(Array(6).fill("ready"));
     expect((await trafficSnapshot(page)).vehicles).toHaveLength(6);
   } else {
-    stageReport("delivered");
     resetCaptureHistory(fixture);
     await enterCaptureOffice(page, fixture);
     await page.getByRole("button", { name: "전체 보기", exact: true }).click();
     await expect(page.getByRole("textbox").last()).toHaveAttribute("contenteditable", "true");
     await expect(page.getByLabel("3D performance")).toHaveCount(0);
   }
-}
-
-/** Rejoin through the real authenticated server handler to expose the seeded pending report. */
-export async function rejoinOffice(page: Page) {
-  await page.evaluate(() => {
-    type Socket = { emit(event: string, data: unknown): void; connected: boolean };
-    type Fiber = {
-      memoizedProps?: {
-        socket?: Socket;
-        characterId?: string;
-        characterName?: string;
-        appearance?: unknown;
-      };
-      return?: Fiber;
-    };
-    const host = document.getElementById("game-container")!;
-    const key = Object.keys(host).find((key) => key.startsWith("__reactFiber$"));
-    if (!key) throw new Error("Office simulation React fiber is unavailable");
-    let fiber: Fiber | undefined = (host as unknown as Record<string, Fiber>)[key];
-    while (fiber && !fiber.memoizedProps?.socket) fiber = fiber.return;
-    const socket = fiber?.memoizedProps?.socket;
-    if (!socket?.connected) throw new Error("Office socket is not connected");
-    const player = document.querySelector<HTMLElement>('.office-actor-label[data-kind="player"]')!;
-    socket.emit("player:join", {
-      characterId: fiber!.memoizedProps!.characterId,
-      characterName: fiber!.memoizedProps!.characterName,
-      appearance: fiber!.memoizedProps!.appearance,
-      mapId: new URL(location.href).searchParams.get("channelId"),
-      x: Number(player.dataset.worldX) * 32,
-      y: Number(player.dataset.worldZ) * 32,
-    });
-  });
 }
 
 export async function markClip(

@@ -8,7 +8,7 @@
 
 Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
 
-DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles become employees: they sit at desks, answer when you mention them, hold meetings with turn control, work kanban cards, and **walk over to report** when a task is done. Several people can be in the same office at once.
+DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles become employees: they sit at desks, answer when you mention them, hold meetings with turn control, and work kanban cards. **Call them over and read their completion reports in office chat.** Several people can be in the same office at once.
 
 DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you already run, so existing Hermes users bring their profiles as they are — nothing to migrate.
 
@@ -24,7 +24,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 - Hire AI NPCs bound to Hermes profiles, edit their `SOUL.md` from the web, and choose model, provider, toolsets and reasoning effort per NPC.
 - Talk in the office room (mention to address one employee), open group rooms with invited NPCs, and watch a six-stage response receipt (queued → thinking → streaming → done) plus what tool the agent is using right now.
 - Run meetings in a dedicated meeting room with floor control, hand raising and exportable minutes.
-- Move kanban cards through backlog → pending → in progress → stalled → complete, nudge or resume stalled work, and receive reports in-world — the NPC walks to you.
+- Track Hermes-owned kanban cards from planning through execution and review to completion. Call NPCs over and receive card completion or blocked-work notices in office chat.
 - Share the office with other people (multiplayer, groups and role-based access), in Korean, English, Japanese or Chinese.
 
 ## Screenshots
@@ -203,12 +203,12 @@ later without firing it.
 - One-on-one conversations are stored per character, so history survives a server restart.
 - NPCs can be called over, sent back, edited, reset, and fired from in-app menus.
 
-### 4. Tasks
+### 4. Kanban and Reports
 
-- You can assign work to NPCs through conversation.
-- Tasks move through `대기`, `진행중`, `중단`, `완료`.
-- NPCs can be nudged automatically or manually to continue working.
-- Important reports are delivered in-world by the NPC walking over to the player.
+- Assign kanban cards to the channel's Hermes profiles; Hermes owns the cards and their execution.
+- Follow cards through planning, running, blocked work, review, and completion.
+- Completed top-level cards and blocked cards post structured notices in office chat, with a link to the card.
+- Call an NPC over through its menu to discuss the work beside your character.
 
 ### 5. Meetings
 

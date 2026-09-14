@@ -12,9 +12,7 @@ import {
   orbit,
   zoom,
   trafficSnapshot,
-  stageReport,
   wireEvents,
-  rejoinOffice,
 } from "./capture-helpers";
 
 const test = base.extend({
@@ -92,39 +90,47 @@ for (const scene of SCENES) {
         8000,
       );
     } else if (scene === "walk-report") {
+      const cardPath = `/api/channels/${fixture.channelId}/kanban/tasks/${fixture.reportCardId}`;
+      expect((await page.request.patch(cardPath, { data: { status: "running" } })).ok()).toBe(true);
       await markClip(page, scene, async () => {
-        await orbit(page, 100, 1400);
-        await zoom(page, -160, 5);
-        stageReport("pending");
-        await rejoinOffice(page);
-        await expect
-          .poll(() => wireEvents.get(page)?.some((e) => e.event === "npc:report-ready"))
-          .toBe(true);
+        await orbit(page, 75, 1000);
+        await zoom(page, -160, 4);
         const sophie = page.locator('.office-actor-label[aria-label="Sophie"]');
+        await sophie.click({ button: "right" });
+        await page.getByRole("button", { name: "호출하기", exact: true }).click();
         await expect(sophie).toHaveAttribute("data-walking", "true", { timeout: 5000 });
         await expect(sophie).toHaveAttribute("data-walking", "false", { timeout: 6000 });
         expect(
           await page.evaluate(() =>
-            window.__readmeEvents?.some((e) => e.event === "npc:call-to-player" && e.data.reportId),
+            window.__readmeEvents?.some((e) => e.event === "npc:call-to-player"),
           ),
         ).toBe(true);
         expect(
           await page.evaluate(() =>
-            window.__readmeEvents?.some(
-              (e) => e.event === "npc:movement-arrived" && e.data.reportId,
-            ),
+            window.__readmeEvents?.some((e) => e.event === "npc:movement-arrived"),
           ),
         ).toBe(true);
-        await expect(
-          page.locator(".office-actor-bubble").filter({ hasText: "보고드립니다." }),
-        ).toBeVisible();
-        await sophie.click();
-        await expect(page.getByText(/시네마틱 캡처 준비를 마쳤습니다/).first()).toBeVisible({
-          timeout: 1500,
-        });
+        // Arrival opens Sophie's direct chat; the report belongs to the office room.
+        await page.getByRole("button", { name: "사무실 전체", exact: true }).click();
+        expect((await page.request.patch(cardPath, { data: { status: "done" } })).ok()).toBe(true);
+        await expect(page.locator('[data-room-notice="card_done"]')).toContainText(
+          "시네마틱 캡처 준비",
+        );
+        expect(
+          wireEvents
+            .get(page)
+            ?.some(
+              (e) =>
+                e.event === "kanban:event" &&
+                (e.data.event as { kind: string }).kind === "task.status",
+            ),
+        ).toBe(true);
       });
     } else if (scene === "small-talk") {
+      for (let i = 0; i < 5; i++)
+        await page.getByRole("button", { name: "확대", exact: true }).click();
       await page.getByRole("button", { name: "내 캐릭터 따라가기", exact: true }).click();
+      await page.waitForTimeout(650);
       const input = page.getByRole("textbox").last();
       await input.fill("@Soph");
       await page.getByRole("option", { name: "Sophie", exact: true }).click();
@@ -153,6 +159,7 @@ for (const scene of SCENES) {
             )
             .at(-1)!.data.response as { requestId: string }
         ).requestId;
+        const targetResponse = page.locator(`[data-response-request-id="${requestId}"]`);
         const targetStates = () =>
           wireEvents
             .get(page)!
@@ -162,10 +169,17 @@ for (const scene of SCENES) {
                 (e.data.response as { requestId: string }).requestId === requestId,
             )
             .map((e) => (e.data.response as { status: string }).status);
+        // Poll the next brief visible phase directly; exponential locator polling can
+        // skip a whole thinking interval while waiting for the queued label to leave.
+        await expect
+          .poll(() => targetResponse.getByText("Sophie: 생각 중", { exact: true }).isVisible(), {
+            intervals: [50],
+            timeout: 5000,
+          })
+          .toBe(true);
         await expect(queued).not.toBeVisible();
-        await expect(page.getByText("Sophie: 생각 중", { exact: true })).toBeVisible();
         await page.waitForTimeout(300);
-        await expect(page.getByText("Sophie: 생각 중", { exact: true })).toBeVisible();
+        await expect(targetResponse.getByText("Sophie: 생각 중", { exact: true })).toBeVisible();
         await expect
           .poll(targetStates)
           .toEqual(expect.arrayContaining(["queued", "thinking", "streaming", "complete"]));
@@ -199,6 +213,14 @@ for (const scene of SCENES) {
       });
       await markClip(page, scene, async () => {
         await page.getByRole("button", { name: "회의 시작", exact: true }).click();
+        const cameraMove = async () => {
+          await page.mouse.move(350, 330);
+          for (let i = 1; i <= 48; i++) {
+            await page.mouse.move(350 + (300 * i) / 48, 330 - (35 * i) / 48);
+            await page.waitForTimeout(40);
+          }
+        };
+        await cameraMove();
         await expect
           .poll(() => page.evaluate(() => window.__readmeSpeakers))
           .toEqual(expect.arrayContaining(["Sophie", "Noah"]));

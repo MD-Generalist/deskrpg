@@ -3,11 +3,51 @@ import test from "node:test";
 
 import { createSseParser, type SseEvent } from "../../src/lib/hermes/sse";
 import { startMockHermes } from "./mock-hermes";
+import { createOwnerPluginClient } from "../../src/lib/hermes/plugin-client";
 
 const headers = {
   Authorization: "Bearer readme-capture-sophie-token",
   "Content-Type": "application/json",
 };
+
+test("the real owner client creates a card and consumes its completion once by cursor", async (t) => {
+  const server = await startServer(t);
+  const client = createOwnerPluginClient({
+    baseUrl: server.baseUrl,
+    ownerToken: "readme-capture-gateway-token",
+  });
+  const info = await client.info();
+  assert.equal(info.ok, true);
+  assert.equal((await client.kanban.createBoard({ slug: "capture", name: "Office" })).ok, true);
+  const created = await client.kanban.createTask("capture", {
+    title: "릴리스 점검",
+    assignee: "sophie",
+  });
+  assert.ok(created.ok);
+  const before = await client.events.poll({ board: "capture" });
+  assert.ok(before.ok);
+  assert.deepEqual(before.data.events, []);
+  const completed = await client.kanban.updateTask("capture", created.data.task.id, {
+    status: "done",
+  });
+  assert.ok(completed.ok);
+  const after = await client.events.poll({ board: "capture", cursor: before.data.cursor });
+  assert.ok(after.ok);
+  assert.equal(after.data.events.length, 1);
+  assert.deepEqual(after.data.events[0].payload, {
+    from: "todo",
+    to: "done",
+    title: "릴리스 점검",
+    assignee: "sophie",
+    parent_count: 0,
+  });
+  const next = await client.events.poll({ board: "capture", cursor: after.data.cursor });
+  assert.ok(next.ok);
+  assert.deepEqual(next.data.events, []);
+  const detail = await client.kanban.getTask("capture", created.data.task.id);
+  assert.ok(detail.ok);
+  assert.equal(detail.data.task.status, "done");
+});
 
 test("supports the real unauthenticated gateway discovery handshake", async (t) => {
   const server = await startServer(t);

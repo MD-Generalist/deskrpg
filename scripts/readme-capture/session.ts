@@ -69,7 +69,7 @@ export function assertCaptureRuntimePath(root: string, runtimePath: string): voi
   let candidate = resolvedRoot;
   for (const segment of path.relative(resolvedRoot, resolvedRuntime).split(path.sep)) {
     candidate = path.join(candidate, segment);
-    if (fs.existsSync(candidate) && fs.lstatSync(candidate).isSymbolicLink()) {
+    if (fs.lstatSync(candidate, { throwIfNoEntry: false })?.isSymbolicLink()) {
       throw new Error("Capture runtime must not traverse a symlink");
     }
   }
@@ -328,9 +328,10 @@ export async function runCaptureSession(deps: Partial<SessionDeps> = {}): Promis
   const signals = deps.signals ?? process;
   const kill = deps.kill ?? process.kill;
   const runtimePath = path.join(root, CAPTURE_ARTIFACT_DIR, "runtime");
-  assertCaptureRuntimePath(root, runtimePath);
   const dataPath = path.join(runtimePath, "data");
   const sqlitePath = path.join(dataPath, "db.sqlite");
+  // SQLite bootstraps during app startup, before prepareFixture can inspect the path.
+  assertCaptureRuntimePath(root, sqlitePath);
   fs.mkdirSync(dataPath, { recursive: true });
 
   const ownedChildren = new Set<ChildProcess>();

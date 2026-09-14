@@ -1,5 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
+import {
+  KANBAN_TASK_STATUSES,
+  type BoardMeta,
+  type KanbanTaskFull,
+  type PluginEvent,
+} from "../../src/lib/hermes/deskrpg-plugin-types";
 
 const CAPTURE_TOKENS = new Set([
   "readme-capture-gateway-token",
@@ -68,6 +74,14 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
   let sessionSequence = 0;
   let runSequence = 0;
   const runs = new Map<string, { profile: MeetingProfile; room: boolean; priming: boolean }>();
+  const boards = new Map<string, BoardMeta>();
+  const cards = new Map<string, { board: string; task: KanbanTaskFull }>();
+  const events: PluginEvent[] = [];
+  const readBody = async (request: IncomingMessage) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    return JSON.parse(Buffer.concat(chunks).toString() || "{}");
+  };
   const server = createServer((request, response) => {
     const handle = async () => {
       if (request.method === "GET" && request.url === "/health") {
@@ -81,6 +95,115 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
       }
 
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? host}`);
+      if (url.pathname.startsWith("/deskrpg/")) {
+        if (request.headers.authorization !== "Bearer readme-capture-gateway-token") {
+          writeJson(response, 401, { error: "unauthorized" });
+          return;
+        }
+        const board = url.searchParams.get("board") ?? "";
+        if (url.pathname === "/deskrpg/info") {
+          writeJson(response, 200, {
+            plugin: "deskrpg",
+            version: "0.6.0",
+            capabilities: ["kanban", "cron", "events"],
+            timezone: "Asia/Seoul",
+            kanban: { dispatcher_present: true, attachments: false },
+          });
+          return;
+        }
+        if (url.pathname === "/deskrpg/kanban/boards" && request.method === "POST") {
+          const body = (await readBody(request)) as BoardMeta;
+          if (!boards.has(body.slug)) boards.set(body.slug, body);
+          writeJson(response, 200, { board: boards.get(body.slug) });
+          return;
+        }
+        if (url.pathname.startsWith("/deskrpg/kanban/boards/") && request.method === "PATCH") {
+          const slug = decodeURIComponent(url.pathname.split("/").at(-1)!);
+          const updated = { ...boards.get(slug), ...(await readBody(request)), slug };
+          boards.set(slug, updated);
+          writeJson(response, 200, { board: updated });
+          return;
+        }
+        if (url.pathname === "/deskrpg/kanban/board") {
+          writeJson(response, 200, {
+            columns: KANBAN_TASK_STATUSES.map((name) => ({
+              name,
+              tasks: [...cards.values()]
+                .filter((c) => c.board === board && c.task.status === name)
+                .map((c) => c.task),
+            })),
+            tenants: [],
+            assignees: ["sophie", "noah"],
+            latest_event_id: events.at(-1)?.id ?? null,
+            now: new Date().toISOString(),
+          });
+          return;
+        }
+        if (url.pathname === "/deskrpg/kanban/tasks" && request.method === "POST") {
+          const body = await readBody(request);
+          const task: KanbanTaskFull = {
+            ...body,
+            id: `capture-card-${cards.size + 1}`,
+            status: "todo",
+            created_at: new Date().toISOString(),
+          };
+          cards.set(task.id, { board, task });
+          writeJson(response, 201, { task });
+          return;
+        }
+        const cardMatch = /^\/deskrpg\/kanban\/tasks\/([^/]+)$/.exec(url.pathname);
+        if (cardMatch) {
+          const card = cards.get(decodeURIComponent(cardMatch[1]));
+          if (!card || card.board !== board) {
+            writeJson(response, 404, { error: "not_found" });
+            return;
+          }
+          if (request.method === "PATCH") {
+            const body = await readBody(request);
+            const from = card.task.status;
+            Object.assign(card.task, body);
+            if (body.status && body.status !== from)
+              events.push({
+                id: `capture-event-${events.length + 1}`,
+                ts: Date.now(),
+                kind: "task.status",
+                board,
+                task_id: card.task.id,
+                profile: card.task.assignee,
+                payload: {
+                  from,
+                  to: body.status,
+                  title: card.task.title,
+                  assignee: card.task.assignee,
+                  parent_count: 0,
+                },
+              });
+          }
+          writeJson(response, 200, {
+            task: card.task,
+            comments: [],
+            events: [],
+            attachments: null,
+            links: { parents: [], children: [] },
+            runs: [],
+          });
+          return;
+        }
+        if (url.pathname === "/deskrpg/kanban/dispatch") {
+          writeJson(response, 200, { dispatched: [], skipped: [] });
+          return;
+        }
+        if (url.pathname === "/deskrpg/events") {
+          const cursor = url.searchParams.get("cursor");
+          writeJson(response, 200, {
+            events:
+              cursor === null ? [] : events.slice(Number(cursor)).filter((e) => e.board === board),
+            cursor: String(events.length),
+            has_more: false,
+          });
+          return;
+        }
+      }
       const match = /^\/p\/([^/]+)(\/.*)$/.exec(url.pathname);
       if (!match) {
         writeJson(response, 404, { error: "not_found" });
