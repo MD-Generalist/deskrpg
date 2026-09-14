@@ -42,6 +42,7 @@ function evaluate(code: string, extra: object = {}) {
     MAP_ROWS: 10,
     isSeatAnchor: () => false,
     playerMotionGoal,
+    adoptNpcMotionHome,
     untouchedSpawn,
     adoptNpcMotionHome,
     ...extra,

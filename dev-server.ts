@@ -11,10 +11,13 @@ const envLoader = (
     loadEnvFile?: (path?: string) => void;
   }
 ).loadEnvFile;
+const captureMode = process.env.DESKRPG_CAPTURE_MODE === "1";
 
 try {
-  envLoader?.(process.env.DESKRPG_ENV_PATH || ".env.local");
-  envLoader?.(".env");
+  if (!captureMode) {
+    envLoader?.(process.env.DESKRPG_ENV_PATH || ".env.local");
+    envLoader?.(".env");
+  }
 } catch {
   // Ignore missing local env files in environments that inject env vars externally.
 }
@@ -41,7 +44,7 @@ const app = next({ dev: true, hostname, port: preferredPort });
 const handle = app.getRequestHandler();
 
 app.prepare().then(async () => {
-  const port = await findAvailablePort(preferredPort);
+  const port = await findAvailablePort(preferredPort, captureMode ? 1 : 10);
   if (port !== preferredPort) {
     console.log(`⚠ Port ${preferredPort} in use, using ${port} instead`);
   }
@@ -52,6 +55,18 @@ app.prepare().then(async () => {
   // 들도 함께 없어졌다 — server.js 의 /_internal/rpc 브리지와 짝을 맞춰 제거한다.
 
   const httpServer = createServer((req, res) => {
+    if (captureMode && req.method === "GET" && req.url === "/__readme-capture/health") {
+      const address = httpServer.address();
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(
+        JSON.stringify({
+          instanceId: process.env.DESKRPG_CAPTURE_INSTANCE_ID ?? null,
+          listenerAddress: address && typeof address === "object" ? address.address : null,
+          repositoryEnvLoaded: Object.hasOwn(process.env, "README_CAPTURE_ENV_SENTINEL"),
+        }),
+      );
+      return;
+    }
     const parsedUrl = parse(req.url!, true);
     handle(req, res, parsedUrl);
   });
@@ -76,7 +91,7 @@ app.prepare().then(async () => {
 
   setupSocketHandlers(io);
 
-  httpServer.listen(port, () => {
+  httpServer.listen(port, captureMode ? "127.0.0.1" : undefined, () => {
     console.log(`> Dev server ready on http://${hostname}:${port}`);
   });
 });

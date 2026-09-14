@@ -8,11 +8,11 @@
 
 Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
 
-DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles become employees: they sit at desks, answer when you mention them, hold meetings with turn control, work kanban cards, and **walk over to report** when a task is done. Several people can be in the same office at once.
+DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles become employees: they sit at desks, answer when you mention them, hold meetings with turn control, and work kanban cards. **Call them over and read their completion reports in office chat.** Several people can be in the same office at once.
 
 DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you already run, so existing Hermes users bring their profiles as they are — nothing to migrate.
 
-- Website: `https://deskrpg.com` (planned)
+- Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
 - Version: `v2026.9.18` — Detailed morning traffic, foliage and distance-matched walking (the 2D pixel-art client remains available on tags up to `2026.9.9`)
 
@@ -24,28 +24,19 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 - Hire AI NPCs bound to Hermes profiles, edit their `SOUL.md` from the web, and choose model, provider, toolsets and reasoning effort per NPC.
 - Talk in the office room (mention to address one employee), open group rooms with invited NPCs, and watch a six-stage response receipt (queued → thinking → streaming → done) plus what tool the agent is using right now.
 - Run meetings in a dedicated meeting room with floor control, hand raising and exportable minutes.
-- Move kanban cards through backlog → pending → in progress → stalled → complete, nudge or resume stalled work, and receive reports in-world — the NPC walks to you.
+- Track Hermes-owned kanban cards from planning through execution and review to completion. Call NPCs over and receive card completion or blocked-work notices in office chat.
 - Share the office with other people (multiplayer, groups and role-based access), in Korean, English, Japanese or Chinese.
-- Build or upload your own office maps with the browser-based map editor.
 
 ## Screenshots
 
 <table width="100%">
   <tr>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-login-to-office.gif" alt="DeskRPG getting started" width="100%" /></td>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-npc-task-loop.gif" alt="DeskRPG NPC chat and tasks" width="100%" /></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-home-commute.gif" alt="DeskRPG 3D office morning commute" width="100%" /><br /><strong>Morning Commute</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-walk-report.gif" alt="DeskRPG agent walking over to report" width="100%" /><br /><strong>Walk Over and Report</strong></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><strong>Getting Started</strong></td>
-    <td width="50%" align="center"><strong>NPC Chat and Tasks</strong></td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-meeting-room.gif" alt="DeskRPG meeting room" width="100%" /></td>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-map-editor.gif" alt="DeskRPG map editor" width="100%" /></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><strong>Meeting Room</strong></td>
-    <td width="50%" align="center"><strong>Map Editor</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-small-talk.gif" alt="DeskRPG live office small talk" width="100%" /><br /><strong>Live Small Talk</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-ai-meeting.gif" alt="DeskRPG agent meeting" width="100%" /><br /><strong>Agent Meeting</strong></td>
   </tr>
 </table>
 
@@ -195,8 +186,8 @@ later without firing it.
 
 ### 1. Characters
 
-- Every user enters as a character.
-- Character appearance is LPC-based and composed from layered sprite parts.
+- Every user enters as a 3D character.
+- Choose from 50 stylized complete-character GLB office looks, shared across the map, roster and meeting room.
 - Character creation is required before entering a channel.
 
 ### 2. Channels
@@ -212,12 +203,12 @@ later without firing it.
 - One-on-one conversations are stored per character, so history survives a server restart.
 - NPCs can be called over, sent back, edited, reset, and fired from in-app menus.
 
-### 4. Tasks
+### 4. Kanban and Reports
 
-- You can assign work to NPCs through conversation.
-- Tasks move through `대기`, `진행중`, `중단`, `완료`.
-- NPCs can be nudged automatically or manually to continue working.
-- Important reports are delivered in-world by the NPC walking over to the player.
+- Assign kanban cards to the channel's Hermes profiles; Hermes owns the cards and their execution.
+- Follow cards through planning, running, blocked work, review, and completion.
+- Completed top-level cards and blocked cards post structured notices in office chat, with a link to the card.
+- Call an NPC over through its menu to discuss the work beside your character.
 
 ### 5. Meetings
 
@@ -225,18 +216,16 @@ later without firing it.
 - AI meetings are channel-scoped and orchestrated through the channel's Hermes gateway.
 - Meeting notes are stored and visible from the header.
 
-### 6. Map Editor
+### Map Editor — Coming Later
 
-- The browser map editor supports Tiled-style map workflows.
-- You can upload templates, manage project-linked assets, and reuse maps for new channels.
-- This is a major subsystem of the project, not a side tool.
+The browser map editor is being prepared for a later release. It is not part of the current public workflow.
 
 ## Product Notes
 
 - Login is required even if you have an invite code.
 - Invite codes are channel access helpers, not anonymous access tokens.
 - The current default in-app office tiles and object textures are generated in code at runtime.
-- LPC avatar sprite assets are bundled separately and have their own credits and license notes.
+- Legacy 2D LPC avatar sprite assets are bundled separately and have their own credits and license notes.
 
 ## Licenses And Credits
 

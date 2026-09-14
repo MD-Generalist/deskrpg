@@ -92,7 +92,7 @@ export default function GatewaySetupWizard({
     setScreen(next);
     setToken("");
   }
-  async function run<T>(task: (signal: AbortSignal) => Promise<T>, apply: (value: T) => void) {
+  async function run<T>(job: (signal: AbortSignal) => Promise<T>, apply: (value: T) => void) {
     const epoch = ++generation.current;
     controller.current?.abort();
     const abort = new AbortController();
@@ -100,7 +100,7 @@ export default function GatewaySetupWizard({
     setBusy(true);
     setErrorCode(null);
     try {
-      const value = await task(abort.signal);
+      const value = await job(abort.signal);
       if (epoch === generation.current) apply(value);
     } catch (error) {
       if (epoch === generation.current && !abort.signal.aborted)

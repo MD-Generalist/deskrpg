@@ -9,7 +9,7 @@
 // drizzle-kit reads the .ts file to generate migrations; server.js requires the
 // .cjs file at runtime. If a column / constraint is added in one place but not the
 // other, the runtime ORM silently emits mis-shaped SQL (this exact failure mode
-// broke task creation in 2026-04). This test introspects the *compiled* drizzle
+// broke the legacy task creation path in 2026-04). This test introspects the *compiled* drizzle
 // table structure of each pair and asserts deep structural equality so the two
 // definitions can never silently drift.
 //
@@ -263,27 +263,6 @@ test("schema-sqlite.ts and schema.sqlite.cjs are structurally identical (SQLite)
   );
 });
 
-test("PostgreSQL tasks table has all task-manager columns (2026-04 regression guard)", () => {
-  // Absolute presence check: guards that the runtime PG schema carries every
-  // column TaskManager writes, even if .ts and .cjs were (wrongly) changed in
-  // lockstep. This is the specific failure that broke task creation in 2026-04.
-  const cols = new Set(Object.keys(getTableColumns(pgCjs.tasks as never)));
-  for (const required of [
-    "autoNudgeCount",
-    "autoNudgeMax",
-    "lastNudgedAt",
-    "lastReportedAt",
-    "stalledAt",
-    "stalledReason",
-    "completedAt",
-  ]) {
-    assert.ok(
-      cols.has(required),
-      `tasks.${required} missing from runtime PG schema (this is what broke task creation in 2026-04)`,
-    );
-  }
-});
-
 test("each dialect exports exactly the expected 29 tables", () => {
   assert.equal(Object.keys(pgCjs).length, EXPECTED_TABLE_COUNT, "schema.pg.cjs table count");
   assert.equal(
@@ -293,4 +272,96 @@ test("each dialect exports exactly the expected 29 tables", () => {
   );
   assert.equal(Object.keys(pgTs).length, EXPECTED_TABLE_COUNT, "schema.ts table count");
   assert.equal(Object.keys(sqliteTs).length, EXPECTED_TABLE_COUNT, "schema-sqlite.ts table count");
+});
+
+/**
+ * PG ↔ SQLite 방언 간 패리티. 두 방언은 타입이 달라 구조를 통째로 비교하진 않지만,
+ * 테이블과 컬럼 *집합* 은 같아야 한다 — 한 방언에만 테이블·컬럼을 더하면 그 방언을 쓰는
+ * 배포에서만 "no such column" 이 난다. 칸반·cron 장부(0011)가 이 규칙의 첫 적용 대상이다.
+ */
+function columnNames(table: unknown): string[] {
+  return Object.keys(getTableColumns(table as never)).sort();
+}
+
+test("칸반·cron 장부 테이블은 PG 와 SQLite 양쪽에 같은 컬럼 집합으로 있다", () => {
+  for (const tableName of ["channelKanbanBoards", "cronJobOrigins"] as const) {
+    for (const [dialect, mod] of [
+      ["schema.ts", pgTs],
+      ["schema.pg.cjs", pgCjs],
+      ["schema-sqlite.ts", sqliteTs],
+      ["schema.sqlite.cjs", sqliteCjs],
+    ] as const) {
+      assert.ok(tableName in mod, `${dialect} 에 ${tableName} 이 없습니다`);
+    }
+    assert.deepEqual(
+      columnNames((sqliteTs as Record<string, unknown>)[tableName]),
+      columnNames((pgTs as Record<string, unknown>)[tableName]),
+      `${tableName} 의 컬럼 집합이 PG 와 SQLite 사이에서 갈렸습니다`,
+    );
+  }
+
+  const boardCols = new Set(columnNames(pgTs.channelKanbanBoards));
+  for (const required of [
+    "channelId",
+    "gatewayId",
+    "boardSlug",
+    "boardNameSyncedAt",
+    "eventCursor",
+    "lastPolledAt",
+    "lastError",
+    "createdAt",
+    "updatedAt",
+  ]) {
+    assert.ok(boardCols.has(required), `channel_kanban_boards.${required} 가 없습니다`);
+  }
+  const originCols = new Set(columnNames(pgTs.cronJobOrigins));
+  for (const required of [
+    "id",
+    "gatewayId",
+    "profileName",
+    "jobId",
+    "channelId",
+    "createdByUserId",
+    "createdAt",
+  ]) {
+    assert.ok(originCols.has(required), `cron_job_origins.${required} 가 없습니다`);
+  }
+});
+
+test("cron_job_origins 는 (gateway_id, profile_name, job_id) 가 양쪽 방언에서 유니크다", () => {
+  const pgCfg = pgGetTableConfig(pgTs.cronJobOrigins);
+  const sqliteCfg = sqliteGetTableConfig(sqliteTs.cronJobOrigins);
+  for (const [dialect, indexes] of [
+    ["postgresql", pgCfg.indexes],
+    ["sqlite", sqliteCfg.indexes],
+  ] as const) {
+    const unique = (indexes as unknown as IndexLike[]).find(
+      (i) => i.config.unique && i.config.name === "cron_job_origins_gateway_profile_job_idx",
+    );
+    assert.ok(unique, `[${dialect}] cron_job_origins 의 유니크 인덱스가 없습니다`);
+    assert.deepEqual(
+      unique.config.columns.map((c) => c.name),
+      ["gateway_id", "profile_name", "job_id"],
+      `[${dialect}] 유니크 인덱스 컬럼이 다릅니다`,
+    );
+  }
+});
+
+test("notice_json·plugin_info_json 컬럼은 네 스키마 파일 모두에 있다", () => {
+  for (const [dialect, mod] of [
+    ["schema.ts", pgTs],
+    ["schema.pg.cjs", pgCjs],
+    ["schema-sqlite.ts", sqliteTs],
+    ["schema.sqlite.cjs", sqliteCjs],
+  ] as const) {
+    const m = mod as Record<string, unknown>;
+    assert.ok(
+      "noticeJson" in getTableColumns(m.chatRoomMessages as never),
+      `${dialect}: chat_room_messages.notice_json 이 없습니다`,
+    );
+    assert.ok(
+      "pluginInfoJson" in getTableColumns(m.gatewayResources as never),
+      `${dialect}: gateway_resources.plugin_info_json 이 없습니다`,
+    );
+  }
 });

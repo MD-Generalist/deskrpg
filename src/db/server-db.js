@@ -12,6 +12,8 @@ const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js");
 const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js");
 const { migrateNpcsToProfileOwnership } = require("./sqlite-npc-profile-ownership.js");
 const { ensureChatRoomTables } = require("./sqlite-chat-rooms.js");
+const { ensureKanbanCronBookkeeping } = require("./sqlite-kanban-cron-bookkeeping.js");
+const { dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js");
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -325,22 +327,6 @@ function ensureSqliteCompatibility(sqlite) {
     );
     CREATE INDEX IF NOT EXISTS idx_channel_gateway_bindings_gateway_id ON channel_gateway_bindings(gateway_id);
     CREATE UNIQUE INDEX IF NOT EXISTS channel_gateway_bindings_channel_idx ON channel_gateway_bindings(channel_id);
-    CREATE TABLE IF NOT EXISTS npc_reports (
-      id TEXT PRIMARY KEY NOT NULL,
-      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-      npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
-      task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-      target_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL,
-      message TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL,
-      delivered_at TEXT,
-      consumed_at TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_channel ON npc_reports(channel_id);
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_target_user ON npc_reports(target_user_id);
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_status ON npc_reports(status);
     CREATE TABLE IF NOT EXISTS npc_sessions (
       id TEXT PRIMARY KEY NOT NULL,
       npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
@@ -385,20 +371,16 @@ function ensureSqliteCompatibility(sqlite) {
   ]);
   migrateNpcsToProfileOwnership(sqlite);
   ensureChatRoomTables(sqlite);
+  // chat_room_messages 가 있어야 notice_json 을 더할 수 있으니 방 테이블 다음이다.
+  ensureKanbanCronBookkeeping(sqlite);
+  // 2026-04 태스크 시스템 폐기 — 옛 태스크·보고 테이블은 데이터째 지운다.
+  dropLegacyTaskTables(sqlite);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",
   ]);
   applySqliteAlterStatements(sqlite, "channels", [
     "ALTER TABLE channels ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE SET NULL",
-  ]);
-  applySqliteAlterStatements(sqlite, "tasks", [
-    "ALTER TABLE tasks ADD COLUMN auto_nudge_count INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE tasks ADD COLUMN auto_nudge_max INTEGER NOT NULL DEFAULT 5",
-    "ALTER TABLE tasks ADD COLUMN last_nudged_at TEXT",
-    "ALTER TABLE tasks ADD COLUMN last_reported_at TEXT",
-    "ALTER TABLE tasks ADD COLUMN stalled_at TEXT",
-    "ALTER TABLE tasks ADD COLUMN stalled_reason TEXT",
   ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);

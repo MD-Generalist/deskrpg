@@ -1,0 +1,362 @@
+"use client";
+/**
+ * 자동화 템플릿 갤러리 (R21): 목록(제목·설명·카테고리·태그) → 선택 → 필드 폼 + 담당 NPC
+ * → 인스턴스화. 필드 타입은 enum/text/time/weekdays. `strict` 가 아니면 enum·weekdays 도
+ * 자유 입력을 허용한다(datalist). `deliver` 슬롯은 크론 폼과 같은 배달처 체크박스로 그린다.
+ */
+import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
+
+import { useT } from "@/lib/i18n";
+import type {
+  AutomationBlueprint,
+  BlueprintField,
+  CronDeliveryTarget,
+} from "@/lib/hermes/deskrpg-plugin-types";
+
+import { cronApi, classifyCronError, type CronJobView } from "./cron-api";
+import { composeDeliver, parseDeliver } from "./cron-schedule";
+import { CronErrorNotice } from "./cron-notices";
+import type { CronEditorNpc } from "./CronEditorDialog";
+
+interface BlueprintGalleryProps {
+  channelId: string;
+  npcs: CronEditorNpc[];
+  defaultNpcId?: string | null;
+  onCreated: (job: CronJobView) => void;
+  onClose: () => void;
+}
+
+const DELIVER_FIELD = "deliver";
+
+/** 필드 기본값으로 폼을 채운다. deliver 슬롯의 "origin"/빈 값은 local 로 바꾼다. */
+export function initialBlueprintValues(blueprint: AutomationBlueprint): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const field of blueprint.fields) {
+    const seeded = field.default ?? "";
+    out[field.name] =
+      field.name === DELIVER_FIELD && (seeded === "" || seeded === "origin") ? "local" : seeded;
+  }
+  return out;
+}
+
+/** 필수(optional 아님) 필드가 비어 있으면 그 이름들. */
+export function missingRequiredFields(
+  blueprint: AutomationBlueprint,
+  values: Record<string, string>,
+): string[] {
+  return blueprint.fields
+    .filter((field) => !field.optional && !(values[field.name] ?? "").trim())
+    .map((field) => field.name);
+}
+
+function FieldControl({
+  field,
+  value,
+  onChange,
+  inputClass,
+}: {
+  field: BlueprintField;
+  value: string;
+  onChange: (next: string) => void;
+  inputClass: string;
+}) {
+  if (field.type === "time") {
+    return (
+      <input
+        type="time"
+        className={inputClass}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  if ((field.type === "enum" || field.type === "weekdays") && field.options?.length) {
+    if (field.strict !== false) {
+      return (
+        <select className={inputClass} value={value} onChange={(e) => onChange(e.target.value)}>
+          {field.optional && <option value="">—</option>}
+          {field.options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    const listId = `bp-options-${field.name}`;
+    return (
+      <>
+        <input
+          className={inputClass}
+          list={listId}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <datalist id={listId}>
+          {field.options.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      </>
+    );
+  }
+  return (
+    <input
+      className={inputClass}
+      value={value}
+      placeholder={field.help ?? field.label}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+export default function BlueprintGallery({
+  channelId,
+  npcs,
+  defaultNpcId = null,
+  onCreated,
+  onClose,
+}: BlueprintGalleryProps) {
+  const t = useT();
+  const [npcId, setNpcId] = useState<string>(defaultNpcId ?? npcs[0]?.npcId ?? "");
+  const [blueprints, setBlueprints] = useState<AutomationBlueprint[] | null>(null);
+  const [targets, setTargets] = useState<CronDeliveryTarget[]>([]);
+  const [selected, setSelected] = useState<AutomationBlueprint | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [submitError, setSubmitError] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+
+  // 템플릿·배달처는 NPC 프로필의 것이다 — 담당 NPC 를 바꾸면 다시 받는다.
+  useEffect(() => {
+    if (!npcId) return;
+    let cancelled = false;
+    setLoadError(null);
+    cronApi
+      .listBlueprints(channelId, npcId)
+      .then((res) => {
+        if (!cancelled) setBlueprints(res.blueprints);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setBlueprints([]);
+          setLoadError(err);
+        }
+      });
+    cronApi
+      .listDeliveryTargets(channelId, npcId)
+      .then((res) => {
+        if (!cancelled) setTargets(res.targets);
+      })
+      .catch(() => {
+        if (!cancelled) setTargets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [channelId, npcId]);
+
+  const select = (blueprint: AutomationBlueprint) => {
+    setSelected(blueprint);
+    setValues(initialBlueprintValues(blueprint));
+    setSubmitError(null);
+  };
+
+  const deliverRows = useMemo(() => {
+    const known = new Map(targets.map((target) => [target.id, target]));
+    const chosen = parseDeliver(values[DELIVER_FIELD]);
+    const ids = new Set<string>(["local", ...known.keys(), ...chosen]);
+    return Array.from(ids).map((id) => ({ id, target: known.get(id) ?? null, chosen }));
+  }, [targets, values]);
+
+  const missing = selected ? missingRequiredFields(selected, values) : [];
+  const canSubmit = !!selected && !!npcId && missing.length === 0 && !saving;
+
+  const submit = async () => {
+    if (!selected || !canSubmit) return;
+    setSaving(true);
+    setSubmitError(null);
+    try {
+      const res = await cronApi.instantiateBlueprint(channelId, {
+        npcId,
+        blueprint: selected.key,
+        values,
+      });
+      onCreated(res.job);
+    } catch (err) {
+      setSubmitError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputClass =
+    "w-full px-3 py-2 bg-surface border border-border rounded text-sm text-text focus:outline-none focus:border-primary mt-1";
+  const titleId = "cron-blueprint-title";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-bg border border-border rounded-xl shadow-2xl w-[90vw] max-w-[640px] max-h-[85dvh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+          <h2 id={titleId} className="text-sm font-bold">
+            {selected ? selected.title : t("cron.blueprint.title")}
+          </h2>
+          <button onClick={onClose} aria-label={t("common.close")} className="text-text-muted">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <label className="block text-xs text-text-muted">
+            {t("cron.field.npc")}
+            <select
+              data-testid="bp-npc"
+              className={inputClass}
+              value={npcId}
+              onChange={(e) => setNpcId(e.target.value)}
+            >
+              {!npcId && <option value="">—</option>}
+              {npcs.map((npc) => (
+                <option key={npc.npcId} value={npc.npcId}>
+                  {npc.npcName}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {loadError !== null && <CronErrorNotice notice={classifyCronError(loadError)} />}
+
+          {!selected ? (
+            blueprints === null ? (
+              <p className="text-sm text-text-dim">{t("common.loading")}</p>
+            ) : blueprints.length === 0 ? (
+              <p className="text-sm text-text-dim">{t("cron.blueprint.empty")}</p>
+            ) : (
+              <ul role="list" className="space-y-2">
+                {blueprints.map((blueprint) => (
+                  <li key={blueprint.key} role="listitem">
+                    <button
+                      type="button"
+                      onClick={() => select(blueprint)}
+                      className="w-full text-left p-3 rounded-lg bg-surface hover:bg-surface-raised border border-border"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-text">{blueprint.title}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-raised text-text-muted">
+                          {blueprint.category}
+                        </span>
+                      </div>
+                      <p className="text-xs text-text-muted mt-1">{blueprint.description}</p>
+                      {blueprint.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {blueprint.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-[10px] px-1.5 py-0.5 rounded-full bg-bg border border-border text-text-dim"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-text-muted">{selected.description}</p>
+              {selected.fields.map((field) => (
+                <div key={field.name} className="text-xs text-text-muted">
+                  <span>
+                    {field.label}
+                    {field.optional && (
+                      <span className="ml-1 text-text-dim">({t("cron.blueprint.optional")})</span>
+                    )}
+                  </span>
+                  {field.name === DELIVER_FIELD ? (
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                      {deliverRows.map(({ id, target, chosen }) => (
+                        <label key={id} className="inline-flex items-center gap-1.5 text-text">
+                          <input
+                            type="checkbox"
+                            checked={chosen.includes(id)}
+                            onChange={() => {
+                              const next = chosen.includes(id)
+                                ? chosen.filter((x) => x !== id)
+                                : [...chosen, id];
+                              setValues((v) => ({ ...v, [DELIVER_FIELD]: composeDeliver(next) }));
+                            }}
+                          />
+                          <span>
+                            {id === "local" ? t("cron.deliver.local") : (target?.name ?? id)}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <FieldControl
+                      field={field}
+                      value={values[field.name] ?? ""}
+                      onChange={(next) => setValues((v) => ({ ...v, [field.name]: next }))}
+                      inputClass={inputClass}
+                    />
+                  )}
+                  {field.help && field.type !== "text" && field.name !== DELIVER_FIELD && (
+                    <p className="mt-1 text-[11px] text-text-dim">{field.help}</p>
+                  )}
+                </div>
+              ))}
+              {submitError !== null && <CronErrorNotice notice={classifyCronError(submitError)} />}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-between gap-2 px-5 py-3 border-t border-border">
+          <div>
+            {selected && (
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="px-3 py-1.5 text-sm rounded bg-surface hover:bg-surface-raised text-text"
+              >
+                {t("cron.blueprint.back")}
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm rounded bg-surface hover:bg-surface-raised text-text"
+            >
+              {t("common.cancel")}
+            </button>
+            {selected && (
+              <button
+                type="button"
+                data-testid="bp-submit"
+                onClick={() => void submit()}
+                disabled={!canSubmit}
+                className="px-3 py-1.5 text-sm rounded bg-primary text-white font-semibold disabled:opacity-50"
+              >
+                {t("cron.blueprint.instantiate")}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

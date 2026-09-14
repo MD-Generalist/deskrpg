@@ -99,7 +99,7 @@ export function toHistoryMessages(rows: StoredChatMessage[]): NpcHistoryMessage[
 
 // --- DB 경계 -------------------------------------------------------------
 // 이 아래는 drizzle 에 닿는다. 다른 서버 헬퍼들과 같은 주입 방식을 쓴다
-// (src/lib/task-reporting.ts 참고): db·schema 를 unknown 으로 받아 안에서 좁힌다.
+// db·schema 를 unknown 으로 받아 안에서 좁힌다.
 
 type ChatDb = {
   insert: (table: unknown) => { values: (row: unknown) => Promise<unknown> };

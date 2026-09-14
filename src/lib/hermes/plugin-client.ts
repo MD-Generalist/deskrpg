@@ -26,7 +26,15 @@ import { transportFetch } from "./setup/transport";
 
 import { mapPluginFailure, type PluginFailure } from "./plugin-errors";
 
-import type { PluginResponse, PluginClient } from "./plugin-client-types";
+import type {
+  CronApi,
+  EventsApi,
+  KanbanApi,
+  OwnerPluginClient,
+  PluginClient,
+  PluginResponse,
+  ProfilePluginClient,
+} from "./plugin-client-types";
 export type {
   PluginResponse,
   IdentityPayload,
@@ -34,6 +42,11 @@ export type {
   DeleteProfilePayload,
   CatalogPayload,
   PluginClient,
+  KanbanApi,
+  EventsApi,
+  CronApi,
+  OwnerPluginClient,
+  ProfilePluginClient,
 } from "./plugin-client-types";
 
 const UNREACHABLE: PluginFailure = {
@@ -66,20 +79,34 @@ const MALFORMED_RESPONSE: PluginFailure = {
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
-export function createPluginClient(input: {
+type TransportInput = {
   baseUrl: string;
-  defaultToken: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
-}): PluginClient {
+};
+
+type CallInit = {
+  method?: string;
+  /** JSON 본문. `formData` 와 함께 쓰지 않는다. */
+  body?: unknown;
+  /** multipart 본문(첨부 업로드). content-type 은 fetch 가 boundary 와 함께 붙인다. */
+  formData?: FormData;
+};
+
+/**
+ * 세 클라이언트(`createPluginClient`·`createOwnerPluginClient`·`createProfilePluginClient`)가
+ * 공유하는 한 겹 — 타임아웃·도달 실패·JSON 판정·`mapPluginFailure` 를 여기 한 곳에 둔다.
+ * 토큰은 호출마다 받되, 어느 토큰을 쓸지는 바깥의 각 클라이언트가 생성 시점에 고정한다.
+ */
+function createPluginTransport(input: TransportInput) {
   const fetchImpl = input.fetchImpl ?? transportFetch;
   const base = input.baseUrl.replace(/\/+$/, "");
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  async function call<T>(
+  return async function call<T>(
     path: string,
     token: string,
-    init: { method?: string; body?: unknown } = {},
+    init: CallInit = {},
   ): Promise<PluginResponse<T>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -92,7 +119,11 @@ export function createPluginClient(input: {
           authorization: `Bearer ${token}`,
           ...(init.body === undefined ? {} : { "content-type": "application/json" }),
         },
-        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+        ...(init.formData !== undefined
+          ? { body: init.formData }
+          : init.body === undefined
+            ? {}
+            : { body: JSON.stringify(init.body) }),
         signal: controller.signal,
       });
     } catch {
@@ -122,7 +153,21 @@ export function createPluginClient(input: {
     const failure = mapPluginFailure({ status: res.status, body });
     if (failure) return { ok: false, failure, status: res.status };
     return { ok: true, data: body as T };
+  };
+}
+
+/** 쿼리스트링 조립. `undefined` 값은 빼고, 있는 것만 인코딩한다. 비면 빈 문자열. */
+function query(params: Record<string, string | number | boolean | undefined>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
   }
+  return parts.length === 0 ? "" : `?${parts.join("&")}`;
+}
+
+export function createPluginClient(input: TransportInput & { defaultToken: string }): PluginClient {
+  const call = createPluginTransport(input);
 
   // 프로필 이름은 검증을 통과하지 않은 채 들어올 수 있는 경로가 있다(사용자 입력).
   const seg = (name: string) => encodeURIComponent(name);
@@ -156,4 +201,128 @@ export function createPluginClient(input: {
     putConfig: (name, profileToken, patch) =>
       call(`/p/${seg(name)}/deskrpg/config`, profileToken, { method: "PUT", body: patch }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// 자동화 계약(v0.6.0+) — 오너 키 클라이언트(칸반·이벤트) / 프로필 키 클라이언트(크론)
+//
+// 토큰을 **생성 시점에** 고정한다. `PluginClient` 처럼 메서드마다 토큰을 받으면 칸반
+// 호출에 프로필 키를 넘기는 실수가 타입으로 막히지 않는다(둘 다 string). 오너 클라이언트에는
+// 프로필 경로가 없고 프로필 클라이언트에는 오너 경로가 없으니, 섞을 자리 자체가 없다.
+// ---------------------------------------------------------------------------
+
+/** 오너(게이트웨이) 키로만 부르는 표면 — `/deskrpg/info`, `/deskrpg/kanban/*`, `/deskrpg/events`. */
+export function createOwnerPluginClient(
+  input: TransportInput & { ownerToken: string },
+): OwnerPluginClient {
+  const call = createPluginTransport(input);
+  const token = input.ownerToken;
+  const seg = (value: string) => encodeURIComponent(value);
+  const task = (board: string, id: string, suffix = "") =>
+    `/deskrpg/kanban/tasks/${seg(id)}${suffix}${query({ board })}`;
+
+  const kanban: KanbanApi = {
+    listBoards: () => call("/deskrpg/kanban/boards", token),
+    createBoard: (body) => call("/deskrpg/kanban/boards", token, { method: "POST", body }),
+    updateBoard: (slug, body) =>
+      call(`/deskrpg/kanban/boards/${seg(slug)}`, token, { method: "PATCH", body }),
+
+    getBoard: (board, opts) =>
+      call(
+        `/deskrpg/kanban/board${query({
+          board,
+          include_archived: opts?.includeArchived ? true : undefined,
+        })}`,
+        token,
+      ),
+    getTask: (board, id) => call(task(board, id), token),
+    createTask: (board, body) =>
+      call(`/deskrpg/kanban/tasks${query({ board })}`, token, { method: "POST", body }),
+    updateTask: (board, id, body) => call(task(board, id), token, { method: "PATCH", body }),
+    deleteTask: (board, id) => call(task(board, id), token, { method: "DELETE" }),
+    addComment: (board, id, body) =>
+      call(task(board, id, "/comments"), token, { method: "POST", body }),
+    runTaskAction: (board, id, action, body) =>
+      call(task(board, id, `/${action}`), token, { method: "POST", body }),
+
+    listAttachments: (board, id) => call(task(board, id, "/attachments"), token),
+    uploadAttachment: (board, id, file) => {
+      const formData = new FormData();
+      const blob = typeof file.content === "string" ? new Blob([file.content]) : file.content;
+      formData.append("file", blob, file.filename);
+      return call(task(board, id, "/attachments"), token, { method: "POST", formData });
+    },
+    getAttachment: (board, attachmentId) =>
+      call(`/deskrpg/kanban/attachments/${seg(attachmentId)}${query({ board })}`, token),
+    deleteAttachment: (board, attachmentId) =>
+      call(`/deskrpg/kanban/attachments/${seg(attachmentId)}${query({ board })}`, token, {
+        method: "DELETE",
+      }),
+
+    addLink: (board, body) =>
+      call(`/deskrpg/kanban/links${query({ board })}`, token, { method: "POST", body }),
+    removeLink: (board, body) =>
+      call(`/deskrpg/kanban/links${query({ board })}`, token, { method: "DELETE", body }),
+
+    dispatch: (board, opts) =>
+      call(`/deskrpg/kanban/dispatch${query({ board, max: opts?.max })}`, token, {
+        method: "POST",
+        body: {},
+      }),
+    getTaskLog: (board, id, opts) =>
+      call(`/deskrpg/kanban/tasks/${seg(id)}/log${query({ board, tail: opts?.tail })}`, token),
+
+    getOrchestration: () => call("/deskrpg/kanban/orchestration", token),
+    updateOrchestration: (body) =>
+      call("/deskrpg/kanban/orchestration", token, { method: "PUT", body }),
+    listProfiles: () => call("/deskrpg/kanban/profiles", token),
+  };
+
+  const events: EventsApi = {
+    poll: (opts) =>
+      call(
+        `/deskrpg/events${query({ board: opts.board, cursor: opts.cursor, limit: opts.limit })}`,
+        token,
+      ),
+  };
+
+  return {
+    info: () => call("/deskrpg/info", token),
+    kanban,
+    events,
+  };
+}
+
+/** 한 프로필의 키로만 부르는 표면 — `/p/{profile}/deskrpg/cron/*`. */
+export function createProfilePluginClient(
+  input: TransportInput & { profileName: string; profileToken: string },
+): ProfilePluginClient {
+  const call = createPluginTransport(input);
+  const token = input.profileToken;
+  const seg = (value: string) => encodeURIComponent(value);
+  // `hermes-client.ts` 와 같은 프리픽스 규약 — 프로필 스코프는 `/p/<name>` 뒤에 붙는다.
+  const root = `/p/${seg(input.profileName)}/deskrpg/cron`;
+  const job = (id: string, suffix = "") => `${root}/jobs/${seg(id)}${suffix}`;
+
+  const cron: CronApi = {
+    listJobs: (opts) =>
+      call(
+        `${root}/jobs${query({ include_disabled: opts?.includeDisabled ? true : undefined })}`,
+        token,
+      ),
+    getJob: (id) => call(job(id), token),
+    listRuns: (id, opts) => call(`${job(id, "/runs")}${query({ limit: opts?.limit })}`, token),
+    createJob: (body) => call(`${root}/jobs`, token, { method: "POST", body }),
+    updateJob: (id, body) => call(job(id), token, { method: "PUT", body }),
+    pauseJob: (id) => call(job(id, "/pause"), token, { method: "POST", body: {} }),
+    resumeJob: (id) => call(job(id, "/resume"), token, { method: "POST", body: {} }),
+    runJob: (id) => call(job(id, "/run"), token, { method: "POST", body: {} }),
+    deleteJob: (id) => call(job(id), token, { method: "DELETE" }),
+    listDeliveryTargets: () => call(`${root}/delivery-targets`, token),
+    listBlueprints: () => call(`${root}/blueprints`, token),
+    instantiateBlueprint: (body) =>
+      call(`${root}/blueprints/instantiate`, token, { method: "POST", body }),
+  };
+
+  return { profileName: input.profileName, cron };
 }

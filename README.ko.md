@@ -8,11 +8,11 @@ English README: [README.md](README.md)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
-DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 오피스**입니다. 이미 쓰고 있는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 프로필이 그대로 직원이 됩니다. 자리에 앉아 있다가 지명하면 답하고, 회의실에서 발언권을 주고받고, 칸반 카드를 처리하고, 일이 끝나면 **걸어와서 보고합니다**. 여러 사람이 같은 오피스에 동시에 들어올 수 있습니다.
+DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 오피스**입니다. 이미 쓰고 있는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 프로필이 그대로 직원이 됩니다. 자리에 앉아 있다가 지명하면 답하고, 회의실에서 발언권을 주고받고, 칸반 카드를 처리합니다. **NPC를 곁으로 부르고 사무실 채팅에서 완료 보고를 확인하세요.** 여러 사람이 같은 오피스에 동시에 들어올 수 있습니다.
 
 DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 돌리고 있는 Hermes 게이트웨이에 붙기만 하므로, 기존 Hermes 사용자는 옮길 것 없이 프로필 그대로 올라탑니다.
 
-- 웹사이트: `https://deskrpg.com` (준비 중)
+- 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
 - 버전: `v2026.9.18` — 아침 출근길의 차량·나무·재질과 보폭에 맞춘 이동을 개선했습니다 (2D 픽셀아트 클라이언트는 `2026.9.9` 이하 태그에서 받을 수 있습니다)
 
@@ -24,28 +24,19 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 - Hermes 프로필에 묶인 AI NPC를 고용하고, `SOUL.md`를 웹에서 편집하고, NPC마다 모델·프로바이더·툴셋·추론 강도를 정합니다.
 - 오피스 방에서 지명해 대화하고, NPC를 초대한 그룹 방을 열고, 6단계 응답 리시트(대기 → 생각 중 → 스트리밍 → 완료)와 에이전트가 지금 쓰는 도구를 봅니다.
 - 전용 회의실에서 발언권 제어·거수·회의록 내보내기가 있는 회의를 엽니다.
-- 칸반 카드를 백로그 → 대기 → 진행 중 → 정체 → 완료로 옮기고, 정체된 일을 독촉·재개하고, 보고는 오피스 안에서 받습니다. NPC가 걸어옵니다.
+- Hermes가 관리하는 칸반 카드의 계획·실행·검토·완료를 확인합니다. NPC를 곁으로 부르고 사무실 채팅에서 카드 완료와 작업 차단 알림을 받습니다.
 - 다른 사람과 오피스를 공유합니다(멀티플레이어, 그룹, 역할 기반 권한). 한국어·영어·일본어·중국어를 지원합니다.
-- 브라우저 맵 에디터로 오피스 맵을 직접 만들거나 올립니다.
 
 ## 스크린샷
 
 <table width="100%">
   <tr>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-login-to-office.gif" alt="DeskRPG 접속하기" width="100%" /></td>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-npc-task-loop.gif" alt="DeskRPG NPC 채팅과 태스크" width="100%" /></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-home-commute.gif" alt="DeskRPG 3D 오피스 아침 출근길" width="100%" /><br /><strong>아침 출근길</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-walk-report.gif" alt="DeskRPG 에이전트가 걸어와서 보고하는 장면" width="100%" /><br /><strong>걸어와서 보고하기</strong></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><strong>접속하기</strong></td>
-    <td width="50%" align="center"><strong>NPC 채팅과 태스크</strong></td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-meeting-room.gif" alt="DeskRPG 회의실" width="100%" /></td>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-map-editor.gif" alt="DeskRPG 맵 에디터" width="100%" /></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><strong>회의실</strong></td>
-    <td width="50%" align="center"><strong>맵 에디터</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-small-talk.gif" alt="DeskRPG 오피스 실시간 스몰토크" width="100%" /><br /><strong>실시간 스몰토크</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-ai-meeting.gif" alt="DeskRPG 에이전트 회의" width="100%" /><br /><strong>에이전트 회의</strong></td>
   </tr>
 </table>
 
@@ -196,8 +187,8 @@ DeskRPG에 연결하는 절차는 세 단계입니다.
 
 ### 1. 캐릭터
 
-- 모든 사용자는 캐릭터로 채널에 입장합니다.
-- 캐릭터 외형은 LPC 레이어 스프라이트를 조합해 구성됩니다.
+- 모든 사용자는 3D 캐릭터로 채널에 입장합니다.
+- 맵·출근부·회의실에서 함께 쓰는 완성형 GLB 오피스 룩 50종 중 하나를 고릅니다.
 - 채널에 들어가기 전에 캐릭터를 먼저 만들어야 합니다.
 
 ### 2. 채널
@@ -213,12 +204,12 @@ DeskRPG에 연결하는 절차는 세 단계입니다.
 - NPC와의 1:1 대화는 캐릭터별로 저장되어 서버를 재시작해도 남습니다.
 - 앱 안의 메뉴에서 호출, 복귀, 대화, 수정, 대화 초기화, 해고가 가능합니다.
 
-### 4. 태스크
+### 4. 칸반과 보고
 
-- NPC와의 대화를 통해 업무를 맡길 수 있습니다.
-- 태스크는 `대기`, `진행중`, `중단`, `완료` 상태를 오갑니다.
-- 자동 재촉과 수동 보고 요청으로 NPC의 진행을 계속 밀어줄 수 있습니다.
-- 중요한 보고는 NPC가 직접 플레이어에게 걸어와 전달합니다.
+- 채널의 Hermes 프로필에 칸반 카드를 배정합니다. 카드와 실행 상태는 Hermes가 관리합니다.
+- 계획·실행·차단·검토·완료까지 카드의 진행을 확인합니다.
+- 최상위 카드 완료와 카드 차단 알림이 사무실 채팅에 표시되며, 알림에서 카드를 열 수 있습니다.
+- NPC 메뉴로 곁에 호출해 캐릭터 옆에서 업무를 이야기할 수 있습니다.
 
 ### 5. 회의
 
@@ -226,18 +217,16 @@ DeskRPG에 연결하는 절차는 세 단계입니다.
 - AI 회의는 채널 단위로 동작하며, 해당 채널의 Hermes 게이트웨이가 오케스트레이션합니다.
 - 저장된 회의록은 헤더에서 바로 확인할 수 있습니다.
 
-### 6. 맵 에디터
+### 맵 에디터 — 추후 제공
 
-- 브라우저 기반 맵 에디터는 Tiled 스타일 워크플로를 지원합니다.
-- 맵 템플릿 업로드, 프로젝트 연결 자산 관리, 채널용 맵 재사용이 가능합니다.
-- 별도 부속 도구가 아니라 DeskRPG의 주요 서브시스템입니다.
+브라우저 맵 에디터는 이후 릴리스를 위해 준비 중이며, 현재 공개 워크플로에는 포함되지 않습니다.
 
 ## 제품 메모
 
 - 초대 코드가 있어도 로그인은 필요합니다.
 - 초대 코드는 채널 접근을 돕는 수단이지, 익명 접근 토큰은 아닙니다.
 - 기본 오피스 타일과 오브젝트 텍스처는 런타임에 코드로 생성됩니다.
-- LPC 아바타 스프라이트는 별도 크레딧과 라이선스 문서를 따릅니다.
+- 레거시 2D LPC 아바타 스프라이트 자산은 별도 크레딧과 라이선스 문서를 따릅니다.
 
 ## 라이선스와 크레딧
 

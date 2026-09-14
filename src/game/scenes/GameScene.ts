@@ -338,8 +338,6 @@ class NpcSprite {
   motionLocallyDriven?: boolean;
   moveSpeed = 150; // px/s (faster than player's 120)
   pendingMessage: string | null = null;
-  pendingReportId: string | null = null;
-  pendingReportKind: string | null = null;
   arrivalBubbleText: string | null = null;
   waitDurationMs = 10000;
   /** 어느 방에서 불렀나 — null 이면 직접 부른 것. "r1" 같은 roomId 면 방에서 불렀으므로 그 방이 보이는 동안 자리로 돌아가지 않는다. */
@@ -563,8 +561,6 @@ class NpcSprite {
     isWalkableFn: (tx: number, ty: number) => boolean,
     options?: {
       message?: string;
-      reportId?: string;
-      reportKind?: string;
       bubbleText?: string;
       waitDurationMs?: number;
       destinationTag?: string;
@@ -584,8 +580,6 @@ class NpcSprite {
     this.lastDist = Infinity;
     this.pathRecalcTimer = 0;
     this.pendingMessage = options?.message || null;
-    this.pendingReportId = options?.reportId || null;
-    this.pendingReportKind = options?.reportKind || null;
     this.arrivalBubbleText = options?.bubbleText || null;
     this.waitDurationMs = options?.waitDurationMs ?? 10000;
     this.destinationTag = options?.destinationTag ?? null;
@@ -617,7 +611,7 @@ class NpcSprite {
     this.moveState = "idle";
     this.ambientPaused = false;
     this.remoteWalkingUntil = 0;
-    this.pendingMessage = this.pendingReportId = this.pendingReportKind = null;
+    this.pendingMessage = null;
     this.destinationTag = null;
     this.destinationTarget = null;
     this.purposeAccessOrigin = null;
@@ -660,8 +654,6 @@ class NpcSprite {
     this.lastDist = Infinity;
     this.pathRecalcTimer = 0;
     this.pendingMessage = null;
-    this.pendingReportId = null;
-    this.pendingReportKind = null;
     this.arrivalBubbleText = null;
     this.waitDurationMs = 10000;
     this.moveState = "returning";
@@ -1010,8 +1002,6 @@ export class GameScene extends Phaser.Scene {
     {
       npcId: string;
       message?: string;
-      reportId?: string;
-      reportKind?: string;
       bubbleText?: string;
       npcName?: string;
       reason?: string;
@@ -1325,6 +1315,8 @@ export class GameScene extends Phaser.Scene {
   private speechPreviews = new SpeechPreviews();
   private smalltalk = new NpcSmalltalk();
   private responsePhases: Record<string, "queued" | "thinking" | "streaming"> = {};
+  /** 카드 실행·크론 실행 중인 NPC(R27). `npc:working-state` 로 통째로 갱신된다. */
+  private workingNpcs = new Set<string>();
 
   /** Reuse authoritative frontend simulation while Three.js owns presentation. */
   readonly officeBridge: OfficeBridge = {
@@ -1363,6 +1355,7 @@ export class GameScene extends Phaser.Scene {
                 : undefined),
           active: this.activityBubbles.has(npc.id),
           phase: this.responsePhases[npc.id],
+          working: this.workingNpcs.has(npc.id),
         };
       });
       if (this.playerReady && this.player)
@@ -1689,7 +1682,6 @@ export class GameScene extends Phaser.Scene {
   private spawnHighlight: Phaser.GameObjects.Rectangle | null = null;
   private mapConfigSpawnCol: number | null = null;
   private mapConfigSpawnRow: number | null = null;
-  private reportWaitMs = 20000;
 
   constructor() {
     super({ key: "GameScene" });
@@ -1905,10 +1897,6 @@ export class GameScene extends Phaser.Scene {
         this.savedPosition = initialChannelData.savedPosition;
       }
 
-      if (typeof initialChannelData.reportWaitSeconds === "number") {
-        this.reportWaitMs = Math.max(5000, initialChannelData.reportWaitSeconds * 1000);
-      }
-
       setPendingChannelData(null); // consumed
     }
 
@@ -2122,11 +2110,6 @@ export class GameScene extends Phaser.Scene {
       this.spawnHighlight?.destroy();
       this.spawnHighlight = null;
     });
-    this.eventScope.on("task-automation-updated", (data: { reportWaitSeconds?: number }) => {
-      if (typeof data.reportWaitSeconds === "number") {
-        this.reportWaitMs = Math.max(5000, data.reportWaitSeconds * 1000);
-      }
-    });
     this.eventScope.on("owner-status", (data: { isOwner: boolean }) => {
       this.isChannelOwner = data.isOwner;
     });
@@ -2208,8 +2191,6 @@ export class GameScene extends Phaser.Scene {
       (data: {
         npcId: string;
         message?: string;
-        reportId?: string;
-        reportKind?: string;
         bubbleText?: string;
         npcName?: string;
         reason?: string;
@@ -2234,13 +2215,11 @@ export class GameScene extends Phaser.Scene {
         const dist = npc.distanceTo(this.player.x, this.player.y);
         if (dist < TILE_SIZE + 4) {
           npc.pendingMessage = data.message || null;
-          npc.pendingReportId = data.reportId || null;
-          npc.pendingReportKind = data.reportKind || null;
           npc.arrivalBubbleText = data.bubbleText || null;
-          npc.waitDurationMs = data.reportKind === "complete" ? this.reportWaitMs : 10000;
+          npc.waitDurationMs = 10000;
           npc.moveState = "waiting";
           npc.waitTimer = 0;
-          if (!npc.calledForRoom || npc.pendingReportId)
+          if (!npc.calledForRoom)
             EventBus.emit("npc:bubble", {
               npcId: npc.id,
               text: npc.arrivalBubbleText || undefined,
@@ -2253,8 +2232,6 @@ export class GameScene extends Phaser.Scene {
             npcId: npc.id,
             npcName: data.npcName || npc.name,
             pendingMessage: npc.pendingMessage,
-            reportId: npc.pendingReportId,
-            reportKind: npc.pendingReportKind,
           });
           publishNpcArrival((event, payload) => this.socket?.emit(event, payload), {
             channelId: this.channelId,
@@ -2269,10 +2246,7 @@ export class GameScene extends Phaser.Scene {
         this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
         npc.moveTo(playerCol, playerRow, findPath, this.createNpcWalkValidator(), {
           message: data.message,
-          reportId: data.reportId,
-          reportKind: data.reportKind,
           bubbleText: data.bubbleText,
-          waitDurationMs: data.reportKind === "complete" ? this.reportWaitMs : 10000,
         });
       },
     );
@@ -2639,6 +2613,11 @@ export class GameScene extends Phaser.Scene {
         this.responsePhases = data.phases;
       },
     );
+    // 작업 중 표시(R27) — GamePageClient 가 소켓의 `npc:working` 을 접어 id 목록으로 준다.
+    this.workingNpcs = new Set();
+    this.eventScope.on("npc:working-state", (data: { npcIds: string[] }) => {
+      this.workingNpcs = new Set(data.npcIds);
+    });
     // Conversation previews are independent of activity/greeting lifecycle.
     this.eventScope.on("chat:speech", (data: { actorId: string; text: string }) => {
       this.speechPreviews.set(data.actorId, data.text, this.time.now);
@@ -4803,7 +4782,7 @@ export class GameScene extends Phaser.Scene {
           this.socket?.emit("npc:arrived", { channelId: this.channelId, npcId: npc.id });
         }
         if (result === "arrived") {
-          if (!npc.calledForRoom || npc.pendingReportId)
+          if (!npc.calledForRoom)
             EventBus.emit("npc:bubble", {
               npcId: npc.id,
               text: npc.arrivalBubbleText || undefined,
@@ -4816,8 +4795,6 @@ export class GameScene extends Phaser.Scene {
             npcId: npc.id,
             npcName: npc.name,
             pendingMessage: npc.pendingMessage,
-            reportId: npc.pendingReportId,
-            reportKind: npc.pendingReportKind,
           });
           publishNpcArrival((event, payload) => this.socket?.emit(event, payload), {
             channelId: this.channelId,

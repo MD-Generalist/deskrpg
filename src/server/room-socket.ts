@@ -10,7 +10,7 @@ import { getRoomResponseSnapshot } from "./room-runtime";
 
 import type { Server } from "socket.io";
 import { resolveRoomAccessDecision, type RoomAccess } from "@/lib/chat-rooms-policy";
-import type { RoomSummary } from "@/lib/chat-rooms-policy";
+import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import type * as chatRooms from "@/lib/chat-rooms";
 import type { PlayerState } from "./socket-handlers";
 import type { getOrCreateRoomRuntime, invalidateRoomRuntime } from "./room-runtime";
@@ -34,6 +34,19 @@ type RoomSocket = {
 type RoomIo = {
   to(room: string): { emit(event: string, payload: unknown): void };
 };
+
+/** 방 `roomId` 의 소켓 룸 이름. 채널 룸(`<channelId>`)과 겹치지 않게 접두어를 붙인다. */
+export function roomSocketRoom(roomId: string): string {
+  return `room-${roomId}`;
+}
+
+/**
+ * 방에 메시지 한 건을 방송한다. 사람·NPC 발화와 자동화 알림(폴러의 `ingest`)이 같은
+ * 경로를 타야 클라이언트가 한 리스너로 받는다 — `room:message` 는 이 한 벌뿐이다.
+ */
+export function broadcastRoomMessage(io: RoomIo, roomId: string, message: RoomMessage): void {
+  io.to(roomSocketRoom(roomId)).emit("room:message", { roomId, message });
+}
 
 export type RegisterRoomHandlersArgs = {
   io: Server;
@@ -105,7 +118,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
   /** 이 소켓이 지금 보고 있는 방들. `room:send` 는 여기 없는 방을 거절한다. */
   const openRooms = new Set<string>();
 
-  const socketRoom = (roomId: string) => `room-${roomId}`;
+  const socketRoom = roomSocketRoom;
 
   function fail(roomId: string | null, code: RoomErrorCode) {
     socket.emit("room:error", { roomId, code });
@@ -156,7 +169,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       senderName: "",
       content: systemContent(payload),
     });
-    roomIo.to(socketRoom(roomId)).emit("room:message", { roomId, message });
+    broadcastRoomMessage(roomIo, roomId, message);
   }
 
   const handlers: RoomHandlers = {
@@ -235,7 +248,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         senderName,
         content,
       });
-      roomIo.to(socketRoom(id)).emit("room:message", { roomId: id, message: saved });
+      broadcastRoomMessage(roomIo, id, saved);
 
       // 런타임 조립(DB + 어댑터 해석)은 기다리지만 **NPC 의 턴은 기다리지 않는다.**
       // 턴은 수십 초가 걸리므로 여기서 await 하면 다음 메시지가 막힌다.
