@@ -15,7 +15,7 @@ import {
 } from "@/lib/gateway-resources";
 import internalTransport from "@/lib/internal-transport.js";
 import { getGatewayConfigUpdatedHandler } from "@/lib/rpc-registry";
-import { refreshPollers } from "@/server/automation-poller";
+import { requestRefreshPollers } from "@/lib/automation-registry";
 
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
   buildInternalAuthHeaders: () => Record<string, string>;
@@ -24,7 +24,7 @@ const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport
 
 /** 바인딩이 바뀌면 폴러 표를 다시 읽게 한다 — 기다리지 않고, 실패해도 응답에 섞지 않는다. */
 function refreshPollersInBackground() {
-  void refreshPollers().catch((err: unknown) => {
+  void requestRefreshPollers().catch((err: unknown) => {
     console.warn(
       `[gateway-route] refreshPollers failed: ${err instanceof Error ? err.message : String(err)}`,
     );
