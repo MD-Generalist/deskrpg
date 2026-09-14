@@ -11,6 +11,7 @@ import { localExecutor, sshExecutor, getSshHosts } from "./executor";
 import { ensureSshTunnel, registerSshTransport, transportFetch } from "./transport";
 import { hostSetupAllowed, safeSetupError, validateGatewayUrl } from "./policy";
 import { SetupJobStore } from "./store";
+import { buildPluginInfoCacheUpdate } from "../plugin-cache-update";
 import { verifySetupGateway } from "./verify";
 import type { HostTarget, PreparedHost, SetupCapabilities } from "./types";
 
@@ -189,6 +190,8 @@ export async function startSetup(
           pluginStatus: capability.status,
           pluginVersion: capability.version,
           pluginCheckedAt: nowForDb(),
+          // 보드 확보(kanban-boards.ts)가 계약 판정에 쓴다 — 없으면 캐시가 신선해도 재프로브한다.
+          ...buildPluginInfoCacheUpdate(capability.info),
         })
         .where(eq(gatewayResources.id, gateway.id));
       step("importing_profiles");
@@ -259,6 +262,7 @@ export async function connectSetupUrl(
       pluginStatus: capability.status,
       pluginVersion: capability.version,
       pluginCheckedAt: nowForDb(),
+      ...buildPluginInfoCacheUpdate(capability.info),
     })
     .where(eq(gatewayResources.id, gateway.id));
   return { gatewayId: gateway.id, pluginStatus: capability.status };

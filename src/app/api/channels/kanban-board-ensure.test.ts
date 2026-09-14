@@ -215,6 +215,42 @@ test("플러그인 0.6.0 미만이면 확보를 시도하지 않고 plugin_upgra
   ]);
 });
 
+test("캐시가 신선한 plugin_ready 인데 info_json 이 없으면 재프로브한 뒤 보드를 확보한다", async () => {
+  // 설정 마법사(setup/service.ts)가 예전에 남긴 캐시 모양 — status/version 만 있고 info 는 없다.
+  // 이것을 "계약 미달" 로 읽으면 한 시간 동안 보드 확보가 막힌다(독립 검토 지적).
+  const plugin = await startPlugin();
+  const user = await seedUser("board-owner");
+  const gateway = await seedGateway(user.id, plugin.baseUrl);
+  const channel = await seedChannel(user.id, "캐시만 있는 채널");
+  const { db, gatewayResources, nowForDb } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  await db
+    .update(gatewayResources)
+    .set({
+      pluginStatus: "plugin_ready",
+      pluginVersion: "0.6.0",
+      pluginCheckedAt: nowForDb(),
+      pluginInfoJson: null,
+    })
+    .where(eq(gatewayResources.id, gateway.id));
+
+  assert.equal((await bind(channel.id, user.id, gateway.id)).status, 200);
+
+  const paths = plugin.requests().map((r) => `${r.method} ${r.path}`);
+  assert.ok(paths.includes("GET /deskrpg/info"), "info 를 다시 찌른다");
+  assert.ok(paths.includes("POST /deskrpg/kanban/boards"), "그 뒤 보드를 확보한다");
+
+  const row = await readBoardRow(channel.id);
+  assert.ok(row);
+  assert.equal(row.lastError, null);
+
+  const [cached] = await db
+    .select()
+    .from(gatewayResources)
+    .where(eq(gatewayResources.id, gateway.id));
+  assert.ok(cached.pluginInfoJson, "재프로브 결과의 info 가 캐시에 채워진다");
+});
+
 test("게이트웨이를 바꾸면 새 게이트웨이에 보드를 확보하고 이전 보드는 남는다 + 경고", async () => {
   const pluginA = await startPlugin();
   const pluginB = await startPlugin();

@@ -36,3 +36,15 @@ test("reject bad API credential before calling plugin route", async () => {
   );
   assert.equal(responses.length, 0);
 });
+test("plugin_ready 판정에는 자동화 계약 블록(info)이 함께 온다 — 설정 마법사가 캐시한다 (T4)", async () => {
+  const responses = [
+    json({ platform: "hermes-agent" }),
+    json({ data: [] }),
+    json({ plugin: "deskrpg", version: "0.6.0", capabilities: ["kanban", "cron", "events"] }),
+  ];
+  const result = await verifySetupGateway("http://gateway", "secret", (async () =>
+    responses.shift()!) as typeof fetch);
+  assert.equal(result.status, "plugin_ready");
+  assert.equal(result.version, "0.6.0");
+  assert.deepEqual(result.info?.capabilities, ["kanban", "cron", "events"]);
+});
