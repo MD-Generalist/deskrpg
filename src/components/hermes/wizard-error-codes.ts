@@ -56,6 +56,15 @@ export const WIZARD_ERROR_CODES = [
   "gateway_auth_failed",
   "key_missing_after_issue",
   "key_store_forbidden",
+  // T9/T10 자동화(크론·칸반) 라우트가 내는 코드 — `cron-access.ts`/`cron-routes.ts` 와
+  // 칸반 라우트가 `{code, message}` 로 싣는다. 크론·칸반 화면이 이 표 하나를 같이 쓴다.
+  "plugin_upgrade_required",
+  "unknown_cursor",
+  "cron_read_only",
+  "gateway_not_bound",
+  "assignee_not_in_channel",
+  "settings_forbidden",
+  "attachments_unsupported",
 ] as const;
 
 export type WizardErrorCode = (typeof WIZARD_ERROR_CODES)[number];
@@ -84,6 +93,13 @@ export const WIZARD_ERROR_MESSAGE_KEYS: Record<WizardErrorCode, string> = {
   gateway_auth_failed: "hermes.wizard.error.gatewayAuthFailed",
   key_missing_after_issue: "hermes.wizard.error.keyMissingAfterIssue",
   key_store_forbidden: "hermes.wizard.error.keyStoreForbidden",
+  plugin_upgrade_required: "hermes.wizard.error.pluginUpgradeRequired",
+  unknown_cursor: "hermes.wizard.error.unknownCursor",
+  cron_read_only: "hermes.wizard.error.cronReadOnly",
+  gateway_not_bound: "hermes.wizard.error.gatewayNotBound",
+  assignee_not_in_channel: "hermes.wizard.error.assigneeNotInChannel",
+  settings_forbidden: "hermes.wizard.error.settingsForbidden",
+  attachments_unsupported: "hermes.wizard.error.attachmentsUnsupported",
 };
 
 const UNKNOWN_KEY = "hermes.wizard.error.unknown";
