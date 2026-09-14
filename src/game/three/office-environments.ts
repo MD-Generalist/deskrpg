@@ -5,13 +5,85 @@ import {
   furnishCreativeStudio,
   type CreativeStudioPlacement,
 } from "./creative-studio-layout";
-import {
-  createDefaultMap,
-  type TiledMap,
-  type TiledObject,
-  type TiledProperty,
+import type {
+  TiledMap,
+  TiledObject,
+  TiledProperty,
 } from "../../components/map-editor/hooks/useMapEditor";
 import { getObjectDimensions } from "../../lib/object-types";
+
+/**
+ * Server-safe base map factory. The map-editor hook is a Client Module, so its
+ * exported helper cannot be invoked by the channel GET route during a lazy
+ * official-environment upgrade in a production Next.js build.
+ */
+function createOfficeBaseMap(
+  name: string,
+  width: number,
+  height: number,
+  tileSize: number,
+): TiledMap {
+  const empty = new Array(width * height).fill(0);
+  const tileLayer = (id: number, layerName: string, depth: number, opacity = 1) => ({
+    id,
+    name: layerName,
+    type: "tilelayer" as const,
+    width,
+    height,
+    x: 0,
+    y: 0,
+    opacity,
+    visible: true,
+    data: [...empty],
+    properties: [{ name: "depth", type: "int", value: depth }],
+  });
+
+  return {
+    compressionlevel: -1,
+    width,
+    height,
+    tilewidth: tileSize,
+    tileheight: tileSize,
+    orientation: "orthogonal",
+    renderorder: "right-down",
+    infinite: false,
+    type: "map",
+    version: "1.10",
+    tiledversion: "1.11.2",
+    nextlayerid: 7,
+    nextobjectid: 2,
+    tilesets: [],
+    layers: [
+      tileLayer(1, "Floor", 0),
+      tileLayer(2, "Walls", 1),
+      tileLayer(3, "Foreground", 10000),
+      tileLayer(4, "Collision", -1, 0.7),
+      {
+        id: 5,
+        name: "Objects",
+        type: "objectgroup",
+        x: 0,
+        y: 0,
+        opacity: 1,
+        visible: true,
+        draworder: "topdown",
+        objects: [
+          {
+            id: 1,
+            name: "spawn",
+            type: "spawn",
+            x: Math.floor(width / 2) * tileSize,
+            y: Math.floor(height / 2) * tileSize,
+            width: tileSize,
+            height: tileSize,
+            visible: true,
+          },
+        ],
+        properties: [{ name: "depth", type: "string", value: "y-sort" }],
+      },
+    ],
+  };
+}
 
 export const OFFICE_ENVIRONMENTS = Object.freeze([
   Object.freeze({
@@ -75,7 +147,7 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
   const cols = id === "agency" ? CREATIVE_STUDIO_SIZE.cols : id === "executive" ? 18 : 30;
   const rows = id === "agency" ? CREATIVE_STUDIO_SIZE.rows : id === "executive" ? 18 : 22;
   const entrance = id === "agency" ? CREATIVE_STUDIO_ENTRANCE.spawnCol : Math.floor(cols / 2);
-  const map = createDefaultMap(environment.nameEn, cols, rows, 32);
+  const map = createOfficeBaseMap(environment.nameEn, cols, rows, 32);
   const layer = map.layers.find((entry) => entry.name === "Objects")!;
   const objects: TiledObject[] = [];
   const add = (type: string, col: number, row: number, placement: CreativeStudioPlacement = {}) => {
