@@ -5,7 +5,6 @@ import { createServer } from "node:http";
 import { parse } from "node:url";
 import next from "next";
 import { Server as SocketServer } from "socket.io";
-import { registerGatewayConfigUpdatedHandler, registerRpcHandler } from "./src/lib/rpc-registry";
 
 const envLoader = (
   process as typeof process & {

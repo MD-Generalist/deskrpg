@@ -36,7 +36,8 @@ export class WorkspaceManager {
     const fileName = fileMap[adapterType];
     if (!fileName) return;
 
-    await fs.writeFile(path.join(wsPath, fileName), fullPersona, "utf-8");
+    // Runtime-owned workspace content must not become a build-time file trace.
+    await fs.writeFile(path.join(/*turbopackIgnore: true*/ wsPath, fileName), fullPersona, "utf-8");
   }
 
   getUserAuthHome(userId: string): string {
