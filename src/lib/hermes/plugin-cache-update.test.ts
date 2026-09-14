@@ -72,3 +72,33 @@ describe("buildPluginCacheUpdate", () => {
     assert.equal(typeof payload.updatedAt, "string");
   });
 });
+
+// 자동화 계약 블록(`/deskrpg/info` 의 capabilities·timezone·kanban)은
+// `gateway_resources.plugin_info_json`(텍스트 컬럼, 병행 태스크가 추가) 에 JSON 문자열로
+// 보관한다. 컬럼이 이 워크트리에 아직 없으므로 helper 는 문자열만 주고받는다 — 컬럼이
+// 생기면 라우트가 `{ pluginInfoJson }` 을 `.set()` 에 합치면 된다.
+describe("plugin_info_json 직렬화", () => {
+  it("info 가 있으면 JSON 문자열, 없으면 null 을 pluginInfoJson 에 싣는다", async () => {
+    const { buildPluginInfoCacheUpdate, restorePluginInfo } = await import("./plugin-cache-update");
+    const info = {
+      plugin: "deskrpg" as const,
+      version: "0.6.0",
+      capabilities: ["kanban", "cron", "events"],
+      timezone: "Asia/Seoul",
+      kanban: { dispatcher_present: true, attachments: false },
+    };
+    const payload = buildPluginInfoCacheUpdate(info);
+    assert.equal(typeof payload.pluginInfoJson, "string");
+    assert.deepEqual(restorePluginInfo(payload.pluginInfoJson), info);
+
+    const absent = buildPluginInfoCacheUpdate(null);
+    assert.equal(absent.pluginInfoJson, null);
+  });
+
+  it("restorePluginInfo 는 깨진 JSON·낯선 모양을 null 로 접는다", async () => {
+    const { restorePluginInfo } = await import("./plugin-cache-update");
+    assert.equal(restorePluginInfo(null), null);
+    assert.equal(restorePluginInfo("{not json"), null);
+    assert.equal(restorePluginInfo(JSON.stringify({ hello: "world" })), null);
+  });
+});
