@@ -168,3 +168,30 @@ export function mapPluginFailure(input: { status: number; body: unknown }): Plug
     details: extractDetails(record, ["error", "reason"]),
   };
 }
+
+/**
+ * 자동화 계약 게이트(`meetsAutomationContract`)가 거절한 결과를 같은 실패 모양으로 옮긴다.
+ *
+ * 게이트웨이에 닿았고 플러그인도 있지만 **버전이나 capability 가 모자란** 상태다 —
+ * 사용자가 할 일은 재시도가 아니라 플러그인 업그레이드라, `unreachable`/`plugin_absent`
+ * 와 섞이면 안 된다. `details` 에 최소 버전·이유·빠진 capability 를 실어 화면이
+ * "플러그인 0.6.0 이상이 필요합니다(events 없음)" 같은 문장을 만들 수 있게 한다.
+ */
+export function pluginUpgradeRequired(gate: {
+  ok: false;
+  minVersion: string;
+  reason: string;
+  missing?: string[];
+}): PluginFailure {
+  return {
+    code: "plugin_upgrade_required",
+    message: "",
+    blocksEditor: true,
+    showsShellCommand: null,
+    details: {
+      minVersion: gate.minVersion,
+      reason: gate.reason,
+      ...(gate.missing ? { missing: gate.missing } : {}),
+    },
+  };
+}

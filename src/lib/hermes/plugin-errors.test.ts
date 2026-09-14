@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { mapPluginFailure } from "./plugin-errors";
+import { mapPluginFailure, pluginUpgradeRequired } from "./plugin-errors";
 
 describe("mapPluginFailure", () => {
   it("2xx 는 실패가 아니다", () => {
@@ -313,5 +313,31 @@ describe("isCodeLikeString 경계 (수정 라운드 3 I-4 — 리뷰어 실증)"
       assert.equal(got.code, "upstream_error");
       assert.equal(got.message, sentence);
     }
+  });
+});
+
+describe("자동화 계약 실패 코드", () => {
+  it("400 unknown_cursor 는 코드 그대로 접힌다 — 폴러가 커서를 버리고 다시 시작해야 한다", () => {
+    const got = mapPluginFailure({ status: 400, body: { error: "unknown_cursor" } });
+    assert.ok(got);
+    assert.equal(got.code, "unknown_cursor");
+    assert.equal(got.blocksEditor, false);
+  });
+
+  it("pluginUpgradeRequired 는 계약 게이트 결과를 같은 실패 모양으로 옮긴다", () => {
+    const got = pluginUpgradeRequired({
+      ok: false,
+      minVersion: "0.6.0",
+      reason: "missing_capability",
+      missing: ["events"],
+    });
+    assert.equal(got.code, "plugin_upgrade_required");
+    assert.equal(got.blocksEditor, true);
+    assert.equal(got.showsShellCommand, null);
+    assert.deepEqual(got.details, {
+      minVersion: "0.6.0",
+      reason: "missing_capability",
+      missing: ["events"],
+    });
   });
 });

@@ -3,7 +3,12 @@ import { describe, it } from "node:test";
 
 import {
   classifyPluginProbe,
+  classifyPluginProbeWithInfo,
+  compareSemver,
+  meetsAutomationContract,
+  parsePluginInfo,
   probeDeskrpgPlugin,
+  probeDeskrpgPluginWithInfo,
   resolvePluginStatusFromCache,
   shouldReprobePlugin,
 } from "./plugin-capability";
@@ -203,3 +208,135 @@ describe("resolvePluginStatusFromCache", () => {
 // 그 함수 자체가 plugin-cache-update.ts(서버 전용)로 옮겨졌기 때문이다. 이 파일의
 // 헤더 주석 참조(HermesProfileList.tsx 가 이 파일을 직접 import 하므로 `@/db` 를
 // 더는 담을 수 없다).
+
+// ---------------------------------------------------------------------------
+// 자동화 계약(v0.6.0+) — info 파싱과 계약 게이트
+// ---------------------------------------------------------------------------
+
+describe("parsePluginInfo", () => {
+  it("계약 블록(capabilities·timezone·kanban)을 그대로 뽑는다", () => {
+    const got = parsePluginInfo({
+      plugin: "deskrpg",
+      version: "0.6.0",
+      capabilities: ["kanban", "cron", "events"],
+      timezone: "Asia/Seoul",
+      kanban: { dispatcher_present: true, attachments: false },
+    });
+    assert.deepEqual(got, {
+      plugin: "deskrpg",
+      version: "0.6.0",
+      capabilities: ["kanban", "cron", "events"],
+      timezone: "Asia/Seoul",
+      kanban: { dispatcher_present: true, attachments: false },
+    });
+  });
+
+  it("구버전 info(capabilities 없음)도 빈 배열·기본값으로 접어 잃지 않는다", () => {
+    const got = parsePluginInfo({ plugin: "deskrpg", version: "0.3.0" });
+    assert.ok(got);
+    assert.deepEqual(got.capabilities, []);
+    assert.equal(got.timezone, null);
+    assert.deepEqual(got.kanban, { dispatcher_present: false, attachments: false });
+  });
+
+  it("우리 플러그인이 아니거나 version 이 없으면 null", () => {
+    assert.equal(parsePluginInfo({ hello: "world" }), null);
+    assert.equal(parsePluginInfo({ plugin: "deskrpg" }), null);
+    assert.equal(parsePluginInfo("ok"), null);
+    assert.equal(parsePluginInfo(null), null);
+  });
+
+  it("classifyPluginProbeWithInfo 는 200 이면 info 를, 아니면 null 을 곁들인다", () => {
+    const got = classifyPluginProbeWithInfo({
+      status: 200,
+      body: { plugin: "deskrpg", version: "0.6.1", capabilities: ["kanban"] },
+    });
+    assert.deepEqual(got.capability, { status: "plugin_ready", version: "0.6.1" });
+    assert.deepEqual(got.info?.capabilities, ["kanban"]);
+    assert.equal(classifyPluginProbeWithInfo({ status: 404, body: {} }).info, null);
+  });
+
+  it("probeDeskrpgPluginWithInfo 는 같은 경로를 찌르고 계약 블록까지 돌려준다", async () => {
+    const fetchImpl = (async () =>
+      new Response(
+        JSON.stringify({
+          plugin: "deskrpg",
+          version: "0.6.0",
+          capabilities: ["kanban", "cron", "events"],
+          timezone: "Asia/Seoul",
+          kanban: { dispatcher_present: true, attachments: true },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+    const got = await probeDeskrpgPluginWithInfo({ baseUrl: "http://gw", token: "t", fetchImpl });
+    assert.equal(got.capability.status, "plugin_ready");
+    assert.equal(got.info?.timezone, "Asia/Seoul");
+
+    const dead = (async () => {
+      throw new Error("ECONNREFUSED");
+    }) as unknown as typeof fetch;
+    const unreachable = await probeDeskrpgPluginWithInfo({
+      baseUrl: "http://gw",
+      token: "t",
+      fetchImpl: dead,
+    });
+    assert.deepEqual(unreachable, { capability: { status: "unknown", version: null }, info: null });
+  });
+});
+
+describe("meetsAutomationContract", () => {
+  const full = {
+    plugin: "deskrpg" as const,
+    version: "0.6.0",
+    capabilities: ["kanban", "cron", "events"],
+    timezone: "Asia/Seoul",
+    kanban: { dispatcher_present: true, attachments: true },
+  };
+
+  it("0.6.0 + 세 capability 면 통과", () => {
+    assert.deepEqual(meetsAutomationContract(full), { ok: true, minVersion: "0.6.0" });
+  });
+
+  it("상위 버전(0.10.0, 1.0.0)도 통과 — 문자열 비교가 아니라 semver 비교다", () => {
+    assert.equal(meetsAutomationContract({ ...full, version: "0.10.0" }).ok, true);
+    assert.equal(meetsAutomationContract({ ...full, version: "1.0.0" }).ok, true);
+    assert.equal(meetsAutomationContract({ ...full, version: "0.6.0-rc.1" }).ok, true);
+  });
+
+  it("0.5.9 는 version_below_minimum", () => {
+    const got = meetsAutomationContract({ ...full, version: "0.5.9" });
+    assert.equal(got.ok, false);
+    assert.equal(got.reason, "version_below_minimum");
+    assert.equal(got.minVersion, "0.6.0");
+  });
+
+  it("capability 가 하나라도 빠지면 missing_capability 와 빠진 이름", () => {
+    const got = meetsAutomationContract({ ...full, capabilities: ["kanban", "cron"] });
+    assert.equal(got.ok, false);
+    assert.equal(got.reason, "missing_capability");
+    assert.deepEqual(got.missing, ["events"]);
+  });
+
+  it("버전이 파싱 불가면 invalid_version", () => {
+    const got = meetsAutomationContract({ ...full, version: "dev" });
+    assert.equal(got.ok, false);
+    assert.equal(got.reason, "invalid_version");
+  });
+
+  it("info 가 null 이면(플러그인 부재·구버전) no_info", () => {
+    const got = meetsAutomationContract(null);
+    assert.equal(got.ok, false);
+    assert.equal(got.reason, "no_info");
+  });
+});
+
+describe("compareSemver", () => {
+  it("숫자 단위로 비교하고 프리릴리스 꼬리는 무시한다", () => {
+    assert.equal(compareSemver("0.6.0", "0.6.0"), 0);
+    assert.equal(compareSemver("0.10.0", "0.9.9"), 1);
+    assert.equal(compareSemver("0.6", "0.6.0"), 0);
+    assert.equal(compareSemver("v1.2.3", "1.2.3"), 0);
+    assert.equal(compareSemver("0.6.0-rc.1", "0.6.0"), 0);
+    assert.equal(compareSemver("abc", "1.0.0"), null);
+  });
+});
