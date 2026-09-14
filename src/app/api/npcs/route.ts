@@ -1,3 +1,5 @@
+import { deriveChannelMotionLayout } from "@/lib/channel-motion-layout";
+import { isCreativeStudioMap } from "@/lib/effective-map-spawn";
 // NPC 생성 라우트는 없다. NPC 는 사용자가 만드는 것이 아니라 "게이트웨이의 프로필이
 // 채널에 갖는 자리" 이고, 그 자리는 게이트웨이 연결(hireGatewayProfilesIntoChannel)과
 // 프로필 등록(hireProfileIntoBoundChannels)이 만든다. 여기서 다시 만들 수 있으면
@@ -73,13 +75,30 @@ export async function GET(req: NextRequest) {
     }
 
     const list = await selectChannelNpcs(channelId, { roster });
+    const [mapChannel] = !roster
+      ? await db
+          .select({ mapData: channels.mapData })
+          .from(channels)
+          .where(eq(channels.id, channelId))
+          .limit(1)
+      : [];
+    const runtimeHomes =
+      mapChannel && isCreativeStudioMap(mapChannel.mapData)
+        ? deriveChannelMotionLayout(
+            mapChannel,
+            list
+              .filter((npc) => npc.positionX !== null && npc.positionY !== null)
+              .map((npc) => ({ id: npc.id, positionX: npc.positionX!, positionY: npc.positionY! })),
+          )?.npcs
+        : undefined;
     const result = list.map((npc) => {
+      const home = runtimeHomes?.find((home) => home.id === npc.id);
       const agentConfig = (npc.agentConfig ?? {}) as Record<string, unknown>;
       return {
         id: npc.id,
         name: npc.name,
-        positionX: npc.positionX,
-        positionY: npc.positionY,
+        positionX: home ? Math.floor(home.x / 32) : npc.positionX,
+        positionY: home ? Math.floor(home.y / 32) : npc.positionY,
         direction: npc.direction,
         appearance: npc.appearance,
         hasAgent: !!agentConfig.agentId,

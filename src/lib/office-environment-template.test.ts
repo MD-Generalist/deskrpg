@@ -155,10 +155,28 @@ test("room rollout creates v2 separately and never reads or updates legacy v1 te
           templates: [{ id: "existing-channel-template", tags: `deskrpg-office-v1:${id}` }],
         });
       assert.equal(options.method, "POST");
-      assert.equal(JSON.parse(String(options.body)).tags, `deskrpg-office-v2:${id}`);
+      assert.equal(
+        JSON.parse(String(options.body)).tags,
+        `deskrpg-office-v${id === "agency" ? 3 : 2}:${id}`,
+      );
       return reply({ template: { id: "new-room-template" } }, 201);
     };
     assert.equal(await ensureOfficeEnvironmentTemplate(id, request), "new-room-template");
     assert.deepEqual(calls, ["GET /api/map-templates", "POST /api/map-templates"]);
   }
+});
+
+test("agency skips v2 evidence and registers v3 with the actual Tiled entrance spawn", async () => {
+  const request: typeof fetch = async (url, options) => {
+    if (!options) {
+      assert.equal(url, "/api/map-templates");
+      return reply({ templates: [{ id: "legacy", tags: "deskrpg-office-v2:agency" }] });
+    }
+    const body = JSON.parse(String(options.body));
+    assert.equal(body.tags, "deskrpg-office-v3:agency");
+    assert.equal(body.spawnCol, 23);
+    assert.equal(body.spawnRow, 23);
+    return reply({ template: { id: "v3" } });
+  };
+  assert.equal(await ensureOfficeEnvironmentTemplate("agency", request), "v3");
 });

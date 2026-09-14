@@ -1,31 +1,7 @@
 import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "../game/three/office-environments";
 
-/** JSONB may reorder object keys; array position remains part of the snapshot contract. */
-function sameJsonSnapshot(left: unknown, right: unknown): boolean {
-  if (left === right) return true;
-  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
-    return false;
-  }
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((value, index) => sameJsonSnapshot(value, right[index]))
-    );
-  }
-  const leftObject = left as Record<string, unknown>;
-  const rightObject = right as Record<string, unknown>;
-  const keys = Object.keys(leftObject);
-  return (
-    keys.length === Object.keys(rightObject).length &&
-    keys.every(
-      (key) =>
-        Object.prototype.hasOwnProperty.call(rightObject, key) &&
-        sameJsonSnapshot(leftObject[key], rightObject[key]),
-    )
-  );
-}
+import { sameJsonSnapshot } from "./same-json-snapshot";
+import { effectiveMapSpawn } from "./effective-map-spawn";
 
 /** Reuse only an exact built-in snapshot; user-edited templates remain untouched. */
 export async function ensureOfficeEnvironmentTemplate(
@@ -35,9 +11,8 @@ export async function ensureOfficeEnvironmentTemplate(
   const environment = OFFICE_ENVIRONMENTS.find((entry) => entry.id === id);
   if (!environment) throw new Error("Unknown office environment");
   const map = buildOfficeEnvironment(environment.id);
-  const spawnCol = Math.floor(map.width / 2);
-  const spawnRow = map.height - 3;
-  const tag = `deskrpg-office-v2:${id}`;
+  const { col: spawnCol, row: spawnRow } = effectiveMapSpawn(map)!;
+  const tag = `deskrpg-office-v${id === "agency" ? 3 : 2}:${id}`;
   const listResponse = await request("/api/map-templates");
   if (!listResponse.ok) throw new Error("Unable to load office environments");
   const list = await listResponse.json();

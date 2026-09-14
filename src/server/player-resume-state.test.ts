@@ -53,3 +53,12 @@ test("idle snapshots expire and bounded cache evicts oldest identity", () => {
   now = 103;
   assert.equal(store.get({ ...identity, userId: "c" }), undefined);
 });
+
+test("map refresh discards only the affected channel destinations", () => {
+  const store = new PlayerResumeStore();
+  store.save(state);
+  store.save({ ...state, mapId: "other" });
+  store.clearChannel(identity.mapId);
+  assert.equal(store.get(identity), undefined);
+  assert.equal(store.get({ ...identity, mapId: "other" })?.motion?.targetX, 600);
+});

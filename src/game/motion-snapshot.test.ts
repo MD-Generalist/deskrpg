@@ -56,3 +56,14 @@ test("ambient leader departure preserves an already owned call while restoring u
   );
   assert.equal(restoreOnSnapshot(true, false, called), true);
 });
+
+test("authoritative home adoption repairs a reactivated sprite and later roster reallocations", async () => {
+  const { adoptNpcMotionHome } = await import("./motion-snapshot");
+  const npc = { homeCol: 2, homeRow: 2 };
+  assert.equal(adoptNpcMotionHome(npc, { homeX: 432, homeY: 80 }), true);
+  assert.deepEqual(npc, { homeCol: 13, homeRow: 2 });
+  // A call/return consumer sees the new tile on every snapshot, not just creation.
+  assert.equal(adoptNpcMotionHome(npc, { homeX: 464, homeY: 80 }), true);
+  assert.deepEqual(npc, { homeCol: 14, homeRow: 2 });
+  assert.equal(adoptNpcMotionHome(npc, { homeX: 464, homeY: 80 }), false);
+});

@@ -1,3 +1,11 @@
+import {
+  channelRowRevisionExpression,
+  mapContentRevision,
+  mapUpgradeCondition,
+} from "@/lib/channel-map-revision";
+import { resolveChannelMapUpgrade } from "@/lib/channel-map-upgrade";
+import { backupChannelMap } from "@/lib/channel-map-backup";
+import { requestMapRefresh } from "@/lib/channel-map-refresh";
 import { db, tilesetImages, isPostgres, jsonForDb } from "@/db";
 import { channels, channelMembers, groupMembers, groups } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
@@ -37,27 +45,30 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   try {
-    const rows = await db
-      .select({
-        id: channels.id,
-        name: channels.name,
-        description: channels.description,
-        ownerId: channels.ownerId,
-        isPublic: channels.isPublic,
-        inviteCode: channels.inviteCode,
-        maxPlayers: channels.maxPlayers,
-        groupId: channels.groupId,
-        groupName: groups.name,
-        mapData: channels.mapData,
-        mapConfig: channels.mapConfig,
-        gatewayConfig: channels.gatewayConfig,
-        createdAt: channels.createdAt,
-        updatedAt: channels.updatedAt,
-      })
-      .from(channels)
-      .leftJoin(groups, eq(channels.groupId, groups.id))
-      .where(eq(channels.id, id))
-      .limit(1);
+    const loadSelected = () =>
+      db
+        .select({
+          id: channels.id,
+          name: channels.name,
+          description: channels.description,
+          ownerId: channels.ownerId,
+          isPublic: channels.isPublic,
+          inviteCode: channels.inviteCode,
+          maxPlayers: channels.maxPlayers,
+          groupId: channels.groupId,
+          groupName: groups.name,
+          mapData: channels.mapData,
+          mapConfig: channels.mapConfig,
+          gatewayConfig: channels.gatewayConfig,
+          createdAt: channels.createdAt,
+          updatedAt: channels.updatedAt,
+          rowRevision: channelRowRevisionExpression(channels.updatedAt, isPostgres),
+        })
+        .from(channels)
+        .leftJoin(groups, eq(channels.groupId, groups.id))
+        .where(eq(channels.id, id))
+        .limit(1);
+    const rows = await loadSelected();
 
     if (rows.length === 0) {
       return NextResponse.json(
@@ -66,7 +77,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
-    const channel = rows[0];
+    let channel = rows[0];
 
     // Check membership
     const memberRows = await db
@@ -118,6 +129,44 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
+    const resolved = await resolveChannelMapUpgrade<typeof channel>(channel, {
+      backup: backupChannelMap,
+      begin: (channelId) => requestMapRefresh("begin", channelId),
+      save: async (selected, mapData) => {
+        const [saved] = await db
+          .update(channels)
+          .set({
+            mapData: jsonForDb(mapData),
+            updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
+          })
+          .where(mapUpgradeCondition(channels, selected, isPostgres))
+          .returning({
+            mapData: channels.mapData,
+            updatedAt: channels.updatedAt,
+            rowRevision: channelRowRevisionExpression(channels.updatedAt, isPostgres),
+          });
+        return saved ? { ...selected, ...saved } : null;
+      },
+      refetch: async () => (await loadSelected())[0] ?? null,
+      finish: async (channelId, lease) => {
+        await requestMapRefresh("finish", channelId, lease);
+      },
+    });
+    if (!resolved)
+      return NextResponse.json(
+        { errorCode: "channel_not_found", error: "Channel not found" },
+        { status: 404 },
+      );
+    // A concurrent owner/privacy/group change must pass authorization anew.
+    if (
+      resolved.ownerId !== channel.ownerId ||
+      resolved.groupId !== channel.groupId ||
+      resolved.isPublic !== channel.isPublic
+    )
+      return GET(req, { params: Promise.resolve({ id }) });
+    channel = resolved;
+    const mapRevision = mapContentRevision(channel.mapData);
+
     // Restore tileset images in mapData if they were stripped
     const parsedMapData = parseDbJson<Record<string, unknown>>(channel.mapData) ?? channel.mapData;
     const parsedMapConfig =
@@ -154,10 +203,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const gatewayBinding = await getChannelGatewayBinding(id);
     const channelWithoutGateway = { ...channel } as Record<string, unknown>;
     delete channelWithoutGateway.gatewayConfig;
+    delete channelWithoutGateway.rowRevision;
     return NextResponse.json({
       channel: {
         ...channelWithoutGateway,
-        mapData: (channel as Record<string, unknown>).mapData ?? parsedMapData,
+        mapRevision,
+        mapData: parsedMapData,
         mapConfig: parsedMapConfig,
         isOwner,
         isMember,

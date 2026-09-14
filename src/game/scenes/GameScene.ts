@@ -1,3 +1,4 @@
+import { effectiveMapSpawn } from "../../lib/effective-map-spawn";
 import { tiledDirection, tiledVariant } from "../../lib/tiled-geometry";
 import { RemoteNpcPresentation } from "../remote-npc-presentation";
 import {
@@ -11,6 +12,7 @@ import {
   MotionSnapshotCache,
   restoreOnSnapshot,
   untouchedSpawn,
+  adoptNpcMotionHome,
   type MotionNpc,
   type MotionSnapshot,
 } from "../motion-snapshot";
@@ -1017,6 +1019,7 @@ export class GameScene extends Phaser.Scene {
     }
   >();
   private applyMotionNpc(npc: NpcSprite, state: MotionNpc, force = false) {
+    force = adoptNpcMotionHome(npc, state) || force;
     const previousOwner = this.npcOwnership.owner(npc.id);
     if (state.ownerSocketId) this.takeNpcOwnership(npc.id, state.ownerSocketId);
     else this.npcOwnership.clear(npc.id);
@@ -1652,6 +1655,7 @@ export class GameScene extends Phaser.Scene {
   private editorSelectedHighlight: Phaser.GameObjects.Graphics | null = null;
 
   // Channel
+  private mapRevision?: string;
   private channelId: string = "";
   private channelMapData: MapData | null = null;
   private tiledMode: boolean = false; // true when using Tiled JSON map (not legacy tilemap)
@@ -1862,6 +1866,7 @@ export class GameScene extends Phaser.Scene {
 
     if (initialChannelData) {
       this.channelId = initialChannelData.channelId;
+      this.mapRevision = initialChannelData.mapRevision;
 
       if (initialChannelData.tiledJson) {
         // Explicit Tiled JSON passed from game page
@@ -1887,6 +1892,12 @@ export class GameScene extends Phaser.Scene {
           this.tiledSpawnRow = config.spawnRow;
           this.mapConfigSpawnRow = config.spawnRow;
         }
+      }
+
+      const effectiveSpawn = effectiveMapSpawn(tiledJsonData, initialChannelData.mapConfig);
+      if (effectiveSpawn) {
+        this.tiledSpawnCol = this.mapConfigSpawnCol = effectiveSpawn.col;
+        this.tiledSpawnRow = this.mapConfigSpawnRow = effectiveSpawn.row;
       }
 
       // Restore saved position from last session
@@ -2100,6 +2111,9 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Spawn set mode events
+    this.eventScope.on("map-refresh-start", () => {
+      this.scene.pause();
+    });
     this.eventScope.on("spawn-set-mode-start", () => {
       this.spawnSetMode = true;
     });
@@ -3744,6 +3758,8 @@ export class GameScene extends Phaser.Scene {
         const npc = this.npcSprites.find((n) => n.id === action.npcId);
         if (!npc) return;
         npc.updateFromData(action.fields);
+        const motion = this.motionSnapshot.current?.npcs.find((state) => state.npcId === npc.id);
+        if (motion) this.applyMotionNpc(npc, motion);
         return;
       }
       const npcData: NpcData = { ...action.npc };
@@ -4076,6 +4092,7 @@ export class GameScene extends Phaser.Scene {
       characterName: this.characterName,
       appearance: this.appearance,
       mapId: this.channelId || "office",
+      mapRevision: this.mapRevision,
       x,
       y,
     });

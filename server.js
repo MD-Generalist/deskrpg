@@ -71,7 +71,7 @@ async function main() {
   // 없어졌다 — 페르소나는 DB 에만 남고, Hermes 프로필은 자기 홈을 직접 들고 있다.
   // 플레이어/세션 상태는 socket-handlers.ts 에 있다.
 
-  setupSocketHandlers(io);
+  const { refreshChannelMap } = setupSocketHandlers(io);
 
   // Internal HTTP endpoints for cross-process communication
   socketHttpServer.on("request", (req, res) => {
@@ -82,6 +82,32 @@ async function main() {
     if (!isInternalRequestAuthorized(req.headers)) {
       res.writeHead(403);
       res.end(JSON.stringify({ ok: false, error: "Forbidden" }));
+      return;
+    }
+
+    // Authenticated cross-process migration boundary, also registered locally in dev.
+    if (req.method === "POST" && req.url === "/_internal/map-refresh") {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", async () => {
+        try {
+          const { action, channelId, lease } = JSON.parse(body);
+          if (
+            !["begin", "finish"].includes(action) ||
+            typeof channelId !== "string" ||
+            channelId.length > 128
+          )
+            throw Error("Invalid request");
+          const result = await refreshChannelMap(action, channelId, lease);
+          res.writeHead(200);
+          res.end(JSON.stringify({ lease: result }));
+        } catch {
+          res.writeHead(503);
+          res.end(JSON.stringify({ error: "Map refresh unavailable" }));
+        }
+      });
       return;
     }
 

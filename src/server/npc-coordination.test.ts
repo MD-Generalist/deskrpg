@@ -1069,3 +1069,152 @@ test("inactive room cache evicts its oldest room at capacity while keeping recen
     await h.close();
   }
 });
+
+test("map refresh resets live walkers, reservations and destinations against the new layout", async () => {
+  let current = channel;
+  const h = await harness({ load: async () => current });
+  try {
+    const a = await h.connect("a"),
+      b = await h.connect("a");
+    assert.equal((await ack(a, "npc:call", { npcId: "n1" })).ok, true);
+    assert.equal(
+      (await ack(a, "npc:position-update", { npcId: "n1", x: 220, y: 200, direction: "down" })).ok,
+      true,
+    );
+    assert.equal((await ack(b, "seat:claim", { seatId: "128:128" })).ok, true);
+    current = { ...channel, npcs: [{ id: "n1", x: 320, y: 320 }], seats: [] };
+    await h.coord.reset("a");
+    const positions = await h.coord.occupancy("a");
+    assert.ok(positions.some((p) => p.x === 320 && p.y === 320));
+    assert.ok(!positions.some((p) => p.x === 32 && p.y === 32));
+    const snapshotReady = stateEvent(b, () => true);
+    await h.coord.joined(h.servers.get(b.socket.id!)!, "a");
+    const snapshot = await snapshotReady;
+    assert.deepEqual(snapshot.seats, []);
+    assert.equal(snapshot.npcs[0].phase, "idle");
+    assert.equal(snapshot.npcs[0].moving, false);
+    assert.equal(snapshot.npcs[0].continuation ?? null, null);
+  } finally {
+    await h.close();
+  }
+});
+
+test("an in-flight actor claim cannot publish an evicted layout after map refresh", async () => {
+  let delayed = false;
+  let release!: (value: CoordinationChannel) => void;
+  let announce!: () => void;
+  const started = new Promise<void>((r) => {
+    announce = r;
+  });
+  const h = await harness({
+    load: async () => {
+      if (!delayed) return channel;
+      announce();
+      return new Promise<CoordinationChannel>((r) => {
+        release = r;
+      });
+    },
+  });
+  try {
+    const client = await h.connect("a");
+    await h.coord.reset("a");
+    delayed = true;
+    const pending = ack(client, "npc:call", { npcId: "n1" });
+    await started;
+    await h.coord.reset("a");
+    delayed = false;
+    release(channel);
+    assert.equal((await pending).ok, false, "evicted state must not retain authority");
+  } finally {
+    await h.close();
+  }
+});
+
+test("roster reallocation changes authoritative home and discards an ambient continuation to the previous home", async () => {
+  let current = channel;
+  const h = await harness({ load: async () => current });
+  try {
+    const a = await h.connect("a");
+    assert.equal(
+      (
+        await ack(a, "npc:position-update", {
+          npcId: "n1",
+          x: 220,
+          y: 200,
+          direction: "down",
+          continuation: {
+            ambientSchedule: { phase: "roam", elapsed: 1200, duration: 25000, pause: 800 },
+            path: [{ x: 1, y: 1 }],
+          },
+        })
+      ).ok,
+      true,
+    );
+    current = {
+      ...channel,
+      sanitizedHomes: true,
+      npcs: channel.npcs.map((n) => (n.id === "n1" ? { ...n, x: 320, y: 320 } : n)),
+    };
+    const changed = stateEvent(a, (s) => s.npcs[0].homeX === 320);
+    await h.coord.invalidate("a");
+    const snapshot = await changed;
+    const npc = snapshot.npcs[0];
+    assert.equal(npc.continuation ?? null, null);
+    assert.equal(npc.phase, "idle");
+    assert.equal(npc.homeY, 320);
+    assert.deepEqual([npc.x, npc.y], [320, 320]);
+  } finally {
+    await h.close();
+  }
+});
+
+test("delayed v2 invalidation cannot overwrite fresh v3 clients after reset", async () => {
+  let loads = 0;
+  let release!: (data: CoordinationChannel) => void;
+  let announce!: () => void;
+  const waiting = new Promise<void>((r) => {
+    announce = r;
+  });
+  const v3 = {
+    ...channel,
+    sanitizedHomes: true,
+    npcs: channel.npcs.map((n) => ({ ...n, x: n.x + 288, y: n.y + 288 })),
+  };
+  const h = await harness({
+    load: async () => {
+      loads++;
+      if (loads === 1) return channel;
+      if (loads === 2) {
+        announce();
+        return new Promise<CoordinationChannel>((r) => {
+          release = r;
+        });
+      }
+      return v3;
+    },
+  });
+  try {
+    const old = await h.connect("a");
+    await ack(old, "npc:call", { npcId: "n1" });
+    const oldRevision = old.latest.revision;
+    const pending = h.coord.invalidate("a");
+    await waiting;
+    await h.coord.reset("a");
+    h.players.clear();
+    old.socket.disconnect();
+    const fresh = await h.connect("a");
+    const snapshotBefore = structuredClone(fresh.latest);
+    release(channel);
+    await pending;
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(fresh.latest.npcs[0].homeX, 320, "stale v2 must never broadcast over v3");
+    assert.deepEqual(fresh.latest, snapshotBefore);
+    assert.ok(
+      fresh.latest.revision > oldRevision,
+      "new epoch revision must exceed all old geometry revisions",
+    );
+    assert.equal((await h.coord.occupancy("a"))[0].x, 320);
+  } finally {
+    await h.close();
+  }
+});

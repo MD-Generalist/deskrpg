@@ -44,11 +44,29 @@ test("DM socket sends correlated live state, restores history without duplicate 
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("1h")
     .sign(new TextEncoder().encode(process.env.JWT_SECRET || DEV_JWT_SECRET));
+  const middleware: Array<(packet: [string, unknown], next: () => void) => void> = [];
   const socket = {
+    data: {} as Record<string, unknown>,
+    use: (handler: (packet: [string, unknown], next: () => void) => void) => {
+      middleware.push(handler);
+    },
     id: "dm-ux-test-socket",
     handshake: { headers: { cookie: `token=${token}` } },
     on: (event: string, handler: (payload: unknown) => Promise<void>) => {
-      handlers.set(event, handler);
+      handlers.set(event, async (payload) => {
+        let allowed = true;
+        for (const guard of middleware) {
+          let continued = false;
+          guard([event, payload], () => {
+            continued = true;
+          });
+          if (!continued) {
+            allowed = false;
+            break;
+          }
+        }
+        if (allowed) await handler(payload);
+      });
     },
     emit: (event: string, payload: unknown) => {
       events.push([event, payload]);

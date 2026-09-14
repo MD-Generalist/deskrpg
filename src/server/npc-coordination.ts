@@ -16,6 +16,7 @@ export type NpcMotion = {
   continuation?: MotionContinuation | null;
 };
 export type CoordinationChannel = {
+  sanitizedHomes?: boolean;
   npcs: { id: string; x: number; y: number }[];
   seats: { id: string; x: number; y: number }[];
   bounds?: { width: number; height: number };
@@ -37,6 +38,7 @@ type Reservation = {
   expires: number;
 };
 type Channel = {
+  source: Promise<Channel>;
   channelId: string;
   identities: Map<string, string>;
   disconnected: Map<
@@ -62,6 +64,15 @@ const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
 /** Process-local authority. DB homes and seat anchors are inputs; no pathfinding or AI calls. */
 export function createNpcCoordination(io: Server, dependencies: CoordinationDependencies) {
   const channels = new Map<string, Promise<Channel>>();
+  // Keep the revision watermark across reset: fresh geometry must outrank any
+  // snapshot clients received before the refresh.
+  const revisions = new Map<string, number>();
+  const nextRevision = (id: string) => {
+    const revision = (revisions.get(id) ?? -1) + 1;
+    revisions.set(id, revision);
+    return revision;
+  };
+  const isCurrent = (state: Channel) => channels.get(state.channelId) === state.source;
   const now = dependencies.now ?? Date.now;
   const inactive = new Map<
     string,
@@ -113,39 +124,51 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       )
       .sort();
   const leader = (channelId: string, exclude?: string) => members(channelId, exclude)[0] ?? null;
-  const create = (data: CoordinationChannel, channelId: string): Channel => ({
-    channelId,
-    identities: new Map(),
-    disconnected: new Map(),
-    data,
-    revision: 0,
-    excursions: new Set(),
-    ambientLeaderId: null,
-    reservations: new Map(),
-    players: new Map(),
-    npcs: new Map(
-      data.npcs.map((npc) => [
-        npc.id,
-        {
-          npcId: npc.id,
-          x: npc.x,
-          y: npc.y,
-          homeX: npc.x,
-          homeY: npc.y,
-          direction: "down",
-          ownerSocketId: null,
-          phase: "idle",
-          moving: false,
-          revision: 0,
-        },
-      ]),
-    ),
-  });
+  const create = (
+    data: CoordinationChannel,
+    channelId: string,
+    source: Promise<Channel>,
+  ): Channel => {
+    const revision = nextRevision(channelId);
+    return {
+      channelId,
+      source,
+      identities: new Map(),
+      disconnected: new Map(),
+      data,
+      revision,
+      excursions: new Set(),
+      ambientLeaderId: null,
+      reservations: new Map(),
+      players: new Map(),
+      npcs: new Map(
+        data.npcs.map((npc) => [
+          npc.id,
+          {
+            npcId: npc.id,
+            x: npc.x,
+            y: npc.y,
+            homeX: npc.x,
+            homeY: npc.y,
+            direction: "down",
+            ownerSocketId: null,
+            phase: "idle",
+            moving: false,
+            revision,
+          },
+        ]),
+      ),
+    };
+  };
   const load = (channelId: string) => {
     if ((inactive.get(channelId)?.expires ?? Infinity) <= now()) evict(channelId);
     let pending = channels.get(channelId);
     if (!pending) {
-      pending = dependencies.loadChannel(channelId).then((data) => create(data, channelId));
+      const replacement: Promise<Channel> = dependencies.loadChannel(channelId).then((data) => {
+        if (channels.get(channelId) !== replacement) throw Error("Stale channel load");
+        return create(data, channelId, replacement);
+      });
+      pending = replacement;
       channels.set(channelId, pending);
       void pending.catch(() => {
         if (channels.get(channelId) === pending) channels.delete(channelId);
@@ -165,7 +188,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
           state.npcs.get(reservation.actorId)?.phase !== "ambient"
         ) {
           state.reservations.delete(seatId);
-          state.revision++;
+          state.revision = nextRevision(state.channelId);
         }
       }
       for (const npc of state.npcs.values()) {
@@ -174,14 +197,15 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         npc.phase = "returning";
         npc.continuation = null;
         npc.moving = !!npc.ownerSocketId;
-        npc.revision = ++state.revision;
+        state.revision = nextRevision(state.channelId);
+        npc.revision = state.revision;
       }
     }
     if (inactive.has(state.channelId)) return;
     for (const [id, reservation] of state.reservations)
       if (!reservation.arrived && reservation.expires <= now()) {
         state.reservations.delete(id);
-        state.revision++;
+        state.revision = nextRevision(state.channelId);
         const npc = state.npcs.get(reservation.actorId);
         if (
           npc?.phase === "ambient" &&
@@ -212,11 +236,12 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     };
   };
   const broadcast = (channelId: string, state: Channel) => {
+    if (!isCurrent(state)) return;
     state.ambientLeaderId = leader(channelId);
     return io.to(channelId).emit("npc:motion-state", snapshot(channelId, state));
   };
   const changed = (state: Channel, npc?: NpcMotion) => {
-    state.revision++;
+    state.revision = nextRevision(state.channelId);
     if (npc) npc.revision = state.revision;
   };
   const releaseActor = (state: Channel, actorId: string) => {
@@ -253,9 +278,13 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   };
   async function authorized(socket: Socket, channelId: unknown) {
     if (!member(socket, channelId)) return null;
-    const state = await load(channelId);
-    // The await must not grant authority after leave/disconnect/channel switch.
-    return member(socket, channelId) && socket.connected ? state : null;
+    const pending = load(channelId);
+    const state = await pending;
+    // A map reset can finish while this load is pending. The old promise must
+    // never regain authority, even if the same socket has already rejoined.
+    return channels.get(channelId) === pending && member(socket, channelId) && socket.connected
+      ? state
+      : null;
   }
   function register(socket: Socket) {
     const handle = (
@@ -277,7 +306,12 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         const payload = raw as Record<string, unknown>;
         try {
           const state = await authorized(socket, payload.channelId);
-          if (!state) {
+          if (
+            !state ||
+            !isCurrent(state) ||
+            !member(socket, payload.channelId) ||
+            !socket.connected
+          ) {
             reply({ ok: false, error: "forbidden" });
             return;
           }
@@ -525,7 +559,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   };
   async function joined(socket: Socket, channelId: string) {
     const state = await authorized(socket, channelId);
-    if (state) {
+    if (state && isCurrent(state) && member(socket, channelId) && socket.connected) {
       const dormant = inactive.get(channelId);
       if (dormant) {
         const paused = Math.max(0, now() - dormant.startedAt);
@@ -561,7 +595,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   async function moved(socket: Socket, x: number, y: number) {
     const channelId = dependencies.getPlayer(socket.id)?.mapId;
     const state = await authorized(socket, channelId);
-    if (!state || !validPoint(state, x, y)) return;
+    if (
+      !state ||
+      !isCurrent(state) ||
+      !member(socket, channelId) ||
+      !socket.connected ||
+      !validPoint(state, x, y)
+    )
+      return;
     const revision = state.revision;
     state.players.set(socket.id, { x, y });
     prune(state);
@@ -580,6 +621,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     } catch {
       return;
     }
+    if (!isCurrent(state)) return;
     state.players.delete(socket.id);
     const next = leader(channelId, socket.id);
     const key = state.identities.get(socket.id);
@@ -591,6 +633,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         void channels
           .get(channelId)
           ?.then((current) => {
+            if (!isCurrent(current)) return;
             const revision = current.revision;
             prune(current);
             if (current.revision !== revision && members(channelId).length)
@@ -633,7 +676,12 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   async function invalidate(channelId: string) {
     const pending = channels.get(channelId);
     if (!pending) return;
-    const old = await pending;
+    let old: Channel;
+    try {
+      old = await pending;
+    } catch {
+      return;
+    }
     if (
       channels.get(channelId) !== pending ||
       (!members(channelId).length && !inactive.has(channelId))
@@ -641,19 +689,32 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       if (channels.get(channelId) === pending) channels.delete(channelId);
       return;
     }
-    const replacement = dependencies.loadChannel(channelId).then((data) => {
-      const state = create(data, channelId);
+    const replacement: Promise<Channel> = dependencies.loadChannel(channelId).then((data) => {
+      if (channels.get(channelId) !== replacement) throw Error("Stale channel invalidation");
+      const state = create(data, channelId, replacement);
       state.identities = old.identities;
       state.disconnected = old.disconnected;
-      state.revision = old.revision + 1;
       state.players = old.players;
       state.excursions = new Set([...old.excursions].filter((id) => state.npcs.has(id)));
+      const reallocated = new Set<string>();
       for (const [id, npc] of state.npcs) {
         const previous = old.npcs.get(id);
-        if (previous) state.npcs.set(id, { ...previous, homeX: npc.homeX, homeY: npc.homeY });
+        if (
+          data.sanitizedHomes &&
+          previous &&
+          (previous.homeX !== npc.homeX || previous.homeY !== npc.homeY)
+        ) {
+          // Roster allocation can move an invalid persisted home. The old seat,
+          // live position and continuation may now belong to another actor.
+          reallocated.add(id);
+          state.excursions.delete(id);
+          npc.revision = state.revision;
+        } else if (previous)
+          state.npcs.set(id, { ...previous, homeX: npc.homeX, homeY: npc.homeY });
       }
       for (const [id, reservation] of old.reservations)
         if (
+          !reallocated.has(reservation.actorId) &&
           data.seats.some((seat) => seat.id === id) &&
           (state.npcs.has(reservation.actorId) ||
             state.disconnected.has(reservation.actorId) ||
@@ -665,6 +726,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     channels.set(channelId, replacement);
     try {
       const state = await replacement;
+      if (!isCurrent(state)) return;
       if (!members(channelId).length) {
         if (!inactive.has(channelId) && channels.get(channelId) === replacement)
           channels.delete(channelId);
@@ -675,9 +737,16 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       if (channels.get(channelId) === replacement) channels.delete(channelId);
     }
   }
+  /** Map replacement is a hard runtime boundary: no old reservations or paths survive. */
+  async function reset(channelId: string) {
+    evict(channelId);
+    // Fresh joins load/sanitize homes from the new map. No old owner can retain
+    // a reservation; a channel deleted during CAS does not poison reset.
+  }
   async function occupancy(channelId: string, excludePlayerId?: string) {
     const pending = load(channelId);
     const state = await pending;
+    if (!isCurrent(state)) throw Error("Stale channel occupancy");
     const positions = [...state.npcs.values()]
       .map(({ x, y }) => ({ x, y }))
       .concat(
@@ -695,5 +764,5 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     return positions;
   }
 
-  return { register, joined, moved, left, invalidate, occupancy };
+  return { register, joined, moved, left, invalidate, reset, occupancy };
 }

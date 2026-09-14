@@ -51,3 +51,18 @@ export function untouchedSpawn(
 export function restoreOnSnapshot(first: boolean, becameLeader: boolean, npc: MotionNpc) {
   return first || (becameLeader && !npc.ownerSocketId);
 }
+
+/** Runtime home changes must reach every return/ambient consumer, including an
+ * existing sprite whose roster allocation changed after another NPC clocked in. */
+export function adoptNpcMotionHome(
+  npc: { homeCol: number; homeRow: number },
+  state: { homeX: number; homeY: number },
+): boolean {
+  const col = state.homeX / 32 - 0.5,
+    row = state.homeY / 32 - 0.5;
+  if (!Number.isFinite(col) || !Number.isFinite(row)) return false;
+  const changed = npc.homeCol !== col || npc.homeRow !== row;
+  npc.homeCol = col;
+  npc.homeRow = row;
+  return changed;
+}

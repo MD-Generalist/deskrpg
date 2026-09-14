@@ -139,3 +139,52 @@ test("edited themed maps keep edits and GameScene's no-Collision legacy wall fal
   assert.equal(layout.isWalkable(15, 19), false);
   assert.notDeepEqual(closestValidUnoccupiedSpawn(layout, { x: 496, y: 624 }), { x: 496, y: 624 });
 });
+
+test("v3 runtime repairs invalid and colliding NPC homes without editing persisted assignments", () => {
+  const map = buildOfficeEnvironment("agency");
+  const rows = [
+    { id: "a", positionX: 999, positionY: 999 },
+    { id: "b", positionX: 0, positionY: 0 },
+    { id: "c", positionX: 0, positionY: 0 },
+  ];
+  const before = structuredClone(rows);
+  const layout = deriveChannelMotionLayout({ mapData: map }, rows)!;
+  assert.equal(layout.npcs.length, 3);
+  assert.equal(new Set(layout.npcs.map((n) => `${n.x}:${n.y}`)).size, 3);
+  for (const npc of layout.npcs) {
+    assert.ok(layout.canStandAt(npc));
+    assert.ok(layout.seats.some((s) => s.x === npc.x && s.y === npc.y));
+  }
+  assert.deepEqual(rows, before);
+});
+
+test("v3 repairs malformed placed coordinates without dropping actors and keeps valid homes reserved", () => {
+  const map = buildOfficeEnvironment("agency");
+  const base = deriveChannelMotionLayout({ mapData: map }, [])!;
+  const seat = [...base.seats].sort(
+    (a, b) => Math.hypot(a.x - 32000, a.y - 32000) - Math.hypot(b.x - 32000, b.y - 32000),
+  )[0];
+  const rows = [
+    { id: "a", positionX: 999, positionY: 999 },
+    { id: "b", positionX: NaN, positionY: 2 },
+    { id: "z", positionX: Math.floor(seat.x / 32), positionY: Math.floor(seat.y / 32) },
+  ];
+  const layout = deriveChannelMotionLayout({ mapData: map }, rows)!;
+  assert.equal(layout.npcs.length, 3);
+  assert.deepEqual(
+    layout.npcs.find((n) => n.id === "z"),
+    { id: "z", x: seat.x, y: seat.y },
+  );
+  for (const npc of layout.npcs) assert.ok(layout.canStandAt(npc));
+});
+
+test("v3 fractional saved NPC homes become tile-centered runtime seats for client/server parity", () => {
+  const map = buildOfficeEnvironment("agency");
+  const layout = deriveChannelMotionLayout({ mapData: map }, [
+    { id: "fractional", positionX: 23.1, positionY: 23 },
+  ])!;
+  const npc = layout.npcs[0];
+  assert.equal(npc.x % 32, 16);
+  assert.equal(npc.y % 32, 16);
+  assert.ok(layout.seats.some((s) => s.x === npc.x && s.y === npc.y));
+});

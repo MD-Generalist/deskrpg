@@ -5,6 +5,17 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { clearSegment, type NavigationPoint, type Walkable } from "./navigation";
 import { findTrafficPath, TrafficCoordinator, clearActors } from "./traffic";
+import { findTaggedDestinationPath, readAmbientZones } from "./ambient-zones";
+import { buildOfficeEnvironment } from "./three/office-environments";
+import { tiledSnapshot } from "./three/tiled-preview";
+
+type NpcPathfinder = (
+  sx: number,
+  sy: number,
+  ex: number,
+  ey: number,
+  valid: Walkable,
+) => NavigationPoint[] | null;
 
 // Execute the real controller without starting a WebGL/Phaser scene in node.
 const source = readFileSync(new URL("./scenes/GameScene.ts", import.meta.url), "utf8");
@@ -20,26 +31,26 @@ type RuntimeNpc = {
   pixelY: number;
   moveState: string;
   actuallyWalking: boolean;
-  currentPath: NavigationPoint[];
+  currentPath: NavigationPoint[] | null;
+  destinationTag: string | null;
+  destinationTarget: NavigationPoint | null;
+  purposeAccessOrigin: NavigationPoint | null;
   updateMovement(
     delta: number,
     playerX: number,
     playerY: number,
-    plan: (
-      sx: number,
-      sy: number,
-      ex: number,
-      ey: number,
-      valid: Walkable,
-    ) => NavigationPoint[] | null,
+    plan: NpcPathfinder,
     valid: Walkable,
-    step: (p: NavigationPoint, goal: NavigationPoint, amount: number) => NavigationPoint,
+    step?: (p: NavigationPoint, goal: NavigationPoint, amount: number) => NavigationPoint,
   ): string;
 };
 const scope: Record<string, unknown> = {
   Phaser: { GameObjects: { Sprite: class {} } },
   TILE_SIZE: 32,
   clearSegment,
+  clearActors,
+  findTrafficPath,
+  findTaggedDestinationPath,
   DIR_LEFT: 1,
   DIR_RIGHT: 2,
   DIR_UP: 3,
@@ -88,9 +99,9 @@ for (const state of ["strolling", "returning", "moving-to-player"]) {
     }
     assert.equal(replans, 1);
     assert.equal(npc.moveState, state);
-    assert.deepEqual(JSON.parse(JSON.stringify(npc.currentPath.at(-1))), { x: 7, y: 2 });
+    assert.deepEqual(JSON.parse(JSON.stringify(npc.currentPath!.at(-1))), { x: 7, y: 2 });
     assert.ok(
-      npc.currentPath.some((p: NavigationPoint) => p.y !== 2),
+      npc.currentPath!.some((p: NavigationPoint) => p.y !== 2),
       "detour leaves the blocked row",
     );
   });
@@ -112,7 +123,7 @@ test("unreachable stroll retains its seat goal and retries at a bounded interval
     );
   assert.equal(replans, 3);
   assert.equal(npc.actuallyWalking, false);
-  assert.equal(npc.currentPath.at(-1)!.x, 7);
+  assert.equal(npc.currentPath!.at(-1)!.x, 7);
   assert.equal(npc.moveState, "strolling");
 });
 
@@ -141,4 +152,58 @@ test("stroll really passes a stationary player and reaches the original destinat
   assert.equal(npc.moveState, "idle");
   assert.ok(detoured);
   assert.ok(Math.hypot(npc.pixelX / 32 - 0.5 - 7, npc.pixelY / 32 - 0.5 - 2) < 0.1);
+});
+
+const pathfinderSource = source.slice(
+  source.indexOf("  private npcPathfinder("),
+  source.indexOf("  private createNpcWalkValidator("),
+);
+const pathfinderCode = ts.transpileModule(
+  `class PathController { ${pathfinderSource} }\nglobalThis.PathController = PathController;`,
+  { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+).outputText;
+runInNewContext(pathfinderCode, scope);
+
+test("tagged retry starts at the current tile and keeps the fixed purpose destination", () => {
+  const map = buildOfficeEnvironment("agency");
+  const snapshot = tiledSnapshot(map);
+  const zones = readAmbientZones(map as unknown as Record<string, unknown>);
+  const blocked = new Set(snapshot.blocked);
+  const walkable = (x: number, y: number) =>
+    x >= 1 && x < snapshot.cols - 1 && y >= 1 && y < snapshot.rows && !blocked.has(`${x},${y}`);
+  const runtime = Object.assign(
+    new (
+      scope.PathController as new () => {
+        npcPathfinder(npc: RuntimeNpc): NpcPathfinder;
+      }
+    )(),
+    { ambientZones: zones, trafficActors: () => [] },
+  );
+  const npc = actor("moving-to-player");
+  Object.assign(npc, {
+    pixelX: (11 + 0.5) * 32,
+    pixelY: (15 + 0.5) * 32,
+    currentPath: null,
+    pathRecalcTimer: 900,
+    destinationTag: "photo",
+    destinationTarget: { x: 5, y: 8 },
+    purposeAccessOrigin: { x: 23, y: 23 },
+  });
+  const plan = runtime.npcPathfinder(npc);
+
+  npc.updateMovement(100, 1000, 1000, plan, walkable);
+  assert.deepEqual(JSON.parse(JSON.stringify(npc.currentPath?.[0])), { x: 11, y: 15 });
+  assert.notDeepEqual(JSON.parse(JSON.stringify(npc.currentPath?.[0])), { x: 23, y: 23 });
+  assert.deepEqual(JSON.parse(JSON.stringify(npc.currentPath?.at(-1))), { x: 5, y: 8 });
+  assert.deepEqual(JSON.parse(JSON.stringify(npc.destinationTarget)), { x: 5, y: 8 });
+  assert.equal(npc.destinationTag, "photo");
+
+  for (let frame = 0; frame < 300 && npc.moveState !== "waiting"; frame++) {
+    const before = { x: npc.pixelX / 32 - 0.5, y: npc.pixelY / 32 - 0.5 };
+    npc.updateMovement(50, 1000, 1000, plan, walkable);
+    const after = { x: npc.pixelX / 32 - 0.5, y: npc.pixelY / 32 - 0.5 };
+    assert.ok(clearSegment(before, after, walkable), `body-clear retry frame ${frame}`);
+  }
+  assert.equal(npc.moveState, "waiting");
+  assert.ok(Math.hypot(npc.pixelX / 32 - 0.5 - 5, npc.pixelY / 32 - 0.5 - 8) < 0.1);
 });

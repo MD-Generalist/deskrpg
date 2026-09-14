@@ -1,3 +1,8 @@
+import { broadcastNpcUpdate } from "./npc-update-broadcast";
+import { mapContentRevision } from "../lib/channel-map-revision";
+import { createChannelMapRefresh } from "./channel-map-refresh";
+import { registerMapRefreshHandler } from "../lib/channel-map-refresh";
+import { effectiveMapSpawn, isCreativeStudioMap } from "../lib/effective-map-spawn";
 import {
   PlayerResumeStore,
   readPlayerDestination,
@@ -1357,7 +1362,10 @@ export function setupSocketHandlers(io: Server) {
   const loadMotionLayout = async (channelId: string) => {
     const [[channel], channelNpcs] = await Promise.all([
       db
-        .select({ mapData: channels.mapData, mapConfig: channels.mapConfig })
+        .select({
+          mapData: channels.mapData,
+          mapConfig: channels.mapConfig,
+        })
         .from(channels)
         .where(eq(channels.id, channelId))
         .limit(1),
@@ -1372,12 +1380,66 @@ export function setupSocketHandlers(io: Server) {
           .map((npc) => ({ id: npc.id, positionX: npc.positionX!, positionY: npc.positionY! })),
       );
     if (!layout) throw new Error("Channel motion layout unavailable");
-    return layout;
+    return {
+      ...layout,
+      spawn: effectiveMapSpawn(channel.mapData, channel.mapConfig),
+      revision: mapContentRevision(channel.mapData),
+      requiresRevision: isCreativeStudioMap(channel.mapData),
+    };
+  };
+  const selectRuntimeNpc = async (npcId: string) => {
+    const npc = await selectNpcById(npcId);
+    if (!npc || !npc.active || npc.positionX === null || npc.positionY === null) return npc;
+    const [channel] = await db
+      .select({ mapData: channels.mapData })
+      .from(channels)
+      .where(eq(channels.id, npc.channelId))
+      .limit(1);
+    if (!channel || !isCreativeStudioMap(channel.mapData)) return npc;
+    const layout = await loadMotionLayout(npc.channelId);
+    const home = layout.npcs.find((home) => home.id === npcId);
+    return home ? { ...npc, positionX: home.x / 32 - 0.5, positionY: home.y / 32 - 0.5 } : null;
   };
   const coordination = createNpcCoordination(io, {
-    getPlayer: (id) => players.get(id),
+    getPlayer: (id) => {
+      const player = players.get(id);
+      return player &&
+        !mapRefresh.isPaused(player.mapId) &&
+        !io.sockets.sockets.get(id)?.data.mapRefreshRequired
+        ? player
+        : undefined;
+    },
     loadChannel: loadMotionLayout,
   });
+
+  const mapRefresh = createChannelMapRefresh({
+    pause: async (id) => {
+      io.to(id).emit("map:refresh", { channelId: id, protocolVersion: 1, phase: "begin" });
+    },
+    reset: async (id) => {
+      await coordination.reset(id);
+      playerResumeStates.clearChannel(id);
+      for (const [socketId, player] of players)
+        if (player.mapId === id) {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket) socket.data.mapRefreshRequired = true;
+          players.delete(socketId);
+        }
+    },
+    ready: (id) => {
+      io.to(id).emit("map:refresh", { channelId: id, protocolVersion: 1, phase: "ready" });
+    },
+  });
+  const refreshChannelMap = async (
+    action: "begin" | "finish",
+    channelId: string,
+    lease?: string,
+  ) => {
+    if (action === "begin") return mapRefresh.begin(channelId);
+    await mapRefresh.finish(channelId, lease ?? "");
+    return null;
+  };
+  registerMapRefreshHandler(refreshChannelMap);
 
   if (!progressNudgeTimer) {
     progressNudgeTimer = setInterval(() => {
@@ -1392,6 +1454,17 @@ export function setupSocketHandlers(io: Server) {
       return;
     }
 
+    socket.use((packet, next) => {
+      const player = players.get(socket.id);
+      const mapId = packet[0] === "player:join" ? packet[1]?.mapId : player?.mapId;
+      if (typeof mapId === "string" && mapRefresh.isPaused(mapId)) {
+        if (packet[0] === "player:join")
+          socket.emit("map:refresh", { channelId: mapId, protocolVersion: 1, phase: "ready" });
+        return;
+      }
+      if (socket.data.mapRefreshRequired && packet[0] !== "player:join") return;
+      next();
+    });
     coordination.register(socket);
 
     // ----- player:join -----
@@ -1402,9 +1475,11 @@ export function setupSocketHandlers(io: Server) {
         characterName: string;
         appearance: unknown;
         mapId: string;
+        mapRevision?: string;
         x: number;
         y: number;
       }) => {
+        const mapGeneration = mapRefresh.generation(data.mapId);
         const accessResult = await getSocketChannelParticipationAccess(data.mapId, user.userId);
         if (!accessResult) {
           socket.emit("channel:access-denied", {
@@ -1450,6 +1525,7 @@ export function setupSocketHandlers(io: Server) {
         const resume = playerResumeStates.get(identity);
         let spawn = resume ? { x: resume.x, y: resume.y } : { x: data.x, y: data.y };
         let restored = !!resume;
+        let admittedMapRevision: string;
         try {
           if (!resume) {
             const [saved] = await db
@@ -1473,6 +1549,36 @@ export function setupSocketHandlers(io: Server) {
             }
           }
           const layout = await loadMotionLayout(data.mapId);
+          if (
+            mapRefresh.isPaused(data.mapId) ||
+            mapRefresh.generation(data.mapId) !== mapGeneration
+          ) {
+            socket.emit("map:refresh", {
+              channelId: data.mapId,
+              protocolVersion: 1,
+              phase: "ready",
+            });
+            return;
+          }
+          const missingRevision =
+            typeof data.mapRevision !== "string" || data.mapRevision.length === 0;
+          if ((layout.requiresRevision || socket.data.mapRefreshRequired) && missingRevision) {
+            // Old bundles understand join-error but not map:refresh. They must
+            // bootstrap through a fresh channel GET before regaining authority.
+            socket.emit("join-error");
+            socket.disconnect(true);
+            return;
+          }
+          if (!missingRevision && data.mapRevision !== layout.revision) {
+            socket.emit("map:refresh", {
+              channelId: data.mapId,
+              protocolVersion: 1,
+              phase: "ready",
+            });
+            return;
+          }
+          if (!restored && layout.spawn)
+            spawn = { x: (layout.spawn.col + 0.5) * 32, y: (layout.spawn.row + 0.5) * 32 };
           const liveActors = await coordination.occupancy(data.mapId, socket.id);
           // No await between final allocation and players.set: concurrent joins see this slot.
           const occupied = Array.from(players.values()).filter(
@@ -1482,15 +1588,29 @@ export function setupSocketHandlers(io: Server) {
             ...occupied,
             ...liveActors,
           ]);
+          if (
+            mapRefresh.isPaused(data.mapId) ||
+            mapRefresh.generation(data.mapId) !== mapGeneration
+          ) {
+            socket.emit("map:refresh", {
+              channelId: data.mapId,
+              protocolVersion: 1,
+              phase: "ready",
+            });
+            return;
+          }
           if (!candidate || !socket.connected) {
             socket.emit("join-error");
             return;
           }
           spawn = candidate;
+          admittedMapRevision = layout.revision;
         } catch {
           socket.emit("join-error");
           return;
         }
+        socket.data.mapRefreshRequired = false;
+        socket.data.mapRevision = admittedMapRevision;
         const playerState: PlayerState = {
           id: socket.id,
           userId: user.userId,
@@ -1507,7 +1627,14 @@ export function setupSocketHandlers(io: Server) {
 
         players.set(socket.id, playerState);
         playerResumeStates.save(playerState);
+        const admissionCurrent = () =>
+          players.get(socket.id) === playerState &&
+          socket.connected &&
+          !socket.data.mapRefreshRequired &&
+          !mapRefresh.isPaused(data.mapId) &&
+          mapRefresh.generation(data.mapId) === mapGeneration;
         await socket.join(data.mapId);
+        if (!admissionCurrent()) return;
         socket.emit("player:spawn", {
           ...spawn,
           direction: playerState.direction,
@@ -1516,6 +1643,7 @@ export function setupSocketHandlers(io: Server) {
           motion: playerState.motion,
         });
         await coordination.joined(socket, data.mapId);
+        if (!admissionCurrent()) return;
 
         // Send current players on this map to the joining player
         const mapPlayers = Array.from(players.values()).filter(
@@ -1528,6 +1656,7 @@ export function setupSocketHandlers(io: Server) {
         // 그 판단보다 앞서 도착해 화면이 두 번 바뀐다.
 
         await deliverPendingReportsToSocket(socket, user.userId, data.mapId);
+        if (!admissionCurrent()) return;
 
         // Broadcast to others in the same map
         socket.to(data.mapId).emit("player:joined", playerState);
@@ -1992,11 +2121,24 @@ export function setupSocketHandlers(io: Server) {
     });
 
     socket.on("npc:broadcast-update", (data: unknown) => {
-      const player = players.get(socket.id);
-      if (!player) return;
-      invalidateRoomRuntimesForChannel(player.mapId);
-      void coordination.invalidate(player.mapId);
-      socket.to(player.mapId).emit("npc:updated", data);
+      void broadcastNpcUpdate(socket, data, {
+        getPlayer: () => players.get(socket.id),
+        admittedRevision: () => socket.data.mapRevision,
+        generation: mapRefresh.generation,
+        isPaused: mapRefresh.isPaused,
+        requiresRefresh: () => !!socket.data.mapRefreshRequired,
+        selectNpc: selectRuntimeNpc,
+        readRevision: async (id) => {
+          const [row] = await db
+            .select({ mapData: channels.mapData })
+            .from(channels)
+            .where(eq(channels.id, id))
+            .limit(1);
+          return row ? mapContentRevision(row.mapData) : null;
+        },
+        invalidate: coordination.invalidate,
+        invalidateRooms: (id) => invalidateRoomRuntimesForChannel(id),
+      });
     });
 
     socket.on("npc:broadcast-remove", (data: unknown) => {
@@ -2470,6 +2612,7 @@ export function setupSocketHandlers(io: Server) {
         activeBrokers,
         user,
         isChannelOwner,
+        selectNpcById: selectRuntimeNpc,
         setNpcActive: async (npcId, active) => {
           await setNpcActive(npcId, active);
           const npc = await selectNpcById(npcId);
@@ -2563,4 +2706,5 @@ export function setupSocketHandlers(io: Server) {
       lastChatTime.delete(socket.id);
     });
   });
+  return { refreshChannelMap };
 }

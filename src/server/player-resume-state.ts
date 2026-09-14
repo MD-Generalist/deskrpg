@@ -60,6 +60,10 @@ export class PlayerResumeStore {
     while (this.entries.size > this.maxEntries)
       this.entries.delete(this.entries.keys().next().value!);
   }
+  clearChannel(channelId: string) {
+    for (const key of this.entries.keys())
+      if (JSON.parse(key)[2] === channelId) this.entries.delete(key);
+  }
   get(identity: PlayerIdentity): PlayerResumeState | undefined {
     const key = this.key(identity),
       entry = this.entries.get(key);

@@ -891,6 +891,15 @@ function GamePageInner() {
         router.push(`/channels?characterId=${characterId}`);
       });
 
+      socketInstance.on(
+        "map:refresh",
+        (data: { channelId: string; protocolVersion: number; phase: string }) => {
+          if (data.channelId !== channelId || data.protocolVersion !== 1) return;
+          if (data.phase === "begin") EventBus.emit("map-refresh-start");
+          if (data.phase === "ready") window.location.reload();
+        },
+      );
+
       socketInstance.on("channel:updated", (data: { name?: string; isPublic?: boolean }) => {
         setChannel((prev) => (prev ? { ...prev, ...data } : prev));
       });
@@ -1928,6 +1937,7 @@ function GamePageInner() {
 
           const nextPendingChannelData: PendingChannelData = {
             channelId: channelData.channel.id,
+            mapRevision: channelData.channel.mapRevision ?? "null",
             mapData: isTiledJson ? null : rawMapData || null,
             tiledJson: isTiledJson ? rawMapData : null,
             mapConfig:

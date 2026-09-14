@@ -46,6 +46,7 @@ export const EventBus = new SimpleEventEmitter();
 
 export type PendingChannelData = {
   channelId: string;
+  mapRevision?: string;
   mapData: unknown;
   tiledJson?: unknown;
   mapConfig?: unknown;
