@@ -318,13 +318,15 @@ test("R8/R9: create posts to the server, shows the 400 message verbatim, and sur
 });
 
 test("R26: a kanban:event tick refetches the board after the debounce", async () => {
-  const f = await mount(happy, { refreshTick: 0, debounceMs: 1 });
+  // 디바운스 창을 넉넉히 둔다 — 1ms 면 전체 스위트 부하에서 두 render 사이에 타이머가 먼저 터져
+  // 두 번 fetch 되는 일이 실제로 있었다(간헐 실패). 창 안에 두 tick 이 확실히 들어가게 50ms.
+  const f = await mount(happy, { refreshTick: 0, debounceMs: 50 });
   try {
     const before = f.calls.filter((c) => c.endsWith("/kanban/board")).length;
-    await f.render({ refreshTick: 1, debounceMs: 1 });
-    await f.render({ refreshTick: 2, debounceMs: 1 });
+    await f.render({ refreshTick: 1, debounceMs: 50 });
+    await f.render({ refreshTick: 2, debounceMs: 50 });
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 10));
+      await new Promise((r) => setTimeout(r, 150));
     });
     const after = f.calls.filter((c) => c.endsWith("/kanban/board")).length;
     assert.equal(after, before + 1, "two ticks inside the debounce window collapse into one fetch");
