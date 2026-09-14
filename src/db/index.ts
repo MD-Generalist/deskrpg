@@ -96,6 +96,8 @@ export const projectStamps = activeSchema.projectStamps;
 export const chatRooms = activeSchema.chatRooms;
 export const chatRoomMembers = activeSchema.chatRoomMembers;
 export const chatRoomMessages = activeSchema.chatRoomMessages;
+// DeskRPG 가 만든 Hermes cron 작업의 출처 장부(src/lib/cron-origins.ts 가 읽고 쓴다).
+export const cronJobOrigins = activeSchema.cronJobOrigins;
 
 // Use PG type for all API routes — Drizzle's runtime API is identical across dialects.
 type DbInstance = NodePgDatabase<typeof pgSchema>;
