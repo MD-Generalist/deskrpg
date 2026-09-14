@@ -696,6 +696,68 @@ test("전달 대상·템플릿 조회와 템플릿 인스턴스화(출처 기록
   assert.equal(await countOrigins(seed.gatewayId), 1);
 });
 
+test("스크립트 전용 잡은 prompt 없이 만들 수 있고, prompt 도 script 도 없으면 400", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedCronChannel();
+
+  const neither = await createJob(routes, seed.ownerId, seed.channelId, seed.npcId, {
+    prompt: undefined,
+  });
+  assert.equal(neither.status, 400);
+  assert.equal(neither.body.code, "invalid_body");
+
+  const before = server.requests().length;
+  const scripted = await createJob(routes, seed.ownerId, seed.channelId, seed.npcId, {
+    prompt: undefined,
+    script: "echo hello",
+  });
+  assert.equal(scripted.status, 201, JSON.stringify(scripted.body));
+  const sent = server
+    .requests()
+    .slice(before)
+    .find((r) => r.method === "POST" && r.path.endsWith("/cron/jobs"));
+  assert.ok(sent);
+  const json = sent.json as Record<string, unknown>;
+  assert.equal(json.script, "echo hello", "script 는 그대로 전달된다");
+  assert.equal("prompt" in json, false, "빈 prompt 를 지어내지 않는다");
+  assert.equal("npcId" in json, false);
+});
+
+test("게이트 진단은 뭉치지 않는다 — plugin_absent 는 404, 도달 실패는 503 unreachable", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedCronChannel();
+  const { db, gatewayResources, nowForDb } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+
+  // 신선한 plugin_absent 캐시 → Hermes 를 부르지 않고 404. 예전에는 이것을 428 로 오진했다.
+  await db
+    .update(gatewayResources)
+    .set({ pluginStatus: "plugin_absent", pluginCheckedAt: nowForDb(), pluginInfoJson: null })
+    .where(eq(gatewayResources.id, seed.gatewayId));
+  const before = server.requests().length;
+  const absent = await routes.jobs.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/jobs`),
+    ctx(seed.channelId),
+  );
+  assert.equal(absent.status, 404);
+  assert.equal((await absent.json()).code, "plugin_absent");
+  assert.equal(server.requests().length, before, "신선한 캐시면 재확인하지 않는다");
+
+  // unknown 캐시는 신선해도 다시 찌른다. 게이트웨이가 죽어 있으면 503 unreachable.
+  await db
+    .update(gatewayResources)
+    .set({ baseUrl: "http://127.0.0.1:1", pluginStatus: "unknown", pluginCheckedAt: nowForDb() })
+    .where(eq(gatewayResources.id, seed.gatewayId));
+  const dead = await routes.jobs.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/jobs`),
+    ctx(seed.channelId),
+  );
+  assert.equal(dead.status, 503);
+  assert.equal((await dead.json()).code, "unreachable");
+});
+
 test("본문 검증 — npcId 없음/다른 채널의 NPC 는 400/404 이고 Hermes 를 부르지 않는다", async () => {
   server.reset();
   const routes = await loadRoutes();

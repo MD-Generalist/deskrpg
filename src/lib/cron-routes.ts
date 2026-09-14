@@ -75,6 +75,7 @@ function invalidBody(message: string) {
 /**
  * R17 생성 본문. `npcId` 는 여기서 떼어 낸다 — Hermes 로 나가는 본문에 섞이면 안 된다.
  * 프리셋→표현식 변환은 클라이언트가 하므로 `schedule` 은 문자열 그대로 넘긴다.
+ * `prompt` 는 스크립트 전용 잡(`script` 가 있음)이 아니면 필수다 — 둘 다 비면 400.
  */
 export function parseCreateBody(
   body: JsonBody,
@@ -83,16 +84,21 @@ export function parseCreateBody(
   if (!npcId) return { ok: false, response: invalidBody("npcId is required") };
   const name = requiredString(body.name);
   const prompt = requiredString(body.prompt);
+  const script = requiredString(body.script);
   const schedule = optionalString(body.schedule);
-  if (!name || !prompt || schedule === undefined) {
-    return { ok: false, response: invalidBody("name, prompt and schedule are required") };
+  if (!name || schedule === undefined) {
+    return { ok: false, response: invalidBody("name and schedule are required") };
+  }
+  if (!prompt && !script) {
+    return { ok: false, response: invalidBody("prompt is required unless script is given") };
   }
   const skills = Array.isArray(body.skills)
     ? body.skills.filter((s): s is string => typeof s === "string")
     : undefined;
   const job: CreateCronJobBody = {
     name,
-    prompt,
+    ...(prompt ? { prompt } : {}),
+    ...(script ? { script } : {}),
     schedule,
     deliver: optionalString(body.deliver) ?? "local",
     ...(optionalString(body.model) !== undefined ? { model: body.model as string } : {}),

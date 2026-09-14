@@ -1,10 +1,11 @@
 /**
  * 칸반 REST(`/api/channels/:id/kanban/**`, `/automation/status`)의 문지기.
  *
- * 순서가 곧 규칙이다: 로그인 → 채널 멤버 → 채널의 게이트웨이(409) → 플러그인 계약(428) →
- * 보드 확보(503). 앞 단계가 막히면 뒤 단계(특히 Hermes 호출)는 일어나지 않는다.
- * 멤버·게이트·오류 응답은 `cron-access.ts` 의 것을 **그대로 가져다 쓴다** — 게이트를 두
- * 벌 두면 언젠가 한쪽만 고쳐진다.
+ * 순서가 곧 규칙이다: 로그인 → 채널 멤버 → 채널의 게이트웨이(409) → 플러그인 계약(428/404/401/
+ * 503/504) → 보드 확보(503). 앞 단계가 막히면 뒤 단계(특히 Hermes 호출)는 일어나지 않는다.
+ * 게이트는 `resolveChannelBoard` 가 한 번 풀어 준 것을 그대로 쓰고, 그 결과의 오너 클라이언트를
+ * 컨텍스트에 싣는다 — 한 요청에서 게이트·클라이언트를 두 번 만들지 않는다. 멤버·오류 응답은
+ * `cron-access.ts` 의 것을 **그대로 가져다 쓴다** — 게이트를 두 벌 두면 언젠가 한쪽만 고쳐진다.
  *
  * 크론과 다른 점은 셋이다.
  * - 스코프가 **오너 키**다. 프로필 키는 여기서 쓰지 않는다.
@@ -22,22 +23,21 @@ import type { NextResponse } from "next/server";
 import { db, hermesProfiles, npcs, users } from "@/db";
 import {
   cronError,
-  ensureAutomationPlugin,
+  pluginGateResponse,
   requireChannelMember,
   type CronChannelContext,
 } from "@/lib/cron-access";
-import { decryptGatewayToken, getChannelGatewayBinding } from "@/lib/gateway-resources";
-import { createOwnerPluginClient } from "@/lib/hermes/plugin-client";
 import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
-import { transportFetch } from "@/lib/hermes/setup/transport";
 import {
-  channelBoardSlug,
   ensureChannelBoard,
   getChannelBoard,
+  resolveChannelBoard,
   type ChannelBoardRow,
+  type ResolvedChannelBoard,
 } from "@/lib/kanban-boards";
 
-export const AUTOMATION_MIN_PLUGIN_VERSION = "0.6.0";
+/** 자동화 최소 플러그인 버전 — 정본은 `plugin-capability.ts` 하나다. */
+export { AUTOMATION_MIN_VERSION as AUTOMATION_MIN_PLUGIN_VERSION } from "@/lib/hermes/plugin-capability";
 
 // ---------------------------------------------------------------------------
 // 채널 컨텍스트 — 멤버 + 게이트웨이 + 플러그인 게이트 + 보드
@@ -64,13 +64,14 @@ export type KanbanContextResult =
  */
 async function requireBoardRow(
   channelId: string,
-  gatewayId: string,
+  resolved: Extract<ResolvedChannelBoard, { ok: true }>,
 ): Promise<{ ok: true; row: ChannelBoardRow } | { ok: false; response: NextResponse }> {
+  const gatewayId = resolved.binding.resource.id;
   const existing = await getChannelBoard(channelId);
   if (existing && existing.gatewayId === gatewayId && !existing.lastError) {
     return { ok: true, row: existing };
   }
-  const ensured = await ensureChannelBoard(channelId);
+  const ensured = await ensureChannelBoard(channelId, resolved);
   if (ensured.ok) return { ok: true, row: ensured.row };
   return {
     ok: false,
@@ -88,40 +89,36 @@ export async function resolveKanbanChannelContext(input: {
   const access = await requireChannelMember(input.channelId, input.userId);
   if (!access.ok) return access;
 
-  const binding = await getChannelGatewayBinding(input.channelId);
-  if (!binding) {
+  const resolved = await resolveChannelBoard(input.channelId);
+  if (!resolved.ok) {
     return {
       ok: false,
       response: cronError(409, "gateway_not_bound", "Channel has no gateway bound"),
     };
   }
+  if (!resolved.pluginGate.ok) {
+    return { ok: false, response: pluginGateResponse(resolved.pluginGate) };
+  }
+  const info = resolved.pluginGate.info;
 
-  const gate = await ensureAutomationPlugin(binding.resource);
-  if (!gate.ok) return gate;
-
-  const board = await requireBoardRow(input.channelId, binding.resource.id);
+  const board = await requireBoardRow(input.channelId, resolved);
   if (!board.ok) return board;
 
-  const client = createOwnerPluginClient({
-    baseUrl: binding.resource.baseUrl,
-    ownerToken: decryptGatewayToken(binding.resource.tokenEncrypted),
-    fetchImpl: transportFetch,
-  });
-
+  const gateway = resolved.binding.resource;
   return {
     ok: true,
     ctx: {
       userId: input.userId,
       channelId: input.channelId,
       channel: access.channel,
-      gateway: binding.resource,
-      info: gate.info,
-      timezone: gate.info.timezone ?? null,
+      gateway,
+      info,
+      timezone: info.timezone ?? null,
       isChannelOwner: access.channel.ownerId === input.userId,
-      isGatewayOwner: binding.resource.ownerUserId === input.userId,
-      boardSlug: channelBoardSlug(input.channelId),
+      isGatewayOwner: gateway.ownerUserId === input.userId,
+      boardSlug: resolved.boardSlug,
       boardRow: board.row,
-      client,
+      client: resolved.ownerClient,
     },
   };
 }

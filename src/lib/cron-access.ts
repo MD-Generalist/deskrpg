@@ -1,7 +1,7 @@
 /**
  * 크론 REST(`/api/channels/:id/cron/**`)의 문지기.
  *
- * 순서가 곧 규칙이다: 로그인 → 채널 멤버 → 채널의 게이트웨이 → 플러그인 계약(428) →
+ * 순서가 곧 규칙이다: 로그인 → 채널 멤버 → 채널의 게이트웨이 → 플러그인 계약(428/404/401/503/504) →
  * 담당 NPC 의 프로필 클라이언트. 앞 단계가 막히면 뒤 단계(특히 Hermes 호출)는 일어나지
  * 않는다 — 권한 거절이 원격 왕복 뒤에 오면 거절당한 요청도 Hermes 에 흔적을 남긴다.
  *
@@ -15,22 +15,12 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { gateAutomationPlugin, type PluginGate as AutomationGate } from "@/lib/automation-gate";
 import { channelMembers, channels, db, gatewayResources, hermesProfiles, npcs } from "@/db";
 import { decryptGatewayToken, getChannelGatewayBinding } from "@/lib/gateway-resources";
 import type { PluginInfo } from "@/lib/hermes/deskrpg-plugin-types";
-import {
-  buildPluginCacheUpdate,
-  buildPluginInfoCacheUpdate,
-  restorePluginInfo,
-} from "@/lib/hermes/plugin-cache-update";
-import {
-  meetsAutomationContract,
-  probeDeskrpgPluginWithInfo,
-  shouldReprobePlugin,
-} from "@/lib/hermes/plugin-capability";
 import { createProfilePluginClient } from "@/lib/hermes/plugin-client";
 import type { PluginResponse, ProfilePluginClient } from "@/lib/hermes/plugin-client-types";
-import { transportFetch } from "@/lib/hermes/setup/transport";
 
 type GatewayResourceRow = typeof gatewayResources.$inferSelect;
 type HermesProfileRow = typeof hermesProfiles.$inferSelect;
@@ -84,12 +74,50 @@ export async function requireChannelMember(
 export type PluginGate = { ok: true; info: PluginInfo } | { ok: false; response: NextResponse };
 
 /**
- * 자동화 계약(버전 ≥ 0.6.0 + capability 세 가지)을 만족하는지 본다.
- *
- * `gateway_resources` 의 캐시(plugin_status/plugin_version/plugin_info_json)를 먼저 쓴다.
- * 캐시가 없거나 1시간이 지났으면(`shouldReprobePlugin`) `/deskrpg/info` 를 다시 쳐서 캐시를
- * 갱신한다. 미달이면 428 `{code:"plugin_upgrade_required", minVersion}` — 사용자가 할 일은
- * 재시도가 아니라 플러그인 업그레이드다.
+ * 게이트 실패를 HTTP 응답으로 옮긴다. 진단마다 사용자가 할 일이 다르므로 코드를 뭉치지 않는다:
+ * - 428 `plugin_upgrade_required` `{minVersion, reason, missing?}` — 플러그인 업그레이드
+ * - 404 `plugin_absent` — 게이트웨이 머신에 플러그인 설치
+ * - 401 `plugin_unauthorized` — 게이트웨이 레코드의 키 교체
+ * - 503 `unreachable` / 504 `timeout` — 게이트웨이 주소·상태 확인(`pluginFailureResponse` 와 같은 코드)
+ * - 503 `plugin_unknown` — 닿았지만 우리 플러그인의 응답이 아님
+ */
+export function pluginGateResponse(gate: Extract<AutomationGate, { ok: false }>): NextResponse {
+  switch (gate.code) {
+    case "plugin_upgrade_required": {
+      const verdict = gate.verdict;
+      return cronError(
+        428,
+        "plugin_upgrade_required",
+        `deskrpg-hermes-plugin ${verdict?.minVersion ?? ""}+ required (${verdict?.reason ?? gate.reason})`,
+        {
+          ...(verdict ? { minVersion: verdict.minVersion, reason: verdict.reason } : {}),
+          ...(verdict?.missing ? { missing: verdict.missing } : {}),
+        },
+      );
+    }
+    case "plugin_absent":
+      return cronError(
+        404,
+        "plugin_absent",
+        "deskrpg-hermes-plugin is not installed on this gateway",
+      );
+    case "plugin_unauthorized":
+      return cronError(401, "plugin_unauthorized", "gateway token was rejected by the plugin");
+    case "plugin_unknown":
+      if (gate.transport === "timeout") {
+        return cronError(504, "timeout", "gateway did not answer the plugin probe in time");
+      }
+      if (gate.transport === "unreachable") {
+        return cronError(503, "unreachable", "gateway could not be reached for the plugin probe");
+      }
+      return cronError(503, "plugin_unknown", gate.reason);
+  }
+}
+
+/**
+ * 자동화 계약(버전 ≥ 0.6.0 + capability 세 가지)을 만족하는지 본다. 판정은 `automation-gate.ts`
+ * 의 단일 게이트(캐시 1시간, `unknown`·info 없는 `plugin_ready` 는 재프로브)이고 여기서는 그 결과를
+ * `pluginGateResponse` 로 HTTP 에 옮기기만 한다.
  *
  * `timezone` 은 여기서 나온 `info` 에서 읽는다(E9 — 플러그인이 안 주면 null).
  */
@@ -97,46 +125,13 @@ export async function ensureAutomationPlugin(
   gateway: GatewayResourceRow,
   now = new Date(),
 ): Promise<PluginGate> {
-  let info = restorePluginInfo(gateway.pluginInfoJson);
-  const stale = shouldReprobePlugin({ checkedAt: gateway.pluginCheckedAt, now });
-
-  // 캐시가 "준비됨" 이 아니어도 신선하면 그 판정을 믿는다 — 매 요청마다 부재/미인증
-  // 게이트웨이를 다시 찌르면 캐시를 둔 이유가 없다.
-  if (stale || (gateway.pluginStatus === "plugin_ready" && !info)) {
-    const probe = await probeDeskrpgPluginWithInfo({
-      baseUrl: gateway.baseUrl,
-      token: decryptGatewayToken(gateway.tokenEncrypted),
-      fetchImpl: transportFetch,
-    });
-    await db
-      .update(gatewayResources)
-      .set({
-        ...buildPluginCacheUpdate(probe.capability),
-        ...buildPluginInfoCacheUpdate(probe.info),
-      })
-      .where(eq(gatewayResources.id, gateway.id));
-    info = probe.info;
-  } else if (gateway.pluginStatus !== "plugin_ready") {
-    info = null;
-  }
-
-  const verdict = meetsAutomationContract(info);
-  if (!verdict.ok) {
-    return {
-      ok: false,
-      response: cronError(
-        428,
-        "plugin_upgrade_required",
-        `deskrpg-hermes-plugin ${verdict.minVersion}+ required (${verdict.reason})`,
-        {
-          minVersion: verdict.minVersion,
-          reason: verdict.reason,
-          ...(verdict.missing ? { missing: verdict.missing } : {}),
-        },
-      ),
-    };
-  }
-  return { ok: true, info: info as PluginInfo };
+  const gate = await gateAutomationPlugin(
+    gateway,
+    decryptGatewayToken(gateway.tokenEncrypted),
+    now,
+  );
+  if (gate.ok) return { ok: true, info: gate.info };
+  return { ok: false, response: pluginGateResponse(gate) };
 }
 
 // ---------------------------------------------------------------------------

@@ -89,6 +89,7 @@ COPY --from=builder /app/src/lib/runtime-paths.ts ./src/lib/runtime-paths.ts
 COPY --from=builder /app/src/lib/gateway-resources.ts ./src/lib/gateway-resources.ts
 # gateway-resources 가 바인딩 뒤 보드 확보(T4)를 위해 끌어온다 — 빠지면 소켓 서버가 기동에서 죽는다.
 COPY --from=builder /app/src/lib/kanban-boards.ts ./src/lib/kanban-boards.ts
+COPY --from=builder /app/src/lib/automation-gate.ts ./src/lib/automation-gate.ts
 # 폴러(T5)가 REST 라우트에 자기를 꽂는 globalThis 레지스트리 — 빠지면 소켓 서버가 기동에서 죽는다.
 COPY --from=builder /app/src/lib/automation-registry.ts ./src/lib/automation-registry.ts
 # 자동화 사건 싱크(T5)가 크론 결과의 출처를 대조하려고 끌어온다.
