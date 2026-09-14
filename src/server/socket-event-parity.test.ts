@@ -89,6 +89,20 @@ test("socket-handlers still registers the events server.js used to own", () => {
   }
 });
 
+// 2026-04 태스크 시스템은 2026-09 에 데이터째 폐기됐다(스펙 R33·R34, 0012). 그 소켓 이벤트가
+// 어느 핸들러 파일에든 다시 등록되면 서버는 지워진 태스크·보고 테이블을 다시 찾게 된다.
+test("legacy task-system socket events are not registered anywhere", () => {
+  const events = socketEventsIn(...HANDLER_FILES);
+  const revived = events.filter(
+    (e) => e.startsWith("task:") || e.startsWith("npc:task-") || e.startsWith("npc:report-"),
+  );
+  assert.deepEqual(
+    revived,
+    [],
+    `폐기된 태스크 시스템의 소켓 이벤트가 되살아났습니다: ${revived.join(", ")}`,
+  );
+});
+
 test("게이트웨이 설정이 바뀌면 런타임 상태 캐시가 무효화된다", () => {
   // 원래 이 자리에는 "server.js 가 invalidateGatewayConnectionForChannel 을 부르는가"를
   // 보는 가드가 있었다. 게이트웨이 연결 캐시가 두 곳(server.js 의 channelId 키,

@@ -1,5 +1,3 @@
-import { taskPromptMessages } from "../task-prompt-messages.js";
-
 // Korean translations
 const ko: Record<string, string> = {
   // Common
@@ -36,7 +34,6 @@ const ko: Record<string, string> = {
   "common.logout": "로그아웃",
   "common.language": "언어",
   "common.copy": "복사",
-  ...taskPromptMessages.ko,
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -1452,7 +1449,6 @@ const ko: Record<string, string> = {
   "game.aiConfigured": "AI 설정됨",
   "game.aiGateway": "AI 연결",
   "game.gatewayConnect": "연결하기",
-  "game.tasks": "태스크",
   "game.channel": "채널",
   "game.notifications": "알림",
   "game.markAllRead": "모두 읽음",
@@ -1462,7 +1458,6 @@ const ko: Record<string, string> = {
   "game.removedFromChannel": "이 채널에서 퇴장되었습니다.",
   "game.channelDeleted": "이 채널이 삭제되었습니다.",
   "game.sessionKicked": "세션이 종료되었습니다. 채널에 다시 참가해주세요.",
-  "game.reportReadyBubble": "보고드립니다.",
   "game.inviteLink": "초대 링크:",
   "game.inviteCodeLabel": "코드:",
   "game.placementMode": "비어 있는 의자를 클릭해 고정 자리를 지정하세요 (ESC로 취소)",
@@ -1584,8 +1579,6 @@ const ko: Record<string, string> = {
   "npc.gatewayError": "AI 게이트웨이 오류",
   "npc.unsupportedAdapter": "이 NPC는 지원하지 않는 어댑터를 사용합니다.",
   "npc.unbound": "이 NPC는 아직 Hermes 프로필에 연결되지 않았습니다.",
-  "npc.taskOwnerUnknown":
-    "이 태스크의 주인을 알 수 없습니다 — 채널에 다시 입장한 뒤 시도해 주세요.",
   "npc.hermesImageUnsupported": "이 NPC는 아직 이미지를 받을 수 없습니다.",
   "npc.notFound": "NPC를 찾을 수 없습니다",
   "npc.waitBeforeSending": "잠시 후 다시 보내주세요.",
@@ -1614,22 +1607,6 @@ const ko: Record<string, string> = {
   "context.calledByOther": "다른 사용자가 호출 중",
 
   // Task
-  "task.tab": "태스크",
-  "task.title": "태스크",
-  "task.board": "태스크 보드",
-  "task.noTasks": "{name}에게 할당된 태스크가 없습니다",
-  "task.pending": "대기",
-  "task.inProgress": "진행중",
-  "task.complete": "완료",
-  "task.cancelled": "취소",
-  "task.active": "활성",
-  "task.done": "완료",
-  "task.justNow": "방금",
-  "task.minutesAgo": "{count}분 전",
-  "task.hoursAgo": "{count}시간 전",
-  "task.daysAgo": "{count}일 전",
-  "task.defaultTitle": "태스크",
-  "task.progressReported": "{title} 진행 상황을 보고했습니다.",
 
   // Meeting
   "meeting.title": "회의실",
@@ -1833,41 +1810,6 @@ const ko: Record<string, string> = {
   "providers.model": "모델",
   "providers.ready": "준비됨",
   "settings.disconnectGateway": "연결 삭제",
-  "settings.taskAutomation": "태스크 자동화",
-  "settings.autoProgressNudgeHelp":
-    "태스크가 진행 중일 때 일정 시간이 지나면 NPC에게 진행 상황 보고를 재촉합니다.",
-  "settings.progressNudgeMinutes": "진행 보고 간격 (분)",
-  "settings.autoProgressNudgeMax": "최대 자동 재촉 횟수",
-  "settings.reportWaitSeconds": "보고 대기 시간 (초)",
-  "task.stalled": "중단",
-  "task.requestReport": "보고 요청하기",
-  "task.requestReportQueued": "보고 요청을 보냈습니다.",
-  "task.markComplete": "완료 처리",
-  "task.completeQueued": "태스크를 완료 처리했습니다.",
-  "task.completeToast": '"{title}" 태스크를 완료 처리했습니다.',
-  "task.resume": "재개하기",
-  "task.resumeQueued": "태스크를 재개했습니다.",
-  "task.resumeToast": '"{title}" 태스크를 다시 진행중으로 전환했습니다.',
-  "task.stalledToast": '"{title}" 태스크 자동 재촉이 중단되었습니다.',
-  "task.autoNudgeCount": "재촉 {count}/{max}",
-  "task.stalledCount": "중단 {count}/{max}",
-  "task.backlog": "백로그",
-  "task.createNew": "새 태스크",
-  "task.assign": "할당",
-  "task.assignToNpc": "NPC에 할당",
-  "task.selectNpc": "NPC 선택",
-  "task.selectNpcDescription": '"{title}" 태스크를 실행할 NPC를 선택하세요',
-  "task.unassigned": "미할당",
-  "task.autoStarted": '{npcName}이(가) "{title}" 태스크를 시작했습니다',
-  "task.addToNpc": "이 NPC에 태스크 추가",
-  "task.npcWorkload": "진행 중 {inProgress} · 대기 {pending}",
-  "task.npcActive": "활성",
-  "task.npcInactive": "비활성",
-  "task.titlePlaceholder": "태스크 제목",
-  "task.summaryPlaceholder": "설명 (선택사항)",
-  "task.dragHint": "카드의 상태 메뉴 또는 드래그로 이동 · 클릭하여 상세 보기",
-  "task.changeStatus": "상태 변경",
-  "task.moveStatus": "{title} 상태 변경",
 
   // Map Editor - Modals
   "mapEditor.newMap.title": "새 맵",
@@ -2357,12 +2299,6 @@ const ko: Record<string, string> = {
   "errors.malformedResponse": "서버 응답을 해석할 수 없습니다",
   "errors.noProfile": "이 프로필이 등록되지 않았습니다",
   "errors.templateDeleteConfirm": '"{name}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
-  "task.chatPlaceholder": "태스크에 대해 추가 지시를 보내보세요.",
-  "task.register": "등록",
-  "task.registered": "등록됨",
-  "task.reportDetail": "태스크 상세",
-  "task.noReport": "아직 보고된 내용이 없습니다.",
-  "task.reportLoading": "보고서 조회 중...",
 };
 
 export default ko;

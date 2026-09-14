@@ -12,7 +12,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useT, useLocale, LOCALES } from "@/lib/i18n";
 import {
-  ClipboardList,
   MessageSquare,
   Undo2,
   Clock,
@@ -55,13 +54,10 @@ import type { RosterNpc } from "@/components/NpcRoster";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
-import TaskBoard from "@/components/TaskBoard";
-import type { Task } from "@/components/TaskCard";
 import { getLocalizedErrorMessage, getLocalizedMessage } from "@/lib/i18n/error-codes";
 import { mentionSkipI18nKey } from "@/components/meeting-room/mention-skip-notice";
 import type { MentionSkipReason } from "@/lib/conversation/floor-controller";
 import { resolveNpcResponseChunk, type NpcResponsePayload } from "@/lib/npc-response-messages";
-import { sanitizeNpcResponseText } from "@/lib/task-block-utils.js";
 import type { ChatResponse } from "@/lib/chat-response";
 import {
   npcPresentationPhases,
@@ -126,20 +122,7 @@ interface ChannelInfo {
     gatewayId?: string | null;
     url?: string | null;
     token?: string | null;
-    taskAutomation?: {
-      autoProgressNudgeEnabled?: boolean;
-      autoProgressNudgeMinutes?: number;
-      reportWaitSeconds?: number;
-    };
   } | null;
-}
-
-interface PendingNpcReport {
-  reportId: string;
-  npcId: string;
-  npcName?: string;
-  message: string;
-  kind: string;
 }
 
 interface ChannelPlayerSummary {
@@ -240,17 +223,6 @@ function GamePageInner() {
       EventBus.off("scene-ready", publish);
     };
   }, [chatResponses]);
-  // Task session state
-  const [npcTaskMessages, setNpcTaskMessages] = useState<
-    Map<string, Array<{ role: "player" | "npc"; content: string }>>
-  >(new Map());
-  const [isTaskStreaming, setIsTaskStreaming] = useState(false);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const activeTaskIdRef = useRef<string | null>(null);
-  const taskStreamBufferRef = useRef("");
-  useEffect(() => {
-    activeTaskIdRef.current = activeTaskId;
-  }, [activeTaskId]);
   const [npcSelectList, setNpcSelectList] = useState<{ npcId: string; npcName: string }[] | null>(
     null,
   );
@@ -288,7 +260,6 @@ function GamePageInner() {
   // NPC greeting messages (stored until dialog opens)
   const npcGreetings = useRef<Map<string, string>>(new Map());
   const npcMessagesRef = useRef<NpcChatMessage[]>([]);
-  const pendingNpcReportsRef = useRef<Map<string, PendingNpcReport>>(new Map());
   /**
    * 맵 채팅 지명 때문에 걸어오는 중인 NPC 들. 도착했을 때 1:1 대화창을 **열지 않기**
    * 위해서다 — 대답은 맵 채팅에 나오는데 대화창이 뜨면 그 채팅을 가려 버린다.
@@ -298,16 +269,13 @@ function GamePageInner() {
   const mapChatParticipantsRef = useRef<MapChatParticipants>(new MapChatParticipants());
   /** 채널 채팅 패널이 지금 보이는가(ChatPanel 이 알려 준다) — 씬에 전달한다. */
   const [channelChatVisible, setChannelChatVisible] = useState(false);
-  const consumedNpcReportIdsRef = useRef<Set<string>>(new Set());
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [channelSettingsInitialTab, setChannelSettingsInitialTab] = useState<
     "settings" | "members" | "gateway"
   >("settings");
-  const [showTaskBoard, setShowTaskBoard] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [meetingMinutesCount, setMeetingMinutesCount] = useState(0);
 
   // Owner & NPC management state
@@ -476,83 +444,6 @@ function GamePageInner() {
     );
   }, []);
 
-  const deleteTask = useCallback(
-    (taskId: string) => {
-      if (!socketRef.current?.connected) {
-        showToastNotification(`task-delete-disconnected-${taskId}`, t("chat.disconnected"));
-        return;
-      }
-      socketRef.current.emit("task:delete", { taskId });
-    },
-    [showToastNotification, t],
-  );
-
-  const requestTaskReport = useCallback(
-    (taskId: string) => {
-      if (!socketRef.current?.connected) {
-        showToastNotification(`task-request-disconnected-${taskId}`, t("chat.disconnected"));
-        return;
-      }
-      socketRef.current.emit("task:request-report", { taskId });
-      showToastNotification(`task-request-${taskId}`, t("task.requestReportQueued"));
-    },
-    [showToastNotification, t],
-  );
-
-  const resumeTask = useCallback(
-    (taskId: string) => {
-      if (!socketRef.current?.connected) {
-        showToastNotification(`task-resume-disconnected-${taskId}`, t("chat.disconnected"));
-        return;
-      }
-      socketRef.current.emit("task:resume", { taskId });
-      showToastNotification(`task-resume-${taskId}`, t("task.resumeQueued"));
-    },
-    [showToastNotification, t],
-  );
-
-  const completeTask = useCallback(
-    (taskId: string) => {
-      if (!socketRef.current?.connected) {
-        showToastNotification(`task-complete-disconnected-${taskId}`, t("chat.disconnected"));
-        return;
-      }
-      socketRef.current.emit("task:complete", { taskId });
-      showToastNotification(`task-complete-${taskId}`, t("task.completeQueued"));
-    },
-    [showToastNotification, t],
-  );
-
-  const refreshChannelTasks = useCallback(() => {
-    if (!channelId || !socketRef.current?.connected) return;
-    socketRef.current.emit("task:list", { channelId });
-  }, [channelId]);
-
-  const appendPendingReportToDialog = useCallback(
-    (npcId: string, baseMessages: NpcChatMessage[]): NpcChatMessage[] => {
-      const pendingReport = pendingNpcReportsRef.current.get(npcId);
-      if (!pendingReport) return baseMessages;
-      const alreadyInHistory = baseMessages.some(
-        (message) => message.role === "npc" && message.content === pendingReport.message,
-      );
-      if (consumedNpcReportIdsRef.current.has(pendingReport.reportId)) {
-        pendingNpcReportsRef.current.delete(npcId);
-        return baseMessages;
-      }
-
-      consumedNpcReportIdsRef.current.add(pendingReport.reportId);
-      pendingNpcReportsRef.current.delete(npcId);
-      socketRef.current?.emit("npc:report-consumed", { reportId: pendingReport.reportId });
-
-      if (alreadyInHistory) {
-        return baseMessages;
-      }
-
-      return [...baseMessages, { role: "npc", content: pendingReport.message } as NpcChatMessage];
-    },
-    [],
-  );
-
   // Socket.io connection (dynamic import to avoid SSR window access)
   useEffect(() => {
     let socketInstance: Socket | null = null;
@@ -584,7 +475,6 @@ function GamePageInner() {
         setSocketConnected(true);
         setIsNpcStreaming(false);
         if (channelId) {
-          socketInstance?.emit("task:list", { channelId });
           socketInstance?.emit("room:list", { channelId });
         }
         const openNpc = dialogNpcRef.current;
@@ -636,7 +526,6 @@ function GamePageInner() {
         // This acknowledgement arrives after authentication and handler registration.
         if (channelId) {
           socketInstance?.emit("room:list", { channelId });
-          socketInstance?.emit("task:list", { channelId });
         }
         setChannelPlayers([
           {
@@ -733,26 +622,13 @@ function GamePageInner() {
           if (!dialogNpcRef.current || dialogNpcRef.current.npcId !== data.npcId) return;
           const historyMessages = (data.messages || []).map<NpcChatMessage>((m) => ({
             role: m.role === "npc" ? "npc" : "player",
-            content: m.role === "npc" ? sanitizeNpcResponseText(m.content) : m.content,
+            content: m.content,
             id: m.id,
             responseRequestId: m.responseRequestId,
           }));
-          setNpcMessages(appendPendingReportToDialog(data.npcId, historyMessages));
+          setNpcMessages(historyMessages);
         },
       );
-
-      socketInstance.on("npc:history-append", (data: { npcId: string; message: string }) => {
-        const cleaned = sanitizeNpcResponseText(data.message);
-        if (!cleaned.trim()) return;
-        if (dialogNpcRef.current?.npcId !== data.npcId) return;
-
-        setNpcMessages((prev) => {
-          if (prev.some((message) => message.role === "npc" && message.content === cleaned)) {
-            return prev;
-          }
-          return [...prev, { role: "npc", content: cleaned }];
-        });
-      });
 
       // Room messages
       socketInstance.on("room:message", (data: { roomId: string; message: RoomMessage }) => {
@@ -985,24 +861,7 @@ function GamePageInner() {
         },
       );
 
-      socketInstance.on("npc:report-ready", (data: PendingNpcReport) => {
-        pendingNpcReportsRef.current.set(data.npcId, data);
-        if (dialogNpcRef.current?.npcId === data.npcId) {
-          setNpcMessages((prev) => appendPendingReportToDialog(data.npcId, prev));
-          return;
-        }
-        EventBus.emit("npc:call-to-player", {
-          npcId: data.npcId,
-          message: data.message,
-          reportId: data.reportId,
-          reportKind: data.kind,
-          npcName: data.npcName,
-          bubbleText: t("game.reportReadyBubble"),
-        });
-      });
-
-      // Generic NPC chat responses should stay in the dialog.
-      // Only explicit report-ready events should pull an NPC over to the player.
+      // Generic NPC chat responses stay in the dialog — nothing pulls the NPC over.
       socketInstance.on("npc:response-complete", () => {});
 
       // 진행 상태. 대화창이 열려 있으면 창 안 상태 줄로, 아니면 맵 위 말풍선으로 —
@@ -1036,9 +895,7 @@ function GamePageInner() {
         if (chunk) {
           const continuing = streamBufferRef.current.length > 0;
           streamBufferRef.current += chunk;
-          const buffered = sanitizeNpcResponseText(streamBufferRef.current, {
-            stripIncompleteTail: true,
-          });
+          const buffered = streamBufferRef.current;
           EventBus.emit("chat:speech", { actorId: data.npcId, text: buffered });
           setIsNpcStreaming(true);
           setNpcMessages((prev) => upsertLegacyNpcChunk(prev, buffered, continuing));
@@ -1046,9 +903,7 @@ function GamePageInner() {
         if (data.done) {
           setIsNpcStreaming(false);
           const hadBufferedContent = streamBufferRef.current.length > 0;
-          const cleaned = sanitizeNpcResponseText(streamBufferRef.current, {
-            stripIncompleteTail: true,
-          });
+          const cleaned = streamBufferRef.current.trim();
           if (hadBufferedContent) {
             setNpcMessages((prev) => {
               const lastIdx = prev.length - 1;
@@ -1064,156 +919,8 @@ function GamePageInner() {
         }
       });
 
-      // NPC task response streaming — per-task session messages
-      socketInstance.on(
-        "npc:task-response",
-        ({ npcId: _npcId, chunk, done }: { npcId: string; chunk: string; done: boolean }) => {
-          const taskId = activeTaskIdRef.current;
-          if (!taskId) return;
-
-          if (chunk) {
-            taskStreamBufferRef.current += chunk;
-            setNpcTaskMessages((prev) => {
-              const next = new Map(prev);
-              const msgs = [...(next.get(taskId) || [])];
-              const lastMsg = msgs[msgs.length - 1];
-              if (lastMsg?.role === "npc") {
-                msgs[msgs.length - 1] = { role: "npc", content: taskStreamBufferRef.current };
-              } else {
-                msgs.push({ role: "npc", content: taskStreamBufferRef.current });
-              }
-              next.set(taskId, msgs);
-              return next;
-            });
-          }
-          if (done) {
-            setIsTaskStreaming(false);
-            taskStreamBufferRef.current = "";
-          }
-        },
-      );
-
-      // Task: delete
-      socketInstance.on("task:deleted", ({ taskId }: { taskId: string }) => {
-        setAllTasks((prev) => prev.filter((t) => t.id !== taskId));
-      });
-
-      // Task: real-time updates
-      socketInstance.on("task:updated", ({ task, action }: { task: Task; action?: string }) => {
-        setAllTasks((prev) => {
-          const idx = prev.findIndex((t) => t.id === task.id);
-          if (idx >= 0) {
-            const updated = [...prev];
-            updated[idx] = task;
-            return updated;
-          }
-          return [task, ...prev];
-        });
-
-        if (action === "stalled") {
-          showToastNotification(
-            `task-stalled-${task.id}`,
-            t("task.stalledToast", { title: task.title }),
-          );
-        }
-        if (action === "resume") {
-          showToastNotification(
-            `task-resume-toast-${task.id}`,
-            t("task.resumeToast", { title: task.title }),
-          );
-        }
-        if (action === "complete_manual") {
-          showToastNotification(
-            `task-complete-toast-${task.id}`,
-            t("task.completeToast", { title: task.title }),
-          );
-        }
-        if (action?.startsWith("move_") && action.endsWith("_in_progress") && task.npcName) {
-          showToastNotification(
-            `task-autostart-toast-${task.id}`,
-            t("task.autoStarted", { npcName: task.npcName, title: task.title }),
-          );
-        }
-      });
-
-      // Task: initial load — channel tasks (npcId null = channel-wide response)
-      socketInstance.on(
-        "task:list-response",
-        ({ tasks: taskList, npcId: responseNpcId }: { tasks: Task[]; npcId: string | null }) => {
-          if (responseNpcId !== null) return;
-          setAllTasks(taskList);
-        },
-      );
-
-      // Task: NPC broadcast remove — clean up tasks for deleted NPC
-      socketInstance.on("npc:broadcast-remove", ({ npcId: removedNpcId }: { npcId: string }) => {
-        setAllTasks((prev) => prev.filter((t) => t.npcId !== removedNpcId));
-      });
-
-      // NPC task lifecycle events
-      socketInstance.on(
-        "npc:task-created",
-        ({
-          npcId,
-          task,
-        }: {
-          npcId: string;
-          task: { id: string; npcTaskId: string; title: string; status: string };
-        }) => {
-          if (dialogNpcRef.current?.npcId !== npcId) return;
-          // Insert inline task card into DM messages
-          setNpcMessages((prev) => [
-            ...prev,
-            {
-              role: "npc" as const,
-              content: "",
-              taskCard: {
-                taskId: task.id,
-                npcTaskId: task.npcTaskId,
-                title: task.title,
-                status: task.status,
-              },
-            },
-          ]);
-        },
-      );
-
-      socketInstance.on(
-        "npc:task-completed",
-        ({
-          npcId,
-          npcName,
-          taskId,
-          title,
-          summary,
-        }: {
-          npcId: string;
-          npcName: string;
-          taskId: string;
-          title: string;
-          summary: string;
-        }) => {
-          // Insert completion report into DM messages
-          setNpcMessages((prev) => [
-            ...prev,
-            {
-              role: "npc" as const,
-              content: summary || `${title} 완료`,
-              taskCard: { taskId, npcTaskId: taskId, title, status: "complete" },
-            },
-          ]);
-          // Trigger NPC walk-to-player
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(
-              new CustomEvent("npc:walk-to-player", { detail: { npcId, npcName } }),
-            );
-          }
-        },
-      );
-
-      // Request initial task list + room list for this channel
+      // Request initial room list for this channel
       if (channelId) {
-        socketInstance.emit("task:list", { channelId });
         socketInstance.emit("room:list", { channelId });
       }
     });
@@ -1237,13 +944,6 @@ function GamePageInner() {
         socketInstance.off("room:deleted");
         socketInstance.off("room:mention-skipped");
         socketInstance.off("room:npc-aborted");
-        socketInstance.off("task:updated");
-        socketInstance.off("task:deleted");
-        socketInstance.off("task:list-response");
-        socketInstance.off("npc:broadcast-remove");
-        socketInstance.off("npc:task-created");
-        socketInstance.off("npc:task-completed");
-        socketInstance.off("npc:task-response");
         socketInstance.removeAllListeners();
         socketInstance.disconnect();
       }
@@ -1255,12 +955,7 @@ function GamePageInner() {
       setChannelPlayers([]);
       socketRef.current = null;
     };
-  }, [appendPendingReportToDialog, channelId, characterId, router, showToastNotification, t]);
-
-  useEffect(() => {
-    if (!showTaskBoard) return;
-    refreshChannelTasks();
-  }, [showTaskBoard, refreshChannelTasks]);
+  }, [channelId, characterId, router, showToastNotification, t]);
 
   // Shared dialog state reset
   const resetDialog = useCallback(() => {
@@ -1271,11 +966,6 @@ function GamePageInner() {
     setIsNpcStreaming(false);
     setNpcSelectList(null);
     streamBufferRef.current = "";
-    // Reset task session state
-    setActiveTaskId(null);
-    activeTaskIdRef.current = null;
-    setIsTaskStreaming(false);
-    taskStreamBufferRef.current = "";
     setNpcActivityKey(null);
   }, []);
 
@@ -1391,16 +1081,8 @@ function GamePageInner() {
     const handleMovementStarted = (data: { npcId: string }) => {
       setNpcMoveStates((prev) => ({ ...prev, [data.npcId]: "moving-to-player" }));
     };
-    const handleMovementArrived = (data: {
-      npcId: string;
-      npcName?: string;
-      reportId?: string;
-      reportKind?: string;
-    }) => {
+    const handleMovementArrived = (data: { npcId: string; npcName?: string }) => {
       setNpcMoveStates((prev) => ({ ...prev, [data.npcId]: "waiting" }));
-      if (data.reportId) {
-        return;
-      }
       // 맵 채팅으로 부른 NPC 는 맵 채팅에서 대답한다 — 여기서 1:1 대화창을 열면 그 대답이
       // 보이는 패널을 덮어 버린다.
       const fromMapChat = mapChatWalkersRef.current.takeOnArrival(data.npcId);
@@ -1654,45 +1336,6 @@ function GamePageInner() {
     [socket, dialogNpc, characterId, showToastNotification, t],
   );
 
-  const handleTaskDialogSend = useCallback(
-    async (taskId: string, message: string, files?: File[]) => {
-      if (!socket || !dialogNpc) return;
-
-      // Add player message to task messages
-      setNpcTaskMessages((prev) => {
-        const next = new Map(prev);
-        const msgs = [...(next.get(taskId) || [])];
-        msgs.push({ role: "player", content: message });
-        next.set(taskId, msgs);
-        return next;
-      });
-      taskStreamBufferRef.current = "";
-      setIsTaskStreaming(true);
-
-      // Convert files to ArrayBuffers
-      let filePayloads:
-        Array<{ name: string; type: string; size: number; data: ArrayBuffer }> | undefined;
-      if (files && files.length > 0) {
-        filePayloads = await Promise.all(
-          files.map(async (f) => ({
-            name: f.name,
-            type: f.type,
-            size: f.size,
-            data: await f.arrayBuffer(),
-          })),
-        );
-      }
-
-      socket.emit("npc:task-chat", {
-        npcId: dialogNpc.npcId,
-        taskId,
-        message,
-        files: filePayloads,
-      });
-    },
-    [socket, dialogNpc],
-  );
-
   const handleRoomSend = useCallback(
     (message: string) => {
       if (!socket || !socket.connected) {
@@ -1938,8 +1581,6 @@ function GamePageInner() {
               channelData.channel.lastX != null && channelData.channel.lastY != null
                 ? { x: channelData.channel.lastX, y: channelData.channel.lastY }
                 : null,
-            reportWaitSeconds:
-              channelData.channel.gatewayConfig?.taskAutomation?.reportWaitSeconds ?? 20,
           };
           setPendingChannelData(nextPendingChannelData);
           setGameChannelData(nextPendingChannelData);
@@ -2039,12 +1680,6 @@ function GamePageInner() {
       EventBus.off("scene-ready", onSceneReady);
     };
   }, [isOwner]);
-
-  useEffect(() => {
-    EventBus.emit("task-automation-updated", {
-      reportWaitSeconds: channel?.gatewayConfig?.taskAutomation?.reportWaitSeconds ?? 20,
-    });
-  }, [channel?.gatewayConfig?.taskAutomation?.reportWaitSeconds]);
 
   // Placement mode coordination
   useEffect(() => {
@@ -2397,16 +2032,6 @@ function GamePageInner() {
         currentPlayerName={character?.name}
         npcMoveState={dialogMotion.phase}
         onReturnNpc={dialogNpc && dialogMotion.caller === socket?.id ? handleReturnNpc : undefined}
-        socket={socket}
-        onDeleteTask={deleteTask}
-        onRequestReportTask={requestTaskReport}
-        onResumeTask={resumeTask}
-        onCompleteTask={completeTask}
-        taskMessages={npcTaskMessages}
-        isTaskStreaming={isTaskStreaming}
-        onTaskSend={handleTaskDialogSend}
-        activeTaskId={activeTaskId}
-        onSetActiveTaskId={setActiveTaskId}
       />
     </ConversationPane>
   );
@@ -2677,23 +2302,6 @@ function GamePageInner() {
             <span className="bg-white/20 px-1.5 rounded-full text-micro">
               {meetingMinutesCount}
             </span>
-          </button>
-
-          {/* Tasks button */}
-          <button
-            onClick={() => setShowTaskBoard(true)}
-            title={t("game.tasks")}
-            aria-label={t("game.tasks")}
-            className="flex items-center gap-1 px-2.5 py-1 bg-primary/80 hover:bg-primary text-white rounded-md text-caption font-semibold"
-          >
-            <ClipboardList className="w-3 h-3" />
-            <span className="header-full-label">{t("game.tasks")}</span>
-            {(() => {
-              const n = allTasks.filter(
-                (t) => t.status === "in_progress" || t.status === "pending",
-              ).length;
-              return <span className="bg-white/20 px-1.5 rounded-full text-micro">{n}</span>;
-            })()}
           </button>
 
           {/* Separator */}
@@ -3048,11 +2656,6 @@ function GamePageInner() {
           onClose={() => setShowChannelSettings(false)}
           onUpdated={(data) => {
             if (data.gatewayConfig) void refreshNpcLists();
-            if (typeof data.gatewayConfig?.taskAutomation?.reportWaitSeconds === "number") {
-              EventBus.emit("task-automation-updated", {
-                reportWaitSeconds: data.gatewayConfig.taskAutomation.reportWaitSeconds,
-              });
-            }
             setChannel((prev) => {
               if (!prev) return prev;
               return {
@@ -3069,33 +2672,13 @@ function GamePageInner() {
                     )
                   : prev.hasGateway,
                 gatewayConfig: data.gatewayConfig
-                  ? {
-                      ...(prev.gatewayConfig || {}),
-                      ...data.gatewayConfig,
-                      taskAutomation: {
-                        ...(prev.gatewayConfig?.taskAutomation || {}),
-                        ...(data.gatewayConfig.taskAutomation || {}),
-                      },
-                    }
+                  ? { ...(prev.gatewayConfig || {}), ...data.gatewayConfig }
                   : prev.gatewayConfig,
               };
             });
           }}
         />
       )}
-
-      <TaskBoard
-        channelId={channelId!}
-        socket={socketRef.current}
-        isOpen={showTaskBoard}
-        onClose={() => setShowTaskBoard(false)}
-        tasks={allTasks}
-        npcs={rosterNpcs}
-        onDeleteTask={deleteTask}
-        onRequestReportTask={requestTaskReport}
-        onResumeTask={resumeTask}
-        onCompleteTask={completeTask}
-      />
 
       {/* Placement mode indicator */}
       {placementMode && (

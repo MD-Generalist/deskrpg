@@ -1,13 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Socket } from "socket.io-client";
 import { useT } from "@/lib/i18n";
-import { Pencil, UserMinus, RotateCcw, MessageSquare, ClipboardList, Undo2 } from "lucide-react";
+import { Pencil, UserMinus, RotateCcw, Undo2 } from "lucide-react";
 import type { NpcChatMessage } from "./NpcDialog";
-import TaskPanel from "./TaskPanel";
-import TaskChatView, { type TaskMessage } from "./TaskChatView";
 import ChatInput from "./ChatInput";
-import Tab from "./ui/Tab";
 import ChatBubble from "./ui/ChatBubble";
 import RoomList from "./rooms/RoomList";
 import RoomHeader from "./rooms/RoomHeader";
@@ -48,17 +44,6 @@ interface ChatPanelProps {
   onResetNpcChat?: (npcId: string) => void;
   npcMoveState?: string;
   onReturnNpc?: (npcId: string) => void;
-  socket?: Socket | null;
-  onDeleteTask?: (taskId: string) => void;
-  onRequestReportTask?: (taskId: string) => void;
-  onResumeTask?: (taskId: string) => void;
-  onCompleteTask?: (taskId: string) => void;
-  // Task session props
-  taskMessages?: Map<string, TaskMessage[]>;
-  isTaskStreaming?: boolean;
-  onTaskSend?: (taskId: string, message: string, files?: File[]) => void;
-  activeTaskId?: string | null;
-  onSetActiveTaskId?: (taskId: string | null) => void;
   // Channel chat — 방(room) 단위. 목록·방 안·새 방/초대 세 화면이다.
   roomState: RoomState;
   channelChatOpen?: boolean;
@@ -119,16 +104,6 @@ export default function ChatPanel({
   currentPlayerName,
   npcMoveState,
   onReturnNpc,
-  socket,
-  onDeleteTask,
-  onRequestReportTask,
-  onResumeTask,
-  onCompleteTask,
-  taskMessages,
-  isTaskStreaming,
-  onTaskSend,
-  activeTaskId,
-  onSetActiveTaskId,
 }: ChatPanelProps) {
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
   const width = controlledWidth ?? internalWidth;
@@ -144,19 +119,10 @@ export default function ChatPanel({
   const [showGearMenu, setShowGearMenu] = useState(false);
   const [sessions] = useState(() => new ConversationSessionStore());
   const [, setSessionRevision] = useState(0);
-  const [activeTabState, setActiveTabState] = useState<{
-    npcId: string | null;
-    tab: "chat" | "tasks";
-  }>({
-    npcId: null,
-    tab: "chat",
-  });
   const t = useT();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelScrollRef = useRef<HTMLDivElement>(null);
-  const activeNpcId = dialogNpc?.npcId ?? null;
-  const activeTab = activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat";
   const conversationKey = dialogNpc
     ? `npc:${dialogNpc.npcId}`
     : roomState.view === "compose"
@@ -430,132 +396,86 @@ export default function ChatPanel({
         ) : inNpcDialog ? (
           // NPC dialog mode
           <>
-            {/* Tab Bar */}
-            <Tab
-              tabs={[
-                {
-                  key: "chat",
-                  label: t("chat.title"),
-                  icon: <MessageSquare className="w-3.5 h-3.5" />,
-                },
-                {
-                  key: "tasks",
-                  label: t("task.title"),
-                  icon: <ClipboardList className="w-3.5 h-3.5" />,
-                },
-              ]}
-              activeKey={activeTab}
-              onChange={(key) =>
-                setActiveTabState({ npcId: activeNpcId, tab: key as "chat" | "tasks" })
+            <div
+              ref={scrollRef}
+              onScroll={(event) =>
+                sessions.setScroll(conversationKey, event.currentTarget.scrollTop)
               }
-            />
-            {activeTab === "chat" ? (
-              <>
-                <div
-                  ref={scrollRef}
-                  onScroll={(event) =>
-                    sessions.setScroll(conversationKey, event.currentTarget.scrollTop)
-                  }
-                  className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
-                >
-                  {npcMessages.length === 0 && (
-                    <div className="text-text-dim text-sm italic py-4">
-                      {t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
-                    </div>
-                  )}
-                  {npcMessages.map((msg, i) => (
-                    <div key={msg.id ?? `${msg.role}-${i}`}>
-                      {msg.responseRequestId &&
-                      npcResponses.some(
-                        (response) => response.requestId === msg.responseRequestId,
-                      ) ? (
-                        <ResponseProgress
-                          responses={npcResponses.filter(
-                            (response) => response.requestId === msg.responseRequestId,
-                          )}
-                        />
-                      ) : (
-                        <ChatBubble
-                          sender={msg.role === "player" ? "player" : "npc"}
-                          streaming={
-                            msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
-                          }
-                        >
-                          {msg.content}
-                        </ChatBubble>
-                      )}
-                      {msg.role === "player" && (
-                        <ResponseProgress
-                          responses={responsesForSource(npcResponses, msg.id)}
-                          receipt
-                          receiptOnly
-                        />
-                      )}
-                    </div>
-                  ))}
-                  <ResponseProgress
-                    responses={visibleResponseReplies(npcResponses, {
-                      responseRequestIds: new Set(
-                        npcMessages
-                          .map((message) => message.responseRequestId)
-                          .filter((id): id is string => !!id),
-                      ),
-                    })}
-                  />
+              className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
+            >
+              {npcMessages.length === 0 && (
+                <div className="text-text-dim text-sm italic py-4">
+                  {t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
                 </div>
-                {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
+              )}
+              {npcMessages.map((msg, i) => (
+                <div key={msg.id ?? `${msg.role}-${i}`}>
+                  {msg.responseRequestId &&
+                  npcResponses.some((response) => response.requestId === msg.responseRequestId) ? (
+                    <ResponseProgress
+                      responses={npcResponses.filter(
+                        (response) => response.requestId === msg.responseRequestId,
+                      )}
+                    />
+                  ) : (
+                    <ChatBubble
+                      sender={msg.role === "player" ? "player" : "npc"}
+                      streaming={
+                        msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
+                      }
+                    >
+                      {msg.content}
+                    </ChatBubble>
+                  )}
+                  {msg.role === "player" && (
+                    <ResponseProgress
+                      responses={responsesForSource(npcResponses, msg.id)}
+                      receipt
+                      receiptOnly
+                    />
+                  )}
+                </div>
+              ))}
+              <ResponseProgress
+                responses={visibleResponseReplies(npcResponses, {
+                  responseRequestIds: new Set(
+                    npcMessages
+                      .map((message) => message.responseRequestId)
+                      .filter((id): id is string => !!id),
+                  ),
+                })}
+              />
+            </div>
+            {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
                     예전에는 tool.progress 를 채팅 청크로 흘려서 답이 두 번 보였다. */}
-                {/* isStreaming 을 함께 보지 않는다 — 그 값은 **첫 답변 청크**가 와야
+            {/* isStreaming 을 함께 보지 않는다 — 그 값은 **첫 답변 청크**가 와야
                     true 가 되는데, 도구는 그 전에 돈다. 실측(2026-08-28): web_search 가
                     3회 돌 동안 화면에 아무것도 뜨지 않았다. 활동 키가 있다는 것 자체가
                     "아직 진행 중"이라는 뜻이므로 그것만으로 충분하다. */}
-                {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
-                  <div
-                    className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                    {t(npcActivityKey)}
-                  </div>
-                )}
-                <ChatInput
-                  onSend={onSend}
-                  value={conversationDraft}
-                  onValueChange={updateConversationDraft}
-                  placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
-                  disabled={!!npcChatInputDisabled}
-                  disabledPlaceholder={
-                    npcChatInputDisabled
-                      ? (npcChatDisabledPlaceholder ?? t("chat.disconnected"))
-                      : t("chat.responding")
-                  }
-                  autoFocus
-                  showFileUpload
-                />
-              </>
-            ) : activeTaskId ? (
-              <TaskChatView
-                taskId={activeTaskId}
-                taskTitle={activeTaskId}
-                taskStatus="pending"
-                messages={taskMessages?.get(activeTaskId) || []}
-                isStreaming={isTaskStreaming || false}
-                onSend={(msg, files) => onTaskSend?.(activeTaskId, msg, files)}
-                onBack={() => onSetActiveTaskId?.(null)}
-              />
-            ) : (
-              <TaskPanel
-                npcId={dialogNpc!.npcId}
-                npcName={dialogNpc!.npcName}
-                socket={socket ?? null}
-                onDeleteTask={onDeleteTask}
-                onRequestReportTask={onRequestReportTask}
-                onResumeTask={onResumeTask}
-                onCompleteTask={onCompleteTask}
-                onTaskClick={(npcTaskId) => onSetActiveTaskId?.(npcTaskId)}
-              />
+            {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
+              <div
+                className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                {t(npcActivityKey)}
+              </div>
             )}
+            <ChatInput
+              onSend={onSend}
+              value={conversationDraft}
+              onValueChange={updateConversationDraft}
+              placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
+              disabled={!!npcChatInputDisabled}
+              disabledPlaceholder={
+                npcChatInputDisabled
+                  ? (npcChatDisabledPlaceholder ?? t("chat.disconnected"))
+                  : t("chat.responding")
+              }
+              autoFocus
+              showFileUpload
+            />
           </>
         ) : roomState.view === "list" ? (
           <RoomList

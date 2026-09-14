@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
-import { parseDbJson, parseDbObject } from "@/lib/db-json";
+import { parseDbJson } from "@/lib/db-json";
 import { getChannelGatewayBinding } from "@/lib/gateway-resources";
-import { getTaskAutomationConfig } from "@/lib/task-reporting";
 import {
   summarizeChannelDetailAccess,
   summarizeChannelJoinAccess,
@@ -150,7 +149,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    const parsedGatewayConfig = parseDbObject(channel.gatewayConfig);
     const gatewayBinding = await getChannelGatewayBinding(id);
     const channelWithoutGateway = { ...channel } as Record<string, unknown>;
     delete channelWithoutGateway.gatewayConfig;
@@ -173,7 +171,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           gatewayId: gatewayBinding?.resource.id ?? null,
           displayName: gatewayBinding?.resource.displayName ?? null,
           url: gatewayBinding?.resource.baseUrl ?? null,
-          taskAutomation: getTaskAutomationConfig(parsedGatewayConfig),
         },
         lastX,
         lastY,

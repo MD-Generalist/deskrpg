@@ -50,7 +50,6 @@ export type PendingChannelData = {
   tiledJson?: unknown;
   mapConfig?: unknown;
   savedPosition?: { x: number; y: number } | null;
-  reportWaitSeconds?: number;
 } | null;
 
 const PENDING_CHANNEL_DATA_KEY = "__deskrpgPendingChannelData";
