@@ -1,9 +1,10 @@
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
-import { isIP } from "node:net";
+import { createServer, isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { prepareFixture, type FixtureApi } from "./fixture";
 import { startMockHermes } from "./mock-hermes";
@@ -12,6 +13,13 @@ export type SessionDeps = {
   spawn: typeof import("node:child_process").spawn;
   fetch: typeof globalThis.fetch;
   root: string;
+  signals: SignalSource;
+  kill: typeof process.kill;
+};
+
+export type SignalSource = {
+  on(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+  off(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
 };
 
 const APP_URL = "http://127.0.0.1:3310";
@@ -141,7 +149,12 @@ export function createFixtureApi(
   };
 }
 
-function safeChildEnvironment(runtimePath: string, sqlitePath: string): NodeJS.ProcessEnv {
+function safeChildEnvironment(
+  root: string,
+  runtimePath: string,
+  sqlitePath: string,
+  instanceId: string,
+): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
     PATH: process.env.PATH,
     TMPDIR: process.env.TMPDIR,
@@ -161,6 +174,9 @@ function safeChildEnvironment(runtimePath: string, sqlitePath: string): NodeJS.P
     INTERNAL_PORT: "3311",
     HOSTNAME: "127.0.0.1",
     NODE_ENV: "development",
+    DESKRPG_CAPTURE_MODE: "1",
+    DESKRPG_CAPTURE_INSTANCE_ID: instanceId,
+    DESKRPG_PROJECT_ROOT: root,
   };
   const browserCache =
     process.platform === "darwin"
@@ -182,23 +198,39 @@ function childExit(
   });
 }
 
-async function terminateChild(child: ChildProcess): Promise<void> {
+export async function terminateOwnedChild(
+  child: ChildProcess,
+  kill: typeof process.kill = process.kill,
+): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = childExit(child).catch(() => ({ code: null, signal: null }));
-  child.kill("SIGTERM");
-  await Promise.race([
-    exited,
-    new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-        resolve();
-      }, 2_000);
-      timer.unref();
-    }),
+  const groupPid = process.platform !== "win32" && child.pid ? -child.pid : null;
+  try {
+    if (groupPid !== null) kill(groupPid, "SIGTERM");
+    else child.kill("SIGTERM");
+  } catch {
+    child.kill("SIGTERM");
+  }
+  const terminated = await Promise.race([
+    exited.then(() => true),
+    new Promise<false>((resolve) => setTimeout(() => resolve(false), 2_000)),
   ]);
+  if (terminated) return;
+  try {
+    if (groupPid !== null) kill(groupPid, "SIGKILL");
+    else child.kill("SIGKILL");
+  } catch {
+    child.kill("SIGKILL");
+  }
+  await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 2_000))]);
 }
 
-async function waitForHealth(request: typeof globalThis.fetch, child: ChildProcess): Promise<void> {
+async function waitForHealth(
+  request: typeof globalThis.fetch,
+  child: ChildProcess,
+  instanceId: string,
+  signal: AbortSignal,
+): Promise<void> {
   let exited = false;
   const markExited = () => {
     exited = true;
@@ -206,19 +238,34 @@ async function waitForHealth(request: typeof globalThis.fetch, child: ChildProce
   child.once("exit", markExited);
   try {
     for (let attempt = 0; attempt < 80; attempt += 1) {
+      signal.throwIfAborted();
       if (exited || child.exitCode !== null || child.signalCode !== null) {
         throw new Error("DeskRPG exited before its health check became ready");
       }
       let response: Response | null = null;
       try {
-        response = await request(`${APP_URL}/api/auth/status`, {
+        response = await request(`${APP_URL}/__readme-capture/health`, {
           redirect: "error",
-          signal: AbortSignal.timeout(1_000),
+          signal: AbortSignal.any([signal, AbortSignal.timeout(1_000)]),
         });
       } catch {
         // The server is expected to refuse connections during startup.
       }
-      if (response?.ok) return;
+      if (response?.ok) {
+        const health = (await response.json().catch(() => null)) as {
+          instanceId?: string;
+          listenerAddress?: string;
+          repositoryEnvLoaded?: boolean;
+        } | null;
+        if (
+          health?.instanceId !== instanceId ||
+          health.listenerAddress !== "127.0.0.1" ||
+          health.repositoryEnvLoaded !== false
+        ) {
+          throw new Error("Health response does not belong to the owned capture instance");
+        }
+        return;
+      }
       if (response) throw new Error(`DeskRPG health check failed with HTTP ${response.status}`);
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
@@ -228,14 +275,42 @@ async function waitForHealth(request: typeof globalThis.fetch, child: ChildProce
   }
 }
 
-function npmCommand(): string {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+async function assertExclusivePort(host: string, port: number): Promise<void> {
+  const probe = createServer();
+  await new Promise<void>((resolve, reject) => {
+    probe.once("error", (error: NodeJS.ErrnoException) => {
+      reject(
+        error.code === "EADDRINUSE"
+          ? new Error(
+              `Capture requires exclusive ownership of ${host}:${port}; port is already in use`,
+            )
+          : error,
+      );
+    });
+    probe.listen(port, host, resolve);
+  });
+  await new Promise<void>((resolve, reject) => {
+    probe.close((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+function abortableFetch(
+  request: typeof globalThis.fetch,
+  sessionSignal: AbortSignal,
+): typeof globalThis.fetch {
+  return ((input: string | URL | Request, init?: RequestInit) =>
+    request(input, {
+      ...init,
+      signal: init?.signal ? AbortSignal.any([sessionSignal, init.signal]) : sessionSignal,
+    })) as typeof globalThis.fetch;
 }
 
 export async function runCaptureSession(deps: Partial<SessionDeps> = {}): Promise<void> {
   const root = path.resolve(deps.root ?? path.resolve(import.meta.dirname, "../.."));
   const spawn = deps.spawn ?? nodeSpawn;
   const request = deps.fetch ?? globalThis.fetch;
+  const signals = deps.signals ?? process;
+  const kill = deps.kill ?? process.kill;
   const runtimePath = path.join(root, CAPTURE_ARTIFACT_DIR, "runtime");
   assertCaptureRuntimePath(root, runtimePath);
   const dataPath = path.join(runtimePath, "data");
@@ -244,44 +319,88 @@ export async function runCaptureSession(deps: Partial<SessionDeps> = {}): Promis
 
   const ownedChildren = new Set<ChildProcess>();
   let mockHermes: Awaited<ReturnType<typeof startMockHermes>> | null = null;
-  const environment = safeChildEnvironment(runtimePath, sqlitePath);
+  const instanceId = `readme-capture-${randomUUID()}`;
+  const environment = safeChildEnvironment(root, runtimePath, sqlitePath, instanceId);
+  const cancellation = new AbortController();
+  const interrupt = (signal: "SIGINT" | "SIGTERM") => () => {
+    cancellation.abort(new Error(`README capture interrupted by ${signal}`));
+  };
+  const onSigint = interrupt("SIGINT");
+  const onSigterm = interrupt("SIGTERM");
+  signals.on("SIGINT", onSigint);
+  signals.on("SIGTERM", onSigterm);
+  const sessionFetch = abortableFetch(request, cancellation.signal);
 
   const startOwned = (command: string, args: string[]): ChildProcess => {
     const child = spawn(command, args, {
       cwd: root,
       env: environment,
       stdio: "inherit",
+      detached: process.platform !== "win32",
     });
     ownedChildren.add(child);
     child.once("exit", () => ownedChildren.delete(child));
     return child;
   };
 
-  const runScript = async (script: string): Promise<void> => {
-    const child = startOwned(npmCommand(), ["run", script]);
-    const result = await childExit(child);
+  const runStage = async (name: string, command: string, args: string[]): Promise<void> => {
+    cancellation.signal.throwIfAborted();
+    const child = startOwned(command, args);
+    const result = await Promise.race([
+      childExit(child),
+      cancellation.signal.aborted
+        ? Promise.reject(cancellation.signal.reason)
+        : new Promise<never>((_resolve, reject) => {
+            cancellation.signal.addEventListener(
+              "abort",
+              () => reject(cancellation.signal.reason),
+              { once: true },
+            );
+          }),
+    ]);
     if (result.code !== 0) {
-      throw new Error(`${script} failed with ${result.signal ?? `exit code ${result.code}`}`);
+      throw new Error(`${name} failed with ${result.signal ?? `exit code ${result.code}`}`);
     }
   };
 
   try {
+    await assertExclusivePort("127.0.0.1", 3310);
+    cancellation.signal.throwIfAborted();
     mockHermes = await startMockHermes({ host: "127.0.0.1", port: 38642 });
-    const serverEntry = pathToFileURL(path.join(root, "dev-server.ts")).href;
+    cancellation.signal.throwIfAborted();
     const app = startOwned(process.execPath, [
       "--import",
       "tsx",
-      "--eval",
-      `process.loadEnvFile=undefined; import(${JSON.stringify(serverEntry)})`,
+      path.join(root, "scripts/readme-capture/server-launcher.ts"),
     ]);
-    await waitForHealth(request, app);
-    await prepareFixture(createFixtureApi(APP_URL, request), mockHermes.baseUrl, sqlitePath);
-    await runScript("capture:readme:record");
-    await runScript("capture:readme:media");
-    await runScript("capture:readme:verify");
+    await waitForHealth(sessionFetch, app, instanceId, cancellation.signal);
+    cancellation.signal.throwIfAborted();
+    await prepareFixture(createFixtureApi(APP_URL, sessionFetch), mockHermes.baseUrl, sqlitePath);
+    cancellation.signal.throwIfAborted();
+    await runStage("capture:readme:record", process.execPath, [
+      path.join(root, "node_modules/@playwright/test/cli.js"),
+      "test",
+      "--config",
+      path.join(root, "playwright.readme-capture.config.ts"),
+    ]);
+    await runStage("capture:readme:media", process.execPath, [
+      "--import",
+      "tsx",
+      path.join(root, "scripts/readme-capture/media.ts"),
+    ]);
+    await runStage("capture:readme:verify", process.execPath, [
+      "--import",
+      "tsx",
+      path.join(root, "scripts/readme-capture/verify-readme.ts"),
+    ]);
   } finally {
-    await Promise.all([...ownedChildren].map((child) => terminateChild(child)));
-    await mockHermes?.close();
+    try {
+      await Promise.all([...ownedChildren].map((child) => terminateOwnedChild(child, kill)));
+      await mockHermes?.close();
+    } finally {
+      signals.off("SIGINT", onSigint);
+      signals.off("SIGTERM", onSigterm);
+    }
   }
 }
 
