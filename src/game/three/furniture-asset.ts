@@ -43,6 +43,9 @@ export function attachFurnitureAsset(
           : [object.material]) {
           if (!(material instanceof T.MeshStandardMaterial)) continue;
           material.envMapIntensity = 0.55;
+          // Macro silhouettes come from geometry; texture relief stays subtle
+          // under the office sun, especially on broad walnut tabletops.
+          material.normalScale.multiplyScalar(0.12);
           for (const value of Object.values(material))
             if (value instanceof T.Texture) value.anisotropy = 4;
         }
