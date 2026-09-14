@@ -13,7 +13,10 @@ for (const environment of OFFICE_ENVIRONMENTS) {
     const layout = deriveChannelMotionLayout({ mapData: JSON.stringify(map) }, [
       { id: "npc", positionX: 15, positionY: 19 },
     ])!;
-    assert.deepEqual(layout.bounds, { width: 960, height: 704 });
+    assert.deepEqual(
+      layout.bounds,
+      environment.id === "executive" ? { width: 576, height: 576 } : { width: 960, height: 704 },
+    );
     assert.deepEqual(layout.npcs, [{ id: "npc", x: 496, y: 624 }]);
     assert.deepEqual(
       layout.seats.map(({ id }) => id),
