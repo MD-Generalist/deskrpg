@@ -10,6 +10,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { schedulePollNow } from "@/lib/automation-poll-trigger";
 import {
   cronError,
   listNpcProfileClients,
@@ -200,6 +201,8 @@ async function createdJobResponse(resolved: Resolved, res: PluginResponse<{ job:
     channelId: ctx.channelId,
     createdByUserId: ctx.userId,
   });
+  // R24. 조작 직후 즉시 폴링 — 기다리지 않는다.
+  schedulePollNow(ctx.channelId);
   return NextResponse.json({ job: await enrichOne(resolved, res.data.job) }, { status: 201 });
 }
 
@@ -372,6 +375,7 @@ export async function mutateCronJob(
     case "update": {
       const res = await cron.updateJob(jobId, mutation.update);
       if (!res.ok) return pluginFailureResponse(res);
+      schedulePollNow(ctx.channelId);
       return NextResponse.json({ job: await enrichOne(resolved.value, res.data.job) });
     }
     case "pause":
@@ -379,18 +383,21 @@ export async function mutateCronJob(
       const res =
         mutation.kind === "pause" ? await cron.pauseJob(jobId) : await cron.resumeJob(jobId);
       if (!res.ok) return pluginFailureResponse(res);
+      schedulePollNow(ctx.channelId);
       return NextResponse.json({ job: await enrichOne(resolved.value, res.data.job) });
     }
     case "run": {
       // R19. 요청만 넣고 바로 돌아온다 — 결과는 이력(runs)·이벤트로 본다.
       const res = await cron.runJob(jobId);
       if (!res.ok) return pluginFailureResponse(res);
+      schedulePollNow(ctx.channelId);
       return NextResponse.json({ accepted: true }, { status: 202 });
     }
     case "delete": {
       const res = await cron.deleteJob(jobId);
       if (!res.ok) return pluginFailureResponse(res);
       await deleteCronOrigin(key);
+      schedulePollNow(ctx.channelId);
       return NextResponse.json({ ok: true });
     }
   }

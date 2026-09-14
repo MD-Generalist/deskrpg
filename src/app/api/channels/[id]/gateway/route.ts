@@ -15,11 +15,21 @@ import {
 } from "@/lib/gateway-resources";
 import internalTransport from "@/lib/internal-transport.js";
 import { getGatewayConfigUpdatedHandler } from "@/lib/rpc-registry";
+import { refreshPollers } from "@/server/automation-poller";
 
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
   buildInternalAuthHeaders: () => Record<string, string>;
   getInternalSocketBaseUrl: () => string;
 };
+
+/** 바인딩이 바뀌면 폴러 표를 다시 읽게 한다 — 기다리지 않고, 실패해도 응답에 섞지 않는다. */
+function refreshPollersInBackground() {
+  void refreshPollers().catch((err: unknown) => {
+    console.warn(
+      `[gateway-route] refreshPollers failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  });
+}
 
 function buildResponseGatewayConfig(input: {
   userId: string;
@@ -174,6 +184,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   await emitGatewayConfigUpdated(id);
+  refreshPollersInBackground();
 
   const nextBinding = await getChannelGatewayBinding(id);
   // 다른 게이트웨이로 옮겼다 — 보드는 새 게이트웨이에 확보됐지만(bindGatewayToChannel 안에서),
@@ -209,6 +220,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await sleepChannelNpcs(id, previousGatewayId);
   }
   await emitGatewayConfigUpdated(id);
+  refreshPollersInBackground();
 
   return NextResponse.json({
     ok: true,
