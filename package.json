@@ -22,6 +22,7 @@
     "src/server",
     "src/game/navigation.ts",
     "src/game/three/seating.ts",
+    "src/game/three/executive-lounge-layout.ts",
     "drizzle",
     ".env.example",
     "drizzle-sqlite.config.ts",

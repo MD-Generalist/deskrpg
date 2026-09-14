@@ -70,6 +70,7 @@ COPY --from=builder /app/src/lib/tiled-geometry.ts ./src/lib/tiled-geometry.ts
 COPY --from=builder /app/src/lib/object-types.ts ./src/lib/object-types.ts
 COPY --from=builder /app/src/game/navigation.ts ./src/game/navigation.ts
 COPY --from=builder /app/src/game/three/seating.ts ./src/game/three/seating.ts
+COPY --from=builder /app/src/game/three/executive-lounge-layout.ts ./src/game/three/executive-lounge-layout.ts
 COPY --from=builder /app/src/lib/open-chat-formatter.ts ./src/lib/open-chat-formatter.ts
 
 # DB 경계는 통째로 옮긴다. 파일 목록으로 두면 `require("./sqlite-...js")` 처럼
