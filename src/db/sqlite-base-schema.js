@@ -292,46 +292,6 @@ const SQLITE_BASE_SCHEMA = `
     CREATE INDEX IF NOT EXISTS idx_npc_sessions_npc ON npc_sessions(npc_id);
     CREATE UNIQUE INDEX IF NOT EXISTS npc_sessions_npc_user_context_idx ON npc_sessions(npc_id, user_id, context_key);
 
-    CREATE TABLE IF NOT EXISTS tasks (
-      id TEXT PRIMARY KEY NOT NULL,
-      channel_id TEXT NOT NULL REFERENCES channels(id),
-      npc_id TEXT REFERENCES npcs(id) ON DELETE CASCADE,
-      assigner_id TEXT NOT NULL REFERENCES characters(id),
-      npc_task_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      auto_nudge_count INTEGER NOT NULL DEFAULT 0,
-      auto_nudge_max INTEGER NOT NULL DEFAULT 5,
-      last_nudged_at TEXT,
-      last_reported_at TEXT,
-      stalled_at TEXT,
-      stalled_reason TEXT,
-      created_at TEXT,
-      updated_at TEXT,
-      completed_at TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_tasks_channel ON tasks(channel_id);
-    CREATE INDEX IF NOT EXISTS idx_tasks_npc ON tasks(npc_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_npc_task_id ON tasks(npc_id, npc_task_id);
-
-    CREATE TABLE IF NOT EXISTS npc_reports (
-      id TEXT PRIMARY KEY NOT NULL,
-      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-      npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
-      task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-      target_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL,
-      message TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL,
-      delivered_at TEXT,
-      consumed_at TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_channel ON npc_reports(channel_id);
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_target_user ON npc_reports(target_user_id);
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_status ON npc_reports(status);
-
     CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY NOT NULL,
       character_id TEXT NOT NULL REFERENCES characters(id),

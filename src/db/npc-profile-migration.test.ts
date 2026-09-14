@@ -68,7 +68,7 @@ test("0008 은 외형을 프로필로 옮기고 미연결 NPC 를 백업 후 지
            ('55555555-5555-5555-5555-555555555552','44444444-4444-4444-4444-444444444444','new',2,2,'{"v":"new"}','33333333-3333-3333-3333-333333333333', now()),
            ('55555555-5555-5555-5555-555555555553','44444444-4444-4444-4444-444444444444','orphan',3,3,'{"v":"orphan"}',NULL, now())`);
 
-  // 자식 행: 미연결 NPC 와 중복 NPC 에 대화 이력·태스크를 하나씩 매단다.
+  // 자식 행: 미연결 NPC 와 중복 NPC 에 대화 이력을 하나씩 매단다.
   // 이것들이 CASCADE 로 함께 지워지므로 백업이 없으면 영구 소실이다.
   await pool.query(
     `INSERT INTO characters(id, user_id, name, appearance) VALUES ('66666666-6666-6666-6666-666666666666','11111111-1111-1111-1111-111111111111','ch','{}')`,
@@ -77,11 +77,6 @@ test("0008 은 외형을 프로필로 옮기고 미연결 NPC 를 백업 후 지
     `INSERT INTO chat_messages(character_id, npc_id, role, content) VALUES
        ('66666666-6666-6666-6666-666666666666','55555555-5555-5555-5555-555555555553','user','orphan chat'),
        ('66666666-6666-6666-6666-666666666666','55555555-5555-5555-5555-555555555551','user','dup chat')`,
-  );
-  await pool.query(
-    `INSERT INTO tasks(channel_id, npc_id, assigner_id, npc_task_id, title) VALUES
-       ('44444444-4444-4444-4444-444444444444','55555555-5555-5555-5555-555555555553','66666666-6666-6666-6666-666666666666','t-orphan','orphan task'),
-       ('44444444-4444-4444-4444-444444444444','55555555-5555-5555-5555-555555555551','66666666-6666-6666-6666-666666666666','t-dup','dup task')`,
   );
 
   // 0008 까지 적용 — 저장소의 실제 drizzle/ 을 그대로 쓴다.
@@ -122,16 +117,13 @@ test("0008 은 외형을 프로필로 옮기고 미연결 NPC 를 백업 후 지
   assert.equal(Number(conflicts), 1, "외형이 갈린 나머지는 conflicts 에 남는다");
 
   // C1: CASCADE 로 함께 지워진 자식 행이 백업 테이블에 남아야 한다 — 미연결(1) + 중복(1)
-  for (const [table, label] of [
-    ["npcs_removed_chat_messages_backup", "대화 이력"],
-    ["npcs_removed_tasks_backup", "태스크"],
-  ] as const) {
+  for (const [table, label] of [["npcs_removed_chat_messages_backup", "대화 이력"]] as const) {
     const {
       rows: [{ count: n }],
     } = await pool.query(`SELECT count(*) FROM ${table}`);
     assert.equal(Number(n), 2, `${label} 는 지워지기 전에 ${table} 로 백업된다`);
   }
-  for (const table of ["npcs_removed_npc_sessions_backup", "npcs_removed_npc_reports_backup"]) {
+  for (const table of ["npcs_removed_npc_sessions_backup"]) {
     const {
       rows: [{ count: n }],
     } = await pool.query(`SELECT count(*) FROM ${table}`);

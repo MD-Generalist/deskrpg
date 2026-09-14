@@ -497,28 +497,6 @@ export const npcSessions = pgTable(
   ],
 );
 
-export const npcReports = pgTable("npc_reports", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  channelId: uuid("channel_id")
-    .notNull()
-    .references(() => channels.id, { onDelete: "cascade" }),
-  npcId: uuid("npc_id")
-    .notNull()
-    .references(() => npcs.id, { onDelete: "cascade" }),
-  taskId: uuid("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  targetUserId: uuid("target_user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  kind: varchar("kind", { length: 20 }).notNull(),
-  message: text("message").notNull(),
-  status: varchar("status", { length: 20 }).notNull().default("pending"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-  consumedAt: timestamp("consumed_at", { withTimezone: true }),
-});
-
 export const chatMessages = pgTable(
   "chat_messages",
   {
@@ -615,38 +593,6 @@ export const meetingMinutes = pgTable(
   (table) => [
     index("idx_meeting_minutes_channel").on(table.channelId),
     index("idx_meeting_minutes_created").on(table.createdAt),
-  ],
-);
-
-export const tasks = pgTable(
-  "tasks",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    channelId: uuid("channel_id")
-      .notNull()
-      .references(() => channels.id),
-    npcId: uuid("npc_id").references(() => npcs.id, { onDelete: "cascade" }),
-    assignerId: uuid("assigner_id")
-      .notNull()
-      .references(() => characters.id),
-    npcTaskId: varchar("npc_task_id", { length: 64 }).notNull(),
-    title: varchar("title", { length: 200 }).notNull(),
-    summary: text("summary"),
-    status: varchar("status", { length: 20 }).notNull().default("pending"),
-    autoNudgeCount: integer("auto_nudge_count").notNull().default(0),
-    autoNudgeMax: integer("auto_nudge_max").notNull().default(5),
-    lastNudgedAt: timestamp("last_nudged_at", { withTimezone: true }),
-    lastReportedAt: timestamp("last_reported_at", { withTimezone: true }),
-    stalledAt: timestamp("stalled_at", { withTimezone: true }),
-    stalledReason: varchar("stalled_reason", { length: 50 }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-  },
-  (table) => [
-    index("idx_tasks_channel").on(table.channelId),
-    index("idx_tasks_npc").on(table.npcId),
-    uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
   ],
 );
 

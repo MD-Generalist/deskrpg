@@ -9,7 +9,7 @@
 // drizzle-kit reads the .ts file to generate migrations; server.js requires the
 // .cjs file at runtime. If a column / constraint is added in one place but not the
 // other, the runtime ORM silently emits mis-shaped SQL (this exact failure mode
-// broke task creation in 2026-04). This test introspects the *compiled* drizzle
+// broke the legacy task creation path in 2026-04). This test introspects the *compiled* drizzle
 // table structure of each pair and asserts deep structural equality so the two
 // definitions can never silently drift.
 //
@@ -31,7 +31,7 @@ const pgCjs = require("./schema.pg.cjs") as Record<string, unknown>;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sqliteCjs = require("./schema.sqlite.cjs") as Record<string, unknown>;
 
-const EXPECTED_TABLE_COUNT = 35;
+const EXPECTED_TABLE_COUNT = 33;
 
 type AnyTable = Record<string, unknown>;
 type GetTableConfig = (table: unknown) => {
@@ -261,27 +261,6 @@ test("schema-sqlite.ts and schema.sqlite.cjs are structurally identical (SQLite)
     sqliteTs as unknown as Record<string, unknown>,
     sqliteCjs,
   );
-});
-
-test("PostgreSQL tasks table has all task-manager columns (2026-04 regression guard)", () => {
-  // Absolute presence check: guards that the runtime PG schema carries every
-  // column TaskManager writes, even if .ts and .cjs were (wrongly) changed in
-  // lockstep. This is the specific failure that broke task creation in 2026-04.
-  const cols = new Set(Object.keys(getTableColumns(pgCjs.tasks as never)));
-  for (const required of [
-    "autoNudgeCount",
-    "autoNudgeMax",
-    "lastNudgedAt",
-    "lastReportedAt",
-    "stalledAt",
-    "stalledReason",
-    "completedAt",
-  ]) {
-    assert.ok(
-      cols.has(required),
-      `tasks.${required} missing from runtime PG schema (this is what broke task creation in 2026-04)`,
-    );
-  }
 });
 
 test("each dialect exports exactly the expected 29 tables", () => {
