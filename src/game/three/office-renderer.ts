@@ -668,7 +668,10 @@ export class OfficeRenderer {
     if (finishedPerimeter && !executive)
       addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
     if (finishedPerimeter && map.environment && !executive)
-      addOfficeRoomSurfaces(this.world, map.environment);
+      addOfficeRoomSurfaces(this.world, map.environment, {
+        environmentVersion: map.environmentVersion,
+        hasLegacyPartitions: finishedPerimeter,
+      });
     this.seats = furnitureSeats(furniture);
     for (const object of furniture) {
       if (

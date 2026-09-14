@@ -39,11 +39,6 @@ export const OFFICE_ROOMS: Record<string, readonly OfficeRoom[]> = {
     ["meeting", 10],
     ["ceo", 8],
   ]),
-  agency: suite(8, [
-    ["ceo", 7],
-    ["meeting", 12],
-    ["pantry", 7],
-  ]),
   tech: suite(7, [
     ["meeting", 10],
     ["pantry", 9],
@@ -51,13 +46,48 @@ export const OFFICE_ROOMS: Record<string, readonly OfficeRoom[]> = {
   ]),
   executive: EXECUTIVE_ZONES,
 };
-export function furnishOfficeRooms(
-  id: string,
-  add: (type: string, x: number, y: number, direction?: MapObject["direction"]) => void,
-) {
+/** Frozen source of the retired official map. Task 7 uses this to recognize agency v2 exactly. */
+export const LEGACY_AGENCY_V2_ROOMS: readonly OfficeRoom[] = Object.freeze(
+  suite(8, [
+    ["ceo", 7],
+    ["meeting", 12],
+    ["pantry", 7],
+  ]).map((room) => Object.freeze(room)),
+);
+
+export type OfficeRoomSurfaceContext = {
+  environmentVersion?: number;
+  hasLegacyPartitions?: boolean;
+};
+
+/** Keep retired agency rooms available only to persisted legacy presentation. */
+export function officeRoomsForSurface(
+  environment: string,
+  context: OfficeRoomSurfaceContext = {},
+): readonly OfficeRoom[] | undefined {
+  if (environment !== "agency") return OFFICE_ROOMS[environment];
+  if (context.hasLegacyPartitions !== true) return undefined;
+  return context.environmentVersion === 2 || context.environmentVersion === undefined
+    ? LEGACY_AGENCY_V2_ROOMS
+    : undefined;
+}
+
+type RoomAdd = (type: string, x: number, y: number, direction?: MapObject["direction"]) => void;
+
+export function furnishOfficeRooms(id: string, add: RoomAdd) {
   if (id === "executive") return furnishExecutiveOffice(add);
   if (id === "publishing") return furnishPublishingRooms(add);
   const rooms = OFFICE_ROOMS[id];
+  if (!rooms) throw new Error(`No shared office-room layout for ${id}`);
+  furnishStandardSuite(id, rooms, add);
+}
+
+/** Recreates only the v2 agency furniture; it is not used by selectable environments. */
+export function furnishLegacyAgencyV2(add: RoomAdd) {
+  furnishStandardSuite("agency", LEGACY_AGENCY_V2_ROOMS, add);
+}
+
+function furnishStandardSuite(id: string, rooms: readonly OfficeRoom[], add: RoomAdd) {
   const boundary = rooms[0].z + rooms[0].depth;
   for (const room of rooms) {
     if (room.x > 1) for (let z = 1; z <= boundary; z++) add("room_wall_v", room.x - 1, z);

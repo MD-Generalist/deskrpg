@@ -51,6 +51,7 @@ export function projectTiledGeometry(map: TiledGeometryMap): TiledGeometrySnapsh
           row: Math.floor(o.y / 32),
           ...tiledDirection(o.properties),
           ...tiledVariant(o.properties),
+          ...tiledDestinationTags(o.properties),
         })),
     );
   const blocked = computeOccupiedTiles(objects);
@@ -99,4 +100,18 @@ export function tiledVariant(properties?: Array<{ name: string; value: unknown }
 } {
   const value = properties?.find((p) => p.name === "variant")?.value;
   return typeof value === "string" ? { variant: value } : {};
+}
+
+export function tiledDestinationTags(properties?: Array<{ name: string; value: unknown }>): {
+  destinationTags?: readonly string[];
+} {
+  const value = properties?.find((property) => property.name === "destinationTags")?.value;
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(parsed) && parsed.every((tag) => typeof tag === "string")
+      ? { destinationTags: parsed }
+      : {};
+  } catch {
+    return {};
+  }
 }

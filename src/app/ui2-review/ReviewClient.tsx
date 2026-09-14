@@ -119,7 +119,11 @@ export default function ReviewClient() {
   const [report, setReport] = useState<unknown>(null);
 
   const frameRoom = (id: OfficeEnvironmentId, roomId: OfficeRoom["id"]) => {
-    const room = OFFICE_ROOMS[id].find((room) => room.id === roomId)!;
+    const room = (OFFICE_ROOMS[id] ?? []).find((room) => room.id === roomId);
+    if (!room) {
+      renderer.current?.showOverview();
+      return;
+    }
     renderer.current?.showRoom(room.x + room.width / 2, room.z + room.depth / 2, 14);
   };
   const frameCamera = (id: OfficeEnvironmentId, scene: SceneMode) => {
@@ -502,7 +506,7 @@ export default function ReviewClient() {
             }}
           >
             <option value="">장면 카메라 복원</option>
-            {OFFICE_ROOMS[environment].map((room) => (
+            {(OFFICE_ROOMS[environment] ?? []).map((room) => (
               <option key={room.id} value={room.id}>
                 {room.label} 근접
               </option>

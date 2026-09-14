@@ -27,6 +27,8 @@ export type MapSnapshot = {
   tiled: boolean;
   /** Validated office-template metadata, independent of actor appearance. */
   environment?: string;
+  /** Optional persisted template version used for backwards-compatible presentation. */
+  environmentVersion?: number;
   /** Actual channel artwork; retained for custom tiles without semantic 3D equivalents. */
   artwork?: HTMLCanvasElement;
 };

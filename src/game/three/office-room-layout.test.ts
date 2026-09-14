@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as T from "three";
-import { OFFICE_ROOMS } from "./office-room-layout";
+import { furnishLegacyAgencyV2, LEGACY_AGENCY_V2_ROOMS, OFFICE_ROOMS } from "./office-room-layout";
 import { OFFICE_ENVIRONMENTS, buildOfficeEnvironment } from "./office-environments";
 import { tiledSnapshot } from "./tiled-preview";
 import { furnitureSeats } from "./seating";
@@ -16,6 +16,12 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     const snapshot = tiledSnapshot(map);
     const blocked = new Set(snapshot.blocked);
     const zones = readAmbientZones(map as unknown as Record<string, unknown>);
+    if (id === "agency") {
+      assert.equal(zones.length, 8);
+      assert.equal(OFFICE_ROOMS.agency, undefined);
+      assert.ok(!snapshot.objects.some((object) => object.type.startsWith("room_wall")));
+      return;
+    }
     assert.equal(zones.length, 3);
     const rooms = OFFICE_ROOMS[id];
     if (id === "executive") {
@@ -98,13 +104,93 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     }
   });
 }
-test("five suites differ by room footprints and order, not just finishes", () => {
+test("the four shared suites differ by room footprints and order", () => {
   assert.equal(
     new Set(
       Object.values(OFFICE_ROOMS).map((rooms) =>
         JSON.stringify(rooms.map(({ id, x, width, depth }) => [id, x, width, depth])),
       ),
     ).size,
-    5,
+    4,
   );
+});
+
+test("retired agency v2 geometry remains frozen for exact-snapshot migration", () => {
+  assert.ok(Object.isFrozen(LEGACY_AGENCY_V2_ROOMS));
+  assert.ok(LEGACY_AGENCY_V2_ROOMS.every(Object.isFrozen));
+  assert.deepEqual(
+    LEGACY_AGENCY_V2_ROOMS.map(({ id, x, z, width, depth, door }) => [
+      id,
+      x,
+      z,
+      width,
+      depth,
+      door,
+    ]),
+    [
+      ["ceo", 1, 1, 7, 8, 3],
+      ["meeting", 9, 1, 12, 8, 14],
+      ["pantry", 22, 1, 7, 8, 24],
+    ],
+  );
+  const first: string[] = [];
+  const second: string[] = [];
+  const collect = (target: string[]) => (type: string, x: number, y: number) =>
+    target.push(`${type}:${x}:${y}`);
+  furnishLegacyAgencyV2(collect(first));
+  furnishLegacyAgencyV2(collect(second));
+  assert.deepEqual(first, second);
+  assert.equal(first.length, 93);
+});
+
+test("old and edited legacy agency snapshots keep v2 room surfaces", () => {
+  for (const environmentVersion of [2, undefined]) {
+    const map = buildOfficeEnvironment("agency");
+    const layer = map.layers.find((entry) => entry.name === "Objects")!;
+    const versionProperty = layer.properties!.find(
+      (property) => property.name === "officeEnvironmentVersion",
+    )!;
+    if (environmentVersion === undefined)
+      layer.properties = layer.properties!.filter(
+        (property) => property.name !== "officeEnvironmentVersion",
+      );
+    else versionProperty.value = environmentVersion;
+    layer.objects!.push({
+      id: map.nextobjectid++,
+      name: "room_wall_h",
+      type: "room_wall_h",
+      x: 32,
+      y: 9 * 32,
+      width: 32,
+      height: 32,
+      visible: true,
+    });
+    const snapshot = tiledSnapshot(map);
+    assert.equal(snapshot.environmentVersion, environmentVersion);
+    const hasLegacyPartitions = snapshot.objects.some((object) =>
+      object.type.startsWith("room_wall"),
+    );
+    const world = new T.Group();
+    addOfficeRoomSurfaces(world, snapshot.environment!, {
+      environmentVersion: snapshot.environmentVersion,
+      hasLegacyPartitions,
+    });
+    assert.equal(
+      world.children.filter(
+        (object): object is T.Mesh =>
+          object instanceof T.Mesh && object.geometry instanceof T.PlaneGeometry,
+      ).length,
+      3,
+    );
+  }
+
+  for (const options of [
+    { environmentVersion: 3, hasLegacyPartitions: true },
+    { environmentVersion: 2, hasLegacyPartitions: false },
+    { environmentVersion: undefined, hasLegacyPartitions: false },
+  ]) {
+    const world = new T.Group();
+    addOfficeRoomSurfaces(world, "agency", options);
+    assert.equal(world.children.length, 0, "current studio never receives retired room surfaces");
+  }
 });
