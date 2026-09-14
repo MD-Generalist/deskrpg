@@ -78,7 +78,7 @@ export type PluginGate = { ok: true; info: PluginInfo } | { ok: false; response:
  * - 428 `plugin_upgrade_required` `{minVersion, reason, missing?}` — 플러그인 업그레이드
  * - 404 `plugin_absent` — 게이트웨이 머신에 플러그인 설치
  * - 401 `plugin_unauthorized` — 게이트웨이 레코드의 키 교체
- * - 503 `unreachable` / 504 `timeout` — 게이트웨이 주소·상태 확인(`pluginFailureResponse` 와 같은 코드)
+ * - 503 `unreachable` / 504 `timeout` — 게이트웨이 주소·상태 확인(데이터 호출 실패 `pluginFailureResponse` 도 같은 상태·코드)
  * - 503 `plugin_unknown` — 닿았지만 우리 플러그인의 응답이 아님
  */
 export function pluginGateResponse(gate: Extract<AutomationGate, { ok: false }>): NextResponse {
@@ -272,10 +272,10 @@ export async function listNpcProfileClients(
 /**
  * 플러그인 실패를 HTTP 응답으로 옮긴다. 상태 코드는 Hermes 가 준 것을 그대로, 본문은
  * `{code, message}`. 로컬 대체는 없다. 클라이언트 계층에서 난 실패(status 0)만 우리가
- * 코드를 정한다 — 닿지 못했으면 502, 기다리다 끝났으면 504.
+ * 코드를 정한다 — 닿지 못했으면 503, 기다리다 끝났으면 504(게이트 판정 실패와 같은 값).
  */
 export function pluginFailureResponse(res: Extract<PluginResponse<unknown>, { ok: false }>) {
-  const status = res.status > 0 ? res.status : res.failure.code === "timeout" ? 504 : 502;
+  const status = res.status > 0 ? res.status : res.failure.code === "timeout" ? 504 : 503;
   return cronError(status, res.failure.code, res.failure.message, res.failure.details);
 }
 
