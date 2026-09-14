@@ -361,7 +361,10 @@ test.describe("mobile touch emulation (not a physical device)", () => {
 test("no WebGL still exposes public and login HTML", async ({ page }) => {
   await page.addInitScript(() => {
     const getContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (...args: Parameters<typeof getContext>) {
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      ...args: Parameters<typeof getContext>
+    ) {
       if (String(args[0]).startsWith("webgl")) return null;
       return getContext.apply(this, args);
     } as typeof getContext;
