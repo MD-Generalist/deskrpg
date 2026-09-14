@@ -3,11 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: __dirname,
-  turbopack: { root: __dirname },
   devIndicators: false,
   // This repository is independent from any npm project above its root.
   turbopack: {
-    root: process.cwd(),
+    root: __dirname,
   },
   // Loopback-only second origin lets local QA use two independent login sessions.
   allowedDevOrigins: ["127.0.0.1"],
