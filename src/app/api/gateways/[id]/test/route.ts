@@ -11,8 +11,11 @@ import {
   persistGatewayValidationState,
 } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
-import { buildPluginCacheUpdate } from "@/lib/hermes/plugin-cache-update";
-import { probeDeskrpgPlugin } from "@/lib/hermes/plugin-capability";
+import {
+  buildPluginCacheUpdate,
+  buildPluginInfoCacheUpdate,
+} from "@/lib/hermes/plugin-cache-update";
+import { probeDeskrpgPluginWithInfo } from "@/lib/hermes/plugin-capability";
 import { diagnoseUnreachable } from "@/lib/hermes/unreachable-hint";
 import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
@@ -57,14 +60,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (probe.kind === "hermes") {
     // Hermes 임이 확인된 뒤에만 플러그인을 찌른다 — API Server 가 아닌 곳에 우리
     // 경로를 보낼 이유가 없다.
-    const plugin = await probeDeskrpgPlugin({
+    // 응답 모양(`plugin: {status, version}`)은 그대로 두고, 자동화 계약 블록(info)만
+    // `plugin_info_json` 캐시에 함께 남긴다 — 보드 확보(kanban-boards.ts)가 그것으로 판정한다.
+    const probed = await probeDeskrpgPluginWithInfo({
       fetchImpl: transportFetch,
       baseUrl: accessible.resource.baseUrl,
       token: decryptGatewayToken(accessible.resource.tokenEncrypted),
     });
+    const plugin = probed.capability;
     await db
       .update(gatewayResources)
-      .set(buildPluginCacheUpdate(plugin))
+      .set({ ...buildPluginCacheUpdate(plugin), ...buildPluginInfoCacheUpdate(probed.info) })
       .where(eq(gatewayResources.id, id));
 
     // 프로브 결과를 **검증 상태로도** 남긴다. 예전에는 plugin_* 만 쓰고

@@ -137,6 +137,9 @@ describe("게이트웨이 테스트 라우트 — 플러그인 캐시를 실제�
 
       assert.equal(row.pluginStatus, "plugin_ready");
       assert.equal(row.pluginVersion, "0.4.2");
+      // T4: 자동화 계약 블록도 같은 호출에서 캐시된다(0.6.0 이전 본문은 capabilities 가 빈 배열).
+      assert.ok(row.pluginInfoJson, "plugin_info_json 이 채워져야 한다");
+      assert.deepEqual(JSON.parse(row.pluginInfoJson as string).capabilities, []);
       // 화면의 "아직 테스트하지 않음" 은 last_validation_status 를 본다. 예전에는
       // 이 라우트가 plugin_* 만 쓰고 검증 상태를 비워 둬서, 연결 테스트를 아무리
       // 눌러도 목록이 그대로였다(스테이징 실측 2026-09-07). persistGatewayValidationState

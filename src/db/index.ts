@@ -74,6 +74,7 @@ export const hermesProfiles = activeSchema.hermesProfiles;
 export const providerResources = activeSchema.providerResources;
 export const providerShares = activeSchema.providerShares;
 export const channelGatewayBindings = activeSchema.channelGatewayBindings;
+export const channelKanbanBoards = activeSchema.channelKanbanBoards;
 export const groupMembers = activeSchema.groupMembers;
 export const groupInvites = activeSchema.groupInvites;
 export const groupJoinRequests = activeSchema.groupJoinRequests;

@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
 import { parseDbJson } from "@/lib/db-json";
 import { getChannelGatewayBinding } from "@/lib/gateway-resources";
+import { getChannelBoard, syncBoardName } from "@/lib/kanban-boards";
 import {
   summarizeChannelDetailAccess,
   summarizeChannelJoinAccess,
@@ -196,7 +197,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     // Check ownership
     const rows = await db
-      .select({ ownerId: channels.ownerId, isPublic: channels.isPublic })
+      .select({ ownerId: channels.ownerId, isPublic: channels.isPublic, name: channels.name })
       .from(channels)
       .where(eq(channels.id, id))
       .limit(1);
@@ -215,6 +216,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
+    const previousName = rows[0].name;
     const body = await req.json();
     const updates: Record<string, unknown> = {};
 
@@ -261,6 +263,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       createdAt: channels.createdAt,
       updatedAt: channels.updatedAt,
     });
+
+    // 이름이 실제로 바뀌었고 보드 연결 행이 있으면 보드 표시 이름도 맞춘다(R2).
+    // 실패해도 개명은 이미 성공했다 — 삼키고 기록만 남기면 다음 폴링이 재시도한다.
+    if (body.name !== undefined && updated.name !== previousName) {
+      try {
+        if (await getChannelBoard(id)) {
+          const synced = await syncBoardName(id, updated.name);
+          if (!synced.ok) {
+            console.warn(`[channels] board name not synced for ${id}: ${synced.code}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[channels] syncBoardName threw for ${id}:`, err);
+      }
+    }
 
     // Emit socket event to notify clients of channel update
     try {

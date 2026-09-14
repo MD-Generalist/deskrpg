@@ -26,6 +26,9 @@ function nowForDb() {
 }
 
 import { selectChannelNpcs } from "./npc-projection";
+// 순환 import 다(kanban-boards → 이 파일의 getChannelGatewayBinding/decryptGatewayToken).
+// 모듈 평가 시점에는 쓰지 않고 함수 안에서만 부르므로 안전하다.
+import { ensureChannelBoard } from "./kanban-boards";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { DEV_JWT_SECRET } from "./dev-constants";
 
@@ -396,6 +399,8 @@ export async function bindGatewayToChannel(input: {
 }) {
   const existing = await getChannelGatewayBinding(input.channelId);
   if (existing?.binding.gatewayId === input.gatewayId) {
+    // 같은 게이트웨이를 다시 저장하는 것도 보드 확보의 재시도 기회다(R5 — 멱등).
+    await ensureChannelBoardAfterBind(input.channelId);
     return existing.binding;
   }
 
@@ -421,8 +426,25 @@ export async function bindGatewayToChannel(input: {
     invalidateGatewayRuntimeState(existing.binding.gatewayId);
   }
 
+  // 바인딩이 커밋된 뒤에 보드를 확보한다(R1). 실패는 바인딩을 실패시키지 않는다(R5).
+  await ensureChannelBoardAfterBind(input.channelId);
+
   const next = await getChannelGatewayBinding(input.channelId);
   return next?.binding ?? null;
+}
+
+/** `ensureChannelBoard` 는 던지지 않지만, 바인딩 경로에서는 그것조차 한 번 더 감싼다. */
+async function ensureChannelBoardAfterBind(channelId: string) {
+  try {
+    const result = await ensureChannelBoard(channelId);
+    if (!result.ok) {
+      console.warn(
+        `[gateway-resources] board not ensured for channel ${channelId}: ${result.code} (${result.reason})`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[gateway-resources] ensureChannelBoard threw for channel ${channelId}:`, err);
+  }
 }
 
 export async function unbindGatewayFromChannel(channelId: string) {

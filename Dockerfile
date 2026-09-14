@@ -87,6 +87,8 @@ COPY --from=builder /app/src/lib/npc-roster.ts ./src/lib/npc-roster.ts
 # extensionless "../lib/runtime-paths", which TypeScript resolves to the .ts file.
 COPY --from=builder /app/src/lib/runtime-paths.ts ./src/lib/runtime-paths.ts
 COPY --from=builder /app/src/lib/gateway-resources.ts ./src/lib/gateway-resources.ts
+# gateway-resources 가 바인딩 뒤 보드 확보(T4)를 위해 끌어온다 — 빠지면 소켓 서버가 기동에서 죽는다.
+COPY --from=builder /app/src/lib/kanban-boards.ts ./src/lib/kanban-boards.ts
 COPY --from=builder /app/src/lib/gateway-runtime-cache.ts ./src/lib/gateway-runtime-cache.ts
 COPY --from=builder /app/src/lib/npc-response-messages.ts ./src/lib/npc-response-messages.ts
 COPY --from=builder /app/src/lib/dev-constants.ts ./src/lib/dev-constants.ts
