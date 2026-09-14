@@ -284,11 +284,48 @@ test("offscreen intersection pauses and resumes without catch-up", async ({ page
   const paused = await snapshot(page);
   await page.waitForTimeout(1800);
   expect(await snapshot(page)).toEqual(paused);
-  await page.locator(".commute-canvas").evaluate((element) => {
-    (element as HTMLElement).style.transform = "";
+  const resumed = await page.evaluate(() => {
+    const probe = window.__homepageProbe!;
+    const renderer = probe.renderer;
+    const originalRender = renderer.render;
+    const samples: { frames: number; actors: { uuid: string; x: number }[] }[] = [];
+    return new Promise<typeof samples>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        renderer.render = originalRender;
+        reject(new Error("Homepage did not render six frames after returning onscreen"));
+      }, 15_000);
+      renderer.render = (scene, camera) => {
+        originalRender.call(renderer, scene, camera);
+        if (scene !== probe.scene) return;
+        const actors: { uuid: string; x: number }[] = [];
+        scene.traverse((object) => {
+          if (object.userData.assetStatus) actors.push({ uuid: object.uuid, x: object.position.x });
+        });
+        samples.push({ frames: window.__homepageProbe!.frames, actors });
+        if (samples.length === 6) {
+          renderer.render = originalRender;
+          window.clearTimeout(timeout);
+          resolve(samples);
+        }
+      };
+      // Install the observer and restore visibility in one browser task. Sampling
+      // after a Playwright poll instead would include arbitrary CDP round-trip time.
+      document.querySelector<HTMLElement>(".commute-canvas")!.style.transform = "";
+    });
   });
-  await expect.poll(async () => (await snapshot(page)).frames).toBeGreaterThan(paused.frames);
-  expect(Math.abs((await snapshot(page)).actors[0].x - paused.actors[0].x)).toBeLessThan(0.5);
+  expect(resumed.map((sample) => sample.frames)).toEqual(
+    Array.from({ length: 6 }, (_, index) => paused.frames + index + 1),
+  );
+  expect(resumed[0].actors).toEqual(paused.actors.map(({ uuid, x }) => ({ uuid, x })));
+  for (let index = 0; index < resumed[0].actors.length; index++) {
+    // Five subsequent ticks can advance at most 5 × 0.05s × 1.7 world units/s.
+    // Measure across the 36-unit path seam without counting a wrap as catch-up.
+    const travel = Math.abs(
+      ((resumed[5].actors[index].x - resumed[0].actors[index].x + 54) % 36) - 18,
+    );
+    expect(travel).toBeGreaterThan(0);
+    expect(travel).toBeLessThanOrEqual(0.425 + 1e-9);
+  }
 });
 
 test("real WebGL context loss and restoration", async ({ page }) => {
