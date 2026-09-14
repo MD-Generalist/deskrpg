@@ -81,3 +81,8 @@ deploy/pre-deploy-checklist.md
 
 # Character editing sources (Blender, supplied bases, review captures) — not shipped
 /art/
+
+# Public deployment recipes (served via raw URL to Hostinger Docker Manager)
+!/deploy/
+/deploy/*
+!/deploy/hostinger/

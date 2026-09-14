@@ -1,0 +1,86 @@
+# DeskRPG on Hostinger VPS (Docker Manager) — single-file compose
+#
+# Deploy: hPanel → VPS → Docker Manager → Compose → "Compose from URL", or the
+# "Deploy on Hostinger" button in README.md (compose_url=<raw URL of this file>).
+#
+# Rules this file follows (Docker Manager ingests ONE file, nothing next to it):
+#   - image: only (no build:), no env_file:, no version:, every variable has a default
+#   - app ports are not published; Traefik (Hostinger catalog project) terminates HTTPS
+#   - Postgres is not required: SQLite lives in the named volume `deskrpg-data`
+#
+# Environment variables to set in Docker Manager (all optional, defaults boot as-is):
+#   JWT_SECRET        long random string  (REQUIRED for production — default is a placeholder)
+#   HERMES_API_KEY    bearer key for the bundled Hermes API server (REQUIRED if you use `hermes`)
+#   OPENROUTER_API_KEY  or OPENAI_API_KEY / ANTHROPIC_API_KEY — model provider for Hermes
+#   TRAEFIK_HOST      injected by Hostinger when the Traefik project exists (srvNNNNNN.hstgr.cloud)
+#   DESKRPG_IMAGE     override the image tag (default pinned below)
+#
+# Already have Hermes somewhere else? Delete the `hermes` service and point
+# DeskRPG → My Gateways → New gateway at your own API server URL + profile key.
+
+services:
+  deskrpg:
+    image: ${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}
+    restart: unless-stopped
+    depends_on:
+      - hermes
+    environment:
+      DB_TYPE: sqlite
+      SQLITE_PATH: /app/data/deskrpg.db
+      JWT_SECRET: ${JWT_SECRET:-deskrpg-change-this-secret-before-inviting-anyone}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      INTERNAL_HOSTNAME: 0.0.0.0
+      # Only the DeskRPG server host may run the gateway setup wizard; keep it off on a VPS
+      # unless you know why you need it (see docs/gateway-setup.md).
+      DESKRPG_HOST_SETUP_ENABLED: ${DESKRPG_HOST_SETUP_ENABLED:-0}
+    volumes:
+      - deskrpg-data:/app/data
+    networks:
+      - default
+      - traefik-proxy
+    labels:
+      - traefik.enable=true
+      # Socket.IO lives on an internal second port (3001). Route only /socket.io there;
+      # everything else goes to Next.js on 3000. Same-origin, so the browser needs no config.
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.rule=Host(`${COMPOSE_PROJECT_NAME:-deskrpg}.${TRAEFIK_HOST:-localhost}`) && PathPrefix(`/socket.io`)
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.entrypoints=websecure
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.tls.certresolver=letsencrypt
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.priority=20
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.service=${COMPOSE_PROJECT_NAME:-deskrpg}-ws
+      - traefik.http.services.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.loadbalancer.server.port=3001
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.rule=Host(`${COMPOSE_PROJECT_NAME:-deskrpg}.${TRAEFIK_HOST:-localhost}`)
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.entrypoints=websecure
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.tls.certresolver=letsencrypt
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.priority=10
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.service=${COMPOSE_PROJECT_NAME:-deskrpg}
+      - traefik.http.services.${COMPOSE_PROJECT_NAME:-deskrpg}.loadbalancer.server.port=3000
+
+  # Bundled Hermes Agent gateway + OpenAI-compatible API server (what DeskRPG talks to).
+  # Reachable from DeskRPG at http://hermes:8642 — never published to the internet.
+  hermes:
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    environment:
+      HERMES_UID: ${HERMES_UID:-10000}
+      HERMES_GID: ${HERMES_GID:-10000}
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_PORT: "8642"
+      API_SERVER_KEY: ${HERMES_API_KEY:-change-this-hermes-api-key}
+      # Pick ONE provider and set its key in Docker Manager. Empty values are ignored by Hermes.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - hermes-data:/opt/data
+    networks:
+      - default
+
+volumes:
+  deskrpg-data:
+  hermes-data:
+
+networks:
+  traefik-proxy:
+    external: true
