@@ -14,13 +14,15 @@ import { isUniqueViolation } from "./db-unique-violation";
 import { uuidv7 } from "./uuid-v7";
 import { projectNpcRow } from "./npc-projection";
 import {
+  parseRoomNotice,
   sortRooms,
   type ReplyPolicy,
   type RoomMessage,
+  type RoomNotice,
   type RoomSummary,
 } from "./chat-rooms-policy";
 
-export type { RoomMessage, RoomRow } from "./chat-rooms-policy";
+export type { RoomMessage, RoomNotice, RoomRow } from "./chat-rooms-policy";
 import type { RoomRow } from "./chat-rooms-policy";
 
 function toIso(value: Date | string | null): string | null {
@@ -55,6 +57,7 @@ function toRoomMessage(row: typeof chatRoomMessages.$inferSelect): RoomMessage {
     senderName: row.senderName,
     content: row.content,
     createdAt: toIso(row.createdAt as unknown as Date | string)!,
+    notice: parseRoomNotice(row.noticeJson),
   };
 }
 
@@ -371,13 +374,18 @@ export async function roomNpcMemberIds(roomId: string): Promise<string[]> {
   return rows.map((r) => r.memberId);
 }
 
-/** insert 후 방의 last_message_at 을 갱신한다. */
+/**
+ * insert 후 방의 last_message_at 을 갱신한다.
+ * `notice` 는 자동화 알림의 구조(R29·R30) — JSON 으로 `notice_json` 에 남고 `RoomMessage.notice`
+ * 로 되읽힌다. 일반 메시지는 넘기지 않는다(NULL).
+ */
 export async function appendRoomMessage(args: {
   roomId: string;
   senderKind: "user" | "npc" | "system";
   senderId: string | null;
   senderName: string;
   content: string;
+  notice?: RoomNotice | null;
 }): Promise<RoomMessage> {
   const [created] = await db
     .insert(chatRoomMessages)
@@ -390,6 +398,7 @@ export async function appendRoomMessage(args: {
       senderId: args.senderId,
       senderName: args.senderName,
       content: args.content,
+      noticeJson: args.notice ? JSON.stringify(args.notice) : null,
     })
     .returning();
   await db

@@ -63,6 +63,8 @@ import {
 } from "./meeting-socket";
 import { registerMeetingDiscussionHandlers } from "./meeting-discussion";
 import { registerRoomHandlers } from "./room-socket";
+import { AUTOMATION_SOCKET_EVENTS, getWorkingSnapshot } from "./automation-events";
+import { setChannelActive, startAutomationPollers } from "./automation-poller";
 import {
   getOrCreateRoomRuntime,
   invalidateRoomRuntime,
@@ -239,6 +241,24 @@ export function getRoomUserIds(io: Server, channelId: string): string[] {
     if (player?.userId) userIds.push(player.userId);
   }
   return userIds;
+}
+
+/**
+ * 채널 룸에 소켓이 하나라도 있는가 — 자동화 폴러의 주기(짧게/길게)를 정한다(R24).
+ * `disconnect` 시점에는 소켓이 이미 룸에서 빠져 있으므로 그대로 세어도 맞다.
+ */
+function channelHasSockets(io: Server, channelId: string): boolean {
+  return (io.sockets?.adapter?.rooms?.get(channelId)?.size ?? 0) > 0;
+}
+
+/** 폴러에 접속 유무를 알린다. 폴러 쪽 실패가 소켓 흐름을 막지 않도록 여기서 삼킨다. */
+function notifyChannelActivity(io: Server, channelId: string) {
+  void setChannelActive(channelId, channelHasSockets(io, channelId)).catch((err: unknown) => {
+    console.warn(
+      `[automation-poller] setChannelActive(${channelId}) failed:`,
+      err instanceof Error ? err.message : err,
+    );
+  });
 }
 
 /** Socket IDs currently associated with a given user (across all channels). */
@@ -979,6 +999,11 @@ export function setupSocketHandlers(io: Server) {
     loadChannel: loadMotionLayout,
   });
 
+  // 묶인 채널의 자동화 사건 폴러. 뜨지 못해도 채팅·이동은 되어야 하므로 실패는 로그만.
+  void startAutomationPollers(io).catch((err: unknown) => {
+    console.error("[automation-poller] failed to start:", err);
+  });
+
   io.on("connection", async (socket) => {
     const user = await authenticateSocket(socket);
     if (!user) {
@@ -1039,6 +1064,7 @@ export function setupSocketHandlers(io: Server) {
           await socket.leave(previousChannel);
           socket.to(previousChannel).emit("player:left", { id: socket.id });
           await coordination.left(socket, previousChannel);
+          notifyChannelActivity(io, previousChannel);
         }
         const identity = { userId: user.userId, characterId: data.characterId, mapId: data.mapId };
         const resume = playerResumeStates.get(identity);
@@ -1110,6 +1136,13 @@ export function setupSocketHandlers(io: Server) {
           motion: playerState.motion,
         });
         await coordination.joined(socket, data.mapId);
+
+        // 자동화 맵 상태의 현재 값을 이 소켓에만 한 번(R27). 작업 중인 NPC 만 실린다 —
+        // 클라이언트 기본값이 working:false 다. 이후 변화는 채널 방송으로 온다.
+        for (const snapshot of getWorkingSnapshot(data.mapId)) {
+          socket.emit(AUTOMATION_SOCKET_EVENTS.working, snapshot);
+        }
+        notifyChannelActivity(io, data.mapId);
 
         // Send current players on this map to the joining player
         const mapPlayers = Array.from(players.values()).filter(
@@ -1579,6 +1612,7 @@ export function setupSocketHandlers(io: Server) {
         });
 
         players.delete(socket.id);
+        notifyChannelActivity(io, player.mapId);
       }
 
       // Clean up meeting room participation

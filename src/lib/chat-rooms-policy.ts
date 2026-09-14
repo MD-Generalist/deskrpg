@@ -22,7 +22,45 @@ export type RoomMessage = {
   senderName: string;
   content: string;
   createdAt: string;
+  /** 자동화 알림(칸반 카드·크론 결과)의 구조. 일반 메시지에는 없다(R29·R30). */
+  notice?: RoomNotice | null;
 };
+
+/**
+ * `chat_room_messages.notice_json` 의 모양. `content` 는 로케일 무관 폴백(카드 제목·결과
+ * 본문)이고, 카드 렌더링에 필요한 나머지는 여기 실린다 — 서버가 한국어 문장을 굳히지
+ * 않기 위해서다(시스템 메시지와 같은 원칙).
+ */
+export type RoomNotice =
+  | {
+      kind: "card_done" | "card_blocked";
+      cardId: string;
+      cardTitle: string;
+      boardSlug: string;
+      npcName: string;
+    }
+  | {
+      kind: "cron_result";
+      jobId: string;
+      jobName: string;
+      npcName: string;
+      status: "ok" | "error";
+    };
+
+const ROOM_NOTICE_KINDS = new Set(["card_done", "card_blocked", "cron_result"]);
+
+/** 저장된 JSON 문자열을 되읽는다. 깨진 값·모르는 kind 는 null — 메시지 자체는 살린다. */
+export function parseRoomNotice(raw: string | null | undefined): RoomNotice | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const kind = (parsed as { kind?: unknown }).kind;
+    return typeof kind === "string" && ROOM_NOTICE_KINDS.has(kind) ? (parsed as RoomNotice) : null;
+  } catch {
+    return null;
+  }
+}
 
 export type RoomSummary = {
   id: string;
