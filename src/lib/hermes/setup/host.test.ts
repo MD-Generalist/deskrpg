@@ -116,6 +116,8 @@ function fixture(script: string, initial: { config?: object; env?: string } = {}
 import types, sys, json
 sys.modules['yaml'] = types.SimpleNamespace(safe_load=lambda text: json.loads(text) if text else {}, safe_dump=lambda value, **kwargs: json.dumps(value))
 def fixture_env(path):
+    # Mirrors agent.secret_scope.load_env_file: a missing file is an empty mapping, never an error.
+    if not path.exists(): return {}
     return dict(line.split('=',1) for line in path.read_text().splitlines() if '=' in line and not line.startswith('#'))
 sys.modules['agent'] = types.ModuleType('agent')
 sys.modules['agent.secret_scope'] = types.SimpleNamespace(load_env_file=fixture_env)
