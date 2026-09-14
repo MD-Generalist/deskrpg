@@ -1,7 +1,11 @@
-import { SHARED_SCENE_ASSETS, type SharedSceneAsset } from "./shared-scene-assets";
-import * as T from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { disposeTree } from "./dispose-tree";
+import type * as T from "three";
+import type { SharedSceneAsset } from "./shared-scene-assets";
+import {
+  attachSceneAsset as attachCatalogAsset,
+  sceneAsset,
+  type SceneAssetId,
+  type SceneAssetLoader,
+} from "./scene-asset-catalog";
 
 export type ExecutiveAsset =
   | "desk"
@@ -14,67 +18,36 @@ export type ExecutiveAsset =
   | "armchair"
   | "conference"
   | "coffee";
-export const executiveAssetUrl = (name: ExecutiveAsset) =>
-  `/assets/furniture/executive/${name}-v1.glb`;
 
-/** The host owns both fallback and loaded resources, including late-load cancellation. */
+const LEGACY_ASSET_IDS = {
+  ficus: "shared-ficus",
+  olive: "shared-olive",
+  "street-tree": "shared-street-tree",
+  "glass-tower": "shared-glass-tower",
+  "stone-tower": "shared-stone-tower",
+  desk: "executive-work-desk",
+  "executive-desk": "executive-desk",
+  chair: "executive-office-chair",
+  bookcase: "executive-bookcase",
+  rug: "executive-rug",
+  "guest-chair": "executive-guest-chair",
+  sofa: "executive-sofa",
+  armchair: "executive-armchair",
+  conference: "executive-conference-table",
+  coffee: "executive-coffee-table",
+} as const satisfies Record<ExecutiveAsset | SharedSceneAsset, SceneAssetId>;
+
+export const executiveAssetUrl = (name: ExecutiveAsset) =>
+  sceneAsset(LEGACY_ASSET_IDS[name]).url;
+
+/** Compatibility adapter; new consumers should call the typed catalog loader. */
 export function attachFurnitureAsset(
   host: T.Group,
   name: ExecutiveAsset | SharedSceneAsset,
-  load: (url: string) => Promise<T.Group> = async (url) =>
-    (await new GLTFLoader().loadAsync(url)).scene,
+  load?: SceneAssetLoader,
 ) {
-  let disposed = false;
-  host.userData.dynamicAsset = true;
-  host.userData.assetStatus = "loading";
-  host.userData.disposeActor = () => {
-    disposed = true;
-  };
-  const fallback = [...host.children];
-  const url =
-    name in SHARED_SCENE_ASSETS
-      ? SHARED_SCENE_ASSETS[name as SharedSceneAsset].url
-      : executiveAssetUrl(name as ExecutiveAsset);
-  const ready = load(url)
-    .then((model) => {
-      if (disposed) {
-        disposeTree(model);
-        return false;
-      }
-      model.traverse((object) => {
-        if (!(object instanceof T.Mesh)) return;
-        object.receiveShadow = true;
-        object.castShadow = !(
-          name in SHARED_SCENE_ASSETS &&
-          SHARED_SCENE_ASSETS[name as SharedSceneAsset].category === "backdrop-building"
-        );
-        for (const material of Array.isArray(object.material)
-          ? object.material
-          : [object.material]) {
-          if (!(material instanceof T.MeshStandardMaterial)) continue;
-          material.envMapIntensity = 0.55;
-          // Macro silhouettes come from geometry; texture relief stays subtle
-          // under the office sun, especially on broad walnut tabletops.
-          material.normalScale.multiplyScalar(0.12);
-          for (const value of Object.values(material))
-            if (value instanceof T.Texture) value.anisotropy = 4;
-        }
-      });
-      for (const object of fallback) {
-        host.remove(object);
-        disposeTree(object);
-      }
-      host.add(model);
-      host.userData.assetStatus = "ready";
-      return true;
-    })
-    .catch(() => {
-      if (!disposed) host.userData.assetStatus = "failed";
-      return false;
-    });
-  host.userData.assetReady = ready;
-  return ready;
+  return attachCatalogAsset(host, LEGACY_ASSET_IDS[name], load ? { load } : undefined);
 }
 
-/** Shared scene loader; furniture alias retained for existing callers. */
+/** Shared scene loader alias retained for existing callers. */
 export const attachSceneAsset = attachFurnitureAsset;
