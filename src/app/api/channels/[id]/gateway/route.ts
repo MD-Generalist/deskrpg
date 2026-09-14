@@ -176,9 +176,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   await emitGatewayConfigUpdated(id);
 
   const nextBinding = await getChannelGatewayBinding(id);
+  // 다른 게이트웨이로 옮겼다 — 보드는 새 게이트웨이에 확보됐지만(bindGatewayToChannel 안에서),
+  // 카드와 크론은 이전 게이트웨이에 남는다(R4). 사용자에게 그 사실을 알린다.
+  const movedToAnotherGateway = Boolean(previousGatewayId && nextGatewayId && isBindingChanging);
   return NextResponse.json({
     ok: true,
     gatewayConfig: buildResponseGatewayConfig({ userId, binding: nextBinding }),
+    ...(movedToAnotherGateway ? { warning: "previous_board_retained" as const } : {}),
   });
 }
 
