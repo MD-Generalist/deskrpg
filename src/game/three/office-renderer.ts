@@ -1,4 +1,4 @@
-import { attachFurnitureAsset } from "./furniture-asset";
+import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
 import { disposeTree } from "./dispose-tree";
 export { disposeTree } from "./dispose-tree";
 import { addExecutiveArchitecture } from "./executive-architecture";
@@ -778,6 +778,7 @@ export class OfficeRenderer {
         cylinder(group, 0.3, 0.22, 0.45, "#d4ae85", 0, 0.23, 0);
         cylinder(group, 0.035, 0.04, 0.7, p.wood, 0, 0.7, 0);
         for (const x of [-0.18, 0.18]) sphere(group, 0.35, "#668863", x, 1.0 + x, 0, 0.8, 1.2, 0.8);
+        if (executive) void attachSceneAsset(group, (object.col + object.row) % 2 ? "olive" : "ficus");
       } else if (type === "computer") {
         const executiveDesk = executive && furniture.find(
           (desk) => desk.type === "reception_desk" && desk.col === object.col && desk.row === object.row,

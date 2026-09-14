@@ -1,7 +1,7 @@
 import { executiveSurface } from "./executive-surfaces";
-import { attachFurnitureAsset } from "./furniture-asset";
+import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
 import * as T from "three";
-import { round, sphere } from "./primitives";
+import { round } from "./primitives";
 import { surfaceTexture } from "./surface-detail";
 import { EXECUTIVE_ZONES } from "./executive-room-layout";
 
@@ -81,18 +81,22 @@ export function addExecutiveArchitecture(root: T.Group, cols: number, rows: numb
     box(end - start, 0.85, 0.025, glass, (start + end) / 2, 0.48, rows - 0.5).castShadow = false;
     for (const x of [start, end]) box(0.14, 1.02, 0.16, brass, x, 0.51, rows - 0.5);
   }
-  // Restrained skyline and tree canopy behind the rear windows.
-  for (let i = 0; i < Math.floor(cols / 1.85); i++) {
-    const height = 1.1 + ((i * 7) % 11) * 0.21;
-    box(
-      0.65,
-      height,
-      0.55,
-      new T.MeshStandardMaterial({ color: i % 2 ? "#b9c4c8" : "#aab8bf", roughness: 1 }),
-      1.5 + i * 1.85,
-      height / 2,
-      -1.4,
-    );
-    sphere(root, 0.7, "#8c9c7b", 1.3 + i * 1.9, 0.45, -0.5, 1, 0.8, 0.7);
+  // Common backdrop assets stay outside navigation. Two depth layers avoid a flat skyline.
+  for (let i = 0; i < 8; i++) {
+    const tower = new T.Group();
+    tower.position.set(1 + (i * (cols - 2)) / 7, -2.4, i % 2 ? -7.5 : -5);
+    tower.scale.set(1, 0.75 + ((i * 7) % 5) * 0.085, 1);
+    root.add(tower);
+    void attachSceneAsset(tower, i % 3 ? "glass-tower" : "stone-tower");
+  }
+  // Pavement and a planted verge anchor the avenue below the office windows.
+  box(cols - 1, 0.12, 2.1, stone, cols / 2, -1.3, -2.2);
+  for (let i = 0; i < 6; i++) {
+    const tree = new T.Group();
+    tree.position.set(1.2 + (i * (cols - 2.4)) / 5, -1.25, -2.4);
+    tree.rotation.y = i * 2.399;
+    tree.scale.setScalar(0.68 + (i % 3) * 0.055);
+    root.add(tree);
+    void attachSceneAsset(tree, "street-tree");
   }
 }

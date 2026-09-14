@@ -1,3 +1,4 @@
+import { SHARED_SCENE_ASSETS, type SharedSceneAsset } from "./shared-scene-assets";
 import * as T from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { disposeTree } from "./dispose-tree";
@@ -18,7 +19,7 @@ export const executiveAssetUrl = (name: ExecutiveAsset) =>
 /** The host owns both fallback and loaded resources, including late-load cancellation. */
 export function attachFurnitureAsset(
   host: T.Group,
-  name: ExecutiveAsset,
+  name: ExecutiveAsset | SharedSceneAsset,
   load: (url: string) => Promise<T.Group> = async (url) =>
     (await new GLTFLoader().loadAsync(url)).scene,
 ) {
@@ -29,7 +30,11 @@ export function attachFurnitureAsset(
     disposed = true;
   };
   const fallback = [...host.children];
-  const ready = load(executiveAssetUrl(name))
+  const url =
+    name in SHARED_SCENE_ASSETS
+      ? SHARED_SCENE_ASSETS[name as SharedSceneAsset].url
+      : executiveAssetUrl(name as ExecutiveAsset);
+  const ready = load(url)
     .then((model) => {
       if (disposed) {
         disposeTree(model);
@@ -37,7 +42,11 @@ export function attachFurnitureAsset(
       }
       model.traverse((object) => {
         if (!(object instanceof T.Mesh)) return;
-        object.castShadow = object.receiveShadow = true;
+        object.receiveShadow = true;
+        object.castShadow = !(
+          name in SHARED_SCENE_ASSETS &&
+          SHARED_SCENE_ASSETS[name as SharedSceneAsset].category === "backdrop-building"
+        );
         for (const material of Array.isArray(object.material)
           ? object.material
           : [object.material]) {
@@ -65,3 +74,6 @@ export function attachFurnitureAsset(
   host.userData.assetReady = ready;
   return ready;
 }
+
+/** Shared scene loader; furniture alias retained for existing callers. */
+export const attachSceneAsset = attachFurnitureAsset;
