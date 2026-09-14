@@ -5,7 +5,7 @@ function eligibleTransform(object: T.Mesh, root: T.Group, inverse: T.Matrix4) {
   if (new T.Matrix4().multiplyMatrices(inverse, object.matrixWorld).determinant() <= 0)
     return false;
   for (let parent: T.Object3D | null = object; parent && parent !== root; parent = parent.parent)
-    if (!parent.visible || parent.renderOrder !== 0) return false;
+    if (!parent.visible || parent.renderOrder !== 0 || parent.userData.dynamicAsset) return false;
   return (
     !object.customDepthMaterial &&
     !object.customDistanceMaterial &&

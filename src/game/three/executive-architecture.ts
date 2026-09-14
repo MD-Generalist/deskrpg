@@ -1,3 +1,4 @@
+import { attachFurnitureAsset } from "./furniture-asset";
 import * as T from "three";
 import { round, sphere } from "./primitives";
 import { surfaceTexture } from "./surface-detail";
@@ -43,15 +44,23 @@ export function addExecutiveArchitecture(root: T.Group, cols: number, rows: numb
       map: surfaceTexture("fabric", "color"),
       roughness: 1,
     });
-    box(
-      zone.width - 1,
-      0.035,
-      zone.depth - 1,
-      rug,
-      zone.x + zone.width / 2,
-      0.055,
-      zone.z + zone.depth / 2,
-    );
+    if (zone.id === "ceo") {
+      const asset = new T.Group();
+      asset.position.set(zone.x + zone.width / 2, 0.045, zone.z + zone.depth / 2);
+      round(asset, zone.width - 1, 0.026, zone.depth - 1, rug, 0, 0.013, 0);
+      root.add(asset);
+      void attachFurnitureAsset(asset, "rug");
+    } else {
+      box(
+        zone.width - 1,
+        0.035,
+        zone.depth - 1,
+        rug,
+        zone.x + zone.width / 2,
+        0.055,
+        zone.z + zone.depth / 2,
+      );
+    }
   }
   // Continuous walnut side walls, recessed flutes and a single dark top rail.
   for (const x of [0.5, cols - 0.5]) {

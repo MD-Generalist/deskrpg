@@ -1,3 +1,6 @@
+import { attachFurnitureAsset } from "./furniture-asset";
+import { disposeTree } from "./dispose-tree";
+export { disposeTree } from "./dispose-tree";
 import { addExecutiveArchitecture } from "./executive-architecture";
 import { adaptRenderScale } from "./render-scale";
 import { layoutActorLabels, bubbleWidthFor, type ActorLabelAnchor } from "./label-layout";
@@ -32,38 +35,6 @@ import {
   type MapSnapshot,
 } from "./bridge";
 import { getObjectDimensions, TILE_ID_TO_OBJECT, type MapObject } from "../../lib/object-types";
-
-export function disposeTree(root: T.Object3D) {
-  // Collect before callbacks mutate the tree. Clear hooks first for reentrant disposal.
-  const actorDisposers = new Set<() => void>();
-  root.traverse((object) => {
-    const dispose = object.userData.disposeActor;
-    if (typeof dispose === "function") {
-      actorDisposers.add(dispose);
-      delete object.userData.disposeActor;
-    }
-  });
-  actorDisposers.forEach((dispose) => dispose());
-  const geometries = new Set<T.BufferGeometry>(),
-    materials = new Set<T.Material>(),
-    textures = new Set<T.Texture>();
-  root.traverse((object) => {
-    if (object instanceof T.InstancedMesh) object.dispose();
-    if (object instanceof T.DirectionalLight || object instanceof T.SpotLight)
-      object.shadow.dispose();
-    if (!(object instanceof T.Mesh) && !(object instanceof T.Line)) return;
-    geometries.add(object.geometry);
-    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
-      materials.add(material);
-      for (const value of Object.values(material))
-        if (value instanceof T.Texture) textures.add(value);
-    }
-  });
-  geometries.forEach((g) => g.dispose());
-  materials.forEach((m) => m.dispose());
-  textures.forEach((t) => t.dispose());
-  root.clear();
-}
 
 const palettes = {
   office: { floor: "#e3d0aa", wall: "#dae2d2", wood: "#b48a60", outside: "#e9eee2" },
@@ -244,6 +215,9 @@ export class OfficeRenderer {
     const statuses = [...this.actors.values()].map(
       (actor) => actor.model.root.userData.assetStatus,
     );
+    this.world.traverse((object) => {
+      if (object.userData.dynamicAsset) statuses.push(object.userData.assetStatus);
+    });
     return {
       pixelRatio: this.renderer.getPixelRatio(),
       drawCalls: this.renderer.info.render.calls,
@@ -744,6 +718,25 @@ export class OfficeRenderer {
         const seats = sofaSeats(object);
         if (seats.length) group.userData.seats = seats;
         group.add(roomFurniture);
+        if (executive) {
+          const managerSeat =
+            type === "chair" &&
+            furniture.some(
+              (desk) =>
+                desk.type === "reception_desk" &&
+                object.col === desk.col &&
+                object.row === desk.row - 1,
+            );
+          const asset =
+            type === "reception_desk"
+              ? "desk"
+              : type === "bookshelf"
+                ? "bookcase"
+                : managerSeat
+                  ? "chair"
+                  : undefined;
+          if (asset) void attachFurnitureAsset(roomFurniture, asset);
+        }
         continue;
       }
       if (
@@ -781,6 +774,14 @@ export class OfficeRenderer {
         cylinder(group, 0.035, 0.04, 0.7, p.wood, 0, 0.7, 0);
         for (const x of [-0.18, 0.18]) sphere(group, 0.35, "#668863", x, 1.0 + x, 0, 0.8, 1.2, 0.8);
       } else if (type === "computer") {
+        const executiveDesk = executive && furniture.find(
+          (desk) => desk.type === "reception_desk" && desk.col === object.col && desk.row === object.row,
+        );
+        if (executiveDesk) {
+          group.position.x = executiveDesk.col + 1;
+          group.position.y = 0.21;
+          group.rotation.y = Math.PI;
+        }
         round(group, 0.68, 0.45, 0.09, "#354e49", 0, 1.08, -0.14);
         round(group, 0.59, 0.34, 0.015, "#b9d8cc", 0, 1.08, -0.085);
         round(group, 0.07, 0.2, 0.07, "#354e49", 0, 0.78, -0.14);
