@@ -40,14 +40,16 @@ const ja: Record<string, string> = {
   ...taskPromptMessages.ja,
 
   // Auth
-  "auth.title": "DeskRPG",
+  "auth.title": "DeskRPG for Hermes",
+  "auth.morningGreeting": "新しい一日、一緒にオフィスへ",
+  "auth.morningCaption": "AIの仲間が待つ、私たちの小さなオフィス",
   "auth.subtitle": "AI社員と共に働くバーチャルオフィス",
-  "metadata.title": "DeskRPG — AI社員と働くバーチャルオフィス",
+  "metadata.title": "DeskRPG for Hermes — AIの仲間と働く3Dオフィス",
   "metadata.description":
-    "バーチャルオフィスを構築し、AI社員を雇い、他のプレイヤーと一緒に2DピクセルアートRPGワークスペースでビジネス目標を達成しましょう。",
-  "metadata.openGraphDescription": "2DピクセルアートRPG — AI社員と働くバーチャルオフィス",
+    "自分だけの3D仮想オフィスを作り、Hermes AIの仲間と働きましょう。チームとつながり、目標を一緒に達成するワークスペース。",
+  "metadata.openGraphDescription": "DeskRPG for Hermes — AIの仲間と働く3D仮想オフィス",
   "metadata.keywords":
-    "DeskRPG, バーチャルオフィス, AI社員, ピクセルアート, RPG, マルチプレイ, ワークスペース, 2Dゲーム",
+    "DeskRPG, Hermes, バーチャルオフィス, AIの仲間, 3D, RPG, マルチプレイ, ワークスペース",
   "auth.login": "ログイン",
   "auth.register": "新規登録",
   "auth.loginId": "ログインID",
@@ -2158,7 +2160,7 @@ const ja: Record<string, string> = {
   "common.backToCharacters": "キャラクター一覧に戻る",
   "common.renameOnDoubleClick": "ダブルクリックで名前を変更",
   "auth.heroTagline": "バーチャルオフィスアドベンチャー",
-  "auth.heroSubtitle": "仮想オフィスでAI同僚と働こう",
+  "auth.heroSubtitle": "Hermes AIの仲間と働く、自分だけの3Dオフィス",
   "auth.getStarted": "はじめる",
   "auth.setupDescription": "管理者アカウントを作成して始めましょう",
   "channels.backToChannels": "チャンネル一覧に戻る",

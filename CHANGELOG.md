@@ -7,6 +7,19 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.9.16] - 2026-09-14
+
+### Added
+
+- DeskRPG for Hermes morning commute homepage: a Three.js city district, six animated office characters, and smooth pointer-driven camera movement.
+- Responsive public and login layouts, reduced-motion support, and WebGL context recovery.
+
+### Changed
+
+- The public launch screen can be enabled at runtime with `COMING_SOON=true`, using the same release image as self-hosted offices.
+- Homepage metadata and translations now describe the Hermes 3D office.
+- Pin Next.js build and output tracing to the project root to avoid parent-workspace dependency resolution errors.
+
 ## [%s] - 2026-09-15
 
 ### Added

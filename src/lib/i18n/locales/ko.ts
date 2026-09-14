@@ -39,14 +39,15 @@ const ko: Record<string, string> = {
   ...taskPromptMessages.ko,
 
   // Auth
-  "auth.title": "DeskRPG",
+  "auth.title": "DeskRPG for Hermes",
+  "auth.morningGreeting": "새로운 하루, 함께하는 출근길",
+  "auth.morningCaption": "AI 동료가 기다리는 우리의 작은 오피스",
   "auth.subtitle": "AI 직원과 함께하는 가상 오피스",
-  "metadata.title": "DeskRPG — AI 직원과 함께하는 가상 오피스",
+  "metadata.title": "DeskRPG for Hermes — AI 동료와 함께하는 3D 오피스",
   "metadata.description":
-    "가상 오피스를 만들고, AI 직원을 고용하고, 다른 플레이어와 함께 2D 픽셀 아트 RPG 워크스페이스에서 비즈니스 목표를 달성하세요.",
-  "metadata.openGraphDescription": "2D 픽셀 아트 RPG — AI 직원과 함께하는 가상 오피스",
-  "metadata.keywords":
-    "DeskRPG, 가상 오피스, AI 직원, 픽셀 아트, RPG, 멀티플레이어, 워크스페이스, 2D 게임",
+    "나만의 3D 가상 오피스를 만들고 Hermes AI 동료와 함께 일하세요. 팀과 대화하고 비즈니스 목표를 함께 달성하는 워크스페이스.",
+  "metadata.openGraphDescription": "DeskRPG for Hermes — AI 동료와 함께하는 3D 가상 오피스",
+  "metadata.keywords": "DeskRPG, Hermes, 가상 오피스, AI 동료, 3D, RPG, 멀티플레이어, 워크스페이스",
   "auth.login": "로그인",
   "auth.register": "회원가입",
   "auth.loginId": "로그인 ID",
@@ -2148,7 +2149,7 @@ const ko: Record<string, string> = {
   "common.backToCharacters": "캐릭터 목록으로 돌아가기",
   "common.renameOnDoubleClick": "더블클릭하여 이름 변경",
   "auth.heroTagline": "가상 오피스 어드벤처",
-  "auth.heroSubtitle": "가상 오피스에서 AI 동료와 함께 일하세요",
+  "auth.heroSubtitle": "Hermes AI 동료와 함께 일하는, 나만의 3D 오피스",
   "auth.getStarted": "시작하기",
   "auth.setupDescription": "관리자 계정을 만들어 시작하세요",
   "channels.backToChannels": "채널 목록으로 돌아가기",

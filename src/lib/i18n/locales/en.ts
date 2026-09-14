@@ -39,14 +39,16 @@ const en: Record<string, string> = {
   ...taskPromptMessages.en,
 
   // Auth
-  "auth.title": "DeskRPG",
+  "auth.title": "DeskRPG for Hermes",
+  "auth.morningGreeting": "A NEW DAY AT YOUR LITTLE OFFICE",
+  "auth.morningCaption": "A little world. A brighter workday.",
   "auth.subtitle": "Virtual Office with AI Employees",
-  "metadata.title": "DeskRPG — Virtual Office with AI Employees",
+  "metadata.title": "DeskRPG for Hermes — Your 3D Office with AI Coworkers",
   "metadata.description":
-    "Build your virtual office, hire AI employees, and achieve business goals with other players in a 2D pixel art RPG workspace.",
-  "metadata.openGraphDescription": "2D Pixel Art RPG — Build your virtual office with AI employees",
+    "Build your own 3D virtual office and work alongside Hermes AI coworkers. A shared workspace to connect with your team and achieve your goals.",
+  "metadata.openGraphDescription": "DeskRPG for Hermes — Your 3D virtual office with AI coworkers",
   "metadata.keywords":
-    "DeskRPG, virtual office, AI employees, pixel art, RPG, multiplayer, workspace, 2D game",
+    "DeskRPG, Hermes, virtual office, AI coworkers, 3D, RPG, multiplayer, workspace",
   "auth.login": "Login",
   "auth.register": "Register",
   "auth.loginId": "Login ID",
@@ -2153,7 +2155,7 @@ const en: Record<string, string> = {
   "common.backToCharacters": "Back to Characters",
   "common.renameOnDoubleClick": "Double-click to rename",
   "auth.heroTagline": "VIRTUAL OFFICE ADVENTURE",
-  "auth.heroSubtitle": "Work with AI coworkers in a virtual office",
+  "auth.heroSubtitle": "Your own 3D office, with Hermes AI coworkers.",
   "auth.getStarted": "Get Started",
   "auth.setupDescription": "Create an admin account to get started",
   "channels.backToChannels": "Back to Channels",
