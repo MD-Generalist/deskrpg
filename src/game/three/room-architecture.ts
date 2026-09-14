@@ -1,6 +1,6 @@
 import * as T from "three";
 import { round } from "./primitives";
-import { OFFICE_ROOMS } from "./office-room-layout";
+import { officeRoomsForSurface, type OfficeRoomSurfaceContext } from "./office-room-layout";
 import { batchStaticFurniture } from "./static-batching";
 export function addRoomPartition(parent: T.Group, vertical: boolean, length = 1): T.Group {
   const width = vertical ? 0.14 : length,
@@ -59,8 +59,12 @@ export function addRoomTJunction(parent: T.Group) {
   // Shared post covers all rail ends at the same datum, without a protruding stub.
   round(parent, 0.15, 1.83, 0.15, "#435454", 0, 0.915, 0, 0.01);
 }
-export function addOfficeRoomSurfaces(root: T.Group, environment: string) {
-  const rooms = OFFICE_ROOMS[environment];
+export function addOfficeRoomSurfaces(
+  root: T.Group,
+  environment: string,
+  context?: OfficeRoomSurfaceContext,
+) {
+  const rooms = officeRoomsForSurface(environment, context);
   if (!rooms) return;
   const boundary = rooms[0].z + rooms[0].depth + 0.5;
   // Half-cell closures connect partition axes to the perimeter's shared corner axes.

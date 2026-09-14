@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isOfficeEnvironmentId, resolveOfficeEnvironment } from "./office-environment-theme";
+import {
+  isOfficeEnvironmentId,
+  resolveOfficeEnvironment,
+  resolveOfficeEnvironmentVersion,
+} from "./office-environment-theme";
 import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "./office-environments";
 import { tiledSnapshot } from "./tiled-preview";
 
@@ -10,6 +14,10 @@ for (const entry of OFFICE_ENVIRONMENTS) {
     assert.equal(resolveOfficeEnvironment(map), entry.id);
     assert.equal(resolveOfficeEnvironment(map.layers), entry.id);
     assert.equal(tiledSnapshot(map).environment, entry.id);
+    assert.equal(
+      tiledSnapshot(map).environmentVersion,
+      entry.id === "agency" ? 3 : entry.id === "executive" ? 5 : 2,
+    );
     assert.ok(isOfficeEnvironmentId(entry.id));
   });
 }
@@ -48,4 +56,17 @@ test("missing or malformed environment tags safely preserve the legacy theme", (
   const map = buildOfficeEnvironment("tech");
   map.layers.find((entry) => entry.name === "Objects")!.properties = [];
   assert.equal(tiledSnapshot(map).environment, undefined);
+});
+
+test("office environment versions are strict optional integer metadata", () => {
+  const map = buildOfficeEnvironment("agency");
+  assert.equal(resolveOfficeEnvironmentVersion(map), 3);
+  const layer = map.layers.find((entry) => entry.name === "Objects")!;
+  const version = layer.properties!.find(
+    (property) => property.name === "officeEnvironmentVersion",
+  )!;
+  for (const value of [undefined, null, 0, -1, 2.5, "2"]) {
+    version.value = value as never;
+    assert.equal(resolveOfficeEnvironmentVersion(map), undefined);
+  }
 });

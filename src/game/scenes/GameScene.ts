@@ -1,3 +1,4 @@
+import { tiledDirection, tiledVariant } from "../../lib/tiled-geometry";
 import { RemoteNpcPresentation } from "../remote-npc-presentation";
 import {
   copyMotionContinuation,
@@ -21,6 +22,9 @@ import { peerMovementUncertainty, type PeerMotionSample } from "../peer-motion-e
 import {
   readAmbientZones,
   ambientTileAllowed,
+  destinationTileAllowed,
+  findTaggedDestinationPath,
+  taggedPathTileAllowed,
   AmbientExitPolicy,
   type AmbientZone,
 } from "../ambient-zones";
@@ -36,7 +40,10 @@ import {
 } from "../npc-ambient";
 import Phaser from "phaser";
 import { NpcSmalltalk } from "../npc-smalltalk";
-import { resolveOfficeEnvironment } from "../three/office-environment-theme";
+import {
+  resolveOfficeEnvironment,
+  resolveOfficeEnvironmentVersion,
+} from "../three/office-environment-theme";
 import { createEventScope } from "../three/event-scope";
 import {
   matchesNpcTarget,
@@ -316,6 +323,9 @@ class NpcSprite {
   private trafficBlockedMs = 0;
   actuallyWalking = false;
   moveState: "idle" | "moving-to-player" | "waiting" | "returning" | "strolling" = "idle";
+  destinationTag: string | null = null;
+  destinationTarget: NavigationPoint | null = null;
+  purposeAccessOrigin: NavigationPoint | null = null;
   ambientPaused = false;
   ambientTimer = 0;
   ambientSchedule = createAmbientSchedule();
@@ -551,6 +561,7 @@ class NpcSprite {
       message?: string;
       bubbleText?: string;
       waitDurationMs?: number;
+      destinationTag?: string;
     },
   ): boolean {
     const startCol = Math.floor(this.pixelX / TILE_SIZE);
@@ -569,11 +580,17 @@ class NpcSprite {
     this.pendingMessage = options?.message || null;
     this.arrivalBubbleText = options?.bubbleText || null;
     this.waitDurationMs = options?.waitDurationMs ?? 10000;
+    this.destinationTag = options?.destinationTag ?? null;
+    this.destinationTarget = this.destinationTag ? { x: targetCol, y: targetRow } : null;
+    this.purposeAccessOrigin = this.destinationTag ? { x: startCol, y: startRow } : null;
     this.moveState = "moving-to-player";
     return true;
   }
 
   startStroll(path: { x: number; y: number }[]) {
+    this.destinationTag = null;
+    this.destinationTarget = null;
+    this.purposeAccessOrigin = null;
     this.currentPath = path;
     this.pathIndex = 0;
     this.stuckFrames = 0;
@@ -593,6 +610,9 @@ class NpcSprite {
     this.ambientPaused = false;
     this.remoteWalkingUntil = 0;
     this.pendingMessage = null;
+    this.destinationTag = null;
+    this.destinationTarget = null;
+    this.purposeAccessOrigin = null;
     this.stopWalkAnimation();
   }
 
@@ -607,6 +627,9 @@ class NpcSprite {
     isWalkableFn: (tx: number, ty: number) => boolean,
   ): boolean {
     this.calledForRoom = null;
+    this.destinationTag = null;
+    this.destinationTarget = null;
+    this.purposeAccessOrigin = null;
     this.ambientTimer = 0;
     const startCol = Math.floor(this.pixelX / TILE_SIZE);
     const startRow = Math.floor(this.pixelY / TILE_SIZE);
@@ -690,9 +713,13 @@ class NpcSprite {
       if (this.pathRecalcTimer < 1000) return "idle";
       this.pathRecalcTimer = 0;
       const targetX =
-        this.moveState === "returning" ? this.homeCol : Math.floor(playerX / TILE_SIZE);
+        this.moveState === "returning"
+          ? this.homeCol
+          : (this.destinationTarget?.x ?? Math.floor(playerX / TILE_SIZE));
       const targetY =
-        this.moveState === "returning" ? this.homeRow : Math.floor(playerY / TILE_SIZE);
+        this.moveState === "returning"
+          ? this.homeRow
+          : (this.destinationTarget?.y ?? Math.floor(playerY / TILE_SIZE));
       const path = findPathFn(
         Math.floor(this.pixelX / TILE_SIZE),
         Math.floor(this.pixelY / TILE_SIZE),
@@ -708,7 +735,7 @@ class NpcSprite {
     }
 
     // --- Path recalculation (every 3s, only when moving toward player) ---
-    if (this.moveState === "moving-to-player") {
+    if (this.moveState === "moving-to-player" && !this.destinationTag) {
       this.pathRecalcTimer += delta;
       if (this.pathRecalcTimer >= 3000) {
         this.pathRecalcTimer = 0;
@@ -760,6 +787,7 @@ class NpcSprite {
         this.moveState = "idle";
         return "returning-done";
       }
+      if (this.destinationTag) return this.finishDestinationMove();
       // moving-to-player but path ended without reaching player — wait for recalc
       this.currentPath = null;
       return "moving";
@@ -818,6 +846,7 @@ class NpcSprite {
           this.stopWalkAnimation();
           return "returning-done";
         }
+        if (this.destinationTag) return this.finishDestinationMove();
         // Path ended for moving-to-player, wait for next recalc cycle
         this.currentPath = null;
         this.stopWalkAnimation();
@@ -923,6 +952,17 @@ class NpcSprite {
     }
 
     return "moving";
+  }
+
+  private finishDestinationMove(): "arrived" {
+    this.currentPath = null;
+    this.moveState = "waiting";
+    this.waitTimer = 0;
+    this.destinationTag = null;
+    this.destinationTarget = null;
+    this.purposeAccessOrigin = null;
+    this.stopWalkAnimation();
+    return "arrived";
   }
 }
 
@@ -1445,6 +1485,7 @@ export class GameScene extends Phaser.Scene {
         objects: this.mapObjects,
         tiled: this.tiledMode,
         environment: this.officeEnvironment,
+        environmentVersion: this.officeEnvironmentVersion,
         artwork: this.tiledMode ? artwork : undefined,
       };
     },
@@ -1608,6 +1649,7 @@ export class GameScene extends Phaser.Scene {
   private channelMapData: MapData | null = null;
   private tiledMode: boolean = false; // true when using Tiled JSON map (not legacy tilemap)
   private officeEnvironment: string | undefined;
+  private officeEnvironmentVersion: number | undefined;
   private ambientZones: AmbientZone[] = [];
   private tiledSpawnCol: number | null = null;
   private tiledSpawnRow: number | null = null;
@@ -1707,7 +1749,11 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  private npcPathfinder(npc: NpcSprite) {
+  private npcPathfinder(
+    npc: NpcSprite,
+    destinationTag = npc.destinationTag ?? undefined,
+    purposeAccessOrigin = npc.purposeAccessOrigin ?? undefined,
+  ) {
     return (
       sx: number,
       sy: number,
@@ -1716,6 +1762,16 @@ export class GameScene extends Phaser.Scene {
       walkable: (x: number, y: number) => boolean,
     ) => {
       const actors = this.trafficActors().filter((actor) => actor.id !== npc.id);
+      if (destinationTag)
+        return findTaggedDestinationPath(
+          this.ambientZones,
+          destinationTag,
+          { x: sx, y: sy },
+          { x: ex, y: ey },
+          walkable,
+          (from, to) => clearActors(from, to, actors),
+          purposeAccessOrigin ?? { x: sx, y: sy },
+        );
       return findTrafficPath(sx, sy, ex, ey, walkable, actors);
     };
   }
@@ -1781,6 +1837,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.officeEnvironment = undefined;
+    this.officeEnvironmentVersion = undefined;
     this.ambientZones = [];
     this.traffic.clear();
     this.joinedSocketId = undefined;
@@ -2080,17 +2137,38 @@ export class GameScene extends Phaser.Scene {
 
     this.eventScope.on(
       "npc:start-move",
-      (data: { npcId: string; targetCol: number; targetRow: number; message?: string }) => {
+      (data: {
+        npcId: string;
+        targetCol: number;
+        targetRow: number;
+        destinationTag?: string;
+        message?: string;
+      }) => {
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
         if (!npc || !this.ensureLocalNpcOwnership(npc) || npc.moveState !== "idle") return;
+        const destinationTag =
+          typeof data.destinationTag === "string" && data.destinationTag.length > 0
+            ? data.destinationTag
+            : undefined;
+        if (
+          !destinationTag &&
+          this.ambientZones.some((zone) => zone.access !== undefined) &&
+          !destinationTileAllowed(this.ambientZones, data.targetCol, data.targetRow)
+        )
+          return;
         this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
-        npc.moveTo(
+        const origin = {
+          x: Math.floor(npc.pixelX / TILE_SIZE),
+          y: Math.floor(npc.pixelY / TILE_SIZE),
+        };
+        const started = npc.moveTo(
           data.targetCol,
           data.targetRow,
-          findPath,
+          destinationTag ? this.npcPathfinder(npc, destinationTag, origin) : findPath,
           this.createNpcWalkValidator(),
-          data.message ? { message: data.message } : undefined,
+          data.message || destinationTag ? { message: data.message, destinationTag } : undefined,
         );
+        if (!started) this.npcTilePositions.add(`${npc.homeCol},${npc.homeRow}`);
       },
     );
 
@@ -2591,6 +2669,7 @@ export class GameScene extends Phaser.Scene {
   private loadTiledMap(tiledJson: Record<string, unknown>): void {
     this.tiledMode = true;
     this.officeEnvironment = resolveOfficeEnvironment(tiledJson);
+    this.officeEnvironmentVersion = resolveOfficeEnvironmentVersion(tiledJson);
     this.ambientZones = readAmbientZones(tiledJson);
     // Resolve external tileset references — Phaser doesn't support them
     const tilesetArr = tiledJson.tilesets as Array<Record<string, unknown>>;
@@ -2979,6 +3058,12 @@ export class GameScene extends Phaser.Scene {
               type: objectType,
               col: Math.floor((obj.x as number) / TILE_SIZE),
               row: Math.floor((obj.y as number) / TILE_SIZE),
+              ...tiledDirection(
+                obj.properties as Array<{ name: string; value: unknown }> | undefined,
+              ),
+              ...tiledVariant(
+                obj.properties as Array<{ name: string; value: unknown }> | undefined,
+              ),
             });
           }
         }
@@ -4626,6 +4711,15 @@ export class GameScene extends Phaser.Scene {
         const npcWalkable = this.createNpcWalkValidator();
         const routeWalkable = (x: number, y: number) =>
           npcWalkable(x, y) &&
+          (!npc.destinationTag ||
+            !npc.purposeAccessOrigin ||
+            taggedPathTileAllowed(
+              this.ambientZones,
+              npc.destinationTag,
+              npc.purposeAccessOrigin,
+              x,
+              y,
+            )) &&
           (!wasStrolling || npc.ambientSchedule.phase === "home" || zoneWalkable(x, y));
         const result = npc.updateMovement(
           this.game.loop.delta,
@@ -4645,6 +4739,15 @@ export class GameScene extends Phaser.Scene {
               this.time.now,
               (x, y) =>
                 this.isWalkable(x, y) &&
+                (!npc.destinationTag ||
+                  !npc.purposeAccessOrigin ||
+                  taggedPathTileAllowed(
+                    this.ambientZones,
+                    npc.destinationTag,
+                    npc.purposeAccessOrigin,
+                    x,
+                    y,
+                  )) &&
                 (!wasStrolling || npc.ambientSchedule.phase === "home" || zoneWalkable(x, y)),
               this.trafficActors(),
             );

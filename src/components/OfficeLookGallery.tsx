@@ -2,51 +2,10 @@
 import { useEffect, useState } from "react";
 import * as T from "three";
 import { OFFICE_LOOKS, LOOK_CATEGORIES, type OfficeLook } from "@/game/three/office-looks";
-import { createActor, cylinder } from "@/game/three/characters";
-import { disposeTree } from "@/game/three/office-renderer";
-import { captureWhenReady } from "@/game/three/ready-capture";
+import { captureThumbnail } from "@/game/three/office-look-thumbnail";
 import { useLocale } from "@/lib/i18n";
 
 const cachedThumbnails: Record<string, string> = {};
-
-async function captureThumbnail(
-  renderer: T.WebGLRenderer,
-  look: OfficeLook,
-  index: number,
-  signal: AbortSignal,
-) {
-  const scene = new T.Scene();
-  let disposed = false;
-  const release = () => {
-    if (disposed) return;
-    disposed = true;
-    disposeTree(scene);
-  };
-  try {
-    const camera = new T.PerspectiveCamera(30, 240 / 280, 0.1, 20);
-    camera.position.set(1.5, 1.8, 4.2);
-    camera.lookAt(0, 0.97, 0);
-    scene.add(new T.HemisphereLight("#fff8ed", "#89988b", 2.5));
-    const light = new T.DirectionalLight("#fff1dc", 3);
-    light.position.set(-2, 4, 4);
-    scene.add(light);
-    cylinder(scene, 0.46, 0.5, 0.06, "#d9cbb6", 0, 0.015, 0);
-    const actor = createActor(look.id, look.coat, index, undefined, look);
-    scene.add(actor.root);
-    return await captureWhenReady(
-      "ready" in actor ? actor.ready : Promise.resolve(true),
-      signal,
-      () => {
-        actor.update(0, false, "idle", false);
-        renderer.render(scene, camera);
-        return renderer.domElement.toDataURL("image/png");
-      },
-      release,
-    );
-  } finally {
-    release();
-  }
-}
 
 /** One context per mounted generation; each frame captures at most one missing look. */
 function generateThumbnails(publish: (images: Record<string, string>) => void) {

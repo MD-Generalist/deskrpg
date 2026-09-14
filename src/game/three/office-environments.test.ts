@@ -5,7 +5,7 @@ import {
   buildOfficeEnvironment,
   type OfficeEnvironmentId,
 } from "./office-environments";
-import { OBJECT_TYPES } from "../../lib/object-types";
+import { getObjectDimensions, OBJECT_TYPES } from "../../lib/object-types";
 import { tiledSnapshot } from "./tiled-preview";
 
 test("five immutable localized environments have different furnished layouts", () => {
@@ -22,6 +22,14 @@ test("five immutable localized environments have different furnished layouts", (
     layouts.add(JSON.stringify(tiledSnapshot(buildOfficeEnvironment(entry.id)).objects));
   }
   assert.equal(layouts.size, 5);
+  assert.equal(
+    OFFICE_ENVIRONMENTS.find((entry) => entry.id === "agency")?.nameKo,
+    "크리에이티브 스튜디오",
+  );
+  assert.equal(
+    OFFICE_ENVIRONMENTS.find((entry) => entry.id === "agency")?.nameEn,
+    "Creative studio",
+  );
   assert.throws(
     () => buildOfficeEnvironment("unknown" as OfficeEnvironmentId),
     /Unknown office environment/,
@@ -31,8 +39,14 @@ test("five immutable localized environments have different furnished layouts", (
 for (const environment of OFFICE_ENVIRONMENTS) {
   test(`${environment.id}: valid deterministic Tiled map with connected seats and entrance`, () => {
     const map = buildOfficeEnvironment(environment.id);
-    assert.equal(map.width, 30);
-    assert.equal(map.height, 22);
+    assert.equal(
+      map.width,
+      environment.id === "agency" ? 42 : environment.id === "executive" ? 18 : 30,
+    );
+    assert.equal(
+      map.height,
+      environment.id === "agency" ? 26 : environment.id === "executive" ? 18 : 22,
+    );
     assert.equal(map.tilewidth, 32);
     assert.equal(map.tileheight, 32);
     const snapshot = tiledSnapshot(map);
@@ -64,30 +78,57 @@ for (const environment of OFFICE_ENVIRONMENTS) {
     for (let i = 0; i < queue.length; i++) {
       for (const [x, y] of neighbors(queue[i][0], queue[i][1])) {
         const key = `${x},${y}`;
-        if (x < 0 || x >= 30 || y < 0 || y >= 22 || blocked.has(key) || reached.has(key)) continue;
+        if (
+          x < 0 ||
+          x >= map.width ||
+          y < 0 ||
+          y >= map.height ||
+          blocked.has(key) ||
+          reached.has(key)
+        )
+          continue;
         reached.add(key);
         queue.push([x, y]);
       }
     }
-    assert.equal(reached.size + blocked.size, 30 * 22, "All empty tiles are connected");
-    for (const x of [14, 15, 16]) assert.ok(reached.has(`${x},21`));
+    assert.equal(
+      reached.size + blocked.size,
+      map.width * map.height,
+      "All empty tiles are connected",
+    );
+    const entranceColumns =
+      environment.id === "agency"
+        ? [21, 22, 23, 24, 25]
+        : [Math.floor(map.width / 2) - 1, Math.floor(map.width / 2), Math.floor(map.width / 2) + 1];
+    for (const column of entranceColumns) assert.ok(reached.has(`${column},${map.height - 1}`));
     const occupied = new Set<string>();
     for (const object of objects) {
       if (object.type === "spawn") continue;
       const def = OBJECT_TYPES[object.type];
       assert.ok(def, `Known type ${object.type}`);
-      assert.equal(object.width, def.width * 32);
-      assert.equal(object.height, def.height * 32);
+      const propertyDirection = object.properties?.find(
+        (property) => property.name === "direction",
+      )?.value;
+      const direction =
+        propertyDirection === "up" ||
+        propertyDirection === "down" ||
+        propertyDirection === "left" ||
+        propertyDirection === "right"
+          ? propertyDirection
+          : undefined;
+      const size = getObjectDimensions(object.type, direction);
+      assert.equal(object.width, size.width * 32);
+      assert.equal(object.height, size.height * 32);
       const x = object.x / 32,
         y = object.y / 32;
       assert.ok(Number.isInteger(x) && Number.isInteger(y));
-      assert.ok(x >= 0 && y >= 0 && x + def.width <= 30 && y + def.height <= 22);
+      assert.ok(x >= 0 && y >= 0 && x + size.width <= map.width && y + size.height <= map.height);
       if (object.type === "chair") assert.ok(reached.has(`${x},${y}`), "Seat is walkable");
       if (object.type === "computer")
         assert.ok(
           objects.some(
             (desk) =>
-              (desk.type === "desk" || desk.type === "reception_desk") &&
+              ["desk", "reception_desk", "executive_desk"].includes(desk.type) &&
               desk.x === object.x &&
               desk.y === object.y,
           ),
@@ -95,8 +136,8 @@ for (const environment of OFFICE_ENVIRONMENTS) {
         );
       if (!def.collision) continue;
       let accessible = false;
-      for (let col = x; col < x + def.width; col++)
-        for (let row = y; row < y + def.height; row++) {
+      for (let col = x; col < x + size.width; col++)
+        for (let row = y; row < y + size.height; row++) {
           const key = `${col},${row}`;
           assert.ok(!occupied.has(key), `No solid overlap at ${key}`);
           occupied.add(key);

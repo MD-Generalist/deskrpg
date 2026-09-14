@@ -13,18 +13,26 @@ for (const environment of OFFICE_ENVIRONMENTS) {
     const layout = deriveChannelMotionLayout({ mapData: JSON.stringify(map) }, [
       { id: "npc", positionX: 15, positionY: 19 },
     ])!;
-    assert.deepEqual(layout.bounds, { width: 960, height: 704 });
+    assert.deepEqual(
+      layout.bounds,
+      environment.id === "agency"
+        ? { width: 1344, height: 832 }
+        : environment.id === "executive"
+          ? { width: 576, height: 576 }
+          : { width: 960, height: 704 },
+    );
     assert.deepEqual(layout.npcs, [{ id: "npc", x: 496, y: 624 }]);
+    const projectedSeats = furnitureSeats(snapshot.objects).map((seat) => ({
+      x: (seat.anchorX ?? seat.x) * 32,
+      y: (seat.anchorZ ?? seat.z) * 32,
+    }));
+    assert.ok(
+      projectedSeats.every(layout.canStandAt),
+      "every UI2 seat anchor has server-side actor-body clearance",
+    );
     assert.deepEqual(
       layout.seats.map(({ id }) => id),
-      [
-        ...new Set(
-          furnitureSeats(snapshot.objects)
-            .map((seat) => ({ x: (seat.anchorX ?? seat.x) * 32, y: (seat.anchorZ ?? seat.z) * 32 }))
-            .filter(layout.canStandAt)
-            .map(({ x, y }) => `${x}:${y}`),
-        ),
-      ],
+      [...new Set(projectedSeats.map(({ x, y }) => `${x}:${y}`))],
     );
     const blocked = new Set(snapshot.blocked);
     for (let y = 0; y < map.height; y++)

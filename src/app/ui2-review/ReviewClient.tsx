@@ -46,7 +46,7 @@ function makeFixture(id: OfficeEnvironmentId) {
   const map = tiledSnapshot(buildOfficeEnvironment(id));
   const blocked = new Set(map.blocked);
   const walkable = (x: number, y: number) =>
-    x >= 1 && x < 29 && y >= 1 && y < 21 && !blocked.has(`${x},${y}`);
+    x >= 1 && x < map.cols - 1 && y >= 1 && y < map.rows - 1 && !blocked.has(`${x},${y}`);
   const seats = furnitureSeats(map.objects);
   const actors: ActorSnapshot[] = Array.from({ length: 12 }, (_, i) => {
     const seat = seats[i % seats.length];
@@ -65,7 +65,7 @@ function makeFixture(id: OfficeEnvironmentId) {
   const routes = actors.slice(0, 10).map((actor) => {
     const x = actor.x / 32 - 0.5,
       y = actor.y / 32 - 0.5;
-    const path = findPath(x, y, 15, 19, walkable);
+    const path = findPath(x, y, Math.floor(map.cols / 2), map.rows - 3, walkable);
     if (!path) throw new Error(`No fixture path for ${actor.id}`);
     const roundTrip = [...path, ...path.slice(0, -1).reverse()];
     const lengths = roundTrip
@@ -119,7 +119,11 @@ export default function ReviewClient() {
   const [report, setReport] = useState<unknown>(null);
 
   const frameRoom = (id: OfficeEnvironmentId, roomId: OfficeRoom["id"]) => {
-    const room = OFFICE_ROOMS[id].find((room) => room.id === roomId)!;
+    const room = (OFFICE_ROOMS[id] ?? []).find((room) => room.id === roomId);
+    if (!room) {
+      renderer.current?.showOverview();
+      return;
+    }
     renderer.current?.showRoom(room.x + room.width / 2, room.z + room.depth / 2, 14);
   };
   const frameCamera = (id: OfficeEnvironmentId, scene: SceneMode) => {
@@ -502,7 +506,7 @@ export default function ReviewClient() {
             }}
           >
             <option value="">장면 카메라 복원</option>
-            {OFFICE_ROOMS[environment].map((room) => (
+            {(OFFICE_ROOMS[environment] ?? []).map((room) => (
               <option key={room.id} value={room.id}>
                 {room.label} 근접
               </option>

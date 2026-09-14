@@ -5,7 +5,7 @@ function eligibleTransform(object: T.Mesh, root: T.Group, inverse: T.Matrix4) {
   if (new T.Matrix4().multiplyMatrices(inverse, object.matrixWorld).determinant() <= 0)
     return false;
   for (let parent: T.Object3D | null = object; parent && parent !== root; parent = parent.parent)
-    if (!parent.visible || parent.renderOrder !== 0) return false;
+    if (!parent.visible || parent.renderOrder !== 0 || parent.userData.dynamicAsset) return false;
   return (
     !object.customDepthMaterial &&
     !object.customDistanceMaterial &&
@@ -71,7 +71,13 @@ export function batchStaticFurniture(
       if (!options.batchSeats && (parent.userData.seat || parent.userData.seats)) return;
     const m = object.material;
     const key = [
-      materialKey(m, !!options.vertexColors && !object.geometry.hasAttribute("color")),
+      materialKey(
+        m,
+        !!options.vertexColors &&
+          !object.geometry.hasAttribute("color") &&
+          !m.userData.dynamicSurface,
+      ),
+      !!m.userData.dynamicSurface,
       object.layers.mask,
       object.castShadow,
       object.receiveShadow,
@@ -86,7 +92,10 @@ export function batchStaticFurniture(
     obsoleteMaterials = new Set<T.Material>();
   for (const meshes of buckets.values()) {
     if (meshes.length < 2) continue;
-    const colorize = options.vertexColors && !meshes[0].geometry.hasAttribute("color");
+    const colorize =
+      options.vertexColors &&
+      !meshes[0].geometry.hasAttribute("color") &&
+      !meshes[0].material.userData.dynamicSurface;
     const transformed = meshes.map((mesh) => {
       const geometry = mesh.geometry
         .clone()

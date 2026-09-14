@@ -1,3 +1,4 @@
+import { furnitureOffset } from "./executive-lounge-layout";
 import { getObjectDimensions, type MapObject } from "../../lib/object-types";
 export type Seat = {
   elevation?: number;
@@ -90,8 +91,10 @@ export function sofaSeats(object: MapObject): Seat[] {
   return Array.from({ length: count }, (_, i) => {
     const point = transform(count === 2 ? (i === 0 ? -0.38 : 0.38) : 0, SOFA_SEATED_FORWARD);
     const anchor = transform(count === 2 ? (i === 0 ? -0.5 : 0.5) : 0, 1);
+    const offset = furnitureOffset(object);
     return {
-      ...point,
+      x: point.x + offset.x,
+      z: point.z + offset.z,
       anchorX: Math.round(anchor.x * 2) / 2,
       anchorZ: Math.round(anchor.z * 2) / 2,
       direction,

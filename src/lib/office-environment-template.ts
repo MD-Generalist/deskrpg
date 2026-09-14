@@ -35,6 +35,8 @@ export async function ensureOfficeEnvironmentTemplate(
   const environment = OFFICE_ENVIRONMENTS.find((entry) => entry.id === id);
   if (!environment) throw new Error("Unknown office environment");
   const map = buildOfficeEnvironment(environment.id);
+  const spawnCol = Math.floor(map.width / 2);
+  const spawnRow = map.height - 3;
   const tag = `deskrpg-office-v2:${id}`;
   const listResponse = await request("/api/map-templates");
   if (!listResponse.ok) throw new Error("Unable to load office environments");
@@ -55,8 +57,8 @@ export async function ensureOfficeEnvironmentTemplate(
     if (
       template?.cols === map.width &&
       template?.rows === map.height &&
-      template?.spawnCol === 15 &&
-      template?.spawnRow === 19 &&
+      template?.spawnCol === spawnCol &&
+      template?.spawnRow === spawnRow &&
       sameJsonSnapshot(tiledJson, map)
     )
       return entry.id;
@@ -69,8 +71,8 @@ export async function ensureOfficeEnvironmentTemplate(
       description: environment.descriptionKo,
       cols: map.width,
       rows: map.height,
-      spawnCol: 15,
-      spawnRow: 19,
+      spawnCol,
+      spawnRow,
       tiledJson: map,
       tags: tag,
     }),

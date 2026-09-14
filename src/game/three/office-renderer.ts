@@ -1,3 +1,8 @@
+import { furnitureOffset } from "./executive-lounge-layout";
+import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
+import { disposeTree } from "./dispose-tree";
+export { disposeTree } from "./dispose-tree";
+import { addExecutiveArchitecture } from "./executive-architecture";
 import { adaptRenderScale } from "./render-scale";
 import { layoutActorLabels, bubbleWidthFor, type ActorLabelAnchor } from "./label-layout";
 import { FrameBenchmark, type BenchmarkReport, type FrameMetrics } from "./frame-benchmark";
@@ -33,38 +38,6 @@ import {
 } from "./bridge";
 import { getObjectDimensions, TILE_ID_TO_OBJECT, type MapObject } from "../../lib/object-types";
 
-export function disposeTree(root: T.Object3D) {
-  // Collect before callbacks mutate the tree. Clear hooks first for reentrant disposal.
-  const actorDisposers = new Set<() => void>();
-  root.traverse((object) => {
-    const dispose = object.userData.disposeActor;
-    if (typeof dispose === "function") {
-      actorDisposers.add(dispose);
-      delete object.userData.disposeActor;
-    }
-  });
-  actorDisposers.forEach((dispose) => dispose());
-  const geometries = new Set<T.BufferGeometry>(),
-    materials = new Set<T.Material>(),
-    textures = new Set<T.Texture>();
-  root.traverse((object) => {
-    if (object instanceof T.InstancedMesh) object.dispose();
-    if (object instanceof T.DirectionalLight || object instanceof T.SpotLight)
-      object.shadow.dispose();
-    if (!(object instanceof T.Mesh) && !(object instanceof T.Line)) return;
-    geometries.add(object.geometry);
-    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
-      materials.add(material);
-      for (const value of Object.values(material))
-        if (value instanceof T.Texture) textures.add(value);
-    }
-  });
-  geometries.forEach((g) => g.dispose());
-  materials.forEach((m) => m.dispose());
-  textures.forEach((t) => t.dispose());
-  root.clear();
-}
-
 /** 이름표 옆 글리프 — 대화 응답 셋 + 작업 중(R27). `actorIndicator` 가 우선순위를 정한다. */
 const INDICATOR_GLYPH: Record<NonNullable<ReturnType<typeof actorIndicator>> | "none", string> = {
   queued: "⏳",
@@ -84,7 +57,7 @@ const environmentPalettes = {
   trading: { floor: "#e3d0aa", wall: "#dae2d2", wood: "#b48a60", outside: "#e9eee2" },
   agency: { floor: "#ecd2c1", wall: "#e5b5a3", wood: "#b77962", outside: "#f3e7df" },
   tech: { floor: "#d5e0db", wall: "#b1cbc6", wood: "#719389", outside: "#e5efed" },
-  executive: { floor: "#c8c7b5", wall: "#a7b2a3", wood: "#655e4c", outside: "#e1e5dd" },
+  executive: { floor: "#d9cbb5", wall: "#62422d", wood: "#65584b", outside: "#f1eadf" },
   publishing: { floor: "#ecdfbf", wall: "#dfd0ab", wood: "#a17b4f", outside: "#f2ecda" },
 };
 
@@ -253,6 +226,9 @@ export class OfficeRenderer {
     const statuses = [...this.actors.values()].map(
       (actor) => actor.model.root.userData.assetStatus,
     );
+    this.world.traverse((object) => {
+      if (object.userData.dynamicAsset) statuses.push(object.userData.assetStatus);
+    });
     return {
       pixelRatio: this.renderer.getPixelRatio(),
       drawCalls: this.renderer.info.render.calls,
@@ -567,7 +543,7 @@ export class OfficeRenderer {
       tiles.receiveShadow = true;
       this.world.add(tiles);
     }
-    if (isOfficeEnvironmentId(map.environment)) {
+    if (isOfficeEnvironmentId(map.environment) && map.environment !== "executive") {
       const finish = officeFinish(map.environment);
       const floorMap = surfaceTexture(finish.floor, "color");
       const floorBump = surfaceTexture(finish.floor);
@@ -697,12 +673,19 @@ export class OfficeRenderer {
     const furniture = [...tileObjects, ...map.objects];
     const finishedPerimeter =
       !!map.environment && furniture.some((object) => object.type === "room_wall_h");
-    if (finishedPerimeter) addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
-    if (finishedPerimeter && map.environment) addOfficeRoomSurfaces(this.world, map.environment);
+    const executive = map.environment === "executive";
+    if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
+    if (finishedPerimeter && !executive)
+      addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
+    if (finishedPerimeter && map.environment && !executive)
+      addOfficeRoomSurfaces(this.world, map.environment, {
+        environmentVersion: map.environmentVersion,
+        hasLegacyPartitions: finishedPerimeter,
+      });
     this.seats = furnitureSeats(furniture);
     for (const object of furniture) {
       if (
-        finishedPerimeter &&
+        (finishedPerimeter || executive) &&
         object.type === "cubicle_wall" &&
         (object.col === 0 ||
           object.col === map.cols - 1 ||
@@ -712,7 +695,12 @@ export class OfficeRenderer {
         continue;
       const group = new T.Group(),
         size = getObjectDimensions(object.type, object.direction);
-      group.position.set(object.col + size.width / 2, 0, object.row + size.height / 2);
+      const furniturePlacement = furnitureOffset(object);
+      group.position.set(
+        object.col + size.width / 2 + furniturePlacement.x,
+        0,
+        object.row + size.height / 2 + furniturePlacement.z,
+      );
       group.rotation.y = { up: Math.PI, down: 0, left: -Math.PI / 2, right: Math.PI / 2 }[
         object.type === "chair"
           ? resolveSeat(object, furniture).direction
@@ -739,17 +727,49 @@ export class OfficeRenderer {
         else addRoomPartition(group, type === "room_wall_v");
         continue;
       }
-      const roomFurniture = buildRoomFurniture(type);
-      if (roomFurniture) {
-        const seats = sofaSeats(object);
-        if (seats.length) group.userData.seats = seats;
-        group.add(roomFurniture);
-        continue;
-      }
       if (type === "chair") {
         const seat = resolveSeat(object, furniture);
         group.userData.seat = seat;
         group.position.set(seat.x, 0, seat.z);
+      }
+      const roomFurniture = buildRoomFurniture(type, executive);
+      if (roomFurniture) {
+        const seats = sofaSeats(object);
+        if (seats.length) group.userData.seats = seats;
+        group.add(roomFurniture);
+        if (executive) {
+          const managerSeat =
+            type === "chair" &&
+            furniture.some(
+              (desk) =>
+                desk.type === "executive_desk" &&
+                object.col >= desk.col &&
+                object.col < desk.col + 4 &&
+                object.row === desk.row - 1,
+            );
+          const asset =
+            type === "executive_desk"
+              ? "executive-desk"
+              : type === "reception_desk"
+                ? "desk"
+                : type === "bookshelf"
+                  ? "bookcase"
+                  : managerSeat
+                    ? "chair"
+                    : type === "chair"
+                      ? "guest-chair"
+                      : type === "office_sofa"
+                        ? "sofa"
+                        : type === "office_armchair"
+                          ? "armchair"
+                          : type === "conference_table"
+                            ? "conference"
+                            : type === "meeting_table"
+                              ? "coffee"
+                              : undefined;
+          if (asset) void attachFurnitureAsset(roomFurniture, asset);
+        }
+        continue;
       }
       if (
         type === "cubicle_wall" &&
@@ -759,6 +779,21 @@ export class OfficeRenderer {
         (object.col === 0 || object.col === map.cols - 1)
       )
         group.rotation.y = Math.PI / 2;
+      if (type === "computer") {
+        const executiveDesk =
+          executive &&
+          furniture.find(
+            (desk) =>
+              ["reception_desk", "executive_desk"].includes(desk.type) &&
+              desk.col === object.col &&
+              desk.row === object.row,
+          );
+        if (executiveDesk) {
+          group.position.x = executiveDesk.col + getObjectDimensions(executiveDesk.type).width / 2;
+          group.position.y = 0.06;
+          group.rotation.y = Math.PI;
+        }
+      }
       if (
         addOfficeDetails(
           group,
@@ -768,8 +803,11 @@ export class OfficeRenderer {
           object.row === 0,
           isOfficeEnvironmentId(map.environment) ? map.environment : undefined,
         )
-      )
+      ) {
+        if (executive && type === "plant")
+          void attachSceneAsset(group, (object.col + object.row) % 2 ? "olive" : "ficus");
         continue;
+      }
       if (type.includes("desk") || type === "meeting_table") {
         const wide = type === "meeting_table" || type === "reception_desk" ? 1.8 : 0.9,
           deep = type === "meeting_table" ? 1.8 : 0.8;
@@ -785,6 +823,8 @@ export class OfficeRenderer {
         cylinder(group, 0.3, 0.22, 0.45, "#d4ae85", 0, 0.23, 0);
         cylinder(group, 0.035, 0.04, 0.7, p.wood, 0, 0.7, 0);
         for (const x of [-0.18, 0.18]) sphere(group, 0.35, "#668863", x, 1.0 + x, 0, 0.8, 1.2, 0.8);
+        if (executive)
+          void attachSceneAsset(group, (object.col + object.row) % 2 ? "olive" : "ficus");
       } else if (type === "computer") {
         round(group, 0.68, 0.45, 0.09, "#354e49", 0, 1.08, -0.14);
         round(group, 0.59, 0.34, 0.015, "#b9d8cc", 0, 1.08, -0.085);

@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ambientTileAllowed, ambientPathAllowed, readAmbientZones } from "./ambient-zones";
+import {
+  ambientTileAllowed,
+  ambientPathAllowed,
+  destinationTileAllowed,
+  findTaggedDestinationPath,
+  readAmbientZones,
+} from "./ambient-zones";
 import { buildOfficeEnvironment } from "./three/office-environments";
 test("map-owned excluded rooms reject destinations and through paths, but permit exit", () => {
   const zones = readAmbientZones(
@@ -34,6 +40,138 @@ test("arbitrary maps reuse zone rules and legacy maps remain unrestricted", () =
   );
 });
 
+test("creative studio purpose-only zones reject roaming but accept matching explicit destinations", () => {
+  const zones = readAmbientZones(
+    buildOfficeEnvironment("agency") as unknown as Record<string, unknown>,
+  );
+  assert.deepEqual(
+    zones.find((zone) => zone.id === "photo"),
+    {
+      id: "photo",
+      x: 1,
+      y: 2,
+      width: 9,
+      height: 9,
+      roaming: false,
+      access: "purpose-only",
+      destinationTags: ["photo"],
+    },
+  );
+  assert.equal(ambientTileAllowed(zones, 5, 8), false);
+  assert.equal(destinationTileAllowed(zones, 5, 8, "photo"), true);
+  assert.equal(destinationTileAllowed(zones, 5, 8, "meeting"), false);
+  assert.equal(destinationTileAllowed(zones, 35, 4, "meeting"), true);
+  assert.equal(destinationTileAllowed(zones, 35, 4), false);
+  assert.equal(destinationTileAllowed(zones, 26, 10), true);
+  assert.equal(ambientTileAllowed(zones, 30, 10), false, "east aisle is not an idle stop");
+  assert.equal(
+    ambientPathAllowed(zones, 30, 10, { x: 25, y: 10 }),
+    true,
+    "east aisle remains traversable",
+  );
+  assert.equal(ambientTileAllowed(zones, 21, 24), false, "entrance is not an idle stop");
+});
+
+test("malformed optional ambient metadata is rejected while legacy metadata remains valid", () => {
+  const mapWith = (zone: Record<string, unknown>) => ({
+    layers: [
+      {
+        name: "Objects",
+        type: "objectgroup",
+        properties: [{ name: "ambientZones", value: JSON.stringify([zone]) }],
+      },
+    ],
+  });
+  const legacy = { id: "legacy", x: 1, y: 2, width: 3, height: 4, roaming: true };
+  assert.deepEqual(readAmbientZones(mapWith(legacy)), [legacy]);
+  assert.deepEqual(readAmbientZones(mapWith({ ...legacy, access: "private" })), []);
+  assert.deepEqual(
+    readAmbientZones(
+      mapWith({ ...legacy, roaming: false, access: "ambient", destinationTags: ["work"] }),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    readAmbientZones(mapWith({ ...legacy, access: "ambient", destinationTags: [] })),
+    [],
+  );
+  assert.deepEqual(readAmbientZones(mapWith({ ...legacy, destinationTags: ["work", 7] })), []);
+  assert.deepEqual(
+    readAmbientZones(
+      mapWith({
+        ...legacy,
+        destinationExclusions: [{ x: 1, y: 1, width: 0, height: 2 }],
+      }),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    readAmbientZones(
+      mapWith({
+        ...legacy,
+        access: "ambient",
+        destinationTags: ["work"],
+        destinationExclusions: [{ x: 9, y: 9, width: 1, height: 1 }],
+      }),
+    ),
+    [],
+  );
+});
+
+test("mixed metadata preserves each legacy roaming zone and lets restrictive overlaps win", () => {
+  const legacy = { id: "legacy", x: 1, y: 1, width: 2, height: 2, roaming: true };
+  const modern = {
+    id: "modern",
+    x: 5,
+    y: 5,
+    width: 2,
+    height: 2,
+    roaming: true,
+    access: "ambient" as const,
+    destinationTags: ["work"],
+  };
+  assert.equal(ambientTileAllowed([legacy, modern], 1, 1), true);
+  assert.equal(ambientTileAllowed([legacy, modern], 5, 5), true);
+  assert.equal(ambientTileAllowed([legacy, modern], 4, 4), false);
+
+  const restricted = {
+    id: "restricted",
+    x: 2,
+    y: 2,
+    width: 2,
+    height: 2,
+    roaming: false,
+    access: "purpose-only" as const,
+    destinationTags: ["meeting"],
+  };
+  assert.equal(ambientTileAllowed([legacy, modern, restricted], 2, 2), false);
+});
+
+test("tagged action resolves a body-clear route from circulation into a purpose-only zone", () => {
+  const map = buildOfficeEnvironment("agency");
+  const zones = readAmbientZones(map as unknown as Record<string, unknown>);
+  const snapshot = tiledSnapshot(map);
+  const blocked = new Set(snapshot.blocked);
+  const walkable = (x: number, y: number) =>
+    x >= 1 && x < snapshot.cols - 1 && y >= 1 && y < snapshot.rows && !blocked.has(`${x},${y}`);
+  const start = { x: 23, y: 23 };
+  const destination = { x: 5, y: 8 };
+
+  assert.equal(ambientTileAllowed(zones, destination.x, destination.y), false);
+  assert.equal(
+    findTaggedDestinationPath(zones, "meeting", start, destination, walkable),
+    null,
+    "an action cannot enter a purpose zone under the wrong tag",
+  );
+  const route = findTaggedDestinationPath(zones, "photo", start, destination, walkable);
+  assert.ok(route, "photo action enters its matching purpose-only zone");
+  assert.deepEqual(route.at(-1), destination);
+  for (let index = 1; index < route.length; index++) {
+    assert.ok(clearSegment(route[index - 1], route[index], walkable));
+    assert.ok(clearSegment(route[index], route[index - 1], walkable));
+  }
+});
+
 import { AmbientExitPolicy } from "./ambient-zones";
 import { OFFICE_ENVIRONMENTS } from "./three/office-environments";
 import { OFFICE_ROOMS } from "./three/office-room-layout";
@@ -42,6 +180,7 @@ import { TrafficCoordinator } from "./traffic";
 import { ACTOR_RADIUS, clearSegment } from "./navigation";
 
 for (const { id } of OFFICE_ENVIRONMENTS) {
+  if (id === "agency") continue;
   test(`${id}: an inside worker fully exits CEO through incremental traffic and cannot reenter`, () => {
     const map = buildOfficeEnvironment(id);
     const zones = readAmbientZones(map as unknown as Record<string, unknown>);

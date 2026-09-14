@@ -52,3 +52,22 @@ test("unsupported room furniture falls back to the existing object renderer", ()
   assert.equal(buildRoomFurniture("meeting_table"), null);
   assert.equal(buildRoomFurniture("unknown"), null);
 });
+
+test("executive furniture keeps existing collision and seat footprints", () => {
+  for (const [type, width, depth] of [
+    ["reception_desk", 2, 1],
+    ["meeting_table", 2, 2],
+    ["conference_table", 4, 2],
+    ["chair", 1, 1],
+    ["bookshelf", 1, 1],
+    ["office_sofa", 2, 1],
+    ["office_armchair", 1, 1],
+  ] as const) {
+    const model = buildRoomFurniture(type, true);
+    assert.ok(model);
+    const bounds = new Box3().setFromObject(model);
+    assert.ok(bounds.min.x >= -width / 2 && bounds.max.x <= width / 2, `${type} width`);
+    assert.ok(bounds.min.z >= -depth / 2 && bounds.max.z <= depth / 2, `${type} depth`);
+    assert.ok(bounds.min.y >= -0.001, `${type} above floor`);
+  }
+});

@@ -16,6 +16,7 @@ export type TiledGeometryMap = {
       y: number;
       width?: number;
       height?: number;
+      properties?: Array<{ name: string; value: unknown }>;
     }>;
   }>;
 };
@@ -48,6 +49,9 @@ export function projectTiledGeometry(map: TiledGeometryMap): TiledGeometrySnapsh
           type: o.type,
           col: Math.floor(o.x / 32),
           row: Math.floor(o.y / 32),
+          ...tiledDirection(o.properties),
+          ...tiledVariant(o.properties),
+          ...tiledDestinationTags(o.properties),
         })),
     );
   const blocked = computeOccupiedTiles(objects);
@@ -80,4 +84,34 @@ export function projectTiledGeometry(map: TiledGeometryMap): TiledGeometrySnapsh
     blocked: [...blocked],
     tiled: true,
   };
+}
+
+export function tiledDirection(properties?: Array<{ name: string; value: unknown }>): {
+  direction?: MapObject["direction"];
+} {
+  const value = properties?.find((p) => p.name === "direction")?.value;
+  return value === "up" || value === "down" || value === "left" || value === "right"
+    ? { direction: value }
+    : {};
+}
+
+export function tiledVariant(properties?: Array<{ name: string; value: unknown }>): {
+  variant?: string;
+} {
+  const value = properties?.find((p) => p.name === "variant")?.value;
+  return typeof value === "string" ? { variant: value } : {};
+}
+
+export function tiledDestinationTags(properties?: Array<{ name: string; value: unknown }>): {
+  destinationTags?: readonly string[];
+} {
+  const value = properties?.find((property) => property.name === "destinationTags")?.value;
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(parsed) && parsed.every((tag) => typeof tag === "string")
+      ? { destinationTags: parsed }
+      : {};
+  } catch {
+    return {};
+  }
 }

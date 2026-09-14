@@ -5,6 +5,13 @@ import type { ActorPhase } from "./characters";
 import type { OfficeLook } from "./office-looks";
 import { createMiniatureActor } from "./miniature-actor";
 import { createGltfGestures } from "./gltf-gestures";
+import {
+  COMMUTE_WALK_STRIDES,
+  MINIATURE_WALK_STRIDE,
+  createDistanceWalkPhase,
+  type DistanceWalkOptions,
+  type DistanceWalkFrame,
+} from "./commute-walk";
 
 /** Assets use metres, +Z forward and floor origin; animation owns the pelvis height. */
 export type ActorAssetLoader = (url: string) => Promise<GLTF>;
@@ -81,9 +88,19 @@ export function createGltfActor(
   index: number,
   url: string,
   load: ActorAssetLoader = defaultLoader,
+  options: DistanceWalkOptions = {},
 ) {
   const fallback = createMiniatureActor(id, look, index);
   const { root, rig, ring } = fallback;
+  const distancePhase = createDistanceWalkPhase();
+  const worldScale = new T.Vector3();
+  // Keep fallback geometry only for explicit homepage consumers: it also covers
+  // successfully loaded assets whose walk clip is missing.
+  const fallbackVisual = options.distanceWalk ? new T.Group() : undefined;
+  if (fallbackVisual) {
+    fallbackVisual.add(...rig.children);
+    rig.add(fallbackVisual);
+  }
   root.userData.modelStyle = "gltf";
   root.userData.assetStatus = "loading";
   let disposed = false;
@@ -126,7 +143,8 @@ export function createGltfActor(
       gestures = createGltfGestures(model, index);
       for (const clip of asset.animations)
         actions.set(clip.name.toLowerCase(), mixer.clipAction(clip));
-      disposeResources(rig);
+      if (!fallbackVisual) disposeResources(rig);
+      else fallbackVisual.visible = false;
       rig.position.set(0, 0, 0);
       // Facing belongs to the caller (meeting seats set it only once before loading).
       rig.rotation.set(0, rig.rotation.y, 0);
@@ -150,25 +168,46 @@ export function createGltfActor(
     ready,
     phase: "idle" as ActorPhase,
     seated: false,
-    update(t: number, walking: boolean, phase: ActorPhase, seated: boolean) {
+    update(
+      t: number,
+      walking: boolean,
+      phase: ActorPhase,
+      seated: boolean,
+      frame?: DistanceWalkFrame,
+    ) {
       if (disposed) return;
       const delta = lastTime === undefined ? 0 : Math.max(0, Math.min(0.1, t - lastTime));
       lastTime = t;
       actor.phase = phase;
       actor.seated = seated && !walking;
-      if (!mixer) {
-        fallback.update(t, walking, phase, seated);
+      const synced = options.distanceWalk === true && frame !== undefined;
+      const useFallback = !mixer || (synced && walking && !actions.has("walk"));
+      const stride = (!useFallback && COMMUTE_WALK_STRIDES[look.id]) || MINIATURE_WALK_STRIDE;
+      const gait = synced
+        ? distancePhase(frame.cumulativeDistance, stride * root.getWorldScale(worldScale).z)
+        : undefined;
+      if (fallbackVisual) fallbackVisual.visible = useFallback;
+      if (model) model.visible = !useFallback;
+      if (useFallback) {
+        fallback.update(t, walking, phase, seated, gait);
         return;
       }
+      if (synced) rig.position.y = 0;
       const name = walking ? "walk" : seated ? "sit" : "idle";
       const next = actions.get(name) ?? actions.get("idle");
       if (next && next !== current) {
         next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
-        if (current) next.crossFadeFrom(current, 0.22, false);
+        if (current) {
+          if (synced && walking) current.stop();
+          else next.crossFadeFrom(current, 0.22, false);
+        }
         current = next;
       }
       gestures?.restore();
-      mixer.update(delta);
+      if (synced && walking && current && gait !== undefined) {
+        current.time = (gait / (Math.PI * 2)) * current.getClip().duration;
+        mixer!.update(0);
+      } else mixer!.update(delta);
       gestures?.apply(t, walking, phase);
       ring.material.opacity = phase === "streaming" ? 0.45 : 0.22;
     },

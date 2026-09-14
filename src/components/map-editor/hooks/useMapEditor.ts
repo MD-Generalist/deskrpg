@@ -31,6 +31,12 @@ export interface TiledTileset {
   }>;
 }
 
+export interface TiledProperty {
+  name: string;
+  type: string;
+  value: unknown;
+}
+
 export interface TiledLayer {
   id: number;
   name: string;
@@ -44,10 +50,11 @@ export interface TiledLayer {
   x: number;
   y: number;
   draworder?: string;
-  properties?: Array<{ name: string; type: string; value: unknown }>;
+  properties?: TiledProperty[];
 }
 
 export interface TiledObject {
+  properties?: TiledProperty[];
   id: number;
   name: string;
   type: string;
