@@ -2384,6 +2384,15 @@ const en: Record<string, string> = {
   "cron.error.gatewayNotBound":
     "This channel has no Hermes gateway bound. Connect one in channel settings.",
   "cron.error.partial": "Could not load cron jobs for {count} NPC(s)",
+  // Automation notices / cron entry (T10)
+  "cron.open": "Cron",
+  "notice.cardDone": "Finished a card: {title}",
+  "notice.cardBlocked": "A card is blocked: {title}",
+  "notice.openCard": "Open card",
+  "notice.cronResult": "Cron result · {jobName}",
+  "notice.cronFailed": "Failed",
+  "notice.openHistory": "Open history",
+  "map.working": "Working",
   // Kanban (T8)
   "kanban.title": "Kanban board",
   "kanban.open": "Kanban",

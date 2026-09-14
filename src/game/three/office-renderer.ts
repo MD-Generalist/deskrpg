@@ -21,6 +21,7 @@ import { addOfficeDetails } from "./office-details";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createActor, round, sphere, cylinder } from "./characters";
 import {
+  actorIndicator,
   actorPresentationPhase,
   speechActorId,
   pixelToWorld,
@@ -63,6 +64,15 @@ export function disposeTree(root: T.Object3D) {
   textures.forEach((t) => t.dispose());
   root.clear();
 }
+
+/** 이름표 옆 글리프 — 대화 응답 셋 + 작업 중(R27). `actorIndicator` 가 우선순위를 정한다. */
+const INDICATOR_GLYPH: Record<NonNullable<ReturnType<typeof actorIndicator>> | "none", string> = {
+  queued: "⏳",
+  thinking: "💭",
+  streaming: "💬",
+  working: "🛠️",
+  none: "",
+};
 
 const palettes = {
   office: { floor: "#e3d0aa", wall: "#dae2d2", wood: "#b48a60", outside: "#e9eee2" },
@@ -976,14 +986,7 @@ export class OfficeRenderer {
         name.textContent = actor.name;
         label.setAttribute("aria-label", actor.name);
         const message = actor.bubble || ((this.speech.get(actor.id) || 0) > time ? "···" : "");
-        const indicator =
-          phase === "queued"
-            ? "⏳"
-            : phase === "thinking"
-              ? "💭"
-              : phase === "streaming"
-                ? "💬"
-                : "";
+        const indicator = INDICATOR_GLYPH[actorIndicator(actor) ?? "none"];
         const text = [indicator, message].filter(Boolean).join(" ");
         const screen = new T.Vector3(seat?.x ?? p.x, 0, seat?.z ?? p.z).project(this.camera);
         const visible =

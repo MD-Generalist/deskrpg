@@ -2374,6 +2374,15 @@ const ko: Record<string, string> = {
   "cron.error.gatewayNotBound":
     "이 채널에 연결된 Hermes 게이트웨이가 없습니다. 채널 설정에서 게이트웨이를 연결하세요.",
   "cron.error.partial": "{count}개 NPC 의 크론을 불러오지 못했습니다",
+  // 자동화 알림·크론 진입 (T10)
+  "cron.open": "크론",
+  "notice.cardDone": "카드를 완료했습니다: {title}",
+  "notice.cardBlocked": "카드가 막혔습니다: {title}",
+  "notice.openCard": "카드 열기",
+  "notice.cronResult": "크론 결과 · {jobName}",
+  "notice.cronFailed": "실패",
+  "notice.openHistory": "이력 열기",
+  "map.working": "작업 중",
   // Kanban (T8)
   "kanban.title": "칸반 보드",
   "kanban.open": "칸반",

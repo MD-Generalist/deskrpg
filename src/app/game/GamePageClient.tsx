@@ -29,6 +29,7 @@ import {
   Bug,
   Info,
   KanbanSquare,
+  AlarmClock,
 } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
@@ -56,6 +57,14 @@ import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
 import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
+import CronModal from "@/components/cron/CronModal";
+import {
+  EMPTY_NPC_WORKING,
+  parseNpcWorkingPayload,
+  reduceNpcWorking,
+  workingNpcIds,
+  type NpcWorkingMap,
+} from "./npc-working-state";
 import { getLocalizedErrorMessage, getLocalizedMessage } from "@/lib/i18n/error-codes";
 import { mentionSkipI18nKey } from "@/components/meeting-room/mention-skip-notice";
 import type { MentionSkipReason } from "@/lib/conversation/floor-controller";
@@ -188,6 +197,13 @@ function GamePageInner() {
   // 칸반 보드(T8). `kanbanRefreshTick` 은 `kanban:event` 마다 오르고, 모달이 디바운스해 재조회한다.
   const [showKanban, setShowKanban] = useState(false);
   const [kanbanRefreshTick, setKanbanRefreshTick] = useState(0);
+  // 방 알림의 "카드 열기"(R29) — 모달이 마운트될 때 이 카드의 상세를 편다.
+  const [kanbanInitialTaskId, setKanbanInitialTaskId] = useState<string | null>(null);
+  // 채널 크론 화면(T10, R15). "이력 열기"(R30) 는 그 잡의 실행 이력으로 연다.
+  const [showCron, setShowCron] = useState(false);
+  const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
+  // 맵의 "작업 중"(R27). 소켓의 `npc:working` 만 담는다 — 낙관적 갱신 없음(R26).
+  const [npcWorking, setNpcWorking] = useState<NpcWorkingMap>(EMPTY_NPC_WORKING);
   const [mode, setMode] = useState<"office" | "meeting">("office");
   // Map rendering needs only placed NPC identity and appearance.
   const [channelNpcs, setChannelNpcs] = useState<
@@ -228,6 +244,15 @@ function GamePageInner() {
       EventBus.off("scene-ready", publish);
     };
   }, [chatResponses]);
+  // 작업 중 목록도 같은 길로 맵에 넘긴다. 씬이 늦게 뜨면 `scene-ready` 에서 다시 보낸다.
+  useEffect(() => {
+    const publish = () => EventBus.emit("npc:working-state", { npcIds: workingNpcIds(npcWorking) });
+    publish();
+    EventBus.on("scene-ready", publish);
+    return () => {
+      EventBus.off("scene-ready", publish);
+    };
+  }, [npcWorking]);
   const [npcSelectList, setNpcSelectList] = useState<{ npcId: string; npcName: string }[] | null>(
     null,
   );
@@ -448,6 +473,11 @@ function GamePageInner() {
       [{ id, message, timestamp: Date.now(), read: false }, ...prev].slice(0, 20),
     );
   }, []);
+  // 크론 화면·탭의 토스트(R19). id 는 메시지마다 새로 — 알림 목록에 겹치지 않게.
+  const cronToast = useCallback(
+    (message: string) => showToastNotification(`cron-${Date.now()}`, message),
+    [showToastNotification],
+  );
 
   // Socket.io connection (dynamic import to avoid SSR window access)
   useEffect(() => {
@@ -1799,6 +1829,42 @@ function GamePageInner() {
     };
   }, [socket, channelId]);
 
+  /**
+   * `npc:working`(R27) — 값이 바뀔 때만 오고, 접속 때 스냅샷이 한 번 온다. 채널이 바뀌면
+   * 비운다: 스냅샷이 새 채널 것으로 다시 오므로 옛 채널의 표시가 남지 않는다.
+   */
+  useEffect(() => {
+    setNpcWorking(EMPTY_NPC_WORKING);
+    if (!socket || !channelId) return;
+    const onWorking = (raw: unknown) => {
+      const payload = parseNpcWorkingPayload(raw);
+      if (!payload) return;
+      setNpcWorking((prev) => reduceNpcWorking(prev, payload));
+    };
+    socket.on("npc:working", onWorking);
+    return () => {
+      socket.off("npc:working", onWorking);
+    };
+  }, [socket, channelId]);
+
+  // 방 알림 링크(R29·R30) → 해당 모달을 그 항목으로 연다.
+  const openNoticeCard = useCallback((cardId: string) => {
+    setKanbanInitialTaskId(cardId);
+    setShowKanban(true);
+  }, []);
+  const openNoticeCronJob = useCallback((jobId: string) => {
+    setCronInitialJobId(jobId);
+    setShowCron(true);
+  }, []);
+  const closeKanban = useCallback(() => {
+    setShowKanban(false);
+    setKanbanInitialTaskId(null);
+  }, []);
+  const closeCron = useCallback(() => {
+    setShowCron(false);
+    setCronInitialJobId(null);
+  }, []);
+
   // Spawn set mode coordination
   useEffect(() => {
     if (spawnSetMode) {
@@ -1976,6 +2042,10 @@ function GamePageInner() {
   );
 
   const npcResponsePhases = npcPresentationPhases(chatResponses);
+  // 크론 화면의 NPC 후보 — 출근부의 active 만, 이름은 프로필 표시명(출근부가 이미 그것이다).
+  const cronNpcs = rosterNpcs
+    .filter((npc) => npc.active)
+    .map((npc) => ({ npcId: npc.id, npcName: npc.name }));
   const navigatorNpcs: NavigatorNpc[] = rosterNpcs.map((npc) => {
     const motion = npcMotionUi(
       npcMotionSnapshotRef.current,
@@ -2053,6 +2123,9 @@ function GamePageInner() {
         currentPlayerName={character?.name}
         npcMoveState={dialogMotion.phase}
         onReturnNpc={dialogNpc && dialogMotion.caller === socket?.id ? handleReturnNpc : undefined}
+        cron={channelId ? { channelId, socket, onToast: cronToast } : null}
+        onOpenNoticeCard={openNoticeCard}
+        onOpenNoticeCronJob={openNoticeCronJob}
       />
     </ConversationPane>
   );
@@ -2334,6 +2407,17 @@ function GamePageInner() {
           >
             <KanbanSquare className="w-3 h-3" />
             <span className="header-full-label">{t("kanban.open")}</span>
+          </button>
+
+          {/* 채널 크론 화면 (T10, R15) */}
+          <button
+            onClick={() => setShowCron(true)}
+            title={t("cron.title")}
+            aria-label={t("cron.title")}
+            className="flex items-center gap-1 px-2.5 py-1 bg-primary/80 hover:bg-primary text-white rounded-md text-caption font-semibold"
+          >
+            <AlarmClock className="w-3 h-3" />
+            <span className="header-full-label">{t("cron.open")}</span>
           </button>
 
           {/* Separator */}
@@ -2673,7 +2757,19 @@ function GamePageInner() {
         <KanbanBoardModal
           channelId={channelId}
           refreshTick={kanbanRefreshTick}
-          onClose={() => setShowKanban(false)}
+          initialTaskId={kanbanInitialTaskId}
+          onClose={closeKanban}
+        />
+      )}
+
+      {showCron && channelId && (
+        <CronModal
+          channelId={channelId}
+          npcs={cronNpcs}
+          socket={socket}
+          onToast={cronToast}
+          initialJobId={cronInitialJobId}
+          onClose={closeCron}
         />
       )}
 
