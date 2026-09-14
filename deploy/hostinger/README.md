@@ -4,14 +4,14 @@ One VPS, two containers: **DeskRPG** (the virtual office) and **Hermes Agent** (
 
 ## 1. One-click
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.17/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.18/deploy/hostinger/docker-compose.yml)
 
 The button opens Docker Hosting. Pick **KVM 2** (2 vCPU / 8 GB — Hostinger's own minimum for Hermes), finish checkout, and Docker Manager opens with this compose already loaded.
 
 Already have a VPS? hPanel → VPS → **Docker Manager** → **Compose** → **Compose from URL** → paste:
 
 ```
-https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.17/deploy/hostinger/docker-compose.yml
+https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.18/deploy/hostinger/docker-compose.yml
 ```
 
 Project name: `deskrpg` (3–64 chars, letters/digits/`-`/`_`).
