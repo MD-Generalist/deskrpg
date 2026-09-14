@@ -508,17 +508,17 @@ git commit -m "feat(ui2): safely upgrade official agency maps to creative studio
 - Consumes: all catalog, layout, renderer, migration, Blender assets and build reports.
 - Produces: package-safe runtime, staging deployment, captured benchmark and visual verification evidence.
 
-- [ ] **Step 1: Write packaging boundary tests before changing manifests**
+- [x] **Step 1: Write packaging boundary tests before changing manifests**
 
 Add assertions to the existing runtime/package boundary tests that every server-imported layout module is included by Docker and npm, every catalog URL exists under `public`, and build reports cover every generated GLB.
 
-- [ ] **Step 2: Run boundary tests and observe missing package entries**
+- [x] **Step 2: Run boundary tests and observe missing package entries**
 
 Run: `npx tsx --test src/lib/client-bundle-boundary.test.ts src/game/three/scene-asset-catalog.test.ts`
 
 Expected: FAIL for newly server-imported studio modules until package boundaries are updated.
 
-- [ ] **Step 3: Update Docker/npm runtime boundaries and quality checklist**
+- [x] **Step 3: Update Docker/npm runtime boundaries and quality checklist**
 
 Prefer copying the required shared Three.js runtime directory boundary rather than maintaining another fragile per-file list. Ensure all public assets ship through the existing `public` copy. Add the exact texture, reflection, shadow, bounds, triangle, byte, draw-call, and screenshot checks to the reusable quality checklist.
 

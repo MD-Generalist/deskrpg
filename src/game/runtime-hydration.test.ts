@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { copyMotionContinuation, playerMotionGoal } from "./runtime-hydration";
 import { RemoteNpcPresentation } from "./remote-npc-presentation";
-import { untouchedSpawn } from "./motion-snapshot";
+import { adoptNpcMotionHome, untouchedSpawn } from "./motion-snapshot";
 
 const source = readFileSync(new URL("./scenes/GameScene.ts", import.meta.url), "utf8");
 
@@ -43,6 +43,7 @@ function evaluate(code: string, extra: object = {}) {
     isSeatAnchor: () => false,
     playerMotionGoal,
     untouchedSpawn,
+    adoptNpcMotionHome,
     ...extra,
   };
   return runInNewContext(

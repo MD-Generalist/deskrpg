@@ -69,9 +69,8 @@ COPY --from=builder /app/src/server ./src/server
 COPY --from=builder /app/src/lib/tiled-geometry.ts ./src/lib/tiled-geometry.ts
 COPY --from=builder /app/src/lib/object-types.ts ./src/lib/object-types.ts
 COPY --from=builder /app/src/game/navigation.ts ./src/game/navigation.ts
-COPY --from=builder /app/src/game/three/seating.ts ./src/game/three/seating.ts
-COPY --from=builder /app/src/game/three/scene-asset-definitions.ts ./src/game/three/scene-asset-definitions.ts
-COPY --from=builder /app/src/game/three/executive-lounge-layout.ts ./src/game/three/executive-lounge-layout.ts
+# Shared catalog/layout/seat modules evolve together; retain their runtime boundary.
+COPY --from=builder /app/src/game/three ./src/game/three
 COPY --from=builder /app/src/lib/open-chat-formatter.ts ./src/lib/open-chat-formatter.ts
 
 # DB 경계는 통째로 옮긴다. 파일 목록으로 두면 `require("./sqlite-...js")` 처럼
