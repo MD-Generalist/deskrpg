@@ -65,6 +65,7 @@ const SQLITE_BASE_SCHEMA = `
       plugin_status TEXT,
       plugin_version TEXT,
       plugin_checked_at TEXT,
+      plugin_info_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -368,9 +369,35 @@ const SQLITE_BASE_SCHEMA = `
       sender_id TEXT,
       sender_name TEXT NOT NULL,
       content TEXT NOT NULL,
+      notice_json TEXT,
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_chat_room_messages_room ON chat_room_messages(room_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS channel_kanban_boards (
+      channel_id TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      gateway_id TEXT NOT NULL REFERENCES gateway_resources(id) ON DELETE CASCADE,
+      board_slug TEXT NOT NULL,
+      board_name_synced_at TEXT,
+      event_cursor TEXT,
+      last_polled_at TEXT,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_channel_kanban_boards_gateway_id ON channel_kanban_boards(gateway_id);
+    CREATE TABLE IF NOT EXISTS cron_job_origins (
+      id TEXT PRIMARY KEY NOT NULL,
+      gateway_id TEXT NOT NULL REFERENCES gateway_resources(id) ON DELETE CASCADE,
+      profile_name TEXT NOT NULL,
+      job_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(gateway_id, profile_name, job_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cron_job_origins_channel_id ON cron_job_origins(channel_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS cron_job_origins_gateway_profile_job_idx ON cron_job_origins(gateway_id, profile_name, job_id);
 
     CREATE TABLE IF NOT EXISTS meeting_minutes (
       id TEXT PRIMARY KEY NOT NULL,

@@ -100,6 +100,9 @@ export const gatewayResources = sqliteTable(
     pluginStatus: text("plugin_status"),
     pluginVersion: text("plugin_version"),
     pluginCheckedAt: text("plugin_checked_at"),
+    // `GET /deskrpg/info` 응답 본문 캐시(JSON 문자열). plugin_status·plugin_version 은 판정 요약이고,
+    // 칸반·cron 같은 세부 기능 지원 여부는 이 원문에서 읽는다.
+    pluginInfoJson: text("plugin_info_json"),
     createdAt: text("created_at")
       .$defaultFn(() => new Date().toISOString())
       .notNull(),
@@ -239,6 +242,67 @@ export const channelGatewayBindings = sqliteTable(
   (table) => [
     index("idx_channel_gateway_bindings_gateway_id").on(table.gatewayId),
     uniqueIndex("channel_gateway_bindings_channel_idx").on(table.channelId),
+  ],
+);
+
+// 채널 ↔ Hermes 칸반 보드 연결 장부. 채널마다 보드 하나라 channel_id 가 곧 PK 다.
+// event_cursor 는 마지막으로 소비한 보드 이벤트 위치, last_error 는 마지막 폴링 실패 사유.
+// 보드 이름은 Hermes 쪽이 정본이고 board_name_synced_at 은 그것을 마지막으로 맞춘 시각이다.
+export const channelKanbanBoards = sqliteTable(
+  "channel_kanban_boards",
+  {
+    channelId: text("channel_id")
+      .primaryKey()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    gatewayId: text("gateway_id")
+      .notNull()
+      .references(() => gatewayResources.id, { onDelete: "cascade" }),
+    boardSlug: text("board_slug").notNull(),
+    boardNameSyncedAt: text("board_name_synced_at"),
+    eventCursor: text("event_cursor"),
+    lastPolledAt: text("last_polled_at"),
+    lastError: text("last_error"),
+    createdAt: text("created_at")
+      .$defaultFn(() => new Date().toISOString())
+      .notNull(),
+    updatedAt: text("updated_at")
+      .$defaultFn(() => new Date().toISOString())
+      .notNull(),
+  },
+  (table) => [index("idx_channel_kanban_boards_gateway_id").on(table.gatewayId)],
+);
+
+// DeskRPG 가 만든 Hermes cron 작업의 출처 장부. Hermes 쪽 작업은 (게이트웨이, 프로필, job id)
+// 세 값으로 유일하게 정해지므로 그 조합이 유니크다. 채널이 사라지면 장부도 같이 사라지고,
+// 만든 사용자가 탈퇴해도 작업 자체는 남아야 하니 created_by 는 set null 이다.
+export const cronJobOrigins = sqliteTable(
+  "cron_job_origins",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    gatewayId: text("gateway_id")
+      .notNull()
+      .references(() => gatewayResources.id, { onDelete: "cascade" }),
+    profileName: text("profile_name").notNull(),
+    jobId: text("job_id").notNull(),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: text("created_at")
+      .$defaultFn(() => new Date().toISOString())
+      .notNull(),
+  },
+  (table) => [
+    index("idx_cron_job_origins_channel_id").on(table.channelId),
+    uniqueIndex("cron_job_origins_gateway_profile_job_idx").on(
+      table.gatewayId,
+      table.profileName,
+      table.jobId,
+    ),
   ],
 );
 
@@ -598,6 +662,9 @@ export const chatRoomMessages = sqliteTable(
     senderId: text("sender_id"),
     senderName: text("sender_name").notNull(),
     content: text("content").notNull(),
+    // 시스템 메시지의 구조화 페이로드(JSON 문자열). 칸반 카드 이동·cron 결과 같은 알림이
+    // 본문(content) 과 별도로 카드 렌더링에 쓸 데이터를 여기 담는다. 일반 메시지는 NULL.
+    noticeJson: text("notice_json"),
     createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   },
   (t) => [index("idx_chat_room_messages_room").on(t.roomId, t.createdAt)],
