@@ -12,6 +12,7 @@ const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js");
 const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js");
 const { migrateNpcsToProfileOwnership } = require("./sqlite-npc-profile-ownership.js");
 const { ensureChatRoomTables } = require("./sqlite-chat-rooms.js");
+const { ensureKanbanCronBookkeeping } = require("./sqlite-kanban-cron-bookkeeping.js");
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -385,6 +386,8 @@ function ensureSqliteCompatibility(sqlite) {
   ]);
   migrateNpcsToProfileOwnership(sqlite);
   ensureChatRoomTables(sqlite);
+  // chat_room_messages 가 있어야 notice_json 을 더할 수 있으니 방 테이블 다음이다.
+  ensureKanbanCronBookkeeping(sqlite);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",
