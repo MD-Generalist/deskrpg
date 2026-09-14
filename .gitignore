@@ -86,3 +86,6 @@ deploy/pre-deploy-checklist.md
 !/deploy/
 /deploy/*
 !/deploy/hostinger/
+
+# Development meta — never published
+/docs/superpowers/
