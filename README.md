@@ -4,7 +4,7 @@
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG home screen" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.16/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.17/deploy/hostinger/docker-compose.yml)
 
 Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
 
@@ -14,7 +14,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: `https://deskrpg.com` (planned)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.9.16` — 3D morning commute homepage for Hermes (the 2D pixel-art client remains available on tags up to `2026.9.9`)
+- Version: `v2026.9.17` — 3D morning commute homepage for Hermes (the 2D pixel-art client remains available on tags up to `2026.9.9`)
 
 ## What You Can Do
 

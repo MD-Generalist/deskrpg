@@ -4,7 +4,7 @@ English README: [README.md](README.md)
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG 홈 화면" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.16/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.17/deploy/hostinger/docker-compose.yml)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
@@ -14,7 +14,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: `https://deskrpg.com` (준비 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.9.16` — Hermes를 위한 3D 아침 출근길 홈 화면 릴리스입니다 (2D 픽셀아트 클라이언트는 `2026.9.9` 이하 태그에서 받을 수 있습니다)
+- 버전: `v2026.9.17` — Hermes를 위한 3D 아침 출근길 홈 화면 릴리스입니다 (2D 픽셀아트 클라이언트는 `2026.9.9` 이하 태그에서 받을 수 있습니다)
 
 ## 무엇을 할 수 있나요
 

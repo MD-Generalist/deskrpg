@@ -7,6 +7,13 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.9.17] - 2026-09-14
+
+### Fixed
+
+- Align Docker with Node 22 and pin SQLite to 12.8.0 so native dependencies install consistently.
+- Include the final CI action updates alongside the Hermes morning commute homepage release.
+
 ## [2026.9.16] - 2026-09-14
 
 ### Added
