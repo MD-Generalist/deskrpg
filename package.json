@@ -60,7 +60,11 @@
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "db:setup": "dotenv -e .env.local -- drizzle-kit migrate",
     "deploy:test": "bash deploy/test-deploy.sh",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "capture:readme": "tsx scripts/readme-capture/session.ts",
+    "capture:readme:record": "playwright test --config playwright.readme-capture.config.ts",
+    "capture:readme:media": "tsx scripts/readme-capture/media.ts",
+    "capture:readme:verify": "tsx scripts/readme-capture/verify-readme.ts"
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",
