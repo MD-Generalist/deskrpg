@@ -21,7 +21,9 @@ export type CoordinationChannel = {
   bounds?: { width: number; height: number };
 };
 export type CoordinationDependencies = {
-  getPlayer(socketId: string): { mapId: string; x?: number; y?: number; userId?: string; characterId?: string } | undefined;
+  getPlayer(
+    socketId: string,
+  ): { mapId: string; x?: number; y?: number; userId?: string; characterId?: string } | undefined;
   loadChannel(channelId: string): Promise<CoordinationChannel>;
   now?: () => number;
 };
@@ -37,7 +39,10 @@ type Reservation = {
 type Channel = {
   channelId: string;
   identities: Map<string, string>;
-  disconnected: Map<string, { identity: string; expires: number; timer: ReturnType<typeof setTimeout> }>;
+  disconnected: Map<
+    string,
+    { identity: string; expires: number; timer: ReturnType<typeof setTimeout> }
+  >;
   data: CoordinationChannel;
   npcs: Map<string, NpcMotion>;
   reservations: Map<string, Reservation>;
@@ -58,11 +63,15 @@ const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
 export function createNpcCoordination(io: Server, dependencies: CoordinationDependencies) {
   const channels = new Map<string, Promise<Channel>>();
   const now = dependencies.now ?? Date.now;
-  const inactive = new Map<string, { startedAt: number; expires: number; timer: ReturnType<typeof setTimeout> }>();
+  const inactive = new Map<
+    string,
+    { startedAt: number; expires: number; timer: ReturnType<typeof setTimeout> }
+  >();
   const identity = (socketId: string, channelId: string) => {
     const player = dependencies.getPlayer(socketId);
     return player?.userId && player.characterId
-      ? JSON.stringify([player.userId, player.characterId, channelId]) : undefined;
+      ? JSON.stringify([player.userId, player.characterId, channelId])
+      : undefined;
   };
   const cancelInactive = (channelId: string) => {
     const entry = inactive.get(channelId);
@@ -73,15 +82,18 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     cancelInactive(channelId);
     const pending = channels.get(channelId);
     channels.delete(channelId);
-    void pending?.then((state) => {
-      for (const departure of state.disconnected.values()) clearTimeout(departure.timer);
-    }).catch(() => {});
+    void pending
+      ?.then((state) => {
+        for (const departure of state.disconnected.values()) clearTimeout(departure.timer);
+      })
+      .catch(() => {});
   };
   const retainInactive = (channelId: string) => {
     if (inactive.has(channelId)) return;
     const expires = now() + NPC_IDLE_RETENTION_MS;
     const timer = setTimeout(() => {
-      if (inactive.get(channelId)?.expires === expires && !members(channelId).length) evict(channelId);
+      if (inactive.get(channelId)?.expires === expires && !members(channelId).length)
+        evict(channelId);
     }, NPC_IDLE_RETENTION_MS);
     timer.unref();
     inactive.set(channelId, { startedAt: now(), expires, timer });
@@ -102,7 +114,9 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       .sort();
   const leader = (channelId: string, exclude?: string) => members(channelId, exclude)[0] ?? null;
   const create = (data: CoordinationChannel, channelId: string): Channel => ({
-    channelId, identities: new Map(), disconnected: new Map(),
+    channelId,
+    identities: new Map(),
+    disconnected: new Map(),
     data,
     revision: 0,
     excursions: new Set(),
@@ -146,7 +160,10 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       state.disconnected.delete(socketId);
       state.identities.delete(socketId);
       for (const [seatId, reservation] of state.reservations) {
-        if (reservation.ownerSocketId === socketId && state.npcs.get(reservation.actorId)?.phase !== "ambient") {
+        if (
+          reservation.ownerSocketId === socketId &&
+          state.npcs.get(reservation.actorId)?.phase !== "ambient"
+        ) {
           state.reservations.delete(seatId);
           state.revision++;
         }
@@ -292,7 +309,12 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       }
       releaseActor(state, npc.npcId);
       state.excursions.delete(npc.npcId);
-      Object.assign(npc, { ownerSocketId: socket.id, phase: "called", moving: true, continuation: null });
+      Object.assign(npc, {
+        ownerSocketId: socket.id,
+        phase: "called",
+        moving: true,
+        continuation: null,
+      });
       changed(state, npc);
       broadcast(channelId, state);
       io.to(channelId).emit("npc:come-to-player", {
@@ -357,8 +379,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     handle("npc:continuation-update", (payload, state, channelId) => {
       const npc = state.npcs.get(String(payload.npcId));
       if (!npc) return { error: "unknown_npc" };
-      if (npc.ownerSocketId !== socket.id &&
-        !(npc.ownerSocketId === null && (npc.phase === "idle" || npc.phase === "ambient") && leader(channelId) === socket.id))
+      if (
+        npc.ownerSocketId !== socket.id &&
+        !(
+          npc.ownerSocketId === null &&
+          (npc.phase === "idle" || npc.phase === "ambient") &&
+          leader(channelId) === socket.id
+        )
+      )
         return { error: "not_owner" };
       const continuation = parseMotionContinuation(payload.continuation, state.data.bounds);
       if (!continuation.ok) return { error: "invalid_continuation" };
@@ -484,7 +512,11 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       }
     }
     for (const reservation of state.reservations.values()) {
-      if (reservation.ownerSocketId !== oldId || state.npcs.get(reservation.actorId)?.phase === "ambient") continue;
+      if (
+        reservation.ownerSocketId !== oldId ||
+        state.npcs.get(reservation.actorId)?.phase === "ambient"
+      )
+        continue;
       reservation.ownerSocketId = newId;
       if (reservation.actorId === oldId) reservation.actorId = newId;
       reservation.expires = now() + 60_000;
@@ -551,18 +583,27 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     state.players.delete(socket.id);
     const next = leader(channelId, socket.id);
     const key = state.identities.get(socket.id);
-    const replacement = key && members(channelId, socket.id).find((id) => state.identities.get(id) === key);
+    const replacement =
+      key && members(channelId, socket.id).find((id) => state.identities.get(id) === key);
     if (replacement) rebindOwner(state, socket.id, replacement);
     if (key && !replacement && !state.disconnected.has(socket.id)) {
       const timer = setTimeout(() => {
-        void channels.get(channelId)?.then((current) => {
-          const revision = current.revision;
-          prune(current);
-          if (current.revision !== revision && members(channelId).length) broadcast(channelId, current);
-        }).catch(() => {});
+        void channels
+          .get(channelId)
+          ?.then((current) => {
+            const revision = current.revision;
+            prune(current);
+            if (current.revision !== revision && members(channelId).length)
+              broadcast(channelId, current);
+          })
+          .catch(() => {});
       }, NPC_RECONNECT_GRACE_MS);
       timer.unref();
-      state.disconnected.set(socket.id, { identity: key, expires: now() + NPC_RECONNECT_GRACE_MS, timer });
+      state.disconnected.set(socket.id, {
+        identity: key,
+        expires: now() + NPC_RECONNECT_GRACE_MS,
+        timer,
+      });
     }
     for (const [id, reservation] of state.reservations) {
       if (reservation.ownerSocketId !== socket.id) continue;
@@ -593,7 +634,10 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     const pending = channels.get(channelId);
     if (!pending) return;
     const old = await pending;
-    if (channels.get(channelId) !== pending || (!members(channelId).length && !inactive.has(channelId))) {
+    if (
+      channels.get(channelId) !== pending ||
+      (!members(channelId).length && !inactive.has(channelId))
+    ) {
       if (channels.get(channelId) === pending) channels.delete(channelId);
       return;
     }
@@ -611,7 +655,9 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       for (const [id, reservation] of old.reservations)
         if (
           data.seats.some((seat) => seat.id === id) &&
-          (state.npcs.has(reservation.actorId) || state.disconnected.has(reservation.actorId) || members(channelId).includes(reservation.actorId))
+          (state.npcs.has(reservation.actorId) ||
+            state.disconnected.has(reservation.actorId) ||
+            members(channelId).includes(reservation.actorId))
         )
           state.reservations.set(id, reservation);
       return state;
@@ -620,7 +666,8 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     try {
       const state = await replacement;
       if (!members(channelId).length) {
-        if (!inactive.has(channelId) && channels.get(channelId) === replacement) channels.delete(channelId);
+        if (!inactive.has(channelId) && channels.get(channelId) === replacement)
+          channels.delete(channelId);
         return;
       }
       broadcast(channelId, state);
@@ -639,7 +686,11 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
           .map(([, { x, y }]) => ({ x, y })),
       );
     // Prejoin reads have no room membership to trigger disconnect cleanup.
-    if (!members(channelId).length && !inactive.has(channelId) && channels.get(channelId) === pending)
+    if (
+      !members(channelId).length &&
+      !inactive.has(channelId) &&
+      channels.get(channelId) === pending
+    )
       channels.delete(channelId);
     return positions;
   }

@@ -22,9 +22,10 @@ export class RemoteNpcPresentation {
   }
 
   step(deltaMs: number) {
-    const dx = this.targetX - this.x, dy = this.targetY - this.y;
+    const dx = this.targetX - this.x,
+      dy = this.targetY - this.y;
     const distance = Math.hypot(dx, dy);
-    if (distance <= .25) {
+    if (distance <= 0.25) {
       this.x = this.targetX;
       this.y = this.targetY;
       this.walking = false;

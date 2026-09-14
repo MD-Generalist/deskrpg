@@ -17,20 +17,22 @@ const makeBody = () => new Body({ defaults: {}, bounds: {}, updateMotion() {}, e
 
 test("Arcade's later fixed step can overshoot a render-delta checked endpoint", () => {
   const body = makeBody();
-  const from = { x: 16.272, y: 7.20 }, checked = { x: 16.272, y: 7.26 };
+  const from = { x: 16.272, y: 7.2 },
+    checked = { x: 16.272, y: 7.26 };
   const floor = (_x: number, y: number) => y !== 8;
   assert.equal(clearSegment(from, checked, floor), true);
-  body.reset((from.x + .5) * 32, (from.y + .5) * 32);
-  body.setVelocity(0, (checked.y - from.y) * 32 / .008);
+  body.reset((from.x + 0.5) * 32, (from.y + 0.5) * 32);
+  body.setVelocity(0, ((checked.y - from.y) * 32) / 0.008);
   body.update(1 / 60);
-  const actual = { x: body.position.x / 32 - .5, y: body.position.y / 32 - .5 };
+  const actual = { x: body.position.x / 32 - 0.5, y: body.position.y / 32 - 0.5 };
   assert.equal(clearSegment(actual, actual, floor), false);
 });
 
 test("committing the checked endpoint synchronizes Arcade and preserves walking independently", () => {
-  for (const physicsDelta of [.008, 1 / 60, .033, .1]) {
+  for (const physicsDelta of [0.008, 1 / 60, 0.033, 0.1]) {
     const body = makeBody();
-    const from = { x: 536.704, y: 246.4 }, target = { x: 536.704, y: 248.32 };
+    const from = { x: 536.704, y: 246.4 },
+      target = { x: 536.704, y: 248.32 };
     body.reset(from.x, from.y);
     body.setVelocity(0, 240);
     assert.equal(commitPlayerStep(body, from, target), true);
@@ -39,9 +41,17 @@ test("committing the checked endpoint synchronizes Arcade and preserves walking 
     body.update(physicsDelta);
     assert.equal(body.position.x, target.x);
     assert.equal(body.position.y, target.y);
-    assert.equal(clearSegment({ x: 16.272, y: 7.26 }, {
-      x: body.position.x / 32 - .5, y: body.position.y / 32 - .5,
-    }, (_x, y) => y !== 8), true);
+    assert.equal(
+      clearSegment(
+        { x: 16.272, y: 7.26 },
+        {
+          x: body.position.x / 32 - 0.5,
+          y: body.position.y / 32 - 0.5,
+        },
+        (_x, y) => y !== 8,
+      ),
+      true,
+    );
     assert.equal(commitPlayerStep(body, target, target), false);
   }
 });

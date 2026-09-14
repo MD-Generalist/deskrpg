@@ -30,13 +30,14 @@ export function clearActors(
     const moving = a.x !== b.x || a.y !== b.y;
     const separation = ACTOR_SEPARATION + (moving ? Math.max(0, p.movementUncertainty ?? 0) : 0);
     const startDistance = Math.hypot(a.x - p.x, a.y - p.y);
-    if (startDistance >= separation - 1e-7)
-      return segmentDistance(a, b, p) >= separation - 1e-7;
+    if (startDistance >= separation - 1e-7) return segmentDistance(a, b, p) >= separation - 1e-7;
     // A delayed peer snapshot can begin inside another disc. Allow recovery only
     // when distance is nondecreasing along the entire segment, never crossing it.
-    const dx = b.x - a.x, dy = b.y - a.y;
-    return (a.x - p.x) * dx + (a.y - p.y) * dy >= 0 &&
-      Math.hypot(b.x - p.x, b.y - p.y) > startDistance;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
+    return (
+      (a.x - p.x) * dx + (a.y - p.y) * dy >= 0 && Math.hypot(b.x - p.x, b.y - p.y) > startDistance
+    );
   });
 }
 export function clearTraffic(

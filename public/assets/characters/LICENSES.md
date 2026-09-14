@@ -2,10 +2,10 @@
 
 ## Supplied stylized office bases and 50-look catalog
 
-| Output | Original creator / source | License |
-| --- | --- | --- |
-| `eunchae-office.glb` | Quaternius, Animated Women Pack: Smooth Female Casual, Alternative and Dress | CC0 1.0 |
-| `office-male-base.glb` | Quaternius, Animated Man Pack: ClothedMan | CC0 1.0 |
+| Output                 | Original creator / source                                                    | License |
+| ---------------------- | ---------------------------------------------------------------------------- | ------- |
+| `eunchae-office.glb`   | Quaternius, Animated Women Pack: Smooth Female Casual, Alternative and Dress | CC0 1.0 |
+| `office-male-base.glb` | Quaternius, Animated Man Pack: ClothedMan                                    | CC0 1.0 |
 
 - [Animated Women Pack](https://quaternius.com/packs/animatedwomen.html)
 - [Animated Man Pack](https://quaternius.com/packs/animatedman.html)
@@ -31,11 +31,11 @@ These GLBs contain no MPFB or MakeHuman assets. No endorsement is implied.
 `eunchae-mpfb.glb` is an adapted character assembled with MPFB 2.0.17 and
 MakeHuman community assets. It is not a likeness of an actor or drama character.
 
-| Component | Source / author | License |
-| --- | --- | --- |
-| Human topology, game_engine rig, young Asian female skin, bob01 hair, low-poly eyes, eyebrow001, eyelashes01, shoes02 | MakeHuman Community system assets; Data Collection AB, Joel Palmius, Jonas Hauquier and contributors | CC0 1.0 |
-| Basic tucked T-shirt, long full skirt | Margaret Toigo (MRT / MargaretToigo), shirts01 and skirts01 packs | CC0 1.0 |
-| Long open-front cardigan | Mindfront (Sweden), shirts02 pack | CC BY 4.0 |
+| Component                                                                                                             | Source / author                                                                                      | License   |
+| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------- |
+| Human topology, game_engine rig, young Asian female skin, bob01 hair, low-poly eyes, eyebrow001, eyelashes01, shoes02 | MakeHuman Community system assets; Data Collection AB, Joel Palmius, Jonas Hauquier and contributors | CC0 1.0   |
+| Basic tucked T-shirt, long full skirt                                                                                 | Margaret Toigo (MRT / MargaretToigo), shirts01 and skirts01 packs                                    | CC0 1.0   |
+| Long open-front cardigan                                                                                              | Mindfront (Sweden), shirts02 pack                                                                    | CC BY 4.0 |
 
 Cardigan modifications: fitted to the Eunchae body, cropped to hip length,
 reweighted hem, recolored ivory, textures resized/compressed, exported as a

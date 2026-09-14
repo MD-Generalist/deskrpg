@@ -14,5 +14,5 @@ export function peerMovementUncertainty(sample: PeerMotionSample, now: number, n
   const horizon = sample.moving
     ? Math.max(0, Math.min(250, now - sample.receivedAt)) + PEER_TRANSIT_BUDGET_MS
     : Math.max(PEER_SEND_INTERVAL_MS, PEER_TRANSIT_BUDGET_MS);
-  return PEER_SPEED_TILES_PER_SECOND * (horizon + step) / 1000;
+  return (PEER_SPEED_TILES_PER_SECOND * (horizon + step)) / 1000;
 }

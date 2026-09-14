@@ -63,7 +63,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const nextBaseUrl = typeof body.url === "string" && body.url.trim() ? body.url : owned.baseUrl;
-  if (nextBaseUrl !== owned.baseUrl && isManagedSshUrl(nextBaseUrl)) { return NextResponse.json({ errorCode: "setup_invalid_request", error: "setup_invalid_request" }, { status: 400 }); }
+  if (nextBaseUrl !== owned.baseUrl && isManagedSshUrl(nextBaseUrl)) {
+    return NextResponse.json(
+      { errorCode: "setup_invalid_request", error: "setup_invalid_request" },
+      { status: 400 },
+    );
+  }
   const nextToken =
     typeof body.token === "string" ? body.token : decryptGatewayToken(owned.tokenEncrypted);
   const nextDisplayName =

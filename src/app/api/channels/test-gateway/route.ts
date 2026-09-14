@@ -53,7 +53,12 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (isManagedSshUrl(url)) { return NextResponse.json({ errorCode: "setup_invalid_request", error: "setup_invalid_request" }, { status: 400 }); }
+  if (isManagedSshUrl(url)) {
+    return NextResponse.json(
+      { errorCode: "setup_invalid_request", error: "setup_invalid_request" },
+      { status: 400 },
+    );
+  }
 
   const probe = await probeHermesGateway(url);
 

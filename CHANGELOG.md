@@ -25,7 +25,6 @@ GitHub Releases will be written later at actual release time.
 
 - Development plans under `docs/superpowers/` are no longer tracked.
 
-
 ### Added
 
 - Channel owners can now delete meeting minutes from the minutes detail view.

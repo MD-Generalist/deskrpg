@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { findPath, clearSegment } from "./navigation";
-import { TrafficCoordinator, clearActors, clearTraffic, findTrafficPath, type TrafficActor } from "./traffic";
+import {
+  TrafficCoordinator,
+  clearActors,
+  clearTraffic,
+  findTrafficPath,
+  type TrafficActor,
+} from "./traffic";
 
 test("shared disc occupancy checks swept movement, including actors inside the current tile", () => {
   assert.equal(clearActors({ x: 1, y: 1 }, { x: 3, y: 1 }, [{ x: 2, y: 1 }]), false);
@@ -198,7 +204,8 @@ test("NPC return routes around a stationary human on its former coarse waypoint"
 });
 
 test("pre-existing overlap permits only separation without weakening swept collisions", () => {
-  const a = { x: 13, y: 0.999 }, other = { x: 12.601, y: 0.932 };
+  const a = { x: 13, y: 0.999 },
+    other = { x: 12.601, y: 0.932 };
   assert.equal(clearActors(a, { x: 13.05, y: 0.999 }, [other]), true);
   assert.equal(clearActors(a, a, [other]), false);
   assert.equal(clearActors(a, { x: 12.95, y: 0.999 }, [other]), false);
@@ -223,12 +230,20 @@ test("live close-spawn coordinates escape and reach the goal without entering a 
   assert.ok(Math.hypot(a.x - 16, a.y - 1) < 0.02);
 });
 
-
 test("overlap escape handles tangent/coincident starts while preserving walls and other actors", () => {
   const a = { x: 1, y: 1 };
   assert.equal(clearActors(a, { x: 1.1, y: 1 }, [a]), true);
   assert.equal(clearActors(a, a, [a]), false);
   assert.equal(clearActors(a, { x: 1, y: 1.1 }, [{ x: 0.7, y: 1 }]), true);
-  assert.equal(clearActors(a, { x: 1.1, y: 1 }, [{ x: 0.7, y: 1 }, { x: 1.3, y: 1 }]), false);
-  assert.equal(clearTraffic(a, { x: 2, y: 1 }, (x) => x < 2, [{ x: 0.7, y: 1 }]), false);
+  assert.equal(
+    clearActors(a, { x: 1.1, y: 1 }, [
+      { x: 0.7, y: 1 },
+      { x: 1.3, y: 1 },
+    ]),
+    false,
+  );
+  assert.equal(
+    clearTraffic(a, { x: 2, y: 1 }, (x) => x < 2, [{ x: 0.7, y: 1 }]),
+    false,
+  );
 });

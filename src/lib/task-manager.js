@@ -3,7 +3,18 @@
 
 "use strict";
 
-const { eq, and, or, desc, sql, getTableColumns, isNull, isNotNull, lte, notInArray } = require("drizzle-orm");
+const {
+  eq,
+  and,
+  or,
+  desc,
+  sql,
+  getTableColumns,
+  isNull,
+  isNotNull,
+  lte,
+  notInArray,
+} = require("drizzle-orm");
 
 function normalizeTimestamp(value) {
   if (value == null) return null;
@@ -193,11 +204,13 @@ class TaskManager {
         lastReportedAt: lastReportedAt ?? sql`${schema.tasks.lastReportedAt}`,
         completedAt,
       })
-      .where(and(
-        eq(schema.tasks.npcId, npcId),
-        eq(schema.tasks.npcTaskId, npcTaskId),
-        notInArray(schema.tasks.status, ["complete", "cancelled"]),
-      ))
+      .where(
+        and(
+          eq(schema.tasks.npcId, npcId),
+          eq(schema.tasks.npcTaskId, npcTaskId),
+          notInArray(schema.tasks.status, ["complete", "cancelled"]),
+        ),
+      )
       .returning();
 
     if (rows.length > 0) return normalizeTask(rows[0]);

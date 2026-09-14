@@ -1,5 +1,10 @@
 import { RemoteNpcPresentation } from "../remote-npc-presentation";
-import { copyMotionContinuation, playerMotionGoal, type PlayerSpawnState, type PlayerMotionGoal } from "../runtime-hydration";
+import {
+  copyMotionContinuation,
+  playerMotionGoal,
+  type PlayerSpawnState,
+  type PlayerMotionGoal,
+} from "../runtime-hydration";
 import { SpeechPreviews } from "../speech-previews";
 import {
   MotionSnapshotCache,
@@ -979,7 +984,10 @@ export class GameScene extends Phaser.Scene {
     const localDriver =
       state.ownerSocketId === this.socket?.id ||
       (!state.ownerSocketId && this.motionSnapshot.current?.ambientLeaderId === this.socket?.id);
-    const reset = force || npc.motionLocallyDriven !== localDriver || previousOwner !== (state.ownerSocketId ?? undefined);
+    const reset =
+      force ||
+      npc.motionLocallyDriven !== localDriver ||
+      previousOwner !== (state.ownerSocketId ?? undefined);
     npc.motionLocallyDriven = localDriver;
     npc.remotePresentation ??= new RemoteNpcPresentation(npc.pixelX, npc.pixelY);
     if (reset) {
@@ -1004,9 +1012,13 @@ export class GameScene extends Phaser.Scene {
       npc.ambientSchedule = restored.ambientSchedule;
       npc.ambientSeat = restored.ambientSeat ?? { x: npc.homeCol, y: npc.homeRow };
       npc.ambientTimer = restored.ambientTimer ?? 0;
-      npc.ambientExitPolicy = restored.ambientSchedule.phase === "roam"
-        ? new AmbientExitPolicy(this.ambientZones, { x: state.x / TILE_SIZE - .5, y: state.y / TILE_SIZE - .5 })
-        : null;
+      npc.ambientExitPolicy =
+        restored.ambientSchedule.phase === "roam"
+          ? new AmbientExitPolicy(this.ambientZones, {
+              x: state.x / TILE_SIZE - 0.5,
+              y: state.y / TILE_SIZE - 0.5,
+            })
+          : null;
       if (localDriver && state.phase === "ambient" && state.moving && restored.path?.length)
         npc.startStroll(restored.path);
     } else if (force && state.phase === "ambient") {
@@ -1051,7 +1063,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
   private canMovePlayer(): boolean {
-    return !!this.socket?.connected && this.playerSpawnReady && this.peerSnapshotReady && !!this.motionSnapshot.current;
+    return (
+      !!this.socket?.connected &&
+      this.playerSpawnReady &&
+      this.peerSnapshotReady &&
+      !!this.motionSnapshot.current
+    );
   }
   private resumePlayerGoal(): void {
     if (!this.canMovePlayer() || !this.player || !this.pendingPlayerResume) return;
@@ -1071,16 +1088,26 @@ export class GameScene extends Phaser.Scene {
         this.clearPathLine();
         // An expired cached seat can already be beneath the restored avatar. Recover to
         // an unoccupied floor tile instead of visually sitting without a reservation.
-        if (goal.seatId && Math.hypot(goal.targetX - this.player.x, goal.targetY - this.player.y) <= 8) {
-          const col = Math.floor(this.player.x / TILE_SIZE), row = Math.floor(this.player.y / TILE_SIZE);
+        if (
+          goal.seatId &&
+          Math.hypot(goal.targetX - this.player.x, goal.targetY - this.player.y) <= 8
+        ) {
+          const col = Math.floor(this.player.x / TILE_SIZE),
+            row = Math.floor(this.player.y / TILE_SIZE);
           let recovered = false;
           for (let radius = 1; radius < Math.max(MAP_COLS, MAP_ROWS) && !recovered; radius++) {
             for (let dx = -radius; dx <= radius && !recovered; dx++) {
               for (let dy = -radius; dy <= radius; dy++) {
                 if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-                const x = col + dx, y = row + dy;
-                if (!this.isWalkable(x, y) || this.isTileOccupied(x, y) || isSeatAnchor(this.mapObjects, x, y)) continue;
-                this.player.setPosition((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE);
+                const x = col + dx,
+                  y = row + dy;
+                if (
+                  !this.isWalkable(x, y) ||
+                  this.isTileOccupied(x, y) ||
+                  isSeatAnchor(this.mapObjects, x, y)
+                )
+                  continue;
+                this.player.setPosition((x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE);
                 this.playerNameLabel?.setPosition(this.player.x, this.player.y - 44);
                 recovered = true;
                 break;
@@ -1093,8 +1120,10 @@ export class GameScene extends Phaser.Scene {
       this.playerSeatGoal = goal.seatId ?? null;
       if (Math.hypot(goal.targetX - this.player.x, goal.targetY - this.player.y) <= 2) return;
       const path = this.findPlayerPath(
-        Math.floor(this.player.x / TILE_SIZE), Math.floor(this.player.y / TILE_SIZE),
-        Math.floor(goal.targetX / TILE_SIZE), Math.floor(goal.targetY / TILE_SIZE),
+        Math.floor(this.player.x / TILE_SIZE),
+        Math.floor(this.player.y / TILE_SIZE),
+        Math.floor(goal.targetX / TILE_SIZE),
+        Math.floor(goal.targetY / TILE_SIZE),
       );
       if (path?.length) {
         this.currentPath = path;
@@ -1107,7 +1136,8 @@ export class GameScene extends Phaser.Scene {
         this.playerSeatGoal = null;
       }
     };
-    if (goal.seatId && this.socket?.id) this.reserveSeat(this.socket.id, goal.targetX, goal.targetY, resume);
+    if (goal.seatId && this.socket?.id)
+      this.reserveSeat(this.socket.id, goal.targetX, goal.targetY, resume);
     else resume(true);
   }
   private updateRemoteNpcPresentation(): void {
@@ -1125,7 +1155,8 @@ export class GameScene extends Phaser.Scene {
           npc.sprite.setFrame(npc.direction * SPRITE_COLS);
         } else {
           const key = `npc-${npc.id}-walk-${DIR_NUM_TO_NAME[npc.direction]}`;
-          if (this.anims.exists(key) && npc.sprite.anims.currentAnim?.key !== key) npc.sprite.play(key, true);
+          if (this.anims.exists(key) && npc.sprite.anims.currentAnim?.key !== key)
+            npc.sprite.play(key, true);
         }
       }
     }
@@ -1272,7 +1303,9 @@ export class GameScene extends Phaser.Scene {
           direction: DIR_NUM_TO_NAME[npc.direction],
           walking:
             !npc.ambientPaused &&
-            (this.mayDriveNpc(npc) ? npc.actuallyWalking : npc.remotePresentation?.walking ?? npc.remoteWalkingUntil > this.time.now),
+            (this.mayDriveNpc(npc)
+              ? npc.actuallyWalking
+              : (npc.remotePresentation?.walking ?? npc.remoteWalkingUntil > this.time.now)),
           texture: texture(npc.sprite),
           appearance: npc.appearance,
           bubble:
@@ -1659,7 +1692,10 @@ export class GameScene extends Phaser.Scene {
         player: true,
         ...point(remote.x, remote.y),
         movementUncertainty: peerMovementUncertainty(
-          this.peerMotionSamples.get(id) ?? { receivedAt: performance.now(), moving: remote.animation === "walk" },
+          this.peerMotionSamples.get(id) ?? {
+            receivedAt: performance.now(),
+            moving: remote.animation === "walk",
+          },
           performance.now(),
           this.game.loop.delta,
         ),
@@ -3523,9 +3559,15 @@ export class GameScene extends Phaser.Scene {
       this.resumePlayerGoal();
     });
     listen("players:state", (data: { players: RemotePlayerData[] }) => {
-      this.peerMotionSamples = new Map(data.players.map((player) => [player.id, {
-        receivedAt: performance.now(), moving: player.animation === "walk",
-      }]));
+      this.peerMotionSamples = new Map(
+        data.players.map((player) => [
+          player.id,
+          {
+            receivedAt: performance.now(),
+            moving: player.animation === "walk",
+          },
+        ]),
+      );
       this.peerSnapshotReady = true;
       this.connectedPlayerIds = new Set(data.players.map((player) => player.id));
       this.peerPositions = new Map(
@@ -3549,7 +3591,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     listen("player:joined", (data: RemotePlayerData) => {
-      this.peerMotionSamples.set(data.id, { receivedAt: performance.now(), moving: data.animation === "walk" });
+      this.peerMotionSamples.set(data.id, {
+        receivedAt: performance.now(),
+        moving: data.animation === "walk",
+      });
       this.connectedPlayerIds.add(data.id);
       this.peerPositions.set(data.id, {
         x: data.x,
@@ -3563,7 +3608,10 @@ export class GameScene extends Phaser.Scene {
     listen(
       "player:moved",
       (data: { id: string; x: number; y: number; direction: string; animation: string }) => {
-        this.peerMotionSamples.set(data.id, { receivedAt: performance.now(), moving: data.animation === "walk" });
+        this.peerMotionSamples.set(data.id, {
+          receivedAt: performance.now(),
+          moving: data.animation === "walk",
+        });
         this.peerPositions.set(data.id, {
           x: data.x,
           y: data.y,
@@ -3666,7 +3714,12 @@ export class GameScene extends Phaser.Scene {
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
         // Modern snapshots already carry this update and its moving flag. A duplicate
         // legacy packet must not snap presentation or clear walking on equal coordinates.
-        if (!npc || this.motionSnapshot.current?.npcs.some((entry) => entry.npcId === data.npcId) || this.mayDriveNpc(npc)) return;
+        if (
+          !npc ||
+          this.motionSnapshot.current?.npcs.some((entry) => entry.npcId === data.npcId) ||
+          this.mayDriveNpc(npc)
+        )
+          return;
         const moved = Math.hypot(npc.pixelX - data.x, npc.pixelY - data.y) > 0.01;
         npc.remoteWalkingUntil = moved ? this.time.now + 500 : 0;
         npc.pixelX = data.x;
@@ -3951,8 +4004,10 @@ export class GameScene extends Phaser.Scene {
   private sendPosition(x: number, y: number, direction: string, animation: string): void {
     if (!this.socket?.connected || !this.playerSpawnReady || !this.peerSnapshotReady) return;
 
-    const motion = playerMotionGoal(this.currentPath, this.playerSeatGoal, TILE_SIZE)
-      ?? (!this.spawnInputStarted ? this.resumingPlayerGoal : null) ?? null;
+    const motion =
+      playerMotionGoal(this.currentPath, this.playerSeatGoal, TILE_SIZE) ??
+      (!this.spawnInputStarted ? this.resumingPlayerGoal : null) ??
+      null;
     const motionKey = JSON.stringify(motion);
     const now = Date.now();
     if (now - this.lastMoveSent < MOVE_SEND_INTERVAL) return;
@@ -3961,7 +4016,8 @@ export class GameScene extends Phaser.Scene {
       Math.abs(x - this.lastSentX) < 0.5 &&
       Math.abs(y - this.lastSentY) < 0.5 &&
       direction === this.lastSentDir &&
-      animation === this.lastSentAnim && motionKey === this.lastSentMotion
+      animation === this.lastSentAnim &&
+      motionKey === this.lastSentMotion
     ) {
       return;
     }
@@ -4619,7 +4675,7 @@ export class GameScene extends Phaser.Scene {
           this.socket?.emit("npc:position-update", {
             channelId: this.channelId,
             npcId: npc.id,
-              continuation: this.npcContinuation(npc),
+            continuation: this.npcContinuation(npc),
             x: npc.pixelX,
             y: npc.pixelY,
             direction: DIR_NUM_TO_NAME[npc.direction],
@@ -4667,9 +4723,12 @@ export class GameScene extends Phaser.Scene {
       if (this.npcContinuationTimer >= 1000) {
         this.npcContinuationTimer = 0;
         for (const npc of this.npcSprites) {
-          if (this.mayDriveNpc(npc)) this.socket?.emit("npc:continuation-update", {
-            channelId: this.channelId, npcId: npc.id, continuation: this.npcContinuation(npc),
-          });
+          if (this.mayDriveNpc(npc))
+            this.socket?.emit("npc:continuation-update", {
+              channelId: this.channelId,
+              npcId: npc.id,
+              continuation: this.npcContinuation(npc),
+            });
         }
       }
       // Sync moving NPC positions to server every 200ms

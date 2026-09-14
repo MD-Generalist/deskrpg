@@ -17,15 +17,17 @@ test("desktop workspace reserves navigator and conversation widths around the ma
   const root = createRoot(element);
 
   await act(async () => {
-    root.render(localized(
-      <ConversationWorkspace
-        navigator={<div>탐색</div>}
-        conversation={<div>대화</div>}
-        conversationWidth={412}
-      >
-        <div>3D 맵</div>
-      </ConversationWorkspace>,
-    ));
+    root.render(
+      localized(
+        <ConversationWorkspace
+          navigator={<div>탐색</div>}
+          conversation={<div>대화</div>}
+          conversationWidth={412}
+        >
+          <div>3D 맵</div>
+        </ConversationWorkspace>,
+      ),
+    );
   });
 
   const workspace = element.querySelector<HTMLElement>("[data-conversation-workspace]");
@@ -52,15 +54,17 @@ test("responsive controls expose navigator and conversation drawers", async () =
   document.body.appendChild(element);
   const root = createRoot(element);
   await act(async () => {
-    root.render(localized(
-      <ConversationWorkspace
-        navigator={<div>탐색 내용</div>}
-        conversation={<div>대화 내용</div>}
-        conversationWidth={388}
-      >
-        <div>3D 맵</div>
-      </ConversationWorkspace>,
-    ));
+    root.render(
+      localized(
+        <ConversationWorkspace
+          navigator={<div>탐색 내용</div>}
+          conversation={<div>대화 내용</div>}
+          conversationWidth={388}
+        >
+          <div>3D 맵</div>
+        </ConversationWorkspace>,
+      ),
+    );
   });
 
   const buttons = [...element.querySelectorAll("button")];

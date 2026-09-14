@@ -57,7 +57,10 @@ async function harness(
 ) {
   const http = createServer();
   const io = new Server(http, { transports: ["websocket"] });
-  const players = new Map<string, { mapId: string; x: number; y: number; userId?: string; characterId?: string }>();
+  const players = new Map<
+    string,
+    { mapId: string; x: number; y: number; userId?: string; characterId?: string }
+  >();
   const servers = new Map<string, ServerSocket>();
   const clients: Client[] = [];
   let loads = 0;
@@ -78,7 +81,12 @@ async function harness(
     coord.register(socket);
     const channelId = socket.handshake.auth.channel as string | undefined;
     if (channelId) {
-      players.set(socket.id, { mapId: channelId, x: 300, y: 350, ...socket.handshake.auth.identity });
+      players.set(socket.id, {
+        mapId: channelId,
+        x: 300,
+        y: 350,
+        ...socket.handshake.auth.identity,
+      });
       void socket.join(channelId);
       void coord.joined(socket, channelId);
     }
@@ -92,7 +100,10 @@ async function harness(
     servers,
     players,
     loads: () => loads,
-    async connect(channelId: string | null = "a", identity?: { userId: string; characterId: string }) {
+    async connect(
+      channelId: string | null = "a",
+      identity?: { userId: string; characterId: string },
+    ) {
       const socket = connectSocket(`http://127.0.0.1:${address.port}`, {
         transports: ["websocket"],
         forceNew: true,
@@ -439,7 +450,10 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     assert.equal(layout.npcs.length, 10);
     const http = createServer();
     const io = new Server(http, { transports: ["websocket"] });
-    const players = new Map<string, { mapId: string; x: number; y: number; userId?: string; characterId?: string }>();
+    const players = new Map<
+      string,
+      { mapId: string; x: number; y: number; userId?: string; characterId?: string }
+    >();
     const coord = createNpcCoordination(io, {
       getPlayer: (id) => players.get(id),
       loadChannel: async () => layout,
@@ -764,7 +778,6 @@ test("ten NPCs and two sockets sustain one hour of seat contention, occupied hom
   }
 });
 
-
 test("last-member refresh retains ambient coordinates, public seat and excursion through prejoin reads", async () => {
   let time = 0;
   const h = await harness({ now: () => time });
@@ -785,13 +798,16 @@ test("last-member refresh retains ambient coordinates, public seat and excursion
     assert.equal(b.latest.seats[0].actorId, "n1");
     assert.equal(b.latest.seats[0].ownerSocketId, b.socket.id);
     assert.equal(h.loads(), 1);
-  } finally { await h.close(); }
+  } finally {
+    await h.close();
+  }
 });
 
 test("leader disconnect transfers an ambient seat without sending its occupant home", async () => {
   const h = await harness();
   try {
-    const a = await h.connect(), b = await h.connect();
+    const a = await h.connect(),
+      b = await h.connect();
     const driver = b.latest.ambientLeaderId === a.socket.id ? a : b;
     const survivor = driver === a ? b : a;
     await ack(driver, "seat:claim", { actorId: "n1", seatId: "128:128" });
@@ -805,8 +821,13 @@ test("leader disconnect transfers an ambient seat without sending its occupant h
     assert.equal(state.npcs[0].phase, "ambient");
     assert.equal(state.npcs[0].ownerSocketId, null);
     assert.equal(state.seats[0].ownerSocketId, survivor.socket.id);
-    assert.equal((await ack(survivor, "seat:claim", { actorId: "n2", seatId: "128:128" })).error, "seat_occupied");
-  } finally { await h.close(); }
+    assert.equal(
+      (await ack(survivor, "seat:claim", { actorId: "n2", seatId: "128:128" })).error,
+      "seat_occupied",
+    );
+  } finally {
+    await h.close();
+  }
 });
 
 test("same authenticated character reclaims a waiting NPC and its player seat during disconnect grace", async () => {
@@ -819,33 +840,65 @@ test("same authenticated character reclaims a waiting NPC and its player seat du
     await ack(a, "npc:arrived", { npcId: "n1" });
     await ack(a, "seat:claim", { seatId: "192:128" });
     const server = h.servers.get(a.socket.id!)!;
-    await server.leave("a"); await h.coord.left(server, "a");
+    await server.leave("a");
+    await h.coord.left(server, "a");
     const b = await h.connect("a", identity);
     assert.equal(b.latest.npcs[0].phase, "waiting");
     assert.equal(b.latest.npcs[0].ownerSocketId, b.socket.id);
     assert.equal(b.latest.npcs[0].x, 128);
     assert.equal(b.latest.seats[0].actorId, b.socket.id);
     assert.equal(b.latest.seats[0].ownerSocketId, b.socket.id);
-  } finally { await h.close(); }
+  } finally {
+    await h.close();
+  }
 });
 
 test("continuation survives idle heartbeat, leader handoff and last-member reconnect", async () => {
   const h = await harness();
   try {
     const a = await h.connect();
-    const continuation = { ambientSchedule: { phase: "rest", elapsed: 22000, duration: 75000, pause: 800 }, ambientSeat: { x: 1, y: 1 }, ambientTimer: 450, path: [] };
+    const continuation = {
+      ambientSchedule: { phase: "rest", elapsed: 22000, duration: 75000, pause: 800 },
+      ambientSeat: { x: 1, y: 1 },
+      ambientTimer: 450,
+      path: [],
+    };
     assert.equal((await ack(a, "npc:continuation-update", { npcId: "n1", continuation })).ok, true);
     assert.equal(a.latest.npcs[0].phase, "idle", "heartbeat must not invent an excursion");
     const server = h.servers.get(a.socket.id!)!;
-    await server.leave("a"); await h.coord.left(server, "a");
+    await server.leave("a");
+    await h.coord.left(server, "a");
     const b = await h.connect();
-    assert.deepEqual((b.latest.npcs[0] as NpcMotion & { continuation?: unknown }).continuation, continuation);
+    assert.deepEqual(
+      (b.latest.npcs[0] as NpcMotion & { continuation?: unknown }).continuation,
+      continuation,
+    );
     assert.equal(b.latest.npcs[0].phase, "idle");
-    const roam = { ...continuation, ambientSchedule: { phase: "roam", elapsed: 1200, duration: 25000, pause: 800 }, path: [{ x: 4, y: 4 }] };
-    assert.equal((await ack(b, "npc:position-update", { npcId: "n1", x: 80, y: 80, direction: "right", continuation: roam })).ok, true);
+    const roam = {
+      ...continuation,
+      ambientSchedule: { phase: "roam", elapsed: 1200, duration: 25000, pause: 800 },
+      path: [{ x: 4, y: 4 }],
+    };
+    assert.equal(
+      (
+        await ack(b, "npc:position-update", {
+          npcId: "n1",
+          x: 80,
+          y: 80,
+          direction: "right",
+          continuation: roam,
+        })
+      ).ok,
+      true,
+    );
     const c = await h.connect();
-    assert.deepEqual((c.latest.npcs[0] as NpcMotion & { continuation?: unknown }).continuation, roam);
-  } finally { await h.close(); }
+    assert.deepEqual(
+      (c.latest.npcs[0] as NpcMotion & { continuation?: unknown }).continuation,
+      roam,
+    );
+  } finally {
+    await h.close();
+  }
 });
 
 test("inactive authenticated ambient seat outlives caller grace but room cache expires after a day", async () => {
@@ -857,25 +910,36 @@ test("inactive authenticated ambient seat outlives caller grace but room cache e
     await ack(a, "npc:position-update", { npcId: "n1", x: 128, y: 128, direction: "left" });
     await ack(a, "npc:arrived", { npcId: "n1" });
     const server = h.servers.get(a.socket.id!)!;
-    await server.leave("a"); await h.coord.left(server, "a");
+    await server.leave("a");
+    await h.coord.left(server, "a");
     time = 31_000;
     const b = await h.connect();
     assert.equal(b.latest.seats[0]?.actorId, "n1");
     assert.equal(b.latest.npcs[0].phase, "ambient");
     const nextServer = h.servers.get(b.socket.id!)!;
-    await nextServer.leave("a"); await h.coord.left(nextServer, "a");
+    await nextServer.leave("a");
+    await h.coord.left(nextServer, "a");
     time += 24 * 60 * 60 * 1000 + 1;
     const c = await h.connect();
     assert.equal(c.latest.npcs[0].phase, "idle");
     assert.equal(c.latest.npcs[0].x, 32);
     assert.equal(h.loads(), 2);
-  } finally { await h.close(); }
+  } finally {
+    await h.close();
+  }
 });
 
 test("idle invalidation preserves live NPC coordinates while refreshing membership", async () => {
   let release: ((data: CoordinationChannel) => void) | undefined;
   let count = 0;
-  const h = await harness({ load: async () => ++count === 2 ? new Promise<CoordinationChannel>((resolve) => { release = resolve; }) : channel });
+  const h = await harness({
+    load: async () =>
+      ++count === 2
+        ? new Promise<CoordinationChannel>((resolve) => {
+            release = resolve;
+          })
+        : channel,
+  });
   try {
     const a = await h.connect();
     await ack(a, "npc:position-update", { npcId: "n1", x: 128, y: 128, direction: "left" });
@@ -883,12 +947,16 @@ test("idle invalidation preserves live NPC coordinates while refreshing membersh
     await new Promise((resolve) => setImmediate(resolve));
     a.socket.disconnect();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    release!(channel); await invalidation;
+    release!(channel);
+    await invalidation;
     const b = await h.connect();
     assert.equal(b.latest.npcs[0].x, 128);
     assert.equal(b.latest.npcs[0].phase, "ambient");
     assert.equal(h.loads(), 2);
-  } finally { release?.(channel); await h.close(); }
+  } finally {
+    release?.(channel);
+    await h.close();
+  }
 });
 
 test("disconnect grace cannot be stolen by another identity and eventually releases caller ownership", async () => {
@@ -902,7 +970,8 @@ test("disconnect grace cannot be stolen by another identity and eventually relea
     await ack(a, "seat:claim", { seatId: "192:128" });
     const oldId = a.socket.id!;
     const server = h.servers.get(oldId)!;
-    await server.leave("a"); await h.coord.left(server, "a");
+    await server.leave("a");
+    await h.coord.left(server, "a");
     const b = await h.connect("a", { userId: "u2", characterId: "c" });
     assert.equal(b.latest.npcs[0].ownerSocketId, oldId);
     assert.equal((await ack(b, "npc:call", { npcId: "n1" })).error, "already_claimed");
@@ -912,24 +981,51 @@ test("disconnect grace cannot be stolen by another identity and eventually relea
     assert.equal(b.latest.npcs[0].phase, "returning");
     assert.equal(b.latest.npcs[0].ownerSocketId, b.socket.id);
     assert.equal(b.latest.npcs[0].x, 128);
-  } finally { await h.close(); }
+  } finally {
+    await h.close();
+  }
 });
 
 test("continuation heartbeat rejects foreign drivers and invalid data without changing motion", async () => {
   const h = await harness();
   try {
-    const a = await h.connect(), b = await h.connect();
+    const a = await h.connect(),
+      b = await h.connect();
     const driver = b.latest.ambientLeaderId === a.socket.id ? a : b;
     const other = driver === a ? b : a;
-    const continuation = { ambientSchedule: { phase: "rest", elapsed: 22000, duration: 75000, pause: 800 } };
-    assert.equal((await ack(other, "npc:continuation-update", { npcId: "n1", continuation })).error, "not_owner");
-    assert.equal((await ack(driver, "npc:continuation-update", { npcId: "n1", continuation })).ok, true);
+    const continuation = {
+      ambientSchedule: { phase: "rest", elapsed: 22000, duration: 75000, pause: 800 },
+    };
+    assert.equal(
+      (await ack(other, "npc:continuation-update", { npcId: "n1", continuation })).error,
+      "not_owner",
+    );
+    assert.equal(
+      (await ack(driver, "npc:continuation-update", { npcId: "n1", continuation })).ok,
+      true,
+    );
     const before = structuredClone(driver.latest.npcs[0]);
-    assert.equal((await ack(driver, "npc:position-update", { npcId: "n1", x: 150, y: 150, direction: "left", continuation: { ...continuation, path: [{ x: 1000, y: 0 }] } })).error, "invalid_continuation");
+    assert.equal(
+      (
+        await ack(driver, "npc:position-update", {
+          npcId: "n1",
+          x: 150,
+          y: 150,
+          direction: "left",
+          continuation: { ...continuation, path: [{ x: 1000, y: 0 }] },
+        })
+      ).error,
+      "invalid_continuation",
+    );
     assert.deepEqual(driver.latest.npcs[0], before);
-    assert.equal((await ack(driver, "npc:continuation-update", { npcId: "n1", continuation: null })).ok, true);
+    assert.equal(
+      (await ack(driver, "npc:continuation-update", { npcId: "n1", continuation: null })).ok,
+      true,
+    );
     assert.equal(driver.latest.npcs[0].continuation, null);
-  } finally { await h.close(); }
+  } finally {
+    await h.close();
+  }
 });
 
 test("a replacement connection joining before old disconnect inherits its authenticated NPC claim", async () => {
@@ -948,9 +1044,10 @@ test("a replacement connection joining before old disconnect inherits its authen
     const state = await update;
     assert.equal(state.npcs[0].ownerSocketId, b.socket.id);
     assert.equal(state.npcs[0].phase, "waiting");
-  } finally { await h.close(); }
+  } finally {
+    await h.close();
+  }
 });
-
 
 test("inactive room cache evicts its oldest room at capacity while keeping recent shared state", async () => {
   const h = await harness();
@@ -959,7 +1056,8 @@ test("inactive room cache evicts its oldest room at capacity while keeping recen
       const channelId = `room-${i}`;
       const client = await h.connect(channelId);
       const server = h.servers.get(client.socket.id!)!;
-      await server.leave(channelId); await h.coord.left(server, channelId);
+      await server.leave(channelId);
+      await h.coord.left(server, channelId);
       client.socket.disconnect();
     }
     const loads = h.loads();
@@ -967,5 +1065,7 @@ test("inactive room cache evicts its oldest room at capacity while keeping recen
     assert.equal(h.loads(), loads, "recently active room retained");
     await h.coord.occupancy("room-0");
     assert.equal(h.loads(), loads + 1, "oldest inactive state was evicted");
-  } finally { await h.close(); }
+  } finally {
+    await h.close();
+  }
 });

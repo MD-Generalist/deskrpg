@@ -119,9 +119,7 @@ export default function ConversationWorkspace({
         ref={navigatorButtonRef}
         aria-expanded={mobilePanel === "navigator"}
         className="workspace-drawer-toggle workspace-navigator-toggle"
-        onClick={() =>
-          setMobilePanel((current) => (current === "navigator" ? null : "navigator"))
-        }
+        onClick={() => setMobilePanel((current) => (current === "navigator" ? null : "navigator"))}
       >
         {t("workspace.drawer.navigator")}
       </button>

@@ -4,20 +4,30 @@ import { restoreMeetingChat, restoreMeetingExecution } from "./restore-state";
 import type { MeetingDiscussionState } from "../../lib/meeting-discussion-state";
 
 const state: MeetingDiscussionState = {
-  topic: "Meeting", npcs: [{ id: "one", name: "One" }], mode: "manual",
-  initiatorId: "user", initiatorSocketId: "old-socket", isWaitingInput: true,
+  topic: "Meeting",
+  npcs: [{ id: "one", name: "One" }],
+  mode: "manual",
+  initiatorId: "user",
+  initiatorSocketId: "old-socket",
+  isWaitingInput: true,
 };
 const messages = [{ senderType: "npc", content: "Hello", id: "message" }];
 test("manual reconnect restores completed messages and actual next-turn readiness", () => {
   const restored = restoreMeetingChat(state, messages);
   assert.deepEqual(restored.messages, messages);
   assert.equal(restored.isWaitingInput, true);
-  assert.equal(restoreMeetingChat({ ...state, isWaitingInput: false }, messages).isWaitingInput, false);
+  assert.equal(
+    restoreMeetingChat({ ...state, isWaitingInput: false }, messages).isWaitingInput,
+    false,
+  );
 });
 test("mid-turn reconnect keeps raw prefix so later chunks can complete it", () => {
   const currentSpeaker = { npcId: "one", npcName: "One" };
   const rawStreams = { one: "Hello " };
-  const restored = restoreMeetingChat({ ...state, isWaitingInput: false, currentSpeaker, rawStreams }, messages);
+  const restored = restoreMeetingChat(
+    { ...state, isWaitingInput: false, currentSpeaker, rawStreams },
+    messages,
+  );
   assert.deepEqual(restored.currentSpeaker, currentSpeaker);
   assert.equal(restored.rawStreams.one + "world", "Hello world");
   restored.rawStreams.one += "world";
@@ -26,7 +36,11 @@ test("mid-turn reconnect keeps raw prefix so later chunks can complete it", () =
 });
 test("finished meeting join clears chat and transient state", () => {
   assert.deepEqual(restoreMeetingChat(null, messages), {
-    messages: [], rawStreams: {}, streams: {}, currentSpeaker: null, isWaitingInput: false,
+    messages: [],
+    rawStreams: {},
+    streams: {},
+    currentSpeaker: null,
+    isWaitingInput: false,
   });
 });
 test("snapshot sanitizes NPC display but preserves raw prefixes and user text", () => {

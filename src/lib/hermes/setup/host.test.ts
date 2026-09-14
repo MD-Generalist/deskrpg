@@ -117,8 +117,11 @@ import types, sys, json
 sys.modules['yaml'] = types.SimpleNamespace(safe_load=lambda text: json.loads(text) if text else {}, safe_dump=lambda value, **kwargs: json.dumps(value))
 def fixture_env(path):
     # Mirrors agent.secret_scope.load_env_file: a missing file is an empty mapping, never an error.
-    if not path.exists(): return {}
-    return dict(line.split('=',1) for line in path.read_text().splitlines() if '=' in line and not line.startswith('#'))
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        return {}
+    return dict(line.split('=',1) for line in text.splitlines() if '=' in line and not line.startswith('#'))
 sys.modules['agent'] = types.ModuleType('agent')
 sys.modules['agent.secret_scope'] = types.SimpleNamespace(load_env_file=fixture_env)
 `;
@@ -415,8 +418,10 @@ time.sleep(30)
     const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
       env: { ...process.env, HOME: temp },
       encoding: "utf8",
-      input: JSON.stringify({ action: "install", timeout: 0.5, script }),
-      timeout: 5000,
+      // CI runs the full suite concurrently; allow the child enough cold-start time
+      // to publish its owned PIDs before exercising the watchdog.
+      input: JSON.stringify({ action: "install", timeout: 2, script }),
+      timeout: 8000,
     });
     assert.equal(result.status, 0);
     assert.deepEqual(JSON.parse(result.stdout), { error: "host_operation_failed" });

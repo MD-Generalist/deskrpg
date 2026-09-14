@@ -634,12 +634,15 @@ export function registerMeetingDiscussionHandlers({
           // A mode change releases the engine wait; the next waiting callback re-arms it.
           if (state) state.isWaitingInput = false;
           io.to(getMeetingRoomId(channelId)).emit("meeting:mode-changed", {
-            mode, by,
-            execution: state ? {
-              isWaitingInput: state.isWaitingInput,
-              currentSpeaker: state.currentSpeaker,
-              rawStreams: { ...state.rawStreams },
-            } : undefined,
+            mode,
+            by,
+            execution: state
+              ? {
+                  isWaitingInput: state.isWaitingInput,
+                  currentSpeaker: state.currentSpeaker,
+                  rawStreams: { ...state.rawStreams },
+                }
+              : undefined,
           });
         },
         onWaitingInput: (pollResult) => {

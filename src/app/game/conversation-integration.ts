@@ -1,8 +1,7 @@
 import type { ConversationSelection } from "./conversation-selection";
 
 export type ConversationEntryEvent =
-  | { type: "npc"; npcId: string; npcName: string }
-  | { type: "public-room"; roomId: string };
+  { type: "npc"; npcId: string; npcName: string } | { type: "public-room"; roomId: string };
 
 export function selectionForEvent(event: ConversationEntryEvent): ConversationSelection {
   if (event.type === "npc") {

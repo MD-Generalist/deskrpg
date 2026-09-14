@@ -1,4 +1,8 @@
-import { PlayerResumeStore, readPlayerDestination, type PlayerDestination } from "./player-resume-state";
+import {
+  PlayerResumeStore,
+  readPlayerDestination,
+  type PlayerDestination,
+} from "./player-resume-state";
 import { setNpcActive } from "../lib/npc-roster";
 import { createNpcCoordination } from "./npc-coordination";
 import { deriveChannelMotionLayout, closestValidUnoccupiedSpawn } from "./channel-motion-layout";
@@ -1448,11 +1452,22 @@ export function setupSocketHandlers(io: Server) {
         let restored = !!resume;
         try {
           if (!resume) {
-            const [saved] = await db.select({ x: channelMembers.lastX, y: channelMembers.lastY })
+            const [saved] = await db
+              .select({ x: channelMembers.lastX, y: channelMembers.lastY })
               .from(channelMembers)
-              .where(and(eq(channelMembers.channelId, data.mapId), eq(channelMembers.userId, user.userId)))
+              .where(
+                and(
+                  eq(channelMembers.channelId, data.mapId),
+                  eq(channelMembers.userId, user.userId),
+                ),
+              )
               .limit(1);
-            if (saved?.x != null && saved?.y != null && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+            if (
+              saved?.x != null &&
+              saved?.y != null &&
+              Number.isFinite(saved.x) &&
+              Number.isFinite(saved.y)
+            ) {
               spawn = { x: saved.x, y: saved.y };
               restored = true;
             }
@@ -1494,8 +1509,11 @@ export function setupSocketHandlers(io: Server) {
         playerResumeStates.save(playerState);
         await socket.join(data.mapId);
         socket.emit("player:spawn", {
-          ...spawn, direction: playerState.direction, animation: playerState.animation,
-          restored, motion: playerState.motion,
+          ...spawn,
+          direction: playerState.direction,
+          animation: playerState.animation,
+          restored,
+          motion: playerState.motion,
         });
         await coordination.joined(socket, data.mapId);
 
@@ -2506,10 +2524,20 @@ export function setupSocketHandlers(io: Server) {
         const px = Math.round(player.x);
         const py = Math.round(player.y);
         void (async () => {
-          await db.update(channelMembers).set({ lastX: px, lastY: py })
-            .where(and(eq(channelMembers.channelId, player.mapId),eq(channelMembers.userId, player.userId)));
+          await db
+            .update(channelMembers)
+            .set({ lastX: px, lastY: py })
+            .where(
+              and(
+                eq(channelMembers.channelId, player.mapId),
+                eq(channelMembers.userId, player.userId),
+              ),
+            );
         })().catch((error: unknown) => {
-          console.error("[socket] Position save failed:", error instanceof Error ? error.message : "unknown");
+          console.error(
+            "[socket] Position save failed:",
+            error instanceof Error ? error.message : "unknown",
+          );
         });
 
         players.delete(socket.id);

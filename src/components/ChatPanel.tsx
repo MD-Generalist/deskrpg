@@ -232,26 +232,29 @@ export default function ChatPanel({
     widthRef.current = width;
   }, [width]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    const startX = e.clientX;
-    const startWidth = widthRef.current;
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+      const startX = e.clientX;
+      const startWidth = widthRef.current;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = isWorkspace ? startX - e.clientX : e.clientX - startX;
-      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta)));
-    };
+      const handleMouseMove = (e: MouseEvent) => {
+        const delta = isWorkspace ? startX - e.clientX : e.clientX - startX;
+        setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta)));
+      };
 
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
+      const handleMouseUp = () => {
+        setIsDragging(false);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
 
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  }, [isWorkspace, setWidth]);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [isWorkspace, setWidth],
+  );
 
   if (!isOpen && !isWorkspace) {
     return (

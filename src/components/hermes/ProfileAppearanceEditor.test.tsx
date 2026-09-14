@@ -37,7 +37,9 @@ test("profile save preserves unknown look identity until explicit replacement", 
     assert.deepEqual(bodies[0], { appearance: initial });
     assert.equal(host.querySelectorAll(".lookbook-card").length, 50);
     const lookIndex = OFFICE_LOOKS.findIndex((look) => look.id === "office-eun");
-    await act(async () => (host.querySelectorAll(".lookbook-card")[lookIndex] as HTMLButtonElement).click());
+    await act(async () =>
+      (host.querySelectorAll(".lookbook-card")[lookIndex] as HTMLButtonElement).click(),
+    );
     assert.equal(host.querySelectorAll('.lookbook-card[aria-pressed="true"]').length, 1);
     await act(async () => save().click());
     assert.deepEqual(bodies[1], { appearance: officeLookAppearance("office-eun") });

@@ -17,7 +17,11 @@ import { restoreMeetingNpcs, type MeetingDiscussionState } from "@/lib/meeting-d
 import { isMeetingChair, selectMeetingNpcs } from "./meeting-room/participants";
 import { clampMeetingSidebarWidth } from "./meeting-room/responsive";
 import { computeMeetingTopicRows } from "./meeting-room/start-form";
-import { restoreMeetingChat, restoreMeetingExecution, type MeetingExecutionState } from "./meeting-room/restore-state";
+import {
+  restoreMeetingChat,
+  restoreMeetingExecution,
+  type MeetingExecutionState,
+} from "./meeting-room/restore-state";
 import { consumeNpcStreamBuffer } from "./meeting-room/stream-state";
 import {
   sanitizeClientFinalSpeech,
@@ -845,7 +849,9 @@ export default function MeetingRoom({
       isChair,
       isNpc: participant?.type === "npc",
       isSpeaking,
-      speechPreview: isSpeaking ? currentSpeechPreview : recentMeetingSpeech(messages, seat.participantId, nowMs),
+      speechPreview: isSpeaking
+        ? currentSpeechPreview
+        : recentMeetingSpeech(messages, seat.participantId, nowMs),
       isClickable: Boolean(participant?.type === "npc" && meetingActive && isInitiator),
       onClick:
         participant?.type === "npc" && meetingActive && isInitiator

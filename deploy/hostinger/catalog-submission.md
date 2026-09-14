@@ -17,13 +17,13 @@ Hostinger's catalog has no public submission form; this package is what we send 
 
 ## Input form (what the catalog should ask the user)
 
-| Variable | Label | Type | Required | Default / help |
-|---|---|---|---|---|
-| `JWT_SECRET` | Session secret | password, auto-generate | yes | random 64 hex |
-| `HERMES_API_KEY` | Hermes API key | password, auto-generate | yes | random 64 hex; shown back to the user for the "New gateway" step |
-| `OPENROUTER_API_KEY` | Model provider key (OpenRouter) | password | no | leave empty if you use OpenAI/Anthropic keys instead |
-| `OPENAI_API_KEY` | OpenAI key | password | no | |
-| `ANTHROPIC_API_KEY` | Anthropic key | password | no | |
+| Variable             | Label                           | Type                    | Required | Default / help                                                   |
+| -------------------- | ------------------------------- | ----------------------- | -------- | ---------------------------------------------------------------- |
+| `JWT_SECRET`         | Session secret                  | password, auto-generate | yes      | random 64 hex                                                    |
+| `HERMES_API_KEY`     | Hermes API key                  | password, auto-generate | yes      | random 64 hex; shown back to the user for the "New gateway" step |
+| `OPENROUTER_API_KEY` | Model provider key (OpenRouter) | password                | no       | leave empty if you use OpenAI/Anthropic keys instead             |
+| `OPENAI_API_KEY`     | OpenAI key                      | password                | no       |                                                                  |
+| `ANTHROPIC_API_KEY`  | Anthropic key                   | password                | no       |                                                                  |
 
 ## Post-install message (shown after Deploy)
 

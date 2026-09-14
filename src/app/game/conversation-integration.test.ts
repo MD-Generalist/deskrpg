@@ -3,10 +3,11 @@ import test from "node:test";
 import { navigatorMotion, selectionForEvent } from "./conversation-integration";
 
 test("map and navigator events resolve to the same conversation selection", () => {
-  assert.deepEqual(
-    selectionForEvent({ type: "npc", npcId: "n1", npcName: "소피" }),
-    { kind: "npc", npcId: "n1", npcName: "소피" },
-  );
+  assert.deepEqual(selectionForEvent({ type: "npc", npcId: "n1", npcName: "소피" }), {
+    kind: "npc",
+    npcId: "n1",
+    npcName: "소피",
+  });
   assert.deepEqual(selectionForEvent({ type: "public-room", roomId: "office" }), {
     kind: "room",
     roomId: "office",

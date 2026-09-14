@@ -4,7 +4,8 @@ import { RemoteNpcPresentation } from "./remote-npc-presentation";
 
 test("200ms authoritative packets produce continuous bounded visual steps", () => {
   const view = new RemoteNpcPresentation(0, 0);
-  let changed = 0, largest = 0;
+  let changed = 0,
+    largest = 0;
   for (let frame = 0; frame < 120; frame++) {
     if (frame % 12 === 0) view.accept((frame / 12 + 1) * 30, 0);
     const old = view.x;

@@ -160,7 +160,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
       rows: number,
       tileWidth: number,
       tileHeight: number,
-      preset: OfficePreset = 'blank',
+      preset: OfficePreset = "blank",
     ): Promise<{ id: string; createdBy: string | null }> => {
       void tileHeight;
       const mapData = applyOfficePreset(createDefaultMap(name, cols, rows, tileWidth), preset);

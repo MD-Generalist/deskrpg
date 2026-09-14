@@ -75,7 +75,7 @@ export function seatAt(seats: Seat[], x: number, z: number, walking: boolean) {
 // Supplied sit clips put the rear of the shortest calf ~0.135 m ahead of
 // the actor origin. Keep it beyond the sofa body front (+0.41 m), including
 // a small clearance. This is visual only: saved navigation anchors stay put.
-export const SOFA_SEATED_FORWARD = 0.30;
+export const SOFA_SEATED_FORWARD = 0.3;
 export function sofaSeats(object: MapObject): Seat[] {
   const count = object.type === "office_sofa" ? 2 : object.type === "office_armchair" ? 1 : 0;
   const direction = object.direction ?? "down";

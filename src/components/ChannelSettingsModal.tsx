@@ -497,14 +497,10 @@ export default function ChannelSettingsModal({
                   </button>
                 </div>
                 {!visibility && isPublic && (
-                  <p className="text-npc text-xs mt-1">
-                    {t("settings.switchToPrivateWarning")}
-                  </p>
+                  <p className="text-npc text-xs mt-1">{t("settings.switchToPrivateWarning")}</p>
                 )}
                 {visibility && !isPublic && (
-                  <p className="text-npc text-xs mt-1">
-                    {t("settings.switchToPublicWarning")}
-                  </p>
+                  <p className="text-npc text-xs mt-1">{t("settings.switchToPublicWarning")}</p>
                 )}
               </div>
               {!visibility && (
@@ -561,7 +557,9 @@ export default function ChannelSettingsModal({
               ) : membersError ? (
                 <p className="text-red-400 text-sm py-4 text-center">{membersError}</p>
               ) : members.length === 0 ? (
-                <p className="text-text-muted text-sm py-4 text-center">{t("settings.noMembers")}</p>
+                <p className="text-text-muted text-sm py-4 text-center">
+                  {t("settings.noMembers")}
+                </p>
               ) : (
                 <div className="space-y-2">
                   {members.map((m) => (

@@ -104,7 +104,10 @@ test("registerMeetingSocketHandlers joins the room and emits meeting state", asy
   const state = calls.find((call) => call.event === "meeting:state")?.payload as {
     participants: Array<{ id: string; userId?: string }>;
   };
-  assert.equal(state.participants.find((participant) => participant.id === "socket-1")?.userId, "user-1");
+  assert.equal(
+    state.participants.find((participant) => participant.id === "socket-1")?.userId,
+    "user-1",
+  );
   const joined = calls.find((call) => call.event === "meeting:participant-joined")?.payload as {
     userId?: string;
   };

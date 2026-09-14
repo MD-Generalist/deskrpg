@@ -10,7 +10,8 @@ export function npcMotionUi(
   const npc = snapshot?.npcs.find((entry) => entry.npcId === npcId);
   if (!npc) return { phase: fallbackPhase, caller: fallbackCaller };
   return {
-    phase: npc.phase === "called" ? "moving-to-player" : npc.phase === "ambient" ? "idle" : npc.phase,
-    caller: npc.phase === "ambient" ? undefined : npc.ownerSocketId ?? undefined,
+    phase:
+      npc.phase === "called" ? "moving-to-player" : npc.phase === "ambient" ? "idle" : npc.phase,
+    caller: npc.phase === "ambient" ? undefined : (npc.ownerSocketId ?? undefined),
   };
 }

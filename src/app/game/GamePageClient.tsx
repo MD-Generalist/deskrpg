@@ -2313,7 +2313,8 @@ function GamePageInner() {
   }
 
   const dialogMotion = npcMotionUi(
-    npcMotionSnapshotRef.current, dialogNpc?.npcId,
+    npcMotionSnapshotRef.current,
+    dialogNpc?.npcId,
     dialogNpc ? npcMoveStates[dialogNpc.npcId] : undefined,
     dialogNpc ? npcCallers[dialogNpc.npcId] : undefined,
   );
@@ -2353,7 +2354,7 @@ function GamePageInner() {
       ? t("room.new")
       : activeConversationRoom?.kind === "office"
         ? t("room.office")
-        : activeConversationRoom?.name ?? t("room.list");
+        : (activeConversationRoom?.name ?? t("room.list"));
 
   const conversationPanel = (
     <ConversationPane label={conversationLabel}>
@@ -2632,18 +2633,25 @@ function GamePageInner() {
           )}
 
           {/* Counts remain in the header; the full roster now lives in the workspace navigator. */}
-          <div className="header-roster-buttons flex items-center gap-1.5" aria-label={t("workspace.people")}>
+          <div
+            className="header-roster-buttons flex items-center gap-1.5"
+            aria-label={t("workspace.people")}
+          >
             <span className="flex items-center gap-1.5 rounded-md border border-border bg-surface-raised px-2.5 py-1 text-caption text-text-secondary">
               <span className="h-2 w-2 rounded-full bg-sky-400" />
               <span className="header-full-label">
                 {t("game.playersOnlineCount", { count: channelPlayers.length })}
               </span>
-              <span className="header-mobile-label" aria-hidden="true">{channelPlayers.length}</span>
+              <span className="header-mobile-label" aria-hidden="true">
+                {channelPlayers.length}
+              </span>
             </span>
             <span className="flex items-center gap-1.5 rounded-md border border-border bg-surface-raised px-2.5 py-1 text-caption text-text-secondary">
               <span className="h-2 w-2 rounded-full bg-violet-400" />
               <span className="header-full-label">
-                {t("game.npcsAtWorkCount", { count: rosterNpcs.filter((npc) => npc.active).length })}
+                {t("game.npcsAtWorkCount", {
+                  count: rosterNpcs.filter((npc) => npc.active).length,
+                })}
               </span>
               <span className="header-mobile-label" aria-hidden="true">
                 NPC {rosterNpcs.filter((npc) => npc.active).length}
@@ -3143,7 +3151,6 @@ function GamePageInner() {
               {toastMessage}
             </div>
           )}
-
         </>
       )}
 

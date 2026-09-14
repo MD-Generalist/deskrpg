@@ -441,8 +441,11 @@ export class OfficeRenderer {
     if (process.env.NODE_ENV === "development" && kind === "down") {
       // Read-only evidence of the actual raycast target for multi-client seat checks.
       this.renderer.domElement.dataset.pointerTarget = JSON.stringify({
-        at: Date.now(), x: target.x, z: target.z,
-        actorId: actorId ?? null, button: e.button,
+        at: Date.now(),
+        x: target.x,
+        z: target.z,
+        actorId: actorId ?? null,
+        button: e.button,
         walkable: this.bridge.walkable(col, row),
       });
     }
@@ -1073,7 +1076,9 @@ export class OfficeRenderer {
         const sorted = this.sampleIntervals.sort((a, b) => a - b);
         const fps = Math.round((1000 * sorted.length) / sorted.reduce((a, b) => a + b, 0));
         const adaptation = adaptRenderScale(
-          this.renderer.getPixelRatio(), this.slowSamples, fps,
+          this.renderer.getPixelRatio(),
+          this.slowSamples,
+          fps,
           sorted[Math.floor(sorted.length * 0.95)],
         );
         this.slowSamples = adaptation.slowSamples;

@@ -6,8 +6,16 @@ export const MAX_WALL_RECOVERY = 0.025;
 export function clearMovementSegment(a: NavigationPoint, b: NavigationPoint, walkable: Walkable) {
   if (clearSegment(a, b, walkable)) return true;
   const escaping = new Set<string>();
-  for (let x = Math.floor(a.x + 0.5 - ACTOR_RADIUS); x <= Math.floor(a.x + 0.5 + ACTOR_RADIUS); x++) {
-    for (let y = Math.floor(a.y + 0.5 - ACTOR_RADIUS); y <= Math.floor(a.y + 0.5 + ACTOR_RADIUS); y++) {
+  for (
+    let x = Math.floor(a.x + 0.5 - ACTOR_RADIUS);
+    x <= Math.floor(a.x + 0.5 + ACTOR_RADIUS);
+    x++
+  ) {
+    for (
+      let y = Math.floor(a.y + 0.5 - ACTOR_RADIUS);
+      y <= Math.floor(a.y + 0.5 + ACTOR_RADIUS);
+      y++
+    ) {
       if (walkable(x, y)) continue;
       const faces = [
         { depth: a.x - (x - 0.5 - ACTOR_RADIUS), outward: a.x - b.x },
@@ -23,7 +31,9 @@ export function clearMovementSegment(a: NavigationPoint, b: NavigationPoint, wal
   }
   // The exemption is local to this one outward segment. Every other wall is
   // still checked, and a later segment cannot use it to re-enter the wall.
-  return escaping.size > 0 && clearSegment(a, b, (x, y) => walkable(x, y) || escaping.has(`${x},${y}`));
+  return (
+    escaping.size > 0 && clearSegment(a, b, (x, y) => walkable(x, y) || escaping.has(`${x},${y}`))
+  );
 }
 /** Segment versus expanded tile AABBs: conservative body clearance, including corners. */
 export function clearSegment(

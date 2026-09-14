@@ -250,9 +250,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => insertChip(c)}
                 className={`cursor-pointer px-3 py-1.5 text-sm ${
-                  i === index
-                    ? `bg-${accentColor}-500/20 text-white`
-                    : "text-text hover:bg-white/5"
+                  i === index ? `bg-${accentColor}-500/20 text-white` : "text-text hover:bg-white/5"
                 }`}
               >
                 {c.name}
@@ -278,9 +276,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
         }}
         onBlur={() => setQuery(null)}
         className={`min-h-[36px] max-h-[120px] overflow-y-auto whitespace-pre-wrap break-words bg-surface text-text px-3 py-2 rounded-lg border focus:outline-none text-sm leading-5 ${
-          disabled
-            ? "border-border text-text-dim"
-            : `border-border focus:border-${accentColor}-500`
+          disabled ? "border-border text-text-dim" : `border-border focus:border-${accentColor}-500`
         } ${empty ? "before:content-[attr(data-placeholder)] before:text-text-dim before:pointer-events-none" : ""}`}
       />
     </div>

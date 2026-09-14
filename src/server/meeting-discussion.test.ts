@@ -75,7 +75,11 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
   let nextTurnCalls = 0;
   let directedCalls = 0;
   let allowedControl = true;
-  let callbacks: Parameters<NonNullable<Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"]["createMeetingBroker"]>>[1];
+  let callbacks: Parameters<
+    NonNullable<
+      Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"]["createMeetingBroker"]
+    >
+  >[1];
   const socket = createFakeSocket("socket-1", calls);
 
   registerMeetingDiscussionHandlers({
@@ -103,32 +107,36 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
       canControlMeeting: async () => allowedControl,
       createMeetingBroker: (_config, registeredCallbacks) => {
         callbacks = registeredCallbacks;
-        return ({
-        config: {
-          participants: [
-            {
-              npcId: "npc-1",
-              displayName: "Analyst",
-              role: "Participant",
-              passPolicy: null,
-              openclawAgentId: "agent-1",
-            },
-          ],
-          sessionKeyPrefix: "sess-1",
-          meetingId: "meet-1",
-        },
-        turns: [],
-        isRunning: () => true,
-        run: async () => {
-          runCalled = true;
-        },
-        stop: () => {},
-        setMode: () => {},
-        nextTurn: () => { nextTurnCalls++; },
-        directSpeak: () => { directedCalls++; },
-        abortCurrentTurn: () => {},
-        addUserMessage: () => {},
-      });
+        return {
+          config: {
+            participants: [
+              {
+                npcId: "npc-1",
+                displayName: "Analyst",
+                role: "Participant",
+                passPolicy: null,
+                openclawAgentId: "agent-1",
+              },
+            ],
+            sessionKeyPrefix: "sess-1",
+            meetingId: "meet-1",
+          },
+          turns: [],
+          isRunning: () => true,
+          run: async () => {
+            runCalled = true;
+          },
+          stop: () => {},
+          setMode: () => {},
+          nextTurn: () => {
+            nextTurnCalls++;
+          },
+          directSpeak: () => {
+            directedCalls++;
+          },
+          abortCurrentTurn: () => {},
+          addUserMessage: () => {},
+        };
       },
       generateMeetingSummary: async () => ({ keyTopics: [], conclusions: null }),
       persistMeetingMinutes: async () => null,
@@ -159,7 +167,10 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
   callbacks!.onTurnEnd?.("npc-1", "Hello world");
   assert.equal(live.currentSpeaker, null);
   assert.deepEqual(live.rawStreams, {});
-  assert.equal((meetingRooms.get("channel-1")!.messages as Array<{ content: string }>)[0].content, "Hello world");
+  assert.equal(
+    (meetingRooms.get("channel-1")!.messages as Array<{ content: string }>)[0].content,
+    "Hello world",
+  );
   callbacks!.onWaitingInput?.(null);
   assert.equal(live.isWaitingInput, true);
 
@@ -167,7 +178,8 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
   assert.equal(nextTurnCalls, 0, "auto cannot consume a manual next turn");
   callbacks!.onModeChanged?.("manual", "user");
   assert.equal(live.isWaitingInput, false);
-  const modeEvent = calls.filter((call) => call.event === "meeting:mode-changed").at(-1)!.payload as {
+  const modeEvent = calls.filter((call) => call.event === "meeting:mode-changed").at(-1)!
+    .payload as {
     execution: { isWaitingInput: boolean; currentSpeaker: unknown };
   };
   assert.equal(modeEvent.execution.isWaitingInput, false);

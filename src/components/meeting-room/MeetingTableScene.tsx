@@ -196,7 +196,11 @@ export default function MeetingTableScene({
           }
         >
           <div className="relative flex flex-col items-center">
-            <MeetingSpeechBubble preview={seat.speechPreview} visible={seat.isSpeaking || Boolean(seat.speechPreview)} speaking={seat.isSpeaking} />
+            <MeetingSpeechBubble
+              preview={seat.speechPreview}
+              visible={seat.isSpeaking || Boolean(seat.speechPreview)}
+              speaking={seat.isSpeaking}
+            />
             <button
               type="button"
               onClick={seat.onClick}
