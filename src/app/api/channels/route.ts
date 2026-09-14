@@ -337,9 +337,6 @@ export async function POST(req: NextRequest) {
           spawnRow: template.spawnRow,
         }),
         password: passwordHash,
-        gatewayConfig: jsonForDb(
-          gatewayConfig ? { taskAutomation: gatewayConfig.taskAutomation || null } : null,
-        ),
       })
       .returning();
 

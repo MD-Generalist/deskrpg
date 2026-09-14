@@ -10,7 +10,8 @@
 
 import { nowForDb } from "@/db";
 
-import type { PluginCapability } from "./plugin-capability";
+import type { PluginInfo } from "./deskrpg-plugin-types";
+import { parsePluginInfo, type PluginCapability } from "./plugin-capability";
 
 /**
  * 게이트웨이 테스트 라우트가 `db.update(gatewayResources).set(...)` 에 넘길 payload 를
@@ -27,4 +28,33 @@ export function buildPluginCacheUpdate(plugin: PluginCapability) {
     pluginCheckedAt: now,
     updatedAt: now,
   };
+}
+
+/**
+ * 자동화 계약 블록(`/deskrpg/info` 의 capabilities·timezone·kanban)을
+ * `gateway_resources.plugin_info_json`(텍스트 컬럼) 에 넣을 payload.
+ *
+ * `buildPluginCacheUpdate` 와 합치지 않고 따로 둔 이유: 그 컬럼은 병행 태스크가
+ * 추가하는 중이라 이 워크트리의 drizzle 스키마에 아직 없다. 두 payload 를 한 객체로
+ * 내보내면 `.set()` 이 컬럼 없는 키를 받아 타입 검사에 실패한다. 컬럼이 생기면
+ * 라우트에서 `{ ...buildPluginCacheUpdate(p), ...buildPluginInfoCacheUpdate(p) }` 로
+ * 합치면 된다 — 이 함수는 문자열(또는 null)만 낸다.
+ */
+export function buildPluginInfoCacheUpdate(info: PluginInfo | null): {
+  pluginInfoJson: string | null;
+} {
+  return { pluginInfoJson: info ? JSON.stringify(info) : null };
+}
+
+/**
+ * `plugin_info_json` 컬럼 값을 `PluginInfo` 로 되돌린다. 깨진 JSON·낯선 모양은 null —
+ * 캐시가 못 읽히면 재프로브하면 되지, 던져서 화면을 막을 일이 아니다.
+ */
+export function restorePluginInfo(json: string | null | undefined): PluginInfo | null {
+  if (!json) return null;
+  try {
+    return parsePluginInfo(JSON.parse(json));
+  } catch {
+    return null;
+  }
 }

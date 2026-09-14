@@ -11,24 +11,30 @@ import {
   getAccessibleGatewayResource,
   getChannelGatewayBinding,
   unbindGatewayFromChannel,
-  updateChannelTaskAutomationSettings,
   upsertOwnedGatewayResource,
 } from "@/lib/gateway-resources";
-import { buildGatewayConfig, mergeGatewayConfig } from "@/lib/task-reporting";
 import internalTransport from "@/lib/internal-transport.js";
 import { getGatewayConfigUpdatedHandler } from "@/lib/rpc-registry";
+import { requestRefreshPollers } from "@/lib/automation-registry";
 
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
   buildInternalAuthHeaders: () => Record<string, string>;
   getInternalSocketBaseUrl: () => string;
 };
 
+/** 바인딩이 바뀌면 폴러 표를 다시 읽게 한다 — 기다리지 않고, 실패해도 응답에 섞지 않는다. */
+function refreshPollersInBackground() {
+  void requestRefreshPollers().catch((err: unknown) => {
+    console.warn(
+      `[gateway-route] refreshPollers failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  });
+}
+
 function buildResponseGatewayConfig(input: {
   userId: string;
-  channelGatewayConfig: unknown;
   binding: Awaited<ReturnType<typeof getChannelGatewayBinding>>;
 }) {
-  const taskAutomation = buildGatewayConfig(input.channelGatewayConfig).taskAutomation;
   const boundGateway = input.binding?.resource ?? null;
   const canEditCredentials = !boundGateway || boundGateway.ownerUserId === input.userId;
 
@@ -39,7 +45,6 @@ function buildResponseGatewayConfig(input: {
     token:
       boundGateway && canEditCredentials ? decryptGatewayToken(boundGateway.tokenEncrypted) : null,
     canEditCredentials,
-    taskAutomation,
   };
 }
 
@@ -70,14 +75,14 @@ async function emitGatewayConfigUpdated(channelId: string) {
 
 async function getChannelWithOwner(channelId: string) {
   const [channel] = await db
-    .select({ ownerId: channels.ownerId, gatewayConfig: channels.gatewayConfig })
+    .select({ ownerId: channels.ownerId })
     .from(channels)
     .where(eq(channels.id, channelId))
     .limit(1);
   return channel ?? null;
 }
 
-// GET /api/channels/:id/gateway — owner-only, returns bound gateway resource + task automation
+// GET /api/channels/:id/gateway — owner-only, returns bound gateway resource
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId)
@@ -93,11 +98,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const binding = await getChannelGatewayBinding(id);
 
   return NextResponse.json({
-    gatewayConfig: buildResponseGatewayConfig({
-      userId,
-      channelGatewayConfig: channel.gatewayConfig,
-      binding,
-    }),
+    gatewayConfig: buildResponseGatewayConfig({ userId, binding }),
   });
 }
 
@@ -129,7 +130,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const currentBinding = await getChannelGatewayBinding(id);
-  const mergedGatewayConfig = mergeGatewayConfig(channel.gatewayConfig, body);
+  const requestedUrl = typeof body.url === "string" ? body.url.trim() || null : null;
+  const requestedToken = typeof body.token === "string" ? body.token.trim() || null : null;
 
   let nextGatewayId: string | null = currentBinding?.resource.id ?? null;
   if (typeof body.gatewayId === "string" && body.gatewayId.trim()) {
@@ -142,13 +144,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     nextGatewayId = accessible.resource.id;
   } else if (Object.hasOwn(body, "url")) {
-    if (!mergedGatewayConfig.url) {
+    if (!requestedUrl) {
       nextGatewayId = null;
     } else {
       const resource = await upsertOwnedGatewayResource({
         ownerUserId: userId,
-        baseUrl: mergedGatewayConfig.url,
-        token: mergedGatewayConfig.token ?? "",
+        baseUrl: requestedUrl,
+        token: requestedToken ?? "",
         displayName: typeof body.displayName === "string" ? body.displayName : undefined,
       });
       nextGatewayId = resource.id;
@@ -174,29 +176,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (previousGatewayId && previousGatewayId !== nextGatewayId) {
     await sleepChannelNpcs(id, previousGatewayId);
   }
-  // 고용은 **연결이 바뀔 때만** 한다. taskAutomation 만 저장하는 PUT 이 매번
+  // 고용은 **연결이 바뀔 때만** 한다. 같은 게이트웨이를 다시 저장하는 PUT 이 매번
   // 고용을 돌면, 사용자가 개별적으로 재운 NPC 가 설정 저장 한 번에 조용히
   // 되살아난다(Task 7 의 NPC 별 토글이 그 상태를 만든다).
   if (nextGatewayId && isBindingChanging) {
     await hireGatewayProfilesIntoChannel(id, nextGatewayId);
   }
 
-  await updateChannelTaskAutomationSettings(id, {
-    taskAutomation: mergedGatewayConfig.taskAutomation,
-  });
-
   await emitGatewayConfigUpdated(id);
+  refreshPollersInBackground();
 
   const nextBinding = await getChannelGatewayBinding(id);
+  // 다른 게이트웨이로 옮겼다 — 보드는 새 게이트웨이에 확보됐지만(bindGatewayToChannel 안에서),
+  // 카드와 크론은 이전 게이트웨이에 남는다(R4). 사용자에게 그 사실을 알린다.
+  const movedToAnotherGateway = Boolean(previousGatewayId && nextGatewayId && isBindingChanging);
   return NextResponse.json({
     ok: true,
-    gatewayConfig: buildResponseGatewayConfig({
-      userId,
-      channelGatewayConfig: {
-        taskAutomation: mergedGatewayConfig.taskAutomation,
-      },
-      binding: nextBinding,
-    }),
+    gatewayConfig: buildResponseGatewayConfig({ userId, binding: nextBinding }),
+    ...(movedToAnotherGateway ? { warning: "previous_board_retained" as const } : {}),
   });
 }
 
@@ -223,13 +220,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await sleepChannelNpcs(id, previousGatewayId);
   }
   await emitGatewayConfigUpdated(id);
+  refreshPollersInBackground();
 
   return NextResponse.json({
     ok: true,
-    gatewayConfig: buildResponseGatewayConfig({
-      userId,
-      channelGatewayConfig: channel.gatewayConfig,
-      binding: null,
-    }),
+    gatewayConfig: buildResponseGatewayConfig({ userId, binding: null }),
   });
 }

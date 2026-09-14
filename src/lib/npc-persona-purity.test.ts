@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildPersonaConfig } from "./npc-agent-defaults";
-import { buildTaskCorePrompt } from "./task-prompt";
 
 // 저장되는 인격에 태스크 절차가 섞이지 않는다.
 //
@@ -11,9 +10,8 @@ import { buildTaskCorePrompt } from "./task-prompt";
 // 절차였다. 사용자가 인격을 편집하면 절차를 같이 지울 수 있었고, 이미 인격이 있는
 // 프로필에 절차만 얹는 것도 불가능했다.
 //
-// 절차는 이제 두 경로로 간다 — 시스템 지시의 <task-protocol> 층
-// (npc-prompt-layers) 과 사용자 메시지 앞의 리마인더(withTaskReminder).
-// 저장된 인격은 사용자가 쓴 것만 담는다.
+// 태스크 시스템은 2026-09 에 폐기됐지만, 이 계약은 남는다 — 회의 규칙 같은 절차는
+// 시스템 지시의 층(npc-prompt-layers)으로 가고, 저장된 인격은 사용자가 쓴 것만 담는다.
 
 test("저장되는 인격에 태스크 절차가 섞이지 않는다", () => {
   const cfg = buildPersonaConfig({
@@ -23,7 +21,6 @@ test("저장되는 인격에 태스크 절차가 섞이지 않는다", () => {
     identityOverride: "나는 앨리스다.",
   });
   assert.equal(cfg.identity.includes("Task Management Protocol"), false);
-  assert.equal(cfg.identity.includes(buildTaskCorePrompt("ko")), false);
 });
 
 test("프리셋 기본 인격에도 섞이지 않는다", () => {

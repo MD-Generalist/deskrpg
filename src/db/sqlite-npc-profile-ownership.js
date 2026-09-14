@@ -29,11 +29,11 @@ const LEGACY_NPC_COLUMNS = [
 
 // `npcs.id` 를 ON DELETE CASCADE 로 참조하는 테이블들. PostgreSQL 0008 의 4a·5a 단계와
 // 같은 이름의 백업 테이블에 담는다. 최소 픽스처에는 없을 수 있으니 존재하는 것만 훑는다.
+// (0008 이 백업하던 옛 태스크·보고 테이블은 2026-04 태스크 시스템 폐기와 함께 지워졌다 —
+// 0012 / sqlite-legacy-tasks-drop.js.)
 const CASCADING_CHILD_TABLES = [
   ["chat_messages", "npcs_removed_chat_messages_backup"],
-  ["tasks", "npcs_removed_tasks_backup"],
   ["npc_sessions", "npcs_removed_npc_sessions_backup"],
-  ["npc_reports", "npcs_removed_npc_reports_backup"],
 ];
 
 /** 곧 지워질 NPC 집합(`sourceBackup` 의 id)에 매달린 자식 행을 백업 테이블로 옮긴다. */
@@ -110,7 +110,7 @@ function migrateNpcsToProfileOwnership(sqlite) {
   const result = prepare();
 
   // 6~8) 새 정의로 재생성. FK 검사는 트랜잭션 밖에서 잠시 끈다(테이블 교체 중
-  // tasks.npc_id 등 참조가 잠깐 흔들린다) — 트랜잭션 안에서는 이 PRAGMA 가 무시된다.
+  // chat_messages.npc_id 등 참조가 잠깐 흔들린다) — 트랜잭션 안에서는 이 PRAGMA 가 무시된다.
   sqlite.pragma("foreign_keys = OFF");
   const rebuild = sqlite.transaction(() => {
     // 앞선 실행이 CREATE 와 DROP 사이에서 죽었으면 npcs_new 가 남아 다음 부팅을 막는다.

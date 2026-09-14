@@ -1,4 +1,11 @@
-import { classifyPluginProbe, type PluginCapability } from "../plugin-capability";
+import type { PluginInfo } from "../deskrpg-plugin-types";
+import { classifyPluginProbeWithInfo, type PluginCapability } from "../plugin-capability";
+
+/**
+ * 판정에 자동화 계약 블록(info)을 얹는다. `PluginCapability` 를 넓히기만 하므로 `status`/`version`
+ * 을 읽던 호출부는 그대로다 — 설정 마법사가 `plugin_info_json` 도 같이 캐시할 수 있게 한다(T4).
+ */
+export type SetupGatewayVerdict = PluginCapability & { info: PluginInfo | null };
 
 async function readJson(response: Response): Promise<unknown> {
   if (!response.headers.get("content-type")?.includes("json")) return null;
@@ -28,7 +35,7 @@ export async function verifySetupGateway(
   baseUrl: string,
   token: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<PluginCapability> {
+): Promise<SetupGatewayVerdict> {
   const base = baseUrl.replace(/\/+$/, "");
   const signal = AbortSignal.timeout(15000);
   let health: Response;
@@ -58,7 +65,11 @@ export async function verifySetupGateway(
       redirect: "error",
       signal,
     });
-    return classifyPluginProbe({ status: plugin.status, body: await readJson(plugin) });
+    const probe = classifyPluginProbeWithInfo({
+      status: plugin.status,
+      body: await readJson(plugin),
+    });
+    return { ...probe.capability, info: probe.info };
   } catch {
     throw new Error("gateway_unreachable");
   }

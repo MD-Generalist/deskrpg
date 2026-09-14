@@ -16,6 +16,8 @@ export type ActorSnapshot = {
   active?: boolean;
   /** Optional explicit response state; attention bubbles are not streamed responses. */
   phase?: "idle" | "queued" | "thinking" | "streaming" | "done" | "attention";
+  /** 칸반 카드 실행·크론 실행이 진행 중(R27). 대화 응답 표시가 없을 때만 그린다. */
+  working?: boolean;
 };
 export type MapSnapshot = {
   cols: number;
@@ -109,6 +111,20 @@ export function overviewDistance(cols: number, rows: number, aspect: number, fov
 /** Preserve server/UI response state without guessing streaming from a report bubble. */
 export function actorPresentationPhase(actor: Pick<ActorSnapshot, "phase" | "active" | "bubble">) {
   return actor.phase ?? (actor.active ? "thinking" : actor.bubble ? "attention" : "idle");
+}
+
+export type ActorIndicator = "queued" | "thinking" | "streaming" | "working" | null;
+
+/**
+ * 이름표 옆 표시 하나(R27). 대화 응답(queued/thinking/streaming)이 우선하고, 없을 때만
+ * "작업 중" — 둘을 같은 자리에 그리므로 겹치지 않는다.
+ */
+export function actorIndicator(
+  actor: Pick<ActorSnapshot, "phase" | "active" | "bubble" | "working">,
+): ActorIndicator {
+  const phase = actorPresentationPhase(actor);
+  if (phase === "queued" || phase === "thinking" || phase === "streaming") return phase;
+  return actor.working ? "working" : null;
 }
 
 /** Chat messages use user IDs; scene player IDs use socket IDs. Never match names. */

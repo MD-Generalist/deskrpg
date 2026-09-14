@@ -11,7 +11,7 @@ test("보낼 층이 하나도 없으면 undefined — 빈 문자열을 보내지
   // Hermes 는 instructions 를 기존 시스템 프롬프트 뒤에 이어 붙인다. 빈 문자열을 보내면
   // 의미 없는 개행 두 개가 프롬프트에 남는다. 아예 필드를 만들지 않는 쪽이 옳다.
   assert.equal(composeNpcInstructions({}), undefined);
-  assert.equal(composeNpcInstructions({ meetingProtocol: "   ", taskProtocol: "\n\n" }), undefined);
+  assert.equal(composeNpcInstructions({ meetingProtocol: "   " }), undefined);
 });
 
 test("회의 규칙만 있으면 그 층만 실린다", () => {
@@ -19,27 +19,11 @@ test("회의 규칙만 있으면 그 층만 실린다", () => {
   assert.ok(out);
   assert.match(out, new RegExp(`<${SECTION.meeting}>`));
   assert.match(out, /한 번에 한 명씩 말한다/);
-  assert.doesNotMatch(out, new RegExp(`<${SECTION.task}>`));
-});
-
-test("태스크 절차만 있으면 그 층만 실린다", () => {
-  const out = composeNpcInstructions({ taskProtocol: "승인 없이 만들지 않는다" });
-  assert.ok(out);
-  assert.match(out, new RegExp(`<${SECTION.task}>`));
-  assert.doesNotMatch(out, new RegExp(`<${SECTION.meeting}>`));
-});
-
-test("두 층이 다 있으면 순서가 고정된다 — 회의 규칙이 먼저", () => {
-  const out = composeNpcInstructions({
-    meetingProtocol: "MEET",
-    taskProtocol: "TASK",
-  })!;
-  assert.ok(out.indexOf("MEET") < out.indexOf("TASK"));
 });
 
 test("각 층은 이름표 경계로 닫힌다", () => {
-  const out = composeNpcInstructions({ meetingProtocol: "MEET", taskProtocol: "TASK" })!;
-  for (const name of [SECTION.meeting, SECTION.task]) {
+  const out = composeNpcInstructions({ meetingProtocol: "MEET" })!;
+  for (const name of [SECTION.meeting]) {
     assert.match(out, new RegExp(`<${name}>[\\s\\S]*</${name}>`));
   }
 });

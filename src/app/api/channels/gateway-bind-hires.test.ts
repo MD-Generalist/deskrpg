@@ -162,9 +162,9 @@ test("연결이 그대로면 설정만 저장하는 PUT 은 잠든 NPC 를 되�
   const [first] = await selectChannelNpcs(channelId, { roster: true });
   await setNpcActive(first.id, false);
 
-  // 같은 게이트웨이 + taskAutomation 만 바뀐 저장. 여기서 고용을 돌면 사용자가
-  // 직접 재운 NPC 가 조용히 되살아난다.
-  assert.equal((await put({ gatewayId: gatewayA, taskAutomation: { enabled: true } })).status, 200);
+  // 같은 게이트웨이를 다시 저장. 여기서 고용을 돌면 사용자가 직접 재운 NPC 가
+  // 조용히 되살아난다.
+  assert.equal((await put({ gatewayId: gatewayA })).status, 200);
 
   const roster = await selectChannelNpcs(channelId, { roster: true });
   assert.equal(

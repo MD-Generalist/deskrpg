@@ -11,6 +11,7 @@ import { disposeTree } from "@/game/three/office-renderer";
 import type { MeetingSeatLayout, MeetingTableLayout } from "./layout";
 import MeetingSpeechBubble from "./MeetingSpeechBubble";
 import { meetingCameraDistance } from "./camera-fit";
+import { meetingCaptureOffset } from "./capture-camera";
 
 export interface MeetingSceneSeat extends MeetingSeatLayout {
   name: string;
@@ -128,6 +129,24 @@ export default function MeetingTableScene({
           .catch(() => {});
       }
     });
+    const captureCamera =
+      process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_README_CAPTURE === "1";
+    let cameraDistance = 12;
+    const pointer = { x: 0, y: 0 };
+    const smoothed = { x: 0, y: 0 };
+    const movePointer = (event: PointerEvent) => {
+      const box = element.getBoundingClientRect();
+      pointer.x = ((event.clientX - box.left) / box.width - 0.5) * 2;
+      pointer.y = ((event.clientY - box.top) / box.height - 0.5) * 2;
+    };
+    const resetPointer = () => {
+      pointer.x = 0;
+      pointer.y = 0;
+    };
+    if (captureCamera) {
+      element.addEventListener("pointermove", movePointer);
+      element.addEventListener("pointerleave", resetPointer);
+    }
     const resize = new ResizeObserver(() => {
       const width = element.clientWidth,
         height = element.clientHeight;
@@ -135,6 +154,7 @@ export default function MeetingTableScene({
       renderer.setSize(width, height);
       camera.aspect = width / height;
       const distance = meetingCameraDistance(tableWidth, camera.aspect);
+      cameraDistance = distance;
       camera.position.set(0, distance * 0.68, distance * 0.8);
       camera.lookAt(0, 0.4, 0);
       camera.updateProjectionMatrix();
@@ -143,6 +163,22 @@ export default function MeetingTableScene({
     const render = (time: number) => {
       if (disposed) return;
       frame = requestAnimationFrame(render);
+      if (captureCamera) {
+        smoothed.x += (pointer.x - smoothed.x) * 0.06;
+        smoothed.y += (pointer.y - smoothed.y) * 0.06;
+        const offset = meetingCaptureOffset(
+          smoothed.x,
+          smoothed.y,
+          process.env.NODE_ENV,
+          process.env.NEXT_PUBLIC_README_CAPTURE,
+        );
+        camera.position.set(
+          Math.sin(offset.yaw) * cameraDistance * 0.8,
+          cameraDistance * (0.68 + offset.lift),
+          Math.cos(offset.yaw) * cameraDistance * 0.8,
+        );
+        camera.lookAt(0, 0.4, 0);
+      }
       for (const seat of latest.current) {
         const actor = models.get(seat.participantId);
         if (!actor) continue;
@@ -173,6 +209,8 @@ export default function MeetingTableScene({
       disposed = true;
       cancelAnimationFrame(frame);
       resize.disconnect();
+      element.removeEventListener("pointermove", movePointer);
+      element.removeEventListener("pointerleave", resetPointer);
       disposeTree(scene);
       renderer.dispose();
       renderer.domElement.remove();

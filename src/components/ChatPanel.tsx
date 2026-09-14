@@ -1,13 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Socket } from "socket.io-client";
 import { useT } from "@/lib/i18n";
-import { Pencil, UserMinus, RotateCcw, MessageSquare, ClipboardList, Undo2 } from "lucide-react";
+import { Pencil, UserMinus, RotateCcw, Undo2 } from "lucide-react";
 import type { NpcChatMessage } from "./NpcDialog";
-import TaskPanel from "./TaskPanel";
-import TaskChatView, { type TaskMessage } from "./TaskChatView";
 import ChatInput from "./ChatInput";
-import Tab from "./ui/Tab";
 import ChatBubble from "./ui/ChatBubble";
 import RoomList from "./rooms/RoomList";
 import RoomHeader from "./rooms/RoomHeader";
@@ -23,6 +19,15 @@ import {
 } from "@/app/game/chat-response-state";
 import ResponseProgress from "./chat/ResponseProgress";
 import { ConversationSessionStore } from "@/app/game/conversation-session";
+import CronPanel, { type CronEventSource } from "./cron/CronPanel";
+import RoomNoticeMessage from "./chat/RoomNoticeMessage";
+
+/** NPC 대화창의 크론 탭(T9)에 필요한 것. 배선(GamePageClient)이 넘긴다 — 없으면 탭이 없다. */
+export type ChatPanelCronContext = {
+  channelId: string;
+  socket?: CronEventSource | null;
+  onToast?: (message: string) => void;
+};
 
 interface ChatPanelProps {
   /** Overlay keeps the legacy floating panel; workspace embeds it in the right column. */
@@ -48,17 +53,6 @@ interface ChatPanelProps {
   onResetNpcChat?: (npcId: string) => void;
   npcMoveState?: string;
   onReturnNpc?: (npcId: string) => void;
-  socket?: Socket | null;
-  onDeleteTask?: (taskId: string) => void;
-  onRequestReportTask?: (taskId: string) => void;
-  onResumeTask?: (taskId: string) => void;
-  onCompleteTask?: (taskId: string) => void;
-  // Task session props
-  taskMessages?: Map<string, TaskMessage[]>;
-  isTaskStreaming?: boolean;
-  onTaskSend?: (taskId: string, message: string, files?: File[]) => void;
-  activeTaskId?: string | null;
-  onSetActiveTaskId?: (taskId: string | null) => void;
   // Channel chat — 방(room) 단위. 목록·방 안·새 방/초대 세 화면이다.
   roomState: RoomState;
   channelChatOpen?: boolean;
@@ -77,6 +71,12 @@ interface ChatPanelProps {
   /** 방 안 화면(패널 열림 + DM/선택목록 아님)이 보이는지 — 맵의 NPC 대기 규칙이 이걸 본다. */
   onChannelChatVisibleChange?: (visible: boolean) => void;
   currentPlayerName?: string;
+  /** NPC DM 에 "크론" 탭을 붙인다 — 그 NPC 것만(R15). 없으면 대화만 보인다. */
+  cron?: ChatPanelCronContext | null;
+  /** 방 알림의 "카드 열기"(R29) — 칸반 모달을 그 카드로 연다. 없으면 링크가 없다. */
+  onOpenNoticeCard?: (cardId: string, boardSlug: string) => void;
+  /** 방 알림의 "이력 열기"(R30) — 채널 크론 화면을 그 잡으로 연다. 없으면 링크가 없다. */
+  onOpenNoticeCronJob?: (jobId: string) => void;
 }
 
 const MIN_WIDTH = 250;
@@ -119,18 +119,20 @@ export default function ChatPanel({
   currentPlayerName,
   npcMoveState,
   onReturnNpc,
-  socket,
-  onDeleteTask,
-  onRequestReportTask,
-  onResumeTask,
-  onCompleteTask,
-  taskMessages,
-  isTaskStreaming,
-  onTaskSend,
-  activeTaskId,
-  onSetActiveTaskId,
+  cron = null,
+  onOpenNoticeCard,
+  onOpenNoticeCronJob,
 }: ChatPanelProps) {
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
+  // NPC DM 의 탭 — 어느 NPC 의 선택인지 같이 기억해, 다른 NPC 로 바뀌면 대화 탭으로 돌아간다
+  // (effect 로 되돌리지 않는다 — 렌더 중 파생).
+  const [npcTabState, setNpcTabState] = useState<{ npcId: string | null; tab: "chat" | "cron" }>({
+    npcId: null,
+    tab: "chat",
+  });
+  const dialogNpcId = dialogNpc?.npcId ?? null;
+  const npcTab = npcTabState.npcId === dialogNpcId ? npcTabState.tab : "chat";
+  const setNpcTab = (tab: "chat" | "cron") => setNpcTabState({ npcId: dialogNpcId, tab });
   const width = controlledWidth ?? internalWidth;
   const setWidth = useCallback(
     (next: number) => {
@@ -144,19 +146,10 @@ export default function ChatPanel({
   const [showGearMenu, setShowGearMenu] = useState(false);
   const [sessions] = useState(() => new ConversationSessionStore());
   const [, setSessionRevision] = useState(0);
-  const [activeTabState, setActiveTabState] = useState<{
-    npcId: string | null;
-    tab: "chat" | "tasks";
-  }>({
-    npcId: null,
-    tab: "chat",
-  });
   const t = useT();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelScrollRef = useRef<HTMLDivElement>(null);
-  const activeNpcId = dialogNpc?.npcId ?? null;
-  const activeTab = activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat";
   const conversationKey = dialogNpc
     ? `npc:${dialogNpc.npcId}`
     : roomState.view === "compose"
@@ -430,26 +423,41 @@ export default function ChatPanel({
         ) : inNpcDialog ? (
           // NPC dialog mode
           <>
-            {/* Tab Bar */}
-            <Tab
-              tabs={[
-                {
-                  key: "chat",
-                  label: t("chat.title"),
-                  icon: <MessageSquare className="w-3.5 h-3.5" />,
-                },
-                {
-                  key: "tasks",
-                  label: t("task.title"),
-                  icon: <ClipboardList className="w-3.5 h-3.5" />,
-                },
-              ]}
-              activeKey={activeTab}
-              onChange={(key) =>
-                setActiveTabState({ npcId: activeNpcId, tab: key as "chat" | "tasks" })
-              }
-            />
-            {activeTab === "chat" ? (
+            {cron && (
+              <div
+                role="tablist"
+                data-testid="npc-dialog-tabs"
+                className="flex border-b border-border bg-surface/60 text-xs"
+              >
+                {(["chat", "cron"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={npcTab === tab}
+                    onClick={() => setNpcTab(tab)}
+                    className={`px-3 py-1.5 ${
+                      npcTab === tab
+                        ? "text-text border-b-2 border-primary"
+                        : "text-text-muted hover:text-text"
+                    }`}
+                  >
+                    {t(`cron.tab.${tab}`)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {cron && npcTab === "cron" ? (
+              <div className="flex-1 min-h-0">
+                <CronPanel
+                  channelId={cron.channelId}
+                  npcs={[dialogNpc!]}
+                  npc={dialogNpc}
+                  socket={cron.socket ?? null}
+                  onToast={cron.onToast}
+                />
+              </div>
+            ) : (
               <>
                 <div
                   ref={scrollRef}
@@ -534,27 +542,6 @@ export default function ChatPanel({
                   showFileUpload
                 />
               </>
-            ) : activeTaskId ? (
-              <TaskChatView
-                taskId={activeTaskId}
-                taskTitle={activeTaskId}
-                taskStatus="pending"
-                messages={taskMessages?.get(activeTaskId) || []}
-                isStreaming={isTaskStreaming || false}
-                onSend={(msg, files) => onTaskSend?.(activeTaskId, msg, files)}
-                onBack={() => onSetActiveTaskId?.(null)}
-              />
-            ) : (
-              <TaskPanel
-                npcId={dialogNpc!.npcId}
-                npcName={dialogNpc!.npcName}
-                socket={socket ?? null}
-                onDeleteTask={onDeleteTask}
-                onRequestReportTask={onRequestReportTask}
-                onResumeTask={onResumeTask}
-                onCompleteTask={onCompleteTask}
-                onTaskClick={(npcTaskId) => onSetActiveTaskId?.(npcTaskId)}
-              />
             )}
           </>
         ) : roomState.view === "list" ? (
@@ -600,6 +587,17 @@ export default function ChatPanel({
                 </div>
               )}
               {roomMessages.map((msg) => {
+                // 구조화 알림(R29·R30)은 발신자 종류와 무관하게 알림 렌더러가 그린다.
+                if (msg.notice) {
+                  return (
+                    <RoomNoticeMessage
+                      key={msg.id}
+                      message={msg}
+                      onOpenCard={onOpenNoticeCard}
+                      onOpenCronJob={onOpenNoticeCronJob}
+                    />
+                  );
+                }
                 if (msg.senderKind === "system") {
                   return <SystemMessage key={msg.id} content={msg.content} />;
                 }

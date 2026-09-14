@@ -2,7 +2,6 @@ import { withStreamDiagnosticRequest } from "@/lib/hermes/stream-diagnostics";
 import { createTurnTimeout } from "@/lib/conversation/turn-timeout";
 import type { ChatResponse } from "@/lib/chat-response";
 import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
-import { sanitizeNpcResponseText } from "@/lib/task-block-utils.js";
 
 type Identity = Pick<ChatResponse, "requestId" | "sourceMessageId" | "npcId" | "npcName">;
 export type DmCapture = (
@@ -59,7 +58,7 @@ export async function runTrackedDm(args: {
             if (payload.messageCode && payload.done) failure = payload.messageCode;
             if (payload.chunk) {
               raw += payload.chunk;
-              const content = sanitizeNpcResponseText(raw, { stripIncompleteTail: true });
+              const content = raw.trim();
               if (content) tracker.update(identity.requestId, { status: "streaming", content });
             }
           },
@@ -68,7 +67,7 @@ export async function runTrackedDm(args: {
         ),
       );
       if (!isActive()) return;
-      const content = sanitizeNpcResponseText(response ?? "", { stripIncompleteTail: true });
+      const content = (response ?? "").trim();
       if (failure || !content) {
         tracker.update(identity.requestId, {
           status: "failed",

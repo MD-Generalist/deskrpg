@@ -34,7 +34,6 @@ function legacyDb() {
       hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL,
       agent_config TEXT, created_at TEXT, updated_at TEXT,
       UNIQUE(channel_id, position_x, position_y));
-    CREATE TABLE tasks(id TEXT PRIMARY KEY, npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE);
     CREATE TABLE chat_messages(id TEXT PRIMARY KEY, npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE, content TEXT);
     CREATE TABLE channel_gateway_bindings(
       id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, gateway_id TEXT NOT NULL, bound_by_user_id TEXT);
@@ -44,7 +43,6 @@ function legacyDb() {
       VALUES ('old','c1','old',1,1,'{"v":"old"}','p1','2026-01-01T00:00:00Z'),
              ('new','c1','new',2,2,'{"v":"new"}','p1','2026-02-01T00:00:00Z'),
              ('orphan','c1','orphan',3,3,'{"v":"o"}',NULL,'2026-02-01T00:00:00Z');
-    INSERT INTO tasks VALUES ('t1','new'),('t2','orphan'),('t3','old');
     INSERT INTO chat_messages VALUES ('m1','orphan','orphan chat'),('m2','old','dup chat');
   `);
   return db;
@@ -78,14 +76,9 @@ test("외형을 프로필로 옮기고 npcs 를 새 정의로 재생성한다", 
     (db.prepare("SELECT count(*) AS n FROM npcs_unprofiled_backup").get() as { n: number }).n,
     1,
   );
-  assert.equal(
-    (db.prepare("SELECT count(*) AS n FROM tasks").get() as { n: number }).n,
-    1,
-    "살아남은 NPC 의 태스크는 유지된다",
-  );
 
   // C1: CASCADE 로 함께 지워지는 자식 행이 백업된다 — 미연결 1 + 중복 1
-  for (const table of ["npcs_removed_chat_messages_backup", "npcs_removed_tasks_backup"]) {
+  for (const table of ["npcs_removed_chat_messages_backup"]) {
     assert.equal(
       (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n,
       2,
