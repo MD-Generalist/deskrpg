@@ -120,6 +120,43 @@ def desk():
     box('Notebook cover',.235,.008,.17,-.61,.91,.17,L,.003)
     plant(-.74,.88,-.2,.75)
 
+def executive_desk():
+    # Full 4 x 2 navigation footprint. Height stays human scale.
+    box('Broad walnut top',3.9,.12,1.9,0,.81,0,W,.035)
+    box('Continuous brass reveal',3.82,.016,1.82,0,.743,0,B,.005)
+    for x in [-1.4,1.4]:
+        box('Pedestal',.65,.72,1.58,x,.36,0,W,.025)
+        box('Recessed bronze plinth',.59,.05,1.5,x,.025,0,D)
+        for i in range(3):
+            yy=.15+i*.21
+            box('Inset drawer',.60,.19,.04,x,yy,-.8,W)
+            box('Brass pull',.28,.02,.025,x,yy+.025,-.83,B)
+    box('Walnut modesty panel',2.85,.59,.08,0,.37,.73,W)
+    box('Leather writing blotter',1.45,.018,.65,0,.885,-.43,L)
+    for z in [-.73,-.13]:line('Handstitched edge',[(-.69,.897,z),(.69,.897,z)],.002,T)
+    # Visitor-facing brass nameplate, text geometry travels with the GLB.
+    box('Nameplate leather base',.8,.035,.19,0,.89,.68,L)
+    box('Satin brass nameplate',.74,.17,.035,0,.99,.71,B)
+    bpy.ops.object.text_add(location=pos(0,.955,.732))
+    text=bpy.context.object;text.name='Executive nameplate lettering'
+    text.data.body='EXECUTIVE';text.data.align_x='CENTER';text.data.size=.09;text.data.extrude=.001
+    text.rotation_euler=(math.pi/2,0,0);text.data.materials.append(D)
+    rod('Weighted lamp foot',.13,.025,1.5,.887,.25,B)
+    line('Brass task lamp',[(1.5,.9,.25),(1.5,1.36,.25),(1.25,1.43,.25)],.018,B)
+    ball('Task lamp shade',(.19,.065,.09),1.18,1.42,.25,B)
+    for yy in [.9,.98]:
+        box('Document tray',.46,.025,.34,-1.35,yy,.28,L)
+        for i in range(3):box('Ivory stationery',.4,.004,.28,-1.35,yy+.018+i*.006,.28,P,.001)
+    box('Telephone base',.34,.055,.22,-1.35,.905,-.45,D)
+    box('Telephone handset',.32,.065,.075,-1.35,.96,-.51,L)
+    for ix in range(3):
+        for iz in range(3):box('Phone keypad',.026,.007,.022,-1.40+ix*.05,.937,-.44+iz*.035,P,.001)
+    rod('Pen cup',.052,.14,.97,.95,-.45,L)
+    for xx in [.95,.98]:rod('Brass pen',.005,.23,xx,1.04,-.45,B)
+    rod('Porcelain cup',.065,.10,.92,.93,.35,P)
+    rod('Leather coaster',.085,.008,.92,.883,.35,L)
+
+
 def chair():
     rod('Lift column',.03,.33,0,.25,0,D)
     for i in range(5):
@@ -222,7 +259,7 @@ def coffee():
 
 
 report={}
-for name,build in [('desk',desk),('chair',chair),('bookcase',bookcase),('rug',rug_asset),('guest-chair',guest_chair),('sofa',lounge),('armchair',lambda:lounge(True)),('conference',meeting),('coffee',coffee)]:
+for name,build in [('executive-desk',executive_desk),('desk',desk),('chair',chair),('bookcase',bookcase),('rug',rug_asset),('guest-chair',guest_chair),('sofa',lounge),('armchair',lambda:lounge(True)),('conference',meeting),('coffee',coffee)]:
     bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
     build()
     bpy.ops.object.select_all(action='SELECT')

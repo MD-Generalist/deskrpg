@@ -15,7 +15,7 @@ export const SHARED_SCENE_ASSETS = {
   "street-tree": {
     url: "/assets/shared/landscape/street-tree-v1.glb",
     category: "exterior-tree",
-    footprint: [3.5, 3.5],
+    footprint: [3.6, 3.6],
     maxHeight: 4,
   },
   "glass-tower": {

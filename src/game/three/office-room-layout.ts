@@ -1,3 +1,4 @@
+import type { MapObject } from "../../lib/object-types";
 import { EXECUTIVE_ZONES, furnishExecutiveOffice } from "./executive-room-layout";
 import { PUBLISHING_ROOMS, furnishPublishingRooms } from "./publishing-room-layout";
 
@@ -50,7 +51,10 @@ export const OFFICE_ROOMS: Record<string, readonly OfficeRoom[]> = {
   ]),
   executive: EXECUTIVE_ZONES,
 };
-export function furnishOfficeRooms(id: string, add: (type: string, x: number, y: number) => void) {
+export function furnishOfficeRooms(
+  id: string,
+  add: (type: string, x: number, y: number, direction?: MapObject["direction"]) => void,
+) {
   if (id === "executive") return furnishExecutiveOffice(add);
   if (id === "publishing") return furnishPublishingRooms(add);
   const rooms = OFFICE_ROOMS[id];

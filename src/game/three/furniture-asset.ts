@@ -5,6 +5,7 @@ import { disposeTree } from "./dispose-tree";
 
 export type ExecutiveAsset =
   | "desk"
+  | "executive-desk"
   | "chair"
   | "bookcase"
   | "rug"

@@ -4,7 +4,7 @@ import {
   type TiledMap,
   type TiledObject,
 } from "../../components/map-editor/hooks/useMapEditor";
-import { getObjectDimensions } from "../../lib/object-types";
+import { getObjectDimensions, type MapObject } from "../../lib/object-types";
 
 export const OFFICE_ENVIRONMENTS = Object.freeze([
   Object.freeze({
@@ -63,8 +63,8 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
   const map = createDefaultMap(environment.nameEn, cols, rows, 32);
   const layer = map.layers.find((entry) => entry.name === "Objects")!;
   const objects: TiledObject[] = [];
-  const add = (type: string, col: number, row: number) => {
-    const size = getObjectDimensions(type);
+  const add = (type: string, col: number, row: number, direction?: MapObject["direction"]) => {
+    const size = getObjectDimensions(type, direction);
     objects.push({
       id: map.nextobjectid++,
       name: type,
@@ -74,6 +74,9 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
       width: size.width * 32,
       height: size.height * 32,
       visible: true,
+      ...(direction
+        ? { properties: [{ name: "direction", type: "string", value: direction }] }
+        : {}),
     });
   };
   for (let x = 0; x < cols; x++) {
@@ -115,7 +118,7 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
         ),
       },
     ],
-    { name: "officeEnvironmentVersion", type: "int", value: id === "executive" ? 3 : 2 },
+    { name: "officeEnvironmentVersion", type: "int", value: id === "executive" ? 4 : 2 },
   ];
   return map;
 }

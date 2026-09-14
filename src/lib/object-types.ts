@@ -285,6 +285,16 @@ export const OBJECT_TYPES: Record<string, ObjectTypeDef> = {
     fixedDepth: 5,
     directional: true,
   },
+  executive_desk: {
+    id: "executive_desk",
+    name: "Executive Desk",
+    width: 4,
+    height: 2,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
   reception_desk: {
     id: "reception_desk",
     name: "Reception Desk",

@@ -16,6 +16,7 @@ export type TiledGeometryMap = {
       y: number;
       width?: number;
       height?: number;
+      properties?: Array<{ name: string; value: unknown }>;
     }>;
   }>;
 };
@@ -48,6 +49,7 @@ export function projectTiledGeometry(map: TiledGeometryMap): TiledGeometrySnapsh
           type: o.type,
           col: Math.floor(o.x / 32),
           row: Math.floor(o.y / 32),
+          ...tiledDirection(o.properties),
         })),
     );
   const blocked = computeOccupiedTiles(objects);
@@ -80,4 +82,13 @@ export function projectTiledGeometry(map: TiledGeometryMap): TiledGeometrySnapsh
     blocked: [...blocked],
     tiled: true,
   };
+}
+
+function tiledDirection(properties?: Array<{ name: string; value: unknown }>): {
+  direction?: MapObject["direction"];
+} {
+  const value = properties?.find((p) => p.name === "direction")?.value;
+  return value === "up" || value === "down" || value === "left" || value === "right"
+    ? { direction: value }
+    : {};
 }

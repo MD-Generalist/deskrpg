@@ -16,7 +16,7 @@ BARK=material('Warm fissured bark',(.19,.135,.078),.96)
 SOIL=material('Dark potting soil',(.055,.035,.016),1)
 POT=material('Warm cast stone planter',(.43,.37,.29),.82)
 LEAVES=[material('Leaf tone '+str(i),c,.67) for i,c in enumerate([(.075,.15,.035),(.13,.22,.058),(.19,.29,.095),(.095,.18,.08)])]
-for m in LEAVES:m.use_backface_culling=True
+for m in LEAVES:m.use_backface_culling=False
 STONE=material('Facade limestone',(.44,.46,.44),.72)
 FRAME=material('Anodised bronze mullions',(.10,.13,.145),.4,.6)
 GLASS=[material('Glazing reflectance '+str(i),c,.24,.35) for i,c in enumerate([(.22,.32,.39),(.31,.41,.46),(.43,.49,.50),(.17,.23,.28)])]
@@ -33,7 +33,10 @@ def box(name,size,loc,mat,bevel=.008):
  if bevel:
   b=o.modifiers.new('Edge finish','BEVEL');b.width=bevel;b.segments=2;bpy.ops.object.modifier_apply(modifier=b.name)
   b=o.modifiers.new('Face normals','WEIGHTED_NORMAL');b.keep_sharp=True;bpy.ops.object.modifier_apply(modifier=b.name)
- return finish(o,mat)
+ finish(o,mat)
+ if not bevel:
+  for polygon in o.data.polygons:polygon.use_smooth=False
+ return o
 
 def branch(a,b,r,mat=BARK):
  va,vb=point(a),point(b);d=vb-va
@@ -64,8 +67,7 @@ def leaf(center,length,width,angle,tilt,tone):
  faces=[]
  for i in range(6):
   for j in range(2):faces.append((i*3+j,i*3+j+1,(i+1)*3+j+1,(i+1)*3+j))
- # Both sides are actual geometry: stable lighting and shadows from any view.
- faces += [tuple(reversed(f)) for f in faces.copy()]
+ # Opaque double-sided blades avoid duplicate coplanar faces.
  mesh=bpy.data.meshes.new('Leaf blade');mesh.from_pydata(verts,[],faces);mesh.update();o=bpy.data.objects.new('Curved individual leaf',mesh);bpy.context.collection.objects.link(o);finish(o,LEAVES[tone%len(LEAVES)])
  for polygon in mesh.polygons:polygon.use_smooth=False
 
@@ -100,7 +102,7 @@ def street_tree():
    branch(tip,end,.009)
    for k in range(7):
     c=(end[0]+random.uniform(-.19,.19),end[1]+random.uniform(-.13,.18),end[2]+random.uniform(-.19,.19))
-    leaf(c,.19,.048,random.random()*math.tau,random.uniform(-.4,.8),i+j+k)
+    leaf(c,.27,.075,random.random()*math.tau,random.uniform(-.4,.8),i+j+k)
 
 def tower(stone=False):
  height=5.8 if stone else 7.2;w=1.4;d=1.15

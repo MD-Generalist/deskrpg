@@ -22,7 +22,10 @@ const TYPES = new Set([
 export function buildRoomFurniture(type: string, executive = false): T.Group | null {
   if (
     !TYPES.has(type) &&
-    !(executive && ["reception_desk", "meeting_table", "bookshelf", "chair"].includes(type))
+    !(
+      executive &&
+      ["executive_desk", "reception_desk", "meeting_table", "bookshelf", "chair"].includes(type)
+    )
   )
     return null;
   const g = new T.Group();
@@ -120,7 +123,7 @@ export function buildRoomFurniture(type: string, executive = false): T.Group | n
       }
     return g;
   }
-  if (executive && type === "reception_desk") {
+  if (executive && (type === "reception_desk" || type === "executive_desk")) {
     box(1.95, 0.12, 0.95, wood, 0, 0.84, 0);
     for (const x of [-0.78, 0.78]) box(0.35, 0.75, 0.8, wood, x, 0.4, 0);
     box(1.5, 0.6, 0.09, wood, 0, 0.44, 0.32);
