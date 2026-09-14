@@ -12,7 +12,7 @@ DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 �
 
 DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 돌리고 있는 Hermes 게이트웨이에 붙기만 하므로, 기존 Hermes 사용자는 옮길 것 없이 프로필 그대로 올라탑니다.
 
-- 웹사이트: `https://deskrpg.com` (준비 중)
+- 웹사이트: `https://deskrpg.com` (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
 - 버전: `v2026.9.18` — 아침 출근길의 차량·나무·재질과 보폭에 맞춘 이동을 개선했습니다 (2D 픽셀아트 클라이언트는 `2026.9.9` 이하 태그에서 받을 수 있습니다)
 
@@ -26,26 +26,17 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 - 전용 회의실에서 발언권 제어·거수·회의록 내보내기가 있는 회의를 엽니다.
 - 칸반 카드를 백로그 → 대기 → 진행 중 → 정체 → 완료로 옮기고, 정체된 일을 독촉·재개하고, 보고는 오피스 안에서 받습니다. NPC가 걸어옵니다.
 - 다른 사람과 오피스를 공유합니다(멀티플레이어, 그룹, 역할 기반 권한). 한국어·영어·일본어·중국어를 지원합니다.
-- 브라우저 맵 에디터로 오피스 맵을 직접 만들거나 올립니다.
 
 ## 스크린샷
 
 <table width="100%">
   <tr>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-login-to-office.gif" alt="DeskRPG 접속하기" width="100%" /></td>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-npc-task-loop.gif" alt="DeskRPG NPC 채팅과 태스크" width="100%" /></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-home-commute.gif" alt="DeskRPG 3D 오피스 아침 출근길" width="100%" /><br /><strong>아침 출근길</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-walk-report.gif" alt="DeskRPG 에이전트가 걸어와서 보고하는 장면" width="100%" /><br /><strong>걸어와서 보고하기</strong></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><strong>접속하기</strong></td>
-    <td width="50%" align="center"><strong>NPC 채팅과 태스크</strong></td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-meeting-room.gif" alt="DeskRPG 회의실" width="100%" /></td>
-    <td width="50%" valign="top"><img src="public/readme/deskrpg-map-editor.gif" alt="DeskRPG 맵 에디터" width="100%" /></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><strong>회의실</strong></td>
-    <td width="50%" align="center"><strong>맵 에디터</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-small-talk.gif" alt="DeskRPG 오피스 실시간 스몰토크" width="100%" /><br /><strong>실시간 스몰토크</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-ai-meeting.gif" alt="DeskRPG 에이전트 회의" width="100%" /><br /><strong>에이전트 회의</strong></td>
   </tr>
 </table>
 
@@ -226,11 +217,9 @@ DeskRPG에 연결하는 절차는 세 단계입니다.
 - AI 회의는 채널 단위로 동작하며, 해당 채널의 Hermes 게이트웨이가 오케스트레이션합니다.
 - 저장된 회의록은 헤더에서 바로 확인할 수 있습니다.
 
-### 6. 맵 에디터
+### 맵 에디터 — 추후 제공
 
-- 브라우저 기반 맵 에디터는 Tiled 스타일 워크플로를 지원합니다.
-- 맵 템플릿 업로드, 프로젝트 연결 자산 관리, 채널용 맵 재사용이 가능합니다.
-- 별도 부속 도구가 아니라 DeskRPG의 주요 서브시스템입니다.
+브라우저 맵 에디터는 이후 릴리스를 위해 준비 중이며, 현재 공개 워크플로에는 포함되지 않습니다.
 
 ## 제품 메모
 
