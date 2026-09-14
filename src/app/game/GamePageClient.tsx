@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Bug,
   Info,
+  KanbanSquare,
 } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
@@ -54,6 +55,7 @@ import type { RosterNpc } from "@/components/NpcRoster";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
+import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
 import { getLocalizedErrorMessage, getLocalizedMessage } from "@/lib/i18n/error-codes";
 import { mentionSkipI18nKey } from "@/components/meeting-room/mention-skip-notice";
 import type { MentionSkipReason } from "@/lib/conversation/floor-controller";
@@ -183,6 +185,9 @@ function GamePageInner() {
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  // 칸반 보드(T8). `kanbanRefreshTick` 은 `kanban:event` 마다 오르고, 모달이 디바운스해 재조회한다.
+  const [showKanban, setShowKanban] = useState(false);
+  const [kanbanRefreshTick, setKanbanRefreshTick] = useState(0);
   const [mode, setMode] = useState<"office" | "meeting">("office");
   // Map rendering needs only placed NPC identity and appearance.
   const [channelNpcs, setChannelNpcs] = useState<
@@ -1778,6 +1783,22 @@ function GamePageInner() {
     };
   }, [socket, refreshNpcLists, showToastNotification, t]);
 
+  /**
+   * 칸반 사건(`kanban:event`)은 이 채널의 것만 세어 모달에 재조회 신호를 준다(R26).
+   * 모달이 닫혀 있어도 세지만, 여는 순간 어차피 처음부터 읽으므로 누적은 무해하다.
+   */
+  useEffect(() => {
+    if (!socket || !channelId) return;
+    const onKanbanEvent = (data: { channelId?: string }) => {
+      if (data?.channelId && data.channelId !== channelId) return;
+      setKanbanRefreshTick((n) => n + 1);
+    };
+    socket.on("kanban:event", onKanbanEvent);
+    return () => {
+      socket.off("kanban:event", onKanbanEvent);
+    };
+  }, [socket, channelId]);
+
   // Spawn set mode coordination
   useEffect(() => {
     if (spawnSetMode) {
@@ -2304,6 +2325,17 @@ function GamePageInner() {
             </span>
           </button>
 
+          {/* Kanban board (T8) — 옛 태스크 보드 버튼 자리 */}
+          <button
+            onClick={() => setShowKanban(true)}
+            title={t("kanban.title")}
+            aria-label={t("kanban.title")}
+            className="flex items-center gap-1 px-2.5 py-1 bg-primary/80 hover:bg-primary text-white rounded-md text-caption font-semibold"
+          >
+            <KanbanSquare className="w-3 h-3" />
+            <span className="header-full-label">{t("kanban.open")}</span>
+          </button>
+
           {/* Separator */}
           <div className="header-separator w-px h-5 bg-border" />
 
@@ -2635,6 +2667,14 @@ function GamePageInner() {
             </div>
           </div>
         </div>
+      )}
+
+      {showKanban && channelId && (
+        <KanbanBoardModal
+          channelId={channelId}
+          refreshTick={kanbanRefreshTick}
+          onClose={() => setShowKanban(false)}
+        />
       )}
 
       {showPasswordModal && channelId && (
