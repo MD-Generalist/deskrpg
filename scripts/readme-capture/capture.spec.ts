@@ -18,11 +18,11 @@ import {
 } from "./capture-helpers";
 
 const test = base.extend({
-  page: async ({ context }, use) => {
+  page: async ({ context }, providePage) => {
     const origin = performance.now();
     const page = await context.newPage();
     observeRecordingPage(page, origin);
-    await use(page);
+    await providePage(page);
   },
 });
 
@@ -50,38 +50,47 @@ for (const scene of SCENES) {
     if (process.env.README_CAPTURE_DRY_RUN === "1") return;
     if (scene === "home-commute") {
       // Start close to the first red/green transition without changing the traffic simulation.
+      await page.mouse.move(640, 360);
       await page.waitForTimeout(9500);
       const samples = [await trafficSnapshot(page)];
-      await markClip(page, scene, async () => {
-        const start = performance.now();
-        for (let i = 0; i < 60; i++) {
-          const angle = (Math.PI * i) / 59;
-          await page.mouse.move(160 + (960 * i) / 59, 340 - Math.sin(angle) * 190);
-          await page.waitForTimeout(Math.max(0, (i + 1) * 130 - (performance.now() - start)));
-          samples.push(await trafficSnapshot(page));
-        }
-        for (const lane of [4.4, 7.2])
-          expect(
-            samples.some((sample) =>
-              sample.vehicles.some(
-                (v, j) => v.z === lane && Math.abs(v.x - samples[0].vehicles[j].x) > 0.5,
+      await markClip(
+        page,
+        scene,
+        async () => {
+          const start = performance.now();
+          for (let i = 0; i < 65; i++) {
+            // Hold the camera, make one gentle round trip, then settle.
+            // Static holds preserve GIF coherence while traffic continues naturally.
+            const phase = Math.max(0, Math.min(1, (i * 100 - 1800) / 1000));
+            const offset = Math.sin(Math.PI * phase);
+            await page.mouse.move(640 + offset * 200, 360 - offset * 60);
+            await page.waitForTimeout(Math.max(0, (i + 1) * 100 - (performance.now() - start)));
+            samples.push(await trafficSnapshot(page));
+          }
+          for (const lane of [4.4, 7.2])
+            expect(
+              samples.some((sample) =>
+                sample.vehicles.some(
+                  (v, j) => v.z === lane && Math.abs(v.x - samples[0].vehicles[j].x) > 0.5,
+                ),
               ),
+            ).toBe(true);
+          expect(
+            samples.some(
+              (sample, i) =>
+                i > 0 &&
+                sample.vehicles.some(
+                  (v, j) =>
+                    Math.abs(v.x - samples[i - 1].vehicles[j].x) < 1e-7 &&
+                    samples
+                      .slice(i + 1)
+                      .some((later) => Math.abs(later.vehicles[j].wheel - v.wheel) > 0.1),
+                ),
             ),
           ).toBe(true);
-        expect(
-          samples.some(
-            (sample, i) =>
-              i > 0 &&
-              sample.vehicles.some(
-                (v, j) =>
-                  Math.abs(v.x - samples[i - 1].vehicles[j].x) < 1e-7 &&
-                  samples
-                    .slice(i + 1)
-                    .some((later) => Math.abs(later.vehicles[j].wheel - v.wheel) > 0.1),
-              ),
-          ),
-        ).toBe(true);
-      });
+        },
+        8000,
+      );
     } else if (scene === "walk-report") {
       await markClip(page, scene, async () => {
         await orbit(page, 100, 1400);

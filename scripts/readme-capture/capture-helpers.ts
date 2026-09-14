@@ -193,7 +193,12 @@ export async function rejoinOffice(page: Page) {
   });
 }
 
-export async function markClip(page: Page, scene: CaptureScene, action: () => Promise<void>) {
+export async function markClip(
+  page: Page,
+  scene: CaptureScene,
+  action: () => Promise<void>,
+  durationMs = 9000,
+) {
   const origin = origins.get(page);
   if (origin === undefined) throw new Error("Recording page monotonic origin was not registered");
   const checkpoints = path.join(ROOT, ".artifacts/readme-capture/checkpoints");
@@ -206,7 +211,7 @@ export async function markClip(page: Page, scene: CaptureScene, action: () => Pr
   // opening hold keeps the first interaction inside the marked interval.
   await page.waitForTimeout(500);
   await action();
-  const remaining = 9000 - (performance.now() - start);
+  const remaining = durationMs - (performance.now() - start);
   if (remaining > 0) await page.waitForTimeout(remaining);
   const endMs = performance.now() - origin;
   await page.screenshot({ path: path.join(checkpoints, `${scene}-end.png`) });
