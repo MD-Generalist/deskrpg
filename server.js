@@ -1,7 +1,5 @@
 // Custom server — wraps Next.js standalone with Socket.io on a single port
 // Hooks into startServer's httpServer after it starts
-/* eslint-disable @typescript-eslint/no-require-imports */
-
 const path = require("node:path");
 const { Server } = require("socket.io");
 const {
@@ -41,9 +39,6 @@ async function main() {
   };
   const socketHandlers = unwrapTsModule(await import("./src/server/socket-handlers.ts"));
   const { setupSocketHandlers, getRoomUserIds, getSocketIdsForUser } = socketHandlers;
-
-  const { db, schema } = require("./src/db/server-db.js");
-  const { eq } = require("drizzle-orm");
 
   // Start Next.js (this creates and listens on the HTTP server)
   await startServer({
