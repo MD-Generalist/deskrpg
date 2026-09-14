@@ -9,7 +9,6 @@ import {
   gatewayResources,
   gatewayShares,
   isPostgres,
-  jsonForDb,
   meetingMinutes,
   users,
 } from "@/db";
@@ -19,11 +18,8 @@ import {
   invalidateGatewayRuntimeState,
   setGatewayRuntimeState,
 } from "@/lib/gateway-runtime-cache";
-import { buildGatewayConfig, getTaskAutomationConfig } from "@/lib/task-reporting";
 
 type GatewayShareRow = typeof gatewayShares.$inferSelect;
-
-type TaskAutomationConfig = ReturnType<typeof getTaskAutomationConfig>;
 
 function nowForDb() {
   return (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
@@ -529,45 +525,4 @@ export async function getGatewayRuntimeConfigForChannel(channelId: string) {
     binding: binding.binding,
     resource: binding.resource,
   };
-}
-
-export async function getChannelTaskAutomationSettings(
-  channelId: string,
-): Promise<TaskAutomationConfig> {
-  const [row] = await db
-    .select({ gatewayConfig: channels.gatewayConfig })
-    .from(channels)
-    .where(eq(channels.id, channelId))
-    .limit(1);
-
-  return getTaskAutomationConfig(row?.gatewayConfig ?? null);
-}
-
-export async function updateChannelTaskAutomationSettings(
-  channelId: string,
-  patch: { taskAutomation: TaskAutomationConfig },
-) {
-  const [row] = await db
-    .select({ gatewayConfig: channels.gatewayConfig })
-    .from(channels)
-    .where(eq(channels.id, channelId))
-    .limit(1);
-
-  const existing = buildGatewayConfig(row?.gatewayConfig ?? null);
-  const nextConfig = {
-    ...existing,
-    url: null,
-    token: null,
-    taskAutomation: patch.taskAutomation,
-  };
-
-  await db
-    .update(channels)
-    .set({
-      gatewayConfig: jsonForDb(nextConfig),
-      updatedAt: nowForDb(),
-    })
-    .where(eq(channels.id, channelId));
-
-  return nextConfig;
 }

@@ -1,5 +1,3 @@
-import { taskPromptMessages } from "../task-prompt-messages.js";
-
 // Chinese (Simplified) translations
 const zh: Record<string, string> = {
   // Common
@@ -36,7 +34,6 @@ const zh: Record<string, string> = {
   "common.logout": "退出登录",
   "common.language": "语言",
   "common.copy": "复制",
-  ...taskPromptMessages.zh,
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -1435,7 +1432,6 @@ const zh: Record<string, string> = {
   "game.aiConfigured": "AI 已设置",
   "game.aiGateway": "AI 连接",
   "game.gatewayConnect": "连接",
-  "game.tasks": "任务",
   "game.channel": "频道",
   "game.notifications": "通知",
   "game.markAllRead": "全部已读",
@@ -1445,7 +1441,6 @@ const zh: Record<string, string> = {
   "game.removedFromChannel": "你已被移出此频道。",
   "game.channelDeleted": "此频道已被删除。",
   "game.sessionKicked": "会话已结束，请重新加入频道。",
-  "game.reportReadyBubble": "向您汇报。",
   "game.inviteLink": "邀请链接:",
   "game.inviteCodeLabel": "代码:",
   "game.placementMode": "点击瓷砖放置NPC（ESC取消）",
@@ -1565,7 +1560,6 @@ const zh: Record<string, string> = {
   "npc.gatewayError": "AI网关错误",
   "npc.unsupportedAdapter": "此NPC使用了不受支持的适配器。",
   "npc.unbound": "此NPC尚未绑定Hermes配置文件。",
-  "npc.taskOwnerUnknown": "无法确定这项任务的负责人 — 请重新进入频道后再试。",
   "npc.hermesImageUnsupported": "此NPC暂不支持接收图片。",
   "npc.notFound": "找不到NPC",
   "npc.waitBeforeSending": "请稍后再发送",
@@ -1594,22 +1588,6 @@ const zh: Record<string, string> = {
   "context.calledByOther": "其他用户正在呼叫",
 
   // Task
-  "task.tab": "任务",
-  "task.title": "任务",
-  "task.board": "任务看板",
-  "task.noTasks": "{name}没有分配的任务",
-  "task.pending": "待处理",
-  "task.inProgress": "进行中",
-  "task.complete": "已完成",
-  "task.cancelled": "已取消",
-  "task.active": "活跃",
-  "task.done": "完成",
-  "task.justNow": "刚刚",
-  "task.minutesAgo": "{count}分钟前",
-  "task.hoursAgo": "{count}小时前",
-  "task.daysAgo": "{count}天前",
-  "task.defaultTitle": "任务",
-  "task.progressReported": "已汇报 {title} 的进度。",
 
   // Meeting
   "meeting.title": "会议室",
@@ -1805,40 +1783,6 @@ const zh: Record<string, string> = {
   "providers.model": "模型",
   "providers.ready": "就绪",
   "settings.disconnectGateway": "断开连接",
-  "settings.taskAutomation": "任务自动化",
-  "settings.autoProgressNudgeHelp": "当任务保持进行中时，自动提醒 NPC 汇报进度。",
-  "settings.progressNudgeMinutes": "进度提醒间隔 (分钟)",
-  "settings.autoProgressNudgeMax": "最大自动催促次数",
-  "settings.reportWaitSeconds": "报告等待时间 (秒)",
-  "task.stalled": "中断",
-  "task.requestReport": "请求汇报",
-  "task.requestReportQueued": "已发送汇报请求。",
-  "task.markComplete": "标记完成",
-  "task.completeQueued": "任务已标记为完成。",
-  "task.completeToast": "已将“{title}”标记为完成。",
-  "task.resume": "继续",
-  "task.resumeQueued": "任务已恢复。",
-  "task.resumeToast": "已将“{title}”恢复为进行中。",
-  "task.stalledToast": "“{title}”的自动催促已停止。",
-  "task.autoNudgeCount": "催促 {count}/{max}",
-  "task.stalledCount": "中断 {count}/{max}",
-  "task.backlog": "待办",
-  "task.createNew": "新任务",
-  "task.assign": "分配",
-  "task.assignToNpc": "分配给NPC",
-  "task.selectNpc": "选择NPC",
-  "task.selectNpcDescription": '选择执行"{title}"任务的NPC',
-  "task.unassigned": "未分配",
-  "task.autoStarted": '{npcName}已开始处理"{title}"任务',
-  "task.addToNpc": "添加任务到此NPC",
-  "task.npcWorkload": "进行中 {inProgress} · 待处理 {pending}",
-  "task.npcActive": "活跃",
-  "task.npcInactive": "非活跃",
-  "task.titlePlaceholder": "任务标题",
-  "task.summaryPlaceholder": "描述（可选）",
-  "task.dragHint": "使用状态菜单或拖拽移动卡片 · 点击查看详情",
-  "task.changeStatus": "更改状态",
-  "task.moveStatus": "更改{title}的状态",
 
   // Map Editor - Modals
   "mapEditor.newMap.title": "新建地图",
@@ -2322,12 +2266,6 @@ const zh: Record<string, string> = {
   "errors.malformedResponse": "无法解析服务器响应",
   "errors.noProfile": "该配置文件尚未注册",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
-  "task.chatPlaceholder": "发送关于此任务的额外指示。",
-  "task.register": "登记",
-  "task.registered": "已登记",
-  "task.reportDetail": "任务详情",
-  "task.noReport": "暂无报告内容。",
-  "task.reportLoading": "正在加载报告...",
 };
 
 export default zh;

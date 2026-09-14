@@ -562,32 +562,6 @@ export const npcSessions = sqliteTable(
   ],
 );
 
-export const npcReports = sqliteTable("npc_reports", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  channelId: text("channel_id")
-    .notNull()
-    .references(() => channels.id, { onDelete: "cascade" }),
-  npcId: text("npc_id")
-    .notNull()
-    .references(() => npcs.id, { onDelete: "cascade" }),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  targetUserId: text("target_user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  kind: text("kind").notNull(),
-  message: text("message").notNull(),
-  status: text("status").notNull().default("pending"),
-  createdAt: text("created_at")
-    .$defaultFn(() => new Date().toISOString())
-    .notNull(),
-  deliveredAt: text("delivered_at"),
-  consumedAt: text("consumed_at"),
-});
-
 export const chatMessages = sqliteTable(
   "chat_messages",
   {
@@ -694,40 +668,6 @@ export const meetingMinutes = sqliteTable(
   (table) => [
     index("idx_meeting_minutes_channel").on(table.channelId),
     index("idx_meeting_minutes_created").on(table.createdAt),
-  ],
-);
-
-export const tasks = sqliteTable(
-  "tasks",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    channelId: text("channel_id")
-      .notNull()
-      .references(() => channels.id),
-    npcId: text("npc_id").references(() => npcs.id, { onDelete: "cascade" }),
-    assignerId: text("assigner_id")
-      .notNull()
-      .references(() => characters.id),
-    npcTaskId: text("npc_task_id").notNull(),
-    title: text("title").notNull(),
-    summary: text("summary"),
-    status: text("status").notNull().default("pending"),
-    autoNudgeCount: integer("auto_nudge_count").notNull().default(0),
-    autoNudgeMax: integer("auto_nudge_max").notNull().default(5),
-    lastNudgedAt: text("last_nudged_at"),
-    lastReportedAt: text("last_reported_at"),
-    stalledAt: text("stalled_at"),
-    stalledReason: text("stalled_reason"),
-    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
-    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
-    completedAt: text("completed_at"),
-  },
-  (table) => [
-    index("idx_tasks_channel").on(table.channelId),
-    index("idx_tasks_npc").on(table.npcId),
-    uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
   ],
 );
 

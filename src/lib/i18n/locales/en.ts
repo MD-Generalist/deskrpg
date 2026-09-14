@@ -1,5 +1,3 @@
-import { taskPromptMessages } from "../task-prompt-messages.js";
-
 // English translations (default/fallback)
 const en: Record<string, string> = {
   // Common
@@ -36,7 +34,6 @@ const en: Record<string, string> = {
   "common.logout": "Logout",
   "common.language": "Language",
   "common.copy": "Copy",
-  ...taskPromptMessages.en,
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -1456,7 +1453,6 @@ const en: Record<string, string> = {
   "game.aiConfigured": "AI Configured",
   "game.aiGateway": "AI Gateway",
   "game.gatewayConnect": "Connect",
-  "game.tasks": "Tasks",
   "game.channel": "Channel",
   "game.notifications": "Notifications",
   "game.markAllRead": "Mark all read",
@@ -1466,7 +1462,6 @@ const en: Record<string, string> = {
   "game.removedFromChannel": "You have been removed from this channel.",
   "game.channelDeleted": "This channel has been deleted.",
   "game.sessionKicked": "Your session ended. Please rejoin the channel.",
-  "game.reportReadyBubble": "Reporting in.",
   "game.inviteLink": "Invite Link:",
   "game.inviteCodeLabel": "Code:",
   "game.placementMode": "Select an unassigned chair as the permanent seat (ESC to cancel)",
@@ -1589,8 +1584,6 @@ const en: Record<string, string> = {
   "npc.gatewayError": "AI Gateway error",
   "npc.unsupportedAdapter": "This NPC uses an unsupported adapter.",
   "npc.unbound": "This NPC is not yet linked to a Hermes profile.",
-  "npc.taskOwnerUnknown":
-    "I couldn't tell whose task this is — please rejoin the channel and try again.",
   "npc.hermesImageUnsupported": "This NPC cannot receive images yet.",
   "npc.notFound": "NPC not found",
   "npc.waitBeforeSending": "Wait before sending.",
@@ -1620,22 +1613,6 @@ const en: Record<string, string> = {
   "context.calledByOther": "Called by another user",
 
   // Task
-  "task.tab": "Tasks",
-  "task.title": "Tasks",
-  "task.board": "Task Board",
-  "task.noTasks": "No tasks assigned to {name}",
-  "task.pending": "Pending",
-  "task.inProgress": "In Progress",
-  "task.complete": "Complete",
-  "task.cancelled": "Cancelled",
-  "task.active": "Active",
-  "task.done": "Done",
-  "task.justNow": "just now",
-  "task.minutesAgo": "{count}m ago",
-  "task.hoursAgo": "{count}h ago",
-  "task.daysAgo": "{count}d ago",
-  "task.defaultTitle": "Task",
-  "task.progressReported": "{title} progress was reported.",
 
   // Meeting
   "meeting.title": "Meeting Room",
@@ -1839,41 +1816,6 @@ const en: Record<string, string> = {
   "providers.model": "Model",
   "providers.ready": "Ready",
   "settings.disconnectGateway": "Disconnect",
-  "settings.taskAutomation": "Task Automation",
-  "settings.autoProgressNudgeHelp":
-    "Ask NPCs for progress updates automatically while tasks remain in progress.",
-  "settings.progressNudgeMinutes": "Progress nudge (min)",
-  "settings.autoProgressNudgeMax": "Max auto nudges",
-  "settings.reportWaitSeconds": "Report wait (sec)",
-  "task.stalled": "Stalled",
-  "task.requestReport": "Request Report",
-  "task.requestReportQueued": "Report request sent.",
-  "task.markComplete": "Mark Complete",
-  "task.completeQueued": "Task marked complete.",
-  "task.completeToast": '"{title}" was marked complete.',
-  "task.resume": "Resume",
-  "task.resumeQueued": "Task resumed.",
-  "task.resumeToast": '"{title}" was moved back to in progress.',
-  "task.stalledToast": 'Auto-nudging for "{title}" has been stopped.',
-  "task.autoNudgeCount": "Nudges {count}/{max}",
-  "task.stalledCount": "Stalled {count}/{max}",
-  "task.backlog": "Backlog",
-  "task.createNew": "New Task",
-  "task.assign": "Assign",
-  "task.assignToNpc": "Assign to NPC",
-  "task.selectNpc": "Select NPC",
-  "task.selectNpcDescription": 'Select an NPC to execute "{title}"',
-  "task.unassigned": "Unassigned",
-  "task.autoStarted": '{npcName} started working on "{title}"',
-  "task.addToNpc": "Add Task to This NPC",
-  "task.npcWorkload": "{inProgress} in progress · {pending} pending",
-  "task.npcActive": "Active",
-  "task.npcInactive": "Inactive",
-  "task.titlePlaceholder": "Task title",
-  "task.summaryPlaceholder": "Description (optional)",
-  "task.dragHint": "Use the status menu or drag cards to move · Click to view details",
-  "task.changeStatus": "Change status",
-  "task.moveStatus": "Change status for {title}",
 
   // Map Editor - Modals
   "mapEditor.newMap.title": "New Map",
@@ -2364,12 +2306,6 @@ const en: Record<string, string> = {
   "errors.malformedResponse": "Could not parse the server response",
   "errors.noProfile": "This profile is not registered",
   "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
-  "task.chatPlaceholder": "Send additional instructions about this task.",
-  "task.register": "Register",
-  "task.registered": "Registered",
-  "task.reportDetail": "Task Detail",
-  "task.noReport": "No report available yet.",
-  "task.reportLoading": "Loading report...",
 };
 
 export default en;

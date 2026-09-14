@@ -26,6 +26,10 @@ const { ensureChatRoomTables } = require("./sqlite-chat-rooms.js") as {
 const { ensureKanbanCronBookkeeping } = require("./sqlite-kanban-cron-bookkeeping.js") as {
   ensureKanbanCronBookkeeping: (sqlite: BetterSqlite3.Database) => void;
 };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js") as {
+  dropLegacyTaskTables: (sqlite: BetterSqlite3.Database) => void;
+};
 
 const DB_TYPE = (
   process.env.DB_TYPE || (process.env.DATABASE_URL ? "postgresql" : "sqlite")
@@ -80,10 +84,8 @@ export const maps = activeSchema.maps;
 export const mapPortals = activeSchema.mapPortals;
 export const npcs = activeSchema.npcs;
 export const npcSessions = activeSchema.npcSessions;
-export const npcReports = activeSchema.npcReports;
 export const chatMessages = activeSchema.chatMessages;
 export const meetingMinutes = activeSchema.meetingMinutes;
-export const tasks = activeSchema.tasks;
 export const mapTemplates = activeSchema.mapTemplates;
 export const stamps = activeSchema.stamps;
 export const tilesetImages = activeSchema.tilesetImages;
@@ -408,22 +410,6 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_channel_gateway_bindings_gateway_id ON channel_gateway_bindings(gateway_id);
     CREATE UNIQUE INDEX IF NOT EXISTS channel_gateway_bindings_channel_idx ON channel_gateway_bindings(channel_id);
-    CREATE TABLE IF NOT EXISTS npc_reports (
-      id TEXT PRIMARY KEY NOT NULL,
-      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-      npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
-      task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-      target_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL,
-      message TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL,
-      delivered_at TEXT,
-      consumed_at TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_channel ON npc_reports(channel_id);
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_target_user ON npc_reports(target_user_id);
-    CREATE INDEX IF NOT EXISTS idx_npc_reports_status ON npc_reports(status);
     CREATE TABLE IF NOT EXISTS npc_sessions (
       id TEXT PRIMARY KEY NOT NULL,
       npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
@@ -446,14 +432,6 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   applySqliteAlterStatements(sqlite, "channels", [
     "ALTER TABLE channels ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE SET NULL",
   ]);
-  applySqliteAlterStatements(sqlite, "tasks", [
-    "ALTER TABLE tasks ADD COLUMN auto_nudge_count INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE tasks ADD COLUMN auto_nudge_max INTEGER NOT NULL DEFAULT 5",
-    "ALTER TABLE tasks ADD COLUMN last_nudged_at TEXT",
-    "ALTER TABLE tasks ADD COLUMN last_reported_at TEXT",
-    "ALTER TABLE tasks ADD COLUMN stalled_at TEXT",
-    "ALTER TABLE tasks ADD COLUMN stalled_reason TEXT",
-  ]);
   applySqliteAlterStatements(sqlite, "npcs", [
     "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'hermes'",
     "ALTER TABLE npcs ADD COLUMN adapter_config TEXT",
@@ -472,6 +450,8 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   ensureChatRoomTables(sqlite);
   // chat_room_messages 가 있어야 notice_json 을 더할 수 있으니 방 테이블 다음이다.
   ensureKanbanCronBookkeeping(sqlite);
+  // 2026-04 태스크 시스템 폐기 — 옛 태스크·보고 테이블은 데이터째 지운다.
+  dropLegacyTaskTables(sqlite);
   // 이 함수와 server-db.js 의 동명 함수는 **서로 다른 경로**다 — API 라우트는 이쪽,
   // 소켓 서버는 저쪽을 탄다. 한쪽에만 컬럼을 더하면 그 경로에서만 조용히
   // "no such column" 이 난다(실제로 그렇게 났다). 새 컬럼은 양쪽에 넣을 것.

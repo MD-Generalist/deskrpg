@@ -12,7 +12,6 @@ const NPC_RESPONSE_MESSAGE_KEYS = {
   too_many_files: "npc.tooManyFiles",
   npc_unbound: "npc.unbound",
   hermes_image_unsupported: "npc.hermesImageUnsupported",
-  task_owner_unknown: "npc.taskOwnerUnknown",
 } as const;
 
 export type NpcResponseMessageCode = keyof typeof NPC_RESPONSE_MESSAGE_KEYS;

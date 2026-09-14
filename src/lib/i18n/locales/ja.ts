@@ -1,5 +1,3 @@
-import { taskPromptMessages } from "../task-prompt-messages.js";
-
 // Japanese translations
 const ja: Record<string, string> = {
   // Common
@@ -37,7 +35,6 @@ const ja: Record<string, string> = {
   "common.logout": "ログアウト",
   "common.language": "言語",
   "common.copy": "コピー",
-  ...taskPromptMessages.ja,
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -1460,7 +1457,6 @@ const ja: Record<string, string> = {
   "game.aiConfigured": "AI設定済み",
   "game.aiGateway": "AI 接続",
   "game.gatewayConnect": "接続する",
-  "game.tasks": "タスク",
   "game.channel": "チャンネル",
   "game.notifications": "通知",
   "game.markAllRead": "すべて既読",
@@ -1470,7 +1466,6 @@ const ja: Record<string, string> = {
   "game.removedFromChannel": "このチャンネルから退出させられました。",
   "game.channelDeleted": "このチャンネルは削除されました。",
   "game.sessionKicked": "セッションが終了しました。チャンネルに再参加してください。",
-  "game.reportReadyBubble": "ご報告します。",
   "game.inviteLink": "招待リンク:",
   "game.inviteCodeLabel": "コード:",
   "game.placementMode": "タイルをクリックしてNPCを配置 (ESCでキャンセル)",
@@ -1596,8 +1591,6 @@ const ja: Record<string, string> = {
   "npc.gatewayError": "AIゲートウェイエラー",
   "npc.unsupportedAdapter": "このNPCはサポートされていないアダプターを使用しています。",
   "npc.unbound": "このNPCはまだHermesプロファイルに接続されていません。",
-  "npc.taskOwnerUnknown":
-    "このタスクの担当者を特定できません — チャンネルに入り直してからお試しください。",
   "npc.hermesImageUnsupported": "このNPCはまだ画像を受け取れません。",
   "npc.notFound": "NPCが見つかりません",
   "npc.waitBeforeSending": "しばらくお待ちください",
@@ -1626,22 +1619,6 @@ const ja: Record<string, string> = {
   "context.calledByOther": "他のユーザーが呼び出し中",
 
   // Task
-  "task.tab": "タスク",
-  "task.title": "タスク",
-  "task.board": "タスクボード",
-  "task.noTasks": "{name}に割り当てられたタスクはありません",
-  "task.pending": "待機中",
-  "task.inProgress": "進行中",
-  "task.complete": "完了",
-  "task.cancelled": "キャンセル",
-  "task.active": "アクティブ",
-  "task.done": "完了",
-  "task.justNow": "たった今",
-  "task.minutesAgo": "{count}分前",
-  "task.hoursAgo": "{count}時間前",
-  "task.daysAgo": "{count}日前",
-  "task.defaultTitle": "タスク",
-  "task.progressReported": "{title} の進捗が報告されました。",
 
   // Meeting
   "meeting.title": "会議室",
@@ -1845,40 +1822,6 @@ const ja: Record<string, string> = {
   "providers.model": "モデル",
   "providers.ready": "準備完了",
   "settings.disconnectGateway": "接続解除",
-  "settings.taskAutomation": "タスク自動化",
-  "settings.autoProgressNudgeHelp": "タスクが進行中の間、NPC に進捗報告を自動で促します。",
-  "settings.progressNudgeMinutes": "進捗報告間隔 (分)",
-  "settings.autoProgressNudgeMax": "最大自動催促回数",
-  "settings.reportWaitSeconds": "報告待機時間 (秒)",
-  "task.stalled": "停止",
-  "task.requestReport": "報告を依頼",
-  "task.requestReportQueued": "報告依頼を送信しました。",
-  "task.markComplete": "完了にする",
-  "task.completeQueued": "タスクを完了にしました。",
-  "task.completeToast": '"{title}" を完了にしました。',
-  "task.resume": "再開",
-  "task.resumeQueued": "タスクを再開しました。",
-  "task.resumeToast": '"{title}" を進行中に戻しました。',
-  "task.stalledToast": '"{title}" の自動催促を停止しました。',
-  "task.autoNudgeCount": "催促 {count}/{max}",
-  "task.stalledCount": "停止 {count}/{max}",
-  "task.backlog": "バックログ",
-  "task.createNew": "新しいタスク",
-  "task.assign": "割り当て",
-  "task.assignToNpc": "NPCに割り当て",
-  "task.selectNpc": "NPC選択",
-  "task.selectNpcDescription": "「{title}」タスクを実行するNPCを選択してください",
-  "task.unassigned": "未割当",
-  "task.autoStarted": "{npcName}が「{title}」タスクを開始しました",
-  "task.addToNpc": "このNPCにタスクを追加",
-  "task.npcWorkload": "進行中 {inProgress} · 待機 {pending}",
-  "task.npcActive": "アクティブ",
-  "task.npcInactive": "非アクティブ",
-  "task.titlePlaceholder": "タスクタイトル",
-  "task.summaryPlaceholder": "説明（任意）",
-  "task.dragHint": "状態メニューまたはドラッグで移動 · クリックで詳細表示",
-  "task.changeStatus": "状態を変更",
-  "task.moveStatus": "{title}の状態を変更",
 
   // Map Editor - Modals
   "mapEditor.newMap.title": "新規マップ",
@@ -2371,12 +2314,6 @@ const ja: Record<string, string> = {
   "errors.malformedResponse": "サーバーの応答を解釈できませんでした",
   "errors.noProfile": "このプロファイルは登録されていません",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
-  "task.chatPlaceholder": "タスクについて追加の指示を送信してください。",
-  "task.register": "登録",
-  "task.registered": "登録済み",
-  "task.reportDetail": "タスク詳細",
-  "task.noReport": "まだ報告がありません。",
-  "task.reportLoading": "レポートを取得中...",
 };
 
 export default ja;
