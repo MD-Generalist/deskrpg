@@ -59,6 +59,32 @@ test("both qualities retain airy individual leaves, varied orientations and boun
   palette.dispose();
 });
 
+test("crowns keep substantial lower, middle and upper foliage at both qualities", () => {
+  const palette = createCommuteMaterials();
+  for (const quality of ["desktop", "light"] as const) {
+    for (const seed of [1979, 42, 43, 104]) {
+      const tree = createCommuteTree(palette, { quality, seed });
+      const heights = [0, 0, 0];
+      const matrix = new T.Matrix4();
+      for (let i = 0; i < tree.leaves.count; i++) {
+        tree.leaves.getMatrixAt(i, matrix);
+        const y = matrix.elements[13];
+        heights[y < 2.15 ? 0 : y < 2.55 ? 1 : 2]++;
+      }
+      for (const count of heights)
+        assert.ok(count >= tree.leaves.count * 0.15, `${quality}/${seed}: ${heights}`);
+      const bounds = tree.leaves.boundingBox!;
+      const height = bounds.max.y - bounds.min.y;
+      assert.ok(height >= 1.1 && height <= 1.65, `${quality}/${seed}: crown height ${height}`);
+      assert.ok(bounds.max.y <= 3.3);
+      assert.ok(bounds.max.x - bounds.min.x >= 1.5);
+      assert.ok(bounds.max.z - bounds.min.z >= 1.5);
+      tree.dispose();
+    }
+  }
+  palette.dispose();
+});
+
 test("size scales whole tree and disposal is idempotent without disposing borrowed resources", () => {
   const palette = createCommuteMaterials();
   let borrowedDisposals = 0;
