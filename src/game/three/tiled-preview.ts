@@ -1,60 +1,11 @@
 import type { TiledMap, TilesetImageInfo } from "../../components/map-editor/hooks/useMapEditor";
-import { computeOccupiedTiles, OBJECT_TYPES } from "../../lib/object-types";
+import { projectTiledGeometry } from "../../lib/tiled-geometry";
 import type { MapSnapshot } from "./bridge";
 import { resolveOfficeEnvironment } from "./office-environment-theme";
 
-/** Project editor and game both keep server coordinates at 32 pixels per logical tile. */
+/** UI-only metadata stays outside the shared server geometry dependency graph. */
 export function tiledSnapshot(map: TiledMap): MapSnapshot {
-  const tileLayers = map.layers.filter((layer) => layer.type === "tilelayer");
-  const floorLayer = tileLayers.find((l) => l.name.toLowerCase() === "floor") || tileLayers[0];
-  const wallsLayer = tileLayers.find((l) => l.name.toLowerCase() === "walls");
-  const rows = (data?: number[]) =>
-    Array.from({ length: map.height }, (_, row) =>
-      Array.from({ length: map.width }, (_, col) => data?.[row * map.width + col] || 0),
-    );
-  const objects = map.layers
-    .filter((l) => l.type === "objectgroup" && l.name.toLowerCase() !== "collision")
-    .flatMap((layer) =>
-      (layer.objects || [])
-        .filter((o) => OBJECT_TYPES[o.type])
-        .map((o) => ({
-          id: `${layer.id}:${o.id}`,
-          type: o.type,
-          col: Math.floor(o.x / 32),
-          row: Math.floor(o.y / 32),
-        })),
-    );
-  const blocked = computeOccupiedTiles(objects);
-  for (const layer of map.layers.filter((l) => l.name.toLowerCase() === "collision")) {
-    if (layer.type === "tilelayer")
-      layer.data?.forEach((gid, i) => {
-        if (gid) blocked.add(`${i % map.width},${Math.floor(i / map.width)}`);
-      });
-    else
-      for (const object of layer.objects || []) {
-        for (
-          let y = Math.floor(object.y / 32);
-          y < Math.ceil((object.y + (object.height || 32)) / 32);
-          y++
-        )
-          for (
-            let x = Math.floor(object.x / 32);
-            x < Math.ceil((object.x + (object.width || 32)) / 32);
-            x++
-          )
-            blocked.add(`${x},${y}`);
-      }
-  }
-  return {
-    cols: map.width,
-    rows: map.height,
-    floor: rows(floorLayer?.data),
-    walls: rows(wallsLayer?.data),
-    objects,
-    blocked: [...blocked],
-    tiled: true,
-    environment: resolveOfficeEnvironment(map),
-  };
+  return { ...projectTiledGeometry(map), environment: resolveOfficeEnvironment(map) };
 }
 
 export function drawTiledArtwork(

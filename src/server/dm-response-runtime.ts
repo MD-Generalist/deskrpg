@@ -1,3 +1,4 @@
+import { withStreamDiagnosticRequest } from "@/lib/hermes/stream-diagnostics";
 import { createTurnTimeout } from "@/lib/conversation/turn-timeout";
 import type { ChatResponse } from "@/lib/chat-response";
 import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
@@ -51,18 +52,20 @@ export async function runTrackedDm(args: {
     let raw = "";
     let failure: string | undefined;
     try {
-      const response = await args.work(
-        (event, payload) => {
-          if (!isActive() || event !== "npc:response" || payload.npcId !== identity.npcId) return;
-          if (payload.messageCode && payload.done) failure = payload.messageCode;
-          if (payload.chunk) {
-            raw += payload.chunk;
-            const content = sanitizeNpcResponseText(raw, { stripIncompleteTail: true });
-            if (content) tracker.update(identity.requestId, { status: "streaming", content });
-          }
-        },
-        isActive,
-        tracker.signal(identity.requestId),
+      const response = await withStreamDiagnosticRequest(identity.requestId, () =>
+        args.work(
+          (event, payload) => {
+            if (!isActive() || event !== "npc:response" || payload.npcId !== identity.npcId) return;
+            if (payload.messageCode && payload.done) failure = payload.messageCode;
+            if (payload.chunk) {
+              raw += payload.chunk;
+              const content = sanitizeNpcResponseText(raw, { stripIncompleteTail: true });
+              if (content) tracker.update(identity.requestId, { status: "streaming", content });
+            }
+          },
+          isActive,
+          tracker.signal(identity.requestId),
+        ),
       );
       if (!isActive()) return;
       const content = sanitizeNpcResponseText(response ?? "", { stripIncompleteTail: true });

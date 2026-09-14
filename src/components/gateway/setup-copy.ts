@@ -338,6 +338,8 @@ const hostErrorGroups: Record<string, string> = {
   port_conflict: "port",
   plugin_identity_ambiguous: "pluginIdentity",
   plugin_install_failed: "install",
+  plugin_security_review_required: "securityReview",
+  plugin_source_unavailable: "sourceUnavailable",
   gateway_restart_failed: "restart",
   gateway_verification_failed: "verify",
   profile_verification_failed: "profile",
@@ -353,6 +355,10 @@ const hostErrorGroups: Record<string, string> = {
 };
 const hostRemediation: Record<Locale, Record<string, string>> = {
   ko: {
+    securityReview:
+      "Hermes 보안 스캔이 설치를 차단했습니다. 관리자가 해당 버전의 검사 결과와 코드를 검토해야 합니다. 이 마법사는 차단을 자동 해제하지 않습니다.",
+    sourceUnavailable:
+      "플러그인 배포 저장소에 접근할 수 없습니다. 관리자가 배포 주소와 네트워크 접근을 확인해야 합니다.",
     service:
       "관리되는 게이트웨이 서비스를 찾지 못했습니다. 관리자가 Hermes 서비스를 등록하고 실행 상태를 확인한 뒤 다시 확인하세요.",
     identity:
@@ -384,6 +390,10 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
       "호스트 작업 시간이 초과되었습니다. 관리자가 호스트와 네트워크 상태를 확인한 뒤 다시 시도하세요.",
   },
   en: {
+    securityReview:
+      "Hermes security scanning blocked installation. An administrator must review the findings and code for this version. This wizard never overrides the block.",
+    sourceUnavailable:
+      "The plugin source repository is unavailable. Ask the administrator to verify the distribution URL and network access.",
     service:
       "No managed gateway service was found. Ask the administrator to register the Hermes service and check its state, then check again.",
     identity:
@@ -415,6 +425,10 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
       "The host operation timed out. Ask the administrator to check the host and network, then retry.",
   },
   ja: {
+    securityReview:
+      "Hermesのセキュリティ検査がインストールをブロックしました。管理者がこのバージョンの検査結果とコードを確認してください。このウィザードはブロックを解除しません。",
+    sourceUnavailable:
+      "プラグインの配布リポジトリにアクセスできません。管理者が配布URLとネットワークを確認してください。",
     service:
       "管理対象のゲートウェイサービスが見つかりません。管理者がHermesサービスを登録し、実行状態を確認してから再確認してください。",
     identity:
@@ -446,6 +460,9 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
       "ホスト処理がタイムアウトしました。管理者がホストとネットワークを確認してから再試行してください。",
   },
   zh: {
+    securityReview:
+      "Hermes安全扫描阻止了安装。管理员需要审查此版本的扫描结果和代码。此向导不会自动绕过阻止。",
+    sourceUnavailable: "无法访问插件源仓库。请管理员检查分发地址和网络访问。",
     service: "未找到受管理的网关服务。请管理员注册Hermes服务并检查运行状态，然后重新检查。",
     identity:
       "无法安全确认所选安装与运行中网关的对应关系。请管理员检查Hermes路径、配置文件和API端口，然后重新搜索安装。",

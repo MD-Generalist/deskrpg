@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
@@ -130,6 +130,7 @@ export default function NpcHireWizard({
   onDone,
 }: NpcHireWizardProps) {
   const t = useT();
+  const { locale } = useLocale();
 
   const steps = useMemo(
     () => availableSteps(pluginStatus, localDiscovery),
@@ -1053,6 +1054,12 @@ export default function NpcHireWizard({
           )}
           <p className="text-sm text-text-muted">{t("hermes.wizard.placement.guide")}</p>
           <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/profiles?gateway=${encodeURIComponent(gatewayId)}${created ? `&profile=${encodeURIComponent(created.name)}` : ""}`}
+              className="rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-hover"
+            >
+              {locale === "ko" ? "완성형 외형 선택하기" : "Choose a complete office look"}
+            </Link>
             <Link
               href="/channels"
               className="rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-hover"

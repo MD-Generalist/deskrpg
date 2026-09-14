@@ -27,6 +27,8 @@ export const HOST_ERROR_CODES = new Set([
   "listener_ownership_unverified",
   "plugin_identity_ambiguous",
   "plugin_install_failed",
+  "plugin_security_review_required",
+  "plugin_source_unavailable",
   "gateway_restart_failed",
   "gateway_verification_failed",
   "profile_verification_failed",

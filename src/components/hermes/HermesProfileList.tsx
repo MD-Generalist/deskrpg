@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
 import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
 
 import {
@@ -35,6 +36,7 @@ interface HermesProfileListProps {
   canRegister: boolean;
   /** `?new=1` 로 들어왔을 때 고용 마법사를 바로 연다. */
   autoOpenCreate?: boolean;
+  initialAppearanceProfile?: string | null;
   /** 프로필이 실제로 하나 생겼을 때만 부른다(닫기·삭제는 해당 없음). */
   onCreated?: () => void;
 }
@@ -43,9 +45,12 @@ export default function HermesProfileList({
   gatewayId,
   canRegister,
   autoOpenCreate = false,
+  initialAppearanceProfile,
   onCreated,
 }: HermesProfileListProps) {
   const t = useT();
+  const { locale } = useLocale();
+  const ko = locale === "ko";
 
   const [profiles, setProfiles] = useState<HermesProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +64,12 @@ export default function HermesProfileList({
   const [busyId, setBusyId] = useState("");
   /** 외형 편집기를 펼친 프로필. 편집기는 훅을 쓰므로 자식 컴포넌트로 마운트한다. */
   const [appearanceId, setAppearanceId] = useState("");
+  const [savedAppearanceId, setSavedAppearanceId] = useState("");
+  useEffect(() => {
+    if (!canRegister || !initialAppearanceProfile || savedAppearanceId) return;
+    const profile = profiles.find((row) => row.profileName === initialAppearanceProfile);
+    if (profile) setAppearanceId(profile.id);
+  }, [canRegister, initialAppearanceProfile, profiles, savedAppearanceId]);
 
   const [profileName, setProfileName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -388,20 +399,20 @@ export default function HermesProfileList({
             const { tone, key } = profileStatusLabel(profile.lastValidationStatus);
             return (
               <div key={profile.id} className="rounded-lg bg-bg px-3 py-3">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-medium text-white">
+                    <p className="font-medium text-text">
                       {profile.displayName || profile.profileName}
                     </p>
                     <p className="text-xs text-text-muted">{profile.profileName}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${PROFILE_STATUS_BADGE_CLASS[tone]}`}
                     >
                       {t(key)}
                     </span>
-                    {pluginStatus === "plugin_ready" && (
+                    {canRegister && pluginStatus === "plugin_ready" && (
                       <button
                         type="button"
                         onClick={() => {
@@ -488,9 +499,18 @@ export default function HermesProfileList({
                     initialAppearance={profile.appearance ?? null}
                     onSaved={() => {
                       setAppearanceId("");
+                      setSavedAppearanceId(profile.id);
                       void loadProfiles();
                     }}
                   />
+                )}
+                {savedAppearanceId === profile.id && (
+                  <p role="status" className="mt-3 text-sm text-text-secondary">
+                    {ko ? "프로필 외형을 저장했습니다. " : "Profile appearance saved. "}
+                    <Link href="/channels" className="text-primary underline">
+                      {ko ? "채널에서 NPC 배치하기" : "Place this NPC in a channel"}
+                    </Link>
+                  </p>
                 )}
                 {testErrors[profile.id] && (
                   <p className="mt-1 text-xs text-danger">{testErrors[profile.id]}</p>

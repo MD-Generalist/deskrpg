@@ -72,6 +72,10 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
   ]);
 
   let runCalled = false;
+  let nextTurnCalls = 0;
+  let directedCalls = 0;
+  let allowedControl = true;
+  let callbacks: Parameters<NonNullable<Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"]["createMeetingBroker"]>>[1];
   const socket = createFakeSocket("socket-1", calls);
 
   registerMeetingDiscussionHandlers({
@@ -96,8 +100,10 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
           passPolicy: null,
         },
       ],
-      canControlMeeting: async () => true,
-      createMeetingBroker: () => ({
+      canControlMeeting: async () => allowedControl,
+      createMeetingBroker: (_config, registeredCallbacks) => {
+        callbacks = registeredCallbacks;
+        return ({
         config: {
           participants: [
             {
@@ -118,11 +124,12 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
         },
         stop: () => {},
         setMode: () => {},
-        nextTurn: () => {},
-        directSpeak: () => {},
+        nextTurn: () => { nextTurnCalls++; },
+        directSpeak: () => { directedCalls++; },
         abortCurrentTurn: () => {},
         addUserMessage: () => {},
-      }),
+      });
+      },
       generateMeetingSummary: async () => ({ keyTopics: [], conclusions: null }),
       persistMeetingMinutes: async () => null,
     },
@@ -137,6 +144,56 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
   assert.equal(runCalled, true);
   assert.ok(activeBrokers.has("channel-1"));
   assert.equal(discussionInitiators.get("channel-1"), "user-1");
+  assert.deepEqual(activeBrokers.get("channel-1")?.discussionState?.npcs, [
+    { id: "npc-1", name: "Analyst" },
+  ]);
+  const live = activeBrokers.get("channel-1")!.discussionState!;
+  callbacks!.onWaitingInput?.(null);
+  assert.equal(live.isWaitingInput, true);
+  callbacks!.onTurnStart?.(activeBrokers.get("channel-1")!.config.participants[0]);
+  assert.equal(live.isWaitingInput, false);
+  assert.deepEqual(live.currentSpeaker, { npcId: "npc-1", npcName: "Analyst" });
+  callbacks!.onTurnChunk?.("npc-1", "Hello ");
+  callbacks!.onTurnChunk?.("npc-1", "world");
+  assert.deepEqual(live.rawStreams, { "npc-1": "Hello world" });
+  callbacks!.onTurnEnd?.("npc-1", "Hello world");
+  assert.equal(live.currentSpeaker, null);
+  assert.deepEqual(live.rawStreams, {});
+  assert.equal((meetingRooms.get("channel-1")!.messages as Array<{ content: string }>)[0].content, "Hello world");
+  callbacks!.onWaitingInput?.(null);
+  assert.equal(live.isWaitingInput, true);
+
+  await socket.trigger("meeting:next-turn", { channelId: "channel-1" });
+  assert.equal(nextTurnCalls, 0, "auto cannot consume a manual next turn");
+  callbacks!.onModeChanged?.("manual", "user");
+  assert.equal(live.isWaitingInput, false);
+  const modeEvent = calls.filter((call) => call.event === "meeting:mode-changed").at(-1)!.payload as {
+    execution: { isWaitingInput: boolean; currentSpeaker: unknown };
+  };
+  assert.equal(modeEvent.execution.isWaitingInput, false);
+  assert.equal(modeEvent.execution.currentSpeaker, null);
+  await socket.trigger("meeting:next-turn", { channelId: "channel-1" });
+  assert.equal(nextTurnCalls, 0, "polling/busy manual state cannot queue a release");
+  callbacks!.onWaitingInput?.(null);
+  allowedControl = false;
+  await socket.trigger("meeting:next-turn", { channelId: "channel-1" });
+  assert.equal(nextTurnCalls, 0);
+  assert.equal(live.isWaitingInput, true, "denied requests do not consume readiness");
+  allowedControl = true;
+  await Promise.all([
+    socket.trigger("meeting:next-turn", { channelId: "channel-1" }),
+    socket.trigger("meeting:next-turn", { channelId: "channel-1" }),
+  ]);
+  assert.equal(nextTurnCalls, 1, "readiness is consumed before duplicate requests arrive");
+  assert.equal(live.isWaitingInput, false);
+  await socket.trigger("meeting:direct-speak", { channelId: "channel-1", npcId: "npc-1" });
+  assert.equal(directedCalls, 1, "directed interruption remains allowed while busy");
+
+  const started = calls.find((call) => call.event === "meeting:mode-changed")?.payload as {
+    discussion?: { topic: string; npcs: unknown[] };
+  };
+  assert.equal(started.discussion?.topic, "Roadmap sync");
+  assert.deepEqual(started.discussion?.npcs, [{ id: "npc-1", name: "Analyst" }]);
   assert.ok(
     calls.some(
       (call) =>

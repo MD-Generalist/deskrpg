@@ -3,6 +3,7 @@ import type { MapObject } from "../../lib/object-types";
 export const PIXELS_PER_TILE = 32;
 export type ActorSnapshot = {
   id: string;
+  userId?: string;
   name: string;
   kind: "player" | "npc" | "remote";
   x: number;
@@ -13,6 +14,8 @@ export type ActorSnapshot = {
   appearance?: unknown;
   bubble?: string;
   active?: boolean;
+  /** Optional explicit response state; attention bubbles are not streamed responses. */
+  phase?: "idle" | "queued" | "thinking" | "streaming" | "done" | "attention";
 };
 export type MapSnapshot = {
   cols: number;
@@ -99,4 +102,18 @@ export function overviewDistance(cols: number, rows: number, aspect: number, fov
   const halfVertical = (fovDegrees * Math.PI) / 360;
   const halfHorizontal = Math.atan(Math.tan(halfVertical) * Math.max(0.1, aspect));
   return (Math.hypot(cols, rows) / 2 / Math.sin(Math.min(halfVertical, halfHorizontal))) * 1.1;
+}
+
+/** Preserve server/UI response state without guessing streaming from a report bubble. */
+export function actorPresentationPhase(actor: Pick<ActorSnapshot, "phase" | "active" | "bubble">) {
+  return actor.phase ?? (actor.active ? "thinking" : actor.bubble ? "attention" : "idle");
+}
+
+/** Chat messages use user IDs; scene player IDs use socket IDs. Never match names. */
+export function speechActorId(actors: Pick<ActorSnapshot, "id" | "userId">[], senderId: string) {
+  return (
+    actors.find((actor) => actor.id === senderId)?.id ??
+    actors.find((actor) => actor.userId === senderId)?.id ??
+    senderId
+  );
 }

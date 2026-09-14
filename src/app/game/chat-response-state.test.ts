@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { ChatResponse } from "@/lib/chat-response";
 import {
+  npcPresentationPhases,
   initialChatResponseState,
   reconcileNpcResponseMessages,
   reduceChatResponseState,
@@ -224,5 +225,39 @@ test("a complete tracked reply becomes persistent and survives later empty snaps
   assert.deepEqual(
     reconcileNpcResponseMessages(messages, [], { replaceTransient: true }),
     messages,
+  );
+});
+
+test("map phases merge concurrent requests and discard stale duplicate active records", () => {
+  const phases = npcPresentationPhases({
+    rooms: {
+      room: [
+        response({ requestId: "a", status: "thinking", updatedAt: 1 }),
+        response({ requestId: "b", status: "queued" }),
+      ],
+    },
+    npcs: { npc: [response({ requestId: "a", status: "complete", updatedAt: 2 })] },
+  });
+  assert.deepEqual(phases, { "npc-1": "queued" });
+  assert.deepEqual(
+    npcPresentationPhases({
+      rooms: {
+        room: [
+          response({ requestId: "a", status: "streaming" }),
+          response({ requestId: "b", status: "thinking" }),
+        ],
+      },
+      npcs: {},
+    }),
+    { "npc-1": "streaming" },
+  );
+  assert.deepEqual(
+    npcPresentationPhases(
+      reduceChatResponseState(
+        { rooms: { room: [response({ requestId: "a" })] }, npcs: {} },
+        { type: "disconnect" },
+      ),
+    ),
+    {},
   );
 });

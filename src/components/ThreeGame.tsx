@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type ComponentProps } from "react";
-import { Focus, Minus, Plus } from "lucide-react";
+import { Focus, Minus, Plus, Maximize, RotateCcw, RotateCw, Box, LayoutGrid } from "lucide-react";
 import PhaserGame from "./PhaserGame";
 import { EventBus } from "@/game/EventBus";
 import { OfficeRenderer } from "@/game/three/office-renderer";
@@ -60,6 +60,46 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
           <div className="office-camera-tools" aria-label={ko ? "카메라 조작" : "Camera controls"}>
             <button
               type="button"
+              onClick={() => renderer.current?.showOverview()}
+              title={ko ? "전체 보기" : "Overview"}
+              aria-label={ko ? "전체 보기" : "Overview"}
+            >
+              <Maximize size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={() => renderer.current?.rotateCamera(-1)}
+              title={ko ? "왼쪽으로 회전" : "Rotate left"}
+              aria-label={ko ? "왼쪽으로 회전" : "Rotate left"}
+            >
+              <RotateCcw size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={() => renderer.current?.rotateCamera(1)}
+              title={ko ? "오른쪽으로 회전" : "Rotate right"}
+              aria-label={ko ? "오른쪽으로 회전" : "Rotate right"}
+            >
+              <RotateCw size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={() => renderer.current?.setCameraAngle(false)}
+              title={ko ? "입체 시점" : "Isometric view"}
+              aria-label={ko ? "입체 시점" : "Isometric view"}
+            >
+              <Box size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={() => renderer.current?.setCameraAngle(true)}
+              title={ko ? "위에서 보기" : "Top view"}
+              aria-label={ko ? "위에서 보기" : "Top view"}
+            >
+              <LayoutGrid size={17} />
+            </button>
+            <button
+              type="button"
               onClick={() => renderer.current?.focus()}
               title={ko ? "내 캐릭터 따라가기" : "Follow my character"}
               aria-label={ko ? "내 캐릭터 따라가기" : "Follow my character"}
@@ -83,8 +123,8 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
           </div>
           <div className="office-movement-hint">
             {ko
-              ? "클릭해서 이동 · 방향키 · 우클릭 드래그로 회전"
-              : "Click to walk · Arrow keys · Right-drag to orbit"}
+              ? "클릭: 걷기 · 드래그: 화면 이동 · 우클릭 드래그: 회전 · 휠: 확대/축소"
+              : "Click: walk · Drag: pan · Right-drag: orbit · Scroll: zoom"}
           </div>
         </>
       )}

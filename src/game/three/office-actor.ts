@@ -1,3 +1,5 @@
+import { detailSurfaces } from "./surface-detail";
+import { idleMotion } from "./idle-motion";
 import * as T from "three";
 import { round, sphere } from "./primitives";
 import type { OfficeLook } from "./office-looks";
@@ -254,6 +256,7 @@ export function createOfficeActor(id: string, look: OfficeLook, index: number) {
   }
   const arms: T.Group[] = [],
     legs: T.Group[] = [];
+  const knees: T.Group[] = [];
   for (const s of [-1, 1]) {
     const arm = new T.Group();
     arm.position.set(s * 0.3, 1.32, 0);
@@ -270,20 +273,16 @@ export function createOfficeActor(id: string, look: OfficeLook, index: number) {
     leg.position.set(s * 0.125, 0.8, 0);
     rig.add(leg);
     const width = look.lower === "wide" ? 0.245 : 0.18;
-    round(
-      leg,
-      width,
-      0.63,
-      0.22,
-      look.lower === "skirt" && look.skirtLength === "knee" ? look.skin : look.trousers,
-      0,
-      -0.3,
-      0,
-      0.035,
-    );
-    round(leg, 0.19, 0.105, 0.33, look.shoes, 0, -0.66, 0.06, 0.032);
-    round(leg, 0.19, 0.023, 0.32, "#93816a", 0, -0.715, 0.06, 0.008);
-    if (!look.lower) round(leg, 0.009, 0.48, 0.005, "#858980", 0, -0.3, 0.113, 0.001);
+    const legColor =
+      look.lower === "skirt" && look.skirtLength === "knee" ? look.skin : look.trousers;
+    round(leg, width, 0.32, 0.22, legColor, 0, -0.145, 0, 0.035);
+    const knee = new T.Group();
+    knee.position.y = -0.3;
+    leg.add(knee);
+    round(knee, width, 0.33, 0.22, legColor, 0, -0.165, 0, 0.035);
+    round(knee, 0.19, 0.105, 0.33, look.shoes, 0, -0.36, 0.06, 0.032);
+    round(knee, 0.19, 0.023, 0.32, "#93816a", 0, -0.415, 0.06, 0.008);
+    knees.push(knee);
     legs.push(leg);
   }
   const skirtHeight = look.skirtLength === "knee" ? 0.43 : 0.7;
@@ -352,6 +351,13 @@ export function createOfficeActor(id: string, look: OfficeLook, index: number) {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.013;
   root.add(ring);
+  detailSurfaces(
+    rig,
+    [],
+    [look.coat, look.shirt, look.trousers].filter(
+      (color) => color !== look.skin && color !== look.hair,
+    ),
+  );
   return {
     id,
     root,
@@ -361,11 +367,13 @@ export function createOfficeActor(id: string, look: OfficeLook, index: number) {
     seated: false,
     update(t: number, walking: boolean, phase: ActorPhase, seated: boolean) {
       const sit = seated && !walking;
+      const motion = idleMotion(t, index, walking, phase);
+      head.rotation.y = motion.yaw;
       rig.position.y = sit
         ? -0.12
         : Math.sin(t * (look.stance === "bright" ? 2.2 : 1.7) + index) * 0.008;
-      torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.025 : 0;
-      head.rotation.x = phase === "thinking" ? 0.1 : 0;
+      torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.025 : motion.sway;
+      head.rotation.x = phase === "thinking" ? 0.1 : motion.nod;
       head.rotation.z = look.stance === "relaxed" ? 0.04 : Math.sin(t * 1.4 + index) * 0.015;
       arms.forEach((a, i) => {
         a.rotation.x = walking
@@ -376,13 +384,18 @@ export function createOfficeActor(id: string, look: OfficeLook, index: number) {
               ? -0.4 + Math.sin(t * 4 + i) * 0.2
               : sit
                 ? -0.6
-                : 0;
+                : i === 1
+                  ? -motion.hand * 0.75
+                  : 0;
         a.rotation.z = walking
           ? 0
           : (i === 0 ? -1 : 1) * (look.stance === "relaxed" ? 0.09 : 0.035);
       });
       legs.forEach((leg, i) => {
         leg.rotation.x = sit ? -Math.PI / 2 : walking ? Math.sin(t * 8 + i * Math.PI) * 0.4 : 0;
+      });
+      knees.forEach((knee) => {
+        knee.rotation.x = sit ? Math.PI / 2 : 0;
       });
       if (skirt) {
         skirt.rotation.x = sit ? -0.45 : 0;

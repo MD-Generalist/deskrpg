@@ -24,12 +24,12 @@ test("one saved appearance cannot mutate another character", () => {
 });
 
 import * as T from "three";
-import { createActor } from "./characters";
+import { createOfficeActor } from "./office-actor";
 import { disposeTree } from "./office-renderer";
-test("lookbook rigs have distinct geometry, stable identity and finite poses", () => {
+test("legacy procedural rigs have distinct geometry, stable identity and finite poses", () => {
   const silhouettes = new Set<string>();
   for (const [i, look] of OFFICE_LOOKS.entries()) {
-    const actor = createActor("actor", look.coat, i, undefined, look);
+    const actor = createOfficeActor("actor", look, i);
     assert.equal(actor.root.userData.officeLookId, look.id);
     const box = new T.Box3().setFromObject(actor.root);
     assert.ok(box.max.y > 1.8 && box.max.y < 2.2, look.id);
@@ -84,7 +84,7 @@ test("expanded wardrobe offers distinct structural options beyond palette change
 test("new garment and accessory options change rendered geometry", () => {
   const base = OFFICE_LOOKS[0];
   const signature = (look: typeof base) => {
-    const actor = createActor("test", look.coat, 0, undefined, look);
+    const actor = createOfficeActor("test", look, 0);
     const shapes: string[] = [];
     actor.root.updateMatrixWorld(true);
     actor.root.traverse((object) => {
@@ -120,7 +120,7 @@ test("new garment and accessory options change rendered geometry", () => {
 
 test("vest pinstripes and cardigan knit alter garment geometry independently of color", () => {
   const signature = (look: (typeof OFFICE_LOOKS)[number]) => {
-    const actor = createActor("pattern", look.coat, 0, undefined, look);
+    const actor = createOfficeActor("pattern", look, 0);
     const shapes: unknown[] = [];
     actor.root.updateMatrixWorld(true);
     actor.root.traverse((object) => {

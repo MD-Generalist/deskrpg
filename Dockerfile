@@ -40,6 +40,7 @@ COPY --from=builder /app/server.js ./server.js
 
 # CommonJS modules required by server.js (not traced by Next.js standalone)
 COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatter.js
+COPY --from=builder /app/src/lib/meeting-discussion-state.ts ./src/lib/meeting-discussion-state.ts
 COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
 COPY --from=builder /app/src/lib/task-parser.js ./src/lib/task-parser.js
 COPY --from=builder /app/src/lib/task-block-utils.js ./src/lib/task-block-utils.js
@@ -63,6 +64,11 @@ COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-a
 # 목록을 손으로 맞추는 대신 경계를 통째로 옮긴다. 새 형제 파일이 생겨도 따라온다.
 COPY --from=builder /app/src/lib/conversation ./src/lib/conversation
 COPY --from=builder /app/src/server ./src/server
+# Pure shared map geometry and navigation used by channel motion coordination.
+COPY --from=builder /app/src/lib/tiled-geometry.ts ./src/lib/tiled-geometry.ts
+COPY --from=builder /app/src/lib/object-types.ts ./src/lib/object-types.ts
+COPY --from=builder /app/src/game/navigation.ts ./src/game/navigation.ts
+COPY --from=builder /app/src/game/three/seating.ts ./src/game/three/seating.ts
 COPY --from=builder /app/src/lib/open-chat-formatter.ts ./src/lib/open-chat-formatter.ts
 
 # DB 경계는 통째로 옮긴다. 파일 목록으로 두면 `require("./sqlite-...js")` 처럼

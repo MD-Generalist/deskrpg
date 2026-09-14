@@ -362,8 +362,24 @@ def main(action, candidate_id=None):
         if not public['pluginInstalled']: argv += ['install', SOURCE, '--ref', PIN, '--enable']
         elif not public['pluginEnabled']: argv += ['enable', plugin_name]
         else: return {'ok': True}
-        result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
-        if result.returncode: fail('plugin_install_failed')
+        # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
+        child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
+        try:
+            output = child.stdout.read(262145)
+            if len(output) > 262144:
+                child.kill()
+                child.wait()
+                fail('output_limit')
+            code = child.wait()
+        finally:
+            child.stdout.close()
+        if code:
+            diagnostic = output.decode('utf-8', errors='replace').lower()
+            if 'blocked' in diagnostic and ('security' in diagnostic or 'scan' in diagnostic):
+                fail('plugin_security_review_required')
+            if 'repository not found' in diagnostic or 'could not resolve host' in diagnostic:
+                fail('plugin_source_unavailable')
+            fail('plugin_install_failed')
         installed, enabled, unused = plugin(home,config(home))
         if not installed or not enabled: fail('plugin_install_failed')
     elif action == 'configure':

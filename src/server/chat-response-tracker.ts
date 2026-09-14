@@ -1,3 +1,4 @@
+import { streamDiagnostic } from "@/lib/hermes/stream-diagnostics";
 import type { ChatResponse } from "@/lib/chat-response";
 
 const terminal = (status: ChatResponse["status"]) =>
@@ -22,6 +23,12 @@ export class ChatResponseTracker {
     };
     this.controllers.set(response.requestId, new AbortController());
     this.responses.set(response.requestId, response);
+    streamDiagnostic({
+      stage: "response-emit",
+      requestId: response.requestId,
+      event: response.status,
+      length: response.content.length,
+    });
     this.emit({ ...response });
   }
 
@@ -38,6 +45,12 @@ export class ChatResponseTracker {
     };
     this.responses.set(requestId, response);
     if (response.status === "cancelled") this.controllers.get(requestId)?.abort();
+    streamDiagnostic({
+      stage: "response-emit",
+      requestId: response.requestId,
+      event: response.status,
+      length: response.content.length,
+    });
     this.emit({ ...response });
     const completed = [...this.responses.values()].filter((r) => terminal(r.status));
     for (const old of completed.slice(0, Math.max(0, completed.length - this.historyLimit))) {

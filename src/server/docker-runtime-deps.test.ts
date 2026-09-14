@@ -72,3 +72,13 @@ test("Dockerfile never copies a file that no longer exists", () => {
 
   assert.deepEqual(dead, [], `Dockerfile 이 없는 경로를 COPY 합니다: ${dead.join(", ")}`);
 });
+
+test("npm allowlist includes every socket server runtime source dependency", () => {
+  const manifest = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+    files: string[];
+  };
+  const missing = [...transitiveLocalDeps("src/server/socket-handlers.ts")].filter(
+    (file) => !manifest.files.some((entry) => file === entry || file.startsWith(`${entry}/`)),
+  );
+  assert.deepEqual(missing.sort(), [], "npm package would omit runtime dependencies");
+});

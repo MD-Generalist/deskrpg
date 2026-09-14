@@ -5,6 +5,7 @@ import Providers from "@/components/Providers";
 import { LOCALE_COOKIE_NAME } from "@/lib/i18n/constants";
 import { normalizeLocale, translateServer } from "@/lib/i18n/server";
 import "./globals.css";
+import "@/game/three/lookbook.css";
 
 async function getRequestLocale() {
   const cookieStore = await cookies();

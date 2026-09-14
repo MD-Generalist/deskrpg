@@ -138,16 +138,23 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
       onClick={onClose}
     >
       <div
-        className="bg-bg border border-border rounded-xl shadow-2xl w-[90vw] max-w-[800px] h-[70vh] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="minutes-modal-title"
+        className="bg-bg border border-border rounded-xl shadow-2xl w-[90vw] max-w-[800px] h-[70dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border flex-shrink-0">
-          <h2 className="text-sm font-bold flex items-center gap-1.5">
+          <h2 id="minutes-modal-title" className="text-sm font-bold flex items-center gap-1.5">
             <BookOpen className="w-4 h-4" />
             {t("minutes.title")}
           </h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text">
+          <button
+            onClick={onClose}
+            aria-label={t("common.close")}
+            className="text-text-muted hover:text-text"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -155,17 +162,20 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
         {/* Body: 2-pane */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left: list */}
-          <div className="w-[220px] border-r border-border overflow-y-auto p-3 flex-shrink-0">
+          <div
+            className={`${selectedId ? "hidden sm:block" : "block"} w-full sm:w-[220px] sm:border-r border-border overflow-y-auto p-3 flex-shrink-0`}
+          >
             {loading ? (
               <div className="text-xs text-text-dim text-center mt-8">{t("common.loading")}</div>
             ) : items.length === 0 ? (
               <div className="text-xs text-text-dim text-center mt-8">{t("minutes.noMinutes")}</div>
             ) : (
               items.map((item) => (
-                <div
+                <button
+                  type="button"
                   key={item.id}
                   onClick={() => loadDetail(item.id)}
-                  className={`p-2.5 rounded-lg mb-2 cursor-pointer text-xs ${
+                  className={`w-full text-left p-2.5 rounded-lg mb-2 cursor-pointer text-xs ${
                     selectedId === item.id
                       ? "bg-info/15 border-l-2 border-info"
                       : "bg-surface hover:bg-surface-raised border-l-2 border-transparent"
@@ -178,13 +188,27 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                     {t("minutes.participantsSuffix")} ·{" "}
                     {t("minutes.turnCount", { count: item.totalTurns })}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
 
           {/* Right: detail */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div
+            className={`${selectedId ? "block" : "hidden sm:block"} min-w-0 flex-1 overflow-y-auto p-4 break-words`}
+          >
+            {selectedId && (
+              <button
+                className="sm:hidden mb-3 text-sm text-text-muted"
+                onClick={() => {
+                  setSelectedId(null);
+                  setDetail(null);
+                  setExportMenu(false);
+                }}
+              >
+                ← {t("common.back")}
+              </button>
+            )}
             {!selectedId ? (
               <div className="flex items-center justify-center h-full text-xs text-text-dim">
                 {t("minutes.selectMinutes")}

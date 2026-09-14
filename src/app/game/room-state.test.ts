@@ -39,13 +39,13 @@ test("목록이 오면 마지막 방(있으면)으로, 없으면 office 로 들�
   assert.equal(s2.currentRoomId, "o");
 });
 
-test("방이 office 하나뿐이면 목록을 건너뛴다, 둘 이상이면 showList 가 목록을 보인다", () => {
+test("방이 하나여도 명시적 showList 는 새 방 만들기 목록으로 이동한다", () => {
   const s = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office],
     preferRoomId: null,
   });
-  assert.equal(reduceRoomState(s, { type: "showList" }).view, "room", "방이 하나면 목록이 없다");
+  assert.equal(reduceRoomState(s, { type: "showList" }).view, "list");
   const s2 = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office, g1],

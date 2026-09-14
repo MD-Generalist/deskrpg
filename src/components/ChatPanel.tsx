@@ -22,8 +22,13 @@ import {
   visibleResponseReplies,
 } from "@/app/game/chat-response-state";
 import ResponseProgress from "./chat/ResponseProgress";
+import { ConversationSessionStore } from "@/app/game/conversation-session";
 
 interface ChatPanelProps {
+  /** Overlay keeps the legacy floating panel; workspace embeds it in the right column. */
+  presentation?: "overlay" | "workspace";
+  width?: number;
+  onWidthChange?: (width: number) => void;
   dialogNpc: { npcId: string; npcName: string } | null;
   npcMessages: NpcChatMessage[];
   /** 지금 NPC 가 무엇을 하는 중인지 알려 주는 번역 키. 없으면 표시하지 않는다. */
@@ -79,6 +84,9 @@ const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 320;
 
 export default function ChatPanel({
+  presentation = "overlay",
+  width: controlledWidth,
+  onWidthChange,
   dialogNpc,
   npcMessages,
   npcActivityKey = null,
@@ -122,10 +130,20 @@ export default function ChatPanel({
   activeTaskId,
   onSetActiveTaskId,
 }: ChatPanelProps) {
-  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
+  const width = controlledWidth ?? internalWidth;
+  const setWidth = useCallback(
+    (next: number) => {
+      if (controlledWidth === undefined) setInternalWidth(next);
+      onWidthChange?.(next);
+    },
+    [controlledWidth, onWidthChange],
+  );
   const [manualOpen, setManualOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showGearMenu, setShowGearMenu] = useState(false);
+  const [sessions] = useState(() => new ConversationSessionStore());
+  const [, setSessionRevision] = useState(0);
   const [activeTabState, setActiveTabState] = useState<{
     npcId: string | null;
     tab: "chat" | "tasks";
@@ -139,7 +157,20 @@ export default function ChatPanel({
   const channelScrollRef = useRef<HTMLDivElement>(null);
   const activeNpcId = dialogNpc?.npcId ?? null;
   const activeTab = activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat";
-  const isOpen = manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
+  const conversationKey = dialogNpc
+    ? `npc:${dialogNpc.npcId}`
+    : roomState.view === "compose"
+      ? `compose:${roomState.compose?.inviteTo ?? "new"}`
+      : roomState.currentRoomId
+        ? `room:${roomState.currentRoomId}`
+        : "room:list";
+  const conversationDraft = sessions.get(conversationKey).draft;
+  const updateConversationDraft = (draft: string) => {
+    sessions.setDraft(conversationKey, draft);
+    setSessionRevision((revision) => revision + 1);
+  };
+  const isWorkspace = presentation === "workspace";
+  const isOpen = isWorkspace || manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
   // NPC 는 "방이 보이는 동안" 만 곁에 머문다 — 목록·새 방 화면은 대화가 아니다.
   const channelChatVisible = isOpen && !dialogNpc && !npcSelectList && roomState.view === "room";
   useEffect(() => {
@@ -179,6 +210,11 @@ export default function ChatPanel({
     }
   }, [roomResponses]);
 
+  useEffect(() => {
+    const container = dialogNpc ? scrollRef.current : channelScrollRef.current;
+    if (container) container.scrollTop = sessions.get(conversationKey).scrollTop;
+  }, [conversationKey, dialogNpc, sessions]);
+
   // ESC to close NPC dialog (return to channel chat)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -203,7 +239,7 @@ export default function ChatPanel({
     const startWidth = widthRef.current;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - startX;
+      const delta = isWorkspace ? startX - e.clientX : e.clientX - startX;
       setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta)));
     };
 
@@ -215,9 +251,9 @@ export default function ChatPanel({
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
-  }, []);
+  }, [isWorkspace, setWidth]);
 
-  if (!isOpen) {
+  if (!isOpen && !isWorkspace) {
     return (
       <button
         onClick={() => setManualOpen(true)}
@@ -241,24 +277,37 @@ export default function ChatPanel({
     roomState.viewerUserId,
   );
 
-  /** 방 안에서 뒤로 — 방이 하나뿐이면 목록이 빈 화면이므로 패널을 접는다. */
-  const backFromRoom = () => {
-    if (roomState.rooms.length > 1) onRoomAction({ type: "showList" });
-    else setManualOpen(false);
-  };
+  /** 목록은 단일 office 채널에서도 새 방 만들기의 진입점이다. */
+  const backFromRoom = () => onRoomAction({ type: "showList" });
   // 목록이 최상위 화면이다 — 그 위는 "닫힘". 방이 여러 개여도 여기서 패널을 접을 수 있어야 한다.
-  const backFromList = () => setManualOpen(false);
+  const backFromList = () => {
+    if (!isWorkspace) setManualOpen(false);
+  };
 
   return (
-    <div ref={panelRef} className="fixed left-0 top-[48px] bottom-0 z-20 flex" style={{ width }}>
+    <div
+      ref={panelRef}
+      data-chat-panel={presentation}
+      className={
+        isWorkspace
+          ? "relative flex h-full min-h-0 max-w-full flex-row-reverse"
+          : "fixed left-0 bottom-0 z-20 flex"
+      }
+      style={isWorkspace ? { width } : { width, top: "var(--game-header-height, 48px)" }}
+    >
       {/* Panel content */}
-      <div className="flex-1 flex flex-col bg-bg/95 backdrop-blur border-r border-border min-w-0">
+      <div
+        className={`flex min-w-0 flex-1 flex-col bg-bg/95 backdrop-blur ${
+          isWorkspace ? "" : "border-r border-border"
+        }`}
+      >
         {/* Panel header — 방 안에서는 RoomHeader 가 이 자리를 대신한다(화살표가 두 줄이 되지 않게). */}
         {!inNpcDialog && !inNpcSelect && roomState.view === "room" && currentRoom ? (
           <RoomHeader
             room={currentRoom}
             canManage={!!roomState.viewerUserId && currentRoom.createdBy === roomState.viewerUserId}
             onBack={backFromRoom}
+            onClose={() => (isWorkspace ? backFromRoom() : setManualOpen(false))}
             onInvite={() =>
               onRoomAction({ type: "compose", presetNpcIds: [], inviteTo: currentRoom.id })
             }
@@ -399,7 +448,13 @@ export default function ChatPanel({
             />
             {activeTab === "chat" ? (
               <>
-                <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+                <div
+                  ref={scrollRef}
+                  onScroll={(event) =>
+                    sessions.setScroll(conversationKey, event.currentTarget.scrollTop)
+                  }
+                  className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
+                >
                   {npcMessages.length === 0 && (
                     <div className="text-text-dim text-sm italic py-4">
                       {t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
@@ -463,6 +518,8 @@ export default function ChatPanel({
                 )}
                 <ChatInput
                   onSend={onSend}
+                  value={conversationDraft}
+                  onValueChange={updateConversationDraft}
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
                   disabled={!!npcChatInputDisabled}
                   disabledPlaceholder={
@@ -527,7 +584,13 @@ export default function ChatPanel({
         ) : (
           // 방 안 — 메시지 + 입력
           <>
-            <div ref={channelScrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
+            <div
+              ref={channelScrollRef}
+              onScroll={(event) =>
+                sessions.setScroll(conversationKey, event.currentTarget.scrollTop)
+              }
+              className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"
+            >
               {roomMessages.length === 0 && (
                 <div className="text-text-dim text-sm italic py-4 text-center">
                   {t("room.empty")}
@@ -564,6 +627,8 @@ export default function ChatPanel({
             </div>
             <ChatInput
               onSend={onRoomSend}
+              value={conversationDraft}
+              onValueChange={updateConversationDraft}
               placeholder={t("chat.placeholder")}
               disabledPlaceholder={t("chat.moveCloser")}
               disabled={!!channelChatInputDisabled}

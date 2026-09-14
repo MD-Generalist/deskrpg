@@ -27,6 +27,9 @@ function socketEventsIn(...relPaths: string[]): string[] {
   for (const relPath of relPaths) {
     const src = readFileSync(path.join(repoRoot, relPath), "utf8");
     for (const m of src.matchAll(/socket\.on\(\s*"([^"]+)"/g)) events.add(m[1]);
+    // The coordinator's validated wrapper registers each literal event through socket.on(name).
+    if (relPath === "src/server/npc-coordination.ts")
+      for (const m of src.matchAll(/handle\(\s*"([^"]+)"/g)) events.add(m[1]);
   }
   return [...events].sort();
 }
@@ -41,6 +44,7 @@ const HANDLER_FILES = [
   "src/server/socket-handlers.ts",
   "src/server/room-socket.ts",
   "src/server/npc-roster-socket.ts",
+  "src/server/npc-coordination.ts",
 ];
 
 test("server.js registers no socket handlers of its own", () => {
@@ -179,7 +183,8 @@ test("socket-handlers never broadcasts meeting-only events to the map room", () 
 // 될 수 없었다. 그래서 그 두 끝을 각각 못박는다. 이 테스트가 없으면 C1 을 되돌리는
 // 한 줄짜리 뮤테이션이 684개 테스트를 전부 초록으로 통과한다(재리뷰에서 실측).
 test("npc:come-to-player always carries a real caller socket id", () => {
-  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  const src = readFileSync(path.join(repoRoot, "src/server/npc-coordination.ts"), "utf8");
+  assert.match(src, /targetPlayerId:\s*socket\.id/);
   const dead = [...src.matchAll(/emit\(\s*"npc:come-to-player"\s*,\s*\{([^}]*)\}/g)]
     .filter((m) => /targetPlayerId\s*:\s*(null|undefined)/.test(m[1]))
     .map((m) => m[1].trim());

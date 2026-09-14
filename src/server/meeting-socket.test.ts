@@ -101,6 +101,14 @@ test("registerMeetingSocketHandlers joins the room and emits meeting state", asy
     calls.some((call) => call.event === "meeting:state"),
     "expected meeting:state emission",
   );
+  const state = calls.find((call) => call.event === "meeting:state")?.payload as {
+    participants: Array<{ id: string; userId?: string }>;
+  };
+  assert.equal(state.participants.find((participant) => participant.id === "socket-1")?.userId, "user-1");
+  const joined = calls.find((call) => call.event === "meeting:participant-joined")?.payload as {
+    userId?: string;
+  };
+  assert.equal(joined.userId, "user-1", "broadcast identity comes from authenticated user");
 });
 
 test("registerMeetingSocketHandlers rejects meeting chat from sockets outside the room", async () => {
@@ -181,4 +189,65 @@ test("deliverMeetingNpcAnswer는 영속화 대상이 없으면(openclaw/registry
     persistSessionRef: null,
   });
   assert.deepEqual(order, ["done", "message"]);
+});
+
+test("authorized late observer and reconnected initiator receive the resolved discussion roster", async () => {
+  const discussion = {
+    topic: "Selected team",
+    npcs: [
+      { id: "npc-2", name: "소피" },
+      { id: "npc-7", name: "마틴" },
+    ],
+    mode: "manual" as const,
+    initiatorId: "owner",
+    initiatorSocketId: "old-socket",
+  };
+  for (const userId of ["observer", "owner"]) {
+    const calls: RecordedCall[] = [];
+    const socket = createFakeSocket(`new-${userId}`, calls);
+    registerMeetingSocketHandlers({
+      io: createFakeIo(calls),
+      socket,
+      deps: {
+        meetingRooms: new Map(),
+        players: new Map(),
+        lastChatTime: new Map(),
+        chatCooldownMs: 2000,
+        user: { userId },
+        getParticipationAccess: async () => ({ access: { allowed: true } }),
+        getDiscussionState: () => discussion,
+      },
+    });
+    await socket.trigger("meeting:join", { channelId: "channel-1" });
+    const state = calls.find((call) => call.event === "meeting:state")!.payload as {
+      discussion: typeof discussion;
+      isInitiator: boolean;
+    };
+    assert.deepEqual(state.discussion, discussion);
+    assert.equal(state.isInitiator, userId === "owner");
+  }
+});
+test("denied observer cannot retrieve a discussion roster", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("denied", calls);
+  registerMeetingSocketHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      meetingRooms: new Map(),
+      players: new Map(),
+      lastChatTime: new Map(),
+      chatCooldownMs: 2000,
+      user: { userId: "outsider" },
+      getParticipationAccess: async () => ({ access: { allowed: false } }),
+      getDiscussionState: () => {
+        assert.fail("must authorize before accessing roster");
+      },
+    },
+  });
+  await socket.trigger("meeting:join", { channelId: "channel-1" });
+  assert.equal(
+    calls.some((call) => call.event === "meeting:state"),
+    false,
+  );
 });

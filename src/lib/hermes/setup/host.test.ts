@@ -244,9 +244,11 @@ def fake_install(argv, **kwargs):
     assert argv[-5:] == ['install', SOURCE, '--ref', PIN, '--enable']
     assert kwargs['env']['HERMES_HOME'] == str(ROOT)
     assert kwargs['stdin'] == subprocess.DEVNULL
-    assert kwargs['stdout'] == subprocess.DEVNULL
-    return type('Result',(),{'returncode':1})()
-subprocess.run = fake_install
+    assert kwargs['stdout'] == subprocess.PIPE
+    assert '--force' not in argv
+    import io
+    return type('Result',(),{'stdout':io.BytesIO(b'secret=private'), 'wait':lambda self:1})()
+subprocess.Popen = fake_install
 entry('install',id)
 `,
     { config: { gateway: { multiplex_profiles: true } } },
@@ -389,24 +391,23 @@ entry('configure',id)
 });
 test("bootstrap timeout kills the owned installer process group, including descendants", () => {
   const temp = mkdtempSync(join(tmpdir(), "deskrpg-watchdog-test-"));
-  let pid: number | undefined;
+  let ownedPids: number[] = [];
   try {
-    const bin = join(temp, ".hermes/hermes-agent/venv/bin");
-    mkdirSync(bin, { recursive: true });
-    const python =
-      installedPython ??
-      spawnSync("python3", ["-c", "import sys;print(sys.executable)"], {
+    // Build a stdlib-only venv outside the watchdog window. A fresh executable shell
+    // shim has cold-launch overhead; a bare symlink also breaks relocatable Python builds.
+    const venv = spawnSync(
+      "python3",
+      ["-m", "venv", "--without-pip", join(temp, ".hermes/hermes-agent/venv")],
+      {
         encoding: "utf8",
-      }).stdout.trim();
-    writeFileSync(
-      join(bin, "python"),
-      "#!/bin/sh\nexec " + "'" + python.replace(/'/g, "'\\''") + "'" + ' \"$@\"\n',
-      { mode: 0o700 },
+        timeout: 10000,
+      },
     );
+    assert.equal(venv.status, 0, venv.stderr);
     const script = String.raw`
-import os, pathlib, subprocess, sys, time
+import json, os, pathlib, subprocess, sys, time
 child = subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)'])
-(pathlib.Path.home() / 'owned-test-pid').write_text(str(child.pid))
+(pathlib.Path.home() / 'owned-test-pid').write_text(json.dumps([os.getpid(), child.pid]))
 time.sleep(30)
 `;
     const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
@@ -417,13 +418,25 @@ time.sleep(30)
     });
     assert.equal(result.status, 0);
     assert.deepEqual(JSON.parse(result.stdout), { error: "host_operation_failed" });
-    pid = Number(readFileSync(join(temp, "owned-test-pid"), "utf8"));
-    const state = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], {
-      encoding: "utf8",
-    }).stdout.trim();
-    assert.ok(state === "" || state.startsWith("Z"), `owned child survived watchdog: ${state}`);
+    const pidFile = join(temp, "owned-test-pid");
+    assert.ok(
+      existsSync(pidFile),
+      "helper must start and spawn a descendant before the watchdog fires",
+    );
+    ownedPids = JSON.parse(readFileSync(pidFile, "utf8"));
+    assert.equal(ownedPids.length, 2);
+    for (const pid of ownedPids) {
+      assert.ok(Number.isInteger(pid) && pid > 0);
+      const state = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], {
+        encoding: "utf8",
+      }).stdout.trim();
+      assert.ok(
+        state === "" || state.startsWith("Z"),
+        `owned process ${pid} survived watchdog: ${state}`,
+      );
+    }
   } finally {
-    if (pid) {
+    for (const pid of ownedPids) {
       try {
         process.kill(pid, "SIGKILL");
       } catch {
@@ -547,4 +560,45 @@ test("inspection safely forwards optional provisioning capability without creden
   const result = await inspectHost(f.execute, candidate.id);
   assert.deepEqual(result.profiles, [{ name: "sophie", hasToken: false, canProvision: true }]);
   assert.ok(!JSON.stringify(result).includes("private-profile-token"));
+});
+
+for (const [diagnostic, expected] of [
+  ["Security scan: BLOCKED. secret=private", "plugin_security_review_required"],
+  ["fatal: Repository not found. secret=private", "plugin_source_unavailable"],
+  ["unexpected secret=private", "plugin_install_failed"],
+] as const) {
+  test(`installer reports only safe code: ${expected}`, () => {
+    const result = fixture(
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+def fake_install(argv, **kwargs):
+    assert '--force' not in argv
+    return type('Result',(),{'stdout':io.BytesIO(${JSON.stringify(diagnostic)}.encode()), 'wait':lambda self:1})()
+subprocess.Popen = fake_install
+entry('install',id)
+`,
+      { config: { gateway: { multiplex_profiles: true } } },
+    );
+    assert.deepEqual(result.body, { error: expected });
+  });
+}
+test("installer bounds diagnostics and terminates excessive output", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+class Child:
+    stdout = io.BytesIO(b'x' * 262145)
+    killed = False
+    def kill(self): self.killed = True
+    def wait(self):
+        assert self.killed
+        return 1
+subprocess.Popen = lambda *args, **kwargs: Child()
+entry('install',id)
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "output_limit" });
 });

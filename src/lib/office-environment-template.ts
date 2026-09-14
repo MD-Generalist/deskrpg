@@ -35,7 +35,7 @@ export async function ensureOfficeEnvironmentTemplate(
   const environment = OFFICE_ENVIRONMENTS.find((entry) => entry.id === id);
   if (!environment) throw new Error("Unknown office environment");
   const map = buildOfficeEnvironment(environment.id);
-  const tag = `deskrpg-office-v1:${id}`;
+  const tag = `deskrpg-office-v2:${id}`;
   const listResponse = await request("/api/map-templates");
   if (!listResponse.ok) throw new Error("Unable to load office environments");
   const list = await listResponse.json();

@@ -6,3 +6,13 @@
   --border: #d6ddcf;
   --border-subtle: #e4e8df;
 }
+
+/* One header offset shared by the scene, conversation panel and meeting workspace. */
+.ui2-game {
+  --game-header-height: 48px;
+}
+@media (max-width: 1000px) {
+  .ui2-game {
+    --game-header-height: 80px;
+  }
+}

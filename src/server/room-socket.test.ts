@@ -308,11 +308,12 @@ test("room:open 은 최근 60줄만 돌려준다 — 그보다 오래된 줄은 
   assert.equal(history.messages.at(-1)?.content, "m60", "오래된 순으로 온다");
 });
 
-test("office 방의 주인은 채널 소유자다 — 먼저 들어온 손님이 아니다", async () => {
+test("office list remains available to an authorized visitor before asynchronous player join completes", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const visitor = await seedUser("room-visitor");
-  const t = setup({ userId: visitor.id });
+  const t = setup({ userId: visitor.id, player: false });
   await t.register(seeded);
+  assert.equal(t.players.size, 0, "room listing authorization does not depend on map placement");
   await t.socket.trigger("room:list", { channelId: seeded.channelId });
   const [res] = ev(t.emitted, "room:list-response") as {
     rooms: { kind: string; createdBy: string }[];

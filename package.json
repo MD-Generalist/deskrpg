@@ -20,6 +20,8 @@
     "src/db",
     "src/lib",
     "src/server",
+    "src/game/navigation.ts",
+    "src/game/three/seating.ts",
     "drizzle",
     ".env.example",
     "drizzle-sqlite.config.ts",

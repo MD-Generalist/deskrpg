@@ -1,3 +1,4 @@
+import type { MeetingDiscussionState } from "../lib/meeting-discussion-state";
 import { MEETING_NPC_STREAM_EVENT } from "./meeting-socket";
 import type { AdapterRegistry, NpcAdapter } from "../lib/adapters/types";
 import {
@@ -111,6 +112,7 @@ type MeetingSummary = {
 };
 
 export type MeetingBrokerLike = {
+  discussionState?: MeetingDiscussionState;
   config: {
     participants: MeetingBrokerParticipant[];
     sessionKeyPrefix?: string;
@@ -546,6 +548,7 @@ export function registerMeetingDiscussionHandlers({
       },
       {
         onPollStart: () => {
+          if (brokerInstance.discussionState) brokerInstance.discussionState.isWaitingInput = false;
           io.to(getMeetingRoomId(channelId)).emit("meeting:poll-status", { status: "polling" });
         },
         onPollResult: (raises, passes, failures) => {
@@ -564,12 +567,23 @@ export function registerMeetingDiscussionHandlers({
           });
         },
         onTurnStart: (agent) => {
+          const state = brokerInstance.discussionState;
+          if (state) {
+            state.isWaitingInput = false;
+            state.currentSpeaker = { npcId: agent.npcId, npcName: agent.displayName };
+            state.rawStreams = {};
+          }
           io.to(getMeetingRoomId(channelId)).emit("meeting:npc-turn-start", {
             npcId: agent.npcId,
             npcName: agent.displayName,
           });
         },
         onTurnChunk: (npcId, chunk) => {
+          const state = brokerInstance.discussionState;
+          if (state) {
+            state.rawStreams ??= {};
+            state.rawStreams[npcId] = (state.rawStreams[npcId] || "") + chunk;
+          }
           io.to(getMeetingRoomId(channelId)).emit(MEETING_NPC_STREAM_EVENT, {
             npcId,
             chunk,
@@ -577,6 +591,11 @@ export function registerMeetingDiscussionHandlers({
           });
         },
         onTurnEnd: (npcId, fullResponse) => {
+          const state = brokerInstance.discussionState;
+          if (state) {
+            state.currentSpeaker = null;
+            delete state.rawStreams?.[npcId];
+          }
           const agent = brokerInstance.config.participants.find(
             (participant) => participant.npcId === npcId,
           );
@@ -606,12 +625,33 @@ export function registerMeetingDiscussionHandlers({
           }
         },
         onModeChanged: (mode, by) => {
-          io.to(getMeetingRoomId(channelId)).emit("meeting:mode-changed", { mode, by });
+          if (
+            brokerInstance.discussionState &&
+            (mode === "auto" || mode === "manual" || mode === "directed")
+          )
+            brokerInstance.discussionState.mode = mode;
+          const state = brokerInstance.discussionState;
+          // A mode change releases the engine wait; the next waiting callback re-arms it.
+          if (state) state.isWaitingInput = false;
+          io.to(getMeetingRoomId(channelId)).emit("meeting:mode-changed", {
+            mode, by,
+            execution: state ? {
+              isWaitingInput: state.isWaitingInput,
+              currentSpeaker: state.currentSpeaker,
+              rawStreams: { ...state.rawStreams },
+            } : undefined,
+          });
         },
         onWaitingInput: (pollResult) => {
+          if (brokerInstance.discussionState) brokerInstance.discussionState.isWaitingInput = true;
           io.to(getMeetingRoomId(channelId)).emit("meeting:waiting-input", { pollResult });
         },
         onTurnAborted: (npcId) => {
+          const state = brokerInstance.discussionState;
+          if (state) {
+            state.currentSpeaker = null;
+            delete state.rawStreams?.[npcId];
+          }
           io.to(getMeetingRoomId(channelId)).emit("meeting:turn-aborted", { npcId });
         },
         onParticipantsExcluded: (excluded) => {
@@ -667,6 +707,8 @@ export function registerMeetingDiscussionHandlers({
             keyTopics: summary.keyTopics,
             conclusions: summary.conclusions,
             minutesId,
+            discussion: brokerInstance.discussionState,
+            participantCount: meetingParticipants.length,
             totalTurns: brokerInstance.turns.length,
             durationSeconds,
           });
@@ -693,6 +735,20 @@ export function registerMeetingDiscussionHandlers({
       "브로커 시작:",
       brokerInstance.config.participants.map((p) => p.displayName).join(", "),
     );
+    brokerInstance.discussionState = {
+      topic,
+      npcs: brokerInstance.config.participants.map((npc) => ({
+        id: npc.npcId,
+        name: npc.displayName,
+      })),
+      mode: settings?.initialMode === "manual" ? "manual" : "auto",
+      initiatorId: user.userId,
+      initiatorSocketId: socket.id,
+      isWaitingInput: false,
+      currentSpeaker: null,
+      rawStreams: {},
+    };
+    if (room) room.messages = [];
     activeBrokers.set(channelId, brokerInstance);
     discussionInitiators.set(channelId, user.userId);
 
@@ -709,6 +765,7 @@ export function registerMeetingDiscussionHandlers({
       mode: settings?.initialMode || "auto",
       by: user.userId,
       initiatorId: user.userId,
+      discussion: brokerInstance.discussionState,
     });
   });
 
@@ -787,6 +844,10 @@ export function registerMeetingDiscussionHandlers({
 
     const broker = activeBrokers.get(channelId);
     if (!broker || !broker.isRunning()) return;
+    const state = broker.discussionState;
+    if (state?.mode !== "manual" || state.isWaitingInput !== true) return;
+    // Consume readiness before calling the engine so repeated requests cannot queue a release.
+    state.isWaitingInput = false;
     broker.nextTurn();
   });
 

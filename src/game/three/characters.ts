@@ -1,11 +1,13 @@
+import { createGltfActor } from "./gltf-actor";
+import { officeLookAssetUrl } from "./office-look-assets";
+import { idleMotion } from "./idle-motion";
 import * as T from "three";
 import { round, sphere } from "./primitives";
 export { round, sphere, cylinder } from "./primitives";
-import { createOfficeActor } from "./office-actor";
 import type { OfficeLook } from "./office-looks";
 const mat = (color: string) => new T.MeshStandardMaterial({ color, roughness: 0.8 });
 export type ActorPhase =
-  "idle" | "walking" | "seated" | "queued" | "thinking" | "streaming" | "done";
+  "idle" | "walking" | "seated" | "queued" | "thinking" | "streaming" | "done" | "attention";
 export function createActor(
   id: string,
   color: string,
@@ -13,7 +15,7 @@ export function createActor(
   palette?: { skin: string; hair: string; legs: string },
   look?: OfficeLook,
 ) {
-  if (look) return createOfficeActor(id, look, index);
+  if (look) return createGltfActor(id, look, index, officeLookAssetUrl(look.id));
   const root = new T.Group(),
     rig = new T.Group();
   root.add(rig);
@@ -84,13 +86,15 @@ export function createActor(
     seated: false,
     update(t: number, walking: boolean, phase: ActorPhase, seated: boolean) {
       const sit = seated && !walking;
+      const motion = idleMotion(t, index, walking, phase);
+      head.rotation.y = motion.yaw;
       rig.position.y = sit
         ? 0.04
         : walking
           ? -0.14 + Math.abs(Math.sin(t * 9)) * 0.035
           : -0.14 + Math.sin(t * 2.3 + index) * 0.012;
-      torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.035 : 0;
-      head.rotation.x = phase === "thinking" ? 0.12 : 0;
+      torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.035 : motion.sway;
+      head.rotation.x = phase === "thinking" ? 0.12 : motion.nod;
       head.rotation.z = phase === "thinking" ? 0.12 : Math.sin(t * 1.8 + index) * 0.025;
       arms.forEach((a, i) => {
         a.rotation.x = walking
@@ -101,7 +105,9 @@ export function createActor(
               ? -0.45 + Math.sin(t * 4 + i) * 0.2
               : sit
                 ? -0.5
-                : 0;
+                : i === 1
+                  ? -motion.hand * 0.75
+                  : 0;
         a.rotation.z = phase === "streaming" ? Math.sin(t * 3 + i) * 0.15 : 0;
       });
       legs.forEach(

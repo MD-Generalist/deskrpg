@@ -4,12 +4,24 @@ import * as T from "three";
 import { OFFICE_LOOKS, LOOK_CATEGORIES, type OfficeLook } from "@/game/three/office-looks";
 import { createActor, cylinder } from "@/game/three/characters";
 import { disposeTree } from "@/game/three/office-renderer";
+import { captureWhenReady } from "@/game/three/ready-capture";
 import { useLocale } from "@/lib/i18n";
 
 const cachedThumbnails: Record<string, string> = {};
 
-function captureThumbnail(renderer: T.WebGLRenderer, look: OfficeLook, index: number) {
+async function captureThumbnail(
+  renderer: T.WebGLRenderer,
+  look: OfficeLook,
+  index: number,
+  signal: AbortSignal,
+) {
   const scene = new T.Scene();
+  let disposed = false;
+  const release = () => {
+    if (disposed) return;
+    disposed = true;
+    disposeTree(scene);
+  };
   try {
     const camera = new T.PerspectiveCamera(30, 240 / 280, 0.1, 20);
     camera.position.set(1.5, 1.8, 4.2);
@@ -21,18 +33,26 @@ function captureThumbnail(renderer: T.WebGLRenderer, look: OfficeLook, index: nu
     cylinder(scene, 0.46, 0.5, 0.06, "#d9cbb6", 0, 0.015, 0);
     const actor = createActor(look.id, look.coat, index, undefined, look);
     scene.add(actor.root);
-    actor.update(0, false, "idle", false);
-    renderer.render(scene, camera);
-    return renderer.domElement.toDataURL("image/png");
+    return await captureWhenReady(
+      "ready" in actor ? actor.ready : Promise.resolve(true),
+      signal,
+      () => {
+        actor.update(0, false, "idle", false);
+        renderer.render(scene, camera);
+        return renderer.domElement.toDataURL("image/png");
+      },
+      release,
+    );
   } finally {
-    disposeTree(scene);
+    release();
   }
 }
 
 /** One context per mounted generation; each frame captures at most one missing look. */
 function generateThumbnails(publish: (images: Record<string, string>) => void) {
   let renderer: T.WebGLRenderer | undefined;
-  let cancelled = false;
+  const controller = new AbortController();
+  const { signal } = controller;
   let index = 0;
   let frame = 0;
   const release = () => {
@@ -45,8 +65,8 @@ function generateThumbnails(publish: (images: Record<string, string>) => void) {
       current.forceContextLoss();
     }
   };
-  const captureNext = () => {
-    if (cancelled) return;
+  const captureNext = async () => {
+    if (signal.aborted) return;
     try {
       // Always publish completed images, including an entirely cached remount.
       publish({ ...cachedThumbnails });
@@ -66,8 +86,9 @@ function generateThumbnails(publish: (images: Record<string, string>) => void) {
         renderer.outputColorSpace = T.SRGBColorSpace;
       }
       const look = OFFICE_LOOKS[index];
-      const image = captureThumbnail(renderer, look, index++);
-      cachedThumbnails[look.id] = image;
+      const image = await captureThumbnail(renderer, look, index++, signal);
+      if (signal.aborted) return;
+      if (image) cachedThumbnails[look.id] = image;
       publish({ ...cachedThumbnails });
       if (index < OFFICE_LOOKS.length) frame = requestAnimationFrame(captureNext);
       else release();
@@ -78,7 +99,7 @@ function generateThumbnails(publish: (images: Record<string, string>) => void) {
   };
   frame = requestAnimationFrame(captureNext);
   return () => {
-    cancelled = true;
+    controller.abort();
     cancelAnimationFrame(frame);
     release();
   };

@@ -7,7 +7,7 @@
  */
 
 export type ReturnCandidate = {
-  moveState: "idle" | "moving-to-player" | "waiting" | "returning";
+  moveState: "idle" | "moving-to-player" | "waiting" | "returning" | "strolling";
   calledForRoom: string | null;
 };
 

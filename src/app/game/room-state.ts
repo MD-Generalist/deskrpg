@@ -4,7 +4,7 @@ import { sortRooms, type RoomMessage, type RoomSummary } from "@/lib/chat-rooms-
  * 채널 대화방 화면의 상태. 순수 리듀서라 소켓·React 를 모른다 — `node:test` 가 붙는다.
  *
  * `view` 는 세 화면이다: 방 목록(`list`), 방 안(`room`), 새 방/초대 작성(`compose`).
- * office 방 하나뿐인 채널은 목록이 의미가 없으므로 `showList` 가 방에 머문다.
+ * 목록은 방이 하나여도 새 방 만들기의 진입점이다.
  */
 export type RoomState = {
   rooms: RoomSummary[];
@@ -132,8 +132,8 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
       return { ...state, currentRoomId: action.roomId, view: "room", compose: undefined };
 
     case "showList":
-      // 방이 하나뿐이면 목록은 빈 화면이나 다름없다 — 그 방에 머문다.
-      return { ...state, view: state.rooms.length > 1 ? "list" : "room", compose: undefined };
+      // 단일 office 채널에서도 새 방 만들기에 접근할 수 있다.
+      return { ...state, view: "list", compose: undefined };
 
     case "compose":
       return {

@@ -8,12 +8,16 @@ import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-r
 import MinutesModal from "./MinutesModal";
 import { useLocale, useT } from "@/lib/i18n";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
+import { recentMeetingSpeech } from "./meeting-room/recent-speech";
 import { buildSpeechBubblePreview } from "./meeting-room/speech-preview";
 import { appendMeetingMessage } from "./meeting-room/message-state";
 import { mentionSkipI18nKey } from "./meeting-room/mention-skip-notice";
-import { formatPollRaises, type PollRaiseItem } from "./meeting-room/poll-status";
+import { formatPollRaises, formatPollPasses, type PollRaiseItem } from "./meeting-room/poll-status";
+import { restoreMeetingNpcs, type MeetingDiscussionState } from "@/lib/meeting-discussion-state";
+import { isMeetingChair, selectMeetingNpcs } from "./meeting-room/participants";
 import { clampMeetingSidebarWidth } from "./meeting-room/responsive";
 import { computeMeetingTopicRows } from "./meeting-room/start-form";
+import { restoreMeetingChat, restoreMeetingExecution, type MeetingExecutionState } from "./meeting-room/restore-state";
 import { consumeNpcStreamBuffer } from "./meeting-room/stream-state";
 import {
   sanitizeClientFinalSpeech,
@@ -29,6 +33,7 @@ import { computeMeetingTableLayout } from "./meeting-room/layout";
 
 interface Participant {
   id: string;
+  userId?: string;
   name: string;
   appearance: CharacterAppearance | LegacyCharacterAppearance | null;
   type: "user" | "npc";
@@ -243,6 +248,10 @@ export default function MeetingRoom({
   const [maxTurns, setMaxTurns] = useState(20);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  const [discussionNpcs, setDiscussionNpcs] = useState<MeetingRoomProps["npcs"] | null>(null);
+  const participantCountRef = useRef(0);
+  const [initiatorUserId, setInitiatorUserId] = useState<string | null>(null);
+
   // Post-meeting state
   const [meetingEnded, setMeetingEnded] = useState(false);
   const [lastMeetingResult, setLastMeetingResult] = useState<{
@@ -252,6 +261,7 @@ export default function MeetingRoom({
     minutesId: string | null;
     totalTurns: number;
     durationSeconds: number | null;
+    participantCount: number;
   } | null>(null);
   const [showMinutesModal, setShowMinutesModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -259,13 +269,15 @@ export default function MeetingRoom({
   // Build current user as participant
   const currentUser: Participant = {
     id: socket?.id || "self",
+    userId: participants.find((participant) => participant.id === socket?.id)?.userId,
     name: character.name,
     appearance: character.appearance,
     type: "user",
   };
 
   // Build NPC participants
-  const npcParticipants: Participant[] = npcs.map((npc) => ({
+  const displayedNpcs = discussionNpcs ?? selectMeetingNpcs(npcs, selectedNpcIds);
+  const npcParticipants: Participant[] = displayedNpcs.map((npc) => ({
     id: `npc-${npc.id}`,
     name: npc.name,
     appearance: npc.appearance as CharacterAppearance | LegacyCharacterAppearance | null,
@@ -375,9 +387,26 @@ export default function MeetingRoom({
 
     // Listen for state sync (on join)
     const handleState = (data: {
-      participants: { id: string; name: string; appearance: unknown }[];
+      participants: { id: string; userId?: string; name: string; appearance: unknown }[];
       messages: MeetingMessage[];
+      discussion?: MeetingDiscussionState | null;
+      isInitiator?: boolean;
     }) => {
+      if (data.discussion) {
+        setInitiatorUserId(data.discussion.initiatorId);
+        setDiscussionNpcs(restoreMeetingNpcs(data.discussion.npcs, npcsRef.current));
+        setMeetingTopic(data.discussion.topic);
+        meetingTopicRef.current = data.discussion.topic;
+        setMeetingActive(true);
+        setMeetingEnded(false);
+        setLastMeetingResult(null);
+        setMeetingMode(data.discussion.mode);
+        setIsInitiator(data.isInitiator === true);
+      } else {
+        setMeetingActive(false);
+        setDiscussionNpcs(null);
+        setInitiatorUserId(null);
+      }
       setParticipants(
         data.participants.map((p) => ({
           ...p,
@@ -385,20 +414,28 @@ export default function MeetingRoom({
           type: "user" as const,
         })),
       );
-      // Start with empty chat — past messages are preserved in meeting minutes DB
-      setMessages([]);
-      npcRawStreamsRef.current = {};
-      npcStreamsRef.current = {};
-      setNpcStreams({});
+      const restored = restoreMeetingChat(data.discussion, data.messages);
+      setMessages(restored.messages);
+      setIsWaitingInput(restored.isWaitingInput);
+      setCurrentSpeaker(restored.currentSpeaker);
+      npcRawStreamsRef.current = restored.rawStreams;
+      npcStreamsRef.current = restored.streams;
+      setNpcStreams(restored.streams);
     };
 
-    const handleParticipantJoined = (data: { id: string; name: string; appearance: unknown }) => {
+    const handleParticipantJoined = (data: {
+      id: string;
+      userId?: string;
+      name: string;
+      appearance: unknown;
+    }) => {
       setParticipants((prev) => {
         if (prev.some((p) => p.id === data.id)) return prev;
         return [
           ...prev,
           {
             id: data.id,
+            userId: data.userId,
             name: data.name,
             appearance: data.appearance as CharacterAppearance | LegacyCharacterAppearance | null,
             type: "user" as const,
@@ -472,6 +509,7 @@ export default function MeetingRoom({
     };
 
     const handleNpcTurnStart = (data: { npcId: string; npcName: string }) => {
+      setIsWaitingInput(false);
       setCurrentSpeaker({ npcId: data.npcId, npcName: data.npcName });
     };
 
@@ -486,6 +524,8 @@ export default function MeetingRoom({
       minutesId?: string | null;
       totalTurns?: number;
       durationSeconds?: number | null;
+      discussion?: MeetingDiscussionState;
+      participantCount?: number;
     }) => {
       if (suppressNextMeetingEndRef.current) {
         suppressNextMeetingEndRef.current = false;
@@ -497,13 +537,16 @@ export default function MeetingRoom({
       setPollStatus(null);
 
       setMeetingEnded(true);
+      if (data.discussion)
+        setDiscussionNpcs(restoreMeetingNpcs(data.discussion.npcs, npcsRef.current));
       setLastMeetingResult({
-        topic: meetingTopicRef.current,
+        topic: data.discussion?.topic ?? meetingTopicRef.current,
         keyTopics: data.keyTopics || [],
         conclusions: data.conclusions || null,
         minutesId: data.minutesId || null,
         totalTurns: data.totalTurns || 0,
         durationSeconds: data.durationSeconds || null,
+        participantCount: data.participantCount ?? participantCountRef.current,
       });
 
       if (data.transcript) {
@@ -553,9 +596,26 @@ export default function MeetingRoom({
       mode: "auto" | "manual" | "directed";
       by: string;
       initiatorId?: string;
+      discussion?: MeetingDiscussionState;
+      execution?: MeetingExecutionState;
     }) => {
+      if (data.discussion) {
+        setInitiatorUserId(data.discussion.initiatorId);
+        setDiscussionNpcs(restoreMeetingNpcs(data.discussion.npcs, npcsRef.current));
+        setMeetingTopic(data.discussion.topic);
+        meetingTopicRef.current = data.discussion.topic;
+        setMeetingActive(true);
+        setMeetingEnded(false);
+        setLastMeetingResult(null);
+        setIsInitiator(data.discussion.initiatorSocketId === socket.id);
+      }
       setMeetingMode(data.mode);
-      setIsWaitingInput(data.mode !== "auto");
+      const restored = restoreMeetingExecution(data.execution ?? data.discussion);
+      setIsWaitingInput(restored.isWaitingInput);
+      setCurrentSpeaker(restored.currentSpeaker);
+      npcRawStreamsRef.current = restored.rawStreams;
+      npcStreamsRef.current = restored.streams;
+      setNpcStreams(restored.streams);
     };
 
     const handleWaitingInput = (data: { pollResult?: PollStatus | null }) => {
@@ -589,6 +649,13 @@ export default function MeetingRoom({
       setCurrentSpeaker(null);
     };
 
+    const rejoin = () =>
+      socket.emit("meeting:join", {
+        channelId,
+        characterName: characterRef.current.name,
+        appearance: characterRef.current.appearance,
+      });
+    socket.on("connect", rejoin);
     socket.on("meeting:state", handleState);
     socket.on("meeting:participant-joined", handleParticipantJoined);
     socket.on("meeting:participant-left", handleParticipantLeft);
@@ -604,6 +671,7 @@ export default function MeetingRoom({
     socket.on("meeting:mention-skipped", handleMentionSkipped);
 
     return () => {
+      socket.off("connect", rejoin);
       socket.off("meeting:state", handleState);
       socket.off("meeting:participant-joined", handleParticipantJoined);
       socket.off("meeting:participant-left", handleParticipantLeft);
@@ -633,6 +701,7 @@ export default function MeetingRoom({
     const topic = meetingTopic.trim();
     if (!topic || startingMeeting || !socket) return;
     setStartingMeeting(true);
+    setDiscussionNpcs(selectMeetingNpcs(npcs, selectedNpcIds));
     socket.emit("meeting:start-discussion", {
       channelId,
       topic,
@@ -662,6 +731,7 @@ export default function MeetingRoom({
     socket,
     channelId,
     selectedNpcIds,
+    npcs,
     startMode,
     maxTurns,
     hybridMode,
@@ -678,7 +748,7 @@ export default function MeetingRoom({
     (mode: "auto" | "manual") => {
       if (!socket) return;
       setMeetingMode(mode);
-      setIsWaitingInput(mode !== "auto");
+      setIsWaitingInput(false);
       socket.emit("meeting:set-mode", { channelId, mode });
     },
     [socket, channelId],
@@ -692,6 +762,7 @@ export default function MeetingRoom({
     socket.emit("meeting:stop", { channelId });
     setMeetingActive(false);
     setMeetingEnded(false);
+    setDiscussionNpcs(null);
     setLastMeetingResult(null);
     setMeetingMode(startMode);
     setIsWaitingInput(false);
@@ -741,6 +812,9 @@ export default function MeetingRoom({
   );
 
   const sceneParticipants = [currentUser, ...otherParticipants];
+  useEffect(() => {
+    participantCountRef.current = sceneParticipants.length;
+  }, [sceneParticipants.length]);
   const layout = computeMeetingTableLayout({
     participantIds: sceneParticipants.map((participant) => participant.id),
   });
@@ -752,10 +826,12 @@ export default function MeetingRoom({
     : null;
   const raiseNames = formatPollRaises(pollStatus?.raises);
   const tableAvailableWidth =
-    contentWidth > 0 ? Math.max(contentWidth - sidebarWidth - 32, 320) : 980;
+    contentWidth > 0
+      ? Math.max(contentWidth - (contentWidth < 640 ? 16 : sidebarWidth + 32), 1)
+      : 980;
   const sceneSeats: MeetingSceneSeat[] = layout.seats.map((seat) => {
     const participant = participantMap.get(seat.participantId);
-    const isChair = seat.participantId === currentUser.id;
+    const isChair = isMeetingChair(participant, initiatorUserId);
     const isSpeaking = Boolean(
       currentSpeaker &&
       participant?.type === "npc" &&
@@ -769,7 +845,7 @@ export default function MeetingRoom({
       isChair,
       isNpc: participant?.type === "npc",
       isSpeaking,
-      speechPreview: isSpeaking ? currentSpeechPreview : null,
+      speechPreview: isSpeaking ? currentSpeechPreview : recentMeetingSpeech(messages, seat.participantId, nowMs),
       isClickable: Boolean(participant?.type === "npc" && meetingActive && isInitiator),
       onClick:
         participant?.type === "npc" && meetingActive && isInitiator
@@ -956,10 +1032,14 @@ export default function MeetingRoom({
   return (
     <div className="fixed inset-0 z-5 flex flex-col bg-bg text-text">
       {/* Main content: table + chat side by side */}
-      <div ref={contentRef} className="flex-1 flex min-h-0 pt-[44px]">
+      <div
+        ref={contentRef}
+        className="flex-1 flex flex-col sm:flex-row min-h-0"
+        style={{ paddingTop: "var(--game-header-height, 48px)" }}
+      >
         {/* Left: Meeting Table visualization */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 p-4">
+        <div className="h-[28dvh] min-h-[180px] shrink-0 flex flex-col min-w-0 sm:h-auto sm:min-h-0 sm:flex-1">
+          <div className="flex-1 min-h-0 p-2 sm:p-4">
             <MeetingTableScene
               availableWidth={tableAvailableWidth}
               layout={layout}
@@ -971,7 +1051,7 @@ export default function MeetingRoom({
               mode={meetingMode}
               isWaiting={isWaitingInput}
               currentSpeaker={currentSpeaker}
-              npcs={npcs}
+              npcs={displayedNpcs}
               lastSpokeTimes={lastSpokeTimes}
               nowMs={nowMs}
               onSetMode={handleSetMode}
@@ -1026,7 +1106,12 @@ export default function MeetingRoom({
                 )}
                 {pollStatus.passes && pollStatus.passes.length > 0 && (
                   <span className="text-text-dim">
-                    {t("meeting.passLabel")} {pollStatus.passes.join(", ")}
+                    {t("meeting.passLabel")}{" "}
+                    {formatPollPasses(
+                      pollStatus.passes,
+                      displayedNpcs,
+                      locale === "ko" ? "알 수 없는 NPC" : "Unknown NPC",
+                    ).join(", ")}
                   </span>
                 )}
                 {pollStatus.status && <span className="text-text-muted">{pollStatus.status}</span>}
@@ -1119,9 +1204,7 @@ export default function MeetingRoom({
                   placeholder={t("meeting.speakToMeeting")}
                   cooldown={cooldown}
                   accentColor="indigo"
-                  mentionCandidates={npcs
-                    .filter((n) => selectedNpcIds.has(n.id))
-                    .map((n) => ({ id: n.id, name: n.name }))}
+                  mentionCandidates={displayedNpcs.map((n) => ({ id: n.id, name: n.name }))}
                   autoFocus
                 />
               </div>
@@ -1145,9 +1228,11 @@ export default function MeetingRoom({
                   {/* Stats grid */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-surface-raised/50 rounded px-3 py-2 text-center">
-                      <div className="text-heading font-bold text-info">{sceneSeats.length}</div>
+                      <div className="text-heading font-bold text-info">
+                        {lastMeetingResult.participantCount}
+                      </div>
                       <div className="text-micro text-text-muted">
-                        {t("meeting.participantCount")}
+                        {locale === "ko" ? "기록된 참가자" : "Recorded participants"}
                       </div>
                     </div>
                     <div className="bg-surface-raised/50 rounded px-3 py-2 text-center">
@@ -1157,6 +1242,12 @@ export default function MeetingRoom({
                       <div className="text-micro text-text-muted">{t("meeting.totalTurns")}</div>
                     </div>
                   </div>
+
+                  <p className="text-micro text-text-muted">
+                    {locale === "ko"
+                      ? "기록된 참가자 수는 회의 시작 시점의 참여자를 기준으로 합니다."
+                      : "The recorded participant count reflects the participants present when the meeting started."}
+                  </p>
 
                   {/* Key topics & conclusions */}
                   {lastMeetingResult.keyTopics.length > 0 || lastMeetingResult.conclusions ? (

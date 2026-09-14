@@ -38,11 +38,18 @@ npm run test:e2e
 
 기록해 두지 않으면 다음 사람이 같은 자리에서 같은 시간을 쓴다.
 
-**1. `127.0.0.1` 이 아니라 `localhost` 로 붙어야 한다.**
+**1. 기본 주소는 `localhost`; 두 계정 검증에는 명시적으로 허용한 `127.0.0.1`을 쓴다.**
 브라우저에게 이 둘은 서로 다른 origin 이고, Next dev 서버는 `allowedDevOrigins` 에 없는
 origin 의 dev 자원 요청을 막는다. 그러면 RSC 페이로드가 끝내 도착하지 않아 React 가 hydrate
 전에 멈춰 선다 — **콘솔 에러 0, 실패한 요청 0, 청크는 21개 전부 200**. 화면에는 "로딩 중..."
 만 남는다. 실측: 같은 서버에 `127.0.0.1` 로 붙으면 fiber=0/input=0, `localhost` 면 fiber=2/input=2.
+
+UI2 다중 사용자 검증을 위해 `next.config.ts`의 `allowedDevOrigins`에 루프백 주소
+`127.0.0.1`만 추가했다. 설정 변경 후 dev 서버를 재시작해야 한다. Chrome에서
+`localhost:<port>`와 `127.0.0.1:<port>`를 각각 열면 쿠키가 분리되어 서로 다른
+사용자로 같은 채널에 접속할 수 있다. 같은 hostname의 두 탭은 쿠키를 공유하므로
+두 계정 검증에 쓰지 않는다. 프로덕션 CORS·인증 정책을 완화하는 설정은 아니다.
+근거: [Next.js allowedDevOrigins](https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins).
 
 **2. headed 로 돌리면 창이 가리는 순간 게임이 멈춘다.**
 Chrome 은 가려진(occluded) 창의 `requestAnimationFrame` 을 초당 1프레임으로 스로틀한다.

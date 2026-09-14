@@ -1,3 +1,7 @@
+import { PlayerResumeStore, readPlayerDestination, type PlayerDestination } from "./player-resume-state";
+import { setNpcActive } from "../lib/npc-roster";
+import { createNpcCoordination } from "./npc-coordination";
+import { deriveChannelMotionLayout, closestValidUnoccupiedSpawn } from "./channel-motion-layout";
 import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
 import { runTrackedDm, executeDmAdapter } from "./dm-response-runtime";
 import { Server, Socket } from "socket.io";
@@ -15,6 +19,7 @@ import {
   groupMembers,
   meetingMinutes,
   chatMessages,
+  hermesProfiles,
   jsonForDb,
 } from "../db";
 import { describeActivity } from "@/lib/npc-activity";
@@ -109,7 +114,7 @@ const { sanitizeNpcResponseText } =
 const { TaskManager } = require("../lib/task-manager.js") as {
   TaskManager: new (
     db: typeof import("../db").db,
-    schema: { tasks: typeof tasks; npcs: typeof npcs },
+    schema: { tasks: typeof tasks; npcs: typeof npcs; hermesProfiles: typeof hermesProfiles },
   ) => {
     handleTaskAction: (...args: unknown[]) => Promise<unknown>;
     getTasksByNpc: (npcId: string) => Promise<unknown[]>;
@@ -175,6 +180,7 @@ export interface PlayerState {
   y: number;
   direction: string;
   animation: string;
+  motion?: PlayerDestination | null;
 }
 
 interface NpcConfig {
@@ -223,6 +229,7 @@ interface MeetingRoom {
 // ---------------------------------------------------------------------------
 
 const players = new Map<string, PlayerState>();
+const playerResumeStates = new PlayerResumeStore();
 
 // Rate limit: socketId -> last message timestamp
 const lastChatTime = new Map<string, number>();
@@ -266,7 +273,7 @@ function getDmResponseTracker(io: Server, scope: string): ChatResponseTracker {
 
 const CHAT_COOLDOWN_MS = 2000;
 const PROGRESS_NUDGE_SCAN_MS = 60_000;
-const taskManager = new TaskManager(db, { tasks, npcs });
+const taskManager = new TaskManager(db, { tasks, npcs, hermesProfiles });
 const progressNudgeInFlight = new Set<string>();
 const progressNudgeCooldowns = new Map<string, number>();
 let progressNudgeTimer: NodeJS.Timeout | null = null;
@@ -1343,6 +1350,31 @@ async function isChannelOwner(channelId: string, userId: string): Promise<boolea
 // ---------------------------------------------------------------------------
 
 export function setupSocketHandlers(io: Server) {
+  const loadMotionLayout = async (channelId: string) => {
+    const [[channel], channelNpcs] = await Promise.all([
+      db
+        .select({ mapData: channels.mapData, mapConfig: channels.mapConfig })
+        .from(channels)
+        .where(eq(channels.id, channelId))
+        .limit(1),
+      selectChannelNpcs(channelId),
+    ]);
+    const layout =
+      channel &&
+      deriveChannelMotionLayout(
+        channel,
+        channelNpcs
+          .filter((npc) => npc.positionX !== null && npc.positionY !== null)
+          .map((npc) => ({ id: npc.id, positionX: npc.positionX!, positionY: npc.positionY! })),
+      );
+    if (!layout) throw new Error("Channel motion layout unavailable");
+    return layout;
+  };
+  const coordination = createNpcCoordination(io, {
+    getPlayer: (id) => players.get(id),
+    loadChannel: loadMotionLayout,
+  });
+
   if (!progressNudgeTimer) {
     progressNudgeTimer = setInterval(() => {
       void scanProgressNudges(io);
@@ -1355,6 +1387,8 @@ export function setupSocketHandlers(io: Server) {
       socket.disconnect(true);
       return;
     }
+
+    coordination.register(socket);
 
     // ----- player:join -----
     socket.on(
@@ -1401,6 +1435,47 @@ export function setupSocketHandlers(io: Server) {
           players.delete(prevSocketId);
         }
 
+        if (!socket.connected || !Number.isFinite(data.x) || !Number.isFinite(data.y)) return;
+        const previousChannel = players.get(socket.id)?.mapId;
+        if (previousChannel && previousChannel !== data.mapId) {
+          await socket.leave(previousChannel);
+          socket.to(previousChannel).emit("player:left", { id: socket.id });
+          await coordination.left(socket, previousChannel);
+        }
+        const identity = { userId: user.userId, characterId: data.characterId, mapId: data.mapId };
+        const resume = playerResumeStates.get(identity);
+        let spawn = resume ? { x: resume.x, y: resume.y } : { x: data.x, y: data.y };
+        let restored = !!resume;
+        try {
+          if (!resume) {
+            const [saved] = await db.select({ x: channelMembers.lastX, y: channelMembers.lastY })
+              .from(channelMembers)
+              .where(and(eq(channelMembers.channelId, data.mapId), eq(channelMembers.userId, user.userId)))
+              .limit(1);
+            if (saved?.x != null && saved?.y != null && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+              spawn = { x: saved.x, y: saved.y };
+              restored = true;
+            }
+          }
+          const layout = await loadMotionLayout(data.mapId);
+          const liveActors = await coordination.occupancy(data.mapId, socket.id);
+          // No await between final allocation and players.set: concurrent joins see this slot.
+          const occupied = Array.from(players.values()).filter(
+            (player) => player.mapId === data.mapId && player.id !== socket.id,
+          );
+          const candidate = closestValidUnoccupiedSpawn({ ...layout, npcs: [] }, spawn, [
+            ...occupied,
+            ...liveActors,
+          ]);
+          if (!candidate || !socket.connected) {
+            socket.emit("join-error");
+            return;
+          }
+          spawn = candidate;
+        } catch {
+          socket.emit("join-error");
+          return;
+        }
         const playerState: PlayerState = {
           id: socket.id,
           userId: user.userId,
@@ -1408,14 +1483,21 @@ export function setupSocketHandlers(io: Server) {
           characterName: data.characterName,
           appearance: data.appearance,
           mapId: data.mapId,
-          x: data.x,
-          y: data.y,
-          direction: "down",
-          animation: "idle",
+          x: spawn.x,
+          y: spawn.y,
+          direction: resume?.direction ?? "down",
+          animation: resume?.motion ? resume.animation : "idle",
+          motion: resume?.motion ?? null,
         };
 
         players.set(socket.id, playerState);
-        socket.join(data.mapId);
+        playerResumeStates.save(playerState);
+        await socket.join(data.mapId);
+        socket.emit("player:spawn", {
+          ...spawn, direction: playerState.direction, animation: playerState.animation,
+          restored, motion: playerState.motion,
+        });
+        await coordination.joined(socket, data.mapId);
 
         // Send current players on this map to the joining player
         const mapPlayers = Array.from(players.values()).filter(
@@ -1437,14 +1519,18 @@ export function setupSocketHandlers(io: Server) {
     // ----- player:move -----
     socket.on(
       "player:move",
-      (data: { x: number; y: number; direction: string; animation: string }) => {
+      (data: { x: number; y: number; direction: string; animation: string; motion?: unknown }) => {
         const player = players.get(socket.id);
         if (!player) return;
 
+        if (!Number.isFinite(data.x) || !Number.isFinite(data.y)) return;
+        void coordination.moved(socket, data.x, data.y);
         player.x = data.x;
         player.y = data.y;
         player.direction = data.direction;
         player.animation = data.animation;
+        player.motion = readPlayerDestination(data.motion);
+        playerResumeStates.save(player);
 
         socket.to(player.mapId).emit("player:moved", {
           id: socket.id,
@@ -1478,6 +1564,12 @@ export function setupSocketHandlers(io: Server) {
       if (!player) return;
       if (!(await isChannelOwner(player.mapId, user.userId))) return;
       socket.to(player.mapId).emit("map:tiles-updated", data);
+    });
+
+    socket.on("map:layout-saved", async () => {
+      const player = players.get(socket.id);
+      if (!player || !(await isChannelOwner(player.mapId, user.userId))) return;
+      await coordination.invalidate(player.mapId);
     });
 
     // ----- npc:chat -----
@@ -1866,65 +1958,7 @@ export function setupSocketHandlers(io: Server) {
       }
     });
 
-    // ----- NPC movement -----
-    socket.on(
-      "npc:call",
-      ({
-        channelId,
-        npcId,
-        reason,
-        roomId,
-      }: {
-        channelId: string;
-        npcId: string;
-        reason?: string;
-        roomId?: string;
-      }) => {
-        if (!channelId || !npcId) return;
-        const player = players.get(socket.id);
-        if (!player) return;
-        // reason 은 "map-chat" 만 통과 — 클라이언트가 이 값으로 "도착해도 1:1 대화창을 열지
-        // 않는다 / 채널 채팅이 보이는 동안 머문다" 를 가른다. 그룹 채팅 참여자 재호출이 쓴다.
-        // roomId 는 그 재호출이 어느 방에서 났는지다 — 클라이언트가 지금 보고 있는 방의
-        // 호출만 반영하도록 가른다. 문자열이 아니면 싣지 않는다.
-        io.to(channelId).emit("npc:come-to-player", {
-          npcId,
-          targetPlayerId: socket.id,
-          ...(reason === "map-chat" ? { reason } : {}),
-          ...(reason === "map-chat" && typeof roomId === "string" ? { roomId } : {}),
-        });
-      },
-    );
-
-    socket.on("npc:return-home", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
-      if (!channelId || !npcId) return;
-      io.to(channelId).emit("npc:returning", { npcId });
-    });
-
-    socket.on(
-      "npc:position-update",
-      ({
-        channelId,
-        npcId,
-        x,
-        y,
-        direction,
-      }: {
-        channelId: string;
-        npcId: string;
-        x: number;
-        y: number;
-        direction: string;
-      }) => {
-        if (!channelId || !npcId) return;
-        socket.to(channelId).emit("npc:position-sync", { npcId, x, y, direction });
-      },
-    );
-
-    socket.on("npc:arrived", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
-      if (!channelId || !npcId) return;
-      socket.to(channelId).emit("npc:stop-moving", { npcId });
-    });
+    // NPC movement and seat ownership use the compatible channel coordinator above.
 
     // NPC management broadcasts (re-broadcast to room)
     //
@@ -1935,6 +1969,7 @@ export function setupSocketHandlers(io: Server) {
       const player = players.get(socket.id);
       if (!player) return;
       invalidateRoomRuntimesForChannel(player.mapId);
+      void coordination.invalidate(player.mapId);
       socket.to(player.mapId).emit("npc:added", npcData);
     });
 
@@ -1942,6 +1977,7 @@ export function setupSocketHandlers(io: Server) {
       const player = players.get(socket.id);
       if (!player) return;
       invalidateRoomRuntimesForChannel(player.mapId);
+      void coordination.invalidate(player.mapId);
       socket.to(player.mapId).emit("npc:updated", data);
     });
 
@@ -1949,6 +1985,7 @@ export function setupSocketHandlers(io: Server) {
       const player = players.get(socket.id);
       if (!player) return;
       invalidateRoomRuntimesForChannel(player.mapId);
+      void coordination.invalidate(player.mapId);
       socket.to(player.mapId).emit("npc:removed", data);
     });
 
@@ -2359,6 +2396,7 @@ export function setupSocketHandlers(io: Server) {
       socket,
       deps: {
         meetingRooms,
+        getDiscussionState: (channelId) => activeBrokers.get(channelId)?.discussionState ?? null,
         players,
         lastChatTime,
         chatCooldownMs: CHAT_COOLDOWN_MS,
@@ -2414,6 +2452,11 @@ export function setupSocketHandlers(io: Server) {
         activeBrokers,
         user,
         isChannelOwner,
+        setNpcActive: async (npcId, active) => {
+          await setNpcActive(npcId, active);
+          const npc = await selectNpcById(npcId);
+          if (npc) await coordination.invalidate(npc.channelId);
+        },
       },
     });
 
@@ -2456,33 +2499,18 @@ export function setupSocketHandlers(io: Server) {
     socket.on("disconnect", () => {
       const player = players.get(socket.id);
       if (player) {
+        playerResumeStates.save(player);
         socket.to(player.mapId).emit("player:left", { id: socket.id });
 
         // Save last position to DB
         const px = Math.round(player.x);
         const py = Math.round(player.y);
-        try {
-          const result = db
-            .update(channelMembers)
-            .set({ lastX: px, lastY: py })
-            .where(
-              and(
-                eq(channelMembers.channelId, player.mapId),
-                eq(channelMembers.userId, player.userId),
-              ),
-            );
-          // Handle both sync (SQLite) and async (PG)
-          if (result && typeof (result as unknown as Promise<unknown>).then === "function") {
-            (result as unknown as Promise<unknown>).catch((err: Error) => {
-              console.error("[socket] Position save failed (async):", err.message);
-            });
-          }
-        } catch (e) {
-          console.error(
-            "[socket] Position save failed (sync):",
-            e instanceof Error ? e.message : e,
-          );
-        }
+        void (async () => {
+          await db.update(channelMembers).set({ lastX: px, lastY: py })
+            .where(and(eq(channelMembers.channelId, player.mapId),eq(channelMembers.userId, player.userId)));
+        })().catch((error: unknown) => {
+          console.error("[socket] Position save failed:", error instanceof Error ? error.message : "unknown");
+        });
 
         players.delete(socket.id);
       }

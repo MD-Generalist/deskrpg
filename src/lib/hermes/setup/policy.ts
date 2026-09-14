@@ -30,7 +30,10 @@ export function validateGatewayUrl(value: unknown): string {
   } catch {
     throw new Error("setup_invalid_request");
   }
-  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const host = url.hostname
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase()
+    .replace(/\.+$/, "");
   if (
     !["http:", "https:"].includes(url.protocol) ||
     url.username ||
@@ -38,7 +41,8 @@ export function validateGatewayUrl(value: unknown): string {
     url.search ||
     url.hash ||
     host.startsWith("169.254.") ||
-    host.startsWith("fe80:") ||
+    /^fe[89ab][0-9a-f]:/.test(host) ||
+    host.startsWith("::ffff:") ||
     host === "metadata.google.internal" ||
     host.endsWith(".deskrpg-ssh.invalid")
   )
@@ -64,6 +68,8 @@ const SAFE_CODES = new Set([
   "hermes_not_found",
   "hermes_version_unsupported",
   "plugin_install_failed",
+  "plugin_security_review_required",
+  "plugin_source_unavailable",
   "plugin_enable_failed",
   "plugin_verify_failed",
   "gateway_restart_failed",

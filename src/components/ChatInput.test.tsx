@@ -58,3 +58,35 @@ test("후보가 있으면 멘션 편집기를 쓰고, 전송값은 @[이름] 으
   assert.deepEqual(sent, ["@[소피] 안녕"]);
   assert.equal(ed.textContent, "", "전송 후 편집기가 비워져야 한다");
 });
+
+test("controlled draft reports edits and clears through its owner after sending", async () => {
+  const changes: string[] = [];
+  const sent: string[] = [];
+  const el = await mount(
+    <I18nProvider>
+      <ChatInput
+        onSend={(message) => sent.push(message)}
+        value="저장된 초안"
+        onValueChange={(value) => changes.push(value)}
+      />
+    </I18nProvider>,
+  );
+  const textarea = el.querySelector("textarea") as HTMLTextAreaElement;
+  assert.equal(textarea.value, "저장된 초안");
+
+  await act(async () => {
+    const Textarea = textarea.ownerDocument.defaultView!.HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(Textarea.prototype, "value")?.set;
+    setter?.call(textarea, "수정된 초안");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  assert.deepEqual(changes, ["수정된 초안"]);
+
+  await act(async () => {
+    textarea.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+  });
+  assert.deepEqual(sent, ["저장된 초안"]);
+  assert.deepEqual(changes, ["수정된 초안", ""]);
+});

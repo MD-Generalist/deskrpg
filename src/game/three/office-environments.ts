@@ -1,10 +1,10 @@
+import { furnishOfficeRooms, OFFICE_ROOMS } from "./office-room-layout";
 import {
   createDefaultMap,
   type TiledMap,
   type TiledObject,
 } from "../../components/map-editor/hooks/useMapEditor";
 import { getObjectDimensions } from "../../lib/object-types";
-import { applyOfficePreset } from "./office-presets";
 
 export const OFFICE_ENVIRONMENTS = Object.freeze([
   Object.freeze({
@@ -57,7 +57,6 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
   const environment = OFFICE_ENVIRONMENTS.find((entry) => entry.id === id);
   if (!environment) throw new Error(`Unknown office environment: ${id}`);
   const map = createDefaultMap(environment.nameEn, 30, 22, 32);
-  if (id === "trading") return tagEnvironment(applyOfficePreset(map, "trading"), id);
   const layer = map.layers.find((entry) => entry.name === "Objects")!;
   const objects: TiledObject[] = [];
   const add = (type: string, col: number, row: number) => {
@@ -73,18 +72,6 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
       visible: true,
     });
   };
-  const workstation = (x: number, y: number) => {
-    add("desk", x, y);
-    add("computer", x, y);
-    add("chair", x, y + 1);
-  };
-  const meeting = (x: number, y: number) => {
-    add("meeting_table", x, y);
-    add("chair", x - 1, y);
-    add("chair", x + 2, y);
-    add("chair", x, y - 1);
-    add("chair", x + 1, y + 2);
-  };
   for (let x = 0; x < 30; x++) {
     add("cubicle_wall", x, 0);
     if (x < 14 || x > 16) add("cubicle_wall", x, 21);
@@ -93,56 +80,11 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
     add("cubicle_wall", 0, y);
     add("cubicle_wall", 29, y);
   }
-  if (id === "agency") {
-    for (const x of [5, 11, 21]) for (const y of [6, 13]) meeting(x, y);
-    for (const x of [4, 7, 19, 22, 25]) workstation(x, 2);
-    for (const x of [5, 12, 22]) add("whiteboard", x, 10);
-    add("reception_desk", 5, 18);
-    add("chair", 5, 19);
-    add("bookshelf", 27, 5);
-    add("bookshelf", 27, 6);
-    add("coffee", 23, 18);
-    add("water_cooler", 25, 18);
-  } else if (id === "tech") {
-    for (const x of [4, 5, 9, 10, 19, 20, 24, 25]) for (const y of [4, 8, 12]) workstation(x, y);
-    meeting(5, 17);
-    meeting(23, 17);
-    for (const x of [4, 9, 20, 25]) add("whiteboard", x, 1);
-    for (const x of [12, 13, 16, 17]) add("bookshelf", x, 1);
-    add("coffee", 11, 18);
-    add("water_cooler", 18, 18);
-  } else if (id === "executive") {
-    add("reception_desk", 14, 3);
-    add("computer", 14, 3);
-    add("chair", 14, 4);
-    for (const x of [12, 14, 16]) {
-      add("meeting_table", x, 8);
-      add("chair", x, 7);
-      add("chair", x + 1, 10);
+  furnishOfficeRooms(id, add);
+  for (const x of [1, 28])
+    for (const y of [1, 20]) {
+      if (!objects.some((object) => object.x === x * 32 && object.y === y * 32)) add("plant", x, y);
     }
-    add("chair", 11, 8);
-    add("chair", 18, 8);
-    for (const x of [4, 24]) for (const y of [5, 11]) workstation(x, y);
-    for (const x of [4, 5, 24, 25]) add("bookshelf", x, 1);
-    add("whiteboard", 16, 1);
-    add("reception_desk", 6, 17);
-    add("chair", 6, 18);
-    meeting(23, 16);
-    add("coffee", 20, 19);
-    add("water_cooler", 21, 19);
-    for (const x of [9, 20]) for (const y of [4, 12]) add("plant", x, y);
-  } else {
-    for (const start of [3, 21])
-      for (const y of [2, 6, 10]) for (let x = start; x < start + 6; x++) add("bookshelf", x, y);
-    for (const x of [12, 17]) for (const y of [4, 9, 14]) workstation(x, y);
-    meeting(5, 16);
-    meeting(23, 16);
-    add("whiteboard", 13, 1);
-    add("whiteboard", 17, 1);
-    add("coffee", 10, 19);
-    add("water_cooler", 19, 19);
-  }
-  for (const x of [1, 28]) for (const y of [1, 20]) add("plant", x, y);
   add("spawn", 15, 19);
   layer.objects = objects;
   return tagEnvironment(map, id);
@@ -153,7 +95,23 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
   layer.properties = [
     ...(layer.properties || []),
     { name: "officeEnvironment", type: "string", value: id },
-    { name: "officeEnvironmentVersion", type: "int", value: 1 },
+    ...[
+      {
+        name: "ambientZones",
+        type: "string",
+        value: JSON.stringify(
+          OFFICE_ROOMS[id].map((room) => ({
+            id: room.id,
+            x: room.x,
+            y: room.z,
+            width: room.width,
+            height: room.depth + 1,
+            roaming: room.id !== "ceo",
+          })),
+        ),
+      },
+    ],
+    { name: "officeEnvironmentVersion", type: "int", value: 2 },
   ];
   return map;
 }

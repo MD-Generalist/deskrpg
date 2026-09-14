@@ -25,6 +25,11 @@ test("gateway target supports private networks but excludes credential URLs and 
     "http://user:pass@host",
     "http://169.254.169.254",
     "http://metadata.google.internal",
+    "http://metadata.google.internal./",
+    "http://[::ffff:169.254.169.254]/",
+    "http://[::ffff:a9fe:a9fe]/",
+    "http://[fe90::1]/",
+    "http://[febf::1]/",
     "http://host/?token=secret",
     "http://host/#secret",
     "http://evil.deskrpg-ssh.invalid",
@@ -35,4 +40,9 @@ test("gateway target supports private networks but excludes credential URLs and 
 test("unexpected subprocess/DB messages never leave server", () => {
   assert.equal(safeSetupError(new Error("ssh failed token=secret-value")), "setup_failed");
   assert.equal(safeSetupError(new Error("multiplex_conflict")), "multiplex_conflict");
+});
+
+test("security scan and source failures are safe structured errors", () => {
+  for (const code of ["plugin_security_review_required", "plugin_source_unavailable"])
+    assert.equal(safeSetupError(new Error(code)), code);
 });

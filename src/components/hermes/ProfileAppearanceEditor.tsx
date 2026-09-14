@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import OfficeLookGallery from "@/components/OfficeLookGallery";
 import CharacterPreview from "@/components/CharacterPreview";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
@@ -51,7 +52,11 @@ export default function ProfileAppearanceEditor({
   };
   return (
     <div className="mt-3 space-y-3 border-t border-border pt-3">
-      <CharacterPreview appearance={appearance} scale={2.5} />
+      <CharacterPreview appearance={appearance} scale={2.5} walking={false} />
+      <OfficeLookGallery
+        selectedId={selected?.id}
+        onSelect={(look) => setAppearance(officeLookAppearance(look.id))}
+      />
       <label className="block text-xs text-text-secondary">
         {ko ? "오피스 캐릭터" : "Office character"}
         <select

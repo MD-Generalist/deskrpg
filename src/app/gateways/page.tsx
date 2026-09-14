@@ -706,7 +706,12 @@ function GatewayManagementPageInner() {
                 gatewayId={selectedGateway.id}
                 canRegister={!!selectedGateway.isOwner}
                 autoOpenCreate={autoOpenCreate}
-                onCreated={returnTo ? () => router.push(returnTo) : undefined}
+                onCreated={
+                  returnTo
+                    ? () =>
+                        router.push(`${returnTo}${returnTo.includes("?") ? "&" : "?"}assignSeat=1`)
+                    : undefined
+                }
               />
             )}
 

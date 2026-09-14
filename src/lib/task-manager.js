@@ -3,7 +3,7 @@
 
 "use strict";
 
-const { eq, and, or, desc, sql, getTableColumns, isNull, isNotNull, lte } = require("drizzle-orm");
+const { eq, and, or, desc, sql, getTableColumns, isNull, isNotNull, lte, notInArray } = require("drizzle-orm");
 
 function normalizeTimestamp(value) {
   if (value == null) return null;
@@ -38,7 +38,7 @@ function normalizeTask(row) {
 class TaskManager {
   /**
    * @param {import('drizzle-orm').LibSQLDatabase | import('drizzle-orm/node-postgres').NodePgDatabase} db
-   * @param {{ tasks: any, npcs: any }} schema
+   * @param {{ tasks: any, npcs: any, hermesProfiles?: any }} schema
    * @param {{ isPostgres?: boolean }} [options]
    */
   constructor(db, schema, options = {}) {
@@ -151,6 +151,8 @@ class TaskManager {
       })
       .onConflictDoUpdate({
         target: [schema.tasks.npcId, schema.tasks.npcTaskId],
+        // Late agent output must not reopen a manually completed/cancelled task.
+        setWhere: notInArray(schema.tasks.status, ["complete", "cancelled"]),
         set: {
           title: sql`COALESCE(excluded.title, ${schema.tasks.title})`,
           summary: sql`COALESCE(excluded.summary, ${schema.tasks.summary})`,
@@ -191,7 +193,11 @@ class TaskManager {
         lastReportedAt: lastReportedAt ?? sql`${schema.tasks.lastReportedAt}`,
         completedAt,
       })
-      .where(and(eq(schema.tasks.npcId, npcId), eq(schema.tasks.npcTaskId, npcTaskId)))
+      .where(and(
+        eq(schema.tasks.npcId, npcId),
+        eq(schema.tasks.npcTaskId, npcTaskId),
+        notInArray(schema.tasks.status, ["complete", "cancelled"]),
+      ))
       .returning();
 
     if (rows.length > 0) return normalizeTask(rows[0]);
@@ -204,13 +210,22 @@ class TaskManager {
   async getTasksByChannel(channelId) {
     const { db, schema } = this;
 
-    const rows = await db
+    // Profile identity is canonical. Optional schema support keeps non-profile
+    // task-only consumers working without consulting the retired npcs.name.
+    const profiles = schema.hermesProfiles;
+    let query = db
       .select({
         ...getTableColumns(schema.tasks),
-        npcName: schema.npcs.name,
+        npcName: profiles
+          ? sql`coalesce(nullif(trim(${profiles.displayName}), ''), ${profiles.profileName})`
+          : sql`NULL`,
       })
       .from(schema.tasks)
-      .leftJoin(schema.npcs, eq(schema.tasks.npcId, schema.npcs.id))
+      .leftJoin(schema.npcs, eq(schema.tasks.npcId, schema.npcs.id));
+    if (profiles) {
+      query = query.leftJoin(profiles, eq(schema.npcs.hermesProfileId, profiles.id));
+    }
+    const rows = await query
       .where(eq(schema.tasks.channelId, channelId))
       .orderBy(desc(schema.tasks.createdAt));
 

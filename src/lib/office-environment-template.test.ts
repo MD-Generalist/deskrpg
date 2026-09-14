@@ -14,7 +14,7 @@ test("registers valid selected environment with existing template API", async ()
     const body = JSON.parse(String(options.body));
     assert.equal(validateMapTemplate(body), null);
     assert.deepEqual(body.tiledJson, buildOfficeEnvironment("publishing"));
-    assert.equal(body.tags, "deskrpg-office-v1:publishing");
+    assert.equal(body.tags, "deskrpg-office-v2:publishing");
     return reply({ template: { id: "saved-template" } }, 201);
   };
   assert.equal(await ensureOfficeEnvironmentTemplate("publishing", request), "saved-template");
@@ -31,8 +31,8 @@ test("reuses exact snapshot, accepts SQLite JSON, and never overwrites edited te
     if (url === "/api/map-templates")
       return reply({
         templates: [
-          { id: "edited", tags: "deskrpg-office-v1:trading" },
-          { id: "intact", tags: "deskrpg-office-v1:trading" },
+          { id: "edited", tags: "deskrpg-office-v2:trading" },
+          { id: "intact", tags: "deskrpg-office-v2:trading" },
         ],
       });
     return reply({
@@ -89,7 +89,7 @@ test("reuses PostgreSQL JSONB snapshots despite recursively reordered object key
   const request: typeof fetch = async (url, options) => {
     assert.equal(options, undefined, "Equivalent JSONB must not register a duplicate");
     if (url === "/api/map-templates") {
-      return reply({ templates: [{ id: "jsonb", tags: "deskrpg-office-v1:tech" }] });
+      return reply({ templates: [{ id: "jsonb", tags: "deskrpg-office-v2:tech" }] });
     }
     // Return the original object so the assertion below also detects mutation.
     return {
@@ -128,7 +128,7 @@ for (const change of ["nested value", "array order"] as const) {
         return reply({ template: { id: "fresh" } });
       }
       if (url === "/api/map-templates") {
-        return reply({ templates: [{ id: "edited", tags: "deskrpg-office-v1:tech" }] });
+        return reply({ templates: [{ id: "edited", tags: "deskrpg-office-v2:tech" }] });
       }
       return reply({
         template: {
@@ -144,3 +144,21 @@ for (const change of ["nested value", "array order"] as const) {
     assert.equal(posts, 1);
   });
 }
+
+test("room rollout creates v2 separately and never reads or updates legacy v1 templates", async () => {
+  for (const id of ["trading", "agency", "tech", "executive"]) {
+    const calls: string[] = [];
+    const request: typeof fetch = async (url, options) => {
+      calls.push(`${options?.method ?? "GET"} ${url}`);
+      if (!options)
+        return reply({
+          templates: [{ id: "existing-channel-template", tags: `deskrpg-office-v1:${id}` }],
+        });
+      assert.equal(options.method, "POST");
+      assert.equal(JSON.parse(String(options.body)).tags, `deskrpg-office-v2:${id}`);
+      return reply({ template: { id: "new-room-template" } }, 201);
+    };
+    assert.equal(await ensureOfficeEnvironmentTemplate(id, request), "new-room-template");
+    assert.deepEqual(calls, ["GET /api/map-templates", "POST /api/map-templates"]);
+  }
+});

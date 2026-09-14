@@ -1,4 +1,36 @@
+import { RemoteNpcPresentation } from "../remote-npc-presentation";
+import { copyMotionContinuation, playerMotionGoal, type PlayerSpawnState, type PlayerMotionGoal } from "../runtime-hydration";
+import { SpeechPreviews } from "../speech-previews";
+import {
+  MotionSnapshotCache,
+  restoreOnSnapshot,
+  untouchedSpawn,
+  type MotionNpc,
+  type MotionSnapshot,
+} from "../motion-snapshot";
+import { NpcMovementOwnership, publishNpcArrival } from "../npc-movement-ownership";
+import { findPath, clearSegment, clearMovementSegment, type NavigationPoint } from "../navigation";
+import { commitPlayerStep } from "../player-motion";
+import { TrafficCoordinator, clearActors, findTrafficPath, type TrafficActor } from "../traffic";
+import { peerMovementUncertainty, type PeerMotionSample } from "../peer-motion-envelope";
+import {
+  readAmbientZones,
+  ambientTileAllowed,
+  AmbientExitPolicy,
+  type AmbientZone,
+} from "../ambient-zones";
+import { isSeatAnchor, commonAreaSeats } from "../three/seating";
+import {
+  AmbientDepartures,
+  ambientAllowed,
+  ambientDestinations,
+  createAmbientSchedule,
+  advanceAmbientSchedule,
+  randomDuration,
+  restAtAmbientSeat,
+} from "../npc-ambient";
 import Phaser from "phaser";
+import { NpcSmalltalk } from "../npc-smalltalk";
 import { resolveOfficeEnvironment } from "../three/office-environment-theme";
 import { createEventScope } from "../three/event-scope";
 import {
@@ -107,86 +139,13 @@ const TILE_NAMES = [
 // A* Pathfinding
 // ---------------------------------------------------------------------------
 
-interface PathNode {
-  x: number;
-  y: number;
-  g: number;
-  h: number;
-  f: number;
-  parent: PathNode | null;
-}
-
-function findPath(
-  startTileX: number,
-  startTileY: number,
-  endTileX: number,
-  endTileY: number,
-  isWalkable: (tx: number, ty: number) => boolean,
-): { x: number; y: number }[] | null {
-  const open: PathNode[] = [];
-  const closed = new Set<string>();
-
-  const start: PathNode = { x: startTileX, y: startTileY, g: 0, h: 0, f: 0, parent: null };
-  start.h = Math.abs(endTileX - startTileX) + Math.abs(endTileY - startTileY);
-  start.f = start.h;
-  open.push(start);
-
-  while (open.length > 0) {
-    open.sort((a, b) => a.f - b.f);
-    const current = open.shift()!;
-    const key = `${current.x},${current.y}`;
-
-    if (current.x === endTileX && current.y === endTileY) {
-      const path: { x: number; y: number }[] = [];
-      let node: PathNode | null = current;
-      while (node) {
-        path.unshift({ x: node.x, y: node.y });
-        node = node.parent;
-      }
-      return path;
-    }
-
-    closed.add(key);
-
-    for (const [dx, dy] of [
-      [0, -1],
-      [0, 1],
-      [-1, 0],
-      [1, 0],
-    ]) {
-      const nx = current.x + dx;
-      const ny = current.y + dy;
-      const nkey = `${nx},${ny}`;
-
-      if (closed.has(nkey)) continue;
-      if (!isWalkable(nx, ny)) continue;
-
-      const g = current.g + 1;
-      const h = Math.abs(endTileX - nx) + Math.abs(endTileY - ny);
-      const f = g + h;
-
-      const existing = open.find((n) => n.x === nx && n.y === ny);
-      if (existing) {
-        if (g < existing.g) {
-          existing.g = g;
-          existing.f = f;
-          existing.parent = current;
-        }
-      } else {
-        open.push({ x: nx, y: ny, g, h, f, parent: current });
-      }
-    }
-  }
-
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Remote player wrapper
 // ---------------------------------------------------------------------------
 
 interface RemotePlayerData {
   id: string;
+  userId?: string;
   characterName: string;
   appearance: unknown;
   x: number;
@@ -196,6 +155,7 @@ interface RemotePlayerData {
 }
 
 class RemotePlayer {
+  userId?: string;
   appearance: unknown;
   sprite: Phaser.GameObjects.Sprite;
   nameLabel: Phaser.GameObjects.Text;
@@ -206,6 +166,7 @@ class RemotePlayer {
   textureKey: string;
 
   constructor(scene: Phaser.Scene, data: RemotePlayerData, textureKey: string) {
+    this.userId = data.userId;
     this.textureKey = textureKey;
     this.appearance = data.appearance;
     this.targetX = data.x;
@@ -347,7 +308,17 @@ class NpcSprite {
   homeDirection: number;
   currentPath: { x: number; y: number }[] | null = null;
   pathIndex = 0;
-  moveState: "idle" | "moving-to-player" | "waiting" | "returning" = "idle";
+  private trafficBlockedMs = 0;
+  actuallyWalking = false;
+  moveState: "idle" | "moving-to-player" | "waiting" | "returning" | "strolling" = "idle";
+  ambientPaused = false;
+  ambientTimer = 0;
+  ambientSchedule = createAmbientSchedule();
+  ambientSeat: { x: number; y: number } | null = null;
+  ambientExitPolicy: AmbientExitPolicy | null = null;
+  remoteWalkingUntil = 0;
+  remotePresentation: RemoteNpcPresentation | null = null;
+  motionLocallyDriven?: boolean;
   moveSpeed = 150; // px/s (faster than player's 120)
   pendingMessage: string | null = null;
   pendingReportId: string | null = null;
@@ -603,6 +574,29 @@ class NpcSprite {
     return true;
   }
 
+  startStroll(path: { x: number; y: number }[]) {
+    this.currentPath = path;
+    this.pathIndex = 0;
+    this.stuckFrames = 0;
+    this.lastDist = Infinity;
+    this.moveState = "strolling";
+  }
+  stopStroll() {
+    if (this.moveState !== "strolling") return;
+    this.currentPath = null;
+    this.moveState = "idle";
+    this.stopWalkAnimation();
+  }
+
+  cancelMovement() {
+    this.currentPath = null;
+    this.moveState = "idle";
+    this.ambientPaused = false;
+    this.remoteWalkingUntil = 0;
+    this.pendingMessage = this.pendingReportId = this.pendingReportKind = null;
+    this.stopWalkAnimation();
+  }
+
   returnToHome(
     findPathFn: (
       sx: number,
@@ -613,29 +607,24 @@ class NpcSprite {
     ) => { x: number; y: number }[] | null,
     isWalkableFn: (tx: number, ty: number) => boolean,
   ): boolean {
+    this.calledForRoom = null;
+    this.ambientTimer = 0;
     const startCol = Math.floor(this.pixelX / TILE_SIZE);
     const startRow = Math.floor(this.pixelY / TILE_SIZE);
 
-    if (startCol === this.homeCol && startRow === this.homeRow) {
+    if (
+      Math.hypot(
+        this.pixelX - (this.homeCol + 0.5) * TILE_SIZE,
+        this.pixelY - (this.homeRow + 0.5) * TILE_SIZE,
+      ) < 2
+    ) {
       this.moveState = "idle";
       this.snapToHome();
       return true;
     }
 
-    // Allow home tile as walkable destination (it may be marked occupied)
-    const homeCol = this.homeCol;
-    const homeRow = this.homeRow;
-    const walkableWithHome = (tx: number, ty: number) =>
-      (tx === homeCol && ty === homeRow) || isWalkableFn(tx, ty);
-
-    const path = findPathFn(startCol, startRow, this.homeCol, this.homeRow, walkableWithHome);
-    if (!path || path.length === 0) {
-      this.snapToHome();
-      this.moveState = "idle";
-      return true;
-    }
-
-    this.currentPath = path;
+    // An occupied or disconnected home remains a pending return; never teleport through walls.
+    this.currentPath = findPathFn(startCol, startRow, this.homeCol, this.homeRow, isWalkableFn);
     this.pathIndex = 0;
     this.stuckFrames = 0;
     this.lastDist = Infinity;
@@ -659,7 +648,19 @@ class NpcSprite {
     this.stopWalkAnimation();
   }
 
+  pauseForSmalltalk(other: NpcSprite): void {
+    // Keep the path and waypoint so the same stroll resumes after the exchange.
+    if (this.moveState === "strolling") {
+      const dx = other.pixelX - this.pixelX,
+        dy = other.pixelY - this.pixelY;
+      this.direction =
+        Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? DIR_RIGHT : DIR_LEFT) : dy > 0 ? DIR_DOWN : DIR_UP;
+    }
+    this.stopWalkAnimation();
+  }
+
   private stopWalkAnimation(): void {
+    this.actuallyWalking = false;
     if (this.sprite instanceof Phaser.GameObjects.Sprite && this.textureKey) {
       this.sprite.stop();
       const idleFrame = this.direction * SPRITE_COLS;
@@ -679,9 +680,35 @@ class NpcSprite {
       walkable: (tx: number, ty: number) => boolean,
     ) => { x: number; y: number }[] | null,
     isWalkableFn: (tx: number, ty: number) => boolean,
+    trafficStep?: (
+      position: NavigationPoint,
+      goal: NavigationPoint,
+      amount: number,
+    ) => NavigationPoint,
   ): "arrived" | "returning-done" | "moving" | "idle" {
+    this.actuallyWalking = false;
     if (this.moveState === "idle" || this.moveState === "waiting") return "idle";
-    if (!this.currentPath) return "idle";
+    if (!this.currentPath) {
+      this.pathRecalcTimer += Math.min(delta, 100);
+      if (this.pathRecalcTimer < 1000) return "idle";
+      this.pathRecalcTimer = 0;
+      const targetX =
+        this.moveState === "returning" ? this.homeCol : Math.floor(playerX / TILE_SIZE);
+      const targetY =
+        this.moveState === "returning" ? this.homeRow : Math.floor(playerY / TILE_SIZE);
+      const path = findPathFn(
+        Math.floor(this.pixelX / TILE_SIZE),
+        Math.floor(this.pixelY / TILE_SIZE),
+        targetX,
+        targetY,
+        isWalkableFn,
+      );
+      if (!path) return "idle";
+      this.currentPath = path;
+      this.pathIndex = 0;
+      this.stuckFrames = 0;
+      this.lastDist = Infinity;
+    }
 
     // --- Path recalculation (every 3s, only when moving toward player) ---
     if (this.moveState === "moving-to-player") {
@@ -725,6 +752,10 @@ class NpcSprite {
 
     // --- Check if path is exhausted ---
     if (this.pathIndex >= this.currentPath.length) {
+      if (this.moveState === "strolling") {
+        this.stopStroll();
+        return "idle";
+      }
       if (this.moveState === "returning") {
         // Path ended — snap to home regardless of distance
         this.snapToHome();
@@ -739,6 +770,10 @@ class NpcSprite {
 
     // --- Follow path (matching player path-following pattern exactly) ---
     const target = this.currentPath[this.pathIndex];
+    if (this.moveState === "strolling" && !isWalkableFn(target.x, target.y)) {
+      this.stopStroll();
+      return "idle";
+    }
     const targetPx = target.x * TILE_SIZE + TILE_SIZE / 2;
     const targetPy = target.y * TILE_SIZE + TILE_SIZE / 2;
 
@@ -754,10 +789,20 @@ class NpcSprite {
       this.stuckFrames++;
     }
 
-    const reached = dist < TILE_SIZE * 0.6;
-    const stuck = this.stuckFrames > 30;
+    const reached = dist < 2;
+    const stuck = !trafficStep && this.stuckFrames > 30;
 
-    if (reached || stuck) {
+    if (stuck && !reached) {
+      if (this.moveState === "strolling") {
+        this.stopStroll();
+        return "idle";
+      }
+      this.currentPath = null;
+      this.pathRecalcTimer = 0;
+      this.stopWalkAnimation();
+      return "moving";
+    }
+    if (reached) {
       // Advance to next waypoint (NO snap — just like player)
       this.pathIndex++;
       this.stuckFrames = 0;
@@ -765,6 +810,10 @@ class NpcSprite {
 
       // Check if path is now complete
       if (this.pathIndex >= this.currentPath.length) {
+        if (this.moveState === "strolling") {
+          this.stopStroll();
+          return "idle";
+        }
         if (this.moveState === "returning") {
           this.snapToHome();
           this.currentPath = null;
@@ -786,16 +835,78 @@ class NpcSprite {
     const cdx = curPx - this.pixelX;
     const cdy = curPy - this.pixelY;
 
-    const moveAmount = this.moveSpeed * (delta / 1000);
+    const moveAmount = Math.min(
+      Math.hypot(cdx, cdy),
+      (this.moveState === "strolling" ? 55 : this.moveSpeed) * (Math.min(delta, 100) / 1000),
+    );
     const angle = Math.atan2(cdy, cdx);
-    this.pixelX += Math.cos(angle) * moveAmount;
-    this.pixelY += Math.sin(angle) * moveAmount;
+    const planned = trafficStep?.(
+      { x: this.pixelX / TILE_SIZE - 0.5, y: this.pixelY / TILE_SIZE - 0.5 },
+      curTarget,
+      moveAmount / TILE_SIZE,
+    );
+    const nextX = planned
+      ? (planned.x + 0.5) * TILE_SIZE
+      : this.pixelX + Math.cos(angle) * moveAmount;
+    const nextY = planned
+      ? (planned.y + 0.5) * TILE_SIZE
+      : this.pixelY + Math.sin(angle) * moveAmount;
+    if (
+      !clearSegment(
+        { x: this.pixelX / TILE_SIZE - 0.5, y: this.pixelY / TILE_SIZE - 0.5 },
+        { x: nextX / TILE_SIZE - 0.5, y: nextY / TILE_SIZE - 0.5 },
+        isWalkableFn,
+      )
+    ) {
+      if (this.moveState === "strolling") {
+        this.stopStroll();
+        return "idle";
+      }
+      this.currentPath = null;
+      this.pathRecalcTimer = 0;
+      this.stopWalkAnimation();
+      return "moving";
+    }
+    if (Math.hypot(nextX - this.pixelX, nextY - this.pixelY) < 1e-6) {
+      this.trafficBlockedMs += Math.min(delta, 100);
+      // A stationary actor can occupy an intermediate coarse waypoint forever.
+      // Traffic cannot reach that waypoint; retry the complete route around it.
+      if (this.trafficBlockedMs >= 1500) {
+        // Preserve the stroll/seat destination, including when no detour exists.
+        // Clearing a stroll path would accidentally fall back to the player target.
+        const destination = this.currentPath[this.currentPath.length - 1];
+        const detour =
+          destination &&
+          findPathFn(
+            Math.floor(this.pixelX / TILE_SIZE),
+            Math.floor(this.pixelY / TILE_SIZE),
+            destination.x,
+            destination.y,
+            isWalkableFn,
+          );
+        if (detour?.length) {
+          this.currentPath = detour;
+          this.pathIndex = 0;
+          this.stuckFrames = 0;
+          this.lastDist = Infinity;
+        }
+        this.trafficBlockedMs = 0;
+      }
+      this.stopWalkAnimation();
+      return "moving";
+    }
+    this.trafficBlockedMs = 0;
+    this.actuallyWalking = true;
+    const actualDx = nextX - this.pixelX,
+      actualDy = nextY - this.pixelY;
+    this.pixelX = nextX;
+    this.pixelY = nextY;
 
-    // Update direction
-    if (Math.abs(cdx) > Math.abs(cdy)) {
-      this.direction = cdx > 0 ? DIR_RIGHT : DIR_LEFT;
+    // Yielding may move away from the original waypoint: face the actual movement.
+    if (Math.abs(actualDx) > Math.abs(actualDy)) {
+      this.direction = actualDx > 0 ? DIR_RIGHT : DIR_LEFT;
     } else {
-      this.direction = cdy > 0 ? DIR_DOWN : DIR_UP;
+      this.direction = actualDy > 0 ? DIR_DOWN : DIR_UP;
     }
 
     // Play walk animation for current direction
@@ -826,6 +937,320 @@ export class GameScene extends Phaser.Scene {
   private eventScope = createEventScope();
   private presentationPointer: { x: number; y: number } | null = null;
   private presentationActorId: string | undefined;
+  private ambientDepartures = new AmbientDepartures();
+  private traffic = new TrafficCoordinator();
+  private npcOwnership = new NpcMovementOwnership();
+  private connectedPlayerIds = new Set<string>();
+  private peerPositions = new Map<
+    string,
+    { x: number; y: number; direction: string; animation: string }
+  >();
+  private motionSnapshot = new MotionSnapshotCache();
+  private spawnRequest: { x: number; y: number } | null = null;
+  private spawnInputStarted = false;
+  private pendingSeatClaims = new Set<string>();
+  private playerSeatGoal: string | null = null;
+  private playerSpawnReady = false;
+  private pendingPlayerResume: PlayerMotionGoal | null = null;
+  private resumingPlayerGoal: PlayerMotionGoal | null = null;
+  private lastSentMotion = "";
+  private npcContinuationTimer = 0;
+  private motionGeneration = 0;
+  private peerSnapshotReady = false;
+  private socketListenerCleanup: (() => void) | null = null;
+  private pendingNpcCalls = new Map<
+    string,
+    {
+      npcId: string;
+      message?: string;
+      reportId?: string;
+      reportKind?: string;
+      bubbleText?: string;
+      npcName?: string;
+      reason?: string;
+      roomId?: string;
+    }
+  >();
+  private applyMotionNpc(npc: NpcSprite, state: MotionNpc, force = false) {
+    const previousOwner = this.npcOwnership.owner(npc.id);
+    if (state.ownerSocketId) this.takeNpcOwnership(npc.id, state.ownerSocketId);
+    else this.npcOwnership.clear(npc.id);
+    if (state.phase === "returning") this.npcOwnership.startReturn(npc.id);
+    const localDriver =
+      state.ownerSocketId === this.socket?.id ||
+      (!state.ownerSocketId && this.motionSnapshot.current?.ambientLeaderId === this.socket?.id);
+    const reset = force || npc.motionLocallyDriven !== localDriver || previousOwner !== (state.ownerSocketId ?? undefined);
+    npc.motionLocallyDriven = localDriver;
+    npc.remotePresentation ??= new RemoteNpcPresentation(npc.pixelX, npc.pixelY);
+    if (reset) {
+      npc.cancelMovement();
+      npc.pixelX = state.x;
+      npc.pixelY = state.y;
+      npc.direction = DIR_NAME_MAP[state.direction] ?? DIR_DOWN;
+      npc.sprite.setPosition(state.x, state.y);
+      npc.nameLabel.setPosition(state.x, state.y - 44);
+      npc.remotePresentation.accept(state.x, state.y, true);
+      this.traffic.clear(npc.id);
+    } else if (!localDriver) {
+      // Authoritative collision positions update now; presentation catches up per frame.
+      npc.pixelX = state.x;
+      npc.pixelY = state.y;
+      npc.direction = DIR_NAME_MAP[state.direction] ?? DIR_DOWN;
+      npc.remotePresentation.accept(state.x, state.y);
+    }
+    npc.remoteWalkingUntil = !localDriver && state.moving ? this.time.now + 500 : 0;
+    if (force && state.continuation) {
+      const restored = copyMotionContinuation(state.continuation);
+      npc.ambientSchedule = restored.ambientSchedule;
+      npc.ambientSeat = restored.ambientSeat ?? { x: npc.homeCol, y: npc.homeRow };
+      npc.ambientTimer = restored.ambientTimer ?? 0;
+      npc.ambientExitPolicy = restored.ambientSchedule.phase === "roam"
+        ? new AmbientExitPolicy(this.ambientZones, { x: state.x / TILE_SIZE - .5, y: state.y / TILE_SIZE - .5 })
+        : null;
+      if (localDriver && state.phase === "ambient" && state.moving && restored.path?.length)
+        npc.startStroll(restored.path);
+    } else if (force && state.phase === "ambient") {
+      npc.ambientSeat = { x: npc.homeCol, y: npc.homeRow };
+      npc.ambientSchedule = {
+        ...createAmbientSchedule(),
+        phase: "roam",
+        duration: 20000,
+        ...(this.motionSnapshot.current?.seats.some((seat) => seat.actorId === npc.id)
+          ? { seatRest: 10000, visitedSeat: true }
+          : {}),
+      };
+    }
+    if (localDriver && state.phase === "returning" && npc.moveState !== "returning") {
+      npc.returnToHome(this.npcPathfinder(npc), this.createNpcWalkValidator());
+      if (npc.moveState === "idle") this.finishNpcReturn(npc, true);
+    } else if (localDriver && state.phase === "waiting" && npc.moveState !== "waiting") {
+      npc.cancelMovement();
+      npc.moveState = "waiting";
+    }
+    if (
+      force &&
+      localDriver &&
+      state.phase === "called" &&
+      this.player &&
+      !this.pendingNpcCalls.has(npc.id)
+    )
+      EventBus.emit("npc:call-to-player", { npcId: npc.id });
+    if (!state.ownerSocketId && previousOwner) {
+      npc.calledForRoom = null;
+      if (!state.continuation) npc.ambientSchedule = { ...createAmbientSchedule(), phase: "home" };
+      EventBus.emit("npc:movement-returned", { npcId: npc.id });
+    }
+  }
+  private restoreMotionNpc(npc: NpcSprite) {
+    const state = this.motionSnapshot.current?.npcs.find((entry) => entry.npcId === npc.id);
+    if (state) this.applyMotionNpc(npc, state, true);
+    const pending = this.pendingNpcCalls.get(npc.id);
+    if (pending && this.player && this.motionSnapshot.current) {
+      this.pendingNpcCalls.delete(npc.id);
+      EventBus.emit("npc:call-to-player", pending);
+    }
+  }
+  private canMovePlayer(): boolean {
+    return !!this.socket?.connected && this.playerSpawnReady && this.peerSnapshotReady && !!this.motionSnapshot.current;
+  }
+  private resumePlayerGoal(): void {
+    if (!this.canMovePlayer() || !this.player || !this.pendingPlayerResume) return;
+    const goal = this.pendingPlayerResume;
+    this.pendingPlayerResume = null;
+    this.resumingPlayerGoal = goal;
+    const generation = this.motionGeneration;
+    const resume = (accepted: boolean) => {
+      if (this.resumingPlayerGoal === goal) this.resumingPlayerGoal = null;
+      if (generation !== this.motionGeneration || this.spawnInputStarted || !this.player) {
+        if (accepted && goal.seatId) this.releaseSeat(this.socket?.id ?? "");
+        return;
+      }
+      if (!accepted) {
+        this.currentPath = null;
+        this.playerSeatGoal = null;
+        this.clearPathLine();
+        // An expired cached seat can already be beneath the restored avatar. Recover to
+        // an unoccupied floor tile instead of visually sitting without a reservation.
+        if (goal.seatId && Math.hypot(goal.targetX - this.player.x, goal.targetY - this.player.y) <= 8) {
+          const col = Math.floor(this.player.x / TILE_SIZE), row = Math.floor(this.player.y / TILE_SIZE);
+          let recovered = false;
+          for (let radius = 1; radius < Math.max(MAP_COLS, MAP_ROWS) && !recovered; radius++) {
+            for (let dx = -radius; dx <= radius && !recovered; dx++) {
+              for (let dy = -radius; dy <= radius; dy++) {
+                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+                const x = col + dx, y = row + dy;
+                if (!this.isWalkable(x, y) || this.isTileOccupied(x, y) || isSeatAnchor(this.mapObjects, x, y)) continue;
+                this.player.setPosition((x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE);
+                this.playerNameLabel?.setPosition(this.player.x, this.player.y - 44);
+                recovered = true;
+                break;
+              }
+            }
+          }
+        }
+        return;
+      }
+      this.playerSeatGoal = goal.seatId ?? null;
+      if (Math.hypot(goal.targetX - this.player.x, goal.targetY - this.player.y) <= 2) return;
+      const path = this.findPlayerPath(
+        Math.floor(this.player.x / TILE_SIZE), Math.floor(this.player.y / TILE_SIZE),
+        Math.floor(goal.targetX / TILE_SIZE), Math.floor(goal.targetY / TILE_SIZE),
+      );
+      if (path?.length) {
+        this.currentPath = path;
+        this.pathIndex = path.length > 1 ? 1 : 0;
+        this.pathStuckTimer = 0;
+        this.pathLastDist = Infinity;
+        this.drawPathLine(path);
+      } else if (goal.seatId) {
+        this.releaseSeat(this.socket?.id ?? "");
+        this.playerSeatGoal = null;
+      }
+    };
+    if (goal.seatId && this.socket?.id) this.reserveSeat(this.socket.id, goal.targetX, goal.targetY, resume);
+    else resume(true);
+  }
+  private updateRemoteNpcPresentation(): void {
+    for (const npc of this.npcSprites) {
+      if (npc.motionLocallyDriven !== false || !npc.remotePresentation) continue;
+      const view = npc.remotePresentation;
+      view.step(this.game.loop.delta);
+      npc.sprite.setPosition(view.x, view.y);
+      npc.nameLabel.setPosition(view.x, view.y - 44);
+      const bubble = this.npcBubbles.get(npc.id);
+      bubble?.setPosition(view.x, view.y - 44);
+      if (npc.sprite instanceof Phaser.GameObjects.Sprite) {
+        if (!view.walking) {
+          npc.sprite.stop();
+          npc.sprite.setFrame(npc.direction * SPRITE_COLS);
+        } else {
+          const key = `npc-${npc.id}-walk-${DIR_NUM_TO_NAME[npc.direction]}`;
+          if (this.anims.exists(key) && npc.sprite.anims.currentAnim?.key !== key) npc.sprite.play(key, true);
+        }
+      }
+    }
+  }
+  private npcContinuation(npc: NpcSprite) {
+    return copyMotionContinuation({
+      ambientSchedule: npc.ambientSchedule,
+      ambientSeat: npc.ambientSeat ?? { x: npc.homeCol, y: npc.homeRow },
+      ambientTimer: npc.ambientTimer,
+      path: npc.currentPath?.slice(npc.pathIndex, npc.pathIndex + 256),
+    });
+  }
+  private reserveSeat(actorId: string, x: number, y: number, done: (accepted: boolean) => void) {
+    if (!this.socket?.connected || !this.motionSnapshot.current) {
+      done(false);
+      return;
+    }
+    const seatId = `${x}:${y}`;
+    const existing = this.motionSnapshot.current.seats.find((seat) => seat.seatId === seatId);
+    if (existing?.actorId === actorId) {
+      done(true);
+      return;
+    }
+    if (existing || this.pendingSeatClaims.has(actorId)) {
+      done(false);
+      return;
+    }
+    this.pendingSeatClaims.add(actorId);
+    const generation = this.motionGeneration;
+    const channelId = this.channelId;
+    const socket = this.socket;
+    socket
+      .timeout(3000)
+      .emit(
+        "seat:claim",
+        { channelId, seatId, actorId },
+        (error: Error | null, result?: { ok: boolean }) => {
+          if (
+            generation !== this.motionGeneration ||
+            socket !== this.socket ||
+            channelId !== this.channelId
+          ) {
+            // The same Socket object may already own a newer claim after reconnect.
+            // Server departure/approach lease cleanup owns obsolete reservations.
+            return;
+          }
+          this.pendingSeatClaims.delete(actorId);
+          done(!error && !!result?.ok);
+        },
+      );
+  }
+  private releaseSeat(actorId: string) {
+    this.socket?.emit("seat:release", { channelId: this.channelId, actorId });
+  }
+  private isAmbientLeader() {
+    return (
+      !!this.socket?.connected &&
+      this.peerSnapshotReady &&
+      !!this.motionSnapshot.current &&
+      this.motionSnapshot.current.ambientLeaderId === this.socket.id
+    );
+  }
+  private mayDriveNpc(npc: NpcSprite) {
+    return (
+      !!this.socket?.connected &&
+      this.peerSnapshotReady &&
+      !!this.motionSnapshot.current &&
+      this.npcOwnership.mayDrive(npc.id, this.socket.id, this.isAmbientLeader())
+    );
+  }
+  private takeNpcOwnership(npcId: string, ownerId: string) {
+    if (!this.npcOwnership.claim(npcId, ownerId)) return;
+    const npc = this.npcSprites.find((entry) => entry.id === npcId);
+    if (npc) {
+      npc.cancelMovement();
+      npc.calledForRoom = null;
+      delete npc.ambientSchedule.seatTarget;
+      delete npc.ambientSchedule.seatRest;
+      this.traffic.clear(npcId);
+    }
+  }
+  private ensureLocalNpcOwnership(npc: NpcSprite, reason?: string, roomId?: string) {
+    if (!this.socket?.connected || !this.socket.id || !this.motionSnapshot.current) return false;
+    if (this.npcOwnership.owner(npc.id) === this.socket.id) return true;
+    this.takeNpcOwnership(npc.id, this.socket.id);
+    this.socket.emit("npc:call", {
+      channelId: this.channelId,
+      npcId: npc.id,
+      ...(reason ? { reason } : {}),
+      ...(roomId ? { roomId } : {}),
+    });
+    return true;
+  }
+  private finishNpcReturn(npc: NpcSprite, publish: boolean) {
+    const position = { x: npc.pixelX, y: npc.pixelY };
+    const home = { x: (npc.homeCol + 0.5) * TILE_SIZE, y: (npc.homeRow + 0.5) * TILE_SIZE };
+    if (publish)
+      publishNpcArrival((event, payload) => this.socket?.emit(event, payload), {
+        channelId: this.channelId,
+        npcId: npc.id,
+        ...position,
+        direction: DIR_NUM_TO_NAME[npc.direction],
+      });
+    if (this.npcOwnership.finishReturn(npc.id, position, home)) {
+      npc.ambientSchedule = createAmbientSchedule();
+      npc.calledForRoom = null;
+      npc.remoteWalkingUntil = 0;
+      this.traffic.clear(npc.id);
+      EventBus.emit("npc:movement-returned", { npcId: npc.id });
+    }
+  }
+  private releaseNpcOwner(ownerId: string) {
+    for (const npcId of this.npcOwnership.releaseOwner(ownerId)) {
+      const npc = this.npcSprites.find((entry) => entry.id === npcId);
+      if (!npc) continue;
+      npc.cancelMovement();
+      npc.calledForRoom = null;
+      npc.ambientSchedule = { ...createAmbientSchedule(), phase: "home" };
+      this.traffic.clear(npcId);
+      EventBus.emit("npc:movement-returned", { npcId });
+    }
+  }
+  private speechPreviews = new SpeechPreviews();
+  private smalltalk = new NpcSmalltalk();
+  private responsePhases: Record<string, "queued" | "thinking" | "streaming"> = {};
 
   /** Reuse authoritative frontend simulation while Three.js owns presentation. */
   readonly officeBridge: OfficeBridge = {
@@ -842,14 +1267,26 @@ export class GameScene extends Phaser.Scene {
           id: npc.id,
           name: npc.name,
           kind: "npc",
-          x: npc.pixelX,
-          y: npc.pixelY,
+          x: npc.sprite.x,
+          y: npc.sprite.y,
           direction: DIR_NUM_TO_NAME[npc.direction],
-          walking: npc.moveState === "moving-to-player" || npc.moveState === "returning",
+          walking:
+            !npc.ambientPaused &&
+            (this.mayDriveNpc(npc) ? npc.actuallyWalking : npc.remotePresentation?.walking ?? npc.remoteWalkingUntil > this.time.now),
           texture: texture(npc.sprite),
           appearance: npc.appearance,
-          bubble: bubble ? label?.text || "···" : undefined,
+          bubble:
+            this.speechPreviews.get(npc.id, this.time.now) ||
+            (bubble
+              ? label?.text || "···"
+              : !this.responsePhases[npc.id] &&
+                  !this.activityBubbles.has(npc.id) &&
+                  !npc.calledForRoom &&
+                  !this.dialogOpen
+                ? this.smalltalk.text(npc.id, this.time.now)
+                : undefined),
           active: this.activityBubbles.has(npc.id),
+          phase: this.responsePhases[npc.id],
         };
       });
       if (this.playerReady && this.player)
@@ -860,13 +1297,18 @@ export class GameScene extends Phaser.Scene {
           x: this.player.x,
           y: this.player.y,
           direction: DIR_NUM_TO_NAME[this.currentDirection],
-          walking: !!this.player.body?.velocity.length(),
+          walking: this.playerActuallyWalking,
           texture: texture(this.player),
           appearance: this.appearance,
+          bubble: this.speechPreviews.get(
+            this.socket?.id || this.characterId || "local",
+            this.time.now,
+          ),
         });
       for (const [id, remote] of this.remotePlayers)
         actors.push({
           id,
+          userId: remote.userId,
           name: remote.nameLabel.text,
           kind: "remote",
           x: remote.sprite.x,
@@ -875,6 +1317,7 @@ export class GameScene extends Phaser.Scene {
           walking: remote.animation !== "idle",
           texture: texture(remote.sprite),
           appearance: remote.appearance,
+          bubble: this.speechPreviews.get(remote.userId || id, this.time.now),
         });
       return actors;
     },
@@ -1027,14 +1470,25 @@ export class GameScene extends Phaser.Scene {
   private interactKey!: Phaser.Input.Keyboard.Key;
   private currentDirection: number = DIR_DOWN;
   private playerReady = false;
+  private playerActuallyWalking = false;
 
   // Multiplayer
   private socket: Socket | null = null;
   private rejoin = createRejoinTracker();
   private joinedSocketId: string | undefined = undefined;
-  private handleSocketDisconnect = () => this.rejoin.onDisconnect();
+  private handleSocketDisconnect = () => {
+    this.rejoin.onDisconnect();
+    this.motionSnapshot.clear();
+    this.peerSnapshotReady = false;
+    this.playerSpawnReady = false;
+    this.pendingPlayerResume = null;
+    this.resumingPlayerGoal = null;
+    this.motionGeneration++;
+    this.pendingSeatClaims.clear();
+  };
   private handleSocketConnect = () => {
-    if (this.rejoin.shouldRejoin(this.playerReady && !!this.player) && this.player) {
+    const reconnect = this.rejoin.shouldRejoin(this.playerReady && !!this.player);
+    if (this.playerReady && this.player && (reconnect || this.joinedSocketId !== this.socket?.id)) {
       this.joinMultiplayer(this.player.x, this.player.y);
     }
   };
@@ -1048,6 +1502,7 @@ export class GameScene extends Phaser.Scene {
     this.joinMultiplayer(this.player.x, this.player.y);
   };
   private remotePlayers = new Map<string, RemotePlayer>();
+  private peerMotionSamples = new Map<string, PeerMotionSample>();
   private lastMoveSent = 0;
   private lastSentX = 0;
   private lastSentY = 0;
@@ -1127,6 +1582,7 @@ export class GameScene extends Phaser.Scene {
   private channelMapData: MapData | null = null;
   private tiledMode: boolean = false; // true when using Tiled JSON map (not legacy tilemap)
   private officeEnvironment: string | undefined;
+  private ambientZones: AmbientZone[] = [];
   private tiledSpawnCol: number | null = null;
   private tiledSpawnRow: number | null = null;
   private savedPosition: { x: number; y: number } | null = null;
@@ -1136,6 +1592,16 @@ export class GameScene extends Phaser.Scene {
 
   // Placement mode (NPC hiring)
   private placementMode = false;
+  private placementNpcId: string | null = null;
+  private canPlaceAt(col: number, row: number): boolean {
+    return (
+      isSeatAnchor(this.mapObjects, col, row) &&
+      this.isWalkable(col, row) &&
+      !this.npcSprites.some(
+        (n) => n.id !== this.placementNpcId && n.homeCol === col && n.homeRow === row,
+      )
+    );
+  }
   private placementHighlight: Phaser.GameObjects.Rectangle | null = null;
   private isChannelOwner = false;
 
@@ -1184,31 +1650,51 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  private createNpcWalkValidator(
-    npcSelf: NpcSprite,
-    targetCol: number,
-    targetRow: number,
-  ): (tx: number, ty: number) => boolean {
-    return (tx: number, ty: number) => {
-      if (!this.isWalkable(tx, ty)) return false;
-      if (tx === targetCol && ty === targetRow) return true;
-      const cx = tx * TILE_SIZE + TILE_SIZE / 2;
-      const cy = ty * TILE_SIZE + TILE_SIZE / 2;
-      const threshold = TILE_SIZE * 0.8;
-      for (const other of this.npcSprites) {
-        if (other === npcSelf) continue;
-        if (Math.abs(other.pixelX - cx) < threshold && Math.abs(other.pixelY - cy) < threshold)
-          return false;
-      }
-      for (const remote of this.remotePlayers.values()) {
-        if (
-          Math.abs(remote.sprite.x - cx) < threshold &&
-          Math.abs(remote.sprite.y - cy) < threshold
-        )
-          return false;
-      }
-      return true;
+  private trafficActors(): TrafficActor[] {
+    const point = (x: number, y: number) => ({ x: x / TILE_SIZE - 0.5, y: y / TILE_SIZE - 0.5 });
+    return [
+      ...this.npcSprites.map((npc) => ({ id: npc.id, ...point(npc.pixelX, npc.pixelY) })),
+      ...[...this.peerPositions].map(([id, remote]) => ({
+        id: `player:${id}`,
+        player: true,
+        ...point(remote.x, remote.y),
+        movementUncertainty: peerMovementUncertainty(
+          this.peerMotionSamples.get(id) ?? { receivedAt: performance.now(), moving: remote.animation === "walk" },
+          performance.now(),
+          this.game.loop.delta,
+        ),
+      })),
+      ...(this.player
+        ? [{ id: "player:local", player: true, ...point(this.player.x, this.player.y) }]
+        : []),
+    ];
+  }
+
+  private findPlayerPath(sx: number, sy: number, ex: number, ey: number) {
+    const actors = this.trafficActors().filter((actor) => actor.id !== "player:local");
+    const walkable = (x: number, y: number) => this.isWalkable(x, y);
+    return (
+      findPath(sx, sy, ex, ey, walkable, (a, b) => clearActors(a, b, actors)) ??
+      findPath(sx, sy, ex, ey, walkable)
+    );
+  }
+
+  private npcPathfinder(npc: NpcSprite) {
+    return (
+      sx: number,
+      sy: number,
+      ex: number,
+      ey: number,
+      walkable: (x: number, y: number) => boolean,
+    ) => {
+      const actors = this.trafficActors().filter((actor) => actor.id !== npc.id);
+      return findTrafficPath(sx, sy, ex, ey, walkable, actors);
     };
+  }
+
+  private createNpcWalkValidator(): (tx: number, ty: number) => boolean {
+    // Coarse paths describe static topology; traffic handles transient actors using swept discs.
+    return (tx, ty) => this.isWalkable(tx, ty);
   }
 
   private drawPathLine(path: { x: number; y: number }[]): void {
@@ -1267,6 +1753,16 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.officeEnvironment = undefined;
+    this.ambientZones = [];
+    this.traffic.clear();
+    this.joinedSocketId = undefined;
+    this.npcOwnership.clear();
+    this.motionSnapshot.clear();
+    this.peerPositions.clear();
+    this.peerMotionSamples.clear();
+    this.pendingNpcCalls.clear();
+    this.motionGeneration++;
+    this.connectedPlayerIds.clear();
     // Read pending channel data set by game page before scene creation
     let tiledJsonData: Record<string, unknown> | null = null;
     const initialChannelData = pendingChannelData;
@@ -1499,11 +1995,13 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Placement mode events
-    this.eventScope.on("placement-mode-start", () => {
+    this.eventScope.on("placement-mode-start", (npc: { id: string }) => {
+      this.placementNpcId = npc.id;
       this.placementMode = true;
     });
     this.eventScope.on("placement-mode-end", () => {
       this.placementMode = false;
+      this.placementNpcId = null;
       this.placementHighlight?.destroy();
       this.placementHighlight = null;
     });
@@ -1541,6 +2039,7 @@ export class GameScene extends Phaser.Scene {
         if (this.npcSprites.some((n) => n.id === npcData.id)) return;
         const npc = new NpcSprite(this, npcData);
         this.npcSprites.push(npc);
+        this.restoreMotionNpc(npc);
         this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
       },
     );
@@ -1556,17 +2055,21 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
+    this.eventScope.on("npc:movement-owner", (data: { npcId: string; ownerId: string }) => {
+      this.takeNpcOwnership(data.npcId, data.ownerId);
+    });
+
     this.eventScope.on(
       "npc:start-move",
       (data: { npcId: string; targetCol: number; targetRow: number; message?: string }) => {
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
-        if (!npc || npc.moveState !== "idle") return;
+        if (!npc || !this.ensureLocalNpcOwnership(npc) || npc.moveState !== "idle") return;
         this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
         npc.moveTo(
           data.targetCol,
           data.targetRow,
           findPath,
-          (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
+          this.createNpcWalkValidator(),
           data.message ? { message: data.message } : undefined,
         );
       },
@@ -1584,11 +2087,20 @@ export class GameScene extends Phaser.Scene {
         reason?: string;
         roomId?: string;
       }) => {
-        if (!this.player) return;
+        if (
+          !this.player ||
+          !this.motionSnapshot.current ||
+          !this.npcSprites.some((npc) => npc.id === data.npcId)
+        ) {
+          this.pendingNpcCalls.set(data.npcId, data);
+          return;
+        }
         const playerCol = Math.floor(this.player.x / TILE_SIZE);
         const playerRow = Math.floor(this.player.y / TILE_SIZE);
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
-        if (!npc || npc.moveState !== "idle") return;
+        if (!npc) return;
+        if (!this.ensureLocalNpcOwnership(npc, data.reason, data.roomId)) return;
+        if (npc.moveState !== "idle") return;
         npc.calledForRoom = data.reason === "map-chat" ? (data.roomId ?? null) : null;
 
         const dist = npc.distanceTo(this.player.x, this.player.y);
@@ -1600,7 +2112,11 @@ export class GameScene extends Phaser.Scene {
           npc.waitDurationMs = data.reportKind === "complete" ? this.reportWaitMs : 10000;
           npc.moveState = "waiting";
           npc.waitTimer = 0;
-          EventBus.emit("npc:bubble", { npcId: npc.id, text: npc.arrivalBubbleText || undefined });
+          if (!npc.calledForRoom || npc.pendingReportId)
+            EventBus.emit("npc:bubble", {
+              npcId: npc.id,
+              text: npc.arrivalBubbleText || undefined,
+            });
           EventBus.emit("toast:show", {
             messageKey: "game.pressToTalk",
             params: { name: data.npcName || npc.name },
@@ -1612,23 +2128,24 @@ export class GameScene extends Phaser.Scene {
             reportId: npc.pendingReportId,
             reportKind: npc.pendingReportKind,
           });
+          publishNpcArrival((event, payload) => this.socket?.emit(event, payload), {
+            channelId: this.channelId,
+            npcId: npc.id,
+            x: npc.pixelX,
+            y: npc.pixelY,
+            direction: DIR_NUM_TO_NAME[npc.direction],
+          });
           return;
         }
 
         this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
-        npc.moveTo(
-          playerCol,
-          playerRow,
-          findPath,
-          this.createNpcWalkValidator(npc, playerCol, playerRow),
-          {
-            message: data.message,
-            reportId: data.reportId,
-            reportKind: data.reportKind,
-            bubbleText: data.bubbleText,
-            waitDurationMs: data.reportKind === "complete" ? this.reportWaitMs : 10000,
-          },
-        );
+        npc.moveTo(playerCol, playerRow, findPath, this.createNpcWalkValidator(), {
+          message: data.message,
+          reportId: data.reportId,
+          reportKind: data.reportKind,
+          bubbleText: data.bubbleText,
+          waitDurationMs: data.reportKind === "complete" ? this.reportWaitMs : 10000,
+        });
       },
     );
 
@@ -1646,28 +2163,21 @@ export class GameScene extends Phaser.Scene {
       }
 
       // NPC is far — walk to player (only if idle)
-      if (npc.moveState !== "idle") return;
+      if (!this.ensureLocalNpcOwnership(npc) || npc.moveState !== "idle") return;
       this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
       const playerCol = Math.floor(this.player.x / TILE_SIZE);
       const playerRow = Math.floor(this.player.y / TILE_SIZE);
-      npc.moveTo(
-        playerCol,
-        playerRow,
-        findPath,
-        this.createNpcWalkValidator(npc, playerCol, playerRow),
-        {
-          message: `${data.npcName}이(가) 대화를 원합니다`,
-        },
-      );
+      npc.moveTo(playerCol, playerRow, findPath, this.createNpcWalkValidator(), {
+        message: `${data.npcName}이(가) 대화를 원합니다`,
+      });
     });
 
     this.eventScope.on("npc:start-return", (data: { npcId: string }) => {
+      if (!this.npcOwnership.startReturn(data.npcId)) return;
       const npc = this.npcSprites.find((n) => n.id === data.npcId);
-      if (!npc || npc.moveState !== "waiting") return;
-      npc.returnToHome(
-        findPath,
-        (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
-      );
+      if (!npc || !this.mayDriveNpc(npc) || npc.moveState === "returning") return;
+      npc.returnToHome(this.npcPathfinder(npc), this.createNpcWalkValidator());
+      if (npc.moveState === "idle") this.finishNpcReturn(npc, true);
     });
 
     this.eventScope.on("npc:approach-and-interact", (data: { npcId: string; npcName?: string }) => {
@@ -1795,7 +2305,7 @@ export class GameScene extends Phaser.Scene {
         const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         const col = Math.floor(worldPoint.x / TILE_SIZE);
         const row = Math.floor(worldPoint.y / TILE_SIZE);
-        if (this.isWalkable(col, row) && !this.isTileOccupied(col, row)) {
+        if (this.canPlaceAt(col, row)) {
           EventBus.emit("placement-complete", { col, row });
         }
         return;
@@ -1856,7 +2366,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      if (!this.player || !this.playerReady) return;
+      if (!this.player || !this.playerReady || !this.canMovePlayer()) return;
 
       // Right-click on NPC: context menu
       if (pointer.rightButtonDown()) {
@@ -1932,13 +2442,7 @@ export class GameScene extends Phaser.Scene {
         destTileY = nearest.y;
       }
 
-      const path = findPath(
-        startTileX,
-        startTileY,
-        destTileX,
-        destTileY,
-        (tx, ty) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
-      );
+      const path = this.findPlayerPath(startTileX, startTileY, destTileX, destTileY);
 
       // 클릭 한 번이 무슨 뜻인지 여기서 정한다. 예전에는 "걸어가서 도착하면 대화"뿐이라
       // 이미 옆에 서 있으면 경로가 서지 않아 아무 일도 일어나지 않았다.
@@ -1957,6 +2461,8 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (path && path.length > 1) {
+        this.spawnInputStarted = true;
+        this.traffic.clear("player:local");
         this.currentPath = path;
         this.pathIndex = 1;
         this.pathStuckTimer = 0;
@@ -1967,6 +2473,7 @@ export class GameScene extends Phaser.Scene {
 
     // Pre-fetch NPC positions before allowing player spawn, then load sprites
     this.prefetchNpcPositions().then((npcs) => {
+      if (!this.sys.isActive()) return;
       this.loadNpcs(npcs);
     });
 
@@ -1997,13 +2504,27 @@ export class GameScene extends Phaser.Scene {
     };
     this.eventScope.on("socket-ready", handleSocketReady);
 
+    this.responsePhases = {};
+    this.eventScope.on(
+      "npc:response-phases",
+      (data: { phases: Record<string, "queued" | "thinking" | "streaming"> }) => {
+        this.responsePhases = data.phases;
+      },
+    );
+    // Conversation previews are independent of activity/greeting lifecycle.
+    this.eventScope.on("chat:speech", (data: { actorId: string; text: string }) => {
+      this.speechPreviews.set(data.actorId, data.text, this.time.now);
+    });
     // Speech bubble listeners
     this.eventScope.on("chat:bubble", (data: { senderId: string }) => {
       this.showPlayerBubble(data.senderId);
     });
-    this.eventScope.on("npc:bubble", (data: { npcId: string; text?: string }) => {
-      this.showNpcBubbleIcon(data.npcId, data.text);
-    });
+    this.eventScope.on(
+      "npc:bubble",
+      (data: { npcId: string; text?: string; durationMs?: number }) => {
+        this.showNpcBubbleIcon(data.npcId, data.text, data.durationMs);
+      },
+    );
     this.eventScope.on("npc:bubble-clear", (data: { npcId: string }) => {
       this.clearNpcBubble(data.npcId);
       this.activityBubbles.delete(data.npcId);
@@ -2055,6 +2576,7 @@ export class GameScene extends Phaser.Scene {
   private loadTiledMap(tiledJson: Record<string, unknown>): void {
     this.tiledMode = true;
     this.officeEnvironment = resolveOfficeEnvironment(tiledJson);
+    this.ambientZones = readAmbientZones(tiledJson);
     // Resolve external tileset references — Phaser doesn't support them
     const tilesetArr = tiledJson.tilesets as Array<Record<string, unknown>>;
     if (tilesetArr) {
@@ -2847,6 +3369,7 @@ export class GameScene extends Phaser.Scene {
     })
       .then((res) => {
         if (res.ok) {
+          this.socket?.emit("map:layout-saved");
           // Flash the save button green
           const saveBtn = this.children.getByName(
             "editor-save-btn",
@@ -2895,10 +3418,12 @@ export class GameScene extends Phaser.Scene {
       this.npcTilePositions.add(`${npc.positionX},${npc.positionY}`);
       const npcSprite = new NpcSprite(this, npc);
       this.npcSprites.push(npcSprite);
+      this.restoreMotionNpc(npcSprite);
     }
   }
 
   private removeNpcById(npcId: string): void {
+    this.npcOwnership.clear(npcId);
     const idx = this.npcSprites.findIndex((n) => n.id === npcId);
     if (idx === -1) return;
     const npc = this.npcSprites[idx];
@@ -2920,6 +3445,18 @@ export class GameScene extends Phaser.Scene {
 
   private setupSocketListeners(): void {
     if (!this.socket) return;
+    this.socketListenerCleanup?.();
+    const socket = this.socket;
+    const cleanup: (() => void)[] = [];
+    const listen = <Args extends unknown[]>(event: string, listener: (...args: Args) => void) => {
+      socket.on(event, listener);
+      cleanup.push(() => socket.off(event, listener));
+    };
+    const dispose = () => {
+      for (const off of cleanup) off();
+    };
+    this.socketListenerCleanup = dispose;
+    this.eventScope.addCleanup(dispose);
 
     // 재연결 = 새 socket.id. 서버 players 맵에 없으므로 다시 join 한다.
     // (docs/BACKLOG.md "소켓이 재연결되면 채널 채팅·NPC 지명이 조용히 죽는다")
@@ -2929,9 +3466,9 @@ export class GameScene extends Phaser.Scene {
     // socket-ready 를 재발행하는 2차. off-then-on 으로 멱등하게 만들어, 재조인 1회에
     // player:join 이 두 번 나가지 않게 한다 (핸들러는 인스턴스 필드라 참조가 안정적이다).
     this.socket.off("disconnect", this.handleSocketDisconnect);
-    this.socket.on("disconnect", this.handleSocketDisconnect);
+    listen("disconnect", this.handleSocketDisconnect);
     this.socket.off("connect", this.handleSocketConnect);
-    this.socket.on("connect", this.handleSocketConnect);
+    listen("connect", this.handleSocketConnect);
     registerOnce(EventBus, "socket-rejoin", this.handleSocketRejoin);
     const cleanupSocketRejoinListener = () => {
       EventBus.off("socket-rejoin", this.handleSocketRejoin);
@@ -2939,19 +3476,100 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupSocketRejoinListener);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanupSocketRejoinListener);
 
-    this.socket.on("players:state", (data: { players: RemotePlayerData[] }) => {
+    listen("npc:motion-state", (snapshot: MotionSnapshot) => {
+      const first = !this.motionSnapshot.current;
+      const becameLeader =
+        this.motionSnapshot.current?.ambientLeaderId !== this.socket?.id &&
+        snapshot.ambientLeaderId === this.socket?.id;
+      if (!this.motionSnapshot.accept(snapshot, this.channelId)) return;
+      const ownSeat = snapshot.seats.find((seat) => seat.actorId === this.socket?.id);
+      if (first && ownSeat) this.playerSeatGoal = ownSeat.seatId;
+      if (
+        this.playerSeatGoal &&
+        !snapshot.seats.some(
+          (seat) => seat.seatId === this.playerSeatGoal && seat.actorId === this.socket?.id,
+        )
+      )
+        this.playerSeatGoal = null;
+      this.resumePlayerGoal();
+      for (const npc of this.npcSprites) {
+        const state = snapshot.npcs.find((entry) => entry.npcId === npc.id);
+        if (state) this.applyMotionNpc(npc, state, restoreOnSnapshot(first, becameLeader, state));
+        const pending = this.pendingNpcCalls.get(npc.id);
+        if (pending && this.player) {
+          this.pendingNpcCalls.delete(npc.id);
+          EventBus.emit("npc:call-to-player", pending);
+        }
+      }
+    });
+    listen("player:spawn", (position: PlayerSpawnState) => {
+      if (this.player && untouchedSpawn(this.spawnRequest, this.player, this.spawnInputStarted)) {
+        this.player.setPosition(position.x, position.y);
+        this.currentDirection = DIR_NAME_MAP[position.direction ?? "down"] ?? DIR_DOWN;
+        this.player.anims.stop();
+        this.player.setFrame(this.currentDirection * SPRITE_COLS);
+        this.playerActuallyWalking = false;
+        this.playerNameLabel?.setPosition(position.x, position.y - 44);
+        this.currentPath = null;
+        this.traffic.clear("player:local");
+        // A remembered seat is an intention, never proof of a live reservation.
+        this.playerSeatGoal = null;
+        this.pendingPlayerResume = position.motion ?? null;
+      }
+      // Only after consuming the authoritative snapshot may local frames publish movement.
+      this.spawnRequest = null;
+      this.playerSpawnReady = true;
+      this.lastSentMotion = "";
+      this.resumePlayerGoal();
+    });
+    listen("players:state", (data: { players: RemotePlayerData[] }) => {
+      this.peerMotionSamples = new Map(data.players.map((player) => [player.id, {
+        receivedAt: performance.now(), moving: player.animation === "walk",
+      }]));
+      this.peerSnapshotReady = true;
+      this.connectedPlayerIds = new Set(data.players.map((player) => player.id));
+      this.peerPositions = new Map(
+        data.players.map((player) => [
+          player.id,
+          { x: player.x, y: player.y, direction: player.direction, animation: player.animation },
+        ]),
+      );
+      for (const [id, remote] of this.remotePlayers) {
+        if (!this.connectedPlayerIds.has(id)) {
+          remote.destroy();
+          this.remotePlayers.delete(id);
+        }
+      }
+      this.resumePlayerGoal();
       for (const p of data.players) {
-        this.addRemotePlayer(p);
+        const remote = this.remotePlayers.get(p.id);
+        if (remote) remote.updatePosition(p.x, p.y, p.direction, p.animation);
+        else this.addRemotePlayer(p);
       }
     });
 
-    this.socket.on("player:joined", (data: RemotePlayerData) => {
+    listen("player:joined", (data: RemotePlayerData) => {
+      this.peerMotionSamples.set(data.id, { receivedAt: performance.now(), moving: data.animation === "walk" });
+      this.connectedPlayerIds.add(data.id);
+      this.peerPositions.set(data.id, {
+        x: data.x,
+        y: data.y,
+        direction: data.direction,
+        animation: data.animation,
+      });
       this.addRemotePlayer(data);
     });
 
-    this.socket.on(
+    listen(
       "player:moved",
       (data: { id: string; x: number; y: number; direction: string; animation: string }) => {
+        this.peerMotionSamples.set(data.id, { receivedAt: performance.now(), moving: data.animation === "walk" });
+        this.peerPositions.set(data.id, {
+          x: data.x,
+          y: data.y,
+          direction: data.direction,
+          animation: data.animation,
+        });
         const remote = this.remotePlayers.get(data.id);
         if (remote) {
           remote.updatePosition(data.x, data.y, data.direction, data.animation);
@@ -2959,7 +3577,11 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    this.socket.on("player:left", (data: { id: string }) => {
+    listen("player:left", (data: { id: string }) => {
+      this.connectedPlayerIds.delete(data.id);
+      this.peerPositions.delete(data.id);
+      this.peerMotionSamples.delete(data.id);
+      this.releaseNpcOwner(data.id);
       const remote = this.remotePlayers.get(data.id);
       if (remote) {
         remote.destroy();
@@ -2968,16 +3590,17 @@ export class GameScene extends Phaser.Scene {
     });
 
     // NPC real-time sync
-    this.socket.on("npc:added", (npcData: NpcData) => {
+    listen("npc:added", (npcData: NpcData) => {
       if (this.npcSprites.some((n) => n.id === npcData.id)) return;
       const npc = new NpcSprite(this, npcData);
       this.npcSprites.push(npc);
+      this.restoreMotionNpc(npc);
       this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
     });
 
     // 두 가지 모양이 온다 — 옛 `{ npcId, … }`(외형·방향 편집)와 새 `{ npc }`(출근부
     // 토글). 판단은 `decideNpcUpdate` 가 한다(node 에서 테스트되는 순수 함수).
-    this.socket.on("npc:updated", (data: NpcUpdatedPayload) => {
+    listen("npc:updated", (data: NpcUpdatedPayload) => {
       const action = decideNpcUpdate(data, (id) => this.npcSprites.some((n) => n.id === id));
       if (action.kind === "ignore") return;
       if (action.kind === "remove") {
@@ -2993,25 +3616,26 @@ export class GameScene extends Phaser.Scene {
       const npcData: NpcData = { ...action.npc };
       const npc = new NpcSprite(this, npcData);
       this.npcSprites.push(npc);
+      this.restoreMotionNpc(npc);
       this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
     });
 
-    this.socket.on("npc:removed", (data: { npcId: string }) => {
+    listen("npc:removed", (data: { npcId: string }) => {
       this.removeNpcById(data.npcId);
     });
 
     // Map editing real-time sync
-    this.socket.on("map:object-added", (data: { object: MapObject }) => {
+    listen("map:object-added", (data: { object: MapObject }) => {
       this.mapObjects.push(data.object);
       this.renderObjects();
     });
 
-    this.socket.on("map:object-removed", (data: { objectId: string }) => {
+    listen("map:object-removed", (data: { objectId: string }) => {
       this.mapObjects = this.mapObjects.filter((o) => o.id !== data.objectId);
       this.renderObjects();
     });
 
-    this.socket.on(
+    listen(
       "map:tiles-updated",
       (data: { layer: string; row: number; col: number; tileId: number }) => {
         if (this.tiledMode) return; // Tiled JSON maps don't use legacy tile editing
@@ -3024,9 +3648,11 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    this.socket.on("npc:stop-moving", (data: { npcId: string }) => {
+    listen("npc:stop-moving", (data: { npcId: string }) => {
       const npc = this.npcSprites.find((n) => n.id === data.npcId);
       if (!npc) return;
+      npc.remoteWalkingUntil = 0;
+      this.finishNpcReturn(npc, false);
       if (npc.sprite instanceof Phaser.GameObjects.Sprite) {
         npc.sprite.stop();
         const idleFrame = npc.direction * SPRITE_COLS;
@@ -3034,11 +3660,15 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    this.socket.on(
+    listen(
       "npc:position-sync",
       (data: { npcId: string; x: number; y: number; direction: string }) => {
         const npc = this.npcSprites.find((n) => n.id === data.npcId);
-        if (!npc) return;
+        // Modern snapshots already carry this update and its moving flag. A duplicate
+        // legacy packet must not snap presentation or clear walking on equal coordinates.
+        if (!npc || this.motionSnapshot.current?.npcs.some((entry) => entry.npcId === data.npcId) || this.mayDriveNpc(npc)) return;
+        const moved = Math.hypot(npc.pixelX - data.x, npc.pixelY - data.y) > 0.01;
+        npc.remoteWalkingUntil = moved ? this.time.now + 500 : 0;
         npc.pixelX = data.x;
         npc.pixelY = data.y;
         npc.direction = DIR_NAME_MAP[data.direction] ?? DIR_DOWN;
@@ -3047,6 +3677,11 @@ export class GameScene extends Phaser.Scene {
 
         // Play walk animation matching direction (on other clients)
         if (npc.sprite instanceof Phaser.GameObjects.Sprite) {
+          if (!moved) {
+            npc.sprite.stop();
+            npc.sprite.setFrame(npc.direction * SPRITE_COLS);
+            return;
+          }
           const walkKey = `npc-${npc.id}-walk-${data.direction}`;
           if (this.anims.exists(walkKey) && npc.sprite.anims.currentAnim?.key !== walkKey) {
             npc.sprite.play(walkKey, true);
@@ -3064,6 +3699,7 @@ export class GameScene extends Phaser.Scene {
     if (this.remotePlayers.has(data.id)) return;
 
     const textureKey = `remote-${data.id}`;
+    const generation = this.motionGeneration;
 
     EventBus.emit("composite-remote-player", {
       id: data.id,
@@ -3079,7 +3715,13 @@ export class GameScene extends Phaser.Scene {
 
       const img = new window.Image();
       img.onload = () => {
-        if (this.remotePlayers.has(data.id)) return;
+        if (
+          generation !== this.motionGeneration ||
+          this.remotePlayers.has(data.id) ||
+          !this.connectedPlayerIds.has(data.id) ||
+          !this.sys.isActive()
+        )
+          return;
         if (!this.textures.exists(textureKey)) {
           this.textures.addSpriteSheet(textureKey, img, {
             frameWidth: 64,
@@ -3087,7 +3729,11 @@ export class GameScene extends Phaser.Scene {
           });
         }
         this.createRemoteAnimations(textureKey);
-        const remote = new RemotePlayer(this, data, textureKey);
+        const remote = new RemotePlayer(
+          this,
+          { ...data, ...this.peerPositions.get(data.id) },
+          textureKey,
+        );
         this.remotePlayers.set(data.id, remote);
       };
       img.src = result.dataUrl;
@@ -3127,9 +3773,11 @@ export class GameScene extends Phaser.Scene {
 
     const img = new Image();
     img.onerror = () => {
+      if (!this.sys.isActive()) return;
       this.createPlayer(); // fallback texture will be used
     };
     img.onload = () => {
+      if (!this.sys.isActive()) return;
       try {
         if (!this.textures.exists("player")) {
           this.textures.addSpriteSheet("player", img, {
@@ -3150,24 +3798,11 @@ export class GameScene extends Phaser.Scene {
     // Check pre-recorded NPC positions (available before sprites load)
     if (this.npcTilePositions.has(`${col},${row}`)) return true;
 
-    const cx = col * TILE_SIZE + TILE_SIZE / 2;
-    const cy = row * TILE_SIZE + TILE_SIZE / 2;
-    const threshold = TILE_SIZE * 0.8;
-
-    for (const npc of this.npcSprites) {
-      if (Math.abs(npc.pixelX - cx) < threshold && Math.abs(npc.pixelY - cy) < threshold) {
-        return true;
-      }
-    }
-    for (const remote of this.remotePlayers.values()) {
-      if (
-        Math.abs(remote.sprite.x - cx) < threshold &&
-        Math.abs(remote.sprite.y - cy) < threshold
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return !clearActors(
+      { x: col, y: row },
+      { x: col, y: row },
+      this.trafficActors().filter((actor) => actor.id !== "player:local"),
+    );
   }
 
   /** Find a free walkable spawn position near the preferred tile */
@@ -3198,9 +3833,12 @@ export class GameScene extends Phaser.Scene {
     let spawnX: number;
     let spawnY: number;
 
-    // Priority: mapConfig spawn (owner-set) > savedPosition (last session) > Objects layer / default
-    if (this.mapConfigSpawnCol !== null && this.mapConfigSpawnRow !== null) {
-      // Owner explicitly configured spawn — always use it, ignore saved position
+    // Existing members resume where they left; configured spawn is for a fresh visit.
+    if (this.savedPosition) {
+      spawnX = this.savedPosition.x;
+      spawnY = this.savedPosition.y;
+      this.savedPosition = null;
+    } else if (this.mapConfigSpawnCol !== null && this.mapConfigSpawnRow !== null) {
       const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(
         this.mapConfigSpawnCol,
         this.mapConfigSpawnRow,
@@ -3208,11 +3846,6 @@ export class GameScene extends Phaser.Scene {
       spawnX = spawnCol * TILE_SIZE + TILE_SIZE / 2;
       spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
       this.savedPosition = null;
-    } else if (this.savedPosition) {
-      // Restore saved position from last session (pixel coordinates)
-      spawnX = this.savedPosition.x;
-      spawnY = this.savedPosition.y;
-      this.savedPosition = null; // consumed
     } else {
       // Find a free spawn position, checking NPCs, remote players, AND object occupied tiles
       const preferSpawnCol = this.tiledSpawnCol ?? 8;
@@ -3282,8 +3915,24 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private joinMultiplayer(x: number, y: number): void {
-    if (!this.socket || !this.characterId) return;
+    if (
+      !this.socket?.connected ||
+      !this.socket.id ||
+      !this.characterId ||
+      this.joinedSocketId === this.socket.id
+    )
+      return;
 
+    this.motionSnapshot.clear();
+    this.peerSnapshotReady = false;
+    this.playerSpawnReady = false;
+    this.pendingPlayerResume = null;
+    this.resumingPlayerGoal = null;
+    this.motionGeneration++;
+    this.pendingSeatClaims.clear();
+    this.playerSeatGoal = null;
+    this.spawnRequest = { x, y };
+    this.spawnInputStarted = false;
     this.socket.emit("player:join", {
       characterId: this.characterId,
       characterName: this.characterName,
@@ -3300,8 +3949,11 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private sendPosition(x: number, y: number, direction: string, animation: string): void {
-    if (!this.socket) return;
+    if (!this.socket?.connected || !this.playerSpawnReady || !this.peerSnapshotReady) return;
 
+    const motion = playerMotionGoal(this.currentPath, this.playerSeatGoal, TILE_SIZE)
+      ?? (!this.spawnInputStarted ? this.resumingPlayerGoal : null) ?? null;
+    const motionKey = JSON.stringify(motion);
     const now = Date.now();
     if (now - this.lastMoveSent < MOVE_SEND_INTERVAL) return;
 
@@ -3309,7 +3961,7 @@ export class GameScene extends Phaser.Scene {
       Math.abs(x - this.lastSentX) < 0.5 &&
       Math.abs(y - this.lastSentY) < 0.5 &&
       direction === this.lastSentDir &&
-      animation === this.lastSentAnim
+      animation === this.lastSentAnim && motionKey === this.lastSentMotion
     ) {
       return;
     }
@@ -3320,7 +3972,8 @@ export class GameScene extends Phaser.Scene {
     this.lastSentDir = direction;
     this.lastSentAnim = animation;
 
-    this.socket.emit("player:move", { x, y, direction, animation });
+    this.lastSentMotion = motionKey;
+    this.socket.emit("player:move", { x, y, direction, animation, motion });
   }
 
   // ---------------------------------------------------------------------------
@@ -3377,7 +4030,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showPlayerBubble(senderId: string): void {
-    const remote = this.remotePlayers.get(senderId);
+    const remote =
+      this.remotePlayers.get(senderId) ??
+      [...this.remotePlayers.values()].find((player) => player.userId === senderId);
     if (!remote) return;
 
     const bubble = this.createBubbleIcon(remote.sprite.x, remote.sprite.y);
@@ -3392,9 +4047,9 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private showNpcBubbleIcon(npcId: string, text?: string): void {
+  private showNpcBubbleIcon(npcId: string, text?: string, durationMs?: number): void {
     if (this.npcBubbles.has(npcId)) {
-      if (!text) return;
+      if (durationMs || !text) return;
       this.clearNpcBubble(npcId);
     }
 
@@ -3403,6 +4058,11 @@ export class GameScene extends Phaser.Scene {
 
     const bubble = this.createBubbleIcon(npc.pixelX, npc.pixelY, text);
     this.npcBubbles.set(npcId, bubble);
+    if (durationMs)
+      this.time.delayedCall(durationMs, () => {
+        // An old greeting must never clear a newer work/report bubble.
+        if (this.npcBubbles.get(npcId) === bubble) this.clearNpcBubble(npcId);
+      });
   }
 
   private clearNpcBubble(npcId: string): void {
@@ -3508,7 +4168,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private approachNpcAndInteract(npcId: string, npcName?: string): void {
-    if (!this.player || !this.playerReady) return;
+    if (!this.player || !this.playerReady || !this.canMovePlayer()) return;
 
     const npc = this.npcSprites.find((entry) => entry.id === npcId);
     if (!npc || npc.moveState !== "idle") return;
@@ -3546,19 +4206,14 @@ export class GameScene extends Phaser.Scene {
       destTileY = nearest.y;
     }
 
-    const path = findPath(
-      startTileX,
-      startTileY,
-      destTileX,
-      destTileY,
-      (tx, ty) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
-    );
+    const path = this.findPlayerPath(startTileX, startTileY, destTileX, destTileY);
 
     if (!path || path.length <= 1) {
       EventBus.emit("npc:interact", { npcId: npc.id, npcName: npcName || npc.name });
       return;
     }
 
+    this.traffic.clear("player:local");
     this.currentPath = path;
     this.pathIndex = 1;
     this.pathStuckTimer = 0;
@@ -3573,27 +4228,329 @@ export class GameScene extends Phaser.Scene {
 
   /** 대기 중인 NPC 를 자리로 보낸다 — 타이머 만료와 채널 채팅 닫힘이 같은 경로를 쓴다. */
   private sendNpcHome(npc: NpcSprite): void {
+    if (!this.mayDriveNpc(npc)) return;
     npc.waitTimer = 0;
     this.clearNpcBubble(npc.id);
-    npc.returnToHome(
-      findPath,
-      (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
-    );
-    EventBus.emit("npc:movement-returned", { npcId: npc.id });
+    this.npcOwnership.startReturn(npc.id);
     this.socket?.emit("npc:return-home", { channelId: this.channelId, npcId: npc.id });
+    npc.returnToHome(this.npcPathfinder(npc), this.createNpcWalkValidator());
+    if (npc.moveState === "idle") this.finishNpcReturn(npc, true);
+  }
+
+  private returnDiagnosticAt = 0;
+  private returnDiagnosticNode: HTMLOutputElement | null = null;
+  private publishReturnDiagnostics() {
+    if (
+      process.env.NODE_ENV !== "development" ||
+      process.env.NEXT_PUBLIC_DESKRPG_MOTION_DIAGNOSTICS !== "1" ||
+      this.time.now - this.returnDiagnosticAt < 1000
+    )
+      return;
+    this.returnDiagnosticAt = this.time.now;
+    const states = this.npcSprites
+      .filter(
+        (npc) =>
+          npc.moveState === "returning" ||
+          this.motionSnapshot.current?.npcs.some(
+            (state) => state.npcId === npc.id && state.phase === "returning",
+          ),
+      )
+      .map((npc) => {
+        const next = npc.currentPath?.[npc.pathIndex];
+        return {
+          name: npc.name,
+          localOwner: this.npcOwnership.owner(npc.id) === this.socket?.id,
+          drive: this.mayDriveNpc(npc),
+          state: npc.moveState,
+          position: [npc.pixelX, npc.pixelY],
+          home: [npc.homeCol, npc.homeRow],
+          homeWalkable: this.isWalkable(npc.homeCol, npc.homeRow),
+          path: [npc.pathIndex, npc.currentPath?.length ?? 0],
+          next,
+          nextWalkable: next ? this.isWalkable(next.x, next.y) : null,
+          nearby: this.trafficActors()
+            .filter(
+              (actor) =>
+                actor.id !== npc.id &&
+                Math.hypot(
+                  actor.x - (npc.pixelX / TILE_SIZE - 0.5),
+                  actor.y - (npc.pixelY / TILE_SIZE - 0.5),
+                ) < 1.5,
+            )
+            .map(({ id, x, y }) => ({ id, x, y })),
+        };
+      });
+    if (!states.length) {
+      this.returnDiagnosticNode?.remove();
+      this.returnDiagnosticNode = null;
+      return;
+    }
+    if (!this.returnDiagnosticNode) {
+      const node = document.createElement("output");
+      node.id = "ui2-return-diagnostics";
+      node.setAttribute("aria-label", "개발용 NPC 복귀 경로 진단");
+      node.style.cssText =
+        "position:fixed;bottom:0;left:0;z-index:99999;max-width:560px;max-height:100px;overflow:auto;font:10px monospace;background:#fff;color:#111;pointer-events:none";
+      document.body.append(node);
+      this.returnDiagnosticNode = node;
+      this.eventScope.addCleanup(() => node.remove());
+    }
+    this.returnDiagnosticNode.textContent = JSON.stringify(states);
   }
 
   update(): void {
+    this.playerActuallyWalking = false;
+    this.publishReturnDiagnostics();
     // Lerp remote players every frame
     for (const remote of this.remotePlayers.values()) {
       remote.lerpUpdate();
     }
 
+    this.updateRemoteNpcPresentation();
+
+    // Remote snapshots keep arriving, but local input cannot race authoritative hydration.
+    if (!this.canMovePlayer()) {
+      (this.player?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+      return;
+    }
     // Update NPC movement
     if (this.player) {
+      const leader = this.isAmbientLeader();
+      this.smalltalk.update(
+        this.npcSprites.map((npc) => ({
+          id: npc.id,
+          name: npc.name,
+          x: npc.pixelX / TILE_SIZE,
+          y: npc.pixelY / TILE_SIZE,
+          walking: npc.moveState === "strolling" || npc.remoteWalkingUntil > this.time.now,
+          available:
+            !this.npcOwnership.owner(npc.id) &&
+            ambientAllowed(
+              !!this.responsePhases[npc.id] ||
+                this.activityBubbles.has(npc.id) ||
+                this.npcBubbles.has(npc.id),
+              this.dialogOpen,
+              !!npc.calledForRoom,
+            ) &&
+            (npc.moveState === "idle" || npc.moveState === "strolling"),
+        })),
+        this.time.now,
+        (a, b) => {
+          // Do not greet through a wall or a row of shelves.
+          for (let step = 1; step < 8; step++) {
+            const x = Math.floor(a.x + ((b.x - a.x) * step) / 8);
+            const y = Math.floor(a.y + ((b.y - a.y) * step) / 8);
+            if (!this.isWalkable(x, y)) return false;
+          }
+          return true;
+        },
+      );
+      for (const npc of this.npcSprites) {
+        const partnerId = this.smalltalk.partner(npc.id, this.time.now);
+        const partner = this.npcSprites.find((other) => other.id === partnerId);
+        const paused = !!partner && leader;
+        if (paused) {
+          npc.pauseForSmalltalk(partner);
+          if (!npc.ambientPaused && npc.moveState === "strolling") {
+            this.socket?.emit("npc:position-update", {
+              channelId: this.channelId,
+              npcId: npc.id,
+              continuation: this.npcContinuation(npc),
+              x: npc.pixelX,
+              y: npc.pixelY,
+              direction: DIR_NUM_TO_NAME[npc.direction],
+            });
+            this.socket?.emit("npc:arrived", { channelId: this.channelId, npcId: npc.id });
+          }
+        }
+        npc.ambientPaused = paused;
+      }
+      // Oldest ready worker gets the next available departure slot.
+      const ambientOrder = [...this.npcSprites].sort(
+        (a, b) =>
+          b.ambientSchedule.elapsed -
+          b.ambientSchedule.duration -
+          (a.ambientSchedule.elapsed - a.ambientSchedule.duration),
+      );
+      for (const npc of ambientOrder) {
+        const allowed =
+          this.npcOwnership.mayRoam(npc.id, leader) &&
+          ambientAllowed(
+            !!this.responsePhases[npc.id] || this.activityBubbles.has(npc.id),
+            this.dialogOpen,
+            !!npc.calledForRoom,
+          );
+        if (!allowed) {
+          if (npc.moveState === "strolling") {
+            npc.stopStroll();
+            if (leader)
+              this.socket?.emit("npc:arrived", { channelId: this.channelId, npcId: npc.id });
+          }
+          npc.ambientTimer = 0;
+          delete npc.ambientSchedule.seatTarget;
+          delete npc.ambientSchedule.seatRest;
+          continue;
+        }
+        if (npc.ambientPaused) continue;
+        if (npc.moveState !== "idle" && npc.moveState !== "strolling") continue;
+        if (npc.remoteWalkingUntil > this.time.now) continue;
+        const sx = Math.floor(npc.pixelX / TILE_SIZE),
+          sy = Math.floor(npc.pixelY / TILE_SIZE);
+        if (!npc.ambientSeat) {
+          // The persisted placement is the authoritative seat, never pick another chair.
+          npc.ambientSeat = { x: npc.homeCol, y: npc.homeRow };
+          // First arrival also establishes the working seat before starting a cycle.
+          npc.ambientSchedule.phase = "home";
+        }
+        const home = npc.ambientSeat;
+        const atHome =
+          Math.hypot(npc.pixelX / TILE_SIZE - home.x - 0.5, npc.pixelY / TILE_SIZE - home.y - 0.5) <
+          0.1;
+        if (
+          restAtAmbientSeat(
+            npc.ambientSchedule,
+            { x: npc.pixelX / TILE_SIZE - 0.5, y: npc.pixelY / TILE_SIZE - 0.5 },
+            npc.moveState === "strolling",
+            this.game.loop.delta,
+          )
+        )
+          continue;
+        const previousPhase = npc.ambientSchedule.phase;
+        advanceAmbientSchedule(
+          npc.ambientSchedule,
+          this.game.loop.delta,
+          atHome,
+          Math.random,
+          this.ambientDepartures.canDepart(
+            this.time.now,
+            this.npcSprites.filter(
+              (other) => other !== npc && other.ambientSchedule.phase !== "rest",
+            ).length,
+          ),
+        );
+        if (previousPhase === "rest" && npc.ambientSchedule.phase !== "rest") {
+          this.ambientDepartures.departed(this.time.now);
+        }
+
+        if (previousPhase !== "roam" && npc.ambientSchedule.phase === "roam") {
+          npc.ambientExitPolicy = new AmbientExitPolicy(this.ambientZones, {
+            x: npc.pixelX / TILE_SIZE - 0.5,
+            y: npc.pixelY / TILE_SIZE - 0.5,
+          });
+        }
+        if (npc.ambientSchedule.phase === "home") npc.ambientExitPolicy = null;
+        if (previousPhase !== "home" && npc.ambientSchedule.phase === "home") npc.stopStroll();
+        if (npc.moveState !== "idle" || npc.ambientSchedule.phase === "rest") continue;
+        if (
+          this.npcSprites.filter((other) => other !== npc && other.moveState === "strolling")
+            .length >= 2
+        )
+          continue;
+        npc.ambientTimer += Math.min(this.game.loop.delta, 100);
+        if (npc.ambientTimer < npc.ambientSchedule.pause) continue;
+        npc.ambientTimer = 0;
+        const zoneWalkable =
+          npc.ambientExitPolicy?.at({
+            x: npc.pixelX / TILE_SIZE - 0.5,
+            y: npc.pixelY / TILE_SIZE - 0.5,
+          }) ?? ((x: number, y: number) => ambientTileAllowed(this.ambientZones, x, y));
+        const walkable = (x: number, y: number) =>
+          (npc.ambientSchedule.phase === "home" || zoneWalkable(x, y)) && this.isWalkable(x, y);
+        const destinationFree = (x: number, y: number) =>
+          clearActors(
+            { x, y },
+            { x, y },
+            this.trafficActors().filter((actor) => actor.id !== npc.id),
+          );
+        const publicSeats = commonAreaSeats(this.mapObjects)
+          .map((seat) => ({
+            x: Math.floor(seat.anchorX ?? seat.x),
+            y: Math.floor(seat.anchorZ ?? seat.z),
+          }))
+          .filter(
+            (seat) =>
+              ambientTileAllowed(this.ambientZones, seat.x, seat.y) &&
+              !this.npcSprites.some(
+                (other) =>
+                  (other.homeCol === seat.x && other.homeRow === seat.y) ||
+                  (other !== npc &&
+                    other.ambientSchedule.seatTarget?.x === seat.x &&
+                    other.ambientSchedule.seatTarget?.y === seat.y),
+              ) &&
+              walkable(seat.x, seat.y) &&
+              destinationFree(seat.x, seat.y) &&
+              (seat.x !== sx || seat.y !== sy),
+          );
+        const visitSeats =
+          npc.ambientSchedule.phase === "roam" &&
+          !npc.ambientSchedule.visitedSeat &&
+          Math.random() < 0.6;
+        const destinations =
+          npc.ambientSchedule.phase === "home"
+            ? [home]
+            : ambientDestinations(
+                this.floorData[0]?.length ?? 0,
+                this.floorData.length,
+                { x: sx, y: sy },
+                (x, y) => walkable(x, y) && ambientTileAllowed(this.ambientZones, x, y),
+              );
+        if (visitSeats) {
+          // Shuffle seats independently so room/cushion ordering does not bias every visit.
+          for (let i = publicSeats.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [publicSeats[i], publicSeats[j]] = [publicSeats[j], publicSeats[i]];
+          }
+          destinations.unshift(...publicSeats);
+        }
+        // Bound A* work per attempt; retry later if this random batch is unreachable.
+        for (const destination of destinations.slice(0, 12)) {
+          if (
+            !walkable(destination.x, destination.y) ||
+            !destinationFree(destination.x, destination.y)
+          )
+            continue;
+          const path = findPath(sx, sy, destination.x, destination.y, walkable);
+          if (path && path.length > 0) {
+            if (npc.ambientSchedule.phase === "roam") {
+              const seat = publicSeats.find((s) => s.x === destination.x && s.y === destination.y);
+              npc.ambientSchedule.seatTarget = seat;
+              if (seat) npc.ambientSchedule.visitedSeat = true;
+            }
+            if (isSeatAnchor(this.mapObjects, destination.x, destination.y)) {
+              const phase = npc.ambientSchedule.phase;
+              this.reserveSeat(
+                npc.id,
+                (destination.x + 0.5) * TILE_SIZE,
+                (destination.y + 0.5) * TILE_SIZE,
+                (ok) => {
+                  if (
+                    ok &&
+                    this.isAmbientLeader() &&
+                    !this.npcOwnership.owner(npc.id) &&
+                    npc.moveState === "idle" &&
+                    this.npcSprites.filter(
+                      (other) => other !== npc && other.moveState === "strolling",
+                    ).length < 2 &&
+                    npc.ambientSchedule.phase === phase
+                  )
+                    npc.startStroll(path);
+                  else if (ok) this.releaseSeat(npc.id);
+                },
+              );
+            } else {
+              this.releaseSeat(npc.id);
+              npc.startStroll(path);
+            }
+            break;
+          }
+        }
+        npc.ambientSchedule.pause =
+          npc.ambientSchedule.phase === "home" ? 1000 : randomDuration(2000, 6000);
+      }
       // Auto-return NPCs that have been waiting long enough without an open dialog
       for (const npc of this.npcSprites) {
         if (
+          this.mayDriveNpc(npc) &&
           shouldAutoReturn(npc, {
             dialogOpen: this.dialogOpen,
             visibleRoomId: this.visibleRoomId,
@@ -3605,46 +4562,76 @@ export class GameScene extends Phaser.Scene {
       }
 
       for (const npc of this.npcSprites) {
-        if (npc.moveState === "idle" || npc.moveState === "waiting") continue;
-        const pCol = Math.floor(this.player.x / TILE_SIZE);
-        const pRow = Math.floor(this.player.y / TILE_SIZE);
-        // Walkable check excludes this NPC itself (prevents self-blocking)
-        const npcSelf = npc;
+        if (!this.mayDriveNpc(npc)) continue;
+        if (npc.ambientPaused && npc.moveState === "strolling") continue;
+        if (npc.moveState === "idle" || npc.moveState === "waiting") {
+          this.traffic.clear(npc.id);
+          continue;
+        }
+        const destination = npc.currentPath?.[npc.currentPath.length - 1];
+        if (
+          npc.moveState === "strolling" &&
+          destination &&
+          isSeatAnchor(this.mapObjects, destination.x, destination.y) &&
+          !this.motionSnapshot.current?.seats.some(
+            (seat) =>
+              seat.actorId === npc.id &&
+              seat.seatId ===
+                `${(destination.x + 0.5) * TILE_SIZE}:${(destination.y + 0.5) * TILE_SIZE}`,
+          )
+        ) {
+          npc.stopStroll();
+          continue;
+        }
+        const wasStrolling = npc.moveState === "strolling";
+        const position = { x: npc.pixelX / TILE_SIZE - 0.5, y: npc.pixelY / TILE_SIZE - 0.5 };
+        const zoneWalkable =
+          npc.ambientExitPolicy?.at(position) ??
+          ((x: number, y: number) => ambientTileAllowed(this.ambientZones, x, y));
+        const npcWalkable = this.createNpcWalkValidator();
+        const routeWalkable = (x: number, y: number) =>
+          npcWalkable(x, y) &&
+          (!wasStrolling || npc.ambientSchedule.phase === "home" || zoneWalkable(x, y));
         const result = npc.updateMovement(
           this.game.loop.delta,
           this.player.x,
           this.player.y,
-          findPath,
-          (tx: number, ty: number) => {
-            if (!this.isWalkable(tx, ty)) return false;
-            if (tx === pCol && ty === pRow) return true; // player tile always walkable
-            // Check occupation excluding self
-            const cx = tx * TILE_SIZE + TILE_SIZE / 2;
-            const cy = ty * TILE_SIZE + TILE_SIZE / 2;
-            const threshold = TILE_SIZE * 0.8;
-            for (const other of this.npcSprites) {
-              if (other === npcSelf) continue; // skip self
-              if (
-                Math.abs(other.pixelX - cx) < threshold &&
-                Math.abs(other.pixelY - cy) < threshold
-              )
-                return false;
-            }
-            for (const remote of this.remotePlayers.values()) {
-              if (
-                Math.abs(remote.sprite.x - cx) < threshold &&
-                Math.abs(remote.sprite.y - cy) < threshold
-              )
-                return false;
-            }
-            return true;
+          this.npcPathfinder(npc),
+          routeWalkable,
+          (position, goal, amount) => {
+            const zoneWalkable =
+              npc.ambientExitPolicy?.at(position) ??
+              ((x: number, y: number) => ambientTileAllowed(this.ambientZones, x, y));
+            return this.traffic.step(
+              npc.id,
+              position,
+              goal,
+              amount,
+              this.time.now,
+              (x, y) =>
+                this.isWalkable(x, y) &&
+                (!wasStrolling || npc.ambientSchedule.phase === "home" || zoneWalkable(x, y)),
+              this.trafficActors(),
+            );
           },
         );
-        if (result === "arrived") {
-          EventBus.emit("npc:bubble", {
+        if (wasStrolling && result === "idle") {
+          this.socket?.emit("npc:position-update", {
+            channelId: this.channelId,
             npcId: npc.id,
-            text: npc.arrivalBubbleText || undefined,
+              continuation: this.npcContinuation(npc),
+            x: npc.pixelX,
+            y: npc.pixelY,
+            direction: DIR_NUM_TO_NAME[npc.direction],
           });
+          this.socket?.emit("npc:arrived", { channelId: this.channelId, npcId: npc.id });
+        }
+        if (result === "arrived") {
+          if (!npc.calledForRoom || npc.pendingReportId)
+            EventBus.emit("npc:bubble", {
+              npcId: npc.id,
+              text: npc.arrivalBubbleText || undefined,
+            });
           EventBus.emit("toast:show", {
             messageKey: "game.pressToTalk",
             params: { name: npc.name },
@@ -3656,31 +4643,50 @@ export class GameScene extends Phaser.Scene {
             reportId: npc.pendingReportId,
             reportKind: npc.pendingReportKind,
           });
-          this.socket?.emit("npc:arrived", {
+          publishNpcArrival((event, payload) => this.socket?.emit(event, payload), {
             channelId: this.channelId,
             npcId: npc.id,
+            x: npc.pixelX,
+            y: npc.pixelY,
+            direction: DIR_NUM_TO_NAME[npc.direction],
           });
         } else if (result === "returning-done") {
           this.npcTilePositions.add(`${npc.homeCol},${npc.homeRow}`);
-          EventBus.emit("npc:movement-returned", { npcId: npc.id });
+          this.finishNpcReturn(npc, true);
         }
       }
 
       // Update NPC bubble positions to follow sprites
       for (const [npcId, bubble] of this.npcBubbles) {
         const npc = this.npcSprites.find((n) => n.id === npcId);
-        if (npc) bubble.setPosition(npc.pixelX, npc.pixelY - 44);
+        if (npc) bubble.setPosition(npc.sprite.x, npc.sprite.y - 44);
       }
 
+      // Preserve rest and pause clocks too; position updates alone miss stationary ambient state.
+      this.npcContinuationTimer += this.game.loop.delta;
+      if (this.npcContinuationTimer >= 1000) {
+        this.npcContinuationTimer = 0;
+        for (const npc of this.npcSprites) {
+          if (this.mayDriveNpc(npc)) this.socket?.emit("npc:continuation-update", {
+            channelId: this.channelId, npcId: npc.id, continuation: this.npcContinuation(npc),
+          });
+        }
+      }
       // Sync moving NPC positions to server every 200ms
       this.npcPositionSyncTimer += this.game.loop.delta;
       if (this.npcPositionSyncTimer >= 200) {
         this.npcPositionSyncTimer = 0;
         for (const npc of this.npcSprites) {
-          if (npc.moveState === "moving-to-player" || npc.moveState === "returning") {
+          if (!this.mayDriveNpc(npc)) continue;
+          if (
+            npc.moveState === "moving-to-player" ||
+            npc.moveState === "returning" ||
+            (npc.moveState === "strolling" && !npc.ambientPaused)
+          ) {
             this.socket?.emit("npc:position-update", {
               channelId: this.channelId,
               npcId: npc.id,
+              continuation: this.npcContinuation(npc),
               x: npc.pixelX,
               y: npc.pixelY,
               direction: DIR_NUM_TO_NAME[npc.direction] ?? "down",
@@ -3740,7 +4746,7 @@ export class GameScene extends Phaser.Scene {
       const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       const col = Math.floor(worldPoint.x / TILE_SIZE);
       const row = Math.floor(worldPoint.y / TILE_SIZE);
-      if (this.isWalkable(col, row) && !this.isTileOccupied(col, row)) {
+      if (this.canPlaceAt(col, row)) {
         if (!this.placementHighlight) {
           this.placementHighlight = this.add.rectangle(0, 0, TILE_SIZE, TILE_SIZE, 0x4f46e5, 0.4);
           this.placementHighlight.setDepth(20020);
@@ -3827,14 +4833,53 @@ export class GameScene extends Phaser.Scene {
     const up = this.cursors?.up.isDown;
     const down = this.cursors?.down.isDown;
     const hasKeyboardInput = left || right || up || down;
+    if (hasKeyboardInput) {
+      this.spawnInputStarted = true;
+      if (this.playerSeatGoal) {
+        this.releaseSeat(this.socket?.id ?? "");
+        this.playerSeatGoal = null;
+      }
+    }
 
     // Arrow keys cancel path following
     if (hasKeyboardInput && this.currentPath) {
+      this.traffic.clear("player:local");
       this.currentPath = null;
       this.clearPathLine();
       this.targetNpcId = null;
     }
 
+    // Reserve a seat before approaching it; contention never resolves by overlapping actors.
+    if (this.currentPath?.length && this.socket?.id) {
+      const goal = this.currentPath[this.currentPath.length - 1];
+      const goalId = `${(goal.x + 0.5) * TILE_SIZE}:${(goal.y + 0.5) * TILE_SIZE}`;
+      if (this.playerSeatGoal && this.playerSeatGoal !== goalId) {
+        this.releaseSeat(this.socket.id);
+        this.playerSeatGoal = null;
+      }
+      if (isSeatAnchor(this.mapObjects, goal.x, goal.y) && this.playerSeatGoal !== goalId) {
+        const path = this.currentPath;
+        body.setVelocity(0, 0);
+        if (!this.pendingSeatClaims.has(this.socket.id))
+          this.reserveSeat(
+            this.socket.id,
+            (goal.x + 0.5) * TILE_SIZE,
+            (goal.y + 0.5) * TILE_SIZE,
+            (ok) => {
+              if (this.currentPath !== path) {
+                if (ok) this.releaseSeat(this.socket?.id ?? "");
+                return;
+              }
+              if (ok) this.playerSeatGoal = goalId;
+              else {
+                this.currentPath = null;
+                this.clearPathLine();
+              }
+            },
+          );
+        return;
+      }
+    }
     // Path following
     if (this.currentPath && this.pathIndex < this.currentPath.length) {
       const target = this.currentPath[this.pathIndex];
@@ -3852,15 +4897,27 @@ export class GameScene extends Phaser.Scene {
         this.pathStuckTimer++;
       }
 
-      const reached = dist < TILE_SIZE * 0.6;
-      const stuck = this.pathStuckTimer > 30;
-
-      if (reached || stuck) {
+      // Seats require reaching the center, unlike ordinary walking destinations.
+      const arrivingAtSeat =
+        this.pathIndex === this.currentPath.length - 1 &&
+        isSeatAnchor(this.mapObjects, target.x, target.y);
+      if (arrivingAtSeat && this.isTileOccupied(target.x, target.y)) {
+        this.releaseSeat(this.socket?.id ?? "");
+        this.playerSeatGoal = null;
+        this.currentPath = null;
+        this.clearPathLine();
+        body.setVelocity(0, 0);
+        return;
+      }
+      const reached = dist < 2;
+      if (reached) {
+        body.setVelocity(0, 0);
         this.pathIndex++;
         this.pathStuckTimer = 0;
         this.pathLastDist = Infinity;
         if (this.pathIndex >= this.currentPath.length) {
           this.currentPath = null;
+          this.traffic.clear("player:local");
           this.clearPathLine();
           body.setVelocity(0, 0);
 
@@ -3873,17 +4930,35 @@ export class GameScene extends Phaser.Scene {
           }
         }
       } else {
-        const angle = Math.atan2(dy, dx);
-        body.setVelocity(Math.cos(angle) * PLAYER_SPEED, Math.sin(angle) * PLAYER_SPEED);
+        const dt = Math.max(0.001, Math.min(this.game.loop.delta, 100) / 1000);
+        const next = this.traffic.step(
+          "player:local",
+          { x: this.player.x / TILE_SIZE - 0.5, y: this.player.y / TILE_SIZE - 0.5 },
+          target,
+          Math.min(PLAYER_SPEED * dt, dist) / TILE_SIZE,
+          this.time.now,
+          (x, y) => this.isWalkable(x, y),
+          this.trafficActors(),
+        );
+        const vx = ((next.x + 0.5) * TILE_SIZE - this.player.x) / dt;
+        const vy = ((next.y + 0.5) * TILE_SIZE - this.player.y) / dt;
+        this.playerActuallyWalking = commitPlayerStep(
+          body,
+          { x: this.player.x, y: this.player.y },
+          { x: (next.x + 0.5) * TILE_SIZE, y: (next.y + 0.5) * TILE_SIZE },
+        );
 
-        if (Math.abs(dx) > Math.abs(dy)) {
-          this.currentDirection = dx > 0 ? DIR_RIGHT : DIR_LEFT;
-        } else {
-          this.currentDirection = dy > 0 ? DIR_DOWN : DIR_UP;
+        if (Math.abs(vx) > Math.abs(vy)) {
+          this.currentDirection = vx > 0 ? DIR_RIGHT : DIR_LEFT;
+        } else if (vy !== 0) {
+          this.currentDirection = vy > 0 ? DIR_DOWN : DIR_UP;
         }
 
         const walkKey = `walk-${DIR_NUM_TO_NAME[this.currentDirection]}`;
-        if (this.player.anims.currentAnim?.key !== walkKey) {
+        if (vx === 0 && vy === 0) {
+          this.player.anims.stop();
+          this.player.setFrame(this.currentDirection * SPRITE_COLS);
+        } else if (this.player.anims.currentAnim?.key !== walkKey) {
           this.player.play(walkKey, true);
         }
       }
@@ -3892,7 +4967,7 @@ export class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         DIR_NUM_TO_NAME[this.currentDirection],
-        "walk",
+        this.playerActuallyWalking ? "walk" : "idle",
       );
 
       // Update player name label position
@@ -3925,23 +5000,19 @@ export class GameScene extends Phaser.Scene {
       // Check horizontal movement (walkable + not occupied by NPC/player)
       if (left) {
         const checkX = Math.floor((this.player.x - 12) / TILE_SIZE);
-        if (this.isWalkable(checkX, currentTileY) && !this.isTileOccupied(checkX, currentTileY))
-          vx = -PLAYER_SPEED;
+        if (this.isWalkable(checkX, currentTileY)) vx = -PLAYER_SPEED;
       } else if (right) {
         const checkX = Math.floor((this.player.x + 12) / TILE_SIZE);
-        if (this.isWalkable(checkX, currentTileY) && !this.isTileOccupied(checkX, currentTileY))
-          vx = PLAYER_SPEED;
+        if (this.isWalkable(checkX, currentTileY)) vx = PLAYER_SPEED;
       }
 
       // Check vertical movement (walkable + not occupied by NPC/player)
       if (up) {
         const checkY = Math.floor((this.player.y - 12) / TILE_SIZE);
-        if (this.isWalkable(currentTileX, checkY) && !this.isTileOccupied(currentTileX, checkY))
-          vy = -PLAYER_SPEED;
+        if (this.isWalkable(currentTileX, checkY)) vy = -PLAYER_SPEED;
       } else if (down) {
         const checkY = Math.floor((this.player.y + 12) / TILE_SIZE);
-        if (this.isWalkable(currentTileX, checkY) && !this.isTileOccupied(currentTileX, checkY))
-          vy = PLAYER_SPEED;
+        if (this.isWalkable(currentTileX, checkY)) vy = PLAYER_SPEED;
       }
 
       if (vx !== 0 && vy !== 0) {
@@ -3950,7 +5021,33 @@ export class GameScene extends Phaser.Scene {
         vy *= factor;
       }
 
-      body.setVelocity(vx, vy);
+      const dt = Math.min(this.game.loop.delta, 100) / 1000;
+      if (
+        !clearMovementSegment(
+          { x: this.player.x / TILE_SIZE - 0.5, y: this.player.y / TILE_SIZE - 0.5 },
+          {
+            x: (this.player.x + vx * dt) / TILE_SIZE - 0.5,
+            y: (this.player.y + vy * dt) / TILE_SIZE - 0.5,
+          },
+          (x, y) => this.isWalkable(x, y),
+        ) ||
+        !clearActors(
+          { x: this.player.x / TILE_SIZE - 0.5, y: this.player.y / TILE_SIZE - 0.5 },
+          {
+            x: (this.player.x + vx * dt) / TILE_SIZE - 0.5,
+            y: (this.player.y + vy * dt) / TILE_SIZE - 0.5,
+          },
+          this.trafficActors().filter((actor) => actor.id !== "player:local"),
+        )
+      ) {
+        vx = 0;
+        vy = 0;
+      }
+      this.playerActuallyWalking = commitPlayerStep(
+        body,
+        { x: this.player.x, y: this.player.y },
+        { x: this.player.x + vx * dt, y: this.player.y + vy * dt },
+      );
 
       if (vx !== 0 || vy !== 0) {
         if (Math.abs(vx) >= Math.abs(vy)) {

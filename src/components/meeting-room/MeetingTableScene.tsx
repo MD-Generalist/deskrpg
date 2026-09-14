@@ -10,6 +10,7 @@ import { spritePalette } from "@/game/three/appearance";
 import { disposeTree } from "@/game/three/office-renderer";
 import type { MeetingSeatLayout, MeetingTableLayout } from "./layout";
 import MeetingSpeechBubble from "./MeetingSpeechBubble";
+import { meetingCameraDistance } from "./camera-fit";
 
 export interface MeetingSceneSeat extends MeetingSeatLayout {
   name: string;
@@ -61,7 +62,7 @@ export default function MeetingTableScene({
     renderer.outputColorSpace = T.SRGBColorSpace;
     element.append(renderer.domElement);
     const scene = new T.Scene(),
-      camera = new T.PerspectiveCamera(34, 1, 0.1, 100);
+      camera = new T.PerspectiveCamera(34, 1, 0.1, 1000);
     scene.add(new T.HemisphereLight("#fff7e5", "#859577", 2.6));
     const light = new T.DirectionalLight("#fff4d8", 3);
     light.position.set(-5, 12, 8);
@@ -133,7 +134,7 @@ export default function MeetingTableScene({
       if (!width || !height) return;
       renderer.setSize(width, height);
       camera.aspect = width / height;
-      const distance = Math.max(12, ((tableWidth + 3) / Math.max(0.4, camera.aspect)) * 1.4);
+      const distance = meetingCameraDistance(tableWidth, camera.aspect);
       camera.position.set(0, distance * 0.68, distance * 0.8);
       camera.lookAt(0, 0.4, 0);
       camera.updateProjectionMatrix();
@@ -152,8 +153,18 @@ export default function MeetingTableScene({
           .clone()
           .add(new T.Vector3(0, 1.75, 0))
           .project(camera);
-        label.style.left = `${((p.x + 1) / 2) * element.clientWidth}px`;
-        label.style.top = `${((1 - p.y) / 2) * element.clientHeight}px`;
+        let labelX = ((p.x + 1) / 2) * element.clientWidth;
+        let labelY = ((1 - p.y) / 2) * element.clientHeight;
+        const bubble = label.querySelector<HTMLElement>("[data-meeting-speech-bubble]");
+        if (bubble) {
+          // Labels are translated up by their own height; reserve the full bubble
+          // above them so rear seats remain readable in the short mobile scene.
+          const halfWidth = bubble.offsetWidth / 2 + 8;
+          labelX = Math.max(halfWidth, Math.min(element.clientWidth - halfWidth, labelX));
+          labelY = Math.max(label.offsetHeight + bubble.offsetHeight + 16, labelY);
+        }
+        label.style.left = `${labelX}px`;
+        label.style.top = `${labelY}px`;
       }
       renderer.render(scene, camera);
     };
@@ -169,7 +180,7 @@ export default function MeetingTableScene({
   }, [arrangement, appearances]);
   return (
     <div
-      className="relative w-full h-full min-h-[420px] overflow-hidden rounded-2xl border border-border bg-surface-raised"
+      className="relative w-full h-full min-h-0 sm:min-h-[420px] overflow-hidden rounded-2xl border border-border bg-surface-raised"
       style={{ maxWidth: availableWidth || undefined }}
     >
       <div ref={host} className="absolute inset-0" aria-hidden="true" />
@@ -185,12 +196,14 @@ export default function MeetingTableScene({
           }
         >
           <div className="relative flex flex-col items-center">
-            <MeetingSpeechBubble preview={seat.speechPreview} visible={seat.isSpeaking} />
+            <MeetingSpeechBubble preview={seat.speechPreview} visible={seat.isSpeaking || Boolean(seat.speechPreview)} speaking={seat.isSpeaking} />
             <button
               type="button"
               onClick={seat.onClick}
               disabled={!seat.isClickable}
-              className={`max-w-[140px] rounded-lg border px-3 py-1 text-[11px] font-semibold shadow-sm disabled:cursor-default ${seat.isChair ? "bg-primary text-white border-primary" : seat.isSpeaking ? "bg-surface border-npc text-npc" : "bg-surface border-border text-text"}`}
+              title={seat.name}
+              aria-label={seat.name}
+              className={`max-w-[48px] sm:max-w-[140px] truncate rounded-lg border px-1 sm:px-3 py-1 text-[9px] sm:text-[11px] font-semibold shadow-sm disabled:cursor-default ${seat.isChair ? "bg-primary text-white border-primary" : seat.isSpeaking ? "bg-surface border-npc text-npc" : "bg-surface border-border text-text"}`}
             >
               {seat.isChair && (
                 <span className="mr-1.5" aria-label="Chair">

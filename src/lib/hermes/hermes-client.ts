@@ -1,3 +1,4 @@
+import { streamDiagnostic } from "./stream-diagnostics";
 import { transportFetch } from "./setup/transport";
 // Profile-scoped HTTP client for the Hermes API Server.
 // Knows URLs, auth and error shapes. Knows nothing about DeskRPG's DB.
@@ -195,8 +196,20 @@ export class HermesClient {
       outer: for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        streamDiagnostic({ stage: "sse-read", runId, bytes: value.byteLength });
 
         for (const event of parser.push(decoder.decode(value, { stream: true }))) {
+          streamDiagnostic({
+            stage: "sse-event",
+            runId: typeof event.data.run_id === "string" ? event.data.run_id : runId,
+            event: event.event,
+            length:
+              typeof event.data.delta === "string"
+                ? event.data.delta.length
+                : typeof event.data.content === "string"
+                  ? event.data.content.length
+                  : 0,
+          });
           onEvent(event);
 
           if (typeof event.data.run_id === "string") runId = event.data.run_id;

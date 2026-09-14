@@ -175,3 +175,22 @@ export function upsertLegacyNpcChunk(
 }
 
 export { isActive as isActiveChatResponse };
+
+/** Latest record per request, then strongest active phase across rooms and DM. */
+export function npcPresentationPhases(state: ChatResponseState) {
+  const latest = new Map<string, ChatResponse>();
+  for (const responses of [...Object.values(state.rooms), ...Object.values(state.npcs)])
+    for (const response of responses) {
+      const prior = latest.get(response.requestId);
+      if (!prior || response.updatedAt >= prior.updatedAt) latest.set(response.requestId, response);
+    }
+  const phases: Record<string, "queued" | "thinking" | "streaming"> = {};
+  const priority = { queued: 1, thinking: 2, streaming: 3 };
+  for (const response of latest.values()) {
+    const status = response.status;
+    if (status !== "queued" && status !== "thinking" && status !== "streaming") continue;
+    if (!phases[response.npcId] || priority[status] > priority[phases[response.npcId]])
+      phases[response.npcId] = status;
+  }
+  return phases;
+}

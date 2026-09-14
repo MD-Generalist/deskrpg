@@ -111,7 +111,8 @@ function ProfilesPageContent() {
           {[
             ko ? "게이트웨이 선택" : "Choose gateway",
             ko ? "프로필 선택" : "Choose profile",
-            ko ? "이름 · 외형 관리" : "Manage name & appearance",
+            ko ? "완성형 외형 선택" : "Choose a complete look",
+            ko ? "채널에서 배치" : "Place in a channel",
           ].map((label, index) => (
             <li key={label} className="inline-flex items-center gap-3">
               {index > 0 && <ArrowRight size={14} className="text-text-dim" aria-hidden="true" />}
@@ -219,6 +220,7 @@ function ProfilesPageContent() {
                 <HermesProfileList
                   key={selected.id}
                   gatewayId={selected.id}
+                  initialAppearanceProfile={searchParams.get("profile")}
                   canRegister={selected.isOwner === true}
                 />
               </section>

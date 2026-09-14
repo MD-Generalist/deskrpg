@@ -9,6 +9,7 @@ interface RoomHeaderProps {
   /** 내가 만든 방인가 — 이름 변경·삭제는 만든 사람만. */
   canManage: boolean;
   onBack: () => void;
+  onClose: () => void;
   onInvite: () => void;
   onRename: (name: string) => void;
   onLeave: () => void;
@@ -19,6 +20,7 @@ export default function RoomHeader({
   room,
   canManage,
   onBack,
+  onClose,
   onInvite,
   onRename,
   onLeave,
@@ -43,8 +45,13 @@ export default function RoomHeader({
   return (
     <div className="px-3 py-2 border-b border-border bg-surface/60">
       <div className="flex items-center gap-2">
-        <button onClick={onBack} className="text-text-muted hover:text-text text-sm">
-          &#9664;
+        <button
+          onClick={onBack}
+          aria-label={t("room.list")}
+          title={t("room.list")}
+          className="text-text-muted hover:text-text text-sm whitespace-nowrap"
+        >
+          &#9664; {t("room.list")}
         </button>
         {renaming ? (
           <input
@@ -67,6 +74,14 @@ export default function RoomHeader({
             {isOffice ? t("room.office") : room.name}
           </span>
         )}
+        <button
+          onClick={onClose}
+          aria-label={t("common.close")}
+          title={t("common.close")}
+          className="text-text-muted hover:text-text text-lg px-1"
+        >
+          ×
+        </button>
         {!isOffice && (
           <div className="relative">
             <button

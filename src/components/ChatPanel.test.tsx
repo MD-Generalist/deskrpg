@@ -165,3 +165,40 @@ test("shared room shows responder receipt under another user's source message", 
   );
   assert.match(el.textContent ?? "", /👌 Sophie/);
 });
+
+test("workspace presentation stays open and renders as an embedded conversation surface", async () => {
+  const el = await mount(
+    <I18nProvider>
+      <ChatPanel
+        presentation="workspace"
+        width={388}
+        dialogNpc={null}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={listState()}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+      />
+    </I18nProvider>,
+  );
+
+  const panel = el.querySelector<HTMLElement>("[data-chat-panel='workspace']");
+  assert.ok(panel);
+  assert.equal(panel.style.width, "388px");
+  assert.doesNotMatch(panel.className, /fixed/);
+  assert.equal(
+    [...el.querySelectorAll("button")].some((node) => node.textContent?.trim() === OPEN),
+    false,
+  );
+});

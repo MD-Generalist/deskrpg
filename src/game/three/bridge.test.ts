@@ -104,3 +104,11 @@ test("destroying an old simulation never removes page or replacement renderer li
   replacement.dispose();
   EventBus.off("ui2:ownership-test", page);
 });
+
+test("room sender user ID resolves to socket actor without name matching", async () => {
+  const { speechActorId } = await import("./bridge");
+  const actors = [{ id: "socket-1", userId: "user-1" }, { id: "npc-1" }];
+  assert.equal(speechActorId(actors, "user-1"), "socket-1");
+  assert.equal(speechActorId(actors, "npc-1"), "npc-1");
+  assert.equal(speechActorId(actors, "unknown"), "unknown");
+});

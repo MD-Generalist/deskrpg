@@ -14,3 +14,15 @@ export function formatPollRaises(raises: Array<string | PollRaiseItem> | undefin
     })
     .filter((name): name is string => Boolean(name));
 }
+
+/** Broker passes contain NPC IDs; legacy payloads may already contain display names. */
+export function formatPollPasses(
+  passes: readonly string[] | undefined,
+  npcs: readonly { id: string; name: string }[],
+  unknownName: string,
+): string[] {
+  const names = new Map(npcs.map((npc) => [npc.id, npc.name]));
+  return (passes ?? []).map(
+    (value) => names.get(value) ?? (npcs.some((npc) => npc.name === value) ? value : unknownName),
+  );
+}

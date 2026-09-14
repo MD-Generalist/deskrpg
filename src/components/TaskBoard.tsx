@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import TaskCard from "./TaskCard";
 import type { Task } from "./TaskCard";
 import TaskCreateForm from "./TaskCreateForm";
@@ -23,7 +23,7 @@ import type { Socket } from "socket.io-client";
 interface NpcInfo {
   id: string;
   name: string;
-  isActive: boolean;
+  active: boolean;
 }
 
 interface TaskBoardProps {
@@ -81,7 +81,7 @@ export default function TaskBoard({
   channelId,
   isOpen,
   onClose,
-  tasks,
+  tasks: incomingTasks,
   onDeleteTask,
   onRequestReportTask,
   onResumeTask,
@@ -90,6 +90,14 @@ export default function TaskBoard({
   npcs = [],
 }: TaskBoardProps) {
   const t = useT();
+  // Mutation events carry the assignment ID; profile roster names remain canonical.
+  const tasks = useMemo(() => {
+    const names = new Map(npcs.map((npc) => [npc.id, npc.name]));
+    return incomingTasks.map((task) => ({
+      ...task,
+      npcName: task.npcId ? (names.get(task.npcId) ?? task.npcName) : undefined,
+    }));
+  }, [incomingTasks, npcs]);
   const [filterNpc, setFilterNpc] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [assignModal, setAssignModal] = useState<{
@@ -102,6 +110,28 @@ export default function TaskBoard({
     message: string | null;
     loading: boolean;
   } | null>(null);
+
+  const cardElements = useRef(new Map<string, HTMLDivElement>());
+  const pendingReveal = useRef<{ id: string; from: string; until: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      pendingReveal.current = null;
+      return;
+    }
+    const pending = pendingReveal.current;
+    if (!pending) return;
+    const task = tasks.find((item) => item.id === pending.id);
+    if (!task || Date.now() > pending.until) {
+      pendingReveal.current = null;
+      return;
+    }
+    // Reveal only after authoritative task props move, never on the outgoing request.
+    if (task.status !== pending.from) {
+      pendingReveal.current = null;
+      cardElements.current.get(task.id)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }
+  }, [tasks, isOpen]);
 
   const npcList = useMemo(() => {
     const map = new Map<string, string>();
@@ -132,7 +162,8 @@ export default function TaskBoard({
       name: npc.name,
       inProgressCount: tasks.filter((t) => t.npcId === npc.id && t.status === "in_progress").length,
       pendingCount: tasks.filter((t) => t.npcId === npc.id && t.status === "pending").length,
-      isActive: npc.isActive,
+      // Roster activity is authoritative; Hermes profiles have no legacy agentId.
+      isActive: npc.active,
     }));
   }, [npcs, tasks]);
 
@@ -163,6 +194,7 @@ export default function TaskBoard({
         return;
       }
 
+      pendingReveal.current = { id: taskId, from: task.status, until: Date.now() + 10000 };
       socket.emit("task:move", { taskId, toStatus: actualToStatus });
     },
     [socket, tasks],
@@ -171,6 +203,9 @@ export default function TaskBoard({
   const handleAssignFromModal = useCallback(
     (npcId: string) => {
       if (!socket || !assignModal) return;
+      const task = tasks.find((item) => item.id === assignModal.taskId);
+      if (task)
+        pendingReveal.current = { id: task.id, from: task.status, until: Date.now() + 10000 };
       socket.emit("task:move", {
         taskId: assignModal.taskId,
         toStatus: assignModal.toStatus,
@@ -178,7 +213,7 @@ export default function TaskBoard({
       });
       setAssignModal(null);
     },
-    [socket, assignModal],
+    [socket, assignModal, tasks],
   );
 
   const handleAssignClick = useCallback(
@@ -223,17 +258,17 @@ export default function TaskBoard({
       onClick={onClose}
     >
       <div
-        className="bg-surface-raised rounded-xl border border-border w-[95vw] max-w-[1100px] h-[80vh] flex flex-col"
+        className="bg-surface-raised rounded-xl border border-border w-[95vw] max-w-[1100px] h-[80dvh] min-h-0 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-border flex justify-between items-center">
-          <div className="flex items-center gap-3">
+        <div className="px-4 py-3 border-b border-border flex shrink-0 justify-between items-start gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
             <span className="text-title text-text flex items-center gap-1.5">
               <ClipboardList className="w-4 h-4" />
               {t("task.board")}
             </span>
-            <div className="flex gap-1">
+            <div className="flex min-w-0 max-w-full gap-1 overflow-x-auto [&>button]:shrink-0">
               <button
                 onClick={() => setFilterNpc(null)}
                 className={`px-2 py-0.5 rounded text-[12px] ${
@@ -255,19 +290,24 @@ export default function TaskBoard({
               ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text">
+          <button
+            onClick={onClose}
+            aria-label={t("common.close")}
+            className="shrink-0 text-text-muted hover:text-text"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Kanban Columns */}
-        <div className="flex-1 flex gap-2 p-3 overflow-hidden">
+        <div className="flex-1 min-h-0 flex gap-2 p-3 overflow-x-auto">
           {COLUMNS.map((col) => {
             const colTasks = groupedTasks[col.status as keyof typeof groupedTasks] || [];
             return (
               <DroppableColumn
                 key={col.status}
                 status={col.status}
+                className="min-w-[240px] !flex-none w-[80vw] sm:w-auto sm:!flex-1 sm:min-w-[190px]"
                 onDrop={handleDrop}
                 header={
                   <div
@@ -296,19 +336,46 @@ export default function TaskBoard({
                     </button>
                   ))}
                 {colTasks.map((task) => (
-                  <DraggableTaskCard key={task.id} taskId={task.id} status={col.status}>
-                    <TaskCard
-                      task={task}
-                      showNpcName
-                      compact
-                      onDelete={onDeleteTask}
-                      onRequestReport={onRequestReportTask}
-                      onResume={onResumeTask}
-                      onComplete={onCompleteTask}
-                      onAssign={handleAssignClick}
-                      onClick={handleTaskClick}
-                    />
-                  </DraggableTaskCard>
+                  <div
+                    key={task.id}
+                    ref={(element) => {
+                      if (element) cardElements.current.set(task.id, element);
+                      else cardElements.current.delete(task.id);
+                    }}
+                  >
+                    <DraggableTaskCard taskId={task.id} status={col.status}>
+                      <TaskCard
+                        task={task}
+                        showNpcName
+                        compact
+                        onDelete={onDeleteTask}
+                        onRequestReport={onRequestReportTask}
+                        onResume={onResumeTask}
+                        onComplete={onCompleteTask}
+                        onAssign={handleAssignClick}
+                        onClick={handleTaskClick}
+                      />
+                    </DraggableTaskCard>
+                    <select
+                      aria-label={t("task.moveStatus", { title: task.title })}
+                      value=""
+                      disabled={!socket}
+                      onChange={(event) => {
+                        if (event.target.value)
+                          handleDrop(task.id, task.status, event.target.value);
+                      }}
+                      className="mt-1 min-h-10 w-full rounded border border-border bg-surface px-2 text-[12px] text-text"
+                    >
+                      <option value="" disabled>
+                        {t("task.changeStatus")}
+                      </option>
+                      {COLUMNS.filter((target) => target.status !== col.status).map((target) => (
+                        <option key={target.status} value={target.status}>
+                          {t(target.labelKey)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 ))}
               </DroppableColumn>
             );
@@ -341,7 +408,7 @@ export default function TaskBoard({
             className="bg-surface-raised rounded-xl border border-border w-[90vw] max-w-[500px] max-h-[60vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3 border-b border-border flex justify-between items-center">
+            <div className="px-4 py-3 border-b border-border flex shrink-0 justify-between items-start gap-2">
               <span className="text-text font-bold text-[13px] flex items-center gap-1.5">
                 <FileText className="w-4 h-4" />
                 {t("task.reportDetail")}

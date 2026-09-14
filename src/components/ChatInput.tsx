@@ -7,6 +7,8 @@ import type { MentionCandidate } from "./mention-input/mention-model";
 
 interface ChatInputProps {
   onSend: (message: string, files?: File[]) => void;
+  value?: string;
+  onValueChange?: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
   disabledPlaceholder?: string;
@@ -24,6 +26,8 @@ interface ChatInputProps {
 
 export default function ChatInput({
   onSend,
+  value,
+  onValueChange,
   placeholder,
   disabled = false,
   disabledPlaceholder,
@@ -41,6 +45,15 @@ export default function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionRef = useRef<MentionEditorHandle>(null);
   const useMentions = Array.isArray(mentionCandidates);
+  const controlled = value !== undefined;
+  const draft = controlled ? value : input;
+  const updateDraft = useCallback(
+    (next: string) => {
+      if (!controlled) setInput(next);
+      onValueChange?.(next);
+    },
+    [controlled, onValueChange],
+  );
 
   // Auto-resize textarea
   const adjustHeight = useCallback(() => {
@@ -52,7 +65,7 @@ export default function ChatInput({
 
   useEffect(() => {
     adjustHeight();
-  }, [input, adjustHeight]);
+  }, [draft, adjustHeight]);
 
   // Auto-focus when enabled
   useEffect(() => {
@@ -69,18 +82,18 @@ export default function ChatInput({
   }, [disabled, cooldown]);
 
   const handleSend = useCallback(() => {
-    const trimmed = input.trim();
+    const trimmed = draft.trim();
     if (!trimmed && files.length === 0) return;
     if (cooldown || disabled) return;
     onSend(trimmed, files.length > 0 ? files : undefined);
-    setInput("");
+    updateDraft("");
     setFiles([]);
     mentionRef.current?.clear();
     // Reset height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [input, files, cooldown, disabled, onSend]);
+  }, [draft, files, cooldown, disabled, onSend, updateDraft]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -107,7 +120,7 @@ export default function ChatInput({
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
-  const canSend = (input.trim() || files.length > 0) && !cooldown && !disabled;
+  const canSend = (draft.trim() || files.length > 0) && !cooldown && !disabled;
 
   const btnColor = canSend
     ? `bg-${accentColor}-500 hover:bg-${accentColor}-600 text-black`
@@ -181,8 +194,8 @@ export default function ChatInput({
           <MentionEditor
             ref={mentionRef}
             candidates={mentionCandidates ?? []}
-            value={input}
-            onChange={(v) => setInput(v.slice(0, maxLength))}
+            value={draft}
+            onChange={(v) => updateDraft(v.slice(0, maxLength))}
             onSubmit={handleSend}
             placeholder={
               cooldown
@@ -198,9 +211,9 @@ export default function ChatInput({
         ) : (
           <textarea
             ref={textareaRef}
-            value={input}
+            value={draft}
             onChange={(e) => {
-              if (!disabled) setInput(e.target.value.slice(0, maxLength));
+              if (!disabled) updateDraft(e.target.value.slice(0, maxLength));
             }}
             onKeyDown={handleKeyDown}
             placeholder={
@@ -232,12 +245,12 @@ export default function ChatInput({
       </div>
 
       {/* Character count */}
-      {input.length > maxLength * 0.8 && (
+      {draft.length > maxLength * 0.8 && (
         <div className="text-right mt-1">
           <span
-            className={`text-[10px] ${input.length >= maxLength ? "text-red-400" : "text-text-dim"}`}
+            className={`text-[10px] ${draft.length >= maxLength ? "text-red-400" : "text-text-dim"}`}
           >
-            {input.length}/{maxLength}
+            {draft.length}/{maxLength}
           </span>
         </div>
       )}

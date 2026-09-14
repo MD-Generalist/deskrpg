@@ -1,3 +1,4 @@
+import type { MeetingDiscussionState } from "../lib/meeting-discussion-state";
 export const MEETING_NPC_STREAM_EVENT = "meeting:npc-stream";
 
 type MeetingRoom = {
@@ -62,6 +63,7 @@ type RegisterMeetingSocketHandlersArgs = {
   socket: MeetingSocket;
   deps: {
     meetingRooms: Map<string, MeetingRoom>;
+    getDiscussionState?: (channelId: string) => MeetingDiscussionState | null;
     players: Map<string, MeetingPlayer>;
     lastChatTime: Map<string, number>;
     chatCooldownMs: number;
@@ -217,6 +219,7 @@ export function registerMeetingSocketHandlers({
         if (!participant) return null;
         return {
           id: participantId,
+          userId: participantId === socket.id ? user.userId : participant.userId,
           name: participant.characterName || "Unknown",
           appearance: participant.appearance,
         };
@@ -226,10 +229,13 @@ export function registerMeetingSocketHandlers({
     socket.emit("meeting:state", {
       participants: participantList,
       messages: room.messages.slice(-50),
+      discussion: deps.getDiscussionState?.(channelId) ?? null,
+      isInitiator: deps.getDiscussionState?.(channelId)?.initiatorId === user.userId,
     });
 
     socket.to(getMeetingRoomId(channelId)).emit("meeting:participant-joined", {
       id: socket.id,
+      userId: user.userId,
       name: displayName,
       appearance: displayAppearance,
     });

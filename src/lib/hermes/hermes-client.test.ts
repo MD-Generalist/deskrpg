@@ -438,6 +438,48 @@ describe("HermesClient.createSession — 제목 충돌", () => {
 // 실측 회귀 — 회의 폴링 한 건의 SSE 를 그대로 옮긴 것이다(Hermes v0.20.2).
 // NPC 는 "SPEAK: …" 라고 또박또박 답했는데 우리는 빈 문자열을 받아 전원 PASS 로 집계했다.
 describe("HermesClient.streamRunEvents — /v1/runs 방언", () => {
+  test("forwards each delta before the upstream run completes", { timeout: 2000 }, async () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c;
+      },
+    });
+    const client = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "noah",
+      token: "test",
+      fetchImpl: (async () => new Response(body)) as typeof fetch,
+    });
+    const seen: string[] = [];
+    let firstDelta!: () => void;
+    const first = new Promise<void>((resolve) => {
+      firstDelta = resolve;
+    });
+    let settled = false;
+    const result = client
+      .streamRunEvents("run_1", (event) => {
+        if (event.event === "message.delta") {
+          seen.push(String(event.data.delta));
+          firstDelta();
+        }
+      })
+      .then((value) => {
+        settled = true;
+        return value;
+      });
+    const enqueue = (event: object) =>
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`));
+    enqueue({ event: "message.delta", delta: "첫 부분" });
+    await first;
+    assert.deepEqual(seen, ["첫 부분"]);
+    assert.equal(settled, false, "the first callback must not wait for completion");
+    enqueue({ event: "message.delta", delta: " 다음 부분" });
+    enqueue({ event: "run.completed" });
+    assert.equal((await result).text, "첫 부분 다음 부분");
+    assert.deepEqual(seen, ["첫 부분", " 다음 부분"]);
+  });
+
   test("message.delta 를 누적한다 — 회의 폴링 응답이 빈 문자열이면 전원 PASS 가 된다", async () => {
     const frames = [
       'data: {"event": "message.delta", "run_id": "run_1", "delta": "SPE"}\n\n',
