@@ -62,6 +62,7 @@ const eslintConfig = defineConfig([
     ".codex/**",
     ".superpowers/**",
     ".dryforge/**",
+    ".artifacts/**",
   ]),
 ]);
 
