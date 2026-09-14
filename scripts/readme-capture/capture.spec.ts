@@ -125,24 +125,51 @@ for (const scene of SCENES) {
       });
     } else if (scene === "small-talk") {
       await page.getByRole("button", { name: "내 캐릭터 따라가기", exact: true }).click();
+      const input = page.getByRole("textbox").last();
+      await input.fill("@Soph");
+      await page.getByRole("option", { name: "Sophie", exact: true }).click();
+      await input.pressSequentially("잠깐 준비해 주세요.");
+      const primingSent = performance.now();
+      await input.press("Enter");
+      await expect(page.getByText("Sophie: 생각 중", { exact: true })).toBeVisible();
       await markClip(page, scene, async () => {
-        const input = page.getByRole("textbox").last();
         await input.fill("@Soph");
         await page.getByRole("option", { name: "Sophie", exact: true }).click();
         await input.pressSequentially("좋은 아침이에요", { delay: 65 });
+        // Respect the real two-second sender cooldown while Sophie is still busy.
+        await page.waitForTimeout(Math.max(0, 2200 - (performance.now() - primingSent)));
         await input.press("Enter");
+        const queued = page.getByText("Sophie: 대기 중", { exact: true });
+        await expect(queued).toBeVisible();
+        await page.waitForTimeout(500);
+        await expect(queued).toBeVisible();
+        const requestId = (
+          wireEvents
+            .get(page)!
+            .filter(
+              (e) =>
+                e.event === "room:response-state" &&
+                (e.data.response as { status: string }).status === "queued",
+            )
+            .at(-1)!.data.response as { requestId: string }
+        ).requestId;
+        const targetStates = () =>
+          wireEvents
+            .get(page)!
+            .filter(
+              (e) =>
+                e.event === "room:response-state" &&
+                (e.data.response as { requestId: string }).requestId === requestId,
+            )
+            .map((e) => (e.data.response as { status: string }).status);
+        await expect(queued).not.toBeVisible();
+        await expect(page.getByText("Sophie: 생각 중", { exact: true })).toBeVisible();
+        await page.waitForTimeout(300);
+        await expect(page.getByText("Sophie: 생각 중", { exact: true })).toBeVisible();
         await expect
-          .poll(() =>
-            wireEvents
-              .get(page)
-              ?.filter((e) => e.event === "room:response-state")
-              .map((e) => (e.data.response as { status: string }).status),
-          )
+          .poll(targetStates)
           .toEqual(expect.arrayContaining(["queued", "thinking", "streaming", "complete"]));
-        const phases = wireEvents
-          .get(page)!
-          .filter((event) => event.event === "room:response-state")
-          .map((event) => (event.data.response as { status: string }).status);
+        const phases = targetStates();
         expect([...new Set(phases)]).toEqual(["queued", "thinking", "streaming", "complete"]);
         await expect(
           page.getByText("좋은 아침이에요. 오늘 일정부터 함께 확인할게요.").first(),

@@ -14,7 +14,11 @@ test("builds committed and ignored paths separately", () => {
 
 test("rejects media outside the approved dimensions, duration and size", () => {
   assert.throws(() =>
-    validateProbe("ai-meeting", { width: 960, height: 500, fps: 12, duration: 9, loop: "forever" }, 1_000),
+    validateProbe(
+      "ai-meeting",
+      { width: 960, height: 500, fps: 12, duration: 9, loop: "forever" },
+      1_000,
+    ),
   );
   assert.doesNotThrow(() =>
     validateProbe(

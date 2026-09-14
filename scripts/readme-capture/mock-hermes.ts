@@ -42,8 +42,11 @@ async function writeSse(
   response: ServerResponse,
   eventName: "assistant" | "message",
   chunks: string[],
+  thinkingMs = 0,
 ) {
   response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
+  // Let the real room UI display thinking across several 12 fps capture frames.
+  if (thinkingMs) await new Promise((resolve) => setTimeout(resolve, thinkingMs));
   for (const [index, delta] of chunks.entries()) {
     response.write(
       `event: ${eventName}.delta\ndata: ${JSON.stringify({ delta, seq: index + 1 })}\n\n`,
@@ -64,7 +67,7 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
 
   let sessionSequence = 0;
   let runSequence = 0;
-  const runs = new Map<string, { profile: MeetingProfile; room: boolean }>();
+  const runs = new Map<string, { profile: MeetingProfile; room: boolean; priming: boolean }>();
   const server = createServer((request, response) => {
     const handle = async () => {
       if (request.method === "GET" && request.url === "/health") {
@@ -120,10 +123,17 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
       }
 
       if (request.method === "POST" && path === "/v1/runs") {
+        const body: Buffer[] = [];
+        for await (const chunk of request) body.push(Buffer.from(chunk));
+        const input = String(JSON.parse(Buffer.concat(body).toString()).input ?? "");
+        const recent = input.includes("[최근 대화]")
+          ? input.split("[최근 대화]")[1].split("[답하는 법]")[0].trim().split("\n").at(-1)!
+          : input;
         const runId = `run-${++runSequence}`;
         runs.set(runId, {
           profile,
           room: String(request.headers["x-hermes-session-key"] ?? "").includes("-room-"),
+          priming: recent.endsWith("잠깐 준비해 주세요."),
         });
         writeJson(response, 202, { run_id: runId });
         return;
@@ -139,7 +149,12 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
         await writeSse(
           response,
           "message",
-          runs.get(runId)!.room ? CHAT_SCRIPT : [MEETING_LINES[profile]],
+          runs.get(runId)!.room
+            ? runs.get(runId)!.priming
+              ? ["준비됐어요."]
+              : CHAT_SCRIPT
+            : [MEETING_LINES[profile]],
+          runs.get(runId)!.room ? (runs.get(runId)!.priming ? 3500 : 700) : 0,
         );
         return;
       }

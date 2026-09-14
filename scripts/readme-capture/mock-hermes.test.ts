@@ -25,7 +25,21 @@ test("room-scoped multi-party runs stream the small-talk script rather than meet
     body: JSON.stringify({ input: "좋은 아침이에요" }),
   });
   const { run_id } = (await response.json()) as { run_id: string };
-  const events = await streamEvents(server.baseUrl, "sophie", run_id);
+  const started = performance.now();
+  const stream = await fetch(`${server.baseUrl}/p/sophie/v1/runs/${run_id}/events`, { headers });
+  const reader = stream.body!.getReader();
+  const first = await reader.read();
+  const firstChunkMs = performance.now() - started;
+  const decoder = new TextDecoder();
+  let body = decoder.decode(first.value);
+  assert.match(body, /message.delta/);
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    body += decoder.decode(chunk.value);
+  }
+  assert.ok(firstChunkMs >= 600, `thinking hold was only ${firstChunkMs} ms`);
+  const events = createSseParser().push(body);
   assert.deepEqual(
     events.filter((e) => e.event === "message.delta").map((e) => e.data.delta),
     ["좋은 ", "아침이에요. ", "오늘 일정부터 함께 확인할게요."],
@@ -158,4 +172,33 @@ test(
 
 test("rejects non-loopback listen hosts", async () => {
   await assert.rejects(() => startMockHermes({ host: "0.0.0.0", port: 0 }), /loopback/i);
+});
+
+test("a priming room request stays busy briefly and later greetings are not mistaken for priming", async (t) => {
+  const server = await startServer(t);
+  for (const [input, expected, minimumMs] of [
+    ["잠깐 준비해 주세요.", "준비됐어요.", 3300],
+    [
+      "[최근 대화]\nDante: 잠깐 준비해 주세요.\nDante: 좋은 아침이에요\n\n[답하는 법]\n짧게 답하세요.",
+      "좋은 아침이에요. 오늘 일정부터 함께 확인할게요.",
+      600,
+    ],
+  ] as const) {
+    const response = await fetch(`${server.baseUrl}/p/sophie/v1/runs`, {
+      method: "POST",
+      headers: { ...headers, "X-Hermes-Session-Key": "deskrpg-npc-room-capture" },
+      body: JSON.stringify({ input }),
+    });
+    const { run_id } = (await response.json()) as { run_id: string };
+    const started = performance.now();
+    const events = await streamEvents(server.baseUrl, "sophie", run_id);
+    assert.ok(performance.now() - started >= minimumMs);
+    assert.equal(
+      events
+        .filter((e) => e.event === "message.delta")
+        .map((e) => e.data.delta)
+        .join(""),
+      expected,
+    );
+  }
 });
