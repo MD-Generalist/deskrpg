@@ -23,6 +23,7 @@ import { eq } from "drizzle-orm";
 import type { Server } from "socket.io";
 
 import { channelGatewayBindings, channelKanbanBoards, db, nowForDb } from "@/db";
+import { registerAutomationHooks, unregisterAutomationHooks } from "@/lib/automation-registry";
 import {
   ensureChannelBoard,
   getChannelBoard,
@@ -30,7 +31,12 @@ import {
   type ChannelBoardRow,
 } from "@/lib/kanban-boards";
 import { broadcastRoomMessage } from "./room-socket";
-import { createLiveIngestDeps, ingest, type IngestDeps } from "./automation-events";
+import {
+  createLiveIngestDeps,
+  getWorkingSnapshot,
+  ingest,
+  type IngestDeps,
+} from "./automation-events";
 
 // ---------------------------------------------------------------------------
 // 조정값
@@ -369,6 +375,9 @@ export async function startAutomationPollers(io: ChannelIo): Promise<AutomationP
     isChannelBound,
     intervals: { activeMs: POLL_DEFAULTS.activeMs, idleMs: POLL_DEFAULTS.idleMs },
   });
+  // REST 라우트(칸반·크론·게이트웨이)는 `@/server/*` 를 직접 import 하지 않고 레지스트리로
+  // 이 폴러를 만난다 — 소켓 서버 모듈이 Next 번들에 실리면 빌드가 깨진다.
+  registerAutomationHooks({ pollNow, refreshPollers, getWorkingSnapshot });
   try {
     await live.refresh();
   } catch (err) {
@@ -382,6 +391,7 @@ export async function startAutomationPollers(io: ChannelIo): Promise<AutomationP
 export function stopAutomationPollers(): void {
   live?.stopAll();
   live = null;
+  unregisterAutomationHooks();
 }
 
 /** 바인딩이 생기거나 풀렸을 때(게이트웨이 라우트가 부른다). 폴러가 아직 없으면 아무 일 없음. */

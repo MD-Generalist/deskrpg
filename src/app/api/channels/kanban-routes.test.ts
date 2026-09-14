@@ -36,10 +36,15 @@ before(async () => {
     ownerToken: OWNER_TOKEN,
     profileTokens: { sophie: PROFILE_TOKEN, noah: PROFILE_TOKEN },
   });
-  const { setPollNowForTests } = await import("@/lib/automation-poll-trigger");
-  setPollNowForTests(async (channelId) => {
-    polled.push(channelId);
-    return null;
+  // 라우트는 `@/server/*` 를 직접 보지 않고 레지스트리로 폴러를 만난다 — 여기에 기록기를 꽂는다.
+  const { registerAutomationHooks } = await import("@/lib/automation-registry");
+  registerAutomationHooks({
+    pollNow: async (channelId) => {
+      polled.push(channelId);
+      return null;
+    },
+    refreshPollers: async () => {},
+    getWorkingSnapshot: () => [],
   });
 });
 
@@ -48,6 +53,8 @@ beforeEach(() => {
 });
 
 after(async () => {
+  const { resetAutomationHooksForTests } = await import("@/lib/automation-registry");
+  resetAutomationHooksForTests();
   await server.close();
 });
 

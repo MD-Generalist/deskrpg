@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 
 import { db, gatewayResources } from "@/db";
 import { schedulePollNow } from "@/lib/automation-poll-trigger";
+import { readWorkingSnapshot } from "@/lib/automation-registry";
 import {
   cronError,
   ensureAutomationPlugin,
@@ -44,7 +45,6 @@ import {
   type KanbanChannelContext,
 } from "@/lib/kanban-access";
 import { channelBoardSlug, getChannelBoard } from "@/lib/kanban-boards";
-import { getWorkingSnapshot } from "@/server/automation-events";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
 export type TaskParams = { params: Promise<{ id: string; taskId: string }> };
@@ -577,6 +577,6 @@ export async function getAutomationStatus(req: NextRequest, channelId: string) {
     lastPolledAt: isoOrNull(boardRow?.lastPolledAt),
     lastError: boardRow?.lastError ?? null,
     minVersion: AUTOMATION_MIN_PLUGIN_VERSION,
-    working: getWorkingSnapshot(channelId),
+    working: readWorkingSnapshot(channelId),
   });
 }
