@@ -374,7 +374,10 @@ export type CronRun = {
 
 export type CreateCronJobBody = {
   schedule: string;
-  prompt: string;
+  /** 스크립트 전용 잡이 아니면 필수. 서버 라우트가 `script` 부재 시에만 요구한다. */
+  prompt?: string;
+  /** 스크립트 전용 잡 — Hermes 가 프롬프트 대신 실행한다. 그대로 전달한다. */
+  script?: string;
   name: string;
   deliver?: string;
   model?: string;

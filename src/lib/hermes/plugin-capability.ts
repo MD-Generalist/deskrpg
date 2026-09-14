@@ -28,7 +28,12 @@ export type PluginCapability = { status: PluginStatus; version: string | null };
  * 테스트 라우트가 `probeDeskrpgPlugin` 결과를 **응답 본문으로 그대로** 내보내기 때문이다 —
  * 필드를 하나 더하면 그 라우트의 JSON 계약이 바뀐다. `info` 는 200 판정일 때만 채워진다.
  */
-export type PluginProbe = { capability: PluginCapability; info: PluginInfo | null };
+export type PluginProbe = {
+  capability: PluginCapability;
+  info: PluginInfo | null;
+  /** `unknown` 이 전송 계층 실패였으면 어느 쪽인지. HTTP 응답을 받았으면 없다. */
+  failure?: "unreachable" | "timeout";
+};
 
 const PLUGIN_NAME = "deskrpg";
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -211,10 +216,15 @@ type ProbeInput = {
   timeoutMs?: number;
 };
 
-/** `GET /deskrpg/info` 한 번. 도달 실패·타임아웃·중단은 null — 호출자는 판정만 원한다. */
+type ProbeFailure = { failure: "unreachable" | "timeout" };
+
+/**
+ * `GET /deskrpg/info` 한 번. 도달 실패·중단은 `unreachable`, 우리 타이머가 끊었으면 `timeout` —
+ * 호출자는 판정만 원하지만, 사용자가 할 일(재시도 vs 주소 확인)이 달라 둘은 가른다.
+ */
 async function fetchPluginInfo(
   input: ProbeInput,
-): Promise<{ status: number; body: unknown } | null> {
+): Promise<{ status: number; body: unknown } | ProbeFailure> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const base = input.baseUrl.replace(/\/+$/, "");
   const controller = new AbortController();
@@ -235,7 +245,7 @@ async function fetchPluginInfo(
     }
     return { status: res.status, body };
   } catch {
-    return null;
+    return { failure: controller.signal.aborted ? "timeout" : "unreachable" };
   } finally {
     clearTimeout(timer);
   }
@@ -243,13 +253,13 @@ async function fetchPluginInfo(
 
 export async function probeDeskrpgPlugin(input: ProbeInput): Promise<PluginCapability> {
   const raw = await fetchPluginInfo(input);
-  return raw ? classifyPluginProbe(raw) : { status: "unknown", version: null };
+  return "failure" in raw ? { status: "unknown", version: null } : classifyPluginProbe(raw);
 }
 
 /** `probeDeskrpgPlugin` + 계약 블록. 자동화 캐시(`plugin_info_json`)를 채우는 쪽이 쓴다. */
 export async function probeDeskrpgPluginWithInfo(input: ProbeInput): Promise<PluginProbe> {
   const raw = await fetchPluginInfo(input);
-  return raw
-    ? classifyPluginProbeWithInfo(raw)
-    : { capability: { status: "unknown", version: null }, info: null };
+  return "failure" in raw
+    ? { capability: { status: "unknown", version: null }, info: null, failure: raw.failure }
+    : classifyPluginProbeWithInfo(raw);
 }

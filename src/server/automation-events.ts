@@ -6,7 +6,9 @@
  * 하드 게이트 5: 방 알림·맵 상태는 다른 어떤 경로도 직접 만들지 않는다 — 모두 여기를 거친다.
  *
  * 한 사건에 대해 하는 일은 셋뿐이다.
- *  (a) 채널 소켓 방송 — `task.*` 는 `kanban:event`, `cron.*` 는 `cron:event`
+ *  (a) 채널 소켓 방송 — `task.*` 는 `kanban:event`, `cron.*` 는 `cron:event`. 크론 사건은 호스트의
+ *      모든 프로필 것이 실려 오므로 프로필이 **이 채널의 NPC** 로 풀릴 때만 방송한다(잠든 NPC 포함).
+ *      남의 채널 프로필의 실행이 이 채널 화면에 새면 안 된다.
  *  (b) 맵 상태 — NPC 에게 진행 중인 카드 실행·크론 실행이 하나라도 있으면 "작업 중"(R27).
  *      `npc:working` 은 값이 **바뀔 때만** 나간다.
  *  (c) 방 알림 — 카드의 blocked 진입(모두)·최상위 카드의 done 진입(R28), 이 채널 출처의
@@ -197,7 +199,7 @@ export async function ingest(
     result.processed += 1;
 
     try {
-      broadcast(channelId, event, deps);
+      await broadcast(channelId, event, deps);
       await updateWorking(channelId, event, state, deps);
       await postNotice(channelId, event, deps);
     } catch (err) {
@@ -220,11 +222,18 @@ function remember(seen: Set<string>, id: string, limit: number) {
 
 // ---- (a) 방송 -------------------------------------------------------------
 
-function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps) {
-  const name = event.kind.startsWith("cron.")
-    ? AUTOMATION_SOCKET_EVENTS.cron
-    : AUTOMATION_SOCKET_EVENTS.kanban;
-  deps.emitChannel(channelId, name, { channelId, event });
+async function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps) {
+  if (!event.kind.startsWith("cron.")) {
+    deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.kanban, { channelId, event });
+    return;
+  }
+  // 크론 사건은 프로필이 이 채널의 NPC(잠든 NPC 포함)일 때만 — `updateWorking`·`postNotice` 와
+  // 같은 조회다.
+  const profile = profileOf(event);
+  if (!profile) return;
+  const lookup = await deps.findNpcByProfile(channelId, profile);
+  if (!lookup?.npc) return;
+  deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.cron, { channelId, event });
 }
 
 // ---- (b) 맵 상태 ----------------------------------------------------------

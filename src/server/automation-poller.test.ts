@@ -20,10 +20,11 @@ const OWNER_TOKEN = "gateway-owner-key-1234567890";
 const PROFILE_TOKEN = "profile-key-1234567890";
 
 const servers: FakePluginServer[] = [];
-async function startPlugin() {
+async function startPlugin(info?: { version?: string; capabilities?: string[] }) {
   const server = await startFakePluginServer({
     ownerToken: OWNER_TOKEN,
     profileTokens: { sophie: PROFILE_TOKEN, noah: PROFILE_TOKEN },
+    ...(info ? { info } : {}),
   });
   servers.push(server);
   return server;
@@ -382,6 +383,99 @@ test("연결 행이 없으면(바인딩 때 확보 실패) 먼저 보드를 확�
     .map((r) => `${r.method} ${r.path.split("?")[0]}`);
   assert.ok(paths.includes("POST /deskrpg/kanban/boards"), `행을 다시 세운다: ${paths}`);
   assert.ok((await readRow(channel.id)).eventCursor);
+});
+
+test("바인딩 때 게이트에 막혀 보드가 없던 채널은 플러그인을 올린 뒤 다음 바퀴에 보드를 만든다(R5)", async () => {
+  const plugin = await startPlugin({ version: "0.5.0" });
+  const { channel, gateway } = await seedBoundChannel(plugin);
+  let row = await readRow(channel.id);
+  assert.equal(row.lastError, "plugin_upgrade_required", "바인딩은 성공하되 이유가 남는다");
+  assert.equal(row.boardNameSyncedAt, null, "보드가 한 번도 확보되지 않았다");
+  assert.equal(
+    plugin.requests().filter((r) => r.path.startsWith("/deskrpg/kanban/boards")).length,
+    0,
+  );
+
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  const blocked = await pollChannelOnce(channel.id, h.deps);
+  assert.equal(blocked.ok, false);
+  assert.equal(!blocked.ok && blocked.code, "plugin_upgrade_required");
+
+  // 플러그인을 0.6.0 으로 올렸다. 판정 캐시(1시간)는 지나간 것으로 둔다 — 캐시가 신선한 동안은
+  // 어느 경로도 Hermes 를 다시 찌르지 않는 것이 규칙이다.
+  plugin.setInfo({ version: "0.6.0", capabilities: ["kanban", "cron", "events"] });
+  const { db, gatewayResources } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  await db
+    .update(gatewayResources)
+    .set({ pluginCheckedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() as never })
+    .where(eq(gatewayResources.id, gateway.id));
+
+  const outcome = await pollChannelOnce(channel.id, h.deps);
+  assert.ok(outcome.ok, JSON.stringify(outcome));
+  assert.equal(
+    plugin.requests().filter((r) => r.method === "POST" && r.path === "/deskrpg/kanban/boards")
+      .length,
+    1,
+    "다음 바퀴가 보드를 만든다",
+  );
+  row = await readRow(channel.id);
+  assert.equal(row.lastError, null);
+  assert.ok(row.boardNameSyncedAt, "확보 시각이 찍힌다");
+  assert.ok(row.eventCursor, "그 바퀴에서 바로 토큰까지 받는다");
+});
+
+test("채널 개명 뒤 이름 동기화가 뒤처져 있으면 폴링이 한 번 다시 맞추고, 맞춘 뒤에는 건드리지 않는다(R2)", async () => {
+  const plugin = await startPlugin();
+  const { channel } = await seedBoundChannel(plugin);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const patches = () =>
+    plugin
+      .requests()
+      .filter((r) => r.method === "PATCH" && r.path.startsWith("/deskrpg/kanban/boards/"));
+  assert.equal(patches().length, 0);
+
+  // 개명은 됐는데 보드 이름 동기화가 실패한 상태 — 채널의 updated_at 이 synced_at 보다 뒤다.
+  const { db, channels, channelKanbanBoards } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const renamedAt = new Date(Date.now() - 5_000);
+  await db
+    .update(channelKanbanBoards)
+    .set({ boardNameSyncedAt: new Date(renamedAt.getTime() - 5_000).toISOString() as never })
+    .where(eq(channelKanbanBoards.channelId, channel.id));
+  await db
+    .update(channels)
+    .set({ name: "새 이름", updatedAt: renamedAt.toISOString() as never })
+    .where(eq(channels.id, channel.id));
+
+  const outcome = await pollChannelOnce(channel.id, h.deps);
+  assert.ok(outcome.ok, JSON.stringify(outcome));
+  assert.equal(patches().length, 1, "한 바퀴에 한 번");
+  assert.deepEqual(patches()[0].json, { name: "새 이름" });
+  const row = await readRow(channel.id);
+  assert.equal(row.lastError, null);
+  assert.ok(
+    new Date(row.boardNameSyncedAt as unknown as string).getTime() >= renamedAt.getTime(),
+    "동기화 시각이 개명 시각을 넘어선다",
+  );
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.equal(patches().length, 1, "맞춘 뒤에는 다시 부르지 않는다");
+});
+
+test("boardNameStale — 동기화 시각이 없거나 채널 수정 시각보다 앞서면 참", async () => {
+  const { boardNameStale } = await import("./automation-poller");
+  const t0 = new Date("2026-09-14T00:00:00Z");
+  const t1 = new Date("2026-09-14T00:00:01Z");
+  assert.equal(boardNameStale({ boardNameSyncedAt: null }, t0), true);
+  assert.equal(boardNameStale({ boardNameSyncedAt: t0 }, t1), true);
+  assert.equal(boardNameStale({ boardNameSyncedAt: t1 }, t0), false);
+  assert.equal(boardNameStale({ boardNameSyncedAt: t1 }, t1), false);
+  assert.equal(boardNameStale({ boardNameSyncedAt: t1.toISOString() as never }, t1), false);
+  assert.equal(boardNameStale({ boardNameSyncedAt: t0 }, null), false, "채널 시각을 모르면 그대로");
 });
 
 test("타이머 레지스트리 — 접속이 켜지면 즉시 한 바퀴, 짧은 주기; 꺼지면 긴 주기; refresh 가 표를 맞춘다", async () => {

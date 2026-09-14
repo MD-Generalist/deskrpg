@@ -280,7 +280,11 @@ describe("parsePluginInfo", () => {
       token: "t",
       fetchImpl: dead,
     });
-    assert.deepEqual(unreachable, { capability: { status: "unknown", version: null }, info: null });
+    assert.deepEqual(unreachable, {
+      capability: { status: "unknown", version: null },
+      info: null,
+      failure: "unreachable",
+    });
   });
 });
 

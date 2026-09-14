@@ -13,6 +13,10 @@
  *   조작한 직후에는 `pollNow(channelId)` 로 한 번 즉시(R24).
  * - 실패는 던지지 않고 `last_error` 에 남긴다. 성공하면 null 로 지우고 `last_polled_at` 을
  *   찍는다(E6).
+ * - 보드 확보 실패(`board_name_synced_at` 이 한 번도 찍히지 않음)는 바퀴마다 다시 확보한다 —
+ *   플러그인을 올린 뒤 다음 바퀴가 보드를 만든다(R5). 채널 개명 뒤 이름 동기화가 실패했으면
+ *   (`board_name_synced_at` 이 채널 `updated_at` 보다 앞섬) 게이트를 통과한 바퀴에서 한 번 다시
+ *   맞춘다(R2).
  * - 타이머는 전부 `unref()` 다 — 테스트 러너와 CLI 종료를 붙들지 않는다.
  *
  * 순수 한 바퀴(`pollChannelOnce`)와 타이머 레지스트리(`createAutomationPoller`)를 나눠 둔다.
@@ -22,12 +26,13 @@
 import { eq } from "drizzle-orm";
 import type { Server } from "socket.io";
 
-import { channelGatewayBindings, channelKanbanBoards, db, nowForDb } from "@/db";
+import { channelGatewayBindings, channelKanbanBoards, channels, db, nowForDb } from "@/db";
 import { registerAutomationHooks, unregisterAutomationHooks } from "@/lib/automation-registry";
 import {
   ensureChannelBoard,
   getChannelBoard,
   resolveChannelBoard,
+  syncBoardName,
   type ChannelBoardRow,
 } from "@/lib/kanban-boards";
 import { broadcastRoomMessage } from "./room-socket";
@@ -67,6 +72,9 @@ export type PollOnceDeps = {
   resolveBoard: typeof resolveChannelBoard;
   ensureBoard: typeof ensureChannelBoard;
   readRow: typeof getChannelBoard;
+  /** 채널 이름과 마지막 수정 시각 — 보드 이름 동기화가 뒤처졌는지 판정한다(R2). */
+  readChannel(channelId: string): Promise<{ name: string; updatedAt: Date | string | null } | null>;
+  syncBoardName: typeof syncBoardName;
   saveRow(
     channelId: string,
     patch: { eventCursor?: string; lastError: string | null },
@@ -97,6 +105,38 @@ async function saveBoardRow(
     .where(eq(channelKanbanBoards.channelId, channelId));
 }
 
+async function readChannelNameAndUpdatedAt(
+  channelId: string,
+): Promise<{ name: string; updatedAt: Date | string | null } | null> {
+  const [row] = await db
+    .select({ name: channels.name, updatedAt: channels.updatedAt })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+  return row ? { name: row.name, updatedAt: row.updatedAt } : null;
+}
+
+/** SQLite 는 ISO 문자열, PostgreSQL 은 Date — 둘 다 밀리초로. 못 읽으면 null. */
+function toMillis(value: Date | string | null | undefined): number | null {
+  if (!value) return null;
+  const at = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isNaN(at) ? null : at;
+}
+
+/**
+ * 보드 이름이 채널 이름보다 뒤처졌는가 — 동기화 시각이 없거나 채널 `updated_at` 보다 앞서면 참.
+ * 채널의 `updated_at` 을 모르면(옛 행) 동기화 시각이 있는 한 맞다고 본다.
+ */
+export function boardNameStale(
+  row: Pick<ChannelBoardRow, "boardNameSyncedAt">,
+  channelUpdatedAt: Date | string | null,
+): boolean {
+  const synced = toMillis(row.boardNameSyncedAt);
+  if (synced === null) return true;
+  const updated = toMillis(channelUpdatedAt);
+  return updated !== null && synced < updated;
+}
+
 export function createDefaultPollDeps(
   emit: Pick<IngestDeps, "emitChannel" | "emitRoomMessage">,
 ): PollOnceDeps {
@@ -104,6 +144,8 @@ export function createDefaultPollDeps(
     resolveBoard: resolveChannelBoard,
     ensureBoard: ensureChannelBoard,
     readRow: getChannelBoard,
+    readChannel: readChannelNameAndUpdatedAt,
+    syncBoardName,
     saveRow: saveBoardRow,
     makeIngestDeps: (ctx) =>
       createLiveIngestDeps({
@@ -128,11 +170,13 @@ export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Pr
     if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
     const gatewayId = resolved.binding.resource.id;
 
-    // 연결 행이 없거나(바인딩 직후 확보 실패) 게이트웨이가 바뀌었으면 행부터 다시 세운다.
-    // 게이트웨이가 바뀌면 커서는 이전 게이트웨이의 것이라 같이 버려진다(R4).
+    // 연결 행이 없거나, 게이트웨이가 바뀌었거나, 보드가 한 번도 확보된 적이 없으면(바인딩 때
+    // 게이트·생성 실패 — `board_name_synced_at` 이 비어 있다) 행부터 다시 세운다(R5). 게이트웨이가
+    // 바뀌면 커서는 이전 게이트웨이의 것이라 같이 버려진다(R4). 게이트 실패는 `ensureBoard` 가
+    // `last_error` 에 남기므로 여기서 다시 쓰지 않는다.
     let row: ChannelBoardRow | null = await deps.readRow(channelId);
-    if (!row || row.gatewayId !== gatewayId) {
-      const ensured = await deps.ensureBoard(channelId);
+    if (!row || row.gatewayId !== gatewayId || row.boardNameSyncedAt === null) {
+      const ensured = await deps.ensureBoard(channelId, resolved);
       if (!ensured.ok) return { ok: false, code: ensured.code, reason: ensured.reason };
       row = ensured.row;
     }
@@ -140,6 +184,15 @@ export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Pr
     if (!resolved.pluginGate.ok) {
       await deps.saveRow(channelId, { lastError: resolved.pluginGate.code });
       return { ok: false, code: resolved.pluginGate.code, reason: resolved.pluginGate.reason };
+    }
+
+    // R2. 채널 개명 뒤 이름 동기화가 실패해 남아 있으면 한 바퀴에 한 번 다시 맞춘다. 실패해도
+    // 사건 폴링은 계속하되 이유는 `last_error` 에 남긴다(다음 바퀴가 또 시도한다).
+    let syncError: string | null = null;
+    const channel = await deps.readChannel(channelId);
+    if (channel && boardNameStale(row, channel.updatedAt)) {
+      const synced = await deps.syncBoardName(channelId, channel.name, resolved);
+      if (!synced.ok) syncError = `board_name_sync: ${synced.code}`;
     }
 
     const boardSlug = resolved.boardSlug;
@@ -191,7 +244,7 @@ export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Pr
     }
     await deps.saveRow(channelId, {
       eventCursor: cursor,
-      lastError: errors.length > 0 ? `ingest_error: ${errors[0]}` : null,
+      lastError: errors.length > 0 ? `ingest_error: ${errors[0]}` : syncError,
     });
     return { ok: true, events, pages, cursor, restarted };
   } catch (err) {

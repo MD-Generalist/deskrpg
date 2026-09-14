@@ -366,7 +366,9 @@ test("중복 판정 집합은 크기 상한을 지킨다 — 오래된 ID 부터
 });
 
 test("ingest 는 task.* 를 kanban:event 로, cron.* 를 cron:event 로 채널에 방송한다", async () => {
-  const h = harness();
+  const h = harness({
+    npcs: { x: { profileName: "x", displayName: "엑스", npc: { id: "npc-x", active: true } } },
+  });
   const taskEv = ev({ kind: "task.created", task_id: "t1" });
   const cronEv = ev({ kind: "cron.run.started", board: undefined, profile: "x", job_id: "j" });
   await ingest(CHANNEL, [taskEv, cronEv], h.deps);
@@ -377,6 +379,43 @@ test("ingest 는 task.* 를 kanban:event 로, cron.* 를 cron:event 로 채널�
   assert.deepEqual(byEvent(AUTOMATION_SOCKET_EVENTS.cron), [
     { channelId: CHANNEL, event: "cron:event", payload: { channelId: CHANNEL, event: cronEv } },
   ]);
+});
+
+test("cron.* 는 프로필이 이 채널의 NPC 로 풀릴 때만 cron:event 로 방송한다 — 남의 프로필은 새지 않는다", async () => {
+  const cronOf = (profile: string | undefined) =>
+    ev({
+      kind: "cron.run.started",
+      board: undefined,
+      profile,
+      job_id: "j",
+      run_id: `r-${profile}`,
+    });
+  const cronEvents = (h: ReturnType<typeof harness>) =>
+    h.emitted.filter((e) => e.event === AUTOMATION_SOCKET_EVENTS.cron);
+
+  // 프로필은 게이트웨이에 있지만 이 채널에 NPC 행이 없다 → 방송 없음.
+  const stranger = harness({
+    npcs: { noah: { profileName: "noah", displayName: "노아", npc: null } },
+  });
+  await ingest(CHANNEL, [cronOf("noah")], stranger.deps);
+  assert.equal(cronEvents(stranger).length, 0, "채널 밖 프로필");
+
+  // 프로필 자체가 게이트웨이에 없다 → 방송 없음.
+  const unknown = harness();
+  await ingest(CHANNEL, [cronOf("ghost")], unknown.deps);
+  assert.equal(cronEvents(unknown).length, 0, "모르는 프로필");
+
+  // 프로필이 없는 사건 → 방송 없음.
+  const anonymous = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(CHANNEL, [cronOf(undefined)], anonymous.deps);
+  assert.equal(cronEvents(anonymous).length, 0, "프로필 없는 사건");
+
+  // 잠든 NPC 라도 이 채널의 NPC 면 방송한다(작업 중 집계와 같은 기준).
+  const dormant = harness({
+    npcs: { sophie: { ...SOPHIE_ACTIVE, npc: { id: "npc-sophie", active: false } } },
+  });
+  await ingest(CHANNEL, [cronOf("sophie")], dormant.deps);
+  assert.equal(cronEvents(dormant).length, 1, "잠든 NPC");
 });
 
 test("npc:working — run started/finished 로 켜지고 꺼지며, 변화가 없으면 다시 쏘지 않는다", async () => {

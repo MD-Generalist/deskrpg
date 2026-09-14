@@ -676,12 +676,14 @@ export async function startFakePluginServer(
 
   function createJob(profile: string, body: Record<string, unknown>): Reply {
     if (typeof body.schedule !== "string" || !body.schedule) throw badRequest("schedule_required");
-    if (typeof body.prompt !== "string") throw badRequest("prompt_required");
+    // 스크립트 전용 잡은 프롬프트가 없어도 된다(Hermes 와 같은 규칙).
+    const prompt = typeof body.prompt === "string" ? body.prompt : "";
+    if (!prompt && typeof body.script !== "string") throw badRequest("prompt_required");
     const paused = body.paused === true;
     const job: CronJob = {
       id: nextId("job"),
-      name: typeof body.name === "string" ? body.name : body.prompt.slice(0, 40),
-      prompt: body.prompt,
+      name: typeof body.name === "string" ? body.name : prompt.slice(0, 40),
+      prompt,
       schedule: { kind: "text", expr: body.schedule, display: body.schedule },
       schedule_display: body.schedule,
       repeat: body.repeat !== false,
