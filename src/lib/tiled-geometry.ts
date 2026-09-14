@@ -84,7 +84,7 @@ export function projectTiledGeometry(map: TiledGeometryMap): TiledGeometrySnapsh
   };
 }
 
-function tiledDirection(properties?: Array<{ name: string; value: unknown }>): {
+export function tiledDirection(properties?: Array<{ name: string; value: unknown }>): {
   direction?: MapObject["direction"];
 } {
   const value = properties?.find((p) => p.name === "direction")?.value;
