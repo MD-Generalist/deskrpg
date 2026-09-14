@@ -4,22 +4,29 @@ English README: [README.md](README.md)
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG 홈 화면" width="100%" />
 
-DeskRPG는 직접 운영할 수 있는 2D 픽셀 아트 가상 오피스입니다. LPC 기반 캐릭터를 만들고, 공유 채널에 입장해 실시간 오피스 맵을 돌아다니고, Hermes 에이전트를 붙인 AI NPC 동료를 고용하고, 업무를 맡기고, 오피스 안에서 직접 보고를 받고, 브라우저에서 AI 회의까지 진행할 수 있습니다.
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/master/deploy/hostinger/docker-compose.yml)
 
-DeskRPG는 평범한 채팅방 대신, 조금 더 살아 있는 업무 공간을 원하는 사람들을 위해 만들어졌습니다.
+오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
-- 웹사이트: `https://deskrpg.com` (예정)
+DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 오피스**입니다. 이미 쓰고 있는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 프로필이 그대로 직원이 됩니다. 자리에 앉아 있다가 지명하면 답하고, 회의실에서 발언권을 주고받고, 칸반 카드를 처리하고, 일이 끝나면 **걸어와서 보고합니다**. 여러 사람이 같은 오피스에 동시에 들어올 수 있습니다.
+
+DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 돌리고 있는 Hermes 게이트웨이에 붙기만 하므로, 기존 Hermes 사용자는 옮길 것 없이 프로필 그대로 올라탑니다.
+
+- 웹사이트: `https://deskrpg.com` (준비 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.9.9`
+- 버전: `v2026.9.9` (3D 프론트는 다음 릴리스에 포함됩니다. 이전 2D 픽셀아트 클라이언트는 이전 태그에서 계속 받을 수 있습니다)
 
 ## 무엇을 할 수 있나요
 
-- LPC 기반 캐릭터 커스터마이징으로 나만의 픽셀 오피스 아바타를 만들 수 있습니다.
-- 실시간 멀티플레이가 가능한 오피스 채널에 입장하거나 직접 운영할 수 있습니다.
-- AI NPC를 고용하고 Hermes 에이전트 프로필에 바인딩해 오피스 안에서 대화할 수 있습니다.
-- NPC에게 업무를 맡기고, 보고를 요청하고, 중단된 업무를 재개시키고, 태스크 보드에서 진행 상황을 관리할 수 있습니다.
-- 전용 회의실에서 AI 회의를 진행하고 회의록을 저장할 수 있습니다.
-- 브라우저 기반 맵 에디터로 직접 오피스 맵을 만들거나 업로드할 수 있습니다.
+- 나와 모든 NPC의 외형을 50종의 스타일화된 오피스 룩(CC0 Quaternius 베이스를 완성형 인물로 재제작) 중에서 고릅니다. 룩 하나가 GLB 하나이고, 맵·출근부·회의실이 같은 모델을 씁니다.
+- three.js로 그린 3D 오피스를 다섯 가지 환경(종합상사·에이전시·테크 스타트업·임원실·출판사)에서 걸어 다닙니다. 이동·좌석·충돌은 기존 Phaser 시뮬레이션이 계속 맡고, three.js는 그리기만 합니다.
+- Hermes 게이트웨이를 주소로 등록하거나, 설정 마법사로 로컬·SSH로 닿는 Hermes 설치를 찾아 플러그인을 점검하고 프로필을 등록합니다.
+- Hermes 프로필에 묶인 AI NPC를 고용하고, `SOUL.md`를 웹에서 편집하고, NPC마다 모델·프로바이더·툴셋·추론 강도를 정합니다.
+- 오피스 방에서 지명해 대화하고, NPC를 초대한 그룹 방을 열고, 6단계 응답 리시트(대기 → 생각 중 → 스트리밍 → 완료)와 에이전트가 지금 쓰는 도구를 봅니다.
+- 전용 회의실에서 발언권 제어·거수·회의록 내보내기가 있는 회의를 엽니다.
+- 칸반 카드를 백로그 → 대기 → 진행 중 → 정체 → 완료로 옮기고, 정체된 일을 독촉·재개하고, 보고는 오피스 안에서 받습니다. NPC가 걸어옵니다.
+- 다른 사람과 오피스를 공유합니다(멀티플레이어, 그룹, 역할 기반 권한). 한국어·영어·일본어·중국어를 지원합니다.
+- 브라우저 맵 에디터로 오피스 맵을 직접 만들거나 올립니다.
 
 ## 스크린샷
 

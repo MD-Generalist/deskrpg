@@ -4,21 +4,28 @@
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG home screen" width="100%" />
 
-DeskRPG is a 2D pixel-art virtual office you can self-host. Create LPC characters, enter shared channels, walk around a live office map, hire AI NPC coworkers backed by Hermes agents, assign tasks, receive reports in-world, and run AI meetings in a browser.
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/master/deploy/hostinger/docker-compose.yml)
 
-DeskRPG is built for people who want a playful, self-hosted workspace rather than another plain chat room.
+Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
+
+DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles become employees: they sit at desks, answer when you mention them, hold meetings with turn control, work kanban cards, and **walk over to report** when a task is done. Several people can be in the same office at once.
+
+DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you already run, so existing Hermes users bring their profiles as they are — nothing to migrate.
 
 - Website: `https://deskrpg.com` (planned)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.9.9`
+- Version: `v2026.9.9` (3D front end lands with the next release; the previous 2D pixel-art client remains available on older tags)
 
 ## What You Can Do
 
-- Create your own pixel-art office avatar with LPC-based character customization.
-- Join or self-host shared office channels with live multiplayer movement.
-- Hire AI NPCs, bind them to Hermes agent profiles, and talk to them in-world.
-- Delegate tasks, request reports, resume stalled work, and review progress in a task board.
-- Run AI meetings in a dedicated meeting room with meeting notes and multi-agent discussion.
+- Pick one of 50 stylized office looks (CC0 Quaternius bases, rebuilt as complete characters) for yourself and for every NPC — one GLB per look, shared by the map, the roster and the meeting room.
+- Walk a live 3D office rendered with three.js, in five curated environments (trading company, agency, tech startup, executive suite, publisher). The original Phaser simulation still drives movement, seating and collisions; three.js only draws.
+- Register a Hermes gateway by address, or let the setup wizard discover a local / SSH-reachable Hermes install, check the plugin, and register its profiles.
+- Hire AI NPCs bound to Hermes profiles, edit their `SOUL.md` from the web, and choose model, provider, toolsets and reasoning effort per NPC.
+- Talk in the office room (mention to address one employee), open group rooms with invited NPCs, and watch a six-stage response receipt (queued → thinking → streaming → done) plus what tool the agent is using right now.
+- Run meetings in a dedicated meeting room with floor control, hand raising and exportable minutes.
+- Move kanban cards through backlog → pending → in progress → stalled → complete, nudge or resume stalled work, and receive reports in-world — the NPC walks to you.
+- Share the office with other people (multiplayer, groups and role-based access), in Korean, English, Japanese or Chinese.
 - Build or upload your own office maps with the browser-based map editor.
 
 ## Screenshots
