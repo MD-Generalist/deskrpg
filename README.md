@@ -12,7 +12,7 @@ DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [He
 
 DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you already run, so existing Hermes users bring their profiles as they are — nothing to migrate.
 
-- Website: `https://deskrpg.com` (live)
+- Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
 - Version: `v2026.9.18` — Detailed morning traffic, foliage and distance-matched walking (the 2D pixel-art client remains available on tags up to `2026.9.9`)
 
@@ -186,8 +186,8 @@ later without firing it.
 
 ### 1. Characters
 
-- Every user enters as a character.
-- Character appearance is LPC-based and composed from layered sprite parts.
+- Every user enters as a 3D character.
+- Choose from 50 stylized complete-character GLB office looks, shared across the map, roster and meeting room.
 - Character creation is required before entering a channel.
 
 ### 2. Channels
@@ -225,7 +225,7 @@ The browser map editor is being prepared for a later release. It is not part of 
 - Login is required even if you have an invite code.
 - Invite codes are channel access helpers, not anonymous access tokens.
 - The current default in-app office tiles and object textures are generated in code at runtime.
-- LPC avatar sprite assets are bundled separately and have their own credits and license notes.
+- Legacy 2D LPC avatar sprite assets are bundled separately and have their own credits and license notes.
 
 ## Licenses And Credits
 
