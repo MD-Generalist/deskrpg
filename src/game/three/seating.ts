@@ -1,3 +1,4 @@
+import { sceneAsset, studioFurnitureAsset } from "./scene-asset-definitions";
 import { furnitureOffset } from "./executive-lounge-layout";
 import { getObjectDimensions, type MapObject } from "../../lib/object-types";
 export type Seat = {
@@ -9,6 +10,36 @@ export type Seat = {
   anchorZ?: number;
   direction: NonNullable<MapObject["direction"]>;
 };
+/** Catalog anchors are integer tile offsets; visual poses are model-local meters. */
+export function assetSeats(object: MapObject): Seat[] {
+  const selected = studioFurnitureAsset(object);
+  if (!selected) return [];
+  const definition = sceneAsset(selected.id);
+  if (!definition.seats) return [];
+  const direction = object.direction ?? "down";
+  const directions = ["down", "right", "up", "left"] as const;
+  const turn = directions.indexOf(direction);
+  const [width, depth] = definition.footprint;
+  const rotated = turn % 2 === 1;
+  const cx = object.col + (rotated ? depth : width) / 2,
+    cz = object.row + (rotated ? width : depth) / 2;
+  const rotate = (x: number, z: number): [number, number] =>
+    turn === 1 ? [z, -x] : turn === 2 ? [-x, -z] : turn === 3 ? [-z, x] : [x, z];
+  const offset = furnitureOffset(object);
+  return definition.seats.map((seat) => {
+    const [ax, az] = rotate(seat.anchor[0] + 0.5 - width / 2, seat.anchor[1] + 0.5 - depth / 2);
+    const [vx, vz] = rotate(seat.visual[0], seat.visual[2]);
+    return {
+      anchorX: cx + ax,
+      anchorZ: cz + az,
+      x: cx + vx + offset.x,
+      z: cz + vz + offset.z,
+      elevation: seat.actorElevation ?? 0,
+      direction: directions[(directions.indexOf(seat.direction) + turn) % 4],
+    };
+  });
+}
+
 function adjacentTable(chair: MapObject, objects: MapObject[]) {
   const x = chair.col + 0.5,
     z = chair.row + 0.5;
@@ -18,7 +49,9 @@ function adjacentTable(chair: MapObject, objects: MapObject[]) {
     if (
       !object.type.includes("desk") &&
       object.type !== "meeting_table" &&
-      object.type !== "conference_table"
+      object.type !== "conference_table" &&
+      object.type !== "studio_round_table" &&
+      object.type !== "studio_worktable"
     )
       continue;
     const size = getObjectDimensions(object.type, object.direction);
@@ -34,16 +67,30 @@ function adjacentTable(chair: MapObject, objects: MapObject[]) {
 }
 function tableSide(chair: MapObject, table: MapObject) {
   const size = getObjectDimensions(table.type, table.direction);
-  const dx = table.col + size.width / 2 - chair.col - 0.5;
-  const dz = table.row + size.height / 2 - chair.row - 0.5;
+  const x = chair.col + 0.5,
+    z = chair.row + 0.5;
+  // A wide table's corner chair still faces the adjacent edge, not its distant center.
+  if (x >= table.col && x <= table.col + size.width) return z < table.row ? "down" : "up";
+  if (z >= table.row && z <= table.row + size.height) return x < table.col ? "right" : "left";
+  const dx = table.col + size.width / 2 - x;
+  const dz = table.row + size.height / 2 - z;
   return Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? "right" : "left") : dz > 0 ? "down" : "up";
 }
 export function resolveSeat(chair: MapObject, objects: MapObject[]): Seat {
   const anchorX = chair.col + 0.5,
     anchorZ = chair.row + 0.5;
+  const catalogSeat = assetSeats(chair)[0];
   const table = adjacentTable(chair, objects);
   if (!table)
-    return { x: anchorX, z: anchorZ, anchorX, anchorZ, direction: chair.direction ?? "down" };
+    return (
+      catalogSeat ?? {
+        x: anchorX,
+        z: anchorZ,
+        anchorX,
+        anchorZ,
+        direction: chair.direction ?? "down",
+      }
+    );
   const side = tableSide(chair, table);
   const horizontal = side === "up" || side === "down";
   const peers = objects.filter(
@@ -59,6 +106,7 @@ export function resolveSeat(chair: MapObject, objects: MapObject[]): Seat {
   // Center a single chair; evenly space multiple chairs along the same table edge.
   const offset = (peers.findIndex((o) => o.id === chair.id) + 1) / (peers.length + 1);
   return {
+    ...(catalogSeat ?? {}),
     x: horizontal ? table.col + size.width * offset : anchorX,
     z: horizontal ? anchorZ : table.row + size.height * offset,
     anchorX,
@@ -78,6 +126,8 @@ export function seatAt(seats: Seat[], x: number, z: number, walking: boolean) {
 // a small clearance. This is visual only: saved navigation anchors stay put.
 export const SOFA_SEATED_FORWARD = 0.3;
 export function sofaSeats(object: MapObject): Seat[] {
+  const catalog = assetSeats(object);
+  if (catalog.length) return catalog;
   const count = object.type === "office_sofa" ? 2 : object.type === "office_armchair" ? 1 : 0;
   const direction = object.direction ?? "down";
   const size = getObjectDimensions(object.type, direction);
@@ -118,7 +168,10 @@ export function commonAreaSeats(objects: MapObject[]) {
   return objects.flatMap((object) => {
     if (object.type !== "chair") return sofaSeats(object);
     const table = adjacentTable(object, objects);
-    return table && ["meeting_table", "conference_table"].includes(table.type)
+    return table &&
+      ["meeting_table", "conference_table", "studio_round_table", "studio_worktable"].includes(
+        table.type,
+      )
       ? [resolveSeat(object, objects)]
       : [];
   });

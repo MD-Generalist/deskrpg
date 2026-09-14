@@ -125,3 +125,25 @@ test("sofa calf clearance follows all rotations without moving saved anchors", (
     }
   }
 });
+
+test("studio table chairs preserve tile anchors and face every rotated table edge", () => {
+  for (const type of ["studio_round_table", "studio_worktable"]) {
+    for (const direction of ["down", "right", "up", "left"] as const) {
+      const table: MapObject = { id: "table", type, col: 8, row: 8, direction };
+      const { width, height } = getObjectDimensions(type, direction);
+      for (const [col, row, facing] of [
+        [7, 8, "right"],
+        [8 + width, 8, "left"],
+        [8, 7, "down"],
+        [8, 8 + height, "up"],
+      ] as const) {
+        const chair: MapObject = { id: "chair", type: "chair", col, row, variant: "teal" };
+        const seat = resolveSeat(chair, [table, chair]);
+        assert.equal(seat.direction, facing);
+        assert.equal(seat.anchorX, col + 0.5);
+        assert.equal(seat.anchorZ, row + 0.5);
+        assert.equal(commonAreaSeats([table, chair]).length, 1);
+      }
+    }
+  }
+});

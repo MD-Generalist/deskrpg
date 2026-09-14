@@ -24,7 +24,8 @@ test("every asset has a versioned URL, footprint, fallback and budget", () => {
       frontAxis: "+Z",
       origin: "ground-center",
     });
-    assert.deepEqual(asset.destinationTags, [], id);
+    assert.ok(Array.isArray(asset.destinationTags), id);
+    assert.equal(new Set(asset.destinationTags).size, asset.destinationTags.length, id);
     assert.ok(asset.fallback, id);
     assert.ok(asset.source, id);
     assert.equal(asset.license, "repository-original", id);
@@ -115,8 +116,7 @@ test("registered files fit their world bounds, triangle and byte budgets", async
     let triangles = 0;
     gltf.scene.traverse((object) => {
       if (!(object instanceof T.Mesh)) return;
-      triangles +=
-        (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3;
+      triangles += (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3;
     });
     assert.ok(triangles <= asset.budget.maxTriangles, `${id}: ${triangles} triangles`);
     disposeTree(gltf.scene);
@@ -265,9 +265,7 @@ test("cancelling one pending host leaves a shared load available to a live host"
   const liveReady = attachSceneAsset(liveHost, "shared-street-tree", { load });
   disposeTree(cancelledHost);
   const sourceGeometry = new T.BoxGeometry();
-  const source = new T.Group().add(
-    new T.Mesh(sourceGeometry, new T.MeshStandardMaterial()),
-  );
+  const source = new T.Group().add(new T.Mesh(sourceGeometry, new T.MeshStandardMaterial()));
   let sourceDisposed = false;
   sourceGeometry.addEventListener("dispose", () => {
     sourceDisposed = true;

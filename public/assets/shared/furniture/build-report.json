@@ -1,0 +1,432 @@
+{
+  "workstation": {
+    "triangles": 1880,
+    "bytes": 72228,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.48500001430511475,
+        0.0,
+        -0.48500001430511475
+      ],
+      "max": [
+        0.48500001430511475,
+        0.8644999861717224,
+        0.48500001430511475
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "painted-metal"
+    ]
+  },
+  "office-chair": {
+    "triangles": 3292,
+    "bytes": 139508,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.3474999964237213,
+        0.003999996930360794,
+        -0.3266393542289734
+      ],
+      "max": [
+        0.3474999964237213,
+        1.0799891948699951,
+        0.3100000023841858
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "painted-metal",
+      "rubber",
+      "upholstery"
+    ]
+  },
+  "side-chair": {
+    "triangles": 1504,
+    "bytes": 111504,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.3100000023841858,
+        0.0,
+        -0.3041461706161499
+      ],
+      "max": [
+        0.3100000023841858,
+        0.9648157954216003,
+        0.28999999165534973
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "Cream linen"
+    ]
+  },
+  "round-table": {
+    "triangles": 1716,
+    "bytes": 68376,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.4199999570846558,
+        0.0,
+        -1.4199999570846558
+      ],
+      "max": [
+        1.4199999570846558,
+        0.8600000143051147,
+        1.4199999570846558
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "painted-metal"
+    ]
+  },
+  "production-table": {
+    "triangles": 1504,
+    "bytes": 63144,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -2.950000047683716,
+        0.0,
+        -1.4249999523162842
+      ],
+      "max": [
+        2.950000047683716,
+        0.8600000143051147,
+        1.4249999523162842
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "painted-metal"
+    ]
+  },
+  "curved-sofa": {
+    "triangles": 4324,
+    "bytes": 168348,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.4820525646209717,
+        0.0,
+        -0.48499998450279236
+      ],
+      "max": [
+        1.4820525646209717,
+        0.9599999785423279,
+        0.47628578543663025
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "upholstery",
+      "painted-metal"
+    ]
+  },
+  "sofa": {
+    "triangles": 4324,
+    "bytes": 168352,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.4499999284744263,
+        0.0,
+        -0.38499999046325684
+      ],
+      "max": [
+        1.4499999284744263,
+        0.9599999785423279,
+        0.38499999046325684
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "upholstery",
+      "painted-metal"
+    ]
+  },
+  "armchair": {
+    "triangles": 1692,
+    "bytes": 117236,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.4325000047683716,
+        0.0,
+        -0.4000000059604645
+      ],
+      "max": [
+        0.4325000047683716,
+        0.9599999785423279,
+        0.4000000059604645
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "upholstery"
+    ]
+  },
+  "stool": {
+    "triangles": 1708,
+    "bytes": 68760,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.30000001192092896,
+        0.0,
+        -0.30000001192092896
+      ],
+      "max": [
+        0.30000001192092896,
+        0.7200000286102295,
+        0.30000001192092896
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "painted-metal"
+    ]
+  },
+  "credenza": {
+    "triangles": 2444,
+    "bytes": 90376,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.9599999785423279,
+        0.0,
+        -0.38999998569488525
+      ],
+      "max": [
+        0.9599999785423279,
+        1.0575000047683716,
+        0.4475000202655792
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "cabinet-paint",
+      "painted-metal"
+    ]
+  },
+  "low-shelf": {
+    "triangles": 5640,
+    "bytes": 179572,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.9599999785423279,
+        0.0,
+        -0.38999998569488525
+      ],
+      "max": [
+        0.9599999785423279,
+        1.0575000047683716,
+        0.38999998569488525
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "book-0",
+      "book-1",
+      "book-2",
+      "book-3"
+    ]
+  },
+  "mobile-board": {
+    "triangles": 2068,
+    "bytes": 78904,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.9399999976158142,
+        0.0,
+        -0.4000000059604645
+      ],
+      "max": [
+        0.9399999976158142,
+        1.8849999904632568,
+        0.4000000059604645
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "painted-metal",
+      "rubber",
+      "oak",
+      "paper"
+    ]
+  },
+  "round-rug": {
+    "triangles": 764,
+    "bytes": 67280,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.8799999952316284,
+        0.0,
+        -1.8799999952316284
+      ],
+      "max": [
+        1.8799999952316284,
+        0.02199999988079071,
+        1.8799999952316284
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "upholstery"
+    ]
+  },
+  "woven-rug": {
+    "triangles": 188,
+    "bytes": 51908,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -2.950000047683716,
+        0.0,
+        -1.9500000476837158
+      ],
+      "max": [
+        2.950000047683716,
+        0.02199999988079071,
+        1.9500000476837158
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "upholstery"
+    ]
+  },
+  "counter": {
+    "triangles": 2068,
+    "bytes": 75900,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.9900000095367432,
+        0.0,
+        -0.47999998927116394
+      ],
+      "max": [
+        1.9900000095367432,
+        0.9500000476837158,
+        0.48250001668930054
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "painted-metal",
+      "cabinet-paint",
+      "oak"
+    ]
+  },
+  "conference-table": {
+    "triangles": 1504,
+    "bytes": 63148,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -1.9500000476837158,
+        0.0,
+        -0.925000011920929
+      ],
+      "max": [
+        1.9500000476837158,
+        0.8600000143051147,
+        0.925000011920929
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak",
+      "painted-metal"
+    ]
+  },
+  "coffee-table": {
+    "triangles": 1328,
+    "bytes": 58192,
+    "bounds": {
+      "units": "meters",
+      "min": [
+        -0.8700000047683716,
+        0.0,
+        -0.8700000047683716
+      ],
+      "max": [
+        0.8700000047683716,
+        0.48749998211860657,
+        0.8700000047683716
+      ]
+    },
+    "seed": 140927,
+    "source": "scripts/assets/build-shared-studio-furniture.py",
+    "license": "repository-original",
+    "invalidMesh": false,
+    "materialSlots": [
+      "oak"
+    ]
+  }
+}
