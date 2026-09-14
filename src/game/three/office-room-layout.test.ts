@@ -18,6 +18,17 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     const zones = readAmbientZones(map as unknown as Record<string, unknown>);
     assert.equal(zones.length, 3);
     const rooms = OFFICE_ROOMS[id];
+    if (id === "executive") {
+      assert.ok(
+        !snapshot.objects.some((o) => o.type.startsWith("room_wall")),
+        "reference suite remains open",
+      );
+      assert.equal(ambientTileAllowed(zones, 4, 6), false, "private desk is excluded from roaming");
+      assert.equal(ambientTileAllowed(zones, 12, 13), true, "lounge stays available");
+      assert.equal(snapshot.objects.filter((o) => o.type === "conference_table").length, 1);
+      assert.equal(snapshot.objects.filter((o) => o.type === "office_sofa").length, 1);
+      return;
+    }
     const boundary = rooms[0].z + rooms[0].depth;
     for (const room of rooms) {
       assert.deepEqual(
@@ -60,7 +71,7 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
       const size = getObjectDimensions(object.type);
       for (let x = object.col; x < object.col + size.width; x++)
         for (let y = object.row; y < object.row + size.height; y++) {
-          assert.ok(x >= 0 && x < 30 && y >= 0 && y < 22, object.type);
+          assert.ok(x >= 0 && x < snapshot.cols && y >= 0 && y < snapshot.rows, object.type);
           const tile = `${x},${y}`;
           assert.ok(!tiles.has(tile), `${object.type} overlaps ${tiles.get(tile)} at ${tile}`);
           tiles.set(tile, object.type);
@@ -68,13 +79,17 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     }
     const blocked = new Set(snapshot.blocked);
     const walkable = (x: number, y: number) =>
-      x >= 1 && x < 29 && y >= 1 && y < 21 && !blocked.has(`${x},${y}`);
+      x >= 1 &&
+      x < snapshot.cols - 1 &&
+      y >= 1 &&
+      y < snapshot.rows - 1 &&
+      !blocked.has(`${x},${y}`);
     const seats = furnitureSeats(snapshot.objects);
     assert.ok(seats.length >= 12);
     for (const seat of seats) {
       const x = (seat.anchorX ?? seat.x) - 0.5,
         y = (seat.anchorZ ?? seat.z) - 0.5;
-      const route = findPath(15, 19, x, y, walkable);
+      const route = findPath(Math.floor(snapshot.cols / 2), snapshot.rows - 3, x, y, walkable);
       assert.ok(route, `unreachable seat ${x},${y}`);
       for (let i = 1; i < route.length; i++) {
         assert.ok(clearSegment(route[i - 1], route[i], walkable));

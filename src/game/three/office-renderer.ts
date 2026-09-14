@@ -1,3 +1,4 @@
+import { addExecutiveArchitecture } from "./executive-architecture";
 import { adaptRenderScale } from "./render-scale";
 import { layoutActorLabels, bubbleWidthFor, type ActorLabelAnchor } from "./label-layout";
 import { FrameBenchmark, type BenchmarkReport, type FrameMetrics } from "./frame-benchmark";
@@ -74,7 +75,7 @@ const environmentPalettes = {
   trading: { floor: "#e3d0aa", wall: "#dae2d2", wood: "#b48a60", outside: "#e9eee2" },
   agency: { floor: "#ecd2c1", wall: "#e5b5a3", wood: "#b77962", outside: "#f3e7df" },
   tech: { floor: "#d5e0db", wall: "#b1cbc6", wood: "#719389", outside: "#e5efed" },
-  executive: { floor: "#c8c7b5", wall: "#a7b2a3", wood: "#655e4c", outside: "#e1e5dd" },
+  executive: { floor: "#d9cbb5", wall: "#62422d", wood: "#65584b", outside: "#f1eadf" },
   publishing: { floor: "#ecdfbf", wall: "#dfd0ab", wood: "#a17b4f", outside: "#f2ecda" },
 };
 
@@ -557,7 +558,7 @@ export class OfficeRenderer {
       tiles.receiveShadow = true;
       this.world.add(tiles);
     }
-    if (isOfficeEnvironmentId(map.environment)) {
+    if (isOfficeEnvironmentId(map.environment) && map.environment !== "executive") {
       const finish = officeFinish(map.environment);
       const floorMap = surfaceTexture(finish.floor, "color");
       const floorBump = surfaceTexture(finish.floor);
@@ -687,12 +688,16 @@ export class OfficeRenderer {
     const furniture = [...tileObjects, ...map.objects];
     const finishedPerimeter =
       !!map.environment && furniture.some((object) => object.type === "room_wall_h");
-    if (finishedPerimeter) addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
-    if (finishedPerimeter && map.environment) addOfficeRoomSurfaces(this.world, map.environment);
+    const executive = map.environment === "executive";
+    if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
+    if (finishedPerimeter && !executive)
+      addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
+    if (finishedPerimeter && map.environment && !executive)
+      addOfficeRoomSurfaces(this.world, map.environment);
     this.seats = furnitureSeats(furniture);
     for (const object of furniture) {
       if (
-        finishedPerimeter &&
+        (finishedPerimeter || executive) &&
         object.type === "cubicle_wall" &&
         (object.col === 0 ||
           object.col === map.cols - 1 ||
@@ -729,17 +734,17 @@ export class OfficeRenderer {
         else addRoomPartition(group, type === "room_wall_v");
         continue;
       }
-      const roomFurniture = buildRoomFurniture(type);
+      if (type === "chair") {
+        const seat = resolveSeat(object, furniture);
+        group.userData.seat = seat;
+        group.position.set(seat.x, 0, seat.z);
+      }
+      const roomFurniture = buildRoomFurniture(type, executive);
       if (roomFurniture) {
         const seats = sofaSeats(object);
         if (seats.length) group.userData.seats = seats;
         group.add(roomFurniture);
         continue;
-      }
-      if (type === "chair") {
-        const seat = resolveSeat(object, furniture);
-        group.userData.seat = seat;
-        group.position.set(seat.x, 0, seat.z);
       }
       if (
         type === "cubicle_wall" &&

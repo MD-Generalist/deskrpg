@@ -46,7 +46,7 @@ function makeFixture(id: OfficeEnvironmentId) {
   const map = tiledSnapshot(buildOfficeEnvironment(id));
   const blocked = new Set(map.blocked);
   const walkable = (x: number, y: number) =>
-    x >= 1 && x < 29 && y >= 1 && y < 21 && !blocked.has(`${x},${y}`);
+    x >= 1 && x < map.cols - 1 && y >= 1 && y < map.rows - 1 && !blocked.has(`${x},${y}`);
   const seats = furnitureSeats(map.objects);
   const actors: ActorSnapshot[] = Array.from({ length: 12 }, (_, i) => {
     const seat = seats[i % seats.length];
@@ -65,7 +65,7 @@ function makeFixture(id: OfficeEnvironmentId) {
   const routes = actors.slice(0, 10).map((actor) => {
     const x = actor.x / 32 - 0.5,
       y = actor.y / 32 - 0.5;
-    const path = findPath(x, y, 15, 19, walkable);
+    const path = findPath(x, y, Math.floor(map.cols / 2), map.rows - 3, walkable);
     if (!path) throw new Error(`No fixture path for ${actor.id}`);
     const roundTrip = [...path, ...path.slice(0, -1).reverse()];
     const lengths = roundTrip

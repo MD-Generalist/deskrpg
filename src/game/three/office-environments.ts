@@ -35,8 +35,9 @@ export const OFFICE_ENVIRONMENTS = Object.freeze([
     id: "executive",
     nameKo: "임원 오피스",
     nameEn: "Executive office",
-    descriptionKo: "넓은 중앙 회의석과 독립 업무석을 갖춘 차분한 공간",
-    descriptionEn: "A spacious boardroom with private work areas and a welcoming lobby.",
+    descriptionKo: "월넛 업무석, 라운드 미팅과 응접 라운지가 있는 임원실",
+    descriptionEn:
+      "A walnut executive suite with a round meeting table and a warm reception lounge.",
     color: "#596B61",
   }),
   Object.freeze({
@@ -56,7 +57,10 @@ export type OfficeEnvironmentId = (typeof OFFICE_ENVIRONMENTS)[number]["id"];
 export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
   const environment = OFFICE_ENVIRONMENTS.find((entry) => entry.id === id);
   if (!environment) throw new Error(`Unknown office environment: ${id}`);
-  const map = createDefaultMap(environment.nameEn, 30, 22, 32);
+  const cols = id === "executive" ? 18 : 30;
+  const rows = id === "executive" ? 18 : 22;
+  const entrance = Math.floor(cols / 2);
+  const map = createDefaultMap(environment.nameEn, cols, rows, 32);
   const layer = map.layers.find((entry) => entry.name === "Objects")!;
   const objects: TiledObject[] = [];
   const add = (type: string, col: number, row: number) => {
@@ -72,20 +76,20 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
       visible: true,
     });
   };
-  for (let x = 0; x < 30; x++) {
+  for (let x = 0; x < cols; x++) {
     add("cubicle_wall", x, 0);
-    if (x < 14 || x > 16) add("cubicle_wall", x, 21);
+    if (Math.abs(x - entrance) > 1) add("cubicle_wall", x, rows - 1);
   }
-  for (let y = 1; y < 21; y++) {
+  for (let y = 1; y < rows - 1; y++) {
     add("cubicle_wall", 0, y);
-    add("cubicle_wall", 29, y);
+    add("cubicle_wall", cols - 1, y);
   }
   furnishOfficeRooms(id, add);
-  for (const x of [1, 28])
-    for (const y of [1, 20]) {
+  for (const x of [1, cols - 2])
+    for (const y of [1, rows - 2]) {
       if (!objects.some((object) => object.x === x * 32 && object.y === y * 32)) add("plant", x, y);
     }
-  add("spawn", 15, 19);
+  add("spawn", entrance, rows - 3);
   layer.objects = objects;
   return tagEnvironment(map, id);
 }
@@ -111,7 +115,7 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
         ),
       },
     ],
-    { name: "officeEnvironmentVersion", type: "int", value: 2 },
+    { name: "officeEnvironmentVersion", type: "int", value: id === "executive" ? 3 : 2 },
   ];
   return map;
 }

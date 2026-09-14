@@ -31,8 +31,8 @@ test("five immutable localized environments have different furnished layouts", (
 for (const environment of OFFICE_ENVIRONMENTS) {
   test(`${environment.id}: valid deterministic Tiled map with connected seats and entrance`, () => {
     const map = buildOfficeEnvironment(environment.id);
-    assert.equal(map.width, 30);
-    assert.equal(map.height, 22);
+    assert.equal(map.width, environment.id === "executive" ? 18 : 30);
+    assert.equal(map.height, environment.id === "executive" ? 18 : 22);
     assert.equal(map.tilewidth, 32);
     assert.equal(map.tileheight, 32);
     const snapshot = tiledSnapshot(map);
@@ -64,13 +64,26 @@ for (const environment of OFFICE_ENVIRONMENTS) {
     for (let i = 0; i < queue.length; i++) {
       for (const [x, y] of neighbors(queue[i][0], queue[i][1])) {
         const key = `${x},${y}`;
-        if (x < 0 || x >= 30 || y < 0 || y >= 22 || blocked.has(key) || reached.has(key)) continue;
+        if (
+          x < 0 ||
+          x >= map.width ||
+          y < 0 ||
+          y >= map.height ||
+          blocked.has(key) ||
+          reached.has(key)
+        )
+          continue;
         reached.add(key);
         queue.push([x, y]);
       }
     }
-    assert.equal(reached.size + blocked.size, 30 * 22, "All empty tiles are connected");
-    for (const x of [14, 15, 16]) assert.ok(reached.has(`${x},21`));
+    assert.equal(
+      reached.size + blocked.size,
+      map.width * map.height,
+      "All empty tiles are connected",
+    );
+    for (const offset of [-1, 0, 1])
+      assert.ok(reached.has(`${Math.floor(map.width / 2) + offset},${map.height - 1}`));
     const occupied = new Set<string>();
     for (const object of objects) {
       if (object.type === "spawn") continue;

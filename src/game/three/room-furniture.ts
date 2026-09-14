@@ -19,8 +19,12 @@ const TYPES = new Set([
 ]);
 
 /** Centered on the footprint, floor at y=0, front facing +Z. No scene-global resources. */
-export function buildRoomFurniture(type: string): T.Group | null {
-  if (!TYPES.has(type)) return null;
+export function buildRoomFurniture(type: string, executive = false): T.Group | null {
+  if (
+    !TYPES.has(type) &&
+    !(executive && ["reception_desk", "meeting_table", "bookshelf", "chair"].includes(type))
+  )
+    return null;
   const g = new T.Group();
   g.name = type;
   const materials = new Map<string, T.MeshStandardMaterial>();
@@ -38,12 +42,15 @@ export function buildRoomFurniture(type: string): T.Group | null {
     }
     return m;
   };
-  const wood = material("#b89b70", "wood");
+  const wood = material(executive ? "#63452f" : "#b89b70", "wood");
   const metal = material("#39494c", "metal");
   const steel = material("#bbc5c2", "metal");
   const cream = material("#e9e6da");
   const dark = material("#293a3d");
-  const cloth = material("#6f857a", "fabric");
+  const cloth = material(
+    executive ? (type === "office_armchair" ? "#9b613d" : "#ddd0b7") : "#6f857a",
+    executive && type === "office_armchair" ? "leather" : "fabric",
+  );
   const box = (w: number, h: number, d: number, m: T.Material, x: number, y: number, z: number) =>
     round(g, w, h, d, m, x, y, z, Math.min(w, h, d, 0.12) * 0.25);
   const rod = (
@@ -85,6 +92,69 @@ export function buildRoomFurniture(type: string): T.Group | null {
     }
   };
 
+  if (executive && type === "chair") {
+    const leather = material("#c7baa1", "leather");
+    feet(0.65, 0.65, 0.46);
+    box(0.69, 0.13, 0.68, leather, 0, 0.48, 0);
+    box(0.69, 0.64, 0.14, leather, 0, 0.81, -0.27);
+    for (const x of [-0.33, 0.33]) box(0.065, 0.22, 0.49, leather, x, 0.62, 0);
+    return g;
+  }
+  if (executive && type === "bookshelf") {
+    box(0.98, 3.35, 0.12, wood, 0, 1.68, -0.4);
+    for (const x of [-0.47, 0.47]) box(0.055, 3.35, 0.8, wood, x, 1.68, 0);
+    for (const y of [0.12, 0.8, 1.55, 2.3, 3.32]) box(0.98, 0.065, 0.8, wood, 0, y, 0);
+    box(0.88, 0.65, 0.06, wood, 0, 0.45, 0.37);
+    for (const y of [0.84, 1.59, 2.34])
+      for (let i = 0; i < 5; i++) {
+        const book = box(
+          0.09,
+          0.42 + (i % 2) * 0.1,
+          0.29,
+          material(["#c5b695", "#655f4b", "#3e4036"][i % 3]),
+          -0.31 + i * 0.14,
+          y + 0.25,
+          0.1,
+        );
+        book.rotation.z = i === 4 ? -0.12 : 0;
+      }
+    return g;
+  }
+  if (executive && type === "reception_desk") {
+    box(1.95, 0.12, 0.95, wood, 0, 0.84, 0);
+    for (const x of [-0.78, 0.78]) box(0.35, 0.75, 0.8, wood, x, 0.4, 0);
+    box(1.5, 0.6, 0.09, wood, 0, 0.44, 0.32);
+    box(0.85, 0.01, 0.48, dark, 0, 0.91, 0);
+    const brass = material("#b99a5f", "metal");
+    rod(0.09, 0.025, brass, 0.7, 0.92, 0);
+    rod(0.018, 0.34, brass, 0.7, 1.1, 0);
+    box(0.24, 0.045, 0.15, brass, 0.63, 1.28, 0);
+    return g;
+  }
+  if (executive && (type === "conference_table" || type === "meeting_table")) {
+    const meeting = type === "conference_table";
+    const top = rod(
+      0.92,
+      0.1,
+      meeting ? wood : material("#a99f90", "metal"),
+      0,
+      meeting ? 0.81 : 0.43,
+      0,
+    );
+    top.scale.x = meeting ? 2 : 1;
+    rod(meeting ? 0.55 : 0.45, meeting ? 0.75 : 0.38, wood, 0, meeting ? 0.375 : 0.19, 0);
+    rod(0.18, 0.12, material("#b69754", "metal"), 0, meeting ? 0.92 : 0.54, 0);
+    for (let i = 0; i < 7; i++)
+      rod(
+        0.06,
+        0.16 + (i % 3) * 0.05,
+        material("#617044"),
+        Math.sin(i) * 0.1,
+        meeting ? 1.04 : 0.67,
+        Math.cos(i) * 0.1,
+      );
+    return g;
+  }
   switch (type) {
     case "conference_table": {
       // One uninterrupted surface; supports leave the long edges clear for six chairs.
