@@ -98,15 +98,39 @@ export function createCommuteMotion(options: CommuteMotionOptions = {}) {
     "acceleration",
     "deceleration",
     "fadeDistance",
+    "crossingWidth",
   ] as const) {
     if (!Number.isFinite(o[key]) || o[key] <= 0) throw new RangeError(`${key} must be positive`);
   }
-  if (!(o.roadMax > o.roadMin)) throw new RangeError("road bounds must be ordered");
+  if (
+    ![o.roadMin, o.roadMax, o.crossingX, o.stopMargin].every(Number.isFinite) ||
+    !(o.roadMax > o.roadMin) ||
+    o.stopMargin < 0
+  )
+    throw new RangeError("road and crossing geometry must be finite and ordered");
   const vehicles: VehicleState[] = (options.fleet ?? DEFAULT_COMMUTE_FLEET).map((v) => {
-    if (!(v.length > 0 && v.wheelRadius > 0 && Number.isFinite(v.x)))
+    if (
+      ![v.length, v.wheelRadius, v.x, v.laneZ].every(Number.isFinite) ||
+      !(v.length > 0 && v.wheelRadius > 0) ||
+      ![1, -1].includes(v.direction)
+    )
       throw new RangeError("invalid vehicle geometry");
     return { ...v, speed: 0, opacity: 0, active: true, cumulativeDistance: 0, wheelRotation: 0 };
   });
+  if (new Set(vehicles.map((v) => v.id)).size !== vehicles.length)
+    throw new RangeError("vehicle ids must be unique");
+  for (const direction of [1, -1]) {
+    const lane = vehicles
+      .filter((v) => v.direction === direction)
+      .sort((a, b) => direction * (a.x - b.x));
+    for (let i = 1; i < lane.length; i++) {
+      if (
+        direction * (lane[i].x - lane[i - 1].x) - (lane[i].length + lane[i - 1].length) / 2 <
+        o.gap - 1e-9
+      )
+        throw new RangeError("initial vehicle bodies must leave the configured bumper gap");
+    }
+  }
   let ticks = 0,
     requestedTime = 0,
     previousTime: number | undefined;
@@ -120,6 +144,7 @@ export function createCommuteMotion(options: CommuteMotionOptions = {}) {
   }
   function integrate() {
     const stopping = red();
+    const untilRed = o.driveSeconds - ((ticks * FIXED_DT) % (o.driveSeconds + o.stopSeconds));
     // Front-to-back processing means each follower sees the leader's new position.
     for (const direction of [1, -1] as const) {
       const lane = vehicles.filter((v) => v.direction === direction);
@@ -143,8 +168,22 @@ export function createCommuteMotion(options: CommuteMotionOptions = {}) {
         let limit = Infinity;
         if (leader) limit = position(leader) - (leader.length + v.length) / 2 - o.gap;
         const stop = direction * o.crossingX - o.crossingWidth / 2 - o.stopMargin;
+        const distanceToLine = stop - v.length / 2 - q;
+        // Reserve a full braking interval before the scheduled red. The distance
+        // term starts braking early for cars that cannot reach the line this green;
+        // it decreases no faster than the clock, so braking cannot oscillate.
+        // The braking envelope rests a sub-millimetre before the line. Let a
+        // queued vehicle leave that numerical stand-off when green returns.
+        const leavingStop =
+          !stopping &&
+          distanceToLine <= o.deceleration * FIXED_DT * FIXED_DT &&
+          untilRed > 2 * FIXED_DT;
+        const anticipateRed =
+          !leavingStop &&
+          untilRed <=
+            Math.max(0, distanceToLine) / o.maxSpeed + o.maxSpeed / o.deceleration + 2 * FIXED_DT;
         // A front bumper beyond the line has committed and must clear the crossing.
-        if (stopping && q + v.length / 2 <= stop + 1e-9)
+        if ((stopping || anticipateRed) && q + v.length / 2 <= stop + 1e-9)
           limit = Math.min(limit, stop - v.length / 2);
         const remaining = Math.max(0, limit - q);
         const desired = Math.min(

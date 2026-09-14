@@ -139,3 +139,43 @@ test("large frame deltas match fine steps without tunneling and both lanes stop"
     assert.equal(m.pedestriansMayCross, true);
   }
 });
+
+test("default fleet brakes smoothly throughout ten minutes including red transitions", () => {
+  const m = createCommuteMotion();
+  for (let i = 0; i < 600 * 120; i++) {
+    const before = m.vehicles.map((v) => ({ speed: v.speed, active: v.active }));
+    m.step(1 / 120);
+    m.vehicles.forEach((v, j) => {
+      if (!before[j].active || !v.active) return; // Invisible recycling is not driving.
+      assert.ok(
+        before[j].speed - v.speed <= 2.5 / 120 + 1e-8,
+        `${v.id} brakes abruptly at ${m.elapsed}: ${before[j].speed} -> ${v.speed}`,
+      );
+      assert.ok(v.speed - before[j].speed <= 1.4 / 120 + 1e-8);
+    });
+  }
+});
+
+test("reject nonfinite geometry and impossible initial fleets", () => {
+  for (const config of [
+    { crossingX: NaN },
+    { crossingWidth: NaN },
+    { roadMax: Infinity },
+    { roadMin: -Infinity },
+    { crossingWidth: -1 },
+    { stopMargin: NaN },
+  ])
+    assert.throws(() => createCommuteMotion(config), RangeError);
+  const base = {
+    id: "one",
+    kind: "sedan" as const,
+    direction: 1 as const,
+    laneZ: 4.4,
+    length: 3,
+    wheelRadius: 0.3,
+    x: 0,
+  };
+  for (const config of [{ length: Infinity }, { wheelRadius: Infinity }, { laneZ: NaN }])
+    assert.throws(() => createCommuteMotion({ fleet: [{ ...base, ...config }] }), RangeError);
+  assert.throws(() => createCommuteMotion({ fleet: [base, { ...base, id: "two" }] }), RangeError);
+});
