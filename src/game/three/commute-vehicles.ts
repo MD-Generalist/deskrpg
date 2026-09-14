@@ -47,7 +47,7 @@ export function createCommuteVehicle(
   };
   const materials = [
     clone(palette.materials.vehiclePaint, spec.id === "sedan-west" ? "#b9bfd5" : paint),
-    clone(palette.materials.glass),
+    clone(palette.materials.glass, "#476669"),
     clone(palette.materials.rubber),
     clone(palette.materials.metal),
     clone(palette.materials.vehiclePaint, "#fff3ce"),
@@ -105,14 +105,37 @@ export function createCommuteVehicle(
     }
   }
   const cabRoof = van ? 1.52 : roof;
-  box(0, (cabStart + cabEnd) / 2, (belt + cabRoof) / 2, 0, cabLength, cabRoof - belt, w * 0.86);
-  box(0, (cabStart + cabEnd) / 2, cabRoof, 0, cabLength + 0.08, 0.1, w * 0.91);
+  // Warp the complete cabin (paint, glass and pillars) together: the roof is
+  // narrower and shorter than the belt line, leaving proper sloping A/C pillars.
+  const cabinBox = (...args: Parameters<typeof box>) => {
+    box(...args);
+    if (bus || van) return;
+    const geometry = parts[args[0]][parts[args[0]].length - 1];
+    const vertices = geometry.attributes.position;
+    const center = (cabStart + cabEnd) / 2;
+    for (let i = 0; i < vertices.count; i++) {
+      const t = T.MathUtils.clamp((vertices.getY(i) - belt) / (cabRoof - belt), 0, 1);
+      vertices.setX(i, center + (vertices.getX(i) - center) * (1 - t * (suv ? 0.31 : 0.38)));
+      vertices.setZ(i, vertices.getZ(i) * (1 - t * 0.08));
+    }
+    geometry.computeVertexNormals();
+  };
+  cabinBox(
+    0,
+    (cabStart + cabEnd) / 2,
+    (belt + cabRoof) / 2,
+    0,
+    cabLength,
+    cabRoof - belt,
+    w * 0.86,
+  );
+  cabinBox(0, (cabStart + cabEnd) / 2, cabRoof, 0, cabLength + 0.08, 0.1, w * 0.91);
   const windowHeight = cabRoof - belt - 0.17;
   const windows = bus ? 7 : van ? 1 : 2;
   for (const side of [-1, 1]) {
     for (let i = 0; i < windows; i++) {
       const spacing = cabLength / windows;
-      box(
+      cabinBox(
         1,
         cabStart + spacing * (i + 0.5),
         belt + windowHeight / 2 + 0.04,
@@ -121,6 +144,16 @@ export function createCommuteVehicle(
         windowHeight,
         0.035,
       );
+      if (i > 0)
+        cabinBox(
+          2,
+          cabStart + spacing * i,
+          belt + windowHeight / 2 + 0.04,
+          side * w * 0.457,
+          0.048,
+          windowHeight + 0.025,
+          0.02,
+        );
       if (!bus)
         box(3, cabStart + spacing * (i + 0.3), belt - 0.055, side * w * 0.505, 0.13, 0.035, 0.035);
     }
@@ -130,9 +163,9 @@ export function createCommuteVehicle(
     box(5, -l / 2 + 0.081, base + 0.1, side * w * 0.34, 0.035, 0.17, w * 0.17);
     if (bus) box(6, 0, belt - 0.12, side * w * 0.505, l * 0.92, 0.15, 0.025);
   }
-  box(1, cabEnd + 0.015, belt + windowHeight / 2 + 0.04, 0, 0.04, windowHeight, w * 0.74);
+  cabinBox(1, cabEnd + 0.015, belt + windowHeight / 2 + 0.04, 0, 0.04, windowHeight, w * 0.74);
   if (!van)
-    box(1, cabStart - 0.015, belt + windowHeight / 2 + 0.04, 0, 0.04, windowHeight, w * 0.72);
+    cabinBox(1, cabStart - 0.015, belt + windowHeight / 2 + 0.04, 0, 0.04, windowHeight, w * 0.72);
   box(2, l / 2 - 0.079, base - 0.02, 0, 0.04, 0.12, w * 0.33);
   if (kind === "taxi") {
     box(4, -0.02, roof + 0.17, 0, 0.45, 0.23, 0.36);
@@ -142,7 +175,7 @@ export function createCommuteVehicle(
   }
   if (suv)
     for (const side of [-1, 1])
-      box(3, -0.1, roof + 0.12, side * w * 0.34, cabLength * 0.84, 0.065, 0.055);
+      box(3, -0.1, roof + 0.12, side * w * 0.34, cabLength * 0.65, 0.065, 0.055);
   if (bus) {
     box(0, -0.4, roof + 0.13, 0, 1.5, 0.18, 0.85);
     box(2, cabEnd + 0.02, roof - 0.13, 0, 0.035, 0.13, w * 0.65);

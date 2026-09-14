@@ -5,6 +5,35 @@ import { createCommuteMaterials } from "./commute-materials";
 import { createCommuteMotion } from "./commute-motion";
 import { createCommuteVehicles } from "./commute-vehicles";
 
+test("glazing contrasts with paint and passenger windscreens rake inward toward roof", () => {
+  const palette = createCommuteMaterials();
+  const fleet = createCommuteVehicles(palette);
+  const luminance = (c: T.Color) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+  for (const vehicle of fleet.vehicles) {
+    assert.ok(luminance(vehicle.materials[1].color) < luminance(vehicle.materials[0].color) * 0.45);
+    if (!["sedan", "taxi", "suv"].includes(vehicle.kind)) continue;
+    const glass = vehicle.root.children.find(
+      (o) => o instanceof T.Mesh && o.material === vehicle.materials[1],
+    ) as T.Mesh;
+    const vertices = glass.geometry.attributes.position;
+    const belt = vehicle.kind === "suv" ? 0.88 : 0.71;
+    const roof = vehicle.kind === "suv" ? 1.62 : 1.35;
+    const low: number[] = [],
+      high: number[] = [];
+    for (let i = 0; i < vertices.count; i++) {
+      // Rounded boxes keep face vertices near their edges, not at face centers.
+      // Include windscreen edges while excluding the outboard mirror glazing.
+      if (Math.abs(vertices.getZ(i)) > 0.6) continue;
+      if (vertices.getY(i) < belt + 0.15) low.push(vertices.getX(i));
+      if (vertices.getY(i) > roof - 0.25) high.push(vertices.getX(i));
+    }
+    assert.ok(Math.max(...low) - Math.max(...high) > 0.12, "front windscreen slopes back");
+    assert.ok(Math.min(...high) - Math.min(...low) > 0.12, "rear windscreen slopes forward");
+  }
+  fleet.dispose();
+  palette.dispose();
+});
+
 for (const quality of ["desktop", "light"] as const) {
   test(`${quality}: six correctly sized vehicles, five silhouettes and forward orientation`, () => {
     const palette = createCommuteMaterials({ quality });
