@@ -14,7 +14,8 @@ export type SceneAssetFallback =
   | "coffee"
   | "architecture-panel"
   | "architecture-glass"
-  | "studio-furniture";
+  | "studio-furniture"
+  | "creative-studio-kit";
 
 export type SceneMaterialSlot =
   | "upholstery"
@@ -26,7 +27,12 @@ export type SceneMaterialSlot =
   | "foliage"
   | "planter"
   | "brick"
-  | "plaster";
+  | "plaster"
+  | "paper"
+  | "printed-paper"
+  | "diffuser"
+  | "coral"
+  | "ceramic";
 
 export type SceneAssetBounds = {
   units: "meters";
@@ -230,7 +236,153 @@ const studioSofaSeats = (curved = false): NonNullable<SceneAssetDefinition["seat
     direction: "down",
   }));
 
+const studioKit = (
+  name: string,
+  folder: "photo" | "production" | "ideation" | "pantry",
+  width: number,
+  height: number,
+  depth: number,
+  footprint: readonly [number, number],
+  slots: SceneAssetDefinition["materialSlots"],
+  maxTriangles = 30_000,
+): SceneAssetDefinition => ({
+  url: `/assets/environments/creative-studio/${folder}/${name}-v1.glb`,
+  category: "kit",
+  tags: ["creative-studio", folder],
+  destinationTags: [folder === "ideation" ? "ideation" : folder],
+  localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  footprint,
+  bounds: worldBounds(width, height, depth),
+  maxHeight: height,
+  fallback: "creative-studio-kit",
+  materialSlots: slots,
+  shadows: { cast: true, receive: true },
+  batch: "static",
+  lod: maxTriangles > 12_000 ? "hero" : "small",
+  budget: { maxTriangles, maxBytes: 2_000_000 },
+  source: "scripts/assets/build-creative-studio-kits.py; original DeskRPG art and geometry",
+  license: "repository-original",
+});
+
 export const SCENE_ASSETS = {
+  "photo-cyclorama": studioKit("photo-cyclorama", "photo", 6.8, 2.92, 2.9, [7, 3], {
+    coral: "coral-sweep",
+    oak: "oak",
+    "painted-metal": "painted-metal",
+  }),
+  "photo-softbox": studioKit(
+    "photo-softbox",
+    "photo",
+    0.82,
+    2.1,
+    0.82,
+    [1, 1],
+    { diffuser: "diffuser", "painted-metal": "painted-metal" },
+    3000,
+  ),
+  "photo-camera-tripod": studioKit(
+    "photo-camera-tripod",
+    "photo",
+    0.82,
+    1.6,
+    0.84,
+    [1, 1],
+    { "painted-metal": "painted-metal" },
+    3000,
+  ),
+  "photo-reflector": studioKit(
+    "photo-reflector",
+    "photo",
+    0.86,
+    1.63,
+    0.7,
+    [1, 1],
+    { diffuser: "reflector-cloth", "painted-metal": "painted-metal" },
+    3000,
+  ),
+  "photo-equipment-shelf": studioKit("photo-equipment-shelf", "photo", 1.94, 2.27, 0.86, [2, 1], {
+    oak: "oak",
+    paper: "paper",
+    "painted-metal": "painted-metal",
+  }),
+  "production-table-dressed": studioKit(
+    "production-table-dressed",
+    "production",
+    5.2,
+    1.18,
+    2.2,
+    [6, 3],
+    { paper: "paper", "printed-paper": "printed-paper", ceramic: "ceramic" },
+  ),
+  "round-ideation-dressed": studioKit(
+    "round-ideation-dressed",
+    "ideation",
+    2.2,
+    1.03,
+    2.2,
+    [3, 3],
+    { paper: "paper", "printed-paper": "printed-paper", ceramic: "ceramic" },
+  ),
+  "mobile-idea-board": studioKit("mobile-idea-board", "ideation", 1.7, 1.75, 0.18, [2, 1], {
+    paper: "paper",
+  }),
+  "sample-display": studioKit(
+    "sample-display",
+    "production",
+    1.7,
+    1.49,
+    0.62,
+    [2, 1],
+    { paper: "paper", oak: "oak" },
+    12000,
+  ),
+  "pantry-counter-dressed": studioKit("pantry-counter-dressed", "pantry", 3.25, 1.48, 0.8, [4, 1], {
+    oak: "oak",
+    paper: "paper",
+    ceramic: "ceramic",
+    "painted-metal": "painted-metal",
+  }),
+  "art-wall-dressed": studioKit(
+    "art-wall-dressed",
+    "ideation",
+    3.78,
+    3.05,
+    0.12,
+    [4, 1],
+    { oak: "oak", paper: "paper" },
+    12000,
+  ),
+  "workstation-dressed": studioKit(
+    "workstation-dressed",
+    "production",
+    0.88,
+    1.43,
+    0.94,
+    [1, 1],
+    { paper: "paper", ceramic: "ceramic", "painted-metal": "painted-metal" },
+    12000,
+  ),
+  "conference-table-dressed": studioKit(
+    "conference-table-dressed",
+    "ideation",
+    3.3,
+    1.13,
+    1.42,
+    [4, 2],
+    { paper: "paper", "printed-paper": "printed-paper", ceramic: "ceramic" },
+    12000,
+  ),
+  "coffee-table-dressed": studioKit(
+    "coffee-table-dressed",
+    "ideation",
+    0.94,
+    0.64,
+    0.54,
+    [2, 2],
+    { paper: "paper", "printed-paper": "printed-paper", ceramic: "ceramic" },
+    3000,
+  ),
+
   "shared-workstation": studioFurniture("workstation", 0.98, 0.88, 0.98, [1, 1], {
     destinationTags: ["work", "desk"],
   }),
