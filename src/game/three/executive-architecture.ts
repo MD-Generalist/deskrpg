@@ -1,3 +1,4 @@
+import { EXECUTIVE_LOUNGE_RUG } from "./executive-lounge-layout";
 import { executiveSurface } from "./executive-surfaces";
 import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
 import * as T from "three";
@@ -32,6 +33,10 @@ export function addExecutiveArchitecture(root: T.Group, cols: number, rows: numb
     const asset = new T.Group();
     asset.position.set(zone.x + zone.width / 2, 0.035, zone.z + zone.depth / 2);
     asset.scale.set((zone.width - 1) / 5.9, 1, (zone.depth - 1) / 5.9);
+    if (zone.id === "pantry") {
+      asset.position.set(EXECUTIVE_LOUNGE_RUG.x, 0.035, EXECUTIVE_LOUNGE_RUG.z);
+      asset.scale.set(EXECUTIVE_LOUNGE_RUG.width / 5.9, 1, EXECUTIVE_LOUNGE_RUG.depth / 5.9);
+    }
     round(asset, 5.9, 0.026, 5.9, rug, 0, 0.013, 0);
     root.add(asset);
     void attachFurnitureAsset(asset, "rug");

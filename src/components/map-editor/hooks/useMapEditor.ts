@@ -48,6 +48,7 @@ export interface TiledLayer {
 }
 
 export interface TiledObject {
+  properties?: Array<{ name: string; type: string; value: unknown }>;
   id: number;
   name: string;
   type: string;

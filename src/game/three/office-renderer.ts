@@ -1,3 +1,4 @@
+import { furnitureOffset } from "./executive-lounge-layout";
 import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
 import { disposeTree } from "./dispose-tree";
 export { disposeTree } from "./dispose-tree";
@@ -681,7 +682,12 @@ export class OfficeRenderer {
         continue;
       const group = new T.Group(),
         size = getObjectDimensions(object.type, object.direction);
-      group.position.set(object.col + size.width / 2, 0, object.row + size.height / 2);
+      const furniturePlacement = furnitureOffset(object);
+      group.position.set(
+        object.col + size.width / 2 + furniturePlacement.x,
+        0,
+        object.row + size.height / 2 + furniturePlacement.z,
+      );
       group.rotation.y = { up: Math.PI, down: 0, left: -Math.PI / 2, right: Math.PI / 2 }[
         object.type === "chair"
           ? resolveSeat(object, furniture).direction

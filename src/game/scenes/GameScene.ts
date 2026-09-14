@@ -1,4 +1,4 @@
-import { tiledDirection } from "../../lib/tiled-geometry";
+import { tiledDirection, tiledVariant } from "../../lib/tiled-geometry";
 import { RemoteNpcPresentation } from "../remote-npc-presentation";
 import {
   copyMotionContinuation,
@@ -3002,6 +3002,9 @@ export class GameScene extends Phaser.Scene {
               col: Math.floor((obj.x as number) / TILE_SIZE),
               row: Math.floor((obj.y as number) / TILE_SIZE),
               ...tiledDirection(
+                obj.properties as Array<{ name: string; value: unknown }> | undefined,
+              ),
+              ...tiledVariant(
                 obj.properties as Array<{ name: string; value: unknown }> | undefined,
               ),
             });

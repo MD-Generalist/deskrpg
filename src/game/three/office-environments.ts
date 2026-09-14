@@ -92,6 +92,16 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
     for (const y of [1, rows - 2]) {
       if (!objects.some((object) => object.x === x * 32 && object.y === y * 32)) add("plant", x, y);
     }
+  if (id === "executive") {
+    for (const object of objects) {
+      if (["office_sofa", "office_armchair"].includes(object.type)) {
+        object.properties = [
+          ...(object.properties || []),
+          { name: "variant", type: "string", value: "executive-lounge" },
+        ];
+      }
+    }
+  }
   add("spawn", entrance, rows - 3);
   layer.objects = objects;
   return tagEnvironment(map, id);
@@ -118,7 +128,7 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
         ),
       },
     ],
-    { name: "officeEnvironmentVersion", type: "int", value: id === "executive" ? 4 : 2 },
+    { name: "officeEnvironmentVersion", type: "int", value: id === "executive" ? 5 : 2 },
   ];
   return map;
 }
