@@ -44,7 +44,6 @@ function evaluate(code: string, extra: object = {}) {
     playerMotionGoal,
     adoptNpcMotionHome,
     untouchedSpawn,
-    adoptNpcMotionHome,
     ...extra,
   };
   return runInNewContext(

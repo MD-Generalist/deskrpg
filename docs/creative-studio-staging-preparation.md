@@ -2,7 +2,7 @@
 
 These commands are prepared for the controller; none is an instruction to deploy production. This task has not executed them remotely. Staging is `https://test.deskrpg.com`, with source synced by `deploy/test-deploy.sh` to `/home/dante/projects/deskrpg-test/build-context` on `${DESKRPG_TEST_REMOTE:-DanteServer}`. Confirm the existing compose service names with `docker compose config --services` before substituting the database service below; do not assume the local test-compose names match the hosted stack.
 
-## Before enabling migration
+## Phase 0: archive before schema or map migration
 
 1. Commit/review the verified work and push `master` only when the controller authorizes it. Do not create a date tag, production release or Docker Hub push. Record the exact commit and current staging image digest for rollback.
 2. Quiesce staging channel activity and stop only the staging app while leaving its PostgreSQL service running. Do not use `down -v`. Record existing users, profiles, memberships, chat and gateway state before opening any channel with the new code.
@@ -24,20 +24,60 @@ sha256sum pre-studio-backup/database.dump > pre-studio-backup/database.sha256
 
 The dump includes every channel map, therefore every eligible v2 map, before lazy upgrade is enabled. It contains sensitive application data: keep mode 0600, do not attach it to reports, and retain it independently of container/build-context replacement. Listing the archive validates its structure; the controller must also restore it into a disposable database and verify counts before declaring rollback tested.
 
-4. Copy `deploy/creative-studio-preservation.sql` separately into `pre-studio-backup/`; the deploy script deliberately excludes `deploy/` and `docs/`. The canonical fixture can be copied from the verified checkout before deployment. Verify its SHA-256 is `d17e2d0a8e7900e2ad5cfe879c9dc406bcb9dbadc6fdedc2d85e42663fc9015f`.
+4. Copy both `deploy/creative-studio-preservation.sql` and `deploy/creative-studio-bootstrap-check.sql` separately into `pre-studio-backup/`; the deploy script deliberately excludes `deploy/` and `docs/`. The canonical fixture can be copied from the verified checkout before deployment. Verify its SHA-256 is `d17e2d0a8e7900e2ad5cfe879c9dc406bcb9dbadc6fdedc2d85e42663fc9015f`.
 
 ```bash
 # Run on Linux with the verified fixture copied to this private backup directory.
+fixture_b64="$(base64 -w0 pre-studio-backup/official-agency-v2.json)"
+docker compose exec -T "$DESKRPG_STAGING_DB_SERVICE" sh -c 'exec psql -X -A -t -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -v fixture_b64="$1"' sh "$fixture_b64" < pre-studio-backup/creative-studio-bootstrap-check.sql > pre-studio-backup/before-schema.json
+unset fixture_b64
+```
+
+The bootstrap query records schema flags, exact-v2/version counts and a stable hash over **every channel ID and map**, without outputting maps. This pre-schema record proves that startup did not upgrade any map; it is not the whole-row preservation baseline.
+
+## Phase 1: schema-only startup with map upgrades disabled
+
+Before the first new-code startup, remove `DESKRPG_MAP_BACKUP_DIR` from every staging app environment source, or explicitly set it to an empty string in the auto-loaded compose override to neutralize inherited configuration. Do not configure the writable backup mount yet. Empty/unset configuration fails closed in the map upgrader. A shell-only `unset` is insufficient if compose or its env file supplies the value.
+
+With the archive restore test complete, the controller runs `npm run deploy:test` from the verified checkout. The Linux app entrypoint applies PostgreSQL schema migrations before starting the server. Confirm app/database health and final HTTP 200 after redirects, but keep users and automated event producers quiet. Verify the actual running app has no effective backup directory, without printing its environment:
+
+```bash
+docker compose exec -T deskrpg-test-app node -e 'if (process.env.DESKRPG_MAP_BACKUP_DIR) throw Error("Map upgrades must remain disabled during schema bootstrap"); console.log("Map upgrade configuration is disabled")'
+docker compose stop deskrpg-test-app
+fixture_b64="$(base64 -w0 pre-studio-backup/official-agency-v2.json)"
+docker compose exec -T "$DESKRPG_STAGING_DB_SERVICE" sh -c 'exec psql -X -A -t -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -v fixture_b64="$1"' sh "$fixture_b64" < pre-studio-backup/creative-studio-bootstrap-check.sql > pre-studio-backup/after-schema.json
+unset fixture_b64
+python3 - <<'CHECK'
+import json
+from pathlib import Path
+root = Path("pre-studio-backup")
+before = json.loads((root / "before-schema.json").read_text())
+after = json.loads((root / "after-schema.json").read_text())
+for key in ["gatewayPluginInfoColumn", "roomNoticeColumn", "channelKanbanBoardsTable", "cronJobOriginsTable", "legacyTasksAbsent", "legacyNpcReportsAbsent"]:
+    assert after[key] is True, "Schema migration incomplete: " + key
+for key in ["channelsCount", "exactV2Count", "version2Count", "version3Count", "otherVersionCount", "mapRowsHash"]:
+    assert before[key] == after[key], "A map changed during schema-only startup: " + key
+print("Schema state verified; all channel maps unchanged during bootstrap")
+CHECK
+```
+
+Require 0011's `gateway_resources.plugin_info_json`, `chat_room_messages.notice_json`, `channel_kanban_boards` and `cron_job_origins` to exist, and 0012's retired `tasks`/`npc_reports` tables to be absent. Migration 0012 intentionally removes the retired tables; retain their pre-schema archive and tested restore separately. This reviewed schema transition is distinct from exact-map upgrade acceptance.
+
+With the app stopped and all schema changes complete, create the **quiet post-schema/pre-map baseline**:
+
+```bash
 fixture_b64="$(base64 -w0 pre-studio-backup/official-agency-v2.json)"
 docker compose exec -T "$DESKRPG_STAGING_DB_SERVICE" sh -c 'exec psql -X -A -t -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -v fixture_b64="$1"' sh "$fixture_b64" < pre-studio-backup/creative-studio-preservation.sql > pre-studio-backup/before.ndjson
 unset fixture_b64
 ```
 
+`before.ndjson` must be taken here, **after schema bootstrap and before map migration**. Adding even a null column changes `to_jsonb(row)` and its whole-row hash; a pre-deployment snapshot cannot be the comparator for this check. Preserve both bootstrap records to prove no map upgraded before this baseline. Do not omit the new columns from hashes or waive unrelated differences to make comparison pass.
+
 The query emits only IDs, dimensions, eligibility flags, counts and integrity hashes. The global record covers users, profiles, gateway resources, actual gateway shares, groups, group memberships and characters, including currently unbound/unassigned rows. Each channel covers all channel fields except `map_data`/`updated_at`, channel memberships, actual gateway bindings, NPC/profile assignments/homes, room rows, room memberships and both room messages and NPC chat history. NPC history (`chat_messages`) joins through `npcs.channel_id`; the current schema has no soft-delete column, so every persisted row is included. Room memberships use the full `(room_id, member_kind, member_id)` composite key for stable ordering. Every category has a count and full-row hash; hashes cannot be replaced by checking only the channel’s legacy gateway configuration. `eligibleV2` uses exact PostgreSQL JSONB equality to the frozen fixture. No version-tag-only eligibility shortcut is used.
 
-## Durable runtime configuration
+## Phase 2: enable durable map backup and restart
 
-Add the following to the existing **staging** compose app service (`deskrpg-test-app`). Do not overwrite the rest of its environment, volumes or secrets. Keep it in the existing compose file or in an auto-loaded `docker-compose.override.yml`; the deployment script calls plain `docker compose up` and will not load an arbitrary override filename.
+Only after the schema/map proof and `before.ndjson` baseline succeed, add the following to the existing **staging** compose app service (`deskrpg-test-app`). Do not overwrite the rest of its environment, volumes or secrets. Keep it in the existing compose file or in an auto-loaded `docker-compose.override.yml`; the deployment script calls plain `docker compose up` and will not load an arbitrary override filename.
 
 ```yaml
 services:
@@ -50,7 +90,7 @@ services:
 
 The directory must exist and be writable by UID 1001. Validate compose without printing resolved secrets: `docker compose config --quiet`. Confirm the mount source/destination after recreation through `docker inspect` using only mount fields. Confirm fsync/rename/write permissions as the app user before opening an eligible channel. The ordinary container writable layer and `/tmp` do not satisfy this contract.
 
-A write/fsync/rename probe, run after app recreation but before opening an eligible channel:
+Restart the stopped app with the reviewed same image and new backup configuration: `docker compose up -d --no-deps --force-recreate deskrpg-test-app`. Keep users and background writers quiet. Run this write/fsync/rename probe after recreation and before opening an eligible channel:
 
 ```bash
 docker compose exec -T --user 1001:1001 deskrpg-test-app node <<'NODE'
@@ -74,9 +114,9 @@ The probe establishes app-user filesystem behavior. The separate bind-mount insp
 
 Keep **one socket authority**. No independently scaled socket replicas may serve these channels during upgrade. Missing directory, failed fsync, unwritable storage or unavailable coordination must leave the v2 row unchanged. With the feature disabled, do not interpret a successfully loaded old map as migration acceptance.
 
-## Deploy and quiet preservation acceptance
+## Phase 3: quiet map-preservation acceptance
 
-After review, the controller runs `npm run deploy:test` from the verified checkout; it builds on the Linux staging server and recreates only the app. It is not a production release. Confirm healthy app/database containers and follow redirects for `https://test.deskrpg.com/` to a final HTTP 200.
+The schema-only deployment is already complete. Confirm the restarted app is healthy and still uses the same schema. No schema changes may occur between the Phase 1 `before.ndjson` baseline and this map-only comparison; if any do, stop and establish a new quiet post-schema/pre-map baseline before upgrading maps.
 
 Open one recorded exact-v2 channel with two existing browser sessions. Observe `map:refresh` begin/ready, one durable map backup, cache/reservation/continuation reset and the new 42×26/version-3 map. Fetching an edited v2 channel must preserve its exact map hash and legacy rendering. Keep the sessions idle and do not rename, send chat, move actors or replace maps during this quiet preservation window. Authority/interaction tests run only after the comparison below passes.
 

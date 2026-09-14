@@ -160,3 +160,79 @@ test(
     }
   },
 );
+
+test(
+  "native PostgreSQL separates schema bootstrap from the map-preservation baseline",
+  { skip: !process.env.DESKRPG_TEST_PG_SOCKET },
+  async () => {
+    const pool = new Pool({
+      host: process.env.DESKRPG_TEST_PG_SOCKET,
+      port: Number(process.env.DESKRPG_TEST_PG_PORT ?? 55441),
+      user: "task7_fix",
+      database: "postgres",
+      max: 1,
+    });
+    const bootstrapSql = readFileSync("deploy/creative-studio-bootstrap-check.sql", "utf8").replace(
+      ":'fixture_b64'",
+      `'${Buffer.from(JSON.stringify(fixture)).toString("base64")}'`,
+    );
+    const snapshot = async () => {
+      const results = (await pool.query(bootstrapSql)) as unknown as QueryResult[];
+      return results.flatMap((result) => result.rows)[0].jsonb_build_object;
+    };
+    const gatewayHash = async () =>
+      (await pool.query("SELECT md5(to_jsonb(g)::text) AS hash FROM gateway_resources g")).rows[0]
+        .hash;
+    try {
+      await pool.query(
+        "CREATE TEMP TABLE channels (id uuid, map_data jsonb); CREATE TEMP TABLE gateway_resources (id uuid); CREATE TEMP TABLE chat_room_messages (id uuid); CREATE TEMP TABLE tasks (id uuid); CREATE TEMP TABLE npc_reports (id uuid)",
+      );
+      await pool.query("INSERT INTO channels VALUES($1,$2)", [id, fixture]);
+      await pool.query("INSERT INTO gateway_resources VALUES($1)", [id]);
+      const before = await snapshot();
+      const beforeGateway = await gatewayHash();
+      const schemaKeys = [
+        "gatewayPluginInfoColumn",
+        "roomNoticeColumn",
+        "channelKanbanBoardsTable",
+        "cronJobOriginsTable",
+        "legacyTasksAbsent",
+        "legacyNpcReportsAbsent",
+      ];
+      for (const key of schemaKeys) assert.equal(before[key], false, key);
+      // Reproduce the merged 0011/0012 schema shape without running destructive
+      // application migrations: only this connection's temporary fixtures change.
+      await pool.query(
+        "ALTER TABLE pg_temp.gateway_resources ADD COLUMN plugin_info_json text; ALTER TABLE pg_temp.chat_room_messages ADD COLUMN notice_json text; CREATE TEMP TABLE channel_kanban_boards (channel_id uuid); CREATE TEMP TABLE cron_job_origins (id uuid); DROP TABLE pg_temp.npc_reports; DROP TABLE pg_temp.tasks",
+      );
+      const postSchema = await snapshot();
+      for (const key of schemaKeys) assert.equal(postSchema[key], true, key);
+      assert.notEqual(
+        await gatewayHash(),
+        beforeGateway,
+        "whole-row hashes change when schema adds a null column",
+      );
+      for (const key of [
+        "channelsCount",
+        "exactV2Count",
+        "version2Count",
+        "version3Count",
+        "otherVersionCount",
+        "mapRowsHash",
+      ])
+        assert.equal(postSchema[key], before[key], key);
+      assert.equal(postSchema.exactV2Count, 1);
+      assert.equal(postSchema.version2Count, 1);
+      assert.equal(postSchema.version3Count, 0);
+      await pool.query("UPDATE channels SET map_data=$1", [buildOfficeEnvironment("agency")]);
+      const afterMap = await snapshot();
+      assert.notEqual(afterMap.mapRowsHash, postSchema.mapRowsHash);
+      assert.equal(afterMap.exactV2Count, 0);
+      assert.equal(afterMap.version2Count, 0);
+      assert.equal(afterMap.version3Count, 1);
+      assert.equal(afterMap.otherVersionCount, 0);
+    } finally {
+      await pool.end();
+    }
+  },
+);

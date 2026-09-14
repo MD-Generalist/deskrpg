@@ -33,8 +33,16 @@ const entry =
     write: false,
     format: "iife",
     platform: "browser",
-    define: { "process.env.NODE_ENV": reviewUI ? '"development"' : '"production"' },
+    define: {
+      "process.env.NODE_ENV": reviewUI ? '"development"' : '"production"',
+      "process.env.NEXT_PUBLIC_README_CAPTURE": '"0"',
+    },
   });
+  assert.doesNotMatch(
+    bundle.outputFiles[0].text,
+    /\bprocess\.env\b/,
+    "Browser bundle must resolve environment access",
+  );
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     if (url.pathname === "/") {
