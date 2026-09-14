@@ -273,11 +273,15 @@ export const PLUGIN_EVENT_KINDS = [
   "task.run.finished",
   "task.deleted",
   "task.link",
+  "task.updated",
   "cron.run.started",
   "cron.run.finished",
 ] as const;
 
 export type PluginEventKind = (typeof PLUGIN_EVENT_KINDS)[number];
+
+/** 제목·설명·우선순위·담당·첨부 변경 — 바뀐 필드 이름 목록. 화면은 보드 재조회로 반영한다. */
+export type TaskUpdatedEventPayload = { fields: string[] };
 
 export type TaskStatusEventPayload = {
   from: KanbanTaskStatus | null;
