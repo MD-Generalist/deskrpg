@@ -1,0 +1,151 @@
+import "../../test-setup/dom";
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+
+import { I18nProvider } from "@/lib/i18n";
+import CronModal from "./CronModal";
+import type { CronJobView } from "./cron-api";
+
+// R15 진입: 헤더 버튼이 여는 모달 셸. 패널을 담고, 배경·ESC·닫기 버튼이 onClose 를 부른다.
+// R30 "이력 열기": initialJobId 가 있으면 그 잡을 고른 채 실행 이력 탭으로 연다.
+
+const NPCS = [{ npcId: "npc-a", npcName: "소피" }];
+
+function job(id: string, name: string): CronJobView {
+  return {
+    id,
+    npcId: "npc-a",
+    npcName: "소피",
+    name,
+    prompt: "do",
+    schedule: { kind: "cron", expr: "0 9 * * *" },
+    schedule_display: "0 9 * * *",
+    repeat: true,
+    enabled: true,
+    state: "scheduled",
+    next_run_at: null,
+    last_run_at: null,
+    last_status: null,
+    last_error: null,
+    deliver: "local",
+    skills: [],
+    model: null,
+    provider: null,
+    created_at: "2026-09-14T00:00:00Z",
+    origin: { channelId: "ch1", createdByUserId: "u1" },
+    editable: true,
+  };
+}
+
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+
+async function mount(node: React.ReactElement) {
+  const calls: string[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    calls.push(url);
+    if (/\/runs\b/.test(url))
+      return json({
+        runs: [
+          {
+            id: "run-1",
+            started_at: "2026-09-14T09:00:00Z",
+            ended_at: "2026-09-14T09:01:00Z",
+            status: "ok",
+            summary: "done",
+            result_text: "결과",
+          },
+        ],
+        limit: 20,
+      });
+    return json({
+      jobs: [job("j1", "아침 브리핑"), job("j2", "주간 리포트")],
+      timezone: "Asia/Seoul",
+    });
+  }) as typeof fetch;
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () => {
+    root.render(<I18nProvider initialLocale="ko">{node}</I18nProvider>);
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  return {
+    host,
+    calls,
+    cleanup: async () => {
+      await act(async () => root.unmount());
+      host.remove();
+      globalThis.fetch = original;
+    },
+  };
+}
+
+const q = (host: HTMLElement, sel: string) => host.querySelector(sel) as HTMLElement | null;
+
+test("크론 모달 — 패널을 담고, 배경 클릭·ESC·닫기 버튼이 onClose 를 부른다", async () => {
+  let closed = 0;
+  const { host, cleanup } = await mount(
+    <CronModal channelId="ch1" npcs={NPCS} onClose={() => (closed += 1)} />,
+  );
+  try {
+    assert.ok(q(host, '[role="dialog"]'), "대화상자가 없다");
+    assert.ok(q(host, '[data-testid="cron-panel"]'), "CronPanel 이 마운트되지 않았다");
+    assert.equal(host.querySelectorAll('[data-testid="cron-row"]').length, 2);
+
+    // 대화상자 안 클릭은 닫지 않는다.
+    await act(async () => q(host, '[role="dialog"]')!.click());
+    assert.equal(closed, 0);
+    // 배경 클릭은 닫는다.
+    await act(async () => q(host, '[data-testid="cron-modal-backdrop"]')!.click());
+    assert.equal(closed, 1);
+    // ESC 도 닫는다.
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    assert.equal(closed, 2);
+    // 패널 헤더의 닫기 버튼(onClose 를 넘겼으니 생긴다).
+    const closeBtn = Array.from(host.querySelectorAll("button")).find(
+      (b) => b.getAttribute("aria-label") === "닫기",
+    );
+    assert.ok(closeBtn, "패널 닫기 버튼이 없다");
+    await act(async () => closeBtn!.click());
+    assert.equal(closed, 3);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("initialJobId — 그 잡이 선택된 채 실행 이력 탭으로 열린다 (R30 이력 열기)", async () => {
+  const { host, calls, cleanup } = await mount(
+    <CronModal channelId="ch1" npcs={NPCS} initialJobId="j2" onClose={() => {}} />,
+  );
+  try {
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const pressed = Array.from(host.querySelectorAll('[data-testid="cron-row"] button')).find(
+      (b) => b.getAttribute("aria-pressed") === "true",
+    );
+    assert.ok(pressed, "선택된 행이 없다");
+    assert.match(pressed!.textContent ?? "", /주간 리포트/);
+    assert.ok(q(host, '[data-testid="cron-detail"]'), "상세가 열리지 않았다");
+    assert.ok(
+      calls.some((url) => /\/jobs\/j2\/runs\b/.test(url)),
+      `이력 탭이 아니라서 runs 를 읽지 않았다 — ${calls.join(", ")}`,
+    );
+    assert.ok(q(host, '[data-testid="cron-run"]'), "이력 행이 그려지지 않았다");
+  } finally {
+    await cleanup();
+  }
+});

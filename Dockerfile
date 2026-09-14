@@ -43,13 +43,7 @@ COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatter.js
 COPY --from=builder /app/src/lib/meeting-discussion-state.ts ./src/lib/meeting-discussion-state.ts
 COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
-COPY --from=builder /app/src/lib/task-parser.js ./src/lib/task-parser.js
-COPY --from=builder /app/src/lib/task-block-utils.js ./src/lib/task-block-utils.js
-COPY --from=builder /app/src/lib/task-manager.js ./src/lib/task-manager.js
-COPY --from=builder /app/src/lib/task-prompt.js ./src/lib/task-prompt.js
-COPY --from=builder /app/src/lib/i18n/task-prompt-messages.js ./src/lib/i18n/task-prompt-messages.js
 COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
-COPY --from=builder /app/src/lib/task-reporting.ts ./src/lib/task-reporting.ts
 COPY --from=builder /app/src/lib/npc-chat-history.ts ./src/lib/npc-chat-history.ts
 COPY --from=builder /app/src/lib/npc-activity.ts ./src/lib/npc-activity.ts
 COPY --from=builder /app/src/lib/npc-prompt-layers.ts ./src/lib/npc-prompt-layers.ts
@@ -94,6 +88,13 @@ COPY --from=builder /app/src/lib/npc-roster.ts ./src/lib/npc-roster.ts
 # extensionless "../lib/runtime-paths", which TypeScript resolves to the .ts file.
 COPY --from=builder /app/src/lib/runtime-paths.ts ./src/lib/runtime-paths.ts
 COPY --from=builder /app/src/lib/gateway-resources.ts ./src/lib/gateway-resources.ts
+# gateway-resources 가 바인딩 뒤 보드 확보(T4)를 위해 끌어온다 — 빠지면 소켓 서버가 기동에서 죽는다.
+COPY --from=builder /app/src/lib/kanban-boards.ts ./src/lib/kanban-boards.ts
+COPY --from=builder /app/src/lib/automation-gate.ts ./src/lib/automation-gate.ts
+# 폴러(T5)가 REST 라우트에 자기를 꽂는 globalThis 레지스트리 — 빠지면 소켓 서버가 기동에서 죽는다.
+COPY --from=builder /app/src/lib/automation-registry.ts ./src/lib/automation-registry.ts
+# 자동화 사건 싱크(T5)가 크론 결과의 출처를 대조하려고 끌어온다.
+COPY --from=builder /app/src/lib/cron-origins.ts ./src/lib/cron-origins.ts
 COPY --from=builder /app/src/lib/gateway-runtime-cache.ts ./src/lib/gateway-runtime-cache.ts
 COPY --from=builder /app/src/lib/npc-response-messages.ts ./src/lib/npc-response-messages.ts
 COPY --from=builder /app/src/lib/dev-constants.ts ./src/lib/dev-constants.ts

@@ -251,9 +251,8 @@ export function buildPersonaConfig({
   const identitySource = identityOverride?.trim() || fallbackPersona?.trim() || defaults.identity;
   const soulSource = soulOverride?.trim() || defaults.soul;
 
-  // 태스크 절차를 인격에 섞지 않는다. 절차는 시스템 지시의 <task-protocol> 층
-  // (npc-prompt-layers.ts)과 사용자 메시지 앞의 리마인더(withTaskReminder)로 간다.
-  // 여기 저장되는 것은 사용자가 쓴 인격뿐이다.
+  // 절차를 인격에 섞지 않는다. 회의 규칙 같은 절차는 시스템 지시의 층
+  // (npc-prompt-layers.ts)으로 간다. 여기 저장되는 것은 사용자가 쓴 인격뿐이다.
   return {
     identity: localizeNpcPromptDocument(identitySource, locale, "identity"),
     soul: localizeNpcPromptDocument(soulSource, locale, "soul"),

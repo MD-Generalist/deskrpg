@@ -22,7 +22,6 @@ const TEST_CODES: Record<NpcResponseMessageCode, string> = {
   too_many_files: "npc.tooManyFiles",
   npc_unbound: "npc.unbound",
   hermes_image_unsupported: "npc.hermesImageUnsupported",
-  task_owner_unknown: "npc.taskOwnerUnknown",
 };
 
 test("npc response message codes map to stable translation keys", () => {
