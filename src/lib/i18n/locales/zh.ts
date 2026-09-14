@@ -2340,6 +2340,15 @@ const zh: Record<string, string> = {
   "cron.error.upgradeHint": "在网关主机上运行以下命令,然后重试:",
   "cron.error.gatewayNotBound": "此频道未绑定 Hermes 网关。请在频道设置中连接。",
   "cron.error.partial": "无法加载 {count} 个 NPC 的定时任务",
+  // Automation notices / cron entry (T10)
+  "cron.open": "定时任务",
+  "notice.cardDone": "已完成卡片:{title}",
+  "notice.cardBlocked": "卡片被阻塞:{title}",
+  "notice.openCard": "打开卡片",
+  "notice.cronResult": "定时任务结果 · {jobName}",
+  "notice.cronFailed": "失败",
+  "notice.openHistory": "打开历史",
+  "map.working": "工作中",
   // Kanban (T8)
   "kanban.title": "看板",
   "kanban.open": "看板",

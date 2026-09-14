@@ -1272,6 +1272,8 @@ export class GameScene extends Phaser.Scene {
   private speechPreviews = new SpeechPreviews();
   private smalltalk = new NpcSmalltalk();
   private responsePhases: Record<string, "queued" | "thinking" | "streaming"> = {};
+  /** 카드 실행·크론 실행 중인 NPC(R27). `npc:working-state` 로 통째로 갱신된다. */
+  private workingNpcs = new Set<string>();
 
   /** Reuse authoritative frontend simulation while Three.js owns presentation. */
   readonly officeBridge: OfficeBridge = {
@@ -1310,6 +1312,7 @@ export class GameScene extends Phaser.Scene {
                 : undefined),
           active: this.activityBubbles.has(npc.id),
           phase: this.responsePhases[npc.id],
+          working: this.workingNpcs.has(npc.id),
         };
       });
       if (this.playerReady && this.player)
@@ -2518,6 +2521,11 @@ export class GameScene extends Phaser.Scene {
         this.responsePhases = data.phases;
       },
     );
+    // 작업 중 표시(R27) — GamePageClient 가 소켓의 `npc:working` 을 접어 id 목록으로 준다.
+    this.workingNpcs = new Set();
+    this.eventScope.on("npc:working-state", (data: { npcIds: string[] }) => {
+      this.workingNpcs = new Set(data.npcIds);
+    });
     // Conversation previews are independent of activity/greeting lifecycle.
     this.eventScope.on("chat:speech", (data: { actorId: string; text: string }) => {
       this.speechPreviews.set(data.actorId, data.text, this.time.now);

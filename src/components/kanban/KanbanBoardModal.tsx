@@ -34,6 +34,8 @@ interface KanbanBoardModalProps {
   refreshTick?: number;
   /** 사건 → 재조회 디바운스(ms). 기본 `KANBAN_EVENT_DEBOUNCE_MS`. */
   debounceMs?: number;
+  /** 열자마자 이 카드의 상세를 편다 — 방 알림의 "카드 열기"(R29). 마운트 시에만 읽는다. */
+  initialTaskId?: string | null;
 }
 
 /** `kanban:event` 연타를 한 번의 재조회로 접는 간격. */
@@ -75,6 +77,7 @@ export default function KanbanBoardModal({
   onClose,
   refreshTick = 0,
   debounceMs = KANBAN_EVENT_DEBOUNCE_MS,
+  initialTaskId = null,
 }: KanbanBoardModalProps) {
   const t = useT();
   const api = useMemo(() => createKanbanApi(channelId), [channelId]);
@@ -83,7 +86,7 @@ export default function KanbanBoardModal({
   const [blocker, setBlocker] = useState<BoardBlocker | null>(null);
   const [loading, setLoading] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

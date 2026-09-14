@@ -56,6 +56,8 @@ export interface CronPanelProps {
   /** 있으면 헤더에 닫기 버튼이 생긴다(모달로 띄울 때). */
   onClose?: () => void;
   className?: string;
+  /** 열자마자 이 잡을 골라 실행 이력 탭을 편다 — 방 알림의 "이력 열기"(R30). 마운트 시에만 읽는다. */
+  initialJobId?: string | null;
 }
 
 type DetailTab = "detail" | "runs";
@@ -70,6 +72,7 @@ export default function CronPanel({
   onToast,
   onClose,
   className = "",
+  initialJobId = null,
 }: CronPanelProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -86,8 +89,8 @@ export default function CronPanel({
 
   const [filterNpcId, setFilterNpcId] = useState<string>("");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<DetailTab>("detail");
+  const [selectedId, setSelectedId] = useState<string | null>(initialJobId);
+  const [detailTab, setDetailTab] = useState<DetailTab>(initialJobId ? "runs" : "detail");
   const [runs, setRuns] = useState<CronRun[] | null>(null);
   const [runsError, setRunsError] = useState<unknown>(null);
   const [editor, setEditor] = useState<{ job: CronJobView | null } | null>(null);

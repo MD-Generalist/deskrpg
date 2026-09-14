@@ -2390,6 +2390,15 @@ const ja: Record<string, string> = {
   "cron.error.gatewayNotBound":
     "このチャンネルには Hermes ゲートウェイが接続されていません。チャンネル設定で接続してください。",
   "cron.error.partial": "{count} 件の NPC のクーロンを読み込めませんでした",
+  // Automation notices / cron entry (T10)
+  "cron.open": "クーロン",
+  "notice.cardDone": "カードを完了しました: {title}",
+  "notice.cardBlocked": "カードがブロックされました: {title}",
+  "notice.openCard": "カードを開く",
+  "notice.cronResult": "クーロン結果 · {jobName}",
+  "notice.cronFailed": "失敗",
+  "notice.openHistory": "履歴を開く",
+  "map.working": "作業中",
   // Kanban (T8)
   "kanban.title": "カンバンボード",
   "kanban.open": "カンバン",

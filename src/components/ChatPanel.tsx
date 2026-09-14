@@ -20,6 +20,7 @@ import {
 import ResponseProgress from "./chat/ResponseProgress";
 import { ConversationSessionStore } from "@/app/game/conversation-session";
 import CronPanel, { type CronEventSource } from "./cron/CronPanel";
+import RoomNoticeMessage from "./chat/RoomNoticeMessage";
 
 /** NPC 대화창의 크론 탭(T9)에 필요한 것. 배선(GamePageClient)이 넘긴다 — 없으면 탭이 없다. */
 export type ChatPanelCronContext = {
@@ -72,6 +73,10 @@ interface ChatPanelProps {
   currentPlayerName?: string;
   /** NPC DM 에 "크론" 탭을 붙인다 — 그 NPC 것만(R15). 없으면 대화만 보인다. */
   cron?: ChatPanelCronContext | null;
+  /** 방 알림의 "카드 열기"(R29) — 칸반 모달을 그 카드로 연다. 없으면 링크가 없다. */
+  onOpenNoticeCard?: (cardId: string, boardSlug: string) => void;
+  /** 방 알림의 "이력 열기"(R30) — 채널 크론 화면을 그 잡으로 연다. 없으면 링크가 없다. */
+  onOpenNoticeCronJob?: (jobId: string) => void;
 }
 
 const MIN_WIDTH = 250;
@@ -115,6 +120,8 @@ export default function ChatPanel({
   npcMoveState,
   onReturnNpc,
   cron = null,
+  onOpenNoticeCard,
+  onOpenNoticeCronJob,
 }: ChatPanelProps) {
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
   // NPC DM 의 탭 — 어느 NPC 의 선택인지 같이 기억해, 다른 NPC 로 바뀌면 대화 탭으로 돌아간다
@@ -580,6 +587,17 @@ export default function ChatPanel({
                 </div>
               )}
               {roomMessages.map((msg) => {
+                // 구조화 알림(R29·R30)은 발신자 종류와 무관하게 알림 렌더러가 그린다.
+                if (msg.notice) {
+                  return (
+                    <RoomNoticeMessage
+                      key={msg.id}
+                      message={msg}
+                      onOpenCard={onOpenNoticeCard}
+                      onOpenCronJob={onOpenNoticeCronJob}
+                    />
+                  );
+                }
                 if (msg.senderKind === "system") {
                   return <SystemMessage key={msg.id} content={msg.content} />;
                 }
