@@ -91,3 +91,6 @@ __pycache__/
 
 # Development meta — never published
 /docs/superpowers/
+
+# dryforge 3-doc / worktrees (local only)
+/.dryforge
