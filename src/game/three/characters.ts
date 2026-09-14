@@ -1,4 +1,5 @@
 import { createGltfActor } from "./gltf-actor";
+import type { DistanceWalkOptions, DistanceWalkFrame } from "./commute-walk";
 import { officeLookAssetUrl } from "./office-look-assets";
 import { idleMotion } from "./idle-motion";
 import * as T from "three";
@@ -14,8 +15,10 @@ export function createActor(
   index: number,
   palette?: { skin: string; hair: string; legs: string },
   look?: OfficeLook,
+  options?: DistanceWalkOptions,
 ) {
-  if (look) return createGltfActor(id, look, index, officeLookAssetUrl(look.id));
+  if (look)
+    return createGltfActor(id, look, index, officeLookAssetUrl(look.id), undefined, options);
   const root = new T.Group(),
     rig = new T.Group();
   root.add(rig);
@@ -84,7 +87,13 @@ export function createActor(
     ring,
     phase: "idle" as ActorPhase,
     seated: false,
-    update(t: number, walking: boolean, phase: ActorPhase, seated: boolean) {
+    update(
+      t: number,
+      walking: boolean,
+      phase: ActorPhase,
+      seated: boolean,
+      _frame?: DistanceWalkFrame,
+    ) {
       const sit = seated && !walking;
       const motion = idleMotion(t, index, walking, phase);
       head.rotation.y = motion.yaw;
