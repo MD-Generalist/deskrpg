@@ -76,6 +76,8 @@ import { getCenteredCameraBounds } from "../camera-layout";
 // Map constants
 // ---------------------------------------------------------------------------
 
+import { normalizeMeetingMap, prepareMeetingMapSave } from "../meeting-map-normalization";
+import type { MeetingSpace } from "../meeting-space";
 const MAP_COLS = 40;
 const MAP_ROWS = 30;
 const TILE_SIZE = 32;
@@ -1478,6 +1480,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       return {
+        meetingSpace: this.meetingSpace,
         cols: this.effectiveMapCols,
         rows: this.effectiveMapRows,
         floor: this.floorData,
@@ -1662,6 +1665,9 @@ export class GameScene extends Phaser.Scene {
   // Channel
   private channelId: string = "";
   private channelMapData: MapData | null = null;
+  private meetingSpace: MeetingSpace | undefined;
+  private meetingMapSource: Record<string, unknown> | undefined;
+  private mapSavePending = false;
   private tiledMode: boolean = false; // true when using Tiled JSON map (not legacy tilemap)
   private officeEnvironment: string | undefined;
   private officeEnvironmentVersion: number | undefined;
@@ -1851,6 +1857,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   create(): void {
+    this.meetingSpace = undefined;
+    this.meetingMapSource = undefined;
     this.officeEnvironment = undefined;
     this.officeEnvironmentVersion = undefined;
     this.ambientZones = [];
@@ -1869,6 +1877,15 @@ export class GameScene extends Phaser.Scene {
 
     if (initialChannelData) {
       this.channelId = initialChannelData.channelId;
+
+      const source = initialChannelData.tiledJson ?? initialChannelData.mapData;
+      if (source) {
+        const normalized = normalizeMeetingMap(source, initialChannelData.mapConfig);
+        this.meetingSpace = normalized.meetingSpace;
+        this.meetingMapSource = normalized.mapData;
+        if (initialChannelData.tiledJson) initialChannelData.tiledJson = normalized.mapData;
+        else initialChannelData.mapData = normalized.mapData;
+      }
 
       if (initialChannelData.tiledJson) {
         // Explicit Tiled JSON passed from game page
@@ -1911,6 +1928,10 @@ export class GameScene extends Phaser.Scene {
       this.floorData = this.channelMapData.layers.floor;
       this.wallsData = this.channelMapData.layers.walls;
       this.mapObjects = this.channelMapData.objects;
+      this.effectiveMapCols = this.floorData[0].length;
+      this.effectiveMapRows = this.floorData.length;
+      this.currentMapPixelWidth = this.effectiveMapCols * TILE_SIZE;
+      this.currentMapPixelHeight = this.effectiveMapRows * TILE_SIZE;
 
       this.createTilemap();
       this.renderObjects();
@@ -2010,8 +2031,8 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    const mapWidth = MAP_COLS * TILE_SIZE;
-    const mapHeight = MAP_ROWS * TILE_SIZE;
+    const mapWidth = this.effectiveMapCols * TILE_SIZE;
+    const mapHeight = this.effectiveMapRows * TILE_SIZE;
 
     this.cameras.main.setZoom(MAIN_CAMERA_ZOOM);
     this.applyMainCameraBounds(mapWidth, mapHeight);
@@ -3069,7 +3090,7 @@ export class GameScene extends Phaser.Scene {
           const objectType = (obj.type as string) || "";
           if (objectType && OBJECT_TYPES[objectType]) {
             this.mapObjects.push({
-              id: generateObjectId(),
+              id: `${layer.id}:${obj.id}`,
               type: objectType,
               col: Math.floor((obj.x as number) / TILE_SIZE),
               row: Math.floor((obj.y as number) / TILE_SIZE),
@@ -3456,13 +3477,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private saveMap(): Promise<boolean> {
-    const mapData: MapData = {
+    if (this.mapSavePending) return Promise.resolve(false);
+    const prepared = prepareMeetingMapSave(this.meetingMapSource, {
       layers: {
         floor: this.floorData,
         walls: this.wallsData,
       },
       objects: this.mapObjects,
-    };
+    });
+    const mapData = prepared.mapData;
+    this.mapSavePending = true;
 
     // Save to localStorage (may fail in restricted contexts)
     try {
@@ -3484,6 +3508,12 @@ export class GameScene extends Phaser.Scene {
     })
       .then((res) => {
         if (res.ok) {
+          this.meetingMapSource = mapData;
+          this.mapObjects = this.mapObjects.map((object) => ({
+            ...object,
+            id: prepared.objectIds[object.id] ?? object.id,
+          }));
+          if (Object.keys(prepared.objectIds).length) this.renderObjects();
           this.socket?.emit("map:layout-saved");
           // Flash the save button green
           const saveBtn = this.children.getByName(
@@ -3504,6 +3534,9 @@ export class GameScene extends Phaser.Scene {
       .catch((err) => {
         console.error("[MapEditor] Server save error:", err);
         return false;
+      })
+      .finally(() => {
+        this.mapSavePending = false;
       });
   }
 

@@ -1,5 +1,6 @@
 /** Frontend-only presentation boundary. World positions remain server pixel coordinates. */
 import type { MapObject } from "../../lib/object-types";
+import type { MeetingSpace } from "../meeting-space";
 export const PIXELS_PER_TILE = 32;
 export type ActorSnapshot = {
   id: string;
@@ -20,6 +21,7 @@ export type ActorSnapshot = {
   working?: boolean;
 };
 export type MapSnapshot = {
+  meetingSpace?: MeetingSpace;
   cols: number;
   rows: number;
   floor: number[][];
