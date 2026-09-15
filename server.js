@@ -6,6 +6,11 @@ const {
   getInternalSocketHostname,
   isInternalRequestAuthorized,
 } = require("./src/lib/internal-transport.js");
+const {
+  checkDatabaseReachable,
+  inspectEnvironment,
+  reportEnvironmentInspection,
+} = require("./src/lib/startup-check.js");
 
 const dir = __dirname;
 process.env.NODE_ENV = "production";
@@ -21,10 +26,26 @@ const hostname = process.env.HOSTNAME || "0.0.0.0";
 const nextConfig = require(path.join(dir, ".next", "required-server-files.json")).config;
 process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 
+function getRuntimeSqlitePath() {
+  try {
+    return require(path.join(dir, "src", "lib", "runtime-paths.js")).getDeskRpgSqlitePath();
+  } catch {
+    return null;
+  }
+}
+
 require("next");
 const { startServer } = require("next/dist/server/lib/start-server");
 
 async function main() {
+  // 기동 직전 환경 검증 — errors 는 즉시 중단, warnings 는 찍고 계속.
+  // DATABASE_URL 없이 SQLite 로 돌던 사용자는 경고만 보고 그대로 뜬다.
+  const inspection = inspectEnvironment(process.env);
+  if (!reportEnvironmentInspection(inspection)) {
+    console.error("[startup] 환경 설정이 올바르지 않아 서버를 시작하지 않습니다.");
+    process.exit(1);
+  }
+
   const unwrapTsModule = (moduleNamespace) => {
     if (
       moduleNamespace &&
@@ -141,6 +162,19 @@ async function main() {
     res.end(JSON.stringify({ error: "Not found" }));
   });
 
+  // DB 도달성은 기동을 막지 않는다 — 실패해도 경고만 남긴다(기존 동작 유지).
+  const dbProbe = await checkDatabaseReachable({
+    databaseUrl: process.env.DATABASE_URL,
+    sqlitePath: process.env.SQLITE_PATH || getRuntimeSqlitePath(),
+    // 앱이 실제로 쓰는 쪽을 찌른다 — SQLite 런타임에도 .env 에 옛 DATABASE_URL 이 남아 있다.
+    target: inspection.dbTarget,
+  });
+  if (dbProbe.ok) {
+    console.log(`[startup] DB(${dbProbe.target}) 확인: ${dbProbe.message}`);
+  } else {
+    console.warn(`[startup] 경고: ${dbProbe.message}`);
+  }
+
   const internalHostname = getInternalSocketHostname(process.env);
   socketHttpServer.listen(SOCKET_PORT, internalHostname, () => {
     console.log(`[socket.io] Listening on http://${internalHostname}:${SOCKET_PORT}`);
@@ -148,6 +182,9 @@ async function main() {
 }
 
 main().catch((err) => {
+  console.error(
+    "[startup] 서버를 시작하지 못했습니다 — 아래 스택의 첫 줄이 직접 원인입니다. `deskrpg doctor` 로 환경·DB·포트를 먼저 점검하세요.",
+  );
   console.error(err);
   process.exit(1);
 });

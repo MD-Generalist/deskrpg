@@ -55,6 +55,7 @@ import {
   type ChannelAccessDeniedReason,
   summarizeChannelParticipationAccess,
 } from "../lib/rbac/channel-access";
+import { gatewayFailureMessageCode } from "../lib/hermes/classify-gateway-failure";
 import { type NpcResponseMessageCode, type NpcResponsePayload } from "../lib/npc-response-messages";
 import {
   deliverMeetingNpcAnswer,
@@ -547,7 +548,7 @@ async function streamNpcResponse(
       return response || "";
     } catch (err) {
       console.error("[npc] Hermes adapter error for " + npcId + ":", err);
-      emitNpcSystemResponse(socket, npcId, "gateway_error");
+      emitNpcSystemResponse(socket, npcId, gatewayFailureMessageCode(err));
       return "";
     } finally {
       clearHermesRun(sessionKey);
@@ -584,7 +585,7 @@ async function streamNpcResponse(
       return response || "";
     } catch (err) {
       console.error("[npc] CLI adapter error for " + npcId + ":", err);
-      emitNpcSystemResponse(socket, npcId, "gateway_error");
+      emitNpcSystemResponse(socket, npcId, gatewayFailureMessageCode(err));
       return "";
     }
   } else {
@@ -1387,7 +1388,7 @@ export function setupSocketHandlers(io: Server) {
           });
         } catch (error) {
           console.error("[dm-response] unable to admit request", error);
-          emitNpcSystemResponse(socket, npcId, "gateway_error");
+          emitNpcSystemResponse(socket, npcId, gatewayFailureMessageCode(error));
         }
       },
     );

@@ -51,7 +51,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 ## 빠른 시작
 
-아래 여섯 가지 방법 중 하나를 골라 DeskRPG를 시작할 수 있습니다.
+아래 다섯 가지 방법 중 하나를 골라 DeskRPG를 시작할 수 있습니다.
 
 ### 1. npm 설치 런타임
 
@@ -145,7 +145,8 @@ DeskRPG는 `http://localhost:3102`에서 열립니다.
 
 - `JWT_SECRET`
 - `POSTGRES_PASSWORD` (PostgreSQL Docker 구성 사용 시)
-- `DESKRPG_ALLOW_HOST_HERMES_PROFILES` (선택 사항. 루프백 게이트웨이가 호스트의 `~/.hermes/profiles`를 읽도록 허용합니다. 기본값은 꺼짐)
+- `DESKRPG_LOCAL_DISCOVERY_ENABLED` (선택 사항. 루프백 게이트웨이가 호스트의 `~/.hermes/profiles`를 읽도록 허용합니다. 기본값은 꺼짐)
+- `DESKRPG_HOST_SETUP_ENABLED` (선택 사항. `system_admin` 에게 로컬·SSH 게이트웨이 설정 마법사를 엽니다. 기본값은 꺼짐)
 
 운영 환경에서는 반드시 실제 `JWT_SECRET` 값을 설정해야 합니다.
 
@@ -161,11 +162,14 @@ DeskRPG는 에이전트 런타임을 함께 배포하지 않습니다.
 같은 머신이든 접근 가능한 다른 호스트든 상관없습니다. Hermes 쪽에서 두 가지를 확인해 둡니다.
 
 - API 서버가 열려 있는 주소 (예: `http://127.0.0.1:8642`)
-- DeskRPG가 사용할 프로필의 API 키
+- **리스너 소유자 키** — 리스너를 소유한 프로필의 `API_SERVER_KEY`
 
 Hermes는 설정이 머신 단위인 반면 인증은 프로필 단위입니다. 프로필마다 키가 따로 있습니다.
+DeskRPG에는 보조 프로필의 키가 아니라 **소유자 키**를 주세요. 칸반·크론·사건 스트림은
+프리픽스 없는 경로에 있고, Hermes는 그 경로를 소유자 키로만 인증합니다. 보조 프로필의 키로도
+대화는 되지만 보드와 일정은 전부 `plugin_unauthorized` 로 막히고 화면은 이유를 알려주지 않습니다.
 
-DeskRPG에 연결하는 절차는 세 단계입니다.
+DeskRPG에 연결하는 절차는 네 단계입니다.
 
 **1. 게이트웨이 등록**
 
@@ -173,7 +177,7 @@ DeskRPG에 연결하는 절차는 세 단계입니다.
 
 - `표시 이름` — 나중에 알아볼 수 있는 이름이면 됩니다
 - `Hermes 게이트웨이 URL` — 예: `http://127.0.0.1:8642`
-- `토큰` — 해당 게이트웨이의 API 키
+- `토큰` — 해당 게이트웨이의 리스너 소유자 키(`API_SERVER_KEY`)
 
 저장한 뒤 연결 테스트를 실행합니다. 실패하면 그냥 실패로 끝나지 않고 원인을 알려주므로,
 설정을 바꾸기 전에 메시지를 먼저 읽어 보세요.
@@ -188,6 +192,20 @@ DeskRPG에 연결하는 절차는 세 단계입니다.
 
 채널에 입장한 뒤 `설정 -> 채널 설정 -> AI 연결`에서 저장해 둔 게이트웨이를 고르고,
 테스트한 다음 저장합니다. 적용되면 헤더 배지가 `AI 연결`로 바뀝니다.
+
+**4. 칸반·크론을 쓰려면 플러그인 설치**
+
+대화는 플러그인 없이도 됩니다. 칸반 보드와 사건 스트림, 크론은 게이트웨이 호스트에
+[`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) 이 필요합니다.
+
+```bash
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+hermes plugins enable deskrpg
+# 게이트웨이 재시작 — 라우트는 기동할 때만 붙습니다
+```
+
+`enable` 은 선택이 아닙니다. 설치만 하고 건너뛰면 모든 플러그인 라우트가 404를 냅니다.
+DeskRPG는 플러그인이 없거나 낡았다고 판단하면 보드·일정 화면에 같은 명령을 그대로 보여줍니다.
 
 이제 NPC를 고용할 수 있습니다. NPC는 고용 시점에 Hermes 프로필 하나에 바인딩되며,
 해고하지 않고 나중에 다른 프로필로 다시 연결할 수 있습니다.

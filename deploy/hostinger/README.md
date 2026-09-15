@@ -53,7 +53,29 @@ hPanel → VPS → Security → Firewall: allow **22, 80, 443** only. Do **not**
 
 Already running Hermes elsewhere (your laptop, another VPS)? Delete the `hermes` service from the compose and use your own API server URL in step 2. Hermes profiles you already have show up as employees — nothing to migrate.
 
-## 6. Day-2
+## 6. Kanban and cron (optional)
+
+Conversations work out of the box. Kanban boards, the event stream and schedules need
+[`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) inside the Hermes
+container. Docker Manager → **Access → Terminal** on the `hermes` service, or from an SSH shell:
+
+```bash
+docker compose exec hermes hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+docker compose exec hermes hermes plugins enable deskrpg
+docker compose restart hermes
+```
+
+`enable` is not optional — without it every plugin route answers 404 even though the install
+succeeded, and DeskRPG's board screen keeps telling you the plugin is missing. The plugin lives in
+the `hermes-data` volume, so it survives Update. Verify:
+
+```bash
+docker compose exec hermes sh -lc 'curl -s -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/deskrpg/info'
+```
+
+Set `timezone:` in Hermes' `config.yaml` if you schedule anything — cron times are read in that zone.
+
+## 7. Day-2
 
 Docker Manager → project → **Options**: Restart / Update (edit YAML, re-create) / View logs / Delete. **Access → Terminal** opens a shell in the container. Data lives in the named volumes `deskrpg-data` (SQLite + uploads) and `hermes-data` (`~/.hermes`) and survives Update.
 

@@ -300,6 +300,30 @@ async function runInit() {
   console.log("Next step: deskrpg start");
 }
 
+function loadStartupCheckModule() {
+  return require(path.join(getPackageRoot(), "src", "lib", "startup-check.js"));
+}
+
+/** doctor 의 한 줄 출력. 항목별로 OK / 경고 / 실패 가 눈에 보이게 한다. */
+function reportCheck(status, label, detail) {
+  const marker = status === "ok" ? "OK  " : status === "warn" ? "경고" : "실패";
+  const line = detail ? `[${marker}] ${label} — ${detail}` : `[${marker}] ${label}`;
+  if (status === "fail") console.error(line);
+  else console.log(line);
+}
+
+/** doctor 가 볼 포트. start 와 같은 인자 규칙(-p/--port/--port=)을 쓴다. */
+function parseDoctorPort() {
+  const args = process.argv.slice(3);
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === "-p" || args[i] === "--port") && args[i + 1]) return parseInt(args[i + 1], 10);
+    const inlineMatch = args[i].match(/^--port=(\d+)$/);
+    if (inlineMatch) return parseInt(inlineMatch[1], 10);
+  }
+  const fromEnv = parseInt(process.env.PORT, 10);
+  return Number.isInteger(fromEnv) && fromEnv > 0 ? fromEnv : 3000;
+}
+
 async function runDoctor() {
   const runtimePaths = loadRuntimePathsModule();
   const envPath = runtimePaths.getDeskRpgEnvPath();
@@ -315,12 +339,14 @@ async function runDoctor() {
     );
     process.exit(1);
   }
+  reportCheck("ok", "런타임 초기화", envPath);
 
   const missingDirs = [dataDir, uploadsDir, logsDir].filter((dirPath) => !fs.existsSync(dirPath));
   if (missingDirs.length > 0) {
     console.error(`DeskRPG runtime is incomplete. Missing: ${missingDirs.join(", ")}`);
     process.exit(1);
   }
+  reportCheck("ok", "런타임 디렉터리", "data · uploads · logs 모두 있음");
 
   if (process.env.DESKRPG_SKIP_BUILD_CHECK !== "1") {
     const requiredBuildPaths = standaloneAppRoot
@@ -345,6 +371,38 @@ async function runDoctor() {
       );
       process.exit(1);
     }
+    reportCheck("ok", "빌드 산출물", "필요한 런타임 파일이 모두 있음");
+  }
+
+  // 여기부터는 파일 존재가 아니라 "실제로 동작할 수 있는가" 를 본다.
+  loadEnvFile(envPath);
+
+  const { checkDatabaseReachable, checkPortAvailable, inspectEnvironment } =
+    loadStartupCheckModule();
+  const inspection = inspectEnvironment(process.env);
+
+  for (const warning of inspection.warnings) reportCheck("warn", "환경변수", warning);
+  for (const error of inspection.errors) reportCheck("fail", "환경변수", error);
+  if (inspection.warnings.length === 0 && inspection.errors.length === 0) {
+    reportCheck("ok", "환경변수", `문제 없음 (DB 대상: ${inspection.dbTarget})`);
+  }
+
+  // 찌를 대상은 앱이 실제로 쓰는 쪽(inspection.dbTarget)이다. URL 유무로 정하면 SQLite
+  // 런타임에 남아 있는 .env.example 의 DATABASE_URL 때문에 거짓 PostgreSQL 실패가 뜬다.
+  const dbProbe = await checkDatabaseReachable({
+    databaseUrl: process.env.DATABASE_URL,
+    sqlitePath: process.env.SQLITE_PATH || runtimePaths.getDeskRpgSqlitePath(),
+    target: inspection.dbTarget,
+  });
+  reportCheck(dbProbe.ok ? "ok" : "fail", `데이터베이스(${dbProbe.target})`, dbProbe.message);
+
+  const port = parseDoctorPort();
+  const portProbe = await checkPortAvailable(port);
+  reportCheck(portProbe.free ? "ok" : "warn", `포트 ${port}`, portProbe.message);
+
+  if (inspection.errors.length > 0 || !dbProbe.ok) {
+    console.error("DeskRPG 진단에서 문제를 찾았습니다. 위의 [실패] 항목을 먼저 해결하세요.");
+    process.exit(1);
   }
 
   console.log(`DeskRPG runtime looks healthy at ${runtimePaths.getDeskRpgHomeDir()}`);

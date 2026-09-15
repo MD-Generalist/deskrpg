@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
 import GatewaySetupWizard from "@/components/gateway/GatewaySetupWizard";
+import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
@@ -470,6 +471,8 @@ function GatewayManagementPageInner() {
           )}
         </section>
 
+        {gateways.length === 0 && <GatewayOnboardingGuide />}
+
         {error && (
           <div className="mb-6 rounded-lg border border-danger/40 bg-surface px-4 py-3 text-sm text-danger">
             {error}
@@ -534,7 +537,8 @@ function GatewayManagementPageInner() {
             <div className="space-y-2">
               {gateways.length === 0 ? (
                 <div className="rounded-lg bg-bg px-3 py-4 text-sm text-text-muted">
-                  {t("gateways.empty")}
+                  <p>{t("gateways.empty")}</p>
+                  <p className="mt-1">{t("gateways.emptyHint")}</p>
                 </div>
               ) : (
                 gateways.map((gateway) => (

@@ -51,7 +51,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 ## Quick Start
 
-Choose one of these six ways to start DeskRPG.
+Choose one of these five ways to start DeskRPG.
 
 ### Option 1: npm Install Runtime
 
@@ -145,7 +145,8 @@ Important environment variables:
 
 - `JWT_SECRET`
 - `POSTGRES_PASSWORD` (PostgreSQL Docker setup)
-- `DESKRPG_ALLOW_HOST_HERMES_PROFILES` (optional; lets a loopback gateway read `~/.hermes/profiles` on the host — off by default)
+- `DESKRPG_LOCAL_DISCOVERY_ENABLED` (optional; lets a loopback gateway read `~/.hermes/profiles` on the host — off by default)
+- `DESKRPG_HOST_SETUP_ENABLED` (optional; enables the local/SSH gateway setup wizard for `system_admin` — off by default)
 
 For production, always set a real `JWT_SECRET`.
 
@@ -161,11 +162,15 @@ DeskRPG does not ship a bundled agent runtime. Run a
 machine or on any host you can reach — and note two things from it:
 
 - the base URL it listens on (for example `http://127.0.0.1:8642`)
-- the API key of the profile you want DeskRPG to use
+- the **listener owner key** — the `API_SERVER_KEY` of the profile that owns the listener
 
-Hermes config is machine-scoped but auth is per profile, so each profile carries its own key.
+Hermes config is machine-scoped but auth is per profile, so each profile carries its own key. Give
+DeskRPG the owner key, not a secondary profile's key: kanban, cron and the event stream live on
+unprefixed routes that Hermes authenticates with the owner key alone. A secondary profile's key can
+still hold a conversation, but every board and schedule will fail with `plugin_unauthorized` and the
+screen will not tell you why.
 
-Connecting it to DeskRPG then takes three steps.
+Connecting it to DeskRPG then takes four steps.
 
 **1. Register the gateway**
 
@@ -173,7 +178,7 @@ Open `My Gateways` from the top-right menu and choose `New gateway`:
 
 - `Display name` — anything you will recognise later
 - `Hermes Gateway URL` — for example `http://127.0.0.1:8642`
-- `Token` — the API key for that gateway
+- `Token` — the listener owner key (`API_SERVER_KEY`) for that gateway
 
 Save, then run the connection test. A failed test tells you what went wrong rather than just
 failing, so read the message before changing anything.
@@ -187,6 +192,21 @@ page — profiles are what NPCs actually bind to. Registering the gateway alone 
 
 Enter a channel, then `Settings -> Channel Settings -> AI Connection`, pick your saved gateway, test,
 and save. The header badge changes to `AI Connected` once it takes.
+
+**4. Install the plugin for kanban and cron**
+
+Conversations work without it. Kanban boards, the event stream and cron need
+[`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) on the gateway host:
+
+```bash
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+hermes plugins enable deskrpg
+# restart the gateway — routes are attached only at startup
+```
+
+`enable` is not optional: without it every plugin route answers 404 even though the install
+succeeded. DeskRPG shows the same command in the board and schedule screens when it detects the
+plugin is missing or out of date.
 
 Now you can hire NPCs. Each NPC is bound to one Hermes profile at hire time, and you can rebind it
 later without firing it.
