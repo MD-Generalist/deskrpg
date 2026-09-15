@@ -18,7 +18,15 @@ LABEL org.opencontainers.image.title="DeskRPG Office" \
       org.opencontainers.image.licenses="MIT"
 
 # 빌드 시점의 최신 DeskRPG. 컨테이너가 뜰 때 다시 최신으로 올릴지는 DESKRPG_AUTO_UPDATE 가 정한다.
-RUN npm install -g deskrpg@latest && npm cache clean --force
+# 방금 발행한 버전으로 구우면 dist-tag 가 먼저 보이고 tarball 이 CDN 에 늦게 올라와 404 가
+# 난다(실측: 2026.9.21 직후 빌드). 잠깐 기다렸다 다시 시도한다.
+RUN for attempt in 1 2 3 4 5; do \
+      npm install -g deskrpg@latest && break; \
+      echo "npm install 실패 ($attempt/5) — 30초 뒤 다시 시도"; \
+      sleep 30; \
+    done; \
+    npm ls -g deskrpg >/dev/null \
+ && npm cache clean --force
 
 # 사무실 서비스와 초기화 훅
 COPY s6-rc.d/deskrpg /etc/s6-overlay/s6-rc.d/deskrpg
