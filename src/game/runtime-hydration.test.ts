@@ -201,7 +201,7 @@ const applyNpcSource = source.slice(
   source.indexOf("  private applyMotionNpc("),
   source.indexOf("  private restoreMotionNpc("),
 );
-const NpcController = evaluate(`(class { ${applyNpcSource} })`, {
+const NpcController = evaluate(`(class { spatialNpcRoutes = new Map(); ${applyNpcSource} })`, {
   copyMotionContinuation,
   createAmbientSchedule: () => {
     throw new Error("must not reset restored schedule");
