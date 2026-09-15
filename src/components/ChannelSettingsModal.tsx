@@ -22,7 +22,8 @@ interface ChannelSettingsModalProps {
     gatewayConfig?: {
       gatewayId?: string | null;
       url?: string | null;
-      token?: string | null;
+      // 토큰은 서버가 돌려주지 않는다(하드 게이트 2) — 저장 여부만 안다.
+      hasToken?: boolean;
       canEditCredentials?: boolean;
     };
   }) => void;
@@ -79,6 +80,8 @@ export default function ChannelSettingsModal({
   // AI Gateway state
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [gatewayToken, setGatewayToken] = useState("");
+  // 서버는 저장된 키를 돌려주지 않는다. 입력칸을 비워 두고 "저장돼 있음"만 알린다.
+  const [gatewayHasSavedToken, setGatewayHasSavedToken] = useState(false);
   const [gatewayId, setGatewayId] = useState<string | null>(null);
   const [gatewayMode, setGatewayMode] = useState<"resource" | "direct">("direct");
   const [gatewayOptions, setGatewayOptions] = useState<AccessibleGatewayOption[]>([]);
@@ -137,6 +140,7 @@ export default function ChannelSettingsModal({
       const data = await gatewayRes.json();
       const gc = data?.gatewayConfig;
       if (gc) {
+        setGatewayHasSavedToken(gc.hasToken === true);
         const nextGatewayId = typeof gc.gatewayId === "string" ? gc.gatewayId : null;
         const currentOption = nextGatewayId
           ? {
@@ -299,7 +303,8 @@ export default function ChannelSettingsModal({
       gatewayConfig.gatewayId = selectedGatewayId;
     } else {
       gatewayConfig.url = gatewayUrl.trim() || null;
-      gatewayConfig.token = gatewayToken.trim() || null;
+      // 비워 두면 "그대로 두라"는 뜻이다 — 키를 지우려면 게이트웨이를 해제한다.
+      if (gatewayToken.trim()) gatewayConfig.token = gatewayToken.trim();
     }
     try {
       const res = await fetch(`/api/channels/${channelId}/gateway`, {
@@ -321,7 +326,11 @@ export default function ChannelSettingsModal({
         setGatewayMode(nextGatewayId ? "resource" : "direct");
         setGatewayCanEditCredentials(data?.gatewayConfig?.canEditCredentials !== false);
         setGatewayUrl(data?.gatewayConfig?.url ?? gatewayUrl);
-        setGatewayToken(data?.gatewayConfig?.token ?? gatewayToken);
+        setGatewayHasSavedToken(
+          data?.gatewayConfig?.hasToken === true || Boolean(gatewayToken.trim()),
+        );
+        // 입력칸은 비운다 — 저장된 키를 화면에 되돌려 두지 않는다.
+        setGatewayToken("");
         if (nextGatewayId) {
           setGatewayOptions((prev) => {
             if (prev.some((item) => item.id === nextGatewayId)) return prev;
@@ -343,7 +352,7 @@ export default function ChannelSettingsModal({
           gatewayConfig: {
             gatewayId: data?.gatewayConfig?.gatewayId ?? gatewayId,
             url: data?.gatewayConfig?.url ?? gatewayConfig.url,
-            token: data?.gatewayConfig?.token ?? gatewayConfig.token,
+            hasToken: data?.gatewayConfig?.hasToken === true || Boolean(gatewayToken.trim()),
             canEditCredentials:
               data?.gatewayConfig?.canEditCredentials ?? gatewayCanEditCredentials,
           },
@@ -371,13 +380,14 @@ export default function ChannelSettingsModal({
         setGatewayMode("direct");
         setGatewayUrl("");
         setGatewayToken("");
+        setGatewayHasSavedToken(false);
         setGatewayCanEditCredentials(true);
         setGatewayConnectionState({ status: "idle" });
         onUpdated({
           gatewayConfig: {
             gatewayId: null,
             url: null,
-            token: null,
+            hasToken: false,
             canEditCredentials: true,
           },
         });
@@ -707,7 +717,11 @@ export default function ChannelSettingsModal({
                             type={showToken ? "text" : "password"}
                             value={gatewayToken}
                             onChange={(e) => setGatewayToken(e.target.value)}
-                            placeholder={t("settings.gatewayTokenPlaceholder")}
+                            placeholder={
+                              gatewayHasSavedToken
+                                ? t("settings.gatewayTokenSaved")
+                                : t("settings.gatewayTokenPlaceholder")
+                            }
                             disabled={!gatewayCanEditCredentials}
                             className="flex-1 px-3 py-2 bg-bg border border-border rounded text-text placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
                           />

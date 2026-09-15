@@ -33,7 +33,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       id: accessible.resource.id,
       displayName: accessible.resource.displayName,
       baseUrl: accessible.resource.baseUrl,
-      token: accessible.isOwner ? decryptGatewayToken(accessible.resource.tokenEncrypted) : null,
+      // 복호화된 키는 응답에 싣지 않는다(하드 게이트 2) — 저장 여부만 알린다.
+      hasToken: Boolean(decryptGatewayToken(accessible.resource.tokenEncrypted).trim()),
       ownerUserId: accessible.resource.ownerUserId,
       canEditCredentials: accessible.isOwner,
       isOwner: accessible.isOwner,
@@ -106,7 +107,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       id: updated.id,
       displayName: updated.displayName,
       baseUrl: updated.baseUrl,
-      token: decryptGatewayToken(updated.tokenEncrypted),
+      hasToken: Boolean(decryptGatewayToken(updated.tokenEncrypted).trim()),
       ownerUserId: updated.ownerUserId,
       canEditCredentials: true,
       isOwner: true,

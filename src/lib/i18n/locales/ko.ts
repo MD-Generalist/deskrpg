@@ -1867,6 +1867,7 @@ const ko: Record<string, string> = {
   "settings.loadingGateway": "게이트웨이 설정 로딩 중...",
   "settings.gatewayUrlPlaceholder": "http://127.0.0.1:8642",
   "settings.gatewayTokenPlaceholder": "Bearer 토큰",
+  "settings.gatewayTokenSaved": "저장됨 — 바꾸려면 새 키를 입력하세요",
   "settings.gatewaySource": "연결 방식",
   "settings.gatewayUseSaved": "저장된 게이트웨이",
   "settings.gatewayUseCustom": "직접 입력",

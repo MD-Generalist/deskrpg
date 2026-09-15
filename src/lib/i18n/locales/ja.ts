@@ -1880,6 +1880,7 @@ const ja: Record<string, string> = {
   "settings.loadingGateway": "ゲートウェイ設定を読み込み中...",
   "settings.gatewayUrlPlaceholder": "http://127.0.0.1:8642",
   "settings.gatewayTokenPlaceholder": "Bearerトークン",
+  "settings.gatewayTokenSaved": "保存済み — 変更するには新しいキーを入力してください",
   "settings.gatewaySource": "接続方法",
   "settings.gatewayUseSaved": "保存済みゲートウェイ",
   "settings.gatewayUseCustom": "直接入力",

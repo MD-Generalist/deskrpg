@@ -38,12 +38,16 @@ function buildResponseGatewayConfig(input: {
   const boundGateway = input.binding?.resource ?? null;
   const canEditCredentials = !boundGateway || boundGateway.ownerUserId === input.userId;
 
+  // 복호화된 토큰은 응답에 싣지 않는다(하드 게이트 2). 소유자에게만 준다는 조건이 붙어도
+  // 브라우저 메모리·프록시 로그·확장 프로그램으로 흘러간다. 화면이 실제로 필요한 것은
+  // "키가 저장돼 있는가" 뿐이고, 바꿀 때는 새 값을 입력받는다.
+  const hasToken = Boolean(boundGateway && decryptGatewayToken(boundGateway.tokenEncrypted).trim());
+
   return {
     gatewayId: boundGateway?.id ?? null,
     displayName: boundGateway?.displayName ?? null,
     url: boundGateway?.baseUrl ?? null,
-    token:
-      boundGateway && canEditCredentials ? decryptGatewayToken(boundGateway.tokenEncrypted) : null,
+    hasToken,
     canEditCredentials,
   };
 }
@@ -131,7 +135,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const currentBinding = await getChannelGatewayBinding(id);
   const requestedUrl = typeof body.url === "string" ? body.url.trim() || null : null;
-  const requestedToken = typeof body.token === "string" ? body.token.trim() || null : null;
+  // 화면이 더 이상 기존 키를 받아 두지 않으므로, 본문에 token 이 없으면 "그대로 두라"는 뜻이다.
+  // 예전처럼 빈 문자열로 덮어쓰면 URL 만 고친 저장이 키를 지워 버린다.
+  const rawToken: unknown = body.token;
+  const tokenProvided = typeof rawToken === "string";
+  const requestedToken = tokenProvided ? rawToken.trim() || null : null;
 
   let nextGatewayId: string | null = currentBinding?.resource.id ?? null;
   if (typeof body.gatewayId === "string" && body.gatewayId.trim()) {
@@ -150,7 +158,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const resource = await upsertOwnedGatewayResource({
         ownerUserId: userId,
         baseUrl: requestedUrl,
-        token: requestedToken ?? "",
+        token: tokenProvided ? (requestedToken ?? "") : undefined,
         displayName: typeof body.displayName === "string" ? body.displayName : undefined,
       });
       nextGatewayId = resource.id;

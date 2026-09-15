@@ -1839,6 +1839,7 @@ const zh: Record<string, string> = {
   "settings.loadingGateway": "加载网关设置中...",
   "settings.gatewayUrlPlaceholder": "http://127.0.0.1:8642",
   "settings.gatewayTokenPlaceholder": "Bearer令牌",
+  "settings.gatewayTokenSaved": "已保存 — 如需更换请输入新密钥",
   "settings.gatewaySource": "连接方式",
   "settings.gatewayUseSaved": "已保存网关",
   "settings.gatewayUseCustom": "直接输入",
