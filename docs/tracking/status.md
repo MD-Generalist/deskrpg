@@ -2,18 +2,18 @@
 
 ## 구현·검증됨
 
-아래 전체·브라우저 검증의 코드 기준은 `a47c5ff3`이다. 기존 맵 회의실의 도보 진입, 같은 캔버스/액터, 실제 착석,
+아래 전체·브라우저 검증의 코드 기준은 `60455e29`이다. 기존 맵 회의실의 도보 진입, 같은 캔버스/액터, 실제 착석,
 개인 퇴장, 준비 화면 사람 채팅, 개인 카메라 수동/자동 전환, 외벽 가림 복원을 구현했다.
 회의실 없는 legacy/Tiled 증축은 좌표·객체·충돌을 보존하며 표시 경계만 정리한다.
 
-- `env -u DATABASE_URL npm run test -- --test-concurrency=2`: exit 0, 1,781 통과·실패 0·PG 환경 필요 3건 건너뜀.
+- `env -u DATABASE_URL npm run test -- --test-concurrency=2`: exit 0, 1,783 통과·실패 0·PG 환경 필요 3건 건너뜀.
 - `npm run typecheck`, `npm run lint`, `npm run format:check`, `env -u DATABASE_URL npm run build`: 각각 exit 0.
 - `meeting-spatial.spec.ts`: exit 0, 두 사용자 상세 시나리오와 7종 맵 순회 모두 통과(2개 테스트).
   공식 5종 및 legacy/Tiled의 진입·착석·동일 캔버스·퇴장을 확인했다. 두 사용자 좌석 일치·채팅 격리·개별 카메라,
   390×844 화면에서 퇴장, 취소 후 재진입도 포함한다.
-- Chrome 확장에서 임원실의 도보 입장·낮은 각도 외벽 투명화·퇴장 복원, 증축 회의실의 실제 입장과 경계 표시를 확인했다.
+- Chrome 확장에서 `a47c5ff3`의 임원실 도보 입장·낮은 각도 외벽 투명화·퇴장 복원, 증축 회의실의 실제 입장과 경계 표시를 확인했다.
 - 격리 SQLite 서버 `/api/health`: HTTP 200, db connected. 검증 후 해당 서버와 검증 탭 종료.
-- `npm pack --dry-run --ignore-scripts --json`: exit 0. 회의 서버 런타임 파일 포함 및 작업용 디렉터리 제외 검사 exit 0.
+- `a47c5ff3`에서 `npm pack --dry-run --ignore-scripts --json`: exit 0. 회의 서버 런타임 파일 포함 및 작업용 디렉터리 제외 검사 exit 0.
 - 추가 수정 `0174e69e`: NPC 복귀 후 일반 좌석 변경을 막던 회의 예약 표식을 정리했다.
   실제 소켓 기반 업무·대체 좌석 회귀 2건은 수정 전 실패·수정 후 통과했고, 관련 조정 테스트 43건이 exit 0이다.
   복귀 중 보호·물리 점유·원정 제한·담당자 교체도 확인했다. 실제 Hermes 복귀 검증을 대신하지 않는다.
