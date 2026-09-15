@@ -38,6 +38,27 @@ async function speak(page: Page, message: string) {
     page.locator("[data-meeting-workspace]").getByText(message, { exact: true }),
   ).toBeVisible();
 }
+async function waitForOfficeReady(page: Page, frames: Frame[]) {
+  // GameScene.canMovePlayer requires all three server snapshots, even with zero NPCs.
+  await expect
+    .poll(
+      () =>
+        ["player:spawn", "players:state", "npc:motion-state"].every((event) =>
+          frames.some((frame) => frame.direction === "received" && frame.event === event),
+        ),
+      {
+        timeout: 30_000,
+        message: "Server player, peer and NPC motion snapshots must hydrate before movement",
+      },
+    )
+    .toBeTruthy();
+  await expect
+    .poll(() => waitForGameLoop(page, 0), {
+      timeout: 15_000,
+      message: "Visible canvas must reach 10 rAF frames/second after server hydration",
+    })
+    .toBeGreaterThanOrEqual(10);
+}
 
 test("isolated humans walk, share seats and leave independently on the original canvas", async ({
   browser,
@@ -87,7 +108,7 @@ test("isolated humans walk, share seats and leave independently on the original 
       frames.push(observe(page));
       await page.goto(`/game?channelId=${channel.id}&characterId=${character.id}`);
       await expect(page.locator(".office-three-canvas canvas")).toBeVisible();
-      await waitForGameLoop(page);
+      await waitForOfficeReady(page, frames[index]);
       pages.push(page);
     }
     const [a, b] = pages;
@@ -250,7 +271,7 @@ test("seven map meeting smoke: official environments and legacy/Tiled annex", as
           await expect(page.locator(".office-three-canvas canvas")).toBeVisible({
             timeout: 60_000,
           });
-          await waitForGameLoop(page);
+          await waitForOfficeReady(page, frames);
           const canvas = await page.locator(".office-three-canvas canvas").elementHandle();
           if (kind === "legacy") {
             // Arm the real cancel click before starting the long walk into the appended annex.
