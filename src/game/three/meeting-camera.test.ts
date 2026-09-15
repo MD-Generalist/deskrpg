@@ -134,6 +134,47 @@ function rebuildingRenderer() {
   };
 }
 
+test("증축 표식의 ID·좌표·타입이 맞는 벽만 생략하거나 세로 경계로 그린다", () => {
+  const fixture = rebuildingRenderer();
+  const objects = [
+    { id: "hidden", type: "room_wall_h", col: 2, row: 2 },
+    { id: "vertical", type: "room_wall_h", col: 4, row: 2 },
+    { id: "moved", type: "room_wall_h", col: 6, row: 2 },
+    { id: "user", type: "room_wall_h", col: 8, row: 2 },
+    { id: "corner", type: "room_wall_h", col: 10, row: 2 },
+  ];
+  const markers: NonNullable<MeetingSpace["generatedAnnexWalls"]> = [
+    { id: "hidden", type: "room_wall_h", col: 2, row: 2, display: "hidden" },
+    { id: "vertical", type: "room_wall_h", col: 4, row: 2, display: "vertical" },
+    { id: "moved", type: "room_wall_h", col: 5, row: 2, display: "hidden" },
+    { id: "user", type: "room_wall_v" as "room_wall_h", col: 8, row: 2, display: "hidden" },
+    { id: "corner", type: "room_wall_h", col: 10, row: 2, display: "corner" },
+  ];
+  const map = {
+    ...fixture.map(),
+    objects,
+    meetingSpace: { ...space, generatedAnnexWalls: markers },
+  };
+  const before = structuredClone(map);
+  fixture.rebuild(map);
+  const candidates = (fixture.renderer as unknown as { meetingWallObjects: T.Object3D[] })
+    .meetingWallObjects;
+  assert.equal(candidates.length, 4);
+  const sizes = candidates.map((candidate) =>
+    new T.Box3().setFromObject(candidate).getSize(new T.Vector3()),
+  );
+  assert.ok(sizes[0].z > sizes[0].x);
+  assert.ok(sizes[1].x > sizes[1].z);
+  assert.ok(sizes[2].x > sizes[2].z);
+  assert.ok(sizes[3].x >= 1 && sizes[3].z >= 1);
+  assert.deepEqual(map, before);
+  fixture.rebuild({ ...map, meetingSpace: space });
+  assert.equal(
+    (fixture.renderer as unknown as { meetingWallObjects: T.Object3D[] }).meetingWallObjects.length,
+    5,
+  );
+});
+
 for (const environment of ["executive", "tech", undefined]) {
   test(`renderer registers all indoor walls, including ${environment ?? "legacy"} shell occluders`, () => {
     const fixture = rebuildingRenderer();

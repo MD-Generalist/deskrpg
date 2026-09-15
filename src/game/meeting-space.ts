@@ -11,6 +11,14 @@ export type MeetingSpace = {
   standingPositions: MeetingPosition[];
   wallObjectIds: string[];
   wallTileKeys: string[];
+  /** 충돌 객체를 유지한 채 생성된 증축 외곽만 그리는 렌더링 전용 표식. */
+  generatedAnnexWalls?: Array<{
+    id: string;
+    col: number;
+    row: number;
+    type: "room_wall_h";
+    display: "horizontal" | "vertical" | "corner" | "hidden";
+  }>;
 };
 export function insideMeetingSpace(bounds: MeetingBounds, x: number, y: number) {
   return (
