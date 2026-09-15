@@ -10,9 +10,12 @@ function observe(page: Page): Frame[] {
       (direction: Frame["direction"]) =>
       ({ payload }: { payload: string | Buffer }) => {
         const text = payload.toString();
-        if (!text.startsWith("42")) return;
+        // Default-namespace Socket.IO EVENT: Engine.IO 4 + EVENT 2 + optional ack id.
+        // For example, seat:claim is 421["seat:claim", {...}], not just 42[...].
+        const packet = /^42\d*(\[[\s\S]*)$/.exec(text);
+        if (!packet) return;
         try {
-          const [event, data] = JSON.parse(text.slice(2));
+          const [event, data] = JSON.parse(packet[1]);
           frames.push({ direction, event, data, at: Date.now() });
         } catch {
           /* Engine.IO control frames are not application events. */
