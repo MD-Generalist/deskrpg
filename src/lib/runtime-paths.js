@@ -87,6 +87,7 @@ function ensureDeskRpgHome(options = {}) {
 
 module.exports = {
   ensureDeskRpgHome,
+  upsertEnvLine,
   getDeskRpgDataDir,
   getDeskRpgEnvPath,
   getDeskRpgHomeDir,

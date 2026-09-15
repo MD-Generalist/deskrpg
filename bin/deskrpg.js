@@ -212,6 +212,7 @@ function printHelp() {
   console.log("  stop                  Stop the running DeskRPG server");
   console.log("  create-user           Create a new user account");
   console.log("  update                Update to the latest version");
+  console.log("  host-setup <on|off|status>  Toggle the connection wizard's host setup");
   console.log("  doctor                Check runtime health");
   console.log("  remove                Remove runtime data (~/.deskrpg)");
   console.log("  uninstall             Remove runtime data and uninstall the package");
@@ -245,7 +246,7 @@ function printHelp() {
 
 function printUsage() {
   console.error(
-    "Usage: deskrpg <init|start|stop|create-user|update|doctor|remove|uninstall|version|help>",
+    "Usage: deskrpg <init|start|stop|create-user|update|host-setup|doctor|remove|uninstall|version|help>",
   );
 }
 
@@ -324,6 +325,67 @@ function parseDoctorPort() {
   return Number.isInteger(fromEnv) && fromEnv > 0 ? fromEnv : 3000;
 }
 
+const HOST_SETUP_KEY = "DESKRPG_HOST_SETUP_ENABLED";
+const HERMES_INSTALL_KEY = "DESKRPG_HERMES_INSTALL_ENABLED";
+
+function readSwitch(envText, key) {
+  const match = envText.match(new RegExp(`^${key}=(.*)$`, "m"));
+  const value = (match?.[1] ?? "").trim();
+  return ["1", "true", "yes"].includes(value);
+}
+
+/**
+ * 호스트 설정 스위치를 켜고 끈다.
+ *
+ * 이 스위치는 일부러 앱 밖에 있다 — 웹 화면에서 켤 수 있으면 관리자 계정 하나가 뚫렸을 때
+ * 곧바로 이 컴퓨터에서 임의 명령을 돌릴 수 있게 된다. 대신 손으로 파일을 여는 마찰만 없앤다.
+ * 터미널을 쓸 수 있는 사람만 바꿀 수 있다는 성질은 그대로다.
+ */
+async function runHostSetup(argv) {
+  const runtimePaths = loadRuntimePathsModule();
+  const envPath = runtimePaths.getDeskRpgEnvPath();
+  if (!fs.existsSync(envPath)) {
+    console.error("DeskRPG is not initialized yet. Run 'deskrpg init' first.");
+    return 1;
+  }
+
+  const action = argv[0] || "status";
+  const withInstall = argv.includes("--with-install");
+  let envText = fs.readFileSync(envPath, "utf8");
+
+  if (action === "status") {
+    const host = readSwitch(envText, HOST_SETUP_KEY);
+    const install = readSwitch(envText, HERMES_INSTALL_KEY);
+    console.log(`연결 마법사의 호스트 설정: ${host ? "켜짐" : "꺼짐"}`);
+    console.log(`이 컴퓨터에 Hermes 설치: ${install ? "켜짐" : "꺼짐"}`);
+    if (!host)
+      console.log("\n켜려면: deskrpg host-setup on --with-install   (그 뒤 deskrpg 를 다시 시작)");
+    return 0;
+  }
+
+  if (action !== "on" && action !== "off") {
+    console.error("Usage: deskrpg host-setup <on|off|status> [--with-install]");
+    return 1;
+  }
+
+  const enabled = action === "on";
+  envText = runtimePaths.upsertEnvLine(envText, HOST_SETUP_KEY, enabled ? "1" : "0");
+  // 설치는 더 위험한 쪽이라 켤 때만 명시적으로 요구하고, 끌 때는 함께 끈다.
+  if (!enabled || withInstall)
+    envText = runtimePaths.upsertEnvLine(envText, HERMES_INSTALL_KEY, enabled ? "1" : "0");
+  fs.writeFileSync(envPath, envText, { mode: 0o600 });
+
+  console.log(
+    enabled
+      ? `연결 마법사의 호스트 설정을 켰습니다${withInstall ? " (Hermes 설치 포함)" : ""}.`
+      : "호스트 설정과 Hermes 설치를 모두 껐습니다.",
+  );
+  console.log("적용하려면 deskrpg 를 다시 시작하세요 — 이 값은 켤 때 한 번만 읽습니다.");
+  if (enabled && !withInstall)
+    console.log("이 컴퓨터에 Hermes 까지 설치하려면: deskrpg host-setup on --with-install");
+  return 0;
+}
+
 async function runDoctor() {
   const runtimePaths = loadRuntimePathsModule();
   const envPath = runtimePaths.getDeskRpgEnvPath();
@@ -386,6 +448,19 @@ async function runDoctor() {
   if (inspection.warnings.length === 0 && inspection.errors.length === 0) {
     reportCheck("ok", "환경변수", `문제 없음 (DB 대상: ${inspection.dbTarget})`);
   }
+
+  // 연결 마법사가 호스트를 만질 수 있는지. 꺼져 있는 것이 기본이고 정상이므로 실패가 아니다.
+  const hostSetupOn = ["1", "true", "yes"].includes(process.env.DESKRPG_HOST_SETUP_ENABLED ?? "");
+  const hermesInstallOn = ["1", "true", "yes"].includes(
+    process.env.DESKRPG_HERMES_INSTALL_ENABLED ?? "",
+  );
+  reportCheck(
+    "ok",
+    "호스트 설정",
+    hostSetupOn
+      ? `연결 마법사 켜짐${hermesInstallOn ? " · Hermes 설치 켜짐" : " · Hermes 설치는 꺼짐"}`
+      : "꺼짐 — 이 컴퓨터에 Hermes 를 설치하려면 deskrpg host-setup on --with-install",
+  );
 
   // 찌를 대상은 앱이 실제로 쓰는 쪽(inspection.dbTarget)이다. URL 유무로 정하면 SQLite
   // 런타임에 남아 있는 .env.example 의 DATABASE_URL 때문에 거짓 PostgreSQL 실패가 뜬다.
@@ -852,9 +927,17 @@ async function main() {
 
   if (
     !command ||
-    !["init", "start", "stop", "create-user", "update", "doctor", "remove", "uninstall"].includes(
-      command,
-    )
+    ![
+      "init",
+      "start",
+      "stop",
+      "create-user",
+      "update",
+      "host-setup",
+      "doctor",
+      "remove",
+      "uninstall",
+    ].includes(command)
   ) {
     printUsage();
     process.exit(1);
@@ -878,6 +961,10 @@ async function main() {
   if (command === "update") {
     await runUpdate();
     return;
+  }
+
+  if (command === "host-setup") {
+    process.exit(await runHostSetup(process.argv.slice(3)));
   }
 
   if (command === "doctor") {

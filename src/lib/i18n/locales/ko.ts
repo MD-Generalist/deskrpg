@@ -270,7 +270,9 @@ const ko: Record<string, string> = {
     "공식 설치 스크립트를 내려받아 DeskRPG 서버가 도는 이 호스트에서 실행합니다. 몇 분 걸릴 수 있습니다. 모델 제공자 로그인은 포함되지 않으며, 설치가 끝난 뒤 서버에서 hermes model 을 따로 실행해야 합니다.",
   "hermes.wizard.install.consent": "공식 설치 스크립트를 이 서버에서 실행하는 데 동의합니다.",
   "hermes.wizard.install.unavailable":
-    "이 인스턴스에서는 Hermes 설치가 꺼져 있습니다. 운영자가 DESKRPG_HERMES_INSTALL_ENABLED 를 켜야 이 화면에서 설치할 수 있습니다. 그전에는 서버에 직접 Hermes 를 설치한 뒤 다시 검색하세요.",
+    "이 인스턴스에서는 Hermes 설치가 꺼져 있습니다. DeskRPG 가 도는 컴퓨터의 터미널에서 아래 명령을 실행한 뒤 DeskRPG 를 다시 시작하세요. 웹에서 켤 수 없게 해 둔 스위치입니다 — 그 컴퓨터를 쓸 수 있는 사람만 켤 수 있어야 하기 때문입니다.",
+  "hermes.wizard.install.enableCommand": "deskrpg host-setup on --with-install",
+  "hermes.wizard.install.enableHint": "명령을 실행한 뒤 이 화면에서 다시 찾기를 누르세요.",
   "hermes.wizard.install.done":
     "Hermes 설치가 끝났습니다. 다시 찾기로 이 설치를 골라 연결을 이어 가세요.",
   "hermes.wizard.install.digest": "설치 스크립트 지문 {digest}",

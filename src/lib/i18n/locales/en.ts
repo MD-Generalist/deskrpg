@@ -273,7 +273,9 @@ const en: Record<string, string> = {
     "The official installer script is downloaded and run on the host where the DeskRPG server runs. It can take a few minutes. Model provider sign-in is not included: run hermes model on the server afterwards.",
   "hermes.wizard.install.consent": "I agree to run the official installer script on this server.",
   "hermes.wizard.install.unavailable":
-    "Hermes installation is disabled on this instance. An operator must enable DESKRPG_HERMES_INSTALL_ENABLED before this screen can install it. Until then, install Hermes on the server yourself and search again.",
+    "Hermes installation is disabled on this instance. Run the command below in a terminal on the machine running DeskRPG, then restart DeskRPG. The switch is deliberately not flippable from the web: only someone with access to that machine should be able to turn it on.",
+  "hermes.wizard.install.enableCommand": "deskrpg host-setup on --with-install",
+  "hermes.wizard.install.enableHint": "Run the command, then press search again on this screen.",
   "hermes.wizard.install.done":
     "Hermes is installed. Search again, pick this installation and continue connecting.",
   "hermes.wizard.install.digest": "Installer script fingerprint {digest}",

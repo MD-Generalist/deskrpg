@@ -267,7 +267,9 @@ const zh: Record<string, string> = {
     "将下载官方安装脚本并在运行DeskRPG服务器的这台主机上执行。可能需要几分钟。不包含模型提供商登录：安装完成后请在服务器上运行hermes model。",
   "hermes.wizard.install.consent": "我同意在此服务器上运行官方安装脚本。",
   "hermes.wizard.install.unavailable":
-    "此实例已禁用Hermes安装。运维人员需要启用DESKRPG_HERMES_INSTALL_ENABLED后此页面才能安装。在此之前请自行在服务器上安装Hermes并重新搜索。",
+    "此实例已禁用Hermes安装。请在运行DeskRPG的机器上打开终端执行下面的命令，然后重启DeskRPG。此开关刻意不能从网页切换——只有能使用那台机器的人才应该打开它。",
+  "hermes.wizard.install.enableCommand": "deskrpg host-setup on --with-install",
+  "hermes.wizard.install.enableHint": "执行命令后，在此页面重新查找。",
   "hermes.wizard.install.done": "Hermes安装完成。请重新查找并选择此安装以继续连接。",
   "hermes.wizard.install.digest": "安装脚本指纹 {digest}",
   "hermes.wizard.install.start": "开始安装Hermes",

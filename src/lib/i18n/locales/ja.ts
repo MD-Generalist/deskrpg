@@ -278,7 +278,9 @@ const ja: Record<string, string> = {
   "hermes.wizard.install.consent":
     "公式インストールスクリプトをこのサーバーで実行することに同意します。",
   "hermes.wizard.install.unavailable":
-    "このインスタンスではHermesのインストールが無効です。運用者がDESKRPG_HERMES_INSTALL_ENABLEDを有効にする必要があります。それまではサーバーに直接Hermesをインストールしてから再検索してください。",
+    "このインスタンスではHermesのインストールが無効です。DeskRPGが動いているマシンのターミナルで下のコマンドを実行し、DeskRPGを再起動してください。Webからは切り替えられないようにしてあります — そのマシンを使える人だけが有効にできるようにするためです。",
+  "hermes.wizard.install.enableCommand": "deskrpg host-setup on --with-install",
+  "hermes.wizard.install.enableHint": "コマンドを実行したら、この画面で再検索を押してください。",
   "hermes.wizard.install.done":
     "Hermesのインストールが完了しました。再検索してこのインストールを選び、接続を続けてください。",
   "hermes.wizard.install.digest": "インストールスクリプトの指紋 {digest}",

@@ -703,10 +703,11 @@ async function reachEmptyDiscovery(caps: Record<string, unknown>, sent?: string[
   return f;
 }
 
-test("설치 게이트가 꺼져 있으면 설치 제안 대신 운영자 안내를 보여준다", async () => {
+test("설치 게이트가 꺼져 있으면 설치 제안 대신 켜는 명령을 보여준다", async () => {
   const f = await reachEmptyDiscovery({ canInstallHermes: false });
   try {
-    assert.match(f.host.textContent!, /DESKRPG_HERMES_INSTALL_ENABLED/);
+    // 설정 파일을 손으로 고치라고 하지 않는다 — 붙여넣을 명령을 그대로 보여준다.
+    assert.match(f.host.textContent!, /deskrpg host-setup on --with-install/);
     assert.doesNotMatch(f.host.textContent!, /이 서버에 Hermes 를 설치할까요\?/);
     assert.equal(f.host.querySelector('input[name="install-consent"]'), null);
   } finally {

@@ -18,6 +18,29 @@ function readTrimmed(env, key) {
  * @param {Record<string, string | undefined>} env
  * @returns {{ errors: string[], warnings: string[], dbTarget: "postgresql" | "sqlite" }}
  */
+/**
+ * 이 컴퓨터에 Hermes 가 없고 연결 마법사의 호스트 설정도 꺼져 있으면 한 줄 알려 준다.
+ *
+ * 노트북에 처음 깐 사람은 게이트웨이 화면에서 막히고, 그 이유가 스위치라는 걸 알 길이 없다.
+ * 스위치가 켜져 있거나 Hermes 가 이미 있으면 아무 말도 하지 않는다 — 조용한 것이 기본이다.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @param {string} [homeDir]
+ * @returns {string | null}
+ */
+function hostSetupHint(env = process.env, homeDir = require("node:os").homedir()) {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const on = (key) => ["1", "true", "yes"].includes((env[key] ?? "").trim());
+  if (on("DESKRPG_HOST_SETUP_ENABLED")) return null;
+  try {
+    if (fs.existsSync(path.join(homeDir, ".hermes", "hermes-agent"))) return null;
+  } catch {
+    return null;
+  }
+  return "이 컴퓨터에 Hermes 가 없습니다 — 연결 마법사로 함께 설치하려면 `deskrpg host-setup on --with-install` 을 실행한 뒤 다시 시작하세요.";
+}
+
 function inspectEnvironment(env = process.env) {
   const errors = [];
   const warnings = [];
@@ -254,6 +277,7 @@ module.exports = {
   DEFAULT_DB_PROBE_TIMEOUT_MS,
   checkDatabaseReachable,
   checkPortAvailable,
+  hostSetupHint,
   inspectEnvironment,
   reportEnvironmentInspection,
 };

@@ -421,9 +421,13 @@ export default function GatewaySetupWizard({
                     </button>
                   </article>
                 ) : (
-                  <p className="rounded-lg border border-border bg-bg p-4 text-sm text-text-muted">
-                    {t("hermes.wizard.install.unavailable")}
-                  </p>
+                  <div className="rounded-lg border border-border bg-bg p-4 text-sm text-text-muted">
+                    <p>{t("hermes.wizard.install.unavailable")}</p>
+                    <pre className="mt-3 overflow-x-auto rounded bg-surface-raised p-3 text-xs text-text">
+                      {t("hermes.wizard.install.enableCommand")}
+                    </pre>
+                    <p className="mt-2">{t("hermes.wizard.install.enableHint")}</p>
+                  </div>
                 ))}
               {digestLine}
               {candidates.map((candidate) => (

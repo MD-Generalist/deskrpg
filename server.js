@@ -8,6 +8,7 @@ const {
 } = require("./src/lib/internal-transport.js");
 const {
   checkDatabaseReachable,
+  hostSetupHint,
   inspectEnvironment,
   reportEnvironmentInspection,
 } = require("./src/lib/startup-check.js");
@@ -41,6 +42,8 @@ async function main() {
   // 기동 직전 환경 검증 — errors 는 즉시 중단, warnings 는 찍고 계속.
   // DATABASE_URL 없이 SQLite 로 돌던 사용자는 경고만 보고 그대로 뜬다.
   const inspection = inspectEnvironment(process.env);
+  const hint = hostSetupHint();
+  if (hint) console.log(`[startup] ${hint}`);
   if (!reportEnvironmentInspection(inspection)) {
     console.error("[startup] 환경 설정이 올바르지 않아 서버를 시작하지 않습니다.");
     process.exit(1);

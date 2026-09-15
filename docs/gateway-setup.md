@@ -4,7 +4,7 @@
 
 ## 운영자 설정
 
-호스트 설치·재시작 기능은 기본 비활성화다. DeskRPG 실행 환경에 `DESKRPG_HOST_SETUP_ENABLED=1`을 설정하고 앱을 재시작하면 `system_admin` 계정에만 로컬 검색이 표시된다. 일반 사용자는 주소 연결을 사용할 수 있다.
+호스트 설치·재시작 기능은 기본 비활성화다. `deskrpg host-setup on`(이 컴퓨터에 Hermes 까지 설치하려면 `--with-install`)을 실행하면 `DESKRPG_HOST_SETUP_ENABLED`·`DESKRPG_HERMES_INSTALL_ENABLED` 를 대신 써 준다. 값은 프로세스가 켜질 때 한 번 읽으므로 앱을 재시작해야 적용되고, 그 뒤 `system_admin` 계정에만 로컬 검색이 표시된다. `deskrpg host-setup status` 와 `deskrpg doctor` 가 현재 상태를 보여 준다. **이 스위치는 웹에서 켤 수 없다** — 켤 수 있으면 관리자 세션 하나가 곧 호스트 명령 실행 권한이 된다. 그 컴퓨터의 터미널을 쓸 수 있는 사람만 바꿀 수 있어야 한다. 일반 사용자는 주소 연결을 사용할 수 있다.
 
 로컬 Hermes 설치까지 마법사에 맡기려면 `DESKRPG_HERMES_INSTALL_ENABLED=1`을 **추가로** 설정한다. 이 스위치는 호스트 설정 게이트(`DESKRPG_HOST_SETUP_ENABLED` + `system_admin`)를 대체하지 않고 그 위에 얹히며, **로컬 대상에만** 열린다 — SSH 대상은 어떤 조합으로도 `hermes_install_forbidden`이다. 화면은 `SetupCapabilities.canInstallHermes`로 이 조건의 충족 여부를 읽는다.
 

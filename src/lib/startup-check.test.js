@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -120,4 +121,20 @@ test("PostgreSQL 대상인데 URL 이 없으면 찌르지 않고 실패로 알�
   assert.equal(result.ok, false);
   assert.equal(result.target, "postgresql");
   assert.match(result.message, /DATABASE_URL/);
+});
+
+test("Hermes 도 스위치도 없으면 기동 로그에 힌트를 낸다", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-hint-"));
+  assert.match(startupCheck.hostSetupHint({}, home), /host-setup on --with-install/);
+});
+
+test("스위치가 켜져 있으면 조용하다", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-hint-"));
+  assert.equal(startupCheck.hostSetupHint({ DESKRPG_HOST_SETUP_ENABLED: "1" }, home), null);
+});
+
+test("Hermes 가 이미 있으면 조용하다", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-hint-"));
+  fs.mkdirSync(path.join(home, ".hermes", "hermes-agent"), { recursive: true });
+  assert.equal(startupCheck.hostSetupHint({}, home), null);
 });
