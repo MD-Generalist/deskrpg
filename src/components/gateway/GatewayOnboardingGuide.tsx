@@ -34,6 +34,8 @@ export default function GatewayOnboardingGuide() {
           >
             {HERMES_AGENT_REPO_URL}
           </a>
+          {/* 저장소 링크만 주고 끝내지 않는다 — 같은 호스트라면 마법사가 설치할 수 있다. */}
+          <p className="mt-1 text-sm text-text-muted">{t("gateways.onboarding.step1WizardHint")}</p>
         </li>
 
         <li>

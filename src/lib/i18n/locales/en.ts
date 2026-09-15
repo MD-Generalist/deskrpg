@@ -241,6 +241,53 @@ const en: Record<string, string> = {
   "hermes.wizard.review.timezone": "Set the gateway time zone to {timezone}.",
   "hermes.wizard.review.timezoneToggle": "Send this browser's time zone to the gateway",
   "hermes.wizard.review.pluginVersion": "Plugin version",
+  "hermes.wizard.step.installingHermes": "Install Hermes",
+  "hermes.wizard.step.creatingProfile": "Create the new profile",
+  "hermes.wizard.step.provisioningKeys": "Provision profile API credentials",
+  "hermes.wizard.error.profileNameInvalid":
+    "The profile name or description breaks the rules. Names use lowercase letters, digits, hyphens and underscores and stay under 64 characters; descriptions are a single line of at most 200 characters.",
+  "hermes.wizard.error.profileExists":
+    "A profile with that name already exists. Choose another name, or pick that profile from the list below to import it.",
+  "hermes.wizard.error.profileCreateFailed":
+    "The profile could not be created. Ask the administrator to check write permission on the host's Hermes home directory, then retry.",
+  "hermes.wizard.error.profileKeyFailed":
+    "The profile API credential could not be written. Ask the administrator to check write permission on that profile's .env, then retry. Existing credentials are never overwritten.",
+  "hermes.wizard.error.profileProvisionForbidden":
+    "This wizard cannot create a credential for that profile: it is not the listener owner, or an external secret provider manages the credential. Configure it through that provider, then check again.",
+  "hermes.wizard.error.profileVerifyFailed":
+    "The provisioned credential could not be verified against the profile API. Ask the administrator to check the gateway state and the profile allowlist, then retry.",
+  "hermes.wizard.error.hermesAlreadyInstalled":
+    "Hermes is already installed on this host. Go back to discovery and connect to it instead of installing.",
+  "hermes.wizard.error.hermesInstallForbidden":
+    "This wizard cannot install Hermes here. Remote (SSH) targets are never installed to, and an operator must enable DESKRPG_HERMES_INSTALL_ENABLED.",
+  "hermes.wizard.error.hermesInstallFailed":
+    "The Hermes installation did not finish. Ask the administrator to run the installer on the server directly and check its output, then retry.",
+  "hermes.wizard.error.hermesInstallerUnavailable":
+    "The official installer script could not be downloaded. Ask the administrator to check the server's network and proxy settings, then retry.",
+  "hermes.wizard.warn.profileNotServed":
+    "The gateway does not serve this profile yet. Add its name to the gateway's multiplex profile allowlist. This wizard never edits the allowlist.",
+  "hermes.wizard.warn.modelProviderRequired":
+    "No model provider is configured yet. Run hermes model on the server to sign in to a model. Until then NPCs cannot reply.",
+  "hermes.wizard.install.title": "Install Hermes on this server?",
+  "hermes.wizard.install.body":
+    "The official installer script is downloaded and run on the host where the DeskRPG server runs. It can take a few minutes. Model provider sign-in is not included: run hermes model on the server afterwards.",
+  "hermes.wizard.install.consent": "I agree to run the official installer script on this server.",
+  "hermes.wizard.install.unavailable":
+    "Hermes installation is disabled on this instance. An operator must enable DESKRPG_HERMES_INSTALL_ENABLED before this screen can install it. Until then, install Hermes on the server yourself and search again.",
+  "hermes.wizard.install.done":
+    "Hermes is installed. Search again, pick this installation and continue connecting.",
+  "hermes.wizard.install.digest": "Installer script fingerprint {digest}",
+  "hermes.wizard.install.start": "Start Hermes installation",
+  "hermes.wizard.profile.newTitle": "Create a new profile",
+  "hermes.wizard.profile.nameLabel": "Profile name",
+  "hermes.wizard.profile.descriptionLabel": "Profile description",
+  "hermes.wizard.profile.descriptionHint":
+    "Kanban uses it to route work by role. One line, at most 200 characters.",
+  "hermes.wizard.profile.provisionLabel": "Provision credential",
+  "hermes.wizard.profile.provisionHint":
+    "Available only for profiles with no API credential. The wizard creates one. Existing credentials are never rotated.",
+  "gateways.onboarding.step1WizardHint":
+    "If Hermes should run on the same host as the DeskRPG server, the connection wizard below can install it for you when an operator allows it.",
   "hermes.wizard.profile.namePlaceholder": "New profile name (e.g. noah)",
   "hermes.wizard.profile.resumeHint":
     "Or pick a profile you already registered to edit its persona and settings.",

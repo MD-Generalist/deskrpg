@@ -238,6 +238,53 @@ const ko: Record<string, string> = {
   "hermes.wizard.review.timezone": "게이트웨이 시간대를 {timezone} 으로 설정합니다.",
   "hermes.wizard.review.timezoneToggle": "이 브라우저의 시간대를 게이트웨이에 넣기",
   "hermes.wizard.review.pluginVersion": "플러그인 버전",
+  "hermes.wizard.step.installingHermes": "Hermes 설치",
+  "hermes.wizard.step.creatingProfile": "새 프로필 만들기",
+  "hermes.wizard.step.provisioningKeys": "프로필 인증 키 발급",
+  "hermes.wizard.error.profileNameInvalid":
+    "프로필 이름이나 설명이 규칙에 맞지 않습니다. 이름은 소문자·숫자·하이픈·밑줄만 쓰고 64자 이하여야 하며, 설명은 한 줄로 200자 이하여야 합니다.",
+  "hermes.wizard.error.profileExists":
+    "같은 이름의 프로필이 이미 있습니다. 다른 이름을 쓰거나, 아래 목록에서 그 프로필을 골라 가져오세요.",
+  "hermes.wizard.error.profileCreateFailed":
+    "프로필을 만들지 못했습니다. 관리자가 호스트의 Hermes 홈 디렉터리 쓰기 권한을 확인한 뒤 다시 시도하세요.",
+  "hermes.wizard.error.profileKeyFailed":
+    "프로필 인증 키를 쓰지 못했습니다. 관리자가 해당 프로필의 .env 쓰기 권한을 확인한 뒤 다시 시도하세요. 기존 키는 덮어쓰지 않습니다.",
+  "hermes.wizard.error.profileProvisionForbidden":
+    "이 프로필에는 마법사가 키를 만들 수 없습니다. 리스너 소유자 프로필이 아니거나 외부 비밀 관리자가 키를 관리합니다. 해당 관리자에서 키를 설정한 뒤 다시 확인하세요.",
+  "hermes.wizard.error.profileVerifyFailed":
+    "발급한 키로 프로필 API 를 확인하지 못했습니다. 관리자가 게이트웨이 상태와 프로필 허용 목록을 확인한 뒤 다시 시도하세요.",
+  "hermes.wizard.error.hermesAlreadyInstalled":
+    "이 호스트에는 이미 Hermes 가 설치돼 있습니다. 설치 대신 설치 찾기로 돌아가 연결하세요.",
+  "hermes.wizard.error.hermesInstallForbidden":
+    "이 마법사에서는 Hermes 를 설치할 수 없습니다. 원격(SSH) 대상에는 설치하지 않으며, 운영자가 DESKRPG_HERMES_INSTALL_ENABLED 를 켜야 합니다.",
+  "hermes.wizard.error.hermesInstallFailed":
+    "Hermes 설치가 끝나지 못했습니다. 관리자가 서버에서 설치 스크립트를 직접 실행해 결과를 확인한 뒤 다시 시도하세요.",
+  "hermes.wizard.error.hermesInstallerUnavailable":
+    "공식 설치 스크립트를 내려받지 못했습니다. 관리자가 서버의 네트워크와 프록시 설정을 확인한 뒤 다시 시도하세요.",
+  "hermes.wizard.warn.profileNotServed":
+    "이 프로필은 아직 게이트웨이가 서빙하지 않습니다. 게이트웨이의 multiplex 프로필 허용 목록에 이름을 넣어야 합니다. 마법사는 허용 목록을 고치지 않습니다.",
+  "hermes.wizard.warn.modelProviderRequired":
+    "모델 제공자가 아직 없습니다. 서버에서 hermes model 을 실행해 모델에 로그인하세요. 그전까지 NPC 는 대답하지 못합니다.",
+  "hermes.wizard.install.title": "이 서버에 Hermes 를 설치할까요?",
+  "hermes.wizard.install.body":
+    "공식 설치 스크립트를 내려받아 DeskRPG 서버가 도는 이 호스트에서 실행합니다. 몇 분 걸릴 수 있습니다. 모델 제공자 로그인은 포함되지 않으며, 설치가 끝난 뒤 서버에서 hermes model 을 따로 실행해야 합니다.",
+  "hermes.wizard.install.consent": "공식 설치 스크립트를 이 서버에서 실행하는 데 동의합니다.",
+  "hermes.wizard.install.unavailable":
+    "이 인스턴스에서는 Hermes 설치가 꺼져 있습니다. 운영자가 DESKRPG_HERMES_INSTALL_ENABLED 를 켜야 이 화면에서 설치할 수 있습니다. 그전에는 서버에 직접 Hermes 를 설치한 뒤 다시 검색하세요.",
+  "hermes.wizard.install.done":
+    "Hermes 설치가 끝났습니다. 다시 찾기로 이 설치를 골라 연결을 이어 가세요.",
+  "hermes.wizard.install.digest": "설치 스크립트 지문 {digest}",
+  "hermes.wizard.install.start": "Hermes 설치 시작",
+  "hermes.wizard.profile.newTitle": "새 프로필 만들기",
+  "hermes.wizard.profile.nameLabel": "프로필 이름",
+  "hermes.wizard.profile.descriptionLabel": "프로필 설명",
+  "hermes.wizard.profile.descriptionHint":
+    "칸반이 역할을 보고 일을 배분할 때 씁니다. 한 줄로 200자 이하.",
+  "hermes.wizard.profile.provisionLabel": "키 발급",
+  "hermes.wizard.profile.provisionHint":
+    "인증 키가 없는 프로필에만 켤 수 있습니다. 마법사가 새 키를 만들어 넣습니다. 이미 있는 키는 절대 바꾸지 않습니다.",
+  "gateways.onboarding.step1WizardHint":
+    "DeskRPG 서버가 도는 호스트라면, 아래 연결 마법사가 이 서버에 Hermes 를 직접 설치해 줄 수도 있습니다(운영자가 허용한 경우).",
   "hermes.wizard.profile.namePlaceholder": "새 프로필 이름 (예: noah)",
   "hermes.wizard.profile.resumeHint":
     "또는 이미 등록된 프로필을 골라 인격·설정을 이어서 편집합니다.",

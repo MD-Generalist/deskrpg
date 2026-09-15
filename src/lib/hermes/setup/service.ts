@@ -6,14 +6,19 @@ import { db, users, gatewayResources, nowForDb } from "@/db";
 import { upsertOwnedGatewayResource } from "@/lib/gateway-resources";
 import { registerHermesProfile } from "@/lib/hermes-profiles";
 import { isValidProfileName } from "../profile-name";
-import { discoverHost, inspectHost, prepareHost } from "./host";
+import { discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
 import { localExecutor, sshExecutor, getSshHosts } from "./executor";
 import { ensureSshTunnel, registerSshTransport, transportFetch } from "./transport";
-import { hostSetupAllowed, safeSetupError, validateGatewayUrl } from "./policy";
+import {
+  hermesInstallAllowed,
+  hostSetupAllowed,
+  safeSetupError,
+  validateGatewayUrl,
+} from "./policy";
 import { SetupJobStore } from "./store";
 import { buildPluginInfoCacheUpdate } from "../plugin-cache-update";
 import { verifySetupGateway } from "./verify";
-import type { HostTarget, PreparedHost, SetupCapabilities } from "./types";
+import type { HostTarget, PreparedHost, SetupCapabilities, SetupProvisionRequest } from "./types";
 
 const stores = globalThis as typeof globalThis & {
   __deskrpgSetupControllers?: Map<string, AbortController>;
@@ -21,7 +26,10 @@ const stores = globalThis as typeof globalThis & {
 const controllers = (stores.__deskrpgSetupControllers ??= new Map());
 const store = () => new SetupJobStore();
 const STEPS = new Set([
+  "installing_hermes",
   "inspecting",
+  "creating_profile",
+  "provisioning_keys",
   "installing_service",
   "installing_plugin",
   "enabling_plugin",
@@ -56,13 +64,17 @@ function hasCommand(command: string) {
     });
 }
 export async function setupCapabilities(userId: string): Promise<SetupCapabilities> {
-  const enabled = hostSetupAllowed(process.env, await role(userId));
+  const systemRole = await role(userId);
+  const enabled = hostSetupAllowed(process.env, systemRole);
   const hosts = enabled && hasCommand("ssh") ? getSshHosts() : [];
+  const local = enabled && process.platform !== "win32" && hasCommand("python3");
   return {
-    local: enabled && process.platform !== "win32" && hasCommand("python3"),
+    local,
     ssh: enabled && hosts.length > 0,
     hostLabel: enabled ? hostname() : "",
     sshHosts: hosts,
+    // 설치는 local 전용이다. SSH 대상에는 어떤 조합으로도 열리지 않는다.
+    canInstallHermes: local && hermesInstallAllowed(process.env, systemRole, "local"),
   };
 }
 async function requireHost(userId: string, target: HostTarget) {
@@ -119,8 +131,13 @@ export async function startSetup(
   candidateId: string,
   selectedProfiles: string[],
   timezone?: string,
+  provision?: SetupProvisionRequest,
+  installHermes?: boolean,
 ) {
   const executor = await requireHost(userId, target);
+  // 게이트 셋(호스트 설정 + DESKRPG_HERMES_INSTALL_ENABLED + local)을 모두 통과해야 한다.
+  if (installHermes && !hermesInstallAllowed(process.env, await role(userId), target.mode))
+    throw new Error("hermes_install_forbidden");
   const jobs = store();
   // Host-wide lock: default and named candidates may share config/plugin installation.
   const release = jobs.lock(JSON.stringify(target));
@@ -146,6 +163,18 @@ export async function startSetup(
   // The server owns this job; request completion does not cancel its subprocess.
   void (async () => {
     try {
+      let selectedCandidateId = candidateId;
+      if (installHermes) {
+        step("installing_hermes");
+        const { installerDigest } = await installHermesHost(executor, controller.signal);
+        jobs.update(userId, job.id, { installerDigest });
+        checkCancelled();
+        // 설치 뒤에는 후보가 새로 생긴다 — 클라이언트가 알 수 없으므로 서버가 다시 찾는다.
+        const candidates = await discoverHost(executor);
+        const fresh = candidates.find((item) => item.label === "Hermes default");
+        if (!fresh) throw new Error("hermes_install_failed");
+        selectedCandidateId = fresh.id;
+      }
       step("inspecting");
       // Cancel only at safe command boundaries. The helper owns its process group
       // watchdog; killing the launcher cannot prove every descendant stopped.
@@ -153,11 +182,14 @@ export async function startSetup(
         executor(command, args, { ...options, signal: undefined });
       const prepared = await prepareHost(
         boundedExecutor,
-        candidateId,
+        selectedCandidateId,
         step,
         controller.signal,
         timezone,
+        provision,
       );
+      if (prepared.warnings?.length)
+        jobs.update(userId, job.id, { warnings: [...prepared.warnings] });
       const remotePort = assertPrepared(prepared);
       const selected = new Set(selectedProfiles);
       if (

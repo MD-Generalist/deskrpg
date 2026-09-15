@@ -95,3 +95,53 @@ test("새 진행 단계는 네 언어 모두 고유한 라벨을 가진다", asy
     assert.ok(copy.pluginVersion.length > 0);
   }
 });
+
+test("계약 2 의 새 오류 코드도 네 언어 모두 원시 코드 없이 안내를 돌려준다", async () => {
+  const { setupCopy, setupError } = await import("./setup-copy");
+  for (const code of [
+    "profile_name_invalid",
+    "profile_exists",
+    "profile_create_failed",
+    "profile_key_failed",
+    "profile_provision_forbidden",
+    "profile_verify_failed",
+    "hermes_already_installed",
+    "hermes_install_forbidden",
+    "hermes_install_failed",
+    "hermes_installer_unavailable",
+  ]) {
+    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+      const message = setupHostError(locale, code);
+      assert.ok(message && message.length > 20, `${locale}: ${code}`);
+      assert.ok(!message.includes(code));
+      assert.notEqual(message, setupError(setupCopy[locale], code));
+    }
+  }
+});
+
+test("경고는 네 언어에서 안내를 돌려주고, 모르는 코드는 화면에 그리지 않는다", async () => {
+  const { setupWarning } = await import("./setup-copy");
+  for (const code of ["profile_not_served", "model_provider_required"]) {
+    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+      const message = setupWarning(locale, code);
+      assert.ok(message && message.length > 20, `${locale}: ${code}`);
+      assert.ok(!message.includes(code));
+    }
+  }
+  assert.match(setupWarning("ko", "model_provider_required")!, /hermes model/);
+  // 화이트리스트 밖은 undefined — 원시 코드나 호스트 출력이 새면 안 된다.
+  assert.equal(setupWarning("ko", "raw subprocess tail"), undefined);
+  assert.equal(setupWarning("ko", undefined), undefined);
+});
+
+test("계약 2 의 새 진행 단계는 네 언어 모두 고유한 라벨을 가진다", async () => {
+  const { setupCopy, setupStep } = await import("./setup-copy");
+  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    const copy = setupCopy[locale];
+    const labels = ["installing_hermes", "creating_profile", "provisioning_keys"].map((code) =>
+      setupStep(copy, code),
+    );
+    for (const label of labels) assert.notEqual(label, copy.step, `${locale}: 일반 폴백 금지`);
+    assert.equal(new Set(labels).size, 3, `${locale}: 세 단계가 서로 달라야 한다`);
+  }
+});

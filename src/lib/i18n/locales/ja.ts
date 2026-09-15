@@ -245,6 +245,54 @@ const ja: Record<string, string> = {
   "hermes.wizard.review.timezone": "ゲートウェイのタイムゾーンを{timezone}に設定します。",
   "hermes.wizard.review.timezoneToggle": "このブラウザーのタイムゾーンをゲートウェイに設定する",
   "hermes.wizard.review.pluginVersion": "プラグインバージョン",
+  "hermes.wizard.step.installingHermes": "Hermesをインストール",
+  "hermes.wizard.step.creatingProfile": "新しいプロファイルを作成",
+  "hermes.wizard.step.provisioningKeys": "プロファイルのAPI認証キーを発行",
+  "hermes.wizard.error.profileNameInvalid":
+    "プロファイル名または説明が規則に合いません。名前は小文字・数字・ハイフン・アンダースコアのみで64文字以下、説明は1行200文字以下にしてください。",
+  "hermes.wizard.error.profileExists":
+    "同じ名前のプロファイルが既にあります。別の名前を使うか、下の一覧からそのプロファイルを選んで取得してください。",
+  "hermes.wizard.error.profileCreateFailed":
+    "プロファイルを作成できませんでした。管理者がホストのHermesホームディレクトリの書き込み権限を確認してから再試行してください。",
+  "hermes.wizard.error.profileKeyFailed":
+    "プロファイルのAPI認証キーを書き込めませんでした。管理者が該当プロファイルの.envの書き込み権限を確認してから再試行してください。既存のキーは上書きしません。",
+  "hermes.wizard.error.profileProvisionForbidden":
+    "このプロファイルにはキーを作成できません。リスナー所有プロファイルではないか、外部シークレットプロバイダーがキーを管理しています。そのプロバイダーで設定してから再確認してください。",
+  "hermes.wizard.error.profileVerifyFailed":
+    "発行したキーでプロファイルAPIを検証できませんでした。管理者がゲートウェイの状態とプロファイル許可リストを確認してから再試行してください。",
+  "hermes.wizard.error.hermesAlreadyInstalled":
+    "このホストには既にHermesがインストールされています。インストールではなく、検索に戻って接続してください。",
+  "hermes.wizard.error.hermesInstallForbidden":
+    "このウィザードではHermesをインストールできません。リモート(SSH)対象にはインストールせず、運用者がDESKRPG_HERMES_INSTALL_ENABLEDを有効にする必要があります。",
+  "hermes.wizard.error.hermesInstallFailed":
+    "Hermesのインストールが完了しませんでした。管理者がサーバーでインストールスクリプトを直接実行して結果を確認してから再試行してください。",
+  "hermes.wizard.error.hermesInstallerUnavailable":
+    "公式インストールスクリプトをダウンロードできませんでした。管理者がサーバーのネットワークとプロキシ設定を確認してから再試行してください。",
+  "hermes.wizard.warn.profileNotServed":
+    "このプロファイルはまだゲートウェイで配信されていません。ゲートウェイのmultiplexプロファイル許可リストに名前を追加してください。ウィザードは許可リストを変更しません。",
+  "hermes.wizard.warn.modelProviderRequired":
+    "モデルプロバイダーがまだありません。サーバーでhermes modelを実行してモデルにログインしてください。それまでNPCは応答できません。",
+  "hermes.wizard.install.title": "このサーバーにHermesをインストールしますか？",
+  "hermes.wizard.install.body":
+    "公式インストールスクリプトをダウンロードし、DeskRPGサーバーが動作するこのホストで実行します。数分かかる場合があります。モデルプロバイダーへのログインは含まれません。完了後にサーバーでhermes modelを実行してください。",
+  "hermes.wizard.install.consent":
+    "公式インストールスクリプトをこのサーバーで実行することに同意します。",
+  "hermes.wizard.install.unavailable":
+    "このインスタンスではHermesのインストールが無効です。運用者がDESKRPG_HERMES_INSTALL_ENABLEDを有効にする必要があります。それまではサーバーに直接Hermesをインストールしてから再検索してください。",
+  "hermes.wizard.install.done":
+    "Hermesのインストールが完了しました。再検索してこのインストールを選び、接続を続けてください。",
+  "hermes.wizard.install.digest": "インストールスクリプトの指紋 {digest}",
+  "hermes.wizard.install.start": "Hermesのインストールを開始",
+  "hermes.wizard.profile.newTitle": "新しいプロファイルを作成",
+  "hermes.wizard.profile.nameLabel": "プロファイル名",
+  "hermes.wizard.profile.descriptionLabel": "プロファイルの説明",
+  "hermes.wizard.profile.descriptionHint":
+    "カンバンが役割を見て作業を割り当てるときに使います。1行200文字以下。",
+  "hermes.wizard.profile.provisionLabel": "キーを発行",
+  "hermes.wizard.profile.provisionHint":
+    "API認証キーがないプロファイルにのみ有効です。ウィザードが新しいキーを作成します。既存のキーは変更しません。",
+  "gateways.onboarding.step1WizardHint":
+    "DeskRPGサーバーと同じホストでHermesを動かす場合、運用者が許可していれば下の接続ウィザードがインストールを代行できます。",
   "hermes.wizard.profile.namePlaceholder": "新しいプロフィール名（例: noah）",
   "hermes.wizard.profile.resumeHint":
     "または、すでに登録済みのプロフィールを選んで人格・設定を続けて編集します。",

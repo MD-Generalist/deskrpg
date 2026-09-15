@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserId } from "@/lib/internal-rpc";
-import { sameOriginMutation, safeSetupError, validateTimezone } from "@/lib/hermes/setup/policy";
+import {
+  sameOriginMutation,
+  safeSetupError,
+  validateProfileDescription,
+  validateProfileName,
+  validateTimezone,
+} from "@/lib/hermes/setup/policy";
 import {
   setupCapabilities,
   discoverSetupHost,
@@ -10,7 +16,7 @@ import {
   cancelSetupJob,
   connectSetupUrl,
 } from "@/lib/hermes/setup/service";
-import type { HostTarget } from "@/lib/hermes/setup/types";
+import type { HostTarget, SetupProvisionRequest } from "@/lib/hermes/setup/types";
 import { isValidProfileName } from "@/lib/hermes/profile-name";
 
 export const runtime = "nodejs";
@@ -38,14 +44,39 @@ const response = (body: unknown, status = 200) =>
 function failure(error: unknown) {
   const code = safeSetupError(error);
   const status =
-    code === "setup_forbidden" || code === "setup_bad_origin"
+    code === "setup_forbidden" ||
+    code === "setup_bad_origin" ||
+    code === "hermes_install_forbidden" ||
+    code === "profile_provision_forbidden"
       ? 403
       : code === "setup_not_found"
         ? 404
-        : code === "setup_busy"
+        : code === "setup_busy" || code === "profile_exists"
           ? 409
           : 400;
   return response({ error: code, errorCode: code }, status);
+}
+/** 호스트에 넘기기 전에 서버가 같은 규칙으로 다시 본다. 호스트는 이것을 신뢰하지 않고 또 검증한다. */
+function readProvision(body: Record<string, unknown>): SetupProvisionRequest | undefined {
+  const request: SetupProvisionRequest = {};
+  const created = body.createProfile;
+  if (created !== undefined && created !== null) {
+    if (typeof created !== "object" || Array.isArray(created))
+      throw new Error("setup_invalid_request");
+    const entry = created as Record<string, unknown>;
+    const description = validateProfileDescription(entry.description);
+    request.createProfile = {
+      name: validateProfileName(entry.name),
+      ...(description ? { description } : {}),
+    };
+  }
+  const keys = body.provisionKeys;
+  if (keys !== undefined && keys !== null) {
+    if (!Array.isArray(keys) || keys.length > 10) throw new Error("setup_invalid_request");
+    const names = [...new Set(keys.map((name) => validateProfileName(name)))];
+    if (names.length) request.provisionKeys = names;
+  }
+  return request.createProfile || request.provisionKeys ? request : undefined;
 }
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
@@ -83,7 +114,12 @@ export async function POST(req: NextRequest) {
         : { mode: "ssh", hostId: typeof body.hostId === "string" ? body.hostId : "" };
     if (body.action === "discover")
       return response({ candidates: await discoverSetupHost(userId, target) });
-    if (typeof body.candidateId !== "string" || !body.candidateId || body.candidateId.length > 256)
+    // 설치 전에는 후보가 존재하지 않는다 — 그때만 candidateId 를 비울 수 있고, 서버가 설치 뒤 다시 찾는다.
+    const installHermes = body.action === "prepare" && body.installHermes === true;
+    if (
+      !installHermes &&
+      (typeof body.candidateId !== "string" || !body.candidateId || body.candidateId.length > 256)
+    )
       throw new Error("setup_invalid_request");
     if (body.action === "inspect")
       return response(await inspectSetupHost(userId, target, body.candidateId));
@@ -104,9 +140,11 @@ export async function POST(req: NextRequest) {
           job: await startSetup(
             userId,
             target,
-            body.candidateId,
+            installHermes ? "" : body.candidateId,
             [...new Set<string>(body.profiles)],
             timezone,
+            readProvision(body),
+            installHermes,
           ),
         },
         202,

@@ -14,6 +14,7 @@ import {
   setupError,
   setupStep,
   setupHostError,
+  setupWarning,
   isSetupWarningBlocking,
 } from "./setup-copy";
 
@@ -29,6 +30,14 @@ const secondary =
 const input =
   "w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary";
 type Screen = "choice" | "remote" | "ssh" | "discover" | "review" | "job" | "url" | "success";
+// 계약 2 가 더한 필드들. types.ts 는 호스트 담당이 소유하므로 여기서는 넓혀서만 읽는다.
+type WizardJob = SetupJob & { warnings?: string[]; installerDigest?: string };
+type WizardCapabilities = SetupCapabilities & { canInstallHermes?: boolean };
+// 계약: ^[a-z0-9][a-z0-9_-]{0,63}$ — 서버가 다시 검증하지만 화면에서 먼저 안내한다.
+const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const PROFILE_DESCRIPTION_MAX = 200;
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
 export default function GatewaySetupWizard({
   onConnected,
@@ -39,14 +48,22 @@ export default function GatewaySetupWizard({
   const t = useT();
   const c = setupCopy[locale];
   const errorMessage = (code: unknown) => setupHostError(locale, code) ?? setupError(c, code);
-  const [cap, setCap] = useState<SetupCapabilities | null>(null);
+  const [cap, setCap] = useState<WizardCapabilities | null>(null);
   const [screen, setScreen] = useState<Screen>("choice");
   const [mode, setMode] = useState<"local" | "ssh">("local");
   const [hostId, setHostId] = useState("");
   const [candidates, setCandidates] = useState<SetupCandidate[]>([]);
   const [inspection, setInspection] = useState<SetupInspection | null>(null);
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
-  const [job, setJob] = useState<SetupJob | null>(null);
+  const [job, setJob] = useState<WizardJob | null>(null);
+  // 잡이 성공해도 남는 경고다 — 실패와 섞지 않고 성공 화면까지 들고 간다.
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [newProfileDescription, setNewProfileDescription] = useState("");
+  const [provisionKeys, setProvisionKeys] = useState<string[]>([]);
+  // 서버에서 외부 스크립트를 돌리는 일이라 기본은 꺼짐이다(시간대 제안과 다르다).
+  const [installConsent, setInstallConsent] = useState(false);
+  const [installerDigest, setInstallerDigest] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [errorCode, setErrorCode] = useState<unknown>(null);
@@ -84,7 +101,7 @@ export default function GatewaySetupWizard({
   }
   useEffect(() => {
     const abort = new AbortController();
-    request<SetupCapabilities>(undefined, "", abort.signal)
+    request<WizardCapabilities>(undefined, "", abort.signal)
       .then(setCap)
       .catch(() => {
         if (!abort.signal.aborted) setErrorCode("setup_failed");
@@ -129,6 +146,9 @@ export default function GatewaySetupWizard({
     setCandidates([]);
     setInspection(null);
     setJob(null);
+    setNewProfileName("");
+    setNewProfileDescription("");
+    setProvisionKeys([]);
     void run(
       (signal) =>
         request<{ candidates: SetupCandidate[] }>(
@@ -146,6 +166,7 @@ export default function GatewaySetupWizard({
         request<SetupInspection>({ action: "inspect", ...target, candidateId }, "", signal),
       (data) => {
         setInspection(data);
+        setProvisionKeys([]);
         setSelectedProfiles(
           (data.profiles ?? [])
             .filter((profile) => profile.hasToken || profile.canProvision)
@@ -155,13 +176,21 @@ export default function GatewaySetupWizard({
       },
     );
   }
-  function acceptJob(next: SetupJob) {
+  function acceptJob(next: WizardJob) {
     setJob(next);
+    setWarnings(strings(next.warnings));
+    if (typeof next.installerDigest === "string" && next.installerDigest)
+      setInstallerDigest(next.installerDigest);
     if (next.status !== "running") setCancelling(false);
-    if (next.status === "succeeded" && next.gatewayId) {
+    if (next.status !== "succeeded") return;
+    if (next.gatewayId) {
       setResult({ gatewayId: next.gatewayId, pluginStatus: "plugin_ready" });
       setScreen("success");
+      return;
     }
+    // 게이트웨이 없이 끝난 잡은 설치만 한 잡이다. 잡 화면에 끝났다고 알리고,
+    // 이어 가는 것은 사용자가 "다시 확인" 으로 고른다(자동 재검색은 폴링 효과를 재생성한다).
+    setInstallConsent(false);
   }
   useEffect(() => {
     if (screen !== "job" || job?.status !== "running") return;
@@ -170,7 +199,7 @@ export default function GatewaySetupWizard({
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const data = await request<{ job: SetupJob }>(
+        const data = await request<{ job: WizardJob }>(
           undefined,
           `?job=${encodeURIComponent(job.id)}`,
           abort.signal,
@@ -224,6 +253,32 @@ export default function GatewaySetupWizard({
               timezone: inspection?.candidate.timezone || browserTimezone,
             })
           : setupStep(c, change);
+  // 설치는 로컬 대상에서만, 그리고 운영자가 게이트를 켰을 때만 제안한다.
+  const installOffered = mode === "local" && !busy && !candidates.length;
+  const canInstallHermes = cap?.canInstallHermes === true;
+  const trimmedProfileName = newProfileName.trim();
+  const profileNameValid = !trimmedProfileName || PROFILE_NAME.test(trimmedProfileName);
+  const warningBanner = warnings.length ? (
+    <div className="space-y-2">
+      {warnings.map((code) => {
+        const message = setupWarning(locale, code);
+        return message ? (
+          <p
+            key={code}
+            role="status"
+            className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm text-text"
+          >
+            {message}
+          </p>
+        ) : null;
+      })}
+    </div>
+  ) : null;
+  const digestLine = installerDigest ? (
+    <p className="break-all text-xs text-text-muted">
+      {t("hermes.wizard.install.digest", { digest: installerDigest })}
+    </p>
+  ) : null;
   const pluginLabel =
     inspection &&
     (inspection.pluginStatus === "plugin_unauthorized"
@@ -327,6 +382,50 @@ export default function GatewaySetupWizard({
           ) : (
             <>
               {!candidates.length && <p>{c.empty}</p>}
+              {installOffered &&
+                (canInstallHermes ? (
+                  <article className="rounded-lg border border-primary/40 bg-bg p-4">
+                    <h3 className="font-semibold">{t("hermes.wizard.install.title")}</h3>
+                    <p className="mt-1 text-sm text-text-muted">
+                      {t("hermes.wizard.install.body")}
+                    </p>
+                    <label className="mt-3 flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="install-consent"
+                        className="mt-1 accent-primary"
+                        checked={installConsent}
+                        onChange={(event) => setInstallConsent(event.target.checked)}
+                      />
+                      <span>{t("hermes.wizard.install.consent")}</span>
+                    </label>
+                    <button
+                      className={`${button} mt-3`}
+                      disabled={busy || !installConsent}
+                      onClick={() =>
+                        void run(
+                          (signal) =>
+                            request<{ job: WizardJob }>(
+                              { action: "install-hermes", ...target },
+                              "",
+                              signal,
+                            ),
+                          ({ job: next }) => {
+                            setScreen("job");
+                            acceptJob(next);
+                          },
+                        )
+                      }
+                    >
+                      {t("hermes.wizard.install.start")}
+                    </button>
+                  </article>
+                ) : (
+                  <p className="rounded-lg border border-border bg-bg p-4 text-sm text-text-muted">
+                    {t("hermes.wizard.install.unavailable")}
+                  </p>
+                ))}
+              {digestLine}
               {candidates.map((candidate) => (
                 <article key={candidate.id} className="rounded-lg border border-border bg-bg p-4">
                   <h3 className="font-semibold">{candidate.label}</h3>
@@ -378,29 +477,56 @@ export default function GatewaySetupWizard({
           <fieldset disabled={busy} className="space-y-3 rounded-lg border border-border p-4">
             <legend className="px-1 text-sm font-semibold">{c.selectProfiles}</legend>
             {(inspection.profiles ?? []).map((profile) => (
-              <label key={profile.name} className="flex items-start gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1 accent-primary"
-                  disabled={!profile.hasToken && !profile.canProvision}
-                  checked={selectedProfiles.includes(profile.name)}
-                  onChange={(event) =>
-                    setSelectedProfiles((current) =>
-                      event.target.checked
-                        ? [...current, profile.name]
-                        : current.filter((name) => name !== profile.name),
-                    )
-                  }
-                />
-                <span>
-                  <span className="font-medium">{profile.name}</span>
-                  {!profile.hasToken && (
-                    <span className="mt-1 block text-xs text-text-muted">
-                      {profile.canProvision ? c.profileProvisionToken : c.profileNeedsToken}
-                    </span>
-                  )}
-                </span>
-              </label>
+              <div key={profile.name} className="space-y-2">
+                <label className="flex items-start gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    name="profile"
+                    className="mt-1 accent-primary"
+                    disabled={!profile.hasToken && !profile.canProvision}
+                    checked={selectedProfiles.includes(profile.name)}
+                    onChange={(event) =>
+                      setSelectedProfiles((current) =>
+                        event.target.checked
+                          ? [...current, profile.name]
+                          : current.filter((name) => name !== profile.name),
+                      )
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{profile.name}</span>
+                    {!profile.hasToken && (
+                      <span className="mt-1 block text-xs text-text-muted">
+                        {profile.canProvision ? c.profileProvisionToken : c.profileNeedsToken}
+                      </span>
+                    )}
+                  </span>
+                </label>
+                {/* 가져오기와 역할이 다르다: 이 체크는 키가 없는 프로필에 키를 새로 발급한다. */}
+                {profile.canProvision && (
+                  <div className="ml-7">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="provision"
+                        className="mt-1 accent-primary"
+                        checked={provisionKeys.includes(profile.name)}
+                        onChange={(event) =>
+                          setProvisionKeys((current) =>
+                            event.target.checked
+                              ? [...current, profile.name]
+                              : current.filter((name) => name !== profile.name),
+                          )
+                        }
+                      />
+                      <span>{t("hermes.wizard.profile.provisionLabel")}</span>
+                    </label>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {t("hermes.wizard.profile.provisionHint")}
+                    </p>
+                  </div>
+                )}
+              </div>
             ))}
             <p className="text-sm" aria-live="polite">
               {c.selectedProfiles}: {selectedProfiles.length}
@@ -408,6 +534,42 @@ export default function GatewaySetupWizard({
             {selectedProfiles.length === 0 && (
               <p className="text-sm text-text-muted">{c.noSelectedProfiles}</p>
             )}
+          </fieldset>
+          <fieldset disabled={busy} className="space-y-3 rounded-lg border border-border p-4">
+            <legend className="px-1 text-sm font-semibold">
+              {t("hermes.wizard.profile.newTitle")}
+            </legend>
+            <label className="block text-sm font-semibold">
+              {t("hermes.wizard.profile.nameLabel")}
+              <input
+                className={`${input} mt-1`}
+                type="text"
+                name="new-profile-name"
+                autoComplete="off"
+                maxLength={64}
+                value={newProfileName}
+                onChange={(event) => setNewProfileName(event.target.value)}
+              />
+            </label>
+            <p className="text-xs text-text-muted">{t("hermes.wizard.profile.nameHint")}</p>
+            {!profileNameValid && (
+              <p role="alert" className="text-xs text-danger">
+                {t("hermes.wizard.error.profileNameInvalid")}
+              </p>
+            )}
+            <label className="block text-sm font-semibold">
+              {t("hermes.wizard.profile.descriptionLabel")}
+              <input
+                className={`${input} mt-1`}
+                type="text"
+                name="new-profile-description"
+                autoComplete="off"
+                maxLength={PROFILE_DESCRIPTION_MAX}
+                value={newProfileDescription}
+                onChange={(event) => setNewProfileDescription(event.target.value)}
+              />
+            </label>
+            <p className="text-xs text-text-muted">{t("hermes.wizard.profile.descriptionHint")}</p>
           </fieldset>
           <h4 className="font-semibold">{c.changes}</h4>
           {inspection.changes.length || timezoneOffer ? (
@@ -439,18 +601,32 @@ export default function GatewaySetupWizard({
           <button
             className={button}
             disabled={
-              busy || !!blockingWarning || inspection.pluginStatus === "plugin_unauthorized"
+              busy ||
+              !profileNameValid ||
+              !!blockingWarning ||
+              inspection.pluginStatus === "plugin_unauthorized"
             }
             onClick={() =>
               void run(
                 (signal) =>
-                  request<{ job: SetupJob }>(
+                  request<{ job: WizardJob }>(
                     {
                       action: "prepare",
                       ...target,
                       candidateId: inspection.candidate.id,
                       profiles: selectedProfiles,
                       ...(timezoneOffer && sendTimezone ? { timezone: timezoneOffer } : {}),
+                      ...(trimmedProfileName
+                        ? {
+                            createProfile: {
+                              name: trimmedProfileName,
+                              ...(newProfileDescription.trim()
+                                ? { description: newProfileDescription.trim() }
+                                : {}),
+                            },
+                          }
+                        : {}),
+                      ...(provisionKeys.length ? { provisionKeys } : {}),
                     },
                     "",
                     signal,
@@ -480,13 +656,17 @@ export default function GatewaySetupWizard({
               ? c.running
               : job.status === "cancelled"
                 ? c.cancelled
-                : c.failed}
+                : job.status === "succeeded"
+                  ? t("hermes.wizard.install.done")
+                  : c.failed}
           </h3>
           <ol className="list-inside list-decimal space-y-2 text-sm" aria-live="polite">
             {job.steps.map((step, index) => (
               <li key={index}>{setupStep(c, step)}</li>
             ))}
           </ol>
+          {warningBanner}
+          {digestLine}
           {job.error && (
             <p role="alert" className="text-sm text-danger">
               {errorMessage(job.error)}
@@ -503,7 +683,7 @@ export default function GatewaySetupWizard({
                   const epoch = generation.current;
                   const abort = new AbortController();
                   controller.current = abort;
-                  void request<{ job: SetupJob }>(
+                  void request<{ job: WizardJob }>(
                     { action: "cancel", jobId: job.id },
                     "",
                     abort.signal,
@@ -580,6 +760,8 @@ export default function GatewaySetupWizard({
       )}
       {screen === "success" && result && (
         <div className="mt-4 space-y-4">
+          {warningBanner}
+          {digestLine}
           {result.pluginStatus === "plugin_ready" ? (
             <>
               <p role="status">{c.connected}</p>

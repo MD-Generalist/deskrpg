@@ -29,6 +29,83 @@ except Exception:
     print(json.dumps({'error': 'host_operation_failed'}))
 `;
 
+/**
+ * 로컬 Hermes 설치 전용 스크립트. 설치가 없을 때 돌아야 하므로 HOST_BOOTSTRAP(=Hermes venv 파이썬)을
+ * 거치지 않고 시스템 python3 에서 직접 실행된다. 표준 라이브러리만 쓴다.
+ * 설치 스크립트는 파이프가 아니라 임시 파일로 내려받아 sha256 지문을 남기고 `bash <파일>` 로 실행한다.
+ * 설치 출력은 저장도 반환도 하지 않는다 — 실패 분류용 마지막 8KiB 만 메모리에 둔다.
+ */
+export const HOST_INSTALLER = String.raw`
+import hashlib, json, os, pathlib, subprocess, sys, tempfile, threading, urllib.request
+INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.sh'
+MAX_INSTALLER_BYTES = 1048576
+INSTALL_TIMEOUT = 580
+TAIL = 8192
+def out(value):
+    sys.stdout.write(json.dumps(value))
+    raise SystemExit(0)
+try:
+    ROOT = pathlib.Path.home() / '.hermes'
+    INSTALL = ROOT / 'hermes-agent'
+    if ROOT.is_symlink() or (ROOT.exists() and not ROOT.is_dir()): out({'error': 'unsafe_host_path'})
+    # 업그레이드·재설치는 이 경로의 범위가 아니다. 이미 있으면 절대 손대지 않는다.
+    if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
+    ROOT.mkdir(parents=True, exist_ok=True)
+    import fcntl
+    fd = os.open(str(ROOT / '.deskrpg-setup.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        out({'error': 'host_busy'})
+    lock = os.fdopen(fd, 'w')
+    # 잠금을 잡은 뒤 한 번 더 본다 — 경쟁하던 다른 설치가 방금 끝났을 수 있다.
+    if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(INSTALLER_URL, timeout=30) as response:
+            body = response.read(MAX_INSTALLER_BYTES + 1)
+    except Exception:
+        out({'error': 'hermes_installer_unavailable'})
+    if not body or len(body) > MAX_INSTALLER_BYTES: out({'error': 'hermes_installer_unavailable'})
+    digest = hashlib.sha256(body).hexdigest()
+    handle, script = tempfile.mkstemp(prefix='.deskrpg-hermes-install-', suffix='.sh', dir=str(ROOT))
+    try:
+        with os.fdopen(handle, 'wb') as stream:
+            stream.write(body); stream.flush(); os.fsync(stream.fileno())
+        env = {**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}
+        child = subprocess.Popen(['bash', script, '--skip-browser', '--skip-setup'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(ROOT), pass_fds=(lock.fileno(),))
+        watchdog = threading.Timer(INSTALL_TIMEOUT, child.kill)
+        watchdog.start()
+        tail = b''
+        try:
+            while True:
+                chunk = child.stdout.read(65536)
+                if not chunk: break
+                # 읽고 버린다. 정상 설치의 출력은 256KiB 를 넘기므로 상한을 두지 않고 꼬리만 남긴다.
+                tail = (tail + chunk)[-TAIL:]
+            code = child.wait()
+        finally:
+            watchdog.cancel()
+            child.stdout.close()
+    finally:
+        try: os.unlink(script)
+        except OSError: pass
+    if code != 0:
+        diagnostic = tail.decode('utf-8', errors='replace').lower()
+        if 'could not resolve host' in diagnostic or 'failed to connect' in diagnostic or 'connection refused' in diagnostic:
+            out({'error': 'hermes_installer_unavailable'})
+        out({'error': 'hermes_install_failed'})
+    python = next((INSTALL / folder / 'bin' / 'python' for folder in ('venv', '.venv') if (INSTALL / folder / 'bin' / 'python').is_file()), None)
+    if python is None: out({'error': 'hermes_install_failed'})
+    probe = subprocess.run([str(python), '-m', 'hermes_cli.main', '--version'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
+    if probe.returncode: out({'error': 'hermes_install_failed'})
+    out({'ok': True, 'installerDigest': digest})
+except SystemExit:
+    raise
+except Exception:
+    sys.stdout.write(json.dumps({'error': 'host_operation_failed'}))
+`;
+
 // Only fixed operations are accepted. Raw subprocess output, configuration, env and exceptions never leave here.
 export const HOST_HELPER = String.raw`
 import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
@@ -41,6 +118,8 @@ os.environ['HERMES_HOME'] = str(ROOT)
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 NAME = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
 RESERVED = {'hermes','test','tmp','root','sudo'}
+# 마법사가 새로 만들거나 키를 발급할 수 있는 이름에서 제외한다. 'default' 는 configure 가 다룬다.
+RESERVED_PROFILE = RESERVED | {'default'}
 PIN = '1be18d79bf1b8d40890b95517a8131cb2ae48c6f'
 PLUGIN_VERSION = '0.6.0'
 HERMES_MIN = '0.21.1'
@@ -290,10 +369,13 @@ def assert_port_owned(public, owner):
     if not connections or any(c.pid not in owned for c in connections): fail('port_conflict')
     return True
 
-def profile_names(cfg):
+def allowlist(cfg):
     gateway = mapping(cfg.get('gateway'))
     allow = cfg.get('multiplex_profile_allowlist', gateway.get('multiplex_profile_allowlist'))
     if allow is not None and (not isinstance(allow,list) or any(not isinstance(n,str) or not NAME.fullmatch(n) for n in allow)): fail('invalid_host_config')
+    return allow
+def profile_names(cfg):
+    allow = allowlist(cfg)
     return [(name,home) for name,home in homes() if name == 'default' or allow is None or name in allow]
 
 def preflight(name, home, item):
@@ -353,7 +435,7 @@ def bounded(argv, env):
 def main(action, candidate_id=None, option=None):
     global LOCK
     if ROOT.is_symlink(): fail('unsafe_host_path')
-    if action in ('install','configure','restart','install-service','set-timezone'):
+    if action in ('install','configure','restart','install-service','set-timezone','create-profile','provision-key'):
         # A host-wide advisory lock also protects against a retry from a restarted DeskRPG server.
         # Keep it inherited by the installer until the entire bounded action exits.
         import fcntl
@@ -393,7 +475,8 @@ def main(action, candidate_id=None, option=None):
         for child,childhome in available:
             child_settings = settings(childhome)
             metadata = {'name':child, 'hasToken':bool(child_settings[2])}
-            if child == name and preparation_safe and not child_settings[2] and not child_settings[4]:
+            # 형제 프로필도 채운다: 키가 없고 외부 비밀 제공자를 쓰지 않으면 발급할 수 있다.
+            if preparation_safe and not child_settings[2] and not child_settings[4]:
                 metadata['canProvision'] = True
             profiles.append(metadata)
         return {'candidate': public, 'pluginStatus': status, 'changes': changes, 'profiles':profiles}
@@ -409,6 +492,48 @@ def main(action, candidate_id=None, option=None):
             fail('service_install_failed')
         if identity(name, home)['service'] == 'manual': fail('service_install_failed')
         return {'ok': True}
+    if action == 'create-profile':
+        # 프로필을 늘리는 것은 리스너 소유자(default)만 한다.
+        if name != 'default': fail('profile_provision_forbidden')
+        if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
+        try: request_body = json.loads(option) if isinstance(option, str) and option else None
+        except Exception: fail('profile_name_invalid')
+        if not isinstance(request_body, dict): fail('profile_name_invalid')
+        new_name = request_body.get('name')
+        description = request_body.get('description')
+        if not isinstance(new_name, str) or not NAME.fullmatch(new_name) or new_name in RESERVED_PROFILE: fail('profile_name_invalid')
+        if description is not None and (not isinstance(description, str) or len(description) > 200 or re.search(r'[\r\n\x00]', description)): fail('profile_name_invalid')
+        if (ROOT / 'profiles').is_symlink(): fail('unsafe_host_path')
+        target = ROOT / 'profiles' / new_name
+        if target.exists() or target.is_symlink() or any(child == new_name for child,_ in homes()): fail('profile_exists')
+        if bounded([sys.executable, '-m', 'hermes_cli.main', 'profile', 'create', new_name] + (['--description', description] if description else []), {**os.environ, 'HERMES_HOME': str(ROOT)})[0]:
+            fail('profile_create_failed')
+        # 명령이 0 으로 끝나도 디스크에 생겼는지 직접 본다.
+        if not target.is_dir() or target.is_symlink(): fail('profile_create_failed')
+        allowed = allowlist(config(home))
+        result = {'ok': True, 'profile': new_name}
+        # 허용 목록은 운영자의 것이다 — 고치지 않고 서빙되지 않는다는 사실만 알린다.
+        if isinstance(allowed, list) and new_name not in allowed: result['warning'] = 'profile_not_served'
+        return result
+    if action == 'provision-key':
+        target_name = option if isinstance(option, str) else ''
+        if not target_name or not NAME.fullmatch(target_name) or target_name in RESERVED_PROFILE: fail('profile_name_invalid')
+        if name != 'default': fail('profile_provision_forbidden')
+        target_home = next((h for child,h in homes() if child == target_name), None)
+        if target_home is None: fail('candidate_changed')
+        child_token, child_external = settings(target_home)[2], settings(target_home)[4]
+        # 외부 비밀 제공자를 쓰는 프로필은 제공자 설정을 건드리지 않고 그대로 둔다.
+        if child_external: fail('profile_provision_forbidden')
+        if child_token:
+            if len(child_token) < 16 or '\n' in child_token or '\r' in child_token: fail('api_key_invalid')
+            # 이미 있으면 회전하지 않는다. 아무것도 하지 않고 성공이다.
+            return {'ok': True, 'provisioned': False, 'profile': target_name}
+        old = read(target_home / '.env')
+        try: atomic(target_home / '.env', old.rstrip('\n') + '\nAPI_SERVER_KEY=' + secrets.token_hex(32) + '\n')
+        except Failure: raise
+        except Exception: fail('profile_key_failed')
+        if not settings(target_home)[2]: fail('profile_key_failed')
+        return {'ok': True, 'provisioned': True, 'profile': target_name}
     preflight(name,home,item)
     if action == 'install':
         env = {**os.environ, 'HERMES_HOME': str(home)}
@@ -477,6 +602,7 @@ def main(action, candidate_id=None, option=None):
         if code != 200 or not isinstance(live,dict) or not isinstance(live.get('profiles'),list): fail('profile_verification_failed')
         names = {p.get('name') for p in live['profiles'] if isinstance(p,dict) and isinstance(p.get('name'),str)}
         profiles = []
+        warnings = []
         selected_profiles = profile_names(cfg) if name == 'default' else [(name,home)]
         for child, childhome in selected_profiles:
             if child not in names: continue
@@ -484,8 +610,11 @@ def main(action, candidate_id=None, option=None):
             if not childtoken: continue
             path = '/v1/models' if child == 'default' else '/p/' + child + '/v1/models'
             code, models = request(public['port'],childtoken,path)
-            if code == 200 and isinstance(models,dict) and isinstance(models.get('data'),list): profiles.append({'name':child,'token':childtoken})
-        return {'prepared': {'baseUrl':'http://127.0.0.1:' + str(public['port']), 'token':token, 'profiles':profiles}}
+            if code == 200 and isinstance(models,dict) and isinstance(models.get('data'),list):
+                profiles.append({'name':child,'token':childtoken})
+                # 설치는 모델 자격 증명을 만들지 않는다. 빈 목록은 실패가 아니라 사람이 할 일이다.
+                if child == name and not models['data'] and 'model_provider_required' not in warnings: warnings.append('model_provider_required')
+        return {'prepared': {'baseUrl':'http://127.0.0.1:' + str(public['port']), 'token':token, 'profiles':profiles}, 'warnings': warnings}
     else: fail('invalid_host_operation')
     return {'ok':True}
 

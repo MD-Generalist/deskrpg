@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { discoverHost, inspectHost, prepareHost } from "./host";
+import { createHash } from "node:crypto";
+import { discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
 import type { HostExecutor, SetupCandidate } from "./types";
 const candidate: SetupCandidate = {
   id: "a".repeat(64),
@@ -97,7 +98,15 @@ test("cancellation prevents the next mutation", async () => {
 });
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { HOST_BOOTSTRAP, HOST_HELPER } from "./host-helper";
@@ -539,7 +548,7 @@ print(json.dumps(main('inspect',id)))
   assert.equal(result.body.candidate.warning, undefined);
   assert.equal(result.env, "API_SERVER_KEY=existing-valid-token-12345\n");
 });
-test("inspection marks only the safely provisionable selected owner, not missing sibling keys", () => {
+test("inspection marks every safely provisionable profile, owner and siblings alike", () => {
   const result = fixture(
     String.raw`
 child = ROOT / 'profiles' / 'sophie'
@@ -549,9 +558,10 @@ print(json.dumps(main('inspect',id)))
 `,
     { config: { gateway: { multiplex_profiles: true } } },
   );
+  // 계약 2: 형제 프로필도 키가 없고 외부 제공자를 쓰지 않으면 발급 대상이다.
   assert.deepEqual(result.body.profiles, [
     { name: "default", hasToken: false, canProvision: true },
-    { name: "sophie", hasToken: false },
+    { name: "sophie", hasToken: false, canProvision: true },
   ]);
   assert.equal(result.env, "");
 });
@@ -940,4 +950,519 @@ test("잘못된 시간대는 호스트를 실행하기 전에 거부한다", asy
     /^Error: timezone_invalid$/,
   );
   assert.equal(f.calls.length, 1);
+});
+
+// --- 계약 2: 프로필 생성·키 발급 -------------------------------------------------
+test("호스트는 잘못된 이름과 예약어를 실행 전에 거부한다", () => {
+  for (const name of ["Sophie", "-bad", "so phie", "a".repeat(65), "", "default", "root"]) {
+    const result = fixture(
+      String.raw`
+subprocess.Popen = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('must not run'))
+entry('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(JSON.stringify({ name }))})
+`,
+      { config: { gateway: { multiplex_profiles: true } } },
+    );
+    assert.deepEqual(result.body, { error: "profile_name_invalid" });
+  }
+});
+test("설명이 200자를 넘거나 개행을 담으면 프로필을 만들지 않는다", () => {
+  for (const description of ["x".repeat(201), "두\n줄"]) {
+    const result = fixture(
+      String.raw`
+subprocess.Popen = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('must not run'))
+entry('create-profile',main('discover')['candidates'][0]['id'],OPTION)
+`.replace("OPTION", JSON.stringify(JSON.stringify({ name: "sophie", description }))),
+      { config: { gateway: { multiplex_profiles: true } } },
+    );
+    assert.deepEqual(result.body, { error: "profile_name_invalid" });
+  }
+});
+test("이미 있는 프로필 이름은 profile_exists 로 거부한다", () => {
+  const result = fixture(
+    String.raw`
+(ROOT / 'profiles' / 'sophie').mkdir(parents=True)
+subprocess.Popen = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('must not run'))
+entry('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(JSON.stringify({ name: "sophie" }))})
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "profile_exists" });
+});
+test("소유자(default)가 아닌 후보는 프로필을 늘릴 수 없다", () => {
+  const result = fixture(
+    String.raw`
+(ROOT / 'profiles' / 'sophie').mkdir(parents=True)
+subprocess.Popen = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('must not run'))
+entry('create-profile',main('discover')['candidates'][1]['id'],${JSON.stringify(JSON.stringify({ name: "oliver" }))})
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "profile_provision_forbidden" });
+});
+test("프로필 생성은 Hermes CLI 만 부르고 디스크에 생겼는지 되읽어 확인한다", () => {
+  const result = fixture(
+    String.raw`
+import io
+calls = []
+def fake(argv, **kwargs):
+    calls.append(argv)
+    (ROOT / 'profiles' / 'sophie').mkdir(parents=True)
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = fake
+created = main('create-profile',main('discover')['candidates'][0]['id'],OPTION)
+print(json.dumps({'created':created,'argv':calls[0][1:]}))
+`.replace("OPTION", JSON.stringify(JSON.stringify({ name: "sophie", description: "리서치" }))),
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body.created, { ok: true, profile: "sophie" });
+  assert.deepEqual(result.body.argv, [
+    "-m",
+    "hermes_cli.main",
+    "profile",
+    "create",
+    "sophie",
+    "--description",
+    "리서치",
+  ]);
+});
+test("명령이 성공해도 프로필 디렉터리가 없으면 profile_create_failed 다", () => {
+  const result = fixture(
+    String.raw`
+import io
+subprocess.Popen = lambda argv, **kwargs: type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+entry('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(JSON.stringify({ name: "sophie" }))})
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "profile_create_failed" });
+});
+test("허용 목록 밖의 새 프로필은 실패가 아니라 profile_not_served 경고다", () => {
+  const result = fixture(
+    String.raw`
+import io
+def fake(argv, **kwargs):
+    (ROOT / 'profiles' / 'sophie').mkdir(parents=True)
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = fake
+print(json.dumps(main('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(JSON.stringify({ name: "sophie" }))})))
+`,
+    {
+      config: {
+        gateway: { multiplex_profiles: true, multiplex_profile_allowlist: ["default", "oliver"] },
+      },
+    },
+  );
+  assert.deepEqual(result.body, { ok: true, profile: "sophie", warning: "profile_not_served" });
+  assert.ok(!result.config.includes("sophie"));
+});
+test("키가 이미 있는 프로필은 회전하지 않고 그대로 성공한다", () => {
+  const result = fixture(
+    String.raw`
+child = ROOT / 'profiles' / 'sophie'
+child.mkdir(parents=True)
+(child / '.env').write_text('API_SERVER_KEY=sophie-private-valid-key\n')
+result = main('provision-key',main('discover')['candidates'][0]['id'],'sophie')
+print(json.dumps({'result':result,'env':(child / '.env').read_text()}))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body.result, { ok: true, provisioned: false, profile: "sophie" });
+  assert.equal(result.body.env, "API_SERVER_KEY=sophie-private-valid-key\n");
+});
+test("키가 없는 형제 프로필에만 키를 새로 발급한다", () => {
+  const result = fixture(
+    String.raw`
+child = ROOT / 'profiles' / 'sophie'
+child.mkdir(parents=True)
+(child / '.env').write_text('OTHER=keep-me\n')
+result = main('provision-key',main('discover')['candidates'][0]['id'],'sophie')
+print(json.dumps({'result':result,'length':len(envfile(child)['API_SERVER_KEY']),'env':(child / '.env').read_text()}))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body.result, { ok: true, provisioned: true, profile: "sophie" });
+  assert.equal(result.body.length, 64);
+  assert.match(result.body.env, /^OTHER=keep-me\nAPI_SERVER_KEY=[a-f0-9]{64}\n$/);
+  // 소유자의 키는 configure 가 다룬다 — 이 액션이 건드리지 않는다.
+  assert.equal(result.env, "");
+});
+test("외부 비밀 제공자를 쓰는 프로필에는 키를 발급하지 않는다", () => {
+  const result = fixture(
+    String.raw`
+child = ROOT / 'profiles' / 'sophie'
+child.mkdir(parents=True)
+(child / 'config.yaml').write_text(json.dumps({'secrets':{'bitwarden':{'enabled':True}}}))
+entry('provision-key',main('discover')['candidates'][0]['id'],'sophie')
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "profile_provision_forbidden" });
+});
+test("소유자가 아닌 후보는 형제 프로필 키를 발급할 수 없다", () => {
+  const result = fixture(
+    String.raw`
+for name in ('sophie','oliver'):
+    (ROOT / 'profiles' / name).mkdir(parents=True)
+entry('provision-key',main('discover')['candidates'][2]['id'],'oliver')
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "profile_provision_forbidden" });
+});
+test("provision-key 도 예약어와 잘못된 이름을 거부한다", () => {
+  for (const name of ["default", "root", "Sophie", ""]) {
+    const result = fixture(
+      String.raw`
+entry('provision-key',main('discover')['candidates'][0]['id'],${JSON.stringify(name)})
+`,
+      { config: { gateway: { multiplex_profiles: true } } },
+    );
+    assert.deepEqual(result.body, { error: "profile_name_invalid" });
+  }
+});
+test("점검은 키가 없는 형제 프로필에도 canProvision 을 채운다", () => {
+  const result = fixture(
+    String.raw`
+for name, token in (('sophie',''),('oliver','oliver-private-valid-key')):
+    home = ROOT / 'profiles' / name
+    home.mkdir(parents=True)
+    if token: (home / '.env').write_text('API_SERVER_KEY=' + token + '\n')
+print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])['profiles']))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, [
+    { name: "default", hasToken: false, canProvision: true },
+    { name: "oliver", hasToken: true },
+    { name: "sophie", hasToken: false, canProvision: true },
+  ]);
+});
+test("검증에서 모델 목록이 비면 실패가 아니라 model_provider_required 경고다", () => {
+  const result = fixture(
+    String.raw`
+assert_port_owned = lambda public, owner: True
+def live(port,token,path):
+    if path == '/deskrpg/info': return 200, {'plugin':'deskrpg','version':'0.6.0'}
+    if path == '/deskrpg/profiles': return 200, {'profiles':[{'name':'default'}]}
+    if path == '/v1/models': return 200, {'data':[]}
+    return 404, None
+request = live
+print(json.dumps(main('verify',main('discover')['candidates'][0]['id'])))
+`,
+    {
+      config: { gateway: { multiplex_profiles: true } },
+      env: "API_SERVER_KEY=default-own-valid-token\n",
+    },
+  );
+  assert.deepEqual(result.body.warnings, ["model_provider_required"]);
+  assert.deepEqual(result.body.prepared.profiles, [
+    { name: "default", token: "default-own-valid-token" },
+  ]);
+});
+test("모델이 하나라도 있으면 경고를 남기지 않는다", () => {
+  const result = fixture(
+    String.raw`
+assert_port_owned = lambda public, owner: True
+def live(port,token,path):
+    if path == '/deskrpg/info': return 200, {'plugin':'deskrpg','version':'0.6.0'}
+    if path == '/deskrpg/profiles': return 200, {'profiles':[{'name':'default'}]}
+    if path == '/v1/models': return 200, {'data':[{'id':'model'}]}
+    return 404, None
+request = live
+print(json.dumps(main('verify',main('discover')['candidates'][0]['id'])))
+`,
+    {
+      config: { gateway: { multiplex_profiles: true } },
+      env: "API_SERVER_KEY=default-own-valid-token\n",
+    },
+  );
+  assert.deepEqual(result.body.warnings, []);
+});
+test("프로필 생성·키 발급 단계는 플러그인 작업보다 앞에서 계약 순서대로 돈다", async () => {
+  const f = fake([
+    { candidate, pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
+    { ok: true, profile: "sophie" },
+    { ok: true, provisioned: true, profile: "sophie" },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: {
+        baseUrl: "http://127.0.0.1:8642",
+        token: "existing-private-token",
+        profiles: [{ name: "sophie", token: "sophie-private-token" }],
+      },
+      warnings: ["model_provider_required"],
+    },
+  ]);
+  const steps: string[] = [];
+  const result = await prepareHost(
+    f.execute,
+    candidate.id,
+    (s) => steps.push(s),
+    undefined,
+    undefined,
+    {
+      createProfile: { name: "sophie", description: "리서치" },
+    },
+  );
+  assert.deepEqual(steps, [
+    "inspecting",
+    "creating_profile",
+    "provisioning_keys",
+    "installing_plugin",
+    "configuring_api",
+    "restarting_gateway",
+    "verifying_gateway",
+  ]);
+  assert.deepEqual(
+    f.calls.map((c) => JSON.parse(c.input!).action),
+    ["inspect", "create-profile", "provision-key", "install", "configure", "restart", "verify"],
+  );
+  assert.deepEqual(result.warnings, ["model_provider_required"]);
+});
+test("허용 목록 밖으로 만들어진 프로필에는 키를 발급하지 않고 경고만 전달한다", async () => {
+  const f = fake([
+    {
+      candidate: {
+        ...candidate,
+        pluginInstalled: true,
+        pluginEnabled: true,
+        pluginVersion: "0.6.0",
+        hasToken: true,
+      },
+      pluginStatus: "plugin_ready",
+      changes: [],
+    },
+    { ok: true, profile: "sophie", warning: "profile_not_served" },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  const result = await prepareHost(
+    f.execute,
+    candidate.id,
+    (s) => steps.push(s),
+    undefined,
+    undefined,
+    {
+      createProfile: { name: "sophie" },
+    },
+  );
+  assert.deepEqual(steps, ["inspecting", "creating_profile", "verifying_gateway"]);
+  assert.deepEqual(result.warnings, ["profile_not_served"]);
+});
+test("발급한 키가 실제로 서빙되지 않으면 profile_verify_failed 로 멈춘다", async () => {
+  const f = fake([
+    {
+      candidate: {
+        ...candidate,
+        pluginInstalled: true,
+        pluginEnabled: true,
+        pluginVersion: "0.6.0",
+        hasToken: true,
+      },
+      pluginStatus: "plugin_ready",
+      changes: [],
+    },
+    { ok: true, provisioned: true, profile: "sophie" },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  await assert.rejects(
+    prepareHost(f.execute, candidate.id, () => {}, undefined, undefined, {
+      provisionKeys: ["sophie"],
+    }),
+    /^Error: profile_verify_failed$/,
+  );
+});
+test("서버는 호스트에 넘기기 전에 이름·개수를 다시 본다", async () => {
+  const f = fake([]);
+  for (const provision of [
+    { createProfile: { name: "Sophie" } },
+    { createProfile: { name: "default" } },
+    { createProfile: { name: "sophie", description: "두\n줄" } },
+    { provisionKeys: ["root"] },
+  ]) {
+    await assert.rejects(
+      prepareHost(f.execute, candidate.id, () => {}, undefined, undefined, provision),
+      /^Error: profile_name_invalid$/,
+    );
+  }
+  await assert.rejects(
+    prepareHost(f.execute, candidate.id, () => {}, undefined, undefined, {
+      provisionKeys: Array.from({ length: 11 }, (_, i) => `profile${i}`),
+    }),
+    /^Error: setup_invalid_request$/,
+  );
+  assert.equal(f.calls.length, 0);
+});
+
+// --- 계약 2: 로컬 Hermes 설치 ----------------------------------------------------
+import { HOST_INSTALLER } from "./host-helper";
+/** 설치 스크립트를 실제 네트워크·bash 없이 돌린다. 관찰 결과는 HOME 아래 파일로만 받는다. */
+function installer(prelude: string, prepared = false) {
+  const temp = mkdtempSync(join(tmpdir(), "deskrpg-install-test-"));
+  if (prepared) mkdirSync(join(temp, ".hermes/hermes-agent"), { recursive: true });
+  try {
+    const result = spawnSync("python3", ["-"], {
+      input: prelude + HOST_INSTALLER,
+      encoding: "utf8",
+      env: { ...process.env, HOME: temp, PYTHONDONTWRITEBYTECODE: "1" },
+      timeout: 20000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const observed = join(temp, "observed.json");
+    return {
+      body: JSON.parse(result.stdout),
+      observed: existsSync(observed) ? JSON.parse(readFileSync(observed, "utf8")) : null,
+    };
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+const INSTALL_SCRIPT = "#!/usr/bin/env bash\necho installing hermes\n";
+const STUBS = String.raw`
+import io, json, os, pathlib, subprocess, urllib.request
+observed = {'fetched': [], 'argv': None, 'script_exists': False, 'script_body': None, 'probe': None}
+def record():
+    (pathlib.Path.home() / 'observed.json').write_text(json.dumps(observed))
+class FakeResponse:
+    def __init__(self, body): self.body = body
+    def read(self, size=-1): return self.body
+    def __enter__(self): return self
+    def __exit__(self, *unused): return False
+class FakeOpener:
+    def open(self, url, timeout=None):
+        observed['fetched'].append(url)
+        record()
+        if BODY is None: raise OSError('network down')
+        return FakeResponse(BODY)
+urllib.request.build_opener = lambda *args, **kwargs: FakeOpener()
+class FakeChild:
+    def __init__(self, output): self.stdout = io.BytesIO(output)
+    def kill(self): pass
+    def wait(self): return EXIT
+def fake_popen(argv, **kwargs):
+    observed['argv'] = list(argv)
+    observed['script_exists'] = os.path.isfile(argv[1]) if len(argv) > 1 else False
+    observed['script_body'] = pathlib.Path(argv[1]).read_text() if observed['script_exists'] else None
+    record()
+    if EXIT == 0:
+        venv = pathlib.Path.home() / '.hermes' / 'hermes-agent' / 'venv' / 'bin'
+        venv.mkdir(parents=True)
+        (venv / 'python').write_text('')
+    return FakeChild(OUTPUT)
+subprocess.Popen = fake_popen
+def fake_run(argv, **kwargs):
+    observed['probe'] = list(argv)[1:]
+    record()
+    return type('Result',(),{'returncode':PROBE})()
+subprocess.run = fake_run
+`;
+function stubs(
+  options: { body?: string | null; exit?: number; probe?: number; output?: string } = {},
+) {
+  return STUBS.replace("BODY is None", options.body === null ? "True" : "False")
+    .replace(
+      /\bBODY\b/,
+      options.body === null ? "None" : JSON.stringify(options.body ?? INSTALL_SCRIPT) + ".encode()",
+    )
+    .replace(/\bEXIT\b/g, String(options.exit ?? 0))
+    .replace(/\bOUTPUT\b/g, JSON.stringify(options.output ?? "installing\n") + ".encode()")
+    .replace(/\bPROBE\b/g, String(options.probe ?? 0));
+}
+test("설치 스크립트는 파이프가 아니라 파일로 실행되고 지문이 결과에 실린다", () => {
+  const result = installer(stubs());
+  assert.equal(result.body.ok, true);
+  assert.match(result.body.installerDigest, /^[a-f0-9]{64}$/);
+  assert.equal(
+    result.body.installerDigest,
+    createHash("sha256").update(INSTALL_SCRIPT).digest("hex"),
+  );
+  assert.deepEqual(result.observed.fetched, ["https://hermes-agent.nousresearch.com/install.sh"]);
+  assert.equal(result.observed.argv[0], "bash");
+  assert.ok(result.observed.argv[1].endsWith(".sh"));
+  assert.deepEqual(result.observed.argv.slice(2), ["--skip-browser", "--skip-setup"]);
+  // 파이프(`curl | bash`)가 아니라 실재하는 파일을 실행한다.
+  assert.equal(result.observed.script_exists, true);
+  assert.equal(result.observed.script_body, INSTALL_SCRIPT);
+  assert.deepEqual(result.observed.probe, ["-m", "hermes_cli.main", "--version"]);
+});
+test("이미 설치돼 있으면 내려받지도 실행하지도 않는다", () => {
+  const result = installer(stubs(), true);
+  assert.deepEqual(result.body, { error: "hermes_already_installed" });
+  assert.equal(result.observed, null);
+});
+test("설치 스크립트를 받지 못하면 hermes_installer_unavailable 이다", () => {
+  const result = installer(stubs({ body: null }));
+  assert.deepEqual(result.body, { error: "hermes_installer_unavailable" });
+  assert.equal(result.observed.argv, null);
+});
+test("설치 실패는 고정 코드로만 알리고 출력을 돌려주지 않는다", () => {
+  const result = installer(stubs({ exit: 3, output: "token=super-secret\n" }));
+  assert.deepEqual(result.body, { error: "hermes_install_failed" });
+  assert.ok(!JSON.stringify(result.body).includes("super-secret"));
+});
+test("설치 안에서 네트워크가 끊기면 installer_unavailable 로 분류한다", () => {
+  const result = installer(stubs({ exit: 1, output: "curl: (6) Could not resolve host: x\n" }));
+  assert.deepEqual(result.body, { error: "hermes_installer_unavailable" });
+});
+test("설치 후 CLI 가 0 으로 끝나지 않으면 hermes_install_failed 다", () => {
+  const result = installer(stubs({ probe: 2 }));
+  assert.deepEqual(result.body, { error: "hermes_install_failed" });
+});
+test("정상 설치의 큰 출력은 상한에 걸리지 않고 읽고 버린다", () => {
+  const result = installer(stubs({ output: "x".repeat(600_000) }));
+  assert.equal(result.body.ok, true);
+});
+test("설치가 끝나면 임시 스크립트를 남기지 않는다", () => {
+  const temp = mkdtempSync(join(tmpdir(), "deskrpg-install-residue-"));
+  try {
+    const result = spawnSync("python3", ["-"], {
+      input: stubs() + HOST_INSTALLER,
+      encoding: "utf8",
+      env: { ...process.env, HOME: temp, PYTHONDONTWRITEBYTECODE: "1" },
+      timeout: 20000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const residue = readdirSync(join(temp, ".hermes")).filter((name) => name.endsWith(".sh"));
+    assert.deepEqual(residue, []);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+test("설치 잠금은 동시 설치를 막는다", () => {
+  const result = installer(
+    String.raw`
+import fcntl, os, pathlib
+root = pathlib.Path.home() / '.hermes'
+root.mkdir(parents=True, exist_ok=True)
+held = open(root / '.deskrpg-setup.lock','w')
+fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+` + stubs(),
+  );
+  assert.deepEqual(result.body, { error: "host_busy" });
+});
+test("설치 결과의 지문은 소문자 16진수 64자만 통과한다", async () => {
+  const digest = "b".repeat(64);
+  const good = await installHermesHost(fake([{ ok: true, installerDigest: digest }]).execute);
+  assert.deepEqual(good, { installerDigest: digest });
+  for (const bad of [{ ok: true }, { ok: true, installerDigest: "NOT-HEX" }])
+    await assert.rejects(
+      installHermesHost(fake([bad]).execute),
+      /^Error: (hermes_install_failed|host_operation_failed)$/,
+    );
+});
+test("설치 오류 코드는 화이트리스트 밖이면 원문을 흘리지 않는다", async () => {
+  await assert.rejects(
+    installHermesHost(fake([{ error: "hermes_already_installed" }]).execute),
+    /^Error: hermes_already_installed$/,
+  );
+  await assert.rejects(
+    installHermesHost(fake([{ error: "token=secret leaked" }]).execute),
+    /^Error: host_operation_failed$/,
+  );
 });

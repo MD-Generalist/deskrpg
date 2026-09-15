@@ -460,7 +460,7 @@ test("fresh owner eligible for credential provisioning is selected and posted", 
         .click(),
     );
     await f.click("연결하기");
-    const boxes = Array.from(f.host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    const boxes = Array.from(f.host.querySelectorAll<HTMLInputElement>('input[name="profile"]'));
     assert.deepEqual(
       boxes.map((box) => [box.checked, box.disabled]),
       [
@@ -678,3 +678,381 @@ for (const [code, expected] of [
     }
   });
 }
+
+// ── 계약 2: 프로필 생성·키 발급, 로컬 Hermes 설치 ─────────────────────────────
+
+function typeInto(node: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(node, value);
+  node.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function reachEmptyDiscovery(caps: Record<string, unknown>, sent?: string[]) {
+  const f = await fixture(async (_url, init) => {
+    if (!init?.body) return response({ ...capabilities, ...caps });
+    const { action } = JSON.parse(String(init.body));
+    sent?.push(action);
+    if (action === "discover") return response({ candidates: [] });
+    return response({ job: { id: "j", status: "running", steps: ["installing_hermes"] } });
+  });
+  await act(async () =>
+    Array.from(f.host.querySelectorAll("button"))
+      .find((b) => b.textContent?.includes("로컬 연결"))!
+      .click(),
+  );
+  return f;
+}
+
+test("설치 게이트가 꺼져 있으면 설치 제안 대신 운영자 안내를 보여준다", async () => {
+  const f = await reachEmptyDiscovery({ canInstallHermes: false });
+  try {
+    assert.match(f.host.textContent!, /DESKRPG_HERMES_INSTALL_ENABLED/);
+    assert.doesNotMatch(f.host.textContent!, /이 서버에 Hermes 를 설치할까요\?/);
+    assert.equal(f.host.querySelector('input[name="install-consent"]'), null);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("설치 게이트가 켜지면 동의 체크박스가 기본 꺼짐으로 나온다", async () => {
+  const f = await reachEmptyDiscovery({ canInstallHermes: true });
+  try {
+    assert.match(f.host.textContent!, /이 서버에 Hermes 를 설치할까요\?/);
+    const consent = f.host.querySelector<HTMLInputElement>('input[name="install-consent"]')!;
+    assert.equal(consent.checked, false, "시간대 제안과 달리 기본은 꺼짐이다");
+    assert.match(f.host.textContent!, /hermes model/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("동의하지 않으면 설치가 시작되지 않고, 동의해야 install-hermes 가 나간다", async () => {
+  const sent: string[] = [];
+  const f = await reachEmptyDiscovery({ canInstallHermes: true }, sent);
+  try {
+    const start = Array.from(f.host.querySelectorAll("button")).find(
+      (b) => b.textContent === "Hermes 설치 시작",
+    )!;
+    assert.equal(start.disabled, true);
+    await act(async () => start.click());
+    assert.deepEqual(sent, ["discover"]);
+    await act(async () =>
+      f.host.querySelector<HTMLInputElement>('input[name="install-consent"]')!.click(),
+    );
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent === "Hermes 설치 시작")!
+        .click(),
+    );
+    assert.equal(sent.at(-1), "install-hermes");
+    assert.match(f.host.textContent!, /Hermes 설치/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("설치 스크립트 지문이 오면 감사용으로 화면에 남는다", async () => {
+  const digest = "a".repeat(64);
+  const f = await fixture(async (url, init) => {
+    if (String(url).includes("?job="))
+      return response({
+        job: { id: "j", status: "running", steps: ["installing_hermes"], installerDigest: digest },
+      });
+    if (!init?.body) return response({ ...capabilities, canInstallHermes: true });
+    const { action } = JSON.parse(String(init.body));
+    if (action === "discover") return response({ candidates: [] });
+    return response({ job: { id: "j", status: "running", steps: [] } });
+  });
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("로컬 연결"))!
+        .click(),
+    );
+    await act(async () =>
+      f.host.querySelector<HTMLInputElement>('input[name="install-consent"]')!.click(),
+    );
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent === "Hermes 설치 시작")!
+        .click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
+    assert.match(f.host.textContent!, new RegExp(`설치 스크립트 지문 ${digest}`));
+  } finally {
+    await f.cleanup();
+  }
+});
+
+const provisionInspection = {
+  pluginStatus: "plugin_absent",
+  changes: ["installing_plugin"],
+  profiles: [
+    { name: "sophie", hasToken: true },
+    { name: "keyless", hasToken: false, canProvision: true },
+  ],
+};
+
+test("키 발급 체크는 가져오기와 따로 움직이고 prepare 본문의 provisionKeys 로 나간다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    provisionInspection,
+    (body) => {
+      prepared = body;
+    },
+    candidate,
+  );
+  try {
+    const provision = Array.from(
+      f.host.querySelectorAll<HTMLInputElement>('input[name="provision"]'),
+    );
+    assert.equal(provision.length, 1, "키가 없는 프로필에만 붙는다");
+    assert.equal(provision[0].checked, false, "키 발급은 명시적으로 켜야 한다");
+    assert.match(f.host.textContent!, /인증 키가 없는 프로필에만 켤 수 있습니다/);
+    await act(async () => provision[0].click());
+    await f.click("설치 및 연결");
+    assert.deepEqual(prepared?.provisionKeys, ["keyless"]);
+    assert.deepEqual(prepared?.profiles, ["sophie", "keyless"]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("키 발급을 켜지 않으면 prepare 본문에 provisionKeys 자체가 없다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    provisionInspection,
+    (body) => {
+      prepared = body;
+    },
+    candidate,
+  );
+  try {
+    await f.click("설치 및 연결");
+    assert.equal("provisionKeys" in (prepared ?? {}), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("프로필 이름이 비어 있으면 createProfile 을 보내지 않는다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    provisionInspection,
+    (body) => {
+      prepared = body;
+    },
+    candidate,
+  );
+  try {
+    assert.match(f.host.textContent!, /새 프로필 만들기/);
+    assert.match(f.host.textContent!, /칸반이 역할을 보고 일을 배분할 때 씁니다/);
+    assert.ok(f.host.querySelector('input[name="new-profile-name"]'));
+    await f.click("설치 및 연결");
+    assert.equal("createProfile" in (prepared ?? {}), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("프로필 이름과 설명을 채우면 createProfile 로 실린다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    provisionInspection,
+    (body) => {
+      prepared = body;
+    },
+    candidate,
+  );
+  try {
+    await act(async () => {
+      typeInto(f.host.querySelector<HTMLInputElement>('input[name="new-profile-name"]')!, " noah ");
+      typeInto(
+        f.host.querySelector<HTMLInputElement>('input[name="new-profile-description"]')!,
+        "리서치 담당",
+      );
+    });
+    await f.click("설치 및 연결");
+    assert.deepEqual(prepared?.createProfile, { name: "noah", description: "리서치 담당" });
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("규칙에 어긋난 프로필 이름은 안내를 띄우고 prepare 를 막는다", async () => {
+  let prepares = 0;
+  const f = await reachReview(
+    provisionInspection,
+    () => {
+      prepares++;
+    },
+    candidate,
+  );
+  try {
+    await act(async () => {
+      typeInto(f.host.querySelector<HTMLInputElement>('input[name="new-profile-name"]')!, "Noah!");
+    });
+    assert.match(f.host.textContent!, /소문자·숫자·하이픈·밑줄만 쓰고 64자 이하/);
+    const prepare = Array.from(f.host.querySelectorAll("button")).find(
+      (b) => b.textContent === "설치 및 연결",
+    )!;
+    assert.equal(prepare.disabled, true);
+    await act(async () => prepare.click());
+    assert.equal(prepares, 0);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("profile_not_served 와 model_provider_required 는 실패가 아니라 경고로 그린다", async () => {
+  const f = await fixture(async (url, init) => {
+    if (String(url).includes("?job="))
+      return response({
+        job: {
+          id: "j",
+          status: "succeeded",
+          steps: ["provisioning_keys"],
+          gatewayId: "g",
+          warnings: ["profile_not_served", "model_provider_required"],
+        },
+      });
+    if (!init?.body) return response(capabilities);
+    const { action } = JSON.parse(String(init.body));
+    if (action === "discover") return response({ candidates: [candidate] });
+    if (action === "inspect")
+      return response({ candidate, pluginStatus: "plugin_absent", changes: ["installing_plugin"] });
+    return response({ job: { id: "j", status: "running", steps: [] } });
+  });
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("로컬 연결"))!
+        .click(),
+    );
+    await f.click("연결하기");
+    await f.click("설치 및 연결");
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
+    assert.match(f.host.textContent!, /게이트웨이가 연결되었습니다/);
+    assert.match(f.host.textContent!, /multiplex 프로필 허용 목록/);
+    assert.match(f.host.textContent!, /서버에서 hermes model 을 실행/);
+    assert.equal(f.host.querySelector('[role="alert"]'), null, "경고는 실패로 그리지 않는다");
+    assert.doesNotMatch(f.host.textContent!, /profile_not_served|model_provider_required/);
+    assert.doesNotMatch(f.host.textContent!, /연결을 완료하지 못했습니다/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("새 진행 단계 세 가지는 한국어 라벨로 나오고 원시 코드가 새지 않는다", async () => {
+  const f = await fixture(async (url, init) => {
+    if (String(url).includes("?job="))
+      return response({
+        job: {
+          id: "j",
+          status: "running",
+          steps: ["installing_hermes", "creating_profile", "provisioning_keys"],
+        },
+      });
+    if (!init?.body) return response(capabilities);
+    const { action } = JSON.parse(String(init.body));
+    if (action === "discover") return response({ candidates: [candidate] });
+    if (action === "inspect")
+      return response({ candidate, pluginStatus: "plugin_absent", changes: ["installing_plugin"] });
+    return response({ job: { id: "j", status: "running", steps: [] } });
+  });
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("로컬 연결"))!
+        .click(),
+    );
+    await f.click("연결하기");
+    await f.click("설치 및 연결");
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
+    assert.match(f.host.textContent!, /Hermes 설치/);
+    assert.match(f.host.textContent!, /새 프로필 만들기/);
+    assert.match(f.host.textContent!, /프로필 인증 키 발급/);
+    assert.doesNotMatch(f.host.textContent!, /installing_hermes|creating_profile/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+for (const [code, expected] of [
+  ["profile_name_invalid", /소문자·숫자·하이픈·밑줄만 쓰고 64자 이하/],
+  ["profile_exists", /같은 이름의 프로필이 이미 있습니다/],
+  ["profile_create_failed", /Hermes 홈 디렉터리 쓰기 권한/],
+  ["profile_key_failed", /기존 키는 덮어쓰지 않습니다/],
+  ["profile_provision_forbidden", /리스너 소유자 프로필이 아니거나/],
+  ["profile_verify_failed", /프로필 허용 목록을 확인/],
+  ["hermes_already_installed", /이미 Hermes 가 설치돼 있습니다/],
+  ["hermes_install_forbidden", /DESKRPG_HERMES_INSTALL_ENABLED/],
+  ["hermes_install_failed", /설치 스크립트를 직접 실행/],
+  ["hermes_installer_unavailable", /네트워크와 프록시 설정/],
+] as const) {
+  test(`실패한 잡의 ${code} 는 원인과 다음 행동을 담은 안내로 바뀐다 (계약 2)`, async () => {
+    const f = await fixture(async (_url, init) => {
+      if (!init?.body) return response(capabilities);
+      const { action } = JSON.parse(String(init.body));
+      if (action === "discover") return response({ candidates: [candidate] });
+      if (action === "inspect")
+        return response({
+          candidate,
+          pluginStatus: "plugin_absent",
+          changes: ["installing_plugin"],
+        });
+      return response({ job: { id: "j", status: "failed", steps: [], error: code } });
+    });
+    try {
+      await act(async () =>
+        Array.from(f.host.querySelectorAll("button"))
+          .find((b) => b.textContent?.includes("로컬 연결"))!
+          .click(),
+      );
+      await f.click("연결하기");
+      await f.click("설치 및 연결");
+      const alerts = Array.from(f.host.querySelectorAll('[role="alert"]'))
+        .map((node) => node.textContent ?? "")
+        .join("\n");
+      assert.match(alerts, expected);
+      assert.doesNotMatch(alerts, new RegExp(code));
+    } finally {
+      await f.cleanup();
+    }
+  });
+}
+
+test("설치만 끝난 잡은 실패로 그리지 않고 다시 찾기로 이어 간다", async () => {
+  const sent: string[] = [];
+  const f = await fixture(async (url, init) => {
+    if (String(url).includes("?job="))
+      return response({ job: { id: "j", status: "succeeded", steps: ["installing_hermes"] } });
+    if (!init?.body) return response({ ...capabilities, canInstallHermes: true });
+    const { action } = JSON.parse(String(init.body));
+    sent.push(action);
+    if (action === "discover") return response({ candidates: [] });
+    return response({ job: { id: "j", status: "running", steps: [] } });
+  });
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("로컬 연결"))!
+        .click(),
+    );
+    await act(async () =>
+      f.host.querySelector<HTMLInputElement>('input[name="install-consent"]')!.click(),
+    );
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent === "Hermes 설치 시작")!
+        .click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
+    assert.match(f.host.textContent!, /Hermes 설치가 끝났습니다/);
+    assert.doesNotMatch(f.host.textContent!, /연결을 완료하지 못했습니다/);
+    await f.click("다시 확인");
+    assert.equal(sent.at(-1), "discover");
+  } finally {
+    await f.cleanup();
+  }
+});

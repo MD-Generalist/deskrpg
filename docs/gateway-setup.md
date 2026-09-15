@@ -6,6 +6,8 @@
 
 호스트 설치·재시작 기능은 기본 비활성화다. DeskRPG 실행 환경에 `DESKRPG_HOST_SETUP_ENABLED=1`을 설정하고 앱을 재시작하면 `system_admin` 계정에만 로컬 검색이 표시된다. 일반 사용자는 주소 연결을 사용할 수 있다.
 
+로컬 Hermes 설치까지 마법사에 맡기려면 `DESKRPG_HERMES_INSTALL_ENABLED=1`을 **추가로** 설정한다. 이 스위치는 호스트 설정 게이트(`DESKRPG_HOST_SETUP_ENABLED` + `system_admin`)를 대체하지 않고 그 위에 얹히며, **로컬 대상에만** 열린다 — SSH 대상은 어떤 조합으로도 `hermes_install_forbidden`이다. 화면은 `SetupCapabilities.canInstallHermes`로 이 조건의 충족 여부를 읽는다.
+
 SSH 연결을 허용하려면 `DESKRPG_SETUP_SSH_HOSTS=dev-hermes,another-host`처럼 운영자가 승인한 SSH config 별칭을 설정한다. DeskRPG를 실행하는 OS 계정에서 별칭, SSH 키/agent, 검증된 known_hosts가 준비되어 있어야 한다. 미등록·변경된 호스트 키는 자동 수락하지 않는다. 패스워드나 개인 키를 웹 폼으로 받지 않는다.
 
 호스트 실행은 Node 서버와 `python3`, SSH는 추가로 OpenSSH 클라이언트가 필요하다. 원격 Hermes는 Linux/macOS의 표준 `~/.hermes/hermes-agent` 설치와 Hermes가 생성한 사용자 서비스 정의를 지원한다. 임의 설치 경로·Windows 원격·관리되지 않는 프로세스는 자동 변경하지 않는다. 기본 Docker 이미지에는 SSH 클라이언트와 호스트 자격 증명이 준비되어 있지 않으므로 운영자가 이를 별도로 제공하지 않았다면 주소 연결을 사용한다.
@@ -19,15 +21,49 @@ SSH 연결을 허용하려면 `DESKRPG_SETUP_SSH_HOSTS=dev-hermes,another-host`�
 3. 설치 및 연결을 실행하면 서비스 등록(필요할 때), 플러그인 설치/갱신/활성화, API 설정, 시간대 설정(비어 있을 때만), 선택한 서비스 시작/재시작을 수행한다. 기존 키는 재사용하고 선택한 소유 프로필의 키가 없는 경우에만 생성한다.
 4. 실제 API와 플러그인을 검증한 뒤 게이트웨이와 선택한 프로필만 등록한다. 프로필 화면에서 NPC 외형과 배치를 이어간다.
 
-진행 단계는 `inspecting → installing_service → installing_plugin | enabling_plugin | updating_plugin → configuring_api → setting_timezone → restarting_gateway → verifying_gateway → saving_gateway → importing_profiles` 순서다. 필요 없는 단계는 건너뛴다.
+진행 단계는 `installing_hermes → inspecting → creating_profile → provisioning_keys → installing_service → installing_plugin | enabling_plugin | updating_plugin → configuring_api → setting_timezone → restarting_gateway → verifying_gateway → saving_gateway → importing_profiles` 순서다. 필요 없는 단계는 건너뛴다.
 
 개별 프로필 게이트웨이는 자체 프로필만 연결한다. 기본 게이트웨이에 여러 프로필을 묶는 경우 이미 실행 중인 개별 봇과 충돌할 수 있으므로 사전 검사에서 중단한다. 다른 프로필을 자동 종료하지 않는다.
 
-외부 비밀 제공자를 쓰는 경우 기존 로컬 키로 인증이 확인되어야 한다. 제공자 설정을 덮어쓰거나 인증 키를 무조건 회전하지 않는다. 형제 프로필의 키가 없으면 마법사에서 임의 발급하지 않는다.
+외부 비밀 제공자를 쓰는 경우 기존 로컬 키로 인증이 확인되어야 한다. 제공자 설정을 덮어쓰거나 인증 키를 무조건 회전하지 않는다. 형제 프로필의 키는 **운영자가 명시적으로 요청한 경우에만** 발급한다(아래 "프로필 생성과 키 발급").
+
+### 로컬 Hermes 설치
+
+Hermes가 설치돼 있지 않은 호스트에서, 위의 게이트 셋이 모두 켜져 있을 때만 마법사가 설치를 제안한다. 운영자가 동의하면 `installing_hermes` 단계가 먼저 돌고, 그다음 검색·점검부터의 기존 흐름이 그대로 이어진다(설치 직후 후보를 서버가 다시 찾으므로 화면이 후보 ID를 들고 있을 필요가 없다).
+
+절차는 다음과 같다.
+
+1. `https://hermes-agent.nousresearch.com/install.sh`를 임시 파일로 **내려받는다**. 받지 못하면 `hermes_installer_unavailable`.
+2. 내용의 sha256을 계산해 잡의 `installerDigest`(소문자 16진수 64자)로 남긴다. 비밀이 아니라 감사 기록이므로 화면에 표시해도 된다.
+3. `bash <임시파일> --skip-browser --skip-setup`을 실행한다. **`curl | bash`를 쓰지 않는다** — 실행되는 바이트와 지문을 남긴 바이트가 같다는 것을 보장하기 위해서다. 끝나면 임시 파일을 지운다.
+4. 설치 출력은 저장하지도 반환하지도 않는다. 정상 설치의 출력은 플러그인 설치에 쓰는 256KiB 상한을 쉽게 넘기므로 **이 액션만** "읽고 버리되 마지막 8KiB만 실패 분류용으로 메모리에 유지"한다.
+5. 설치 뒤 `~/.hermes/hermes-agent/{venv,.venv}/bin/python`과 `hermes_cli.main --version`을 확인한다. 아니면 `hermes_install_failed`.
+
+**이미 설치돼 있으면 절대 다시 깔지 않는다**(`hermes_already_installed`). 업그레이드·재설치·실패 롤백은 이 경로의 범위가 아니다. 설치도 기존 호스트 잠금(`~/.hermes/.deskrpg-setup.lock`)을 잡으므로 동시 설치는 `host_busy`로 거부된다.
+
+제한 시간은 600초다(내부 감시는 580초). 회선이 느리거나 소스 빌드가 필요해 그보다 오래 걸리는 호스트는 마법사로 설치하지 말고, 호스트에서 직접 `curl -fsSL https://hermes-agent.nousresearch.com/install.sh -o install.sh` 후 내용을 검토하고 `bash install.sh`로 설치한 다음 마법사의 검색부터 다시 시작한다.
+
+**설치는 모델 자격 증명을 만들지 않는다.** 검증에서 `/v1/models`가 200이지만 목록이 비어 있으면 실패가 아니라 경고 `model_provider_required`로 알린다. 호스트에서 `hermes model`을 실행해 제공자를 설정해야 NPC가 실제로 응답한다.
+
+### 프로필 생성과 키 발급
+
+검토 화면에서 새 프로필을 만들고(`creating_profile`), 키가 없는 기존 프로필에 키를 발급할 수 있다(`provisioning_keys`). 두 단계 모두 선택이며, 요청하지 않으면 건너뛴다. 서버와 호스트가 **같은 규칙으로 각각** 검증한다.
+
+- 이름은 `^[a-z0-9][a-z0-9_-]{0,63}$`이어야 하고 예약어 `hermes/test/tmp/root/sudo/default`는 쓸 수 없다 → `profile_name_invalid`. 설명은 200자 이하 한 줄이다(같은 코드).
+- 이미 있는 이름은 `profile_exists`. 생성은 Hermes CLI의 `profile create`만 호출하고, 성공 후 디스크에 디렉터리가 생겼는지 되읽어 확인한다(아니면 `profile_create_failed`).
+- **프로필을 늘리는 것은 리스너 소유자(`default`)만 한다.** 개별 프로필 후보로 연결하면서 프로필을 만들거나 형제 키를 발급하려 하면 `profile_provision_forbidden`이다.
+- 키는 **없을 때만** 만든다. 이미 있으면 아무것도 하지 않고 성공으로 돌려준다 — **어떤 경우에도 회전하지 않는다.** 외부 비밀 제공자를 쓰는 프로필은 제공자 설정을 건드리지 않고 `profile_provision_forbidden`으로 거부한다. 쓰기 실패는 `profile_key_failed`이며, 기존 `configure`와 같은 원자적 교체 경로를 쓴다.
+- 한 번에 최대 10개까지 발급한다. 진행 기록에는 단계 이름만 남고 프로필 이름이나 키는 남지 않는다.
+
+새 프로필은 게이트웨이 재시작이 필요 없다 — API 서버가 요청마다 프로필 목록을 다시 읽는다. 다만 `gateway.multiplex_profile_allowlist`가 설정돼 있고 새 이름이 거기 없으면 그 프로필은 서빙되지 않는다. 이것은 실패가 아니라 경고 `profile_not_served`다 — **마법사는 운영자의 허용 목록을 고치지 않는다.** 이 경우 키도 발급하지 않는다(서빙되지 않으면 검증할 수 없다).
+
+키를 발급한 프로필은 검증 단계에서 그 키로 `/p/<이름>/v1/models`가 200인지 확인한다. 확인되지 않으면 `profile_verify_failed`로 중단한다.
+
+점검(`inspect`)이 돌려주는 `profiles[]`의 `canProvision`은 **형제 프로필에도** 채워진다: 키가 없고 외부 비밀 제공자를 쓰지 않으면 `true`다.
 
 취소는 현재 명령이 안전하게 종료된 뒤 다음 단계 전에 적용된다. 이미 끝난 설치를 되돌린다는 뜻이 아니다. 프로세스 그룹 제한 시간 및 호스트 잠금으로 동시 설치를 방지한다. 실패 시 원인을 수정한 뒤 다시 확인한다. 진행 기록에는 인증 키나 원본 명령 출력을 저장하지 않는다.
 
-설치 출력은 메모리에서 최대 256KiB까지 읽는다. 초과 시 설치 프로세스를 종료하고 실패 처리한다. 보안 스캔 차단과 저장소 접근 실패는 고정 오류 코드로만 전달한다. 알 수 없는 실패도 원문을 반환하지 않는다. 마법사는 **이미 설치된 구버전 플러그인을 고정 버전으로 갱신할 때만 `--force`를 사용한다.** 이때의 `--force`는 "기존 플러그인을 지우고 다시 깐다"는 뜻이며 보안 스캔을 우회하지 않는다 — 스캔이 차단하면 갱신도 `plugin_security_review_required`로 실패하고, 관리자가 해당 버전을 검토해야 한다. 최초 설치는 `--force` 없이 수행한다.
+플러그인 설치 출력은 메모리에서 최대 256KiB까지 읽는다(Hermes 설치 액션만 예외 — 위 참조). 초과 시 설치 프로세스를 종료하고 실패 처리한다. 보안 스캔 차단과 저장소 접근 실패는 고정 오류 코드로만 전달한다. 알 수 없는 실패도 원문을 반환하지 않는다. 마법사는 **이미 설치된 구버전 플러그인을 고정 버전으로 갱신할 때만 `--force`를 사용한다.** 이때의 `--force`는 "기존 플러그인을 지우고 다시 깐다"는 뜻이며 보안 스캔을 우회하지 않는다 — 스캔이 차단하면 갱신도 `plugin_security_review_required`로 실패하고, 관리자가 해당 버전을 검토해야 한다. 최초 설치는 `--force` 없이 수행한다.
 
 ### Hermes 버전 하한
 
@@ -58,6 +94,8 @@ API 주소와 기존 키로 Hermes 정체성, 인증, 플러그인을 순서대�
 SSH 게이트웨이는 영구 대상 ID를 저장하고 요청 시 서버 소유의 루프백 터널로 해석한다. 앱 재시작 후 터널을 다시 만들 수 있다. 호스트 설치 스위치를 끄더라도 이미 등록된 SSH 연결은 유지된다. SSH 별칭을 허용 목록에서 제거하면 이후 연결을 거부한다.
 
 ## 검증 범위
+
+2026-09-15: 프로필 생성·키 발급과 로컬 Hermes 설치는 임시 HOME, 가짜 설치 스크립트, 가짜 프로세스 실행기를 이용한 테스트로만 검증했다. **실제 호스트에서의 종단 설치는 아직 수행하지 않았다** — 배포 전에 깨끗한 리눅스 호스트에서 설치→검색→플러그인→검증 전 구간을 한 번 돌려야 한다.
 
 2026-09-10: 로컬 Chrome에서 실제 설치 검색과 개별 프로필 검토, 원격 경로 선택을 확인했다. 설치/키 생성/서비스 제어는 임시 파일 및 가짜 서비스 실행기를 이용한 테스트로 검증했다.
 

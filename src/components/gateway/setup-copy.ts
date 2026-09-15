@@ -83,6 +83,9 @@ const ko = {
   setting_timezone: koText["hermes.wizard.step.settingTimezone"],
   pluginVersion: koText["hermes.wizard.review.pluginVersion"],
   reviewTimezoneToggle: koText["hermes.wizard.review.timezoneToggle"],
+  installing_hermes: koText["hermes.wizard.step.installingHermes"],
+  creating_profile: koText["hermes.wizard.step.creatingProfile"],
+  provisioning_keys: koText["hermes.wizard.step.provisioningKeys"],
 };
 type Copy = typeof ko;
 const en: Copy = {
@@ -164,6 +167,9 @@ const en: Copy = {
   setting_timezone: enText["hermes.wizard.step.settingTimezone"],
   pluginVersion: enText["hermes.wizard.review.pluginVersion"],
   reviewTimezoneToggle: enText["hermes.wizard.review.timezoneToggle"],
+  installing_hermes: enText["hermes.wizard.step.installingHermes"],
+  creating_profile: enText["hermes.wizard.step.creatingProfile"],
+  provisioning_keys: enText["hermes.wizard.step.provisioningKeys"],
 };
 const ja: Copy = {
   ...en,
@@ -261,6 +267,9 @@ Object.assign(ja, {
   setting_timezone: jaText["hermes.wizard.step.settingTimezone"],
   pluginVersion: jaText["hermes.wizard.review.pluginVersion"],
   reviewTimezoneToggle: jaText["hermes.wizard.review.timezoneToggle"],
+  installing_hermes: jaText["hermes.wizard.step.installingHermes"],
+  creating_profile: jaText["hermes.wizard.step.creatingProfile"],
+  provisioning_keys: jaText["hermes.wizard.step.provisioningKeys"],
 });
 Object.assign(zh, {
   selectProfiles: "要导入的现有配置文件",
@@ -322,6 +331,9 @@ Object.assign(zh, {
   setting_timezone: zhText["hermes.wizard.step.settingTimezone"],
   pluginVersion: zhText["hermes.wizard.review.pluginVersion"],
   reviewTimezoneToggle: zhText["hermes.wizard.review.timezoneToggle"],
+  installing_hermes: zhText["hermes.wizard.step.installingHermes"],
+  creating_profile: zhText["hermes.wizard.step.creatingProfile"],
+  provisioning_keys: zhText["hermes.wizard.step.provisioningKeys"],
 });
 export const setupCopy: Record<Locale, Copy> = { ko, en, ja, zh };
 export function setupError(copy: Copy, code: unknown): string {
@@ -383,6 +395,16 @@ const hostErrorGroups: Record<string, string> = {
   timezone_write_failed: "timezoneWrite",
   command_timeout: "timeout",
   output_limit: "host",
+  profile_name_invalid: "profileName",
+  profile_exists: "profileExists",
+  profile_create_failed: "profileCreate",
+  profile_key_failed: "profileKey",
+  profile_provision_forbidden: "profileProvision",
+  profile_verify_failed: "profileVerify",
+  hermes_already_installed: "hermesInstalled",
+  hermes_install_forbidden: "hermesInstallForbidden",
+  hermes_install_failed: "hermesInstallFailed",
+  hermes_installer_unavailable: "hermesInstaller",
 };
 const hostRemediation: Record<Locale, Record<string, string>> = {
   ko: {
@@ -424,6 +446,16 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     serviceInstall: koText["hermes.wizard.error.serviceInstallFailed"],
     timezoneInvalid: koText["hermes.wizard.error.timezoneInvalid"],
     timezoneWrite: koText["hermes.wizard.error.timezoneWriteFailed"],
+    profileName: koText["hermes.wizard.error.profileNameInvalid"],
+    profileExists: koText["hermes.wizard.error.profileExists"],
+    profileCreate: koText["hermes.wizard.error.profileCreateFailed"],
+    profileKey: koText["hermes.wizard.error.profileKeyFailed"],
+    profileProvision: koText["hermes.wizard.error.profileProvisionForbidden"],
+    profileVerify: koText["hermes.wizard.error.profileVerifyFailed"],
+    hermesInstalled: koText["hermes.wizard.error.hermesAlreadyInstalled"],
+    hermesInstallForbidden: koText["hermes.wizard.error.hermesInstallForbidden"],
+    hermesInstallFailed: koText["hermes.wizard.error.hermesInstallFailed"],
+    hermesInstaller: koText["hermes.wizard.error.hermesInstallerUnavailable"],
   },
   en: {
     securityReview:
@@ -464,6 +496,16 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     serviceInstall: enText["hermes.wizard.error.serviceInstallFailed"],
     timezoneInvalid: enText["hermes.wizard.error.timezoneInvalid"],
     timezoneWrite: enText["hermes.wizard.error.timezoneWriteFailed"],
+    profileName: enText["hermes.wizard.error.profileNameInvalid"],
+    profileExists: enText["hermes.wizard.error.profileExists"],
+    profileCreate: enText["hermes.wizard.error.profileCreateFailed"],
+    profileKey: enText["hermes.wizard.error.profileKeyFailed"],
+    profileProvision: enText["hermes.wizard.error.profileProvisionForbidden"],
+    profileVerify: enText["hermes.wizard.error.profileVerifyFailed"],
+    hermesInstalled: enText["hermes.wizard.error.hermesAlreadyInstalled"],
+    hermesInstallForbidden: enText["hermes.wizard.error.hermesInstallForbidden"],
+    hermesInstallFailed: enText["hermes.wizard.error.hermesInstallFailed"],
+    hermesInstaller: enText["hermes.wizard.error.hermesInstallerUnavailable"],
   },
   ja: {
     securityReview:
@@ -504,6 +546,16 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     serviceInstall: jaText["hermes.wizard.error.serviceInstallFailed"],
     timezoneInvalid: jaText["hermes.wizard.error.timezoneInvalid"],
     timezoneWrite: jaText["hermes.wizard.error.timezoneWriteFailed"],
+    profileName: jaText["hermes.wizard.error.profileNameInvalid"],
+    profileExists: jaText["hermes.wizard.error.profileExists"],
+    profileCreate: jaText["hermes.wizard.error.profileCreateFailed"],
+    profileKey: jaText["hermes.wizard.error.profileKeyFailed"],
+    profileProvision: jaText["hermes.wizard.error.profileProvisionForbidden"],
+    profileVerify: jaText["hermes.wizard.error.profileVerifyFailed"],
+    hermesInstalled: jaText["hermes.wizard.error.hermesAlreadyInstalled"],
+    hermesInstallForbidden: jaText["hermes.wizard.error.hermesInstallForbidden"],
+    hermesInstallFailed: jaText["hermes.wizard.error.hermesInstallFailed"],
+    hermesInstaller: jaText["hermes.wizard.error.hermesInstallerUnavailable"],
   },
   zh: {
     securityReview:
@@ -534,11 +586,37 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     serviceInstall: zhText["hermes.wizard.error.serviceInstallFailed"],
     timezoneInvalid: zhText["hermes.wizard.error.timezoneInvalid"],
     timezoneWrite: zhText["hermes.wizard.error.timezoneWriteFailed"],
+    profileName: zhText["hermes.wizard.error.profileNameInvalid"],
+    profileExists: zhText["hermes.wizard.error.profileExists"],
+    profileCreate: zhText["hermes.wizard.error.profileCreateFailed"],
+    profileKey: zhText["hermes.wizard.error.profileKeyFailed"],
+    profileProvision: zhText["hermes.wizard.error.profileProvisionForbidden"],
+    profileVerify: zhText["hermes.wizard.error.profileVerifyFailed"],
+    hermesInstalled: zhText["hermes.wizard.error.hermesAlreadyInstalled"],
+    hermesInstallForbidden: zhText["hermes.wizard.error.hermesInstallForbidden"],
+    hermesInstallFailed: zhText["hermes.wizard.error.hermesInstallFailed"],
+    hermesInstaller: zhText["hermes.wizard.error.hermesInstallerUnavailable"],
   },
 };
 export function setupHostError(locale: Locale, code: unknown): string | undefined {
   return typeof code === "string" ? hostRemediation[locale][hostErrorGroups[code]] : undefined;
 }
+/**
+ * 잡이 성공해도 남는 경고다 — 실패가 아니므로 오류 안내와 섞지 않는다.
+ * 여기 없는 코드는 화면에 그리지 않는다(원시 코드 유출 방지).
+ */
+const warningKeys: Record<string, string> = {
+  profile_not_served: "hermes.wizard.warn.profileNotServed",
+  model_provider_required: "hermes.wizard.warn.modelProviderRequired",
+};
+export function setupWarning(locale: Locale, code: unknown): string | undefined {
+  if (typeof code !== "string") return undefined;
+  const key = warningKeys[code];
+  if (!key) return undefined;
+  const text = { ko: koText, en: enText, ja: jaText, zh: zhText }[locale];
+  return text[key as keyof typeof text] ?? enText[key as keyof typeof enText];
+}
+
 const repairableWarnings = new Set([
   "gateway_unreachable",
   "api_key_missing",

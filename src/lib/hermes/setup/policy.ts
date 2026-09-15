@@ -4,6 +4,22 @@ export function hostSetupAllowed(env: Record<string, string | undefined>, role?:
   );
 }
 
+/**
+ * 로컬 Hermes 설치는 DeskRPG 가 서버에서 외부 스크립트를 실행하는 유일한 경로다.
+ * 기존 호스트 게이트에 더해 별도 스위치를 요구하고, SSH 대상에는 절대 열리지 않는다.
+ */
+export function hermesInstallAllowed(
+  env: Record<string, string | undefined>,
+  role?: string,
+  mode?: string,
+) {
+  return (
+    hostSetupAllowed(env, role) &&
+    ["1", "true", "yes"].includes(env.DESKRPG_HERMES_INSTALL_ENABLED ?? "") &&
+    mode === "local"
+  );
+}
+
 export function sameOriginMutation(
   origin: string | null,
   host: string | null,
@@ -113,7 +129,37 @@ const SAFE_CODES = new Set([
   "profile_verification_failed",
   "invalid_host_operation",
   "host_busy",
+  "profile_name_invalid",
+  "profile_exists",
+  "profile_create_failed",
+  "profile_key_failed",
+  "profile_provision_forbidden",
+  "profile_verify_failed",
+  "hermes_already_installed",
+  "hermes_install_forbidden",
+  "hermes_install_failed",
+  "hermes_installer_unavailable",
 ]);
+/** 실패가 아닌 알림. 잡의 `warnings` 로만 나가고 오류 경로에는 절대 오르지 않는다. */
+export const SETUP_WARNING_CODES = new Set(["profile_not_served", "model_provider_required"]);
+const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+/** 호스트와 같은 규칙. 예약어에는 `default` 가 포함된다 — 소유자 키는 configure 가 다룬다. */
+export const RESERVED_PROFILE_NAMES = new Set(["hermes", "test", "tmp", "root", "sudo", "default"]);
+export function validateProfileName(value: unknown): string {
+  if (typeof value !== "string") throw new Error("profile_name_invalid");
+  const trimmed = value.trim();
+  if (!PROFILE_NAME.test(trimmed) || RESERVED_PROFILE_NAMES.has(trimmed))
+    throw new Error("profile_name_invalid");
+  return trimmed;
+}
+export function validateProfileDescription(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new Error("profile_name_invalid");
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > 200 || /[\r\n\0]/.test(trimmed)) throw new Error("profile_name_invalid");
+  return trimmed;
+}
 const TIMEZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+\-.]+)*$/;
 /** IANA 이름 모양만 통과시킨다. 실제 존재 여부는 호스트가 판정한다. */
 export function validateTimezone(value: unknown): string {
