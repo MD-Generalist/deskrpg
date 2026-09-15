@@ -10,7 +10,7 @@ const ja: Record<string, string> = {
   "meeting.cameraResume": "手動カメラ・自動に戻す",
   "meeting.rotationHint": "ドラッグで回転・移動や席の変更は退室後にできます。",
   "meeting.availabilityLoading": "会議の状態を確認中…",
-  "meeting.prepare": "会議の開始を準備",
+  "meeting.prepare": "会議を開始",
   "meeting.join": "会議に参加",
   "meeting.cancelPreparation": "集合をキャンセル",
   "meeting.returnBeforeRetry": "参加者を変更するには、帰還が完了してから再開してください。",

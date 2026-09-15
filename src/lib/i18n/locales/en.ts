@@ -10,7 +10,7 @@ const en: Record<string, string> = {
   "meeting.cameraResume": "Manual camera · Resume automatic",
   "meeting.rotationHint": "Drag to rotate · Leave the meeting to walk or change seats.",
   "meeting.availabilityLoading": "Checking meeting status…",
-  "meeting.prepare": "Prepare a meeting",
+  "meeting.prepare": "Start meeting",
   "meeting.join": "Join meeting",
   "meeting.cancelPreparation": "Cancel assembly",
   "meeting.returnBeforeRetry": "Finish returning before starting with changed participants.",

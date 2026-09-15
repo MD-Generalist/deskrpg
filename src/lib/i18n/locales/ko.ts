@@ -10,7 +10,7 @@ const ko: Record<string, string> = {
   "meeting.cameraResume": "수동 카메라 · 자동 재개",
   "meeting.rotationHint": "드래그: 회전 · 이동과 좌석 변경은 나간 후 가능합니다.",
   "meeting.availabilityLoading": "회의 상태 확인 중…",
-  "meeting.prepare": "회의 시작 준비",
+  "meeting.prepare": "회의 시작",
   "meeting.join": "회의 참여",
   "meeting.cancelPreparation": "집결 취소",
   "meeting.returnBeforeRetry": "참가자를 변경하려면 먼저 복귀를 완료한 뒤 다시 시작하세요.",

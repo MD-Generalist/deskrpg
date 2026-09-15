@@ -10,7 +10,7 @@ const zh: Record<string, string> = {
   "meeting.cameraResume": "手动镜头 · 恢复自动",
   "meeting.rotationHint": "拖动旋转 · 离开会议后可移动或换座位。",
   "meeting.availabilityLoading": "正在确认会议状态…",
-  "meeting.prepare": "准备开始会议",
+  "meeting.prepare": "开始会议",
   "meeting.join": "加入会议",
   "meeting.cancelPreparation": "取消集合",
   "meeting.returnBeforeRetry": "请等待返回完成后再以新的参与者开始。",

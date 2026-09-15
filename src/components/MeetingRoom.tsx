@@ -695,7 +695,7 @@ export default function MeetingRoom({
       socket.off("channel:access-denied", denied);
       socket.off("meeting:spatial-state", spatialState);
       clearTimeout(joinTimer);
-      speaker.finish();
+      speaker.dispose();
       socket.off("meeting:state", handleState);
       socket.off("meeting:participant-joined", handleParticipantJoined);
       socket.off("meeting:participant-left", handleParticipantLeft);
