@@ -184,6 +184,88 @@ for (const attempt of ["same-seat", "different-seat", "release"] as const) {
   });
 }
 
+for (const home of [true, false]) {
+  test(`회의 복귀 완료 후 ${home ? "업무" : "대체"} 좌석은 일반 이동 규칙으로 돌아간다`, async () => {
+    let now = 0;
+    const h = await harness({ now: () => now });
+    try {
+      const a = await h.connect();
+      const meeting = { x: 128, y: 128, seatId: "128:128" };
+      const target = home ? { x: 32, y: 32, seatId: "32:32" } : meeting;
+      if (home)
+        assert.equal((await ack(a, "seat:claim", { actorId: "n1", seatId: "192:128" })).ok, true);
+      assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+      assert.equal(await h.coord.spatial.move("a", "n1", 1, meeting, false), true);
+      assert.equal(
+        (await ack(a, "seat:claim", { actorId: "n1", seatId: "192:128" })).error,
+        "meeting_reserved",
+      );
+      now += 1000;
+      assert.equal(
+        (await ack(a, "npc:position-update", { npcId: "n1", x: 128, y: 128, direction: "down" }))
+          .ok,
+        true,
+      );
+      assert.equal((await ack(a, "npc:arrived", { npcId: "n1", generation: 1 })).ok, true);
+      assert.equal((await ack(a, "seat:release", { actorId: "n1" })).error, "meeting_reserved");
+      await h.coord.spatial.release("a", "n1");
+      assert.equal(await h.coord.spatial.reserve("a", "n1", target), true);
+      assert.equal(await h.coord.spatial.move("a", "n1", 2, target, true), true);
+      assert.equal(
+        (await ack(a, "npc:arrived", { npcId: "n1", generation: 1 })).error,
+        "stale_generation",
+      );
+      if (home)
+        assert.equal(
+          (await ack(a, "npc:arrived", { npcId: "n1", generation: 2 })).error,
+          "not_at_target",
+        );
+      assert.equal(
+        (await ack(a, "seat:claim", { actorId: "n1", seatId: "192:128" })).error,
+        "meeting_reserved",
+      );
+      now += 1000;
+      assert.equal(
+        (
+          await ack(a, "npc:position-update", {
+            npcId: "n1",
+            x: target.x,
+            y: target.y,
+            direction: "down",
+          })
+        ).ok,
+        true,
+      );
+      assert.equal((await ack(a, "npc:arrived", { npcId: "n1", generation: 2 })).ok, true);
+      assert.equal(a.latest.npcs[0].phase, home ? "idle" : "ambient");
+      assert.equal(a.latest.npcs[0].spatialTarget, null);
+      assert.ok(!a.latest.seats.some((seat) => seat.actorId === "n1" && seat.spatial));
+      assert.equal((await ack(a, "seat:claim", { seatId: target.seatId })).error, "seat_occupied");
+      assert.equal(
+        (await ack(a, "seat:release", { actorId: "n1" })).error,
+        home ? "not_owner" : undefined,
+      );
+      assert.equal((await ack(a, "seat:claim", { actorId: "n2", seatId: "192:128" })).ok, true);
+      const secondExcursion = await ack(a, "seat:claim", {
+        actorId: "n3",
+        seatId: home ? "128:128" : "32:32",
+      });
+      assert.equal(secondExcursion.error, home ? undefined : "ambient_limit");
+      assert.equal((await ack(a, "seat:release", { actorId: "n2" })).ok, true);
+      if (home) assert.equal((await ack(a, "seat:release", { actorId: "n3" })).ok, true);
+      assert.equal((await ack(a, "seat:claim", { actorId: "n1", seatId: "192:128" })).ok, true);
+      assert.equal((await ack(a, "seat:release", { actorId: "n1" })).ok, true);
+      const b = await h.connect();
+      const server = h.servers.get(a.socket.id!)!;
+      await server.leave("a");
+      await h.coord.left(server, "a");
+      assert.equal((await ack(b, "seat:claim", { actorId: "n1", seatId: "192:128" })).ok, true);
+    } finally {
+      await h.close();
+    }
+  });
+}
+
 test("real sockets reject unauthenticated/cross-channel/nonmember/invalid motion", async () => {
   const h = await harness();
   try {
