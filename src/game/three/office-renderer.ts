@@ -877,7 +877,19 @@ export class OfficeRenderer {
         hasLegacyPartitions: finishedPerimeter,
       });
     this.seats = furnitureSeats(furniture);
+    const annexWalls = new Map(
+      map.meetingSpace?.generatedAnnexWalls?.map((wall) => [wall.id, wall]) ?? [],
+    );
     for (const object of furniture) {
+      const marker = annexWalls.get(object.id);
+      const annexDisplay =
+        marker?.type === "room_wall_h" &&
+        object.type === marker.type &&
+        marker.col === object.col &&
+        marker.row === object.row
+          ? marker.display
+          : undefined;
+      if (annexDisplay === "hidden") continue;
       if (
         (finishedPerimeter || executive) &&
         object.type === "cubicle_wall" &&
@@ -903,9 +915,15 @@ export class OfficeRenderer {
       this.world.add(group);
       if (["room_wall_h", "room_wall_v", "cubicle_wall"].includes(object.type))
         registerMeetingWalls([group]);
-      const type = object.type;
+      const type = annexDisplay === "vertical" ? "room_wall_v" : object.type;
       if (type === "room_wall_h" || type === "room_wall_v") {
+        if (annexDisplay === "corner") {
+          addRoomPartition(group, false);
+          addRoomPartition(group, true);
+          continue;
+        }
         const junction =
+          annexDisplay !== "vertical" &&
           type === "room_wall_v" &&
           furniture.some(
             (other) =>

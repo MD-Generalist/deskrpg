@@ -19,6 +19,126 @@ const legacy = () => ({
   },
   objects: [{ id: "kept-desk", type: "desk", col: 3, row: 3 }],
 });
+for (const tiled of [false, true]) {
+  test(`생성 증축벽만 렌더링 경계로 투영하고 충돌·저장을 보존한다: ${tiled ? "Tiled" : "legacy"}`, () => {
+    const input = tiled
+      ? {
+          tiledversion: "1.10.2",
+          width: 14,
+          height: 12,
+          tilewidth: 32,
+          tileheight: 32,
+          tilesets: [],
+          layers: [
+            { id: 1, name: "Floor", type: "tilelayer", data: Array(168).fill(0) },
+            {
+              id: 2,
+              name: "Objects",
+              type: "objectgroup",
+              objects: [{ id: 1, type: "room_wall_h", x: 96, y: 96 }],
+            },
+          ],
+        }
+      : { ...legacy(), objects: [{ id: "user-wall", type: "room_wall_h", col: 3, row: 3 }] };
+    const result = normalizeMeetingMap(input);
+    const metadata = result.meetingSpace.generatedAnnexWalls;
+    assert.ok(metadata?.length);
+    const geometry = projectMeetingMap(result.mapData);
+    assert.ok(metadata.some((wall) => wall.display === "hidden"));
+    assert.ok(metadata.some((wall) => wall.display === "horizontal"));
+    assert.ok(metadata.some((wall) => wall.display === "vertical"));
+    assert.ok(metadata.some((wall) => wall.display === "corner"));
+    const bounds = result.meetingSpace.bounds;
+    assert.ok(
+      metadata.some(
+        (wall) =>
+          wall.col === bounds.x + bounds.width &&
+          wall.row === bounds.y + bounds.height &&
+          wall.display === "corner",
+      ),
+    );
+    assert.ok(!metadata.some((wall) => wall.id === (tiled ? "2:1" : "user-wall")));
+    for (const marker of metadata) {
+      assert.ok(
+        geometry.objects.some(
+          (o) =>
+            o.id === marker.id &&
+            o.col === marker.col &&
+            o.row === marker.row &&
+            o.type === marker.type,
+        ),
+      );
+      assert.ok(geometry.blocked.includes(`${marker.col},${marker.row}`));
+    }
+    const entry = result.meetingSpace.entry;
+    assert.ok(
+      !metadata.some(
+        (wall) => wall.col === Math.floor(entry.x) && wall.row === Math.floor(entry.y),
+      ),
+    );
+    assert.deepEqual(normalizeMeetingMap(result.mapData), result);
+    const saved = serializeMeetingMap(result.mapData, {
+      layers: { floor: geometry.floor, walls: geometry.walls },
+      objects: geometry.objects,
+    });
+    assert.deepEqual(normalizeMeetingMap(saved).meetingSpace, result.meetingSpace);
+    assert.deepEqual(projectMeetingMap(saved).blocked, geometry.blocked);
+    const stale = structuredClone(result.mapData);
+    const staleRoom = stale.meetingSpace as Record<string, unknown>;
+    staleRoom.generatedAnnexWalls = [
+      { ...metadata[0], id: "missing" },
+      { ...metadata[0], col: metadata[0].col + 1 },
+      { ...metadata[0], type: "chair" },
+      { ...metadata[0], display: "invalid" },
+    ];
+    assert.deepEqual(normalizeMeetingMap(stale).meetingSpace.generatedAnnexWalls, []);
+    const without = structuredClone(result.mapData);
+    delete (without.meetingSpace as Record<string, unknown>).generatedAnnexWalls;
+    assert.equal(
+      (normalizeMeetingMap(without).meetingSpace as unknown as Record<string, unknown>)
+        .generatedAnnexWalls,
+      undefined,
+    );
+  });
+}
+for (const side of ["right", "bottom"]) {
+  test(`증축 ${side} 연결 통로에 표시벽이나 충돌을 만들지 않는다`, () => {
+    const input = legacy();
+    input.layers.floor = Array.from({ length: 30 }, () => Array(40).fill(1));
+    input.layers.walls = Array.from({ length: 30 }, () => Array(40).fill(0));
+    if (side === "bottom") for (const row of input.layers.walls) row[38] = 2;
+    const result = normalizeMeetingMap(input);
+    const geometry = projectMeetingMap(result.mapData);
+    const markers = result.meetingSpace.generatedAnnexWalls!;
+    const corridor =
+      side === "right"
+        ? [
+            [39, 1],
+            [40, 1],
+            [41, 1],
+            [42, 1],
+          ]
+        : [
+            [1, 29],
+            [1, 30],
+            [1, 31],
+            [1, 32],
+          ];
+    for (const [x, y] of corridor) {
+      assert.ok(!geometry.blocked.includes(`${x},${y}`));
+      assert.ok(!markers.some((wall) => wall.col === x && wall.row === y));
+    }
+    const [x, y] = corridor[1];
+    assert.ok(
+      markers.some((wall) =>
+        side === "right"
+          ? wall.col === x && wall.row === y - 1 && wall.display === "horizontal"
+          : wall.col === x - 1 && wall.row === y && wall.display === "vertical",
+      ),
+    );
+    assert.deepEqual(normalizeMeetingMap(result.mapData), result);
+  });
+}
 for (const { name, gid, tilesets } of [
   { name: "빈 타일셋", gid: 0, tilesets: [] },
   { name: "100부터 시작하는 타일셋", gid: 100, tilesets: [{ firstgid: 100, tilecount: 1 }] },

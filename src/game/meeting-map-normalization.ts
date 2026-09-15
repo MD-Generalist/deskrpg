@@ -484,6 +484,26 @@ export function normalizeMeetingMap(
   if (choices.length === 1) {
     const space = spaceFor(g, choices[0].bounds, choices[0].id, reach);
     if (space) {
+      const markers = record(map.meetingSpace) ? map.meetingSpace.generatedAnnexWalls : undefined;
+      if (Array.isArray(markers)) {
+        const objects = new Map(g.objects.map((o) => [o.id, o]));
+        const seen = new Set<string>();
+        space.generatedAnnexWalls = markers.filter((marker) => {
+          if (!record(marker) || typeof marker.id !== "string" || seen.has(marker.id)) return false;
+          const object = objects.get(marker.id);
+          if (
+            !object ||
+            object.type !== "room_wall_h" ||
+            marker.type !== object.type ||
+            marker.col !== object.col ||
+            marker.row !== object.row ||
+            !["horizontal", "vertical", "corner", "hidden"].includes(String(marker.display))
+          )
+            return false;
+          seen.add(marker.id);
+          return true;
+        }) as NonNullable<MeetingSpace["generatedAnnexWalls"]>;
+      }
       map.meetingSpace = space;
       return { mapData: map, meetingSpace: space };
     }
@@ -542,6 +562,7 @@ export function normalizeMeetingMap(
   add("chair", b.x + 2, b.y + 3);
   add("chair", b.x + 7, b.y + 3);
   const open = key(edge.x, edge.y);
+  const generatedIds = new Map(additions.map((o) => [o.id, o.id]));
   if (g.tiled) {
     const tiled = map as unknown as TiledGeometryMap;
     const tilesets = Array.isArray(map.tilesets) ? map.tilesets.filter(record) : [];
@@ -589,6 +610,7 @@ export function normalizeMeetingMap(
       Number(map.nextobjectid) || 1,
       ...tiled.layers.flatMap((l) => (l.objects || []).map((o) => o.id + 1)),
     );
+    additions.forEach((object, i) => generatedIds.set(object.id, `${layerId}:${nextId + i}`));
     tiled.layers.push({
       id: layerId,
       name: "Meeting annex",
@@ -626,6 +648,31 @@ export function normalizeMeetingMap(
   g = projectMeetingMap(map);
   const space = spaceFor(g, b, "meeting-annex-v1", component(g, start));
   if (!space) invalid("증축 회의실의 접근 경로 검증에 실패했습니다");
+  const openAnnex = (x: number, y: number) =>
+    insideMeetingSpace(b, x, y) || corridor.has(key(x, y));
+  space.generatedAnnexWalls = additions
+    .filter((o) => o.type === "room_wall_h")
+    .map((o) => {
+      const horizontal = openAnnex(o.col, o.row - 1) || openAnnex(o.col, o.row + 1);
+      const vertical = openAnnex(o.col - 1, o.row) || openAnnex(o.col + 1, o.row);
+      const diagonal = [-1, 1].some((dx) =>
+        [-1, 1].some((dy) => openAnnex(o.col + dx, o.row + dy)),
+      );
+      return {
+        id: generatedIds.get(o.id)!,
+        col: o.col,
+        row: o.row,
+        type: "room_wall_h",
+        display:
+          (horizontal && vertical) || (!horizontal && !vertical && diagonal)
+            ? "corner"
+            : horizontal
+              ? "horizontal"
+              : vertical
+                ? "vertical"
+                : "hidden",
+      };
+    });
   map.meetingSpace = space;
   return { mapData: map, meetingSpace: space };
 }
