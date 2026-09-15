@@ -134,6 +134,7 @@ export class OfficeRenderer {
   private following = true;
   private overviewDimensions: { cols: number; rows: number } | null = null;
   private lastMap = "";
+  private lastMapStructure = "";
   private mapTimer = 0;
   private bridge: OfficeBridge | null = null;
   private gesture = new PointerGesture();
@@ -595,7 +596,23 @@ export class OfficeRenderer {
     if (kind === "down" && e.button === 0) this.focus();
   }
   private buildMap(map: MapSnapshot) {
-    this.exitMeeting();
+    // mapKey에는 늦게 로드된 액터 텍스처 수도 포함된다. 자산 갱신은 지도 변경과 구분한다.
+    const structure = JSON.stringify([
+      map.cols,
+      map.rows,
+      map.floor,
+      map.walls,
+      map.blocked,
+      map.objects,
+      map.tiled,
+      map.environment,
+      map.environmentVersion,
+      map.meetingSpace,
+    ]);
+    const keepMeeting = this.meetingCamera.active && structure === this.lastMapStructure;
+    if (keepMeeting) this.meetingWalls.dispose();
+    else this.exitMeeting();
+    this.lastMapStructure = structure;
     this.meetingWallObjects = [];
     this.setHoveredSeat(null);
     this.setSelectedSeat(null);
@@ -1054,6 +1071,7 @@ export class OfficeRenderer {
     );
     batchStaticFurniture(this.world, true, { vertexColors: true, batchSeats: true });
     batchCoplanarGlass(this.world);
+    if (keepMeeting) this.meetingWalls.enter(this.meetingWallObjects);
   }
   private createLabel(actor: ActorSnapshot): RenderedActor {
     const color =

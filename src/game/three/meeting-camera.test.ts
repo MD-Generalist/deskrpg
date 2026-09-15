@@ -5,7 +5,7 @@ import { MeetingCamera } from "./meeting-camera";
 import { OfficeRenderer } from "./office-renderer";
 import { MeetingWallOcclusion } from "./meeting-wall-occlusion";
 import type { MeetingSpace } from "../meeting-space";
-import type { ActorSnapshot } from "./bridge";
+import type { ActorSnapshot, MapSnapshot } from "./bridge";
 
 const space: MeetingSpace = {
   id: "room",
@@ -74,6 +74,160 @@ test("meeting locks navigation, restores camera and controls, and can reenter", 
   meeting.enter(space);
   meeting.dispose();
   assert.equal(controls.enablePan, true);
+});
+
+function rebuildingRenderer() {
+  const { camera, controls, meeting } = setup();
+  const renderer = Object.create(OfficeRenderer.prototype) as OfficeRenderer;
+  let assetVersion = 1;
+  let map: MapSnapshot = {
+    cols: 20,
+    rows: 12,
+    floor: [],
+    walls: [],
+    blocked: [],
+    tiled: false,
+    objects: [{ id: "meeting-wall", type: "room_wall_h", col: 11, row: 8 }],
+    meetingSpace: { ...space, wallObjectIds: ["meeting-wall"] },
+  };
+  const world = new T.Group();
+  const meetingWalls = new MeetingWallOcclusion();
+  Object.assign(renderer, {
+    camera,
+    controls: { ...controls, update() {} },
+    meetingCamera: meeting,
+    meetingWalls,
+    meetingWallObjects: [],
+    world,
+    theme: "office",
+    sun: new T.DirectionalLight(),
+    fill: new T.DirectionalLight(),
+    sky: new T.HemisphereLight(),
+    renderer: { setClearColor() {} },
+    following: true,
+    overviewDimensions: { cols: 20, rows: 12 },
+    host: { clientWidth: 1200, clientHeight: 600, dataset: {} },
+    cursor: { visible: true },
+    meetingRightInset: 0,
+    bridge: { map: () => map, mapKey: () => `asset-${assetVersion}` },
+    setHoveredSeat() {},
+    setSelectedSeat() {},
+    stopFollowing() {},
+  });
+  return {
+    renderer,
+    camera,
+    controls,
+    meeting,
+    meetingWalls,
+    world,
+    refresh(next = map) {
+      map = next;
+      assetVersion++;
+      // 실제 tick도 같은 buildMap 경로를 사용한다. 진입 메서드로 WebGL 없이 그 경로를 실행한다.
+      renderer.enterMeeting();
+    },
+    map: () => map,
+    rebuild(next: MapSnapshot) {
+      (renderer as unknown as { buildMap(map: MapSnapshot): void }).buildMap(next);
+    },
+  };
+}
+
+test("같은 지도의 늦은 텍스처 갱신은 회의·수동 방향·발언·복원값을 유지한다", () => {
+  const fixture = rebuildingRenderer();
+  const { renderer, camera, controls, meeting } = fixture;
+  const original = camera.position.clone();
+  renderer.enterMeeting();
+  renderer.setMeetingSpeaker({ kind: "npc", id: "npc", utteranceId: "turn-1" });
+  meeting.update(1, actors);
+  const speakerTarget = controls.target.clone();
+  renderer.rotateCamera(1);
+  const manualPosition = camera.position.clone();
+  const states: boolean[] = [];
+  renderer.onMeetingCameraChange = (state) => states.push(state.active);
+  fixture.refresh();
+  assert.equal(renderer.meetingCameraState().active, true);
+  assert.equal(renderer.meetingCameraState().automatic, false);
+  assert.ok(camera.position.equals(manualPosition), "수동 방향이 재진입으로 초기화되면 안 된다");
+  assert.deepEqual(states, [], "자산 재생성이 회의 종료 사건을 내보내면 안 된다");
+  renderer.resumeMeetingAuto();
+  meeting.update(1, actors);
+  assert.ok(controls.target.equals(speakerTarget), "현재 발언을 유지해야 한다");
+  renderer.exitMeeting();
+  assert.ok(camera.position.equals(original));
+  assert.equal((renderer as unknown as { following: boolean }).following, true);
+  assert.deepEqual((renderer as unknown as { overviewDimensions: unknown }).overviewDimensions, {
+    cols: 20,
+    rows: 12,
+  });
+});
+
+test("자산 갱신은 이전 벽 재질을 복원·해제한 뒤 새 회의 벽에만 가림 처리를 연결한다", () => {
+  const fixture = rebuildingRenderer();
+  fixture.renderer.enterMeeting();
+  const firstWall = () => {
+    let mesh: T.Mesh | undefined;
+    (
+      fixture.renderer as unknown as { meetingWallObjects: T.Object3D[] }
+    ).meetingWallObjects[0].traverse((object) => {
+      if (!mesh && object instanceof T.Mesh) mesh = object;
+    });
+    assert.ok(mesh);
+    return mesh;
+  };
+  const obscure = (mesh: T.Mesh) => {
+    const center = mesh.getWorldPosition(new T.Vector3());
+    fixture.meetingWalls.update(center.clone().add(new T.Vector3(0, 0, 5)), [
+      center.clone().add(new T.Vector3(0, 0, -5)),
+    ]);
+  };
+  const oldWall = firstWall();
+  const original = oldWall.material;
+  obscure(oldWall);
+  assert.notEqual(oldWall.material, original);
+  const faded = Array.isArray(oldWall.material) ? oldWall.material : [oldWall.material];
+  let disposed = 0;
+  faded.forEach((material) => material.addEventListener("dispose", () => disposed++));
+  fixture.refresh();
+  assert.equal(oldWall.material, original);
+  assert.equal(disposed, faded.length);
+  const nextWall = firstWall();
+  assert.notEqual(nextWall, oldWall);
+  const nextOriginal = nextWall.material;
+  obscure(nextWall);
+  assert.notEqual(nextWall.material, nextOriginal, "새 벽도 가림 대상이어야 한다");
+  fixture.renderer.exitMeeting();
+  assert.equal(nextWall.material, nextOriginal);
+});
+
+test("같은 경계라도 실제 가구·좌석·지도·회의 공간 변경은 회의 모드를 종료한다", () => {
+  const fixture = rebuildingRenderer();
+  for (const change of [
+    (map: MapSnapshot) => ({
+      ...map,
+      objects: [...map.objects, { id: "chair", type: "chair", col: 12, row: 9 }],
+    }),
+    (map: MapSnapshot) => ({ ...map, floor: [[1]] }),
+    (map: MapSnapshot) => ({ ...map, blocked: ["12,9"] }),
+    (map: MapSnapshot) => ({
+      ...map,
+      meetingSpace: { ...map.meetingSpace!, bounds: { ...space.bounds, x: 11 } },
+    }),
+    (map: MapSnapshot) => ({ ...map, meetingSpace: undefined }),
+  ]) {
+    fixture.renderer.enterMeeting();
+    fixture.rebuild(change(fixture.map()));
+    assert.equal(fixture.renderer.meetingCameraState().active, false);
+  }
+  fixture.renderer.enterMeeting();
+  fixture.map().objects[0].col += 1;
+  fixture.rebuild(fixture.map());
+  assert.equal(
+    fixture.renderer.meetingCameraState().active,
+    false,
+    "같은 객체를 제자리 수정해도 변경으로 판정한다",
+  );
 });
 test("speaker identity uses typed IDs, never names; missing/thinking speakers show room", () => {
   const { controls, meeting } = setup();
