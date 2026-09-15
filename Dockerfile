@@ -44,6 +44,7 @@ COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatte
 COPY --from=builder /app/src/lib/meeting-discussion-state.ts ./src/lib/meeting-discussion-state.ts
 COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
 COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
+COPY --from=builder /app/src/lib/path-alias.js ./src/lib/path-alias.js
 COPY --from=builder /app/src/lib/startup-check.js ./src/lib/startup-check.js
 COPY --from=builder /app/src/lib/npc-chat-history.ts ./src/lib/npc-chat-history.ts
 COPY --from=builder /app/src/lib/npc-activity.ts ./src/lib/npc-activity.ts

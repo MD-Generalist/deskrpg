@@ -1,6 +1,8 @@
 // Custom server — wraps Next.js standalone with Socket.io on a single port
 // Hooks into startServer's httpServer after it starts
 const path = require("node:path");
+// 별칭 해석을 가장 먼저 심는다 — 아래 require 들이 이미 `@/` 를 타고 들어간다.
+require("./src/lib/path-alias.js").installPathAlias(__dirname);
 const { Server } = require("socket.io");
 const {
   getInternalSocketHostname,
