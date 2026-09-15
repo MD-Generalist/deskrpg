@@ -18,7 +18,7 @@ const source = () => {
   g.add(new T.Mesh(new T.BoxGeometry(0.1, 0.1, 0.1), new T.MeshStandardMaterial()));
   return g;
 };
-test("studio adapter builds architecture once, resolves all objects and retains 51 seats after late batching", async () => {
+test("studio adapter builds architecture once, resolves all objects and retains 57 seats after late batching", async () => {
   const map = tiledSnapshot(buildOfficeEnvironment("agency")),
     root = new T.Group(),
     calls = new Map<string, number>();
@@ -42,7 +42,7 @@ test("studio adapter builds architecture once, resolves all objects and retains 
     seats += o.userData.seats?.length ?? (o.userData.seat ? 1 : 0);
     assert.ok(!o.userData.dynamicAsset);
   });
-  assert.equal(seats, 51);
+  assert.equal(seats, 57);
   for (const object of map.objects) {
     const host = new T.Group();
     assert.equal(
@@ -53,7 +53,7 @@ test("studio adapter builds architecture once, resolves all objects and retains 
     await host.userData.assetReady;
     disposeTree(host);
   }
-  assert.equal(furnitureSeats(map.objects).length, 51);
+  assert.equal(furnitureSeats(map.objects).length, 57);
   disposeTree(root);
 });
 test("legacy/custom agency gate does not compose a studio scene", () => {
@@ -67,6 +67,24 @@ test("legacy/custom agency gate does not compose a studio scene", () => {
     assert.equal(addCreativeStudioScene(root, other), null);
     assert.equal(root.children.length, 0);
   }
+});
+test("protected v4 studio keeps its original open floor without v5 director architecture", async () => {
+  const map = { ...tiledSnapshot(buildOfficeEnvironment("agency")), environmentVersion: 4 };
+  const scene = addCreativeStudioScene(new T.Group(), map, {
+    load: async () => source(),
+    loadTexture: async () => new T.Texture(),
+  })!;
+  await scene.userData.assetReady;
+  assert.equal(scene.getObjectByName("director-open-door"), undefined);
+  assert.equal(
+    scene.children.some(
+      (object) =>
+        object.name === "decoration:executive-rug" ||
+        (object.name === "decoration:shared-woven-rug" && object.position.x < 10),
+    ),
+    false,
+  );
+  disposeTree(scene);
 });
 test("workstation monitors face their adjacent chairs with no navigation edits", () => {
   const map = tiledSnapshot(buildOfficeEnvironment("agency")),

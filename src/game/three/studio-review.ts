@@ -7,6 +7,7 @@ const labels: Record<string, string> = {
   ideation: "아이디어 공간",
   "main-lounge": "메인 라운지",
   production: "제작 공간",
+  "studio-director": "스튜디오 대표실",
   meeting: "미팅룸",
   pantry: "팬트리",
   "small-lounge": "작은 라운지",

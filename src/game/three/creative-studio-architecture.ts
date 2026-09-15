@@ -8,7 +8,10 @@ import {
 } from "./scene-asset-catalog";
 import { batchCoplanarGlass, batchStaticFurniture } from "./static-batching";
 import { CREATIVE_STUDIO_FINISH } from "./office-finishes";
-import { CREATIVE_STUDIO_MEETING_BOUNDARY } from "./creative-studio-layout";
+import {
+  CREATIVE_STUDIO_DIRECTOR_BOUNDARY,
+  CREATIVE_STUDIO_MEETING_BOUNDARY,
+} from "./creative-studio-layout";
 import { CREATIVE_STUDIO_ENTRANCE } from "./office-environments";
 import { surfaceTexture } from "./surface-detail";
 
@@ -153,7 +156,7 @@ export function addCreativeStudioArchitecture(
   root: T.Group,
   cols: number,
   rows: number,
-  options: { load?: SceneAssetLoader; loadTexture?: TextureLoad } = {},
+  options: { load?: SceneAssetLoader; loadTexture?: TextureLoad; includeDirectorSuite?: boolean } = {},
 ) {
   if (cols !== 42 || rows !== 26)
     throw Error("Creative studio architecture requires 42 × 26 tiles");
@@ -405,6 +408,43 @@ export function addCreativeStudioArchitecture(
   // Photo boundary matches authoritative three solid glass_partition tiles.
   for (const row of [5, 6, 7])
     module("shared-glass-partition", 9.5, 0, row + 0.5, [0.5, 0.85, 1], Math.PI / 2);
+  const director = CREATIVE_STUDIO_DIRECTOR_BOUNDARY;
+  if (options.includeDirectorSuite !== false) {
+    for (let start = director.northCols[0]; start <= director.northCols.at(-1)!; start += 2) {
+      const end = Math.min(start + 2, director.northCols.at(-1)! + 1);
+      module("shared-glass-partition", (start + end) / 2, 0, director.northRow + 0.5, [
+        (end - start) / 2,
+        0.9,
+        1,
+      ]);
+      module("shared-glass-partition", (start + end) / 2, 0, director.southRow + 0.5, [
+        (end - start) / 2,
+        0.9,
+        1,
+      ]);
+    }
+    for (const [start, end] of [
+      [director.northRow, director.doorRows[0]],
+      [director.doorRows[1] + 1, director.southRow + 1],
+    ] as const)
+    module(
+      "shared-glass-partition",
+      director.eastCol + 0.5,
+      0,
+      (start + end) / 2,
+      [(end - start) / 2, 0.9, 1],
+      Math.PI / 2,
+    );
+    module(
+      "shared-glass-door",
+      director.eastCol + 0.82,
+      0,
+      director.doorRows[0] - 1.03,
+      [1, 1, 1],
+      Math.PI / 2,
+      "director-open-door",
+    );
+  }
   // Coral backing sits above the pantry's existing counter footprint, never on its approach aisle.
   const coral = new T.MeshStandardMaterial({
     color: CREATIVE_STUDIO_FINISH.accent,

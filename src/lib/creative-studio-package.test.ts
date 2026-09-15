@@ -39,6 +39,8 @@ test("all catalog GLBs, studio surfaces, thumbnail and build reports ship throug
       "public/assets/environments/creative-studio",
     ].flatMap(files),
     "src/lib/fixtures/official-agency-v2.json",
+    "src/lib/fixtures/official-agency-v3.json",
+    "src/lib/fixtures/official-agency-v4.json",
   ];
   for (const file of new Set(runtime)) {
     assert.ok(existsSync(path.join(root, file)), file);
@@ -46,7 +48,12 @@ test("all catalog GLBs, studio surfaces, thumbnail and build reports ship throug
     // The fixture is traced into the Next API; public URLs need explicit copies.
     if (file.startsWith("public/")) assert.ok(covered(docker, file), `Docker omits ${file}`);
   }
-  assert.ok(runtime.includes("public/assets/environments/creative-studio/agency-v4.webp"));
+  assert.ok(runtime.includes("public/assets/environments/creative-studio/agency-v5.webp"));
+  assert.notDeepEqual(
+    readFileSync(path.join(root, "public/assets/environments/creative-studio/agency-v5.webp")),
+    readFileSync(path.join(root, "public/assets/environments/creative-studio/agency-v4.webp")),
+    "v5 picker preview must show the director suite rather than reuse the open v4 floor",
+  );
 });
 test("every generated studio GLB is catalogued and covered by its measured build report", () => {
   let count = 0;

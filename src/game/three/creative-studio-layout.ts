@@ -12,6 +12,17 @@ export const CREATIVE_STUDIO_MEETING_BOUNDARY = Object.freeze({
   doorRows: Object.freeze([8, 9]),
 });
 
+/** Glass enclosure for the studio director suite; the east opening joins the main spine. */
+export const CREATIVE_STUDIO_DIRECTOR_BOUNDARY = Object.freeze({
+  northRow: 10,
+  eastCol: 9,
+  southRow: 22,
+  northCols: Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]),
+  eastSolidRows: Object.freeze([10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22]),
+  doorRows: Object.freeze([14, 15]),
+  southCols: Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]),
+});
+
 const area = (x: number, y: number, width: number, height: number): AmbientArea => ({
   x,
   y,
@@ -80,6 +91,16 @@ export const CREATIVE_STUDIO_ZONES: readonly StudioZone[] = Object.freeze([
     destinationExclusions: Object.freeze([area(16, 16, 14, 1), area(16, 23, 14, 1)]),
   }),
   Object.freeze({
+    id: "studio-director",
+    x: 1,
+    y: 10,
+    width: 9,
+    height: 13,
+    roaming: false,
+    access: "purpose-only" as const,
+    destinationTags: Object.freeze(["work", "desk", "meeting", "lounge"]),
+  }),
+  Object.freeze({
     id: "meeting",
     x: 32,
     y: 2,
@@ -121,10 +142,10 @@ export type CreativeStudioAdd = (
 
 /** Tile anchors ship now; Task 4 must add catalog-local anchors without moving this navigation grid. */
 export const CREATIVE_STUDIO_SEAT_CONTRACT = Object.freeze({
-  tileGridAnchors: 38,
+  tileGridAnchors: 44,
   deferredCatalogSeatsPerObject: Object.freeze({ studio_sofa: 3, studio_stool: 1 }),
   deferredCatalogAnchors: 13,
-  totalAnchors: 51,
+  totalAnchors: 57,
 } as const);
 
 export function furnishCreativeStudio(add: CreativeStudioAdd) {
@@ -244,6 +265,58 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
   add("plant", 22, 7, { variant: "olive" });
   add("studio_shelf", 22, 14, { variant: "low-divider", destinationTags: ["lounge"] });
   add("plant", 29, 14, { variant: "monstera" });
+
+  // Purpose-only studio director suite: walnut hero desk plus a compact client lounge.
+  for (const col of CREATIVE_STUDIO_DIRECTOR_BOUNDARY.northCols)
+    add("glass_partition", col, CREATIVE_STUDIO_DIRECTOR_BOUNDARY.northRow, {
+      variant: "black-frame",
+    });
+  for (const row of CREATIVE_STUDIO_DIRECTOR_BOUNDARY.eastSolidRows)
+    add("glass_partition", CREATIVE_STUDIO_DIRECTOR_BOUNDARY.eastCol, row, {
+      direction: "right",
+      variant: "black-frame",
+    });
+  for (const col of CREATIVE_STUDIO_DIRECTOR_BOUNDARY.southCols)
+    add("glass_partition", col, CREATIVE_STUDIO_DIRECTOR_BOUNDARY.southRow, {
+      variant: "black-frame",
+    });
+  for (const col of [1, 2, 3, 4, 5])
+    add("bookshelf", col, 11, { variant: "studio-director", destinationTags: ["work"] });
+  add("low_cabinet", 6, 11, { variant: "studio-director", destinationTags: ["work"] });
+  add("executive_desk", 2, 13, {
+    direction: "down",
+    variant: "studio-director",
+    destinationTags: ["work", "desk"],
+  });
+  add("computer", 3, 13, { variant: "director-monitor" });
+  add("chair", 3, 12, {
+    direction: "down",
+    variant: "studio-director",
+    destinationTags: ["work", "desk"],
+  });
+  for (const col of [2, 5])
+    add("chair", col, 16, {
+      direction: "up",
+      variant: "studio-director",
+      destinationTags: ["meeting"],
+    });
+  add("floor_lamp", 7, 17, { variant: "studio-director" });
+  add("plant", 1, 18, { variant: "olive" });
+  add("office_sofa", 2, 19, {
+    direction: "right",
+    variant: "studio-director",
+    destinationTags: ["meeting", "lounge"],
+  });
+  add("meeting_table", 4, 19, {
+    variant: "studio-director",
+    destinationTags: ["meeting", "lounge"],
+  });
+  add("office_armchair", 7, 19, {
+    direction: "left",
+    variant: "studio-director",
+    destinationTags: ["meeting", "lounge"],
+  });
+  add("plant", 7, 21, { variant: "monstera" });
 
   // Dressed production table with eight independently reachable legacy chairs.
   add("studio_worktable", 20, 18, {

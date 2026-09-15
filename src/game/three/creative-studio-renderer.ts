@@ -19,6 +19,8 @@ import { attachFurnitureSeats } from "./seat-picking";
 import { resolveSeat } from "./seating";
 import { furnitureOffset } from "./executive-lounge-layout";
 import { buildRoomFurniture } from "./room-furniture";
+import { addOfficeDetails } from "./office-details";
+import { attachFurnitureAsset, type ExecutiveAsset } from "./furniture-asset";
 import { batchStaticFurniture, batchCoplanarGlass } from "./static-batching";
 import { round } from "./primitives";
 
@@ -87,13 +89,26 @@ export function renderCreativeStudioObject(
   const selection = studioFurnitureAsset(object),
     kit = creativeStudioKitFor(object),
     plant = object.type === "plant",
+    directorFurniture =
+      (object.variant === "studio-director" &&
+        [
+        "executive_desk",
+        "chair",
+        "bookshelf",
+        "low_cabinet",
+        "office_sofa",
+        "office_armchair",
+        "meeting_table",
+        "floor_lamp",
+        ].includes(object.type)) ||
+      (object.type === "computer" && object.variant === "director-monitor"),
     roomFurniture = [
       "meeting_display",
       "kitchen_counter",
       "microwave_cabinet",
       "refrigerator",
     ].includes(object.type);
-  if (!selection && !kit && !plant && !roomFurniture) return false;
+  if (!selection && !kit && !plant && !roomFurniture && !directorFurniture) return false;
   const size = getObjectDimensions(object.type, object.direction),
     offset = furnitureOffset(object),
     direction = studioObjectDirection(object, objects);
@@ -112,6 +127,21 @@ export function renderCreativeStudioObject(
     host.position.set(seat.x, 0, seat.z);
   }
   const loads: Promise<boolean>[] = [];
+  if (directorFurniture) {
+    const body = buildRoomFurniture(object.type, true) ?? new T.Group();
+    if (object.type === "computer")
+      addOfficeDetails(body, "computer", "#5a3425", "#efe5d3", false, "executive");
+    host.add(body);
+    const asset = {
+      executive_desk: "executive-desk",
+      chair: object.col === 3 && object.row === 12 ? "chair" : "guest-chair",
+      bookshelf: "bookcase",
+      office_sofa: "sofa",
+      office_armchair: "armchair",
+      meeting_table: "coffee",
+    }[object.type] as ExecutiveAsset | undefined;
+    if (asset) loads.push(attachFurnitureAsset(body, asset, options.load));
+  }
   if (selection && (!kit || !creativeStudioKitOwnsBody(kit))) {
     const body = new T.Group();
     body.name = "shared-furniture-body";
@@ -154,7 +184,10 @@ export type StudioDecoration = {
   variant?: string;
 };
 /** Floor plants occupy existing perimeter cells; tabletop plants remain over solid furniture. */
-export function studioDecorations(objects: MapObject[]): StudioDecoration[] {
+export function studioDecorations(
+  objects: MapObject[],
+  includeDirectorSuite = true,
+): StudioDecoration[] {
   const out: StudioDecoration[] = [
     {
       id: "shared-round-rug",
@@ -176,6 +209,16 @@ export function studioDecorations(objects: MapObject[]): StudioDecoration[] {
     },
     { id: "shared-woven-rug", position: [37, 0.037, 5], scale: [1.25, 1, 1.4], variant: "neutral" },
   ];
+  if (includeDirectorSuite)
+    out.push(
+      { id: "executive-rug", position: [4.5, 0.037, 14.8], scale: [0.78, 1, 0.78] },
+      {
+        id: "shared-woven-rug",
+        position: [4.8, 0.037, 20],
+        scale: [0.85, 1, 0.78],
+        variant: "neutral",
+      },
+    );
   for (const x of [4, 10, 18, 23, 29, 31, 40])
     out.push({ id: x % 2 ? "shared-olive" : "shared-ficus", position: [x + 0.5, 0.035, 0.62] });
   for (const z of [11, 18, 23]) out.push({ id: "shared-ficus", position: [0.5, 0.035, z + 0.5] });
@@ -264,7 +307,11 @@ export function addCreativeStudioScene(
   scene.userData.disposeActor = () => {
     disposed = true;
   };
-  const architecture = addCreativeStudioArchitecture(scene, map.cols, map.rows, options),
+  const includeDirectorSuite = (map.environmentVersion ?? 0) >= 5;
+  const architecture = addCreativeStudioArchitecture(scene, map.cols, map.rows, {
+      ...options,
+      includeDirectorSuite,
+    }),
     loads: Promise<boolean>[] = [architecture.userData.assetReady];
   for (const object of map.objects) {
     const host = new T.Group();
@@ -281,7 +328,7 @@ export function addCreativeStudioScene(
     scene.add(host);
     loads.push(attachCreativeStudioKit(host, d.object, options));
   }
-  for (const d of studioDecorations(map.objects)) {
+  for (const d of studioDecorations(map.objects, includeDirectorSuite)) {
     const host = new T.Group();
     host.name = `decoration:${d.id}`;
     host.position.set(...d.position);

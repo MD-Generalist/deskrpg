@@ -42,7 +42,7 @@ export default function OfficeEnvironmentPicker({
           >
             {environment.id === "agency" && (
               <Image
-                src="/assets/environments/creative-studio/agency-v4.webp"
+                src="/assets/environments/creative-studio/agency-v5.webp"
                 width={874}
                 height={450}
                 alt={ko ? "크리에이티브 스튜디오 실제 3D 장면" : "Creative studio rendered scene"}

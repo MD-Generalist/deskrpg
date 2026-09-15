@@ -148,7 +148,7 @@ test(
         ]);
         assert.equal(after[1].width, 42);
         assert.equal(after[1].height, 26);
-        assert.equal(after[1].environmentVersion, 4);
+        assert.equal(after[1].environmentVersion, 5);
         // Rename belongs to a subsequent, separately named baseline, not migration acceptance.
         await pool.query("UPDATE channels SET name='rename authority test' WHERE id=$1", [id]);
         const renamed = await snapshot();

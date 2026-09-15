@@ -127,10 +127,19 @@ for (const environment of OFFICE_ENVIRONMENTS) {
       if (object.type === "computer")
         assert.ok(
           objects.some(
-            (desk) =>
-              ["desk", "reception_desk", "executive_desk"].includes(desk.type) &&
-              desk.x === object.x &&
-              desk.y === object.y,
+            (desk) => {
+              if (!["desk", "reception_desk", "executive_desk"].includes(desk.type)) return false;
+              const deskDirection = desk.properties?.find(
+                (property) => property.name === "direction",
+              )?.value as "up" | "down" | "left" | "right" | undefined;
+              const deskSize = getObjectDimensions(desk.type, deskDirection);
+              return (
+                object.x >= desk.x &&
+                object.y >= desk.y &&
+                object.x < desk.x + deskSize.width * 32 &&
+                object.y < desk.y + deskSize.height * 32
+              );
+            },
           ),
           "Computer rests on a desk",
         );

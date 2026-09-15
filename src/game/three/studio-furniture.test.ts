@@ -90,17 +90,17 @@ test("all studio layout furniture variants resolve to bounded nonempty fallbacks
   assert.equal(buildStudioFurnitureFallback("photo_camera", "tripod"), null);
 });
 
-test("studio supplies 13 sofa/stool seats, 51 distinct anchors and 39 shared destinations", () => {
+test("studio supplies 13 sofa/stool seats, 57 distinct anchors and expanded shared destinations", () => {
   const objects = tiledSnapshot(buildOfficeEnvironment("agency")).objects;
   const seats = furnitureSeats(objects);
-  assert.equal(seats.length, 51);
-  assert.equal(new Set(seats.map((s) => `${s.anchorX},${s.anchorZ}`)).size, 51);
+  assert.equal(seats.length, 57);
+  assert.equal(new Set(seats.map((s) => `${s.anchorX},${s.anchorZ}`)).size, 57);
   assert.equal(
     objects.filter((o) => ["studio_sofa", "studio_stool"].includes(o.type)).flatMap(assetSeats)
       .length,
     13,
   );
-  assert.equal(commonAreaSeats(objects).length, 39);
+  assert.equal(commonAreaSeats(objects).length, 42);
   for (const seat of seats) {
     assert.ok(Number.isInteger(seat.anchorX! - 0.5));
     assert.ok(Number.isInteger(seat.anchorZ! - 0.5));
@@ -143,14 +143,14 @@ test("sofa and stool catalog anchors rotate on integer tiles independently of vi
     }
 });
 
-test("all 51 anchors are body-clear, reversible and identical in persisted server projection", () => {
+test("all 57 anchors are body-clear, reversible and identical in persisted server projection", () => {
   const map = buildOfficeEnvironment("agency");
   const snapshot = tiledSnapshot(map);
   const blocked = new Set(snapshot.blocked);
   const walkable = (x: number, y: number) =>
     x >= 0 && x < 42 && y >= 0 && y < 26 && !blocked.has(`${x},${y}`);
   const seats = furnitureSeats(snapshot.objects);
-  assert.equal(seats.length, 51);
+  assert.equal(seats.length, 57);
   for (const seat of seats) {
     const x = seat.anchorX! - 0.5,
       y = seat.anchorZ! - 0.5;

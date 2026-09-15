@@ -119,7 +119,9 @@ test("every approved dressing object resolves without mutating layout or collisi
     "studio_counter",
     "computer",
   ];
-  for (const object of map.objects.filter((o) => types.includes(o.type)))
+  for (const object of map.objects.filter(
+    (o) => types.includes(o.type) && o.variant !== "director-monitor",
+  ))
     assert.ok(creativeStudioKitFor(object), object.type);
   assert.equal(
     creativeStudioKitFor({ type: "studio_shelf", variant: "equipment" }),

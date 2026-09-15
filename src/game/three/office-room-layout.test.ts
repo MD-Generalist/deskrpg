@@ -17,7 +17,7 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     const blocked = new Set(snapshot.blocked);
     const zones = readAmbientZones(map as unknown as Record<string, unknown>);
     if (id === "agency") {
-      assert.equal(zones.length, 8);
+      assert.equal(zones.length, 9);
       assert.equal(OFFICE_ROOMS.agency, undefined);
       assert.ok(!snapshot.objects.some((object) => object.type.startsWith("room_wall")));
       return;

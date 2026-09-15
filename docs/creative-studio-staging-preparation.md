@@ -118,12 +118,12 @@ Keep **one socket authority**. No independently scaled socket replicas may serve
 
 The schema-only deployment is already complete. Confirm the restarted app is healthy and still uses the same schema. No schema changes may occur between the Phase 1 `before.ndjson` baseline and this map-only comparison; if any do, stop and establish a new quiet post-schema/pre-map baseline before upgrading maps.
 
-Open one recorded exact-v3 channel with two existing browser sessions. Observe `map:refresh` begin/ready, one durable map backup, cache/reservation/continuation reset and the new 42×26/version-4 map. Repeat the database-path probe with an exact-v2 fixture. Fetching an edited v2 or v3 channel must preserve its exact map hash and legacy rendering. Keep the sessions idle and do not rename, send chat, move actors or replace maps during this quiet preservation window. Authority/interaction tests run only after the comparison below passes.
+Open one recorded exact-v4 channel with two existing browser sessions. Observe `map:refresh` begin/ready, one durable map backup, cache/reservation/continuation reset and the new 42×26/version-5 map. Repeat the database-path probes with exact-v2 and exact-v3 fixtures. Fetching an edited v2, v3 or v4 channel must preserve its exact map hash and legacy rendering. Keep the sessions idle and do not rename, send chat, move actors or replace maps during this quiet preservation window. Authority/interaction tests run only after the comparison below passes.
 
 While staging remains quiet, rerun the same preservation query into `after.ndjson`. Compare by channel ID:
 
 - The global record and every count/hash outside map state must be identical.
-- For the opened eligible channel, only `mapHash`, `updatedAt`, width/height/version and the derived eligibility flag may differ; width=42, height=26 and environmentVersion=4 are required.
+- For the opened eligible channel, only `mapHash`, `updatedAt`, width/height/version and the derived eligibility flag may differ; width=42, height=26 and environmentVersion=5 are required.
 - Unopened or edited channels must have unchanged map hashes and timestamps. Do not waive changed channel/group/room memberships, characters, profiles, NPC homes, gateway bindings/shares/config or either chat table as migration side effects. Investigate unrelated activity separately and repeat a quiet snapshot window.
 - Keep the original database dump and each per-map backup; verify the map backup contains the original exact map and was created before the successful row change. Record filenames/hashes, never raw contents, in the delivery report.
 

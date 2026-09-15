@@ -5,9 +5,10 @@ import { buildOfficeEnvironment } from "./office-environments";
 import { tiledSnapshot } from "./tiled-preview";
 import { furnitureSeats } from "./seating";
 import { clearSegment } from "../navigation";
-test("review uses eight authoritative studio zones", () => {
-  assert.equal(studioReviewRooms.length, 8);
+test("review uses nine authoritative studio zones", () => {
+  assert.equal(studioReviewRooms.length, 9);
   assert.equal(studioReviewRooms.find((r) => r.id === "meeting")?.x, 37);
+  assert.equal(studioReviewRooms.find((r) => r.id === "studio-director")?.label, "스튜디오 대표실");
 });
 test("review player walks body-clear routes to every integer seat then stops at its anchor", () => {
   const map = tiledSnapshot(buildOfficeEnvironment("agency")),

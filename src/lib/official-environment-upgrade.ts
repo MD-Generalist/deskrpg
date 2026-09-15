@@ -1,5 +1,6 @@
 import agencyV2 from "./fixtures/official-agency-v2.json";
 import agencyV3 from "./fixtures/official-agency-v3.json";
+import agencyV4 from "./fixtures/official-agency-v4.json";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
 import { parseDbJson } from "./db-json";
 import { sameJsonSnapshot } from "./same-json-snapshot";
@@ -15,7 +16,9 @@ export function upgradeOfficialEnvironmentMap(map: unknown): {
     ? 2
     : sameJsonSnapshot(parsed, agencyV3)
       ? 3
-      : undefined;
+      : sameJsonSnapshot(parsed, agencyV4)
+        ? 4
+        : undefined;
   if (!fromVersion) return { map, upgraded: false };
   return { map: buildOfficeEnvironment("agency"), upgraded: true, fromVersion };
 }

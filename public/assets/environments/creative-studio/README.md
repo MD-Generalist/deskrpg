@@ -64,13 +64,13 @@ not meaningful for that fixture.
 
 ## Integrated scene thumbnail
 
-`agency-v4.webp` is an 874×450 reference-aligned preview for the dense version-4 scene using
+`agency-v5.webp` is an 874×450 reference-aligned preview for the version-5 director-suite scene using
 `buildOfficeEnvironment('agency')` and the production overview camera. It contains
 no character fixture and is displayed by the environment picker. Regenerate with
 `node scripts/assets/verify-creative-studio-scene.cjs /tmp/studio-review --headed`,
-then copy `/tmp/studio-review/agency-v4.webp` here. The script also supports
+then copy `/tmp/studio-review/agency-v5.webp` here. The script also supports
 `--benchmark` (10s warmup + 30s orbit/walk with 12 real actors), `--review-ui`
 (actual React review controls), and `--smoke` (headless load/overview).
 `--generic-object --smoke` adds a collision-bearing legacy bookshelf to verify
-edited-v3 fallback rendering. `--review-ui` also exercises a real fractional floor
+edited legacy fallback rendering. `--review-ui` also exercises a real fractional floor
 click and an in-flight movement retarget through the component's pointer handler.

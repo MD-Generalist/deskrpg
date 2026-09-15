@@ -367,7 +367,7 @@ const entry =
     await page.waitForTimeout(300);
     const thumbnail = await page.evaluate(() => window.reviewRenderer.captureFrame());
     await fs.writeFile(
-      path.join(out, "agency-v3.webp"),
+      path.join(out, "agency-v5.webp"),
       Buffer.from(thumbnail.split(",")[1], "base64"),
     );
     assert.deepEqual(errors, []);

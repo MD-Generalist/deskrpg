@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import fixture from "./fixtures/official-agency-v2.json";
 import fixtureV3 from "./fixtures/official-agency-v3.json";
+import fixtureV4 from "./fixtures/official-agency-v4.json";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
 import { upgradeOfficialEnvironmentMap } from "./official-environment-upgrade";
 
@@ -17,7 +18,7 @@ const reorder = (value: unknown): unknown =>
             .map(([k, v]) => [k, reorder(v)]),
         )
       : value;
-test("official fixtures freeze the exact v2 and first sparse v3 releases", () => {
+test("official fixtures freeze the exact v2, v3 and v4 releases", () => {
   assert.equal(
     createHash("sha256")
       .update(readFileSync(new URL("./fixtures/official-agency-v2.json", import.meta.url)))
@@ -34,13 +35,21 @@ test("official fixtures freeze the exact v2 and first sparse v3 releases", () =>
   );
   assert.equal(fixtureV3.width, 42);
   assert.equal(fixtureV3.height, 26);
+  assert.equal(
+    createHash("sha256")
+      .update(readFileSync(new URL("./fixtures/official-agency-v4.json", import.meta.url)))
+      .digest("hex"),
+    "32f297141d91ccffd0835b150e474fa98e8538128b8a251271cd357c5dad3956",
+  );
+  assert.equal(fixtureV4.width, 42);
+  assert.equal(fixtureV4.height, 26);
 });
 for (const [kind, input] of Object.entries({
   object: fixture,
   sqlite: JSON.stringify(fixture),
   jsonb: reorder(fixture),
 }))
-  test(`exact v2 ${kind} upgrades to fresh v4 without mutation`, () => {
+  test(`exact v2 ${kind} upgrades to fresh v5 without mutation`, () => {
     const before = JSON.stringify(input);
     const result = upgradeOfficialEnvironmentMap(input);
     assert.equal(result.upgraded, true);
@@ -54,7 +63,7 @@ for (const [kind, input] of Object.entries({
   sqlite: JSON.stringify(fixtureV3),
   jsonb: reorder(fixtureV3),
 }))
-  test(`exact v3 ${kind} upgrades to fresh v4 without mutation`, () => {
+  test(`exact v3 ${kind} upgrades to fresh v5 without mutation`, () => {
     const before = JSON.stringify(input);
     const result = upgradeOfficialEnvironmentMap(input);
     assert.equal(result.upgraded, true);
@@ -62,6 +71,26 @@ for (const [kind, input] of Object.entries({
     assert.deepEqual(result.map, buildOfficeEnvironment("agency"));
     assert.equal(JSON.stringify(input), before);
   });
+for (const [kind, input] of Object.entries({
+  object: fixtureV4,
+  sqlite: JSON.stringify(fixtureV4),
+  jsonb: reorder(fixtureV4),
+}))
+  test(`exact v4 ${kind} upgrades to fresh v5 without mutation`, () => {
+    const before = JSON.stringify(input);
+    const result = upgradeOfficialEnvironmentMap(input);
+    assert.equal(result.upgraded, true);
+    assert.equal(result.fromVersion, 4);
+    assert.deepEqual(result.map, buildOfficeEnvironment("agency"));
+    assert.equal(JSON.stringify(input), before);
+  });
+test("protects an edited v4 studio by exact snapshot identity", () => {
+  const edited = structuredClone(fixtureV4);
+  edited.layers.find((layer) => layer.name === "Objects")!.objects!.pop();
+  const result = upgradeOfficialEnvironmentMap(edited);
+  assert.equal(result.upgraded, false);
+  assert.equal(result.map, edited);
+});
 for (const edit of ["object", "layer-order", "metadata", "spawn", "dimension"])
   test(`protects ${edit} edits by identity`, () => {
     const map = structuredClone(fixture);

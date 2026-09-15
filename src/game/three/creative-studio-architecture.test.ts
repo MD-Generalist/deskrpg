@@ -113,6 +113,10 @@ test("fallback shell fits 42x26 and contains entrance, feature wall and no opaqu
   assert.equal(entrance.position.x, 23.5);
   assert.equal(entrance.scale.x * 4, 5);
   assert.ok(shell.getObjectByName("pantry-coral-feature-wall"));
+  const directorDoor = shell.getObjectByName("director-open-door");
+  assert.ok(directorDoor, "director suite has a dedicated inward-opening glass door");
+  assert.equal(directorDoor.position.x, 9.82);
+  assert.equal(directorDoor.position.z, 12.97);
   shell.traverse((o) => {
     if (o instanceof T.Mesh && o.material.transparent) assert.equal(o.castShadow, false);
   });

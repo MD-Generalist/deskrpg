@@ -15,7 +15,7 @@ import {
   type MapObject,
 } from "../../lib/object-types";
 import { clearSegment, findPath } from "../navigation";
-import { ambientTileAllowed, readAmbientZones } from "../ambient-zones";
+import { ambientTileAllowed, destinationTileAllowed, readAmbientZones } from "../ambient-zones";
 
 const neighbors = (x: number, y: number) =>
   [
@@ -33,7 +33,7 @@ test("agency is the deterministic 42x26 creative studio", () => {
   assert.equal(map.height, 26);
   assert.equal(
     properties?.find((property) => property.name === "officeEnvironmentVersion")?.value,
-    4,
+    5,
   );
   assert.deepEqual(
     CREATIVE_STUDIO_ZONES.map((zone) => zone.id),
@@ -43,6 +43,7 @@ test("agency is the deterministic 42x26 creative studio", () => {
       "ideation",
       "main-lounge",
       "production",
+      "studio-director",
       "meeting",
       "pantry",
       "small-lounge",
@@ -95,7 +96,13 @@ test("creative studio fills its open plan with working clusters, dividers, and s
     "reference-scale density cannot regress to the sparse first studio",
   );
   assert.equal(count("desk"), 10, "two four-person pods and one two-person work island");
-  assert.equal(count("computer"), 10, "every work desk is dressed with a monitor");
+  assert.equal(
+    objects.filter((object) => object.type === "computer" && object.variant === "studio-monitor")
+      .length,
+    10,
+    "every shared work desk is dressed with a monitor",
+  );
+  assert.equal(count("computer"), 11, "the director desk adds a dedicated monitor");
   const workstationBands = new Set(
     objects
       .filter((object) => object.type === "desk")
@@ -108,7 +115,7 @@ test("creative studio fills its open plan with working clusters, dividers, and s
   );
   const workstationZone = CREATIVE_STUDIO_ZONES.find((zone) => zone.id === "workstations")!;
   for (const object of objects.filter(
-    (object) => object.type === "chair" && object.destinationTags?.includes("desk"),
+    (object) => object.type === "chair" && object.variant === "office-neutral",
   )) {
     assert.ok(
       object.col >= workstationZone.x &&
@@ -242,6 +249,19 @@ test("creative studio objects retain visual and destination metadata through Til
   assert.equal(camera.variant, "tripod");
   assert.deepEqual(production.destinationTags, ["production", "worktable"]);
   assert.equal(production.variant, "dressed");
+});
+
+test("studio director suite excludes ambient wandering but accepts purposeful work and meetings", () => {
+  const zones = readAmbientZones(
+    buildOfficeEnvironment("agency") as unknown as Record<string, unknown>,
+  );
+  const director = zones.find((zone) => zone.id === "studio-director")!;
+  assert.equal(director.access, "purpose-only");
+  assert.equal(director.roaming, false);
+  assert.deepEqual(director.destinationTags, ["work", "desk", "meeting", "lounge"]);
+  assert.equal(ambientTileAllowed(zones, 4, 18), false);
+  assert.equal(destinationTileAllowed(zones, 4, 18, "meeting"), true);
+  assert.equal(destinationTileAllowed(zones, 4, 18, "pantry"), false);
 });
 
 test("meeting enclosure joins rear and front boundaries with the two-tile west door retained", () => {
