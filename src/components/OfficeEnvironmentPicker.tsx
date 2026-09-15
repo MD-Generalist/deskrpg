@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import thumbnails from "@/game/three/office-environment-thumbnails.json";
 import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useLocale } from "@/lib/i18n";
@@ -40,15 +41,18 @@ export default function OfficeEnvironmentPicker({
             onClick={() => onChange(environment.id)}
             className={`text-left rounded-lg border p-3 transition-colors ${environment.id === value ? "border-accent bg-accent/10" : "border-border bg-surface hover:bg-surface-raised"}`}
           >
-            {environment.id === "agency" && (
+            <div className="mb-2 aspect-[874/450] w-full overflow-hidden rounded bg-background">
               <Image
-                src="/assets/environments/creative-studio/agency-v5.webp"
+                src={thumbnails[environment.id]}
                 width={874}
                 height={450}
-                alt={ko ? "크리에이티브 스튜디오 실제 3D 장면" : "Creative studio rendered scene"}
-                className="mb-2 w-full h-auto"
+                sizes="(max-width: 640px) 45vw, 260px"
+                alt={
+                  ko ? `${environment.nameKo} 실제 3D 장면` : `${environment.nameEn} rendered scene`
+                }
+                className="h-full w-full object-contain"
               />
-            )}
+            </div>
             <span className="block text-xs mb-2" style={{ color: environment.color }}>
               0{index + 1}
             </span>
