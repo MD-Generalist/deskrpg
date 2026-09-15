@@ -599,7 +599,7 @@ test("플러그인 버전이 있으면 후보 목록과 검토 화면이 커밋�
   });
   try {
     assert.match(f.host.textContent!, /플러그인 버전: 0\.5\.2/);
-    assert.match(f.host.textContent!, /플러그인 고정 버전: 1be18d79bf1b \(0\.6\.0\)/);
+    assert.match(f.host.textContent!, /플러그인 고정 버전: 539ae43c0b5a \(0\.6\.0\)/);
   } finally {
     await f.cleanup();
   }

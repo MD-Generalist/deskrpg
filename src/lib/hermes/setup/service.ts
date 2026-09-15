@@ -10,6 +10,7 @@ import { discoverHost, inspectHost, installHermesHost, prepareHost } from "./hos
 import { localExecutor, sshExecutor, getSshHosts } from "./executor";
 import { ensureSshTunnel, registerSshTransport, transportFetch } from "./transport";
 import {
+  collectSetupWarnings,
   hermesInstallAllowed,
   hostSetupAllowed,
   safeSetupError,
@@ -188,8 +189,8 @@ export async function startSetup(
         timezone,
         provision,
       );
-      if (prepared.warnings?.length)
-        jobs.update(userId, job.id, { warnings: [...prepared.warnings] });
+      const collected = collectSetupWarnings(prepared.warnings, Boolean(installHermes));
+      if (collected.length) jobs.update(userId, job.id, { warnings: collected });
       const remotePort = assertPrepared(prepared);
       const selected = new Set(selectedProfiles);
       if (

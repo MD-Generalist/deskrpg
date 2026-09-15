@@ -173,6 +173,19 @@ export function validateTimezone(value: unknown): string {
     throw new Error("timezone_invalid");
   return trimmed;
 }
+/**
+ * 잡에 남길 경고 목록을 만든다.
+ *
+ * 방금 설치한 Hermes 에는 모델 자격 증명이 있을 수 없다. 원래는 모델 목록이 비었는지로
+ * 판정하려 했는데, 제공자가 하나도 없어도 `/v1/models` 가 200 과 모델 하나를 돌려준다(실측:
+ * MiniPC 신규 계정). 그래서 "설치를 했다" 는 사실 자체를 신호로 쓴다.
+ */
+export function collectSetupWarnings(hostWarnings: string[] | undefined, installedHermes: boolean) {
+  const warnings = [...new Set(hostWarnings ?? [])];
+  if (installedHermes && !warnings.includes("model_provider_required"))
+    warnings.push("model_provider_required");
+  return warnings;
+}
 export function safeSetupError(error: unknown): string {
   const code = error instanceof Error ? error.message : "";
   return SAFE_CODES.has(code) ? code : "setup_failed";

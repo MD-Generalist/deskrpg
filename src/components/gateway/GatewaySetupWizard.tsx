@@ -17,12 +17,12 @@ import {
   setupWarning,
   isSetupWarningBlocking,
 } from "./setup-copy";
+import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
 
 const API = "/api/gateways/setup";
-// Mirrors host-helper.ts: the wizard only ever installs this pinned revision, and that revision
-// carries this plugin.yaml version. Shown so an operator can match what the host reports.
-const PINNED_PLUGIN_COMMIT = "1be18d79bf1b";
-const PINNED_PLUGIN_VERSION = "0.6.0";
+// 고정 커밋·버전은 손으로 베끼지 않는다 — pin.ts 가 정본이고 pin.test.ts 가 호스트 스크립트와 대조한다.
+const PINNED_PLUGIN_COMMIT = PLUGIN_PIN_SHORT;
+const PINNED_PLUGIN_VERSION = PLUGIN_VERSION;
 const button =
   "rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50";
 const secondary =

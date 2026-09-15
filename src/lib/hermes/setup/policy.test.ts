@@ -9,6 +9,7 @@ import {
   validateGatewayUrl,
   safeSetupError,
   validateTimezone,
+  collectSetupWarnings,
 } from "./policy";
 
 test("host execution requires operator opt-in AND system administrator", () => {
@@ -125,4 +126,21 @@ test("계약 2의 새 오류 코드는 그대로 통과하고 나머지는 setup
   // 경고는 오류 경로에 오르지 않는다.
   for (const warning of ["profile_not_served", "model_provider_required"])
     assert.equal(safeSetupError(new Error(warning)), "setup_failed");
+});
+
+test("Hermes 를 방금 설치했으면 모델 제공자 경고를 붙인다", () => {
+  // 제공자가 하나도 없어도 /v1/models 는 200 과 모델 하나를 돌려준다(실측) —
+  // 목록이 비었는지로는 판정할 수 없어 "설치했다" 는 사실을 신호로 쓴다.
+  assert.deepEqual(collectSetupWarnings([], true), ["model_provider_required"]);
+  assert.deepEqual(collectSetupWarnings(undefined, false), []);
+});
+
+test("호스트가 준 경고는 보존하고 중복은 접는다", () => {
+  assert.deepEqual(collectSetupWarnings(["profile_not_served"], true), [
+    "profile_not_served",
+    "model_provider_required",
+  ]);
+  assert.deepEqual(collectSetupWarnings(["model_provider_required"], true), [
+    "model_provider_required",
+  ]);
 });

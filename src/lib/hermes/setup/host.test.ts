@@ -723,7 +723,7 @@ print(json.dumps({'result':result,'argv':calls[0][-6:]}))
     "install",
     "https://github.com/dandacompany/deskrpg-hermes-plugin",
     "--ref",
-    "1be18d79bf1b8d40890b95517a8131cb2ae48c6f",
+    "539ae43c0b5a626aefc87f524793ff265b8bfe52",
     "--force",
     "--enable",
   ]);
