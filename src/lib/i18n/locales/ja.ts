@@ -226,6 +226,93 @@ const ja: Record<string, string> = {
   "hermes.wizard.step.identity": "②人格",
   "hermes.wizard.step.config": "③設定",
   "hermes.wizard.step.placement": "④配置",
+  "hermes.wizard.step.installingService": "ゲートウェイをサービスとして登録",
+  "hermes.wizard.step.updatingPlugin": "DeskRPGプラグインを更新",
+  "hermes.wizard.step.settingTimezone": "ゲートウェイのタイムゾーンを設定",
+  "hermes.wizard.error.hermesVersionUnsupported":
+    "Hermes 0.21.1以上が必要です。サーバーでhermes updateを実行してから再確認してください。",
+  "hermes.wizard.error.pluginUpdateFailed":
+    "DeskRPGプラグインを新しいバージョンに更新できませんでした。管理者がホストのネットワークとプラグインディレクトリの書き込み権限を確認してから再確認してください。",
+  "hermes.wizard.error.serviceInstallFailed":
+    "ゲートウェイをサービスとして登録できませんでした。管理者がホストでhermes gateway installを実行し、結果を確認してから再確認してください。",
+  "hermes.wizard.error.timezoneInvalid":
+    "タイムゾーン名がIANA形式ではありません。Asia/Tokyoのような正しい名前を使うか、タイムゾーン設定をオフにして進めてください。",
+  "hermes.wizard.error.timezoneWriteFailed":
+    "ゲートウェイの設定ファイルにタイムゾーンを書き込めませんでした。管理者がconfig.yamlの書き込み権限を確認してから再確認してください。残りの設定はタイムゾーンなしでも進められます。",
+  "hermes.wizard.review.serviceInstall":
+    "ゲートウェイをサービスとして登録し、再起動後も動き続けるようにします。",
+  "hermes.wizard.review.pluginUpdate": "DeskRPGプラグインを{version}に更新します。",
+  "hermes.wizard.review.timezone": "ゲートウェイのタイムゾーンを{timezone}に設定します。",
+  "hermes.wizard.review.timezoneToggle": "このブラウザーのタイムゾーンをゲートウェイに設定する",
+  "hermes.wizard.review.pluginVersion": "プラグインバージョン",
+  "hermes.wizard.step.installingHermes": "Hermesをインストール",
+  "hermes.wizard.step.creatingProfile": "新しいプロファイルを作成",
+  "hermes.wizard.step.provisioningKeys": "プロファイルのAPI認証キーを発行",
+  "hermes.wizard.step.checkingModel": "モデルのログインを確認",
+  "hermes.wizard.progress.deps": "必要なツールをインストール中",
+  "hermes.wizard.progress.clone": "Hermesのソースを取得中",
+  "hermes.wizard.progress.venv": "Python仮想環境を作成中",
+  "hermes.wizard.progress.node_modules": "Nodeパッケージをインストール中",
+  "hermes.wizard.progress.skills": "標準スキルをインストール中",
+  "hermes.wizard.progress.done": "インストールを仕上げ中",
+  "hermes.wizard.progress.elapsed": "{seconds}秒経過",
+  "hermes.wizard.model.recheck": "モデルを再確認",
+  "hermes.wizard.model.checking": "モデルのログインを確認中…",
+  "hermes.wizard.model.ready": "モデルのログインを確認しました。NPCが応答できます。",
+  "hermes.wizard.model.unknown":
+    "モデルのログイン状態を確認できませんでした。設定自体は完了しています。サーバーでhermes modelを実行して確認してください。",
+  "hermes.wizard.resume.button": "続きから実行",
+  "hermes.wizard.resume.title": "ここまで完了しました",
+  "hermes.wizard.resume.skipped": "スキップ",
+  "hermes.wizard.error.resumeUnavailable":
+    "続きから実行できません。失敗した処理が期限切れになったか、対象が変わりました。インストールの検索からやり直してください。",
+  "hermes.wizard.error.profileNameInvalid":
+    "プロファイル名または説明が規則に合いません。名前は小文字・数字・ハイフン・アンダースコアのみで64文字以下、説明は1行200文字以下にしてください。",
+  "hermes.wizard.error.profileExists":
+    "同じ名前のプロファイルが既にあります。別の名前を使うか、下の一覧からそのプロファイルを選んで取得してください。",
+  "hermes.wizard.error.profileCreateFailed":
+    "プロファイルを作成できませんでした。管理者がホストのHermesホームディレクトリの書き込み権限を確認してから再試行してください。",
+  "hermes.wizard.error.profileKeyFailed":
+    "プロファイルのAPI認証キーを書き込めませんでした。管理者が該当プロファイルの.envの書き込み権限を確認してから再試行してください。既存のキーは上書きしません。",
+  "hermes.wizard.error.profileProvisionForbidden":
+    "このプロファイルにはキーを作成できません。リスナー所有プロファイルではないか、外部シークレットプロバイダーがキーを管理しています。そのプロバイダーで設定してから再確認してください。",
+  "hermes.wizard.error.profileVerifyFailed":
+    "発行したキーでプロファイルAPIを検証できませんでした。管理者がゲートウェイの状態とプロファイル許可リストを確認してから再試行してください。",
+  "hermes.wizard.error.hermesAlreadyInstalled":
+    "このホストには既にHermesがインストールされています。インストールではなく、検索に戻って接続してください。",
+  "hermes.wizard.error.hermesInstallForbidden":
+    "このウィザードではHermesをインストールできません。リモート(SSH)対象にはインストールせず、運用者がDESKRPG_HERMES_INSTALL_ENABLEDを有効にする必要があります。",
+  "hermes.wizard.error.hermesInstallFailed":
+    "Hermesのインストールが完了しませんでした。管理者がサーバーでインストールスクリプトを直接実行して結果を確認してから再試行してください。",
+  "hermes.wizard.error.hermesInstallerUnavailable":
+    "公式インストールスクリプトをダウンロードできませんでした。管理者がサーバーのネットワークとプロキシ設定を確認してから再試行してください。",
+  "hermes.wizard.warn.profileNotServed":
+    "このプロファイルはまだゲートウェイで配信されていません。ゲートウェイのmultiplexプロファイル許可リストに名前を追加してください。ウィザードは許可リストを変更しません。",
+  "hermes.wizard.warn.modelProviderRequired":
+    "モデルプロバイダーがまだありません。サーバーでhermes modelを実行してモデルにログインしてください。それまでNPCは応答できません。",
+  "hermes.wizard.install.title": "このサーバーにHermesをインストールしますか？",
+  "hermes.wizard.install.body":
+    "公式インストールスクリプトをダウンロードし、DeskRPGサーバーが動作するこのホストで実行します。数分かかる場合があります。モデルプロバイダーへのログインは含まれません。完了後にサーバーでhermes modelを実行してください。",
+  "hermes.wizard.install.consent":
+    "公式インストールスクリプトをこのサーバーで実行することに同意します。",
+  "hermes.wizard.install.unavailable":
+    "このインスタンスではHermesのインストールが無効です。DeskRPGが動いているマシンのターミナルで下のコマンドを実行し、DeskRPGを再起動してください。Webからは切り替えられないようにしてあります — そのマシンを使える人だけが有効にできるようにするためです。",
+  "hermes.wizard.install.enableCommand": "deskrpg host-setup on --with-install",
+  "hermes.wizard.install.enableHint": "コマンドを実行したら、この画面で再検索を押してください。",
+  "hermes.wizard.install.done":
+    "Hermesのインストールが完了しました。再検索してこのインストールを選び、接続を続けてください。",
+  "hermes.wizard.install.digest": "インストールスクリプトの指紋 {digest}",
+  "hermes.wizard.install.start": "Hermesのインストールを開始",
+  "hermes.wizard.profile.newTitle": "新しいプロファイルを作成",
+  "hermes.wizard.profile.nameLabel": "プロファイル名",
+  "hermes.wizard.profile.descriptionLabel": "プロファイルの説明",
+  "hermes.wizard.profile.descriptionHint":
+    "カンバンが役割を見て作業を割り当てるときに使います。1行200文字以下。",
+  "hermes.wizard.profile.provisionLabel": "キーを発行",
+  "hermes.wizard.profile.provisionHint":
+    "API認証キーがないプロファイルにのみ有効です。ウィザードが新しいキーを作成します。既存のキーは変更しません。",
+  "gateways.onboarding.step1WizardHint":
+    "DeskRPGサーバーと同じホストでHermesを動かす場合、運用者が許可していれば下の接続ウィザードがインストールを代行できます。",
   "hermes.wizard.profile.namePlaceholder": "新しいプロフィール名（例: noah）",
   "hermes.wizard.profile.resumeHint":
     "または、すでに登録済みのプロフィールを選んで人格・設定を続けて編集します。",
@@ -1589,6 +1676,14 @@ const ja: Record<string, string> = {
   "npc.noAgent": "このNPCにはAIエージェントが接続されていません",
   "npc.gatewayNotConnected": "ゲートウェイ未接続",
   "npc.gatewayError": "AIゲートウェイエラー",
+  "npc.gatewayUnreachable":
+    "AIゲートウェイに接続できません。ゲートウェイが起動しているか、アドレスが正しいか確認してください。",
+  "npc.gatewayAuthFailed":
+    "ゲートウェイキーが拒否されました。チャンネル設定でキーを確認してください。",
+  "npc.gatewayTimeout":
+    "ゲートウェイが時間内に応答しませんでした。しばらくしてからもう一度送信してください。",
+  "npc.gatewayUnknownError":
+    "AIゲートウェイの呼び出しに失敗しました。詳細はサーバーログを確認してください。",
   "npc.unsupportedAdapter": "このNPCはサポートされていないアダプターを使用しています。",
   "npc.unbound": "このNPCはまだHermesプロファイルに接続されていません。",
   "npc.hermesImageUnsupported": "このNPCはまだ画像を受け取れません。",
@@ -1751,6 +1846,26 @@ const ja: Record<string, string> = {
   "gateways.listTitle": "ゲートウェイ一覧",
   "gateways.new": "新しいゲートウェイ",
   "gateways.empty": "登録済みのゲートウェイがありません。",
+  "gateways.emptyHint": "上の案内に従って、まず Hermes Agent を起動してください。",
+  "gateways.onboarding.title": "ゲートウェイがまだありません — ここから始めます",
+  "gateways.onboarding.intro":
+    "DeskRPG は AI エージェントのランタイムを内蔵していません。NPC を動かす頭脳は自分で起動する Hermes Agent であり、DeskRPG はそのゲートウェイに接続するだけです。",
+  "gateways.onboarding.step1Title": "1. Hermes Agent をインストールして API サーバーを起動します",
+  "gateways.onboarding.step1Body":
+    "公式リポジトリの手順でインストールし、モデルプロバイダーにログインしてから API サーバーを実行してください。これを省くと登録できるゲートウェイがありません。",
+  "gateways.onboarding.step2Title": "2. ゲートウェイのアドレスとリスナー所有者キーを用意します",
+  "gateways.onboarding.step2Body":
+    "下のフォームには API サーバーのアドレス（例: {example}）と認証キーが必要です。",
+  "gateways.onboarding.step2OwnerKeyWarning":
+    "必ずリスナー所有者キー（API_SERVER_KEY）を入力してください。プロフィールキーだけではカンバン・cron・イベントストリームが使えません。",
+  "gateways.onboarding.step3Title": "3. カンバンと cron を使うには DeskRPG プラグインを入れます",
+  "gateways.onboarding.step3Body":
+    "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
+  "gateways.onboarding.step4Title": "4. ゲートウェイは後回しでも構いません",
+  "gateways.onboarding.step4Body":
+    "Hermes をまだ起動できていなければ、先にキャラクターとチャンネルを作っても構いません。準備ができたらこの画面で登録できます。",
+  "gateways.onboarding.step4CharacterLink": "キャラクターを作成",
+  "gateways.onboarding.step4ChannelLink": "チャンネルを作成",
   "gateways.owner": "所有",
   "gateways.shared": "共有",
   "gateways.statusValid": "接続確認済み",

@@ -29,6 +29,110 @@ except Exception:
     print(json.dumps({'error': 'host_operation_failed'}))
 `;
 
+/**
+ * 로컬 Hermes 설치 전용 스크립트. 설치가 없을 때 돌아야 하므로 HOST_BOOTSTRAP(=Hermes venv 파이썬)을
+ * 거치지 않고 시스템 python3 에서 직접 실행된다. 표준 라이브러리만 쓴다.
+ * 설치 스크립트는 파이프가 아니라 임시 파일로 내려받아 sha256 지문을 남기고 `bash <파일>` 로 실행한다.
+ * 설치 출력은 저장도 반환도 하지 않는다 — 실패 분류용 마지막 8KiB 만 메모리에 둔다.
+ */
+export const HOST_INSTALLER = String.raw`
+import hashlib, json, os, pathlib, subprocess, sys, tempfile, threading, urllib.request
+INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.sh'
+MAX_INSTALLER_BYTES = 1048576
+INSTALL_TIMEOUT = 580
+TAIL = 8192
+MAX_LINE = 4096
+# 표에 적힌 표시만 본다. 순서가 곧 우선순위이고, 한 줄은 첫 일치 하나로만 접힌다.
+# 표시 문자열은 설치 스크립트의 실제 출력에서 골랐다(install.sh 의 log_info 원문 대조).
+# 처음엔 'clone' 을 literal 로 봤는데 git 은 'Cloning into ...' 을 찍어 한 번도 걸리지 않았다.
+MILESTONE_RULES = (
+    ('deps', lambda text: 'installing managed uv' in text or 'installing dependencies' in text or 'installing git' in text),
+    ('clone', lambda text: 'clon' in text or 'fetching repository' in text),
+    ('venv', lambda text: 'creating virtual environment' in text or 'virtual environment' in text),
+    ('node_modules', lambda text: 'node.js dependencies' in text or 'npm install' in text or 'desktop workspace dependencies' in text),
+    ('skills', lambda text: 'bundled skills' in text or 'skills to' in text),
+    ('done', lambda text: 'installation complete' in text),
+)
+milestones = []
+def note(line):
+    # 줄 내용은 어디에도 남기지 않는다 — 미리 정한 코드로만 접어 올린다.
+    if not line: return
+    text = line.decode('utf-8', errors='replace').lower()
+    for code, matches in MILESTONE_RULES:
+        if matches(text):
+            if code not in milestones: milestones.append(code)
+            return
+def out(value):
+    sys.stdout.write(json.dumps(value))
+    raise SystemExit(0)
+try:
+    ROOT = pathlib.Path.home() / '.hermes'
+    INSTALL = ROOT / 'hermes-agent'
+    if ROOT.is_symlink() or (ROOT.exists() and not ROOT.is_dir()): out({'error': 'unsafe_host_path'})
+    # 업그레이드·재설치는 이 경로의 범위가 아니다. 이미 있으면 절대 손대지 않는다.
+    if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
+    ROOT.mkdir(parents=True, exist_ok=True)
+    import fcntl
+    fd = os.open(str(ROOT / '.deskrpg-setup.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        out({'error': 'host_busy'})
+    lock = os.fdopen(fd, 'w')
+    # 잠금을 잡은 뒤 한 번 더 본다 — 경쟁하던 다른 설치가 방금 끝났을 수 있다.
+    if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(INSTALLER_URL, timeout=30) as response:
+            body = response.read(MAX_INSTALLER_BYTES + 1)
+    except Exception:
+        out({'error': 'hermes_installer_unavailable'})
+    if not body or len(body) > MAX_INSTALLER_BYTES: out({'error': 'hermes_installer_unavailable'})
+    digest = hashlib.sha256(body).hexdigest()
+    handle, script = tempfile.mkstemp(prefix='.deskrpg-hermes-install-', suffix='.sh', dir=str(ROOT))
+    try:
+        with os.fdopen(handle, 'wb') as stream:
+            stream.write(body); stream.flush(); os.fsync(stream.fileno())
+        env = {**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}
+        child = subprocess.Popen(['bash', script, '--skip-browser', '--skip-setup'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(ROOT), pass_fds=(lock.fileno(),))
+        watchdog = threading.Timer(INSTALL_TIMEOUT, child.kill)
+        watchdog.start()
+        tail = b''
+        buffered = b''
+        try:
+            while True:
+                chunk = child.stdout.read(65536)
+                if not chunk: break
+                # 읽고 버린다. 정상 설치의 출력은 256KiB 를 넘기므로 상한을 두지 않고 꼬리만 남긴다.
+                tail = (tail + chunk)[-TAIL:]
+                pieces = (buffered + chunk).split(b'\n')
+                # 개행이 없는 출력이 메모리를 밀어내지 않도록 남는 조각도 잘라 둔다.
+                buffered = pieces.pop()[-MAX_LINE:]
+                for piece in pieces: note(piece[-MAX_LINE:])
+            note(buffered)
+            code = child.wait()
+        finally:
+            watchdog.cancel()
+            child.stdout.close()
+    finally:
+        try: os.unlink(script)
+        except OSError: pass
+    if code != 0:
+        diagnostic = tail.decode('utf-8', errors='replace').lower()
+        if 'could not resolve host' in diagnostic or 'failed to connect' in diagnostic or 'connection refused' in diagnostic:
+            out({'error': 'hermes_installer_unavailable'})
+        out({'error': 'hermes_install_failed'})
+    python = next((INSTALL / folder / 'bin' / 'python' for folder in ('venv', '.venv') if (INSTALL / folder / 'bin' / 'python').is_file()), None)
+    if python is None: out({'error': 'hermes_install_failed'})
+    probe = subprocess.run([str(python), '-m', 'hermes_cli.main', '--version'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
+    if probe.returncode: out({'error': 'hermes_install_failed'})
+    out({'ok': True, 'installerDigest': digest, 'milestones': milestones})
+except SystemExit:
+    raise
+except Exception:
+    sys.stdout.write(json.dumps({'error': 'host_operation_failed'}))
+`;
+
 // Only fixed operations are accepted. Raw subprocess output, configuration, env and exceptions never leave here.
 export const HOST_HELPER = String.raw`
 import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
@@ -40,12 +144,33 @@ sys.path.insert(0, str(INSTALL))
 os.environ['HERMES_HOME'] = str(ROOT)
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 NAME = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
+# 모델 제공자 이름의 모양만 본다(실측 값: 'openai-codex'). 모양이 아니면 판정하지 않고 unknown 이다.
+PROVIDER = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
 RESERVED = {'hermes','test','tmp','root','sudo'}
-PIN = '9e200eb1d2418d47c3b65a754ca111e13c5aafb4'
+# 마법사가 새로 만들거나 키를 발급할 수 있는 이름에서 제외한다. 'default' 는 configure 가 다룬다.
+RESERVED_PROFILE = RESERVED | {'default'}
+PIN = '539ae43c0b5a626aefc87f524793ff265b8bfe52'
+PLUGIN_VERSION = '0.6.0'
+HERMES_MIN = '0.21.1'
 SOURCE = 'https://github.com/dandacompany/deskrpg-hermes-plugin'
+TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
 LOCK = None
 class Failure(Exception): pass
 def fail(code): raise Failure(code)
+def version_parts(value):
+    parts = []
+    for chunk in str(value or '').split('.'):
+        match = re.match(r'^\d+', chunk)
+        if not match: break
+        parts.append(int(match.group(0)))
+    return parts
+def version_below(value, minimum):
+    # Unreadable, absent or non-numeric versions never block; only a confidently lower number does.
+    if not isinstance(value, str) or not value or value == 'unknown': return False
+    left, right = version_parts(value), version_parts(minimum)
+    if not left: return False
+    size = max(len(left), len(right))
+    return tuple(left + [0] * (size - len(left))) < tuple(right + [0] * (size - len(right)))
 def read(path):
     if path.is_symlink(): fail('unsafe_host_path')
     if path.exists() and path.stat().st_size > 1048576: fail('invalid_host_config')
@@ -180,6 +305,7 @@ def identity(name, home):
 
 def plugin(home, cfg):
     manifests = []
+    versions = {}
     directory = home / 'plugins'
     if directory.is_symlink(): fail('unsafe_host_path')
     if directory.exists():
@@ -188,22 +314,28 @@ def plugin(home, cfg):
             manifest = child / 'plugin.yaml'
             if manifest.is_file():
                 data = yaml.safe_load(read(manifest)) or {}
-                if isinstance(data, dict) and data.get('name') == 'deskrpg': manifests.append(child.name)
+                if isinstance(data, dict) and data.get('name') == 'deskrpg':
+                    manifests.append(child.name)
+                    installed_version = data.get('version')
+                    versions[child.name] = installed_version if isinstance(installed_version, str) else None
     if len(manifests) > 1: fail('plugin_identity_ambiguous')
     plugins = mapping(cfg.get('plugins'))
     names = {'deskrpg', *manifests}
     enabled = plugins.get('enabled') or []
     disabled = plugins.get('disabled') or []
     if not isinstance(enabled, list) or not isinstance(disabled, list): fail('invalid_host_config')
-    return bool(manifests), bool(names.intersection(enabled)) and not bool(names.intersection(disabled)), manifests[0] if manifests else 'deskrpg'
+    return bool(manifests), bool(names.intersection(enabled)) and not bool(names.intersection(disabled)), manifests[0] if manifests else 'deskrpg', versions.get(manifests[0]) if manifests else None
 
 def candidate(name, home):
     cfg, env, token, port, external = settings(home)
     owner = identity(name, home)
-    installed, enabled, plugin_name = plugin(home, cfg)
+    installed, enabled, plugin_name, plugin_version = plugin(home, cfg)
     match = re.search(r'^version\s*=\s*"([^"]+)"', read(INSTALL / 'pyproject.toml'), re.M)
-    public = {'id': owner['id'], 'label': 'Hermes ' + name, 'version': match.group(1) if match else 'unknown', 'service': owner['service'], 'pluginInstalled': installed, 'pluginEnabled': enabled, 'hasToken': bool(token), 'port': port}
-    warning = owner['warning'] or ('external_secret_provider' if external else None)
+    zone = cfg.get('timezone')
+    zone = zone.strip() if isinstance(zone, str) else ''
+    public = {'id': owner['id'], 'label': 'Hermes ' + name, 'version': match.group(1) if match else 'unknown', 'service': owner['service'], 'pluginInstalled': installed, 'pluginEnabled': enabled, 'pluginVersion': plugin_version, 'hasToken': bool(token), 'port': port, 'timezone': zone or None}
+    # A version we cannot read warns but never blocks; a version we can read and that is too low does block.
+    warning = owner['warning'] or ('external_secret_provider' if external else None) or ('hermes_version_unknown' if public['version'] == 'unknown' else None)
     if warning: public['warning'] = warning
     return public, owner, cfg, token, plugin_name
 
@@ -266,14 +398,25 @@ def assert_port_owned(public, owner):
     if not connections or any(c.pid not in owned for c in connections): fail('port_conflict')
     return True
 
-def profile_names(cfg):
+def allowlist(cfg):
     gateway = mapping(cfg.get('gateway'))
     allow = cfg.get('multiplex_profile_allowlist', gateway.get('multiplex_profile_allowlist'))
     if allow is not None and (not isinstance(allow,list) or any(not isinstance(n,str) or not NAME.fullmatch(n) for n in allow)): fail('invalid_host_config')
+    return allow
+def profile_names(cfg):
+    allow = allowlist(cfg)
     return [(name,home) for name,home in homes() if name == 'default' or allow is None or name in allow]
+
+def needs_service(owner):
+    # 유닛이 없는 호스트를 알아보는 유일한 규칙이다. service 이름으로 판정하면 안 된다 —
+    # 리눅스 분기는 유닛 파일이 없어도 'hermes-gateway.service' 라는 이름을 먼저 채우므로
+    # service == 'manual' 은 macOS 에서만 참이 된다(실측: 새 설치에서 등록 단계가 통째로 빠졌다).
+    # identity_mismatch/ambiguous 는 남의 유닛이거나 손댄 유닛이라는 뜻이므로 덮어쓰지 않는다.
+    return not owner['command'] and owner['warning'] == 'managed_service_required'
 
 def preflight(name, home, item):
     public, owner, cfg, token, plugin_name = item
+    if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
     if not owner['command']: fail(owner['warning'] or 'managed_service_required')
     if settings(home)[4]:
         listening = assert_port_owned(public,owner)
@@ -311,10 +454,24 @@ def atomic(path, content):
     finally:
         if os.path.exists(tmp): os.unlink(tmp)
 
-def main(action, candidate_id=None):
+def bounded(argv, env):
+    # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
+    child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
+    try:
+        output = child.stdout.read(262145)
+        if len(output) > 262144:
+            child.kill()
+            child.wait()
+            fail('output_limit')
+        code = child.wait()
+    finally:
+        child.stdout.close()
+    return code, output
+
+def main(action, candidate_id=None, option=None):
     global LOCK
     if ROOT.is_symlink(): fail('unsafe_host_path')
-    if action in ('install','configure','restart'):
+    if action in ('install','configure','restart','install-service','set-timezone','create-profile','provision-key'):
         # A host-wide advisory lock also protects against a retry from a restarted DeskRPG server.
         # Keep it inherited by the installer until the entire bounded action exits.
         import fcntl
@@ -328,6 +485,22 @@ def main(action, candidate_id=None):
         return {'candidates': [candidate(name,home)[0] for name,home in homes()]}
     name, home, item = select(candidate_id)
     public, owner, cfg, token, plugin_name = item
+    if action == 'check-model':
+        # 자격 증명이 있는지만 본다. 어떤 결과도 설정을 실패시키지 않는다 — 애매하면 unknown 이다.
+        block = cfg.get('model')
+        provider = block.get('provider') if isinstance(block, dict) else None
+        if not isinstance(provider, str) or not provider.strip(): provider = cfg.get('provider')
+        provider = provider.strip() if isinstance(provider, str) else ''
+        if not provider or not PROVIDER.fullmatch(provider): return {'ok': True, 'model': 'unknown'}
+        try:
+            auth = run([sys.executable, '-m', 'hermes_cli.main', 'auth', 'status', provider], timeout=45, env={**os.environ, 'HERMES_HOME': str(home)})
+        except Exception:
+            return {'ok': True, 'model': 'unknown'}
+        # 실측 출력은 한 줄이다: 'openai-codex: logged in'. 원문은 저장도 반환도 하지 않는다.
+        # 이름을 probe 로 두면 모듈 함수 probe() 가 main 안에서 지역 변수로 가려진다(실측: 테스트 6건 실패).
+        if auth.returncode == 0 and 'logged in' in (auth.stdout or '').lower():
+            return {'ok': True, 'model': 'ready'}
+        return {'ok': True, 'model': 'missing'}
     if action == 'inspect':
         listening = assert_port_owned(public, owner)
         status, warning = probe(public,token) if listening else ('unknown','gateway_unreachable')
@@ -341,56 +514,133 @@ def main(action, candidate_id=None):
                 if warning: public['warning'] = warning
         except Failure as error: public['warning'] = str(error)
         changes = []
+        if needs_service(owner): changes.append('installing_service')
         if not public['pluginInstalled']: changes.append('installing_plugin')
+        elif version_below(public['pluginVersion'], PLUGIN_VERSION): changes.append('updating_plugin')
         elif not public['pluginEnabled']: changes.append('enabling_plugin')
         gateway = mapping(cfg.get('gateway'))
-        if status != 'plugin_ready' or (name == 'default' and not cfg.get('multiplex_profiles',gateway.get('multiplex_profiles',False))):
+        # A replaced plugin or a freshly registered unit only takes effect after the gateway restarts.
+        if status != 'plugin_ready' or (name == 'default' and not cfg.get('multiplex_profiles',gateway.get('multiplex_profiles',False))) or 'updating_plugin' in changes or 'installing_service' in changes:
             changes.extend(['configuring_api','restarting_gateway','verifying_gateway'])
         available = profile_names(cfg) if name == 'default' else [(name,home)]
         profiles = []
         for child,childhome in available:
             child_settings = settings(childhome)
             metadata = {'name':child, 'hasToken':bool(child_settings[2])}
-            if child == name and preparation_safe and not child_settings[2] and not child_settings[4]:
+            # 형제 프로필도 채운다: 키가 없고 외부 비밀 제공자를 쓰지 않으면 발급할 수 있다.
+            if preparation_safe and not child_settings[2] and not child_settings[4]:
                 metadata['canProvision'] = True
             profiles.append(metadata)
         return {'candidate': public, 'pluginStatus': status, 'changes': changes, 'profiles':profiles}
+    if action == 'install-service':
+        # A host without a unit can never pass preflight's managed-service gate, so the rescue runs
+        # before it. Hermes writes the unit itself — DeskRPG never authors one, because only a
+        # Hermes-authored unit can pass the identity check that authorizes a restart later.
+        if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
+        if not needs_service(owner): return {'ok': True}
+        assert_port_owned(public, owner)
+        env = {**os.environ, 'HERMES_HOME': str(home)}
+        if bounded([sys.executable, '-m', 'hermes_cli.main', '--profile', name, 'gateway', 'install'], env)[0]:
+            fail('service_install_failed')
+        fresh = identity(name, home)
+        if needs_service(fresh): fail('service_install_failed')
+        # 후보 id 는 서비스 정의의 해시를 포함한다. 유닛을 막 만들었으므로 id 가 바뀌었다 —
+        # 새 id 를 돌려주지 않으면 이어지는 모든 단계가 candidate_changed 로 죽는다(실측).
+        return {'ok': True, 'candidateId': fresh['id']}
+    if action == 'create-profile':
+        # 프로필을 늘리는 것은 리스너 소유자(default)만 한다.
+        if name != 'default': fail('profile_provision_forbidden')
+        if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
+        try: request_body = json.loads(option) if isinstance(option, str) and option else None
+        except Exception: fail('profile_name_invalid')
+        if not isinstance(request_body, dict): fail('profile_name_invalid')
+        new_name = request_body.get('name')
+        description = request_body.get('description')
+        if not isinstance(new_name, str) or not NAME.fullmatch(new_name) or new_name in RESERVED_PROFILE: fail('profile_name_invalid')
+        if description is not None and (not isinstance(description, str) or len(description) > 200 or re.search(r'[\r\n\x00]', description)): fail('profile_name_invalid')
+        if (ROOT / 'profiles').is_symlink(): fail('unsafe_host_path')
+        target = ROOT / 'profiles' / new_name
+        if target.exists() or target.is_symlink() or any(child == new_name for child,_ in homes()): fail('profile_exists')
+        if bounded([sys.executable, '-m', 'hermes_cli.main', 'profile', 'create', new_name] + (['--description', description] if description else []), {**os.environ, 'HERMES_HOME': str(ROOT)})[0]:
+            fail('profile_create_failed')
+        # 명령이 0 으로 끝나도 디스크에 생겼는지 직접 본다.
+        if not target.is_dir() or target.is_symlink(): fail('profile_create_failed')
+        allowed = allowlist(config(home))
+        result = {'ok': True, 'profile': new_name}
+        # 허용 목록은 운영자의 것이다 — 고치지 않고 서빙되지 않는다는 사실만 알린다.
+        if isinstance(allowed, list) and new_name not in allowed: result['warning'] = 'profile_not_served'
+        return result
+    if action == 'provision-key':
+        target_name = option if isinstance(option, str) else ''
+        if not target_name or not NAME.fullmatch(target_name) or target_name in RESERVED_PROFILE: fail('profile_name_invalid')
+        if name != 'default': fail('profile_provision_forbidden')
+        target_home = next((h for child,h in homes() if child == target_name), None)
+        if target_home is None: fail('candidate_changed')
+        child_token, child_external = settings(target_home)[2], settings(target_home)[4]
+        # 외부 비밀 제공자를 쓰는 프로필은 제공자 설정을 건드리지 않고 그대로 둔다.
+        if child_external: fail('profile_provision_forbidden')
+        if child_token:
+            if len(child_token) < 16 or '\n' in child_token or '\r' in child_token: fail('api_key_invalid')
+            # 이미 있으면 회전하지 않는다. 아무것도 하지 않고 성공이다.
+            return {'ok': True, 'provisioned': False, 'profile': target_name}
+        old = read(target_home / '.env')
+        try: atomic(target_home / '.env', old.rstrip('\n') + '\nAPI_SERVER_KEY=' + secrets.token_hex(32) + '\n')
+        except Failure: raise
+        except Exception: fail('profile_key_failed')
+        if not settings(target_home)[2]: fail('profile_key_failed')
+        return {'ok': True, 'provisioned': True, 'profile': target_name}
     preflight(name,home,item)
     if action == 'install':
         env = {**os.environ, 'HERMES_HOME': str(home)}
         argv = [sys.executable, '-m', 'hermes_cli.main', '--profile', name, 'plugins']
+        updating = False
         if not public['pluginInstalled']: argv += ['install', SOURCE, '--ref', PIN, '--enable']
+        elif version_below(public['pluginVersion'], PLUGIN_VERSION):
+            # --force removes the stale copy and reinstalls the pinned ref. It is not a scan bypass:
+            # a blocked security scan still fails with plugin_security_review_required below.
+            updating = True
+            argv += ['install', SOURCE, '--ref', PIN, '--force', '--enable']
         elif not public['pluginEnabled']: argv += ['enable', plugin_name]
         else: return {'ok': True}
-        # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
-        child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
-        try:
-            output = child.stdout.read(262145)
-            if len(output) > 262144:
-                child.kill()
-                child.wait()
-                fail('output_limit')
-            code = child.wait()
-        finally:
-            child.stdout.close()
+        code, output = bounded(argv, env)
+        failure_code = 'plugin_update_failed' if updating else 'plugin_install_failed'
         if code:
             diagnostic = output.decode('utf-8', errors='replace').lower()
             if 'blocked' in diagnostic and ('security' in diagnostic or 'scan' in diagnostic):
                 fail('plugin_security_review_required')
             if 'repository not found' in diagnostic or 'could not resolve host' in diagnostic:
                 fail('plugin_source_unavailable')
-            fail('plugin_install_failed')
-        installed, enabled, unused = plugin(home,config(home))
-        if not installed or not enabled: fail('plugin_install_failed')
+            fail(failure_code)
+        installed, enabled, unused, installed_version = plugin(home,config(home))
+        if not installed or not enabled: fail(failure_code)
+        if updating and version_below(installed_version, PLUGIN_VERSION): fail('plugin_update_failed')
+    elif action == 'set-timezone':
+        value = option if isinstance(option, str) else ''
+        if not value or len(value) > 64 or not TIMEZONE.fullmatch(value): fail('timezone_invalid')
+        # 모양만 보면 'Asia/../Seoul' 이 통과한다 — zoneinfo 가 거부할 값을 설정에 남기지 않는다.
+        if any(part in ('.','..') for part in value.split('/')): fail('timezone_invalid')
+        fresh = config(home)
+        existing = fresh.get('timezone')
+        # Only ever fill an empty slot. An operator's own timezone is never overwritten.
+        if isinstance(existing, str) and existing.strip(): return {'ok': True}
+        if existing is not None and not isinstance(existing, str): fail('invalid_host_config')
+        fresh['timezone'] = value
+        try: atomic(home / 'config.yaml', yaml.safe_dump(fresh, sort_keys=False, allow_unicode=True))
+        except Failure: raise
+        except Exception: fail('timezone_write_failed')
+        if config(home).get('timezone') != value: fail('timezone_write_failed')
     elif action == 'configure':
         # Preserve existing config shapes while setting the effective merged API block.
-        cfg.setdefault('gateway', {})
+        # gateway 키가 있으나 값이 비어 있으면 setdefault 는 None 을 돌려준다 — 새로 설치한
+        # Hermes 의 config.yaml 이 정확히 그 모양이라 여기서 TypeError 로 죽었다(실측).
+        gateway_block = mapping(cfg.get('gateway'))
+        cfg['gateway'] = gateway_block
         if name == 'default':
-            cfg['gateway']['multiplex_profiles'] = True
+            gateway_block['multiplex_profiles'] = True
             if 'multiplex_profiles' in cfg: cfg['multiplex_profiles'] = True
-        api = mapping(cfg['gateway'].get('api_server'))
+        api = mapping(gateway_block.get('api_server'))
         api['enabled'] = True
-        cfg['gateway']['api_server'] = api
+        gateway_block['api_server'] = api
         atomic(home / 'config.yaml', yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
         if not token:
             old = read(home / '.env')
@@ -410,6 +660,7 @@ def main(action, candidate_id=None):
         if code != 200 or not isinstance(live,dict) or not isinstance(live.get('profiles'),list): fail('profile_verification_failed')
         names = {p.get('name') for p in live['profiles'] if isinstance(p,dict) and isinstance(p.get('name'),str)}
         profiles = []
+        warnings = []
         selected_profiles = profile_names(cfg) if name == 'default' else [(name,home)]
         for child, childhome in selected_profiles:
             if child not in names: continue
@@ -417,13 +668,16 @@ def main(action, candidate_id=None):
             if not childtoken: continue
             path = '/v1/models' if child == 'default' else '/p/' + child + '/v1/models'
             code, models = request(public['port'],childtoken,path)
-            if code == 200 and isinstance(models,dict) and isinstance(models.get('data'),list): profiles.append({'name':child,'token':childtoken})
-        return {'prepared': {'baseUrl':'http://127.0.0.1:' + str(public['port']), 'token':token, 'profiles':profiles}}
+            if code == 200 and isinstance(models,dict) and isinstance(models.get('data'),list):
+                profiles.append({'name':child,'token':childtoken})
+                # 설치는 모델 자격 증명을 만들지 않는다. 빈 목록은 실패가 아니라 사람이 할 일이다.
+                if child == name and not models['data'] and 'model_provider_required' not in warnings: warnings.append('model_provider_required')
+        return {'prepared': {'baseUrl':'http://127.0.0.1:' + str(public['port']), 'token':token, 'profiles':profiles}, 'warnings': warnings}
     else: fail('invalid_host_operation')
     return {'ok':True}
 
-def entry(action, candidate_id):
-    try: print(json.dumps(main(action,candidate_id)))
+def entry(action, candidate_id, option=None):
+    try: print(json.dumps(main(action,candidate_id,option)))
     except Failure as error: print(json.dumps({'error':str(error)}))
     except Exception: print(json.dumps({'error':'host_operation_failed'}))
 `;

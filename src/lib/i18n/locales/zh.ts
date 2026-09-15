@@ -217,6 +217,89 @@ const zh: Record<string, string> = {
   "hermes.wizard.step.identity": "② 人格",
   "hermes.wizard.step.config": "③ 设置",
   "hermes.wizard.step.placement": "④ 放置",
+  "hermes.wizard.step.installingService": "注册网关服务",
+  "hermes.wizard.step.updatingPlugin": "更新DeskRPG插件",
+  "hermes.wizard.step.settingTimezone": "设置网关时区",
+  "hermes.wizard.error.hermesVersionUnsupported":
+    "需要Hermes 0.21.1或更高版本。请在服务器上执行hermes update，然后重新检查。",
+  "hermes.wizard.error.pluginUpdateFailed":
+    "未能将DeskRPG插件更新到新版本。请管理员检查主机网络和插件目录的写入权限，然后重新检查。",
+  "hermes.wizard.error.serviceInstallFailed":
+    "未能将网关注册为服务。请管理员在主机上执行hermes gateway install并查看输出，然后重新检查。",
+  "hermes.wizard.error.timezoneInvalid":
+    "时区名称不符合IANA格式。请使用Asia/Shanghai这样的正确名称，或关闭时区设置后继续。",
+  "hermes.wizard.error.timezoneWriteFailed":
+    "未能将时区写入网关配置文件。请管理员检查config.yaml的写入权限，然后重新检查。其余设置在没有时区的情况下也可继续。",
+  "hermes.wizard.review.serviceInstall": "将网关注册为服务，使其在重启后继续运行。",
+  "hermes.wizard.review.pluginUpdate": "将DeskRPG插件更新到{version}。",
+  "hermes.wizard.review.timezone": "将网关时区设置为{timezone}。",
+  "hermes.wizard.review.timezoneToggle": "将此浏览器的时区设置到网关",
+  "hermes.wizard.review.pluginVersion": "插件版本",
+  "hermes.wizard.step.installingHermes": "安装Hermes",
+  "hermes.wizard.step.creatingProfile": "创建新配置文件",
+  "hermes.wizard.step.provisioningKeys": "发放配置文件API凭据",
+  "hermes.wizard.step.checkingModel": "检查模型登录",
+  "hermes.wizard.progress.deps": "正在安装所需工具",
+  "hermes.wizard.progress.clone": "正在下载Hermes源码",
+  "hermes.wizard.progress.venv": "正在创建Python虚拟环境",
+  "hermes.wizard.progress.node_modules": "正在安装Node软件包",
+  "hermes.wizard.progress.skills": "正在安装默认技能",
+  "hermes.wizard.progress.done": "正在完成安装",
+  "hermes.wizard.progress.elapsed": "已用{seconds}秒",
+  "hermes.wizard.model.recheck": "重新检查模型",
+  "hermes.wizard.model.checking": "正在检查模型登录…",
+  "hermes.wizard.model.ready": "模型登录已确认。NPC可以回复了。",
+  "hermes.wizard.model.unknown":
+    "无法确定模型登录状态。设置本身已完成。请在服务器上执行hermes model进行确认。",
+  "hermes.wizard.resume.button": "继续执行",
+  "hermes.wizard.resume.title": "已完成到此",
+  "hermes.wizard.resume.skipped": "已跳过",
+  "hermes.wizard.error.resumeUnavailable":
+    "无法继续执行。失败的作业已过期或目标已更改。请从查找安装重新开始。",
+  "hermes.wizard.error.profileNameInvalid":
+    "配置文件名称或说明不符合规则。名称只能使用小写字母、数字、连字符和下划线且不超过64个字符；说明为单行且不超过200个字符。",
+  "hermes.wizard.error.profileExists":
+    "已存在同名配置文件。请换一个名称，或从下方列表中选择该配置文件进行导入。",
+  "hermes.wizard.error.profileCreateFailed":
+    "无法创建配置文件。请管理员检查主机Hermes主目录的写入权限，然后重试。",
+  "hermes.wizard.error.profileKeyFailed":
+    "无法写入配置文件的API凭据。请管理员检查该配置文件.env的写入权限，然后重试。已有凭据不会被覆盖。",
+  "hermes.wizard.error.profileProvisionForbidden":
+    "无法为该配置文件创建凭据：它不是监听器所属配置文件，或由外部密钥提供程序管理凭据。请通过该提供程序配置后重新检查。",
+  "hermes.wizard.error.profileVerifyFailed":
+    "无法用已发放的凭据验证配置文件API。请管理员检查网关状态和配置文件允许列表，然后重试。",
+  "hermes.wizard.error.hermesAlreadyInstalled":
+    "此主机已安装Hermes。请返回查找安装并直接连接，而不是重新安装。",
+  "hermes.wizard.error.hermesInstallForbidden":
+    "此向导无法安装Hermes。远程(SSH)目标不会被安装，且运维人员需要启用DESKRPG_HERMES_INSTALL_ENABLED。",
+  "hermes.wizard.error.hermesInstallFailed":
+    "Hermes安装未能完成。请管理员在服务器上直接运行安装脚本并检查输出，然后重试。",
+  "hermes.wizard.error.hermesInstallerUnavailable":
+    "无法下载官方安装脚本。请管理员检查服务器的网络和代理设置，然后重试。",
+  "hermes.wizard.warn.profileNotServed":
+    "网关尚未提供此配置文件。请将其名称加入网关的multiplex配置文件允许列表。此向导不会修改允许列表。",
+  "hermes.wizard.warn.modelProviderRequired":
+    "尚未配置模型提供商。请在服务器上运行hermes model登录模型。在此之前NPC无法回复。",
+  "hermes.wizard.install.title": "要在此服务器上安装Hermes吗？",
+  "hermes.wizard.install.body":
+    "将下载官方安装脚本并在运行DeskRPG服务器的这台主机上执行。可能需要几分钟。不包含模型提供商登录：安装完成后请在服务器上运行hermes model。",
+  "hermes.wizard.install.consent": "我同意在此服务器上运行官方安装脚本。",
+  "hermes.wizard.install.unavailable":
+    "此实例已禁用Hermes安装。请在运行DeskRPG的机器上打开终端执行下面的命令，然后重启DeskRPG。此开关刻意不能从网页切换——只有能使用那台机器的人才应该打开它。",
+  "hermes.wizard.install.enableCommand": "deskrpg host-setup on --with-install",
+  "hermes.wizard.install.enableHint": "执行命令后，在此页面重新查找。",
+  "hermes.wizard.install.done": "Hermes安装完成。请重新查找并选择此安装以继续连接。",
+  "hermes.wizard.install.digest": "安装脚本指纹 {digest}",
+  "hermes.wizard.install.start": "开始安装Hermes",
+  "hermes.wizard.profile.newTitle": "创建新配置文件",
+  "hermes.wizard.profile.nameLabel": "配置文件名称",
+  "hermes.wizard.profile.descriptionLabel": "配置文件说明",
+  "hermes.wizard.profile.descriptionHint": "看板据此按角色分配工作。单行，不超过200个字符。",
+  "hermes.wizard.profile.provisionLabel": "发放凭据",
+  "hermes.wizard.profile.provisionHint":
+    "仅适用于没有API凭据的配置文件。向导会创建新凭据，绝不更换已有凭据。",
+  "gateways.onboarding.step1WizardHint":
+    "如果Hermes与DeskRPG服务器运行在同一主机上，在运维人员允许时，下面的连接向导可以为你完成安装。",
   "hermes.wizard.profile.namePlaceholder": "新配置文件名称（例如 noah）",
   "hermes.wizard.profile.resumeHint": "或选择已注册的配置文件，继续编辑其人格与设置。",
   "hermes.wizard.profile.nameHint":
@@ -1558,6 +1641,10 @@ const zh: Record<string, string> = {
   "npc.noAgent": "此NPC未连接AI代理",
   "npc.gatewayNotConnected": "网关未连接",
   "npc.gatewayError": "AI网关错误",
+  "npc.gatewayUnreachable": "无法连接到 AI 网关。请确认网关正在运行且地址正确。",
+  "npc.gatewayAuthFailed": "网关密钥被拒绝。请在频道设置中检查网关密钥。",
+  "npc.gatewayTimeout": "网关未在限定时间内响应。请稍后重新发送。",
+  "npc.gatewayUnknownError": "调用 AI 网关失败。详细原因请查看服务器日志。",
   "npc.unsupportedAdapter": "此NPC使用了不受支持的适配器。",
   "npc.unbound": "此NPC尚未绑定Hermes配置文件。",
   "npc.hermesImageUnsupported": "此NPC暂不支持接收图片。",
@@ -1717,6 +1804,24 @@ const zh: Record<string, string> = {
   "gateways.listTitle": "网关列表",
   "gateways.new": "新建网关",
   "gateways.empty": "还没有已注册的网关。",
+  "gateways.emptyHint": "请先按上面的指引启动 Hermes Agent。",
+  "gateways.onboarding.title": "还没有网关 — 从这里开始",
+  "gateways.onboarding.intro":
+    "DeskRPG 不内置 AI 智能体运行时。驱动 NPC 的大脑是你自己部署的 Hermes Agent，DeskRPG 只负责连接它的网关。",
+  "gateways.onboarding.step1Title": "1. 安装 Hermes Agent 并启动 API 服务器",
+  "gateways.onboarding.step1Body":
+    "按官方仓库的说明安装，登录模型提供商，然后运行 API 服务器。跳过这一步就没有可注册的网关。",
+  "gateways.onboarding.step2Title": "2. 准备网关地址和监听器所有者密钥",
+  "gateways.onboarding.step2Body": "下面的表单需要 API 服务器地址（例如 {example}）和认证密钥。",
+  "gateways.onboarding.step2OwnerKeyWarning":
+    "请务必填写监听器所有者密钥（API_SERVER_KEY）。仅有配置文件密钥会导致看板、定时任务和事件流不可用。",
+  "gateways.onboarding.step3Title": "3. 要使用看板和定时任务，需安装 DeskRPG 插件",
+  "gateways.onboarding.step3Body": "在网关主机上执行下面的命令，然后重启 Hermes API 服务器。",
+  "gateways.onboarding.step4Title": "4. 网关可以稍后再连",
+  "gateways.onboarding.step4Body":
+    "如果还没启动 Hermes，可以先创建角色和频道，准备好之后再回到本页面注册网关。",
+  "gateways.onboarding.step4CharacterLink": "创建角色",
+  "gateways.onboarding.step4ChannelLink": "创建频道",
   "gateways.owner": "所有者",
   "gateways.shared": "共享",
   "gateways.statusValid": "已验证",

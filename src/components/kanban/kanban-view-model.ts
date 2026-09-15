@@ -1,3 +1,4 @@
+import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 /**
  * 칸반 화면의 순수 뷰모델 — React·fetch 를 모른다.
  *
@@ -142,8 +143,8 @@ export function taskTitleById(tasks: readonly KanbanTask[], id: string): string 
 // 서버 오류 → 화면 분기 (R31/R32/E6)
 // ---------------------------------------------------------------------------
 
-export const PLUGIN_INSTALL_COMMAND =
-  "hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin && hermes plugins enable deskrpg";
+/** 정본은 `@/lib/hermes/plugin-install-command` 다 — 여기서는 기존 import 경로를 지킨다. */
+export const PLUGIN_INSTALL_COMMAND = SHARED_PLUGIN_INSTALL_COMMAND;
 
 export type KanbanFailure = { status: number; code: string; message: string; minVersion?: string };
 

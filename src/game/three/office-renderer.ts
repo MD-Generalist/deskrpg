@@ -35,6 +35,13 @@ import { detailSurfaces, surfaceTexture } from "./surface-detail";
 import { resolveSeat, seatAt, sofaSeats, furnitureSeats, type Seat } from "./seating";
 import { PointerGesture } from "./pointer-gesture";
 import { pickFurnitureSeat } from "./seat-picking";
+import {
+  resolveSeatAction,
+  seatReservationId,
+  seatSelectionHighlighted,
+  type SeatAction,
+} from "./seat-action";
+import { createSeatHighlight } from "./seat-highlight";
 import { resolveOfficeLook } from "./office-looks";
 import { isOfficeEnvironmentId } from "./office-environment-theme";
 import * as T from "three";
@@ -97,6 +104,11 @@ type RenderedActor = {
   labelOcclusion?: { time: number; hidden: boolean };
 };
 
+type SeatVisualTarget = {
+  action: SeatAction;
+  owner: T.Object3D;
+};
+
 /** Three.js presentation consumes the existing gameplay state; it never emits socket payloads. */
 export class OfficeRenderer {
   private speechRail = document.createElement("div");
@@ -132,6 +144,10 @@ export class OfficeRenderer {
   private gesture = new PointerGesture();
   private hoveredActorId: string | undefined;
   private selectedActorId: string | undefined;
+  private hoveredSeat: SeatVisualTarget | null = null;
+  private selectedSeat: SeatVisualTarget | null = null;
+  private seatHighlight: T.Group | null = null;
+  private highlightedSeatKey = "";
   private lastActors: ActorSnapshot[] = [];
   private speech = new Map<string, number>();
   private benchmark: {
@@ -376,7 +392,40 @@ export class OfficeRenderer {
   private stopFollowing = () => {
     this.following = false;
     this.overviewDimensions = null;
+    this.setHoveredSeat(null);
   };
+  private setHoveredSeat(target: SeatVisualTarget | null) {
+    this.hoveredSeat = target;
+    this.refreshSeatHighlight();
+  }
+  private setSelectedSeat(target: SeatVisualTarget | null) {
+    this.selectedSeat = target;
+    this.refreshSeatHighlight();
+  }
+  private refreshSeatHighlight() {
+    const target = this.hoveredSeat ?? this.selectedSeat;
+    const key = target
+      ? `${target.owner.uuid}:${seatReservationId(target.action.x, target.action.z)}`
+      : "";
+    if (key === this.highlightedSeatKey) return;
+    if (this.seatHighlight) {
+      this.scene.remove(this.seatHighlight);
+      disposeTree(this.seatHighlight);
+    }
+    this.seatHighlight = target ? createSeatHighlight(target.owner) : null;
+    if (this.seatHighlight) this.scene.add(this.seatHighlight);
+    this.highlightedSeatKey = key;
+  }
+  private seatAvailable(action: Pick<SeatAction, "x" | "z">) {
+    if (!this.bridge) return false;
+    if (this.bridge.seatAvailable) return this.bridge.seatAvailable(action.x, action.z);
+    return (
+      this.bridge.walkable(Math.floor(action.x), Math.floor(action.z)) &&
+      !this.lastActors.some(
+        (actor) => Math.hypot(actor.x / 32 - action.x, actor.y / 32 - action.z) < 0.45,
+      )
+    );
+  }
   private contextMenu = (event: Event) => event.preventDefault();
   private pointerDown = (e: PointerEvent) => {
     this.gesture.start(e);
@@ -393,6 +442,7 @@ export class OfficeRenderer {
     this.hoveredActorId = undefined;
     this.cursor.visible = false;
     this.renderer.domElement.style.cursor = "default";
+    this.setHoveredSeat(null);
   };
   private pointerMove = (e: PointerEvent) => {
     this.gesture.move(e);
@@ -400,6 +450,7 @@ export class OfficeRenderer {
   };
   private point(e: PointerEvent, kind: "move" | "down") {
     if (!this.bridge) return;
+    const editor = this.bridge.editor();
     const rect = this.host.getBoundingClientRect();
     this.ray.setFromCamera(
       new T.Vector2(
@@ -426,38 +477,41 @@ export class OfficeRenderer {
         }
       }
     }
-    if (!actorId && (kind === "move" || (kind === "down" && e.button === 0))) {
+    if (
+      !actorId &&
+      (kind === "move" || (kind === "down" && e.button === 0)) &&
+      !editor.enabled &&
+      !editor.placement &&
+      !editor.spawn
+    ) {
       const picked = pickFurnitureSeat(this.ray, this.world.children);
       const furnitureHit = picked?.hit;
       const furniture = picked?.owner;
       if (furniture?.userData.seat || furniture?.userData.seats) {
         const candidates: Seat[] = furniture.userData.seats ?? [furniture.userData.seat];
-        const free = candidates.filter(
-          (seat) =>
-            this.bridge!.walkable(
-              Math.floor(seat.anchorX ?? seat.x),
-              Math.floor(seat.anchorZ ?? seat.z),
-            ) &&
-            !this.lastActors.some(
-              (actor) =>
-                actor.kind !== "player" &&
-                Math.hypot(
-                  actor.x / 32 - (seat.anchorX ?? seat.x),
-                  actor.y / 32 - (seat.anchorZ ?? seat.z),
-                ) < 0.45,
-            ),
-        );
         const point = furnitureHit!.point;
-        const seat = free.sort(
-          (a, b) =>
-            Math.hypot(a.x - point.x, a.z - point.z) - Math.hypot(b.x - point.x, b.z - point.z),
-        )[0];
-        if (seat) {
-          target = new T.Vector3(seat.anchorX ?? seat.x, 0, seat.anchorZ ?? seat.z);
-          actorId = "seat-target"; // Avoid legacy nearby-NPC selection when clicking an adjacent cushion.
-        } else if (kind === "down") return;
+        const action = resolveSeatAction(candidates, point, (seat) => {
+          const x = seat.anchorX ?? seat.x,
+            z = seat.anchorZ ?? seat.z;
+          return this.seatAvailable({ x, z });
+        });
+        if (!action) {
+          this.setHoveredSeat(null);
+          this.renderer.domElement.style.cursor = "default";
+          return;
+        }
+        target = new T.Vector3(action.x, 0, action.z);
+        actorId = "seat-target"; // Avoid legacy nearby-NPC selection when clicking an adjacent cushion.
+        const seatTarget = { action, owner: furniture };
+        if (kind === "move") this.setHoveredSeat(seatTarget);
+        if (kind === "down") {
+          this.setSelectedSeat(seatTarget);
+          if (e.pointerType !== "mouse") this.setHoveredSeat(null);
+        }
       }
     }
+    if (kind === "move" && actorId !== "seat-target") this.setHoveredSeat(null);
+    if (kind === "down" && actorId !== "seat-target") this.setSelectedSeat(null);
     this.hoveredActorId = actorId;
     if (kind === "down") this.selectedActorId = actorId;
     this.renderer.domElement.style.cursor = actorId ? "pointer" : "default";
@@ -465,8 +519,8 @@ export class OfficeRenderer {
     const col = Math.floor(target.x),
       row = Math.floor(target.z);
     this.cursor.position.set(col + 0.5, 0.06, row + 0.5);
-    const edit = this.bridge.editor();
-    this.cursor.visible = actorId === "seat-target" || edit.placement || edit.spawn || edit.enabled;
+    const edit = editor;
+    this.cursor.visible = edit.placement || edit.spawn || edit.enabled;
     (this.cursor.material as T.MeshBasicMaterial).color.set(
       this.bridge.walkable(col, row) ? "#578467" : "#bd6756",
     );
@@ -492,6 +546,8 @@ export class OfficeRenderer {
     return this.renderer.domElement.toDataURL("image/webp", 0.9);
   }
   private buildMap(map: MapSnapshot) {
+    this.setHoveredSeat(null);
+    this.setSelectedSeat(null);
     disposeTree(this.world);
     const studio = isCreativeStudioMap(map);
     const tech = isTechStartupMap(map);
@@ -1119,6 +1175,20 @@ export class OfficeRenderer {
           this.speech.delete(id);
         }
       const player = this.lastActors.find((a) => a.kind === "player");
+      if (player && this.selectedSeat) {
+        const action = this.selectedSeat.action;
+        const playerWorld = pixelToWorld(player.x, player.y);
+        const selectedId = seatReservationId(action.x, action.z);
+        if (
+          !seatSelectionHighlighted(
+            selectedId,
+            this.bridge.seatIntent?.() ?? selectedId,
+            Math.hypot(playerWorld.x - action.x, playerWorld.z - action.z),
+            player.walking,
+          )
+        )
+          this.setSelectedSeat(null);
+      }
       if (this.following && player) {
         const p = pixelToWorld(player.x, player.y),
           target = new T.Vector3(p.x, 0, p.z);
@@ -1335,6 +1405,8 @@ export class OfficeRenderer {
   dispose() {
     this.cancelBenchmark("Renderer disposed");
     document.removeEventListener("visibilitychange", this.benchmarkVisibility);
+    this.setHoveredSeat(null);
+    this.setSelectedSeat(null);
     this.disposed = true;
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();

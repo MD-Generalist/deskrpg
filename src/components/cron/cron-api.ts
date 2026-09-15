@@ -1,3 +1,4 @@
+import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 /**
  * 브라우저 → `/api/channels/:id/cron/**` 호출. 하드 게이트: 브라우저는 Hermes 를 직접
  * 부르지 않는다 — 여기 있는 URL 만 쓴다. 인증은 다른 채널 API 와 같이 세션 쿠키다
@@ -195,8 +196,8 @@ export const cronApi = {
 // ---------------------------------------------------------------------------
 
 /** R31 안내에 넣는 설치 명령. 최소 버전은 서버 응답의 `minVersion` 이 우선한다. */
-export const PLUGIN_INSTALL_COMMAND =
-  "hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin && hermes plugins enable deskrpg";
+/** 정본은 `@/lib/hermes/plugin-install-command` 다 — 여기서는 기존 import 경로를 지킨다. */
+export const PLUGIN_INSTALL_COMMAND = SHARED_PLUGIN_INSTALL_COMMAND;
 export const PLUGIN_MIN_VERSION = "0.6.0";
 
 export type CronErrorNotice =

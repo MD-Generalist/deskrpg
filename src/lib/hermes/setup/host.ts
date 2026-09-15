@@ -1,5 +1,12 @@
-import { HOST_BOOTSTRAP, HOST_HELPER } from "./host-helper";
-import type { HostExecutor, PreparedHost, SetupCandidate, SetupInspection } from "./types";
+import { HOST_BOOTSTRAP, HOST_HELPER, HOST_INSTALLER } from "./host-helper";
+import type {
+  HostExecutor,
+  PreparedHost,
+  SetupCandidate,
+  SetupInspection,
+  SetupModelState,
+  SetupProvisionRequest,
+} from "./types";
 
 export const HOST_ERROR_CODES = new Set([
   "ssh_unknown_host",
@@ -27,13 +34,34 @@ export const HOST_ERROR_CODES = new Set([
   "listener_ownership_unverified",
   "plugin_identity_ambiguous",
   "plugin_install_failed",
+  "plugin_update_failed",
   "plugin_security_review_required",
   "plugin_source_unavailable",
+  "hermes_version_unsupported",
+  "service_install_failed",
+  "timezone_invalid",
+  "timezone_write_failed",
   "gateway_restart_failed",
   "gateway_verification_failed",
   "profile_verification_failed",
   "invalid_host_operation",
+  "profile_name_invalid",
+  "profile_exists",
+  "profile_create_failed",
+  "profile_key_failed",
+  "profile_provision_forbidden",
+  "hermes_already_installed",
+  "hermes_install_failed",
+  "hermes_installer_unavailable",
 ]);
+/** 실패가 아닌 알림만 담는다. 오류 경로에는 절대 오르지 않는다. */
+const HOST_WARNING_CODES = new Set(["profile_not_served", "model_provider_required"]);
+const DIGEST = /^[a-f0-9]{64}$/;
+/**
+ * 설치 진행 이정표. 호스트가 무엇을 올리든 이 목록 밖의 값은 버린다 —
+ * 줄 내용이 코드를 가장해 잡에 실리는 경로를 아예 없앤다.
+ */
+export const INSTALL_MILESTONES = ["deps", "clone", "venv", "node_modules", "skills", "done"];
 const WARNING_CODES = new Set([
   ...HOST_ERROR_CODES,
   "gateway_unreachable",
@@ -43,14 +71,20 @@ const WARNING_CODES = new Set([
   "plugin_disabled",
   "plugin_absent",
   "gateway_identity_unverified",
+  "hermes_version_unknown",
 ]);
 const STEP_CODES = new Set([
+  "installing_service",
   "installing_plugin",
   "enabling_plugin",
+  "updating_plugin",
   "configuring_api",
+  "setting_timezone",
   "restarting_gateway",
   "verifying_gateway",
 ]);
+const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const RESERVED_PROFILE_NAMES = new Set(["hermes", "test", "tmp", "root", "sudo", "default"]);
 const ID = /^[a-f0-9]{64}$/;
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): RecordValue {
@@ -84,6 +118,9 @@ function publicCandidate(value: unknown): SetupCandidate {
     port: Number(item.port),
     pluginInstalled: item.pluginInstalled as boolean,
     pluginEnabled: item.pluginEnabled as boolean,
+    // An unreadable version reaches the UI as null, never as a guess.
+    pluginVersion: typeof item.pluginVersion === "string" ? string(item.pluginVersion, 64) : null,
+    timezone: typeof item.timezone === "string" ? string(item.timezone, 64) : null,
     hasToken: item.hasToken as boolean,
     ...(typeof item.warning === "string" && WARNING_CODES.has(item.warning)
       ? { warning: item.warning }
@@ -98,10 +135,27 @@ async function invoke(
   action: string,
   candidateId?: string,
   signal?: AbortSignal,
+  option?: string,
 ): Promise<RecordValue> {
   checkAbort(signal);
   if (candidateId !== undefined && !ID.test(candidateId)) throw new Error("invalid_candidate");
-  const timeout = action === "install" ? 170 : action === "verify" ? 110 : 45;
+  // The helper re-validates `option`; it is JSON-encoded into the script, never shell-interpolated.
+  if (option !== undefined) {
+    if (action === "set-timezone") {
+      if (option.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-.]+)*$/.test(option))
+        throw new Error("timezone_invalid");
+    } else if (option.length > 1024 || /[\r\n\0]/.test(option))
+      throw new Error("setup_invalid_request");
+  }
+  const timeout =
+    action === "install" || action === "install-service"
+      ? 170
+      : action === "verify"
+        ? 110
+        : // 호스트가 CLI 를 45초까지 기다린다 — 바깥 상한이 그보다 좁으면 판정이 늘 timeout 이 된다.
+          action === "check-model"
+          ? 60
+          : 45;
   try {
     const result = await execute("python3", ["-c", HOST_BOOTSTRAP], {
       input: JSON.stringify({
@@ -113,6 +167,8 @@ async function invoke(
           JSON.stringify(action) +
           ", " +
           (candidateId ? JSON.stringify(candidateId) : "None") +
+          ", " +
+          (option === undefined ? "None" : JSON.stringify(option)) +
           ")\n",
       }),
       timeoutMs: (timeout + 5) * 1000,
@@ -131,9 +187,73 @@ async function invoke(
     return body;
   } catch (error) {
     if (signal?.aborted) throw new Error("setup_cancelled");
+    if (
+      error instanceof Error &&
+      ["timezone_invalid", "setup_invalid_request", "profile_name_invalid"].includes(error.message)
+    )
+      throw error;
     if (error instanceof Error && HOST_ERROR_CODES.has(error.message)) throw error;
     // SSH/execution layers may include stderr in an exception. Never propagate it.
     throw new Error("host_operation_failed");
+  }
+}
+/**
+ * 로컬 Hermes 설치. 게이트 판정은 호출자(service.ts)가 이미 끝냈다고 가정하지 않고,
+ * 이 함수는 설치가 없다는 것과 결과 지문만 책임진다. 설치 출력은 어디에도 남지 않는다.
+ */
+export async function installHermesHost(
+  execute: HostExecutor,
+  signal?: AbortSignal,
+): Promise<{ installerDigest: string; milestones: string[] }> {
+  checkAbort(signal);
+  try {
+    const result = await execute("python3", ["-c", HOST_INSTALLER], {
+      timeoutMs: 600_000,
+      signal,
+    });
+    checkAbort(signal);
+    if (result.code !== 0 || result.stdout.length > 65536) throw new Error("hermes_install_failed");
+    const body = record(JSON.parse(result.stdout));
+    if ("error" in body)
+      throw new Error(
+        typeof body.error === "string" && HOST_ERROR_CODES.has(body.error)
+          ? body.error
+          : "host_operation_failed",
+      );
+    const digest = string(body.installerDigest, 64);
+    if (!DIGEST.test(digest)) throw new Error("hermes_install_failed");
+    // 관측 순서는 지키되 목록 밖의 값과 중복은 버린다. 설치 출력의 원문은 여기에 오를 수 없다.
+    const observed = Array.isArray(body.milestones) ? body.milestones : [];
+    const milestones = [
+      ...new Set(
+        observed.filter(
+          (value): value is string =>
+            typeof value === "string" && INSTALL_MILESTONES.includes(value),
+        ),
+      ),
+    ].slice(0, INSTALL_MILESTONES.length);
+    return { installerDigest: digest, milestones };
+  } catch (error) {
+    if (signal?.aborted) throw new Error("setup_cancelled");
+    if (error instanceof Error && HOST_ERROR_CODES.has(error.message)) throw error;
+    // 설치 로그·stderr 가 예외에 실려 있을 수 있다. 절대 그대로 흘리지 않는다.
+    throw new Error("hermes_install_failed");
+  }
+}
+/**
+ * 모델 자격 증명 확인. **절대 던지지 않는다** — 판정할 수 없으면 `unknown` 이고,
+ * 호출자는 이 결과로 설정을 중단하지 않는다.
+ */
+export async function checkModelHost(
+  execute: HostExecutor,
+  candidateId: string,
+  signal?: AbortSignal,
+): Promise<SetupModelState> {
+  try {
+    const body = await invoke(execute, "check-model", candidateId, signal);
+    return body.model === "ready" || body.model === "missing" ? body.model : "unknown";
+  } catch {
+    return "unknown";
   }
 }
 export async function discoverHost(execute: HostExecutor): Promise<SetupCandidate[]> {
@@ -180,29 +300,115 @@ export async function inspectHost(
 ): Promise<SetupInspection> {
   return inspection(await invoke(execute, "inspect", candidateId));
 }
+function assertProvisionRequest(provision: SetupProvisionRequest | undefined) {
+  const created = provision?.createProfile;
+  if (created !== undefined) {
+    if (!PROFILE_NAME.test(created.name) || RESERVED_PROFILE_NAMES.has(created.name))
+      throw new Error("profile_name_invalid");
+    if (
+      created.description !== undefined &&
+      (created.description.length > 200 || /[\r\n\0]/.test(created.description))
+    )
+      throw new Error("profile_name_invalid");
+  }
+  const keys = [...new Set(provision?.provisionKeys ?? [])];
+  if (keys.length > 10) throw new Error("setup_invalid_request");
+  if (keys.some((name) => !PROFILE_NAME.test(name) || RESERVED_PROFILE_NAMES.has(name)))
+    throw new Error("profile_name_invalid");
+  return keys;
+}
 export async function prepareHost(
   execute: HostExecutor,
-  candidateId: string,
+  initialCandidateId: string,
   onStep: (step: string) => void,
   signal?: AbortSignal,
+  timezone?: string,
+  provision?: SetupProvisionRequest,
+  /** 재개에서 이미 성공한 단계. 되돌리지 않고 다시 하지도 않는다. `inspecting` 은 언제나 다시 돈다. */
+  skipStep?: (step: string) => boolean,
 ): Promise<PreparedHost> {
-  const stage = async (step: string, action: string) => {
+  const skip = (step: string) => skipStep?.(step) === true;
+  // 서비스를 등록하면 유닛 정의가 생기고 후보 id(정의의 해시)가 바뀐다. 이후 단계는 새 id 를 써야 한다.
+  let candidateId = initialCandidateId;
+  const stage = async (step: string, action: string, option?: string) => {
     checkAbort(signal);
     onStep(step);
     checkAbort(signal);
-    return invoke(execute, action, candidateId, signal);
+    return invoke(execute, action, candidateId, signal, option);
   };
+  const requestedKeys = assertProvisionRequest(provision);
+  const warnings: string[] = [];
   const state = inspection(await stage("inspecting", "inspect"));
-  if (!state.candidate.pluginInstalled || !state.candidate.pluginEnabled)
-    await stage(
-      state.candidate.pluginInstalled ? "enabling_plugin" : "installing_plugin",
-      "install",
+  // 새 프로필은 플러그인·API 작업보다 앞에 만들어야 재시작 한 번으로 서빙된다.
+  const provisionKeys = [...requestedKeys];
+  if (provision?.createProfile && skip("creating_profile")) {
+    // 이미 만들어진 프로필이다. 다시 만들면 `profile_exists` 로 죽는다 — 키 발급 대상에만 넣는다.
+    if (!provisionKeys.includes(provision.createProfile.name))
+      provisionKeys.push(provision.createProfile.name);
+  } else if (provision?.createProfile) {
+    const created = record(
+      await stage(
+        "creating_profile",
+        "create-profile",
+        JSON.stringify({
+          name: provision.createProfile.name,
+          ...(provision.createProfile.description
+            ? { description: provision.createProfile.description }
+            : {}),
+        }),
+      ),
     );
-  if (state.pluginStatus !== "plugin_ready" || state.changes.includes("configuring_api")) {
-    await stage("configuring_api", "configure");
-    await stage("restarting_gateway", "restart");
+    const notServed =
+      typeof created.warning === "string" && HOST_WARNING_CODES.has(created.warning);
+    if (notServed) warnings.push(created.warning as string);
+    // 허용 목록 밖이면 서빙되지 않으므로 키를 발급해도 검증할 수 없다.
+    if (!notServed && !provisionKeys.includes(provision.createProfile.name))
+      provisionKeys.push(provision.createProfile.name);
   }
-  const body = record((await stage("verifying_gateway", "verify")).prepared);
+  const provisioned: string[] = [];
+  if (provisionKeys.length && !skip("provisioning_keys")) {
+    // 여러 프로필을 한 단계에서 처리한다 — 진행 기록에 프로필 이름은 남기지 않는다.
+    checkAbort(signal);
+    onStep("provisioning_keys");
+    for (const name of provisionKeys) {
+      checkAbort(signal);
+      const result = record(await invoke(execute, "provision-key", candidateId, signal, name));
+      if (result.provisioned === true) provisioned.push(name);
+    }
+  }
+  // A unit must exist before anything tries to restart the gateway through it.
+  if (state.changes.includes("installing_service") && !skip("installing_service")) {
+    const installed = record(await stage("installing_service", "install-service"));
+    if (typeof installed.candidateId === "string" && installed.candidateId.length === 64)
+      candidateId = installed.candidateId;
+  }
+  const pluginStep = state.changes.includes("updating_plugin")
+    ? "updating_plugin"
+    : !state.candidate.pluginInstalled || !state.candidate.pluginEnabled
+      ? state.candidate.pluginInstalled
+        ? "enabling_plugin"
+        : "installing_plugin"
+      : null;
+  if (pluginStep && !skip(pluginStep)) await stage(pluginStep, "install");
+  const configuring =
+    (state.pluginStatus !== "plugin_ready" || state.changes.includes("configuring_api")) &&
+    !skip("configuring_api");
+  // Never overwrite a timezone the operator already set.
+  const settingTimezone =
+    Boolean(timezone) && !state.candidate.timezone && !skip("setting_timezone");
+  if (configuring) await stage("configuring_api", "configure");
+  if (settingTimezone) await stage("setting_timezone", "set-timezone", timezone);
+  if ((configuring || settingTimezone) && !skip("restarting_gateway"))
+    await stage("restarting_gateway", "restart");
+  const verified = await stage("verifying_gateway", "verify");
+  for (const warning of Array.isArray(verified.warnings) ? verified.warnings : [])
+    if (
+      typeof warning === "string" &&
+      HOST_WARNING_CODES.has(warning) &&
+      !warnings.includes(warning)
+    )
+      warnings.push(warning);
+  const body = record(verified.prepared);
   const baseUrl = string(body.baseUrl);
   if (
     !/^http:\/\/127\.0\.0\.1:\d+$/.test(baseUrl) ||
@@ -220,5 +426,8 @@ export async function prepareHost(
       throw new Error("profile_verification_failed");
     return { name, token: profileToken };
   });
-  return { baseUrl, token, profiles };
+  // 키를 발급했으면 그 키로 실제 서빙을 확인한다. verify 는 인증에 실패한 프로필을 그냥 뺀다.
+  if (provisioned.some((name) => !profiles.some((profile) => profile.name === name)))
+    throw new Error("profile_verify_failed");
+  return { baseUrl, token, profiles, ...(warnings.length ? { warnings } : {}) };
 }

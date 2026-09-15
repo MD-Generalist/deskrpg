@@ -49,8 +49,16 @@ test("Dockerfile copies every source file the socket server loads at runtime", (
   const covered = (file: string) =>
     copied.some((c) => file === c || file.startsWith(c.replace(/\/?$/, "/")));
 
-  const missing = [...transitiveLocalDeps("src/server/socket-handlers.ts")]
-    .filter((f) => !covered(f))
+  // 진입점은 둘이다. server.js 자체가 require 하는 것도 이미지에 있어야 한다 —
+  // socket-handlers 만 훑던 때 server.js 에 새로 더한 require 가 그대로 빠져나가
+  // 스테이징이 MODULE_NOT_FOUND 로 재시작 루프에 빠졌다(실측).
+  const missing = [
+    ...new Set([
+      ...transitiveLocalDeps("src/server/socket-handlers.ts"),
+      ...transitiveLocalDeps("server.js"),
+    ]),
+  ]
+    .filter((f) => f !== "server.js" && !covered(f))
     .sort();
 
   assert.deepEqual(

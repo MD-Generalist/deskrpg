@@ -222,6 +222,92 @@ const en: Record<string, string> = {
   "hermes.wizard.step.identity": "② Identity",
   "hermes.wizard.step.config": "③ Config",
   "hermes.wizard.step.placement": "④ Placement",
+  "hermes.wizard.step.installingService": "Register the gateway service",
+  "hermes.wizard.step.updatingPlugin": "Update the DeskRPG plugin",
+  "hermes.wizard.step.settingTimezone": "Set the gateway time zone",
+  "hermes.wizard.error.hermesVersionUnsupported":
+    "Hermes 0.21.1 or newer is required. Run hermes update on the server, then check again.",
+  "hermes.wizard.error.pluginUpdateFailed":
+    "The DeskRPG plugin could not be updated to the new version. Ask the administrator to check host network access and write permission on the plugin directory, then check again.",
+  "hermes.wizard.error.serviceInstallFailed":
+    "The gateway could not be registered as a service. Ask the administrator to run hermes gateway install on the host and read its output, then check again.",
+  "hermes.wizard.error.timezoneInvalid":
+    "That time zone is not an IANA name. Use a valid name such as Asia/Seoul, or turn the time zone step off and continue.",
+  "hermes.wizard.error.timezoneWriteFailed":
+    "The time zone could not be written to the gateway configuration. Ask the administrator to check write permission on config.yaml, then check again. The rest of the setup can proceed without it.",
+  "hermes.wizard.review.serviceInstall":
+    "Register the gateway as a service so it keeps running after a reboot.",
+  "hermes.wizard.review.pluginUpdate": "Update the DeskRPG plugin to {version}.",
+  "hermes.wizard.review.timezone": "Set the gateway time zone to {timezone}.",
+  "hermes.wizard.review.timezoneToggle": "Send this browser's time zone to the gateway",
+  "hermes.wizard.review.pluginVersion": "Plugin version",
+  "hermes.wizard.step.installingHermes": "Install Hermes",
+  "hermes.wizard.step.creatingProfile": "Create the new profile",
+  "hermes.wizard.step.provisioningKeys": "Provision profile API credentials",
+  "hermes.wizard.step.checkingModel": "Check model sign-in",
+  "hermes.wizard.progress.deps": "Installing required tools",
+  "hermes.wizard.progress.clone": "Downloading the Hermes source",
+  "hermes.wizard.progress.venv": "Creating the Python virtual environment",
+  "hermes.wizard.progress.node_modules": "Installing Node packages",
+  "hermes.wizard.progress.skills": "Installing the default skills",
+  "hermes.wizard.progress.done": "Finishing the installation",
+  "hermes.wizard.progress.elapsed": "{seconds}s elapsed",
+  "hermes.wizard.model.recheck": "Check the model again",
+  "hermes.wizard.model.checking": "Checking model sign-in…",
+  "hermes.wizard.model.ready": "Model sign-in verified. NPCs can reply.",
+  "hermes.wizard.model.unknown":
+    "Model sign-in could not be determined. Setup itself finished. Check it on the server with hermes model.",
+  "hermes.wizard.resume.button": "Resume",
+  "hermes.wizard.resume.title": "Completed so far",
+  "hermes.wizard.resume.skipped": "Skipped",
+  "hermes.wizard.error.resumeUnavailable":
+    "This run cannot be resumed. The failed job expired or the target changed. Start again from finding installations.",
+  "hermes.wizard.error.profileNameInvalid":
+    "The profile name or description breaks the rules. Names use lowercase letters, digits, hyphens and underscores and stay under 64 characters; descriptions are a single line of at most 200 characters.",
+  "hermes.wizard.error.profileExists":
+    "A profile with that name already exists. Choose another name, or pick that profile from the list below to import it.",
+  "hermes.wizard.error.profileCreateFailed":
+    "The profile could not be created. Ask the administrator to check write permission on the host's Hermes home directory, then retry.",
+  "hermes.wizard.error.profileKeyFailed":
+    "The profile API credential could not be written. Ask the administrator to check write permission on that profile's .env, then retry. Existing credentials are never overwritten.",
+  "hermes.wizard.error.profileProvisionForbidden":
+    "This wizard cannot create a credential for that profile: it is not the listener owner, or an external secret provider manages the credential. Configure it through that provider, then check again.",
+  "hermes.wizard.error.profileVerifyFailed":
+    "The provisioned credential could not be verified against the profile API. Ask the administrator to check the gateway state and the profile allowlist, then retry.",
+  "hermes.wizard.error.hermesAlreadyInstalled":
+    "Hermes is already installed on this host. Go back to discovery and connect to it instead of installing.",
+  "hermes.wizard.error.hermesInstallForbidden":
+    "This wizard cannot install Hermes here. Remote (SSH) targets are never installed to, and an operator must enable DESKRPG_HERMES_INSTALL_ENABLED.",
+  "hermes.wizard.error.hermesInstallFailed":
+    "The Hermes installation did not finish. Ask the administrator to run the installer on the server directly and check its output, then retry.",
+  "hermes.wizard.error.hermesInstallerUnavailable":
+    "The official installer script could not be downloaded. Ask the administrator to check the server's network and proxy settings, then retry.",
+  "hermes.wizard.warn.profileNotServed":
+    "The gateway does not serve this profile yet. Add its name to the gateway's multiplex profile allowlist. This wizard never edits the allowlist.",
+  "hermes.wizard.warn.modelProviderRequired":
+    "No model provider is configured yet. Run hermes model on the server to sign in to a model. Until then NPCs cannot reply.",
+  "hermes.wizard.install.title": "Install Hermes on this server?",
+  "hermes.wizard.install.body":
+    "The official installer script is downloaded and run on the host where the DeskRPG server runs. It can take a few minutes. Model provider sign-in is not included: run hermes model on the server afterwards.",
+  "hermes.wizard.install.consent": "I agree to run the official installer script on this server.",
+  "hermes.wizard.install.unavailable":
+    "Hermes installation is disabled on this instance. Run the command below in a terminal on the machine running DeskRPG, then restart DeskRPG. The switch is deliberately not flippable from the web: only someone with access to that machine should be able to turn it on.",
+  "hermes.wizard.install.enableCommand": "deskrpg host-setup on --with-install",
+  "hermes.wizard.install.enableHint": "Run the command, then press search again on this screen.",
+  "hermes.wizard.install.done":
+    "Hermes is installed. Search again, pick this installation and continue connecting.",
+  "hermes.wizard.install.digest": "Installer script fingerprint {digest}",
+  "hermes.wizard.install.start": "Start Hermes installation",
+  "hermes.wizard.profile.newTitle": "Create a new profile",
+  "hermes.wizard.profile.nameLabel": "Profile name",
+  "hermes.wizard.profile.descriptionLabel": "Profile description",
+  "hermes.wizard.profile.descriptionHint":
+    "Kanban uses it to route work by role. One line, at most 200 characters.",
+  "hermes.wizard.profile.provisionLabel": "Provision credential",
+  "hermes.wizard.profile.provisionHint":
+    "Available only for profiles with no API credential. The wizard creates one. Existing credentials are never rotated.",
+  "gateways.onboarding.step1WizardHint":
+    "If Hermes should run on the same host as the DeskRPG server, the connection wizard below can install it for you when an operator allows it.",
   "hermes.wizard.profile.namePlaceholder": "New profile name (e.g. noah)",
   "hermes.wizard.profile.resumeHint":
     "Or pick a profile you already registered to edit its persona and settings.",
@@ -1582,6 +1668,13 @@ const en: Record<string, string> = {
   "npc.noAgent": "This NPC has no AI agent connected",
   "npc.gatewayNotConnected": "Gateway not connected",
   "npc.gatewayError": "AI Gateway error",
+  "npc.gatewayUnreachable":
+    "Cannot reach the AI gateway. Check that it is running and that the address is correct.",
+  "npc.gatewayAuthFailed":
+    "The gateway rejected the key. Check the gateway key in the channel settings.",
+  "npc.gatewayTimeout":
+    "The gateway did not respond in time. Try sending the message again in a moment.",
+  "npc.gatewayUnknownError": "The AI gateway call failed. Check the server logs for the cause.",
   "npc.unsupportedAdapter": "This NPC uses an unsupported adapter.",
   "npc.unbound": "This NPC is not yet linked to a Hermes profile.",
   "npc.hermesImageUnsupported": "This NPC cannot receive images yet.",
@@ -1746,6 +1839,26 @@ const en: Record<string, string> = {
   "gateways.listTitle": "Gateway List",
   "gateways.new": "New gateway",
   "gateways.empty": "No gateways have been registered yet.",
+  "gateways.emptyHint": "Follow the guide above to start Hermes Agent first.",
+  "gateways.onboarding.title": "No gateway yet — start here",
+  "gateways.onboarding.intro":
+    "DeskRPG does not ship an AI agent runtime. The brain behind every NPC is a Hermes Agent you host yourself; DeskRPG only connects to its gateway.",
+  "gateways.onboarding.step1Title": "1. Install Hermes Agent and start its API server",
+  "gateways.onboarding.step1Body":
+    "Follow the official repository, sign in to a model provider, then run the API server. Skip this and there is no gateway to register.",
+  "gateways.onboarding.step2Title": "2. Get the gateway address and the listener owner key",
+  "gateways.onboarding.step2Body":
+    "The form below needs the API server address (for example {example}) and an auth key.",
+  "gateways.onboarding.step2OwnerKeyWarning":
+    "Use the listener owner key (API_SERVER_KEY). A profile-only key blocks Kanban, cron and the event stream.",
+  "gateways.onboarding.step3Title": "3. Install the DeskRPG plugin for Kanban and cron",
+  "gateways.onboarding.step3Body":
+    "Run the command below on the gateway host, then restart the Hermes API server.",
+  "gateways.onboarding.step4Title": "4. The gateway can wait",
+  "gateways.onboarding.step4Body":
+    "If Hermes is not running yet, you can still create a character and a channel first, and register the gateway here once it is ready.",
+  "gateways.onboarding.step4CharacterLink": "Create a character",
+  "gateways.onboarding.step4ChannelLink": "Create a channel",
   "gateways.owner": "Owner",
   "gateways.shared": "Shared",
   "gateways.statusValid": "Validated",

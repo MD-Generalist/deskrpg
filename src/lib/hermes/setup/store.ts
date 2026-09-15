@@ -6,6 +6,8 @@ import type { SetupJob } from "./types";
 
 type StoredJob = {
   userId: string;
+  /** 잡이 어느 대상(local / ssh:<host>)의 것인지. 재개는 같은 대상에만 허용된다. 화면에 나가지 않는다. */
+  target?: string;
   pid: number;
   createdAt: number;
   cancelRequested: boolean;
@@ -53,10 +55,33 @@ export class SetupJobStore {
     }
     return record;
   }
-  create(userId: string): SetupJob {
-    const job: SetupJob = { id: randomUUID(), status: "running", steps: [] };
-    this.write({ userId, pid: process.pid, createdAt: Date.now(), cancelRequested: false, job });
+  create(userId: string, target?: string, seed?: { completed?: string[] }): SetupJob {
+    const job: SetupJob = {
+      id: randomUUID(),
+      status: "running",
+      steps: [],
+      // 재개 잡은 앞선 잡이 끝낸 단계를 물려받고 시작한다 — 되돌리지 않고 다시 하지도 않는다.
+      ...(seed?.completed?.length ? { completed: [...new Set(seed.completed)] } : {}),
+    };
+    this.write({
+      userId,
+      ...(target === undefined ? {} : { target }),
+      pid: process.pid,
+      createdAt: Date.now(),
+      cancelRequested: false,
+      job,
+    });
     return job;
+  }
+  /**
+   * 재개할 수 있는 잡만 돌려준다: 같은 사용자·같은 대상·상태 `failed`.
+   * 하나라도 어긋나면 `setup_not_found` 다 — 남의 잡의 존재 여부조차 알려 주지 않는다.
+   */
+  resumable(userId: string, id: string, target: string): SetupJob {
+    const record = this.read(userId, id);
+    if (record.target !== target || record.job.status !== "failed")
+      throw new Error("setup_not_found");
+    return record.job;
   }
   get(userId: string, id: string) {
     return this.read(userId, id).job;
