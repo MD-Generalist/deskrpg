@@ -73,6 +73,7 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
     try {
       view = new OfficeRenderer(host.current, labels.current);
       renderer.current = view;
+      view.onKanbanOpen = () => EventBus.emit("kanban:open");
     } catch (err) {
       console.error("Three.js initialization failed", err);
       // WebGL capability failure is external state discovered only during allocation.
@@ -106,6 +107,9 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
       expectedExit = false;
     };
     const meetingSpeaker = (speaker: MeetingSpeaker | null) => view.setMeetingSpeaker(speaker);
+    const meetingEntryState = (state: { status: string }) => {
+      view.setMeetingEntryState(state.status);
+    };
     const checkInside = window.setInterval(() => {
       const next = bridge.current;
       const space = next?.map().meetingSpace;
@@ -117,6 +121,7 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
     EventBus.on("meeting:presentation-enter", enterMeeting);
     EventBus.on("meeting:presentation-exit", exitMeeting);
     EventBus.on("meeting:speaker", meetingSpeaker);
+    EventBus.on("meeting:entry-state", meetingEntryState);
     EventBus.on("three:bridge-ready", ready);
     EventBus.on("chat:bubble", speech);
     // Mount ordering: the simulation starts asynchronously, but this also handles a later renderer mount.
@@ -127,6 +132,7 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
       EventBus.off("meeting:presentation-enter", enterMeeting);
       EventBus.off("meeting:presentation-exit", exitMeeting);
       EventBus.off("meeting:speaker", meetingSpeaker);
+      EventBus.off("meeting:entry-state", meetingEntryState);
       window.clearInterval(checkInside);
       expectedExit = true;
       view.dispose();

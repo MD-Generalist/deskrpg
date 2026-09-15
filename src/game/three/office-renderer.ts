@@ -1,3 +1,5 @@
+import { FurnitureHighlight } from "./furniture-highlight";
+import { buildOfficeBoard, boardApproach, BoardArrival } from "./office-kanban";
 import { isPublishingMap, addPublishingArchitecture } from "./publishing-scene";
 import { renderPublishingObject } from "./publishing-assets";
 import { isTradingMap, addTradingArchitecture, joinedPartitionSpan } from "./trading-scene";
@@ -44,7 +46,6 @@ import {
   seatSelectionHighlighted,
   type SeatAction,
 } from "./seat-action";
-import { createSeatHighlight } from "./seat-highlight";
 import { resolveOfficeLook } from "./office-looks";
 import { isOfficeEnvironmentId } from "./office-environment-theme";
 import * as T from "three";
@@ -156,12 +157,23 @@ export class OfficeRenderer {
   private mapTimer = 0;
   private bridge: OfficeBridge | null = null;
   private gesture = new PointerGesture();
+  public onKanbanOpen: () => void = () => {};
+  private board: T.Group | null = null;
+  private boardArrival = new BoardArrival();
+  private meetingEntryWalking = false;
+  private furnitureHighlight = new FurnitureHighlight();
+  private cancelBoardKey = (e: KeyboardEvent) => {
+    if (
+      ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "escape"].includes(
+        e.key.toLowerCase(),
+      )
+    )
+      this.boardArrival.cancel();
+  };
   private hoveredActorId: string | undefined;
   private selectedActorId: string | undefined;
   private hoveredSeat: SeatVisualTarget | null = null;
   private selectedSeat: SeatVisualTarget | null = null;
-  private seatHighlight: T.Group | null = null;
-  private highlightedSeatKey = "";
   private lastActors: ActorSnapshot[] = [];
   private speech = new Map<string, number>();
   private benchmark: {
@@ -264,6 +276,8 @@ export class OfficeRenderer {
     });
     this.resize.observe(host);
     document.addEventListener("visibilitychange", this.benchmarkVisibility);
+    document.addEventListener("keydown", this.cancelBoardKey);
+    this.scene.add(this.furnitureHighlight.group);
     this.tick(0);
   }
   attach(bridge: OfficeBridge) {
@@ -416,6 +430,7 @@ export class OfficeRenderer {
   }
   /** Uses the same map, renderer and actual actor snapshots as normal office mode. */
   enterMeeting(space = this.bridge?.map().meetingSpace): boolean {
+    this.cancelBoardIntent();
     if (!space) return false;
     if (this.bridge && this.lastMap !== this.bridge.mapKey()) {
       this.buildMap(this.bridge.map());
@@ -493,17 +508,32 @@ export class OfficeRenderer {
   }
   private refreshSeatHighlight() {
     const target = this.hoveredSeat ?? this.selectedSeat;
-    const key = target
-      ? `${target.owner.uuid}:${seatReservationId(target.action.x, target.action.z)}`
-      : "";
-    if (key === this.highlightedSeatKey) return;
-    if (this.seatHighlight) {
-      this.scene.remove(this.seatHighlight);
-      disposeTree(this.seatHighlight);
-    }
-    this.seatHighlight = target ? createSeatHighlight(target.owner) : null;
-    if (this.seatHighlight) this.scene.add(this.seatHighlight);
-    this.highlightedSeatKey = key;
+    this.furnitureHighlight.highlight(target?.owner ?? null);
+  }
+  cancelBoardIntent() {
+    this.boardArrival.cancel();
+    this.refreshSeatHighlight();
+  }
+  setMeetingEntryState(status: string) {
+    this.meetingEntryWalking = status === "walking";
+    if (this.meetingEntryWalking) this.cancelBoardIntent();
+  }
+  private meetingOcclusionTargets() {
+    if (!this.meetingSpace) return [];
+    const b = this.meetingSpace.bounds;
+    return this.lastActors
+      .filter(
+        (a) =>
+          a.x / 32 >= b.x &&
+          a.x / 32 <= b.x + b.width &&
+          a.y / 32 >= b.y &&
+          a.y / 32 <= b.y + b.height,
+      )
+      .map((a) => {
+        const p = pixelToWorld(a.x, a.y);
+        const seat = seatAt(this.seats, p.x, p.z, a.walking);
+        return new T.Vector3(seat?.x ?? p.x, (seat?.elevation ?? 0) + 1.2, seat?.z ?? p.z);
+      });
   }
   private seatAvailable(action: Pick<SeatAction, "x" | "z">) {
     if (!this.bridge) return false;
@@ -529,6 +559,7 @@ export class OfficeRenderer {
   };
   private pointerCancel = () => this.gesture.cancel();
   private pointerLeave = () => {
+    this.furnitureHighlight.clear();
     this.hoveredActorId = undefined;
     this.cursor.visible = false;
     this.renderer.domElement.style.cursor = "default";
@@ -539,6 +570,7 @@ export class OfficeRenderer {
     this.point(e, "move");
   };
   private point(e: PointerEvent, kind: "move" | "down") {
+    if (this.meetingEntryWalking) return;
     if (this.meetingCamera.active) {
       // OrbitControls owns meeting input; clicks never walk or edit the actual map.
       if (kind === "move" && e.buttons) {
@@ -553,6 +585,9 @@ export class OfficeRenderer {
     }
     if (!this.bridge) return;
     const editor = this.bridge.editor();
+    let hoverOwner: T.Object3D | null = null;
+    this.renderer.domElement.title = "";
+    if (kind === "down") this.boardArrival.cancel();
     const rect = this.host.getBoundingClientRect();
     this.ray.setFromCamera(
       new T.Vector2(
@@ -561,6 +596,46 @@ export class OfficeRenderer {
       ),
       this.camera,
     );
+    const editing = this.bridge.editor();
+    if (this.board && !editing.enabled && !editing.placement && !editing.spawn) {
+      const boardHit = this.ray.intersectObject(this.board, true)[0];
+      const blocker = this.ray.intersectObjects(this.world.children, true).find((h) => {
+        if (!(h.object instanceof T.Mesh)) return false;
+        for (let o: T.Object3D | null = h.object; o; o = o.parent) if (!o.visible) return false;
+        const materials = Array.isArray(h.object.material)
+          ? h.object.material
+          : [h.object.material];
+        return materials.some((m) => m.visible && !m.transparent);
+      });
+      if (boardHit && (!blocker || boardHit.distance <= blocker.distance + 0.04)) {
+        this.setHoveredSeat(null);
+        this.hoveredActorId = undefined;
+        if (kind === "down") {
+          this.setSelectedSeat(null);
+          this.selectedActorId = undefined;
+        }
+        this.furnitureHighlight.highlight(this.board);
+        this.renderer.domElement.title = "Kanban · 클릭하여 이동";
+        this.renderer.domElement.style.cursor = "pointer";
+        this.cursor.visible = false;
+        if (kind === "down" && e.button === 0) {
+          const player = this.lastActors.find((a) => a.kind === "player");
+          const goal =
+            player &&
+            boardApproach(this.bridge.map(), { x: player.x / 32, y: player.y / 32 }, (x, y) =>
+              this.bridge!.walkable(x, y),
+            );
+          if (goal) {
+            const x = (goal.x + 0.5) * 32,
+              y = (goal.y + 0.5) * 32;
+            this.bridge.pointer("down", x, y, 0, e.clientX, e.clientY, "kanban-target");
+            this.boardArrival.start(x / 32, y / 32, performance.now());
+            this.focus();
+          }
+        }
+        return;
+      }
+    }
     const hit = this.ray.intersectObjects(
       [...this.actors.values()].map((a) => a.model.root),
       true,
@@ -589,6 +664,7 @@ export class OfficeRenderer {
       const picked = pickFurnitureSeat(this.ray, this.world.children);
       const furnitureHit = picked?.hit;
       const furniture = picked?.owner;
+      if (!editing.enabled && !editing.placement && !editing.spawn) hoverOwner = furniture ?? null;
       if (furniture?.userData.seat || furniture?.userData.seats) {
         const candidates: Seat[] = furniture.userData.seats ?? [furniture.userData.seat];
         const point = furnitureHit!.point;
@@ -614,6 +690,9 @@ export class OfficeRenderer {
     }
     if (kind === "move" && actorId !== "seat-target") this.setHoveredSeat(null);
     if (kind === "down" && actorId !== "seat-target") this.setSelectedSeat(null);
+    this.furnitureHighlight.highlight(
+      this.hoveredSeat?.owner ?? this.selectedSeat?.owner ?? hoverOwner,
+    );
     this.hoveredActorId = actorId;
     if (kind === "down") this.selectedActorId = actorId;
     this.renderer.domElement.style.cursor = actorId ? "pointer" : "default";
@@ -672,6 +751,14 @@ export class OfficeRenderer {
     };
     this.setHoveredSeat(null);
     this.setSelectedSeat(null);
+    this.furnitureHighlight.clear();
+    this.boardArrival.cancel();
+    if (this.board) {
+      this.board.removeFromParent();
+      disposeTree(this.board);
+    }
+    this.board = buildOfficeBoard(map);
+    if (this.board) this.scene.add(this.board);
     disposeTree(this.world);
     const studio = isCreativeStudioMap(map);
     const tech = isTechStartupMap(map);
@@ -1288,6 +1375,7 @@ export class OfficeRenderer {
     bubble.tabIndex = 0;
     label.dataset.kind = actor.kind;
     label.addEventListener("click", () => {
+      this.boardArrival.cancel();
       this.selectedActorId = actor.id;
       const a = this.lastActors.find((a) => a.id === actor.id);
       if (a && a.kind !== "player") {
@@ -1355,6 +1443,15 @@ export class OfficeRenderer {
         )
           this.setSelectedSeat(null);
       }
+      if (
+        !this.meetingCamera.active &&
+        !this.meetingEntryWalking &&
+        this.boardArrival.update(
+          player ? { x: player.x / 32, y: player.y / 32, walking: player.walking } : undefined,
+          time,
+        )
+      )
+        this.onKanbanOpen();
       if (!this.meetingCamera.active && this.following && player) {
         const p = pixelToWorld(player.x, player.y),
           target = new T.Vector3(p.x, 0, p.z);
@@ -1368,17 +1465,7 @@ export class OfficeRenderer {
         this.lastActors,
       );
       if (this.meetingSpace) {
-        const b = this.meetingSpace.bounds;
-        const targets = this.lastActors
-          .filter(
-            (a) =>
-              a.x / 32 >= b.x &&
-              a.x / 32 <= b.x + b.width &&
-              a.y / 32 >= b.y &&
-              a.y / 32 <= b.y + b.height,
-          )
-          .map((a) => new T.Vector3(a.x / 32, 1.2, a.y / 32));
-        this.meetingWalls.update(this.camera.position, targets);
+        this.meetingWalls.update(this.camera.position, this.meetingOcclusionTargets());
       }
       const labelAnchors: ActorLabelAnchor[] = [];
       const viewportWidth = this.host.clientWidth;
@@ -1590,6 +1677,9 @@ export class OfficeRenderer {
     this.meetingCamera.dispose();
     this.onMeetingCameraChange = undefined;
     this.cancelBenchmark("Renderer disposed");
+    document.removeEventListener("keydown", this.cancelBoardKey);
+    this.boardArrival.cancel();
+    this.furnitureHighlight.dispose();
     document.removeEventListener("visibilitychange", this.benchmarkVisibility);
     this.setHoveredSeat(null);
     this.setSelectedSeat(null);

@@ -4,6 +4,8 @@ import * as T from "three";
 import { MeetingCamera } from "./meeting-camera";
 import { OfficeRenderer } from "./office-renderer";
 import { MeetingWallOcclusion } from "./meeting-wall-occlusion";
+import { FurnitureHighlight } from "./furniture-highlight";
+import { BoardArrival } from "./office-kanban";
 import type { MeetingSpace } from "../meeting-space";
 import type { ActorSnapshot, MapSnapshot } from "./bridge";
 
@@ -99,6 +101,8 @@ function rebuildingRenderer() {
     controls: { ...controls, update() {} },
     meetingCamera: meeting,
     meetingWalls,
+    furnitureHighlight: new FurnitureHighlight(),
+    boardArrival: new BoardArrival(),
     meetingWallObjects: [],
     world,
     scene,
@@ -523,6 +527,8 @@ test("renderer enter/rotate/resume/exit restores follow state and wall materials
     following: true,
     meetingWalls,
     meetingWallObjects: [wall],
+    furnitureHighlight: new FurnitureHighlight(),
+    boardArrival: new BoardArrival(),
     host,
     cursor: { visible: true },
     meetingRightInset: 0,

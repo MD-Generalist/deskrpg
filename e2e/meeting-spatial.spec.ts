@@ -58,6 +58,54 @@ async function currentOfficialTemplate(api: APIRequestContext, kind: string) {
   });
   return template;
 }
+async function annexTemplate(api: APIRequestContext, kind: string) {
+  const cols = 14,
+    rows = 12;
+  const { template } = await post(api, "/api/map-templates", {
+    name: `meeting-annex-${kind}-${Date.now()}`,
+    cols,
+    rows,
+    spawnCol: 1,
+    spawnRow: 1,
+    ...(kind === "tiled"
+      ? {
+          tiledJson: {
+            tiledversion: "1.10.2",
+            orientation: "orthogonal",
+            renderorder: "right-down",
+            width: cols,
+            height: rows,
+            tilewidth: 32,
+            tileheight: 32,
+            tilesets: [],
+            layers: [
+              {
+                id: 1,
+                name: "Floor",
+                type: "tilelayer",
+                width: cols,
+                height: rows,
+                data: Array(cols * rows).fill(0),
+              },
+              {
+                id: 2,
+                name: "Objects",
+                type: "objectgroup",
+                objects: [{ id: 1, type: "desk", x: 96, y: 96 }],
+              },
+            ],
+          },
+        }
+      : {
+          layers: {
+            floor: Array.from({ length: rows }, () => Array(cols).fill(1)),
+            walls: Array.from({ length: rows }, () => Array(cols).fill(0)),
+          },
+          objects: [{ id: "kept-desk", type: "desk", col: 3, row: 3 }],
+        }),
+  });
+  return template;
+}
 async function waitForOfficeReady(page: Page, frames: Frame[]) {
   // GameScene.canMovePlayer requires all three server snapshots, even with zero NPCs.
   await expect
@@ -74,7 +122,9 @@ async function waitForOfficeReady(page: Page, frames: Frame[]) {
     .toBeTruthy();
   await expect
     .poll(() => waitForGameLoop(page, 0), {
-      timeout: 15_000,
+      // Latest GLTF layouts compile shaders after socket hydration; retain the FPS
+      // threshold but allow cold assets to finish before testing movement.
+      timeout: 60_000,
       message: "Visible canvas must reach 10 rAF frames/second after server hydration",
     })
     .toBeGreaterThanOrEqual(10);
@@ -246,7 +296,6 @@ test("seven map meeting smoke: official environments and legacy/Tiled annex", as
       password: process.env.DESKRPG_E2E_PASSWORD,
     });
     const { groups } = await (await admin.get("/api/groups")).json();
-    const { templates } = await (await admin.get("/api/map-templates")).json();
     const nickname = `meeting-matrix-${suffix}`;
     await post(user, "/api/auth/register", {
       loginId: nickname,
@@ -277,10 +326,7 @@ test("seven map meeting smoke: official environments and legacy/Tiled annex", as
         await test.step(kind, async () => {
           const template = OFFICE_ENVIRONMENTS.some((entry) => entry.id === kind)
             ? await currentOfficialTemplate(admin, kind)
-            : templates.find(
-                (entry: { name: string; tags: string | null }) =>
-                  entry.name.toLowerCase() === `회의검증 ${kind}`,
-              );
+            : await annexTemplate(admin, kind);
           expect(template, `existing ${kind} template required`).toBeTruthy();
           const { channel } = await post(admin, "/api/channels", {
             name: `meeting-matrix-${kind}-${suffix}`,

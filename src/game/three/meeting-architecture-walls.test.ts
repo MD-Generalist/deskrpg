@@ -4,12 +4,99 @@ import { readFile } from "node:fs/promises";
 import * as T from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { addCreativeStudioArchitecture } from "./creative-studio-architecture";
-import { finalizeStudioScene } from "./creative-studio-renderer";
+import { addCreativeStudioScene, finalizeStudioScene } from "./creative-studio-renderer";
+import { buildOfficeEnvironment } from "./office-environments";
+import { tiledSnapshot } from "./tiled-preview";
+import { furnitureSeats, seatAt } from "./seating";
+import { OfficeRenderer } from "./office-renderer";
 import { batchCoplanarGlass, batchStaticFurniture } from "./static-batching";
 import { MeetingWallOcclusion } from "./meeting-wall-occlusion";
 import { addPublishingArchitecture } from "./publishing-scene";
 import { addTradingArchitecture } from "./trading-scene";
 import type { MapSnapshot } from "./bridge";
+
+test("실제 스튜디오 전체 GLTF 로드 뒤 낮은 시선의 착석 캐릭터를 가리는 벽을 투명화한다", async () => {
+  const root = new T.Group();
+  const map = tiledSnapshot(buildOfficeEnvironment("agency"));
+  const scene = addCreativeStudioScene(root, map, {
+    load: async (url) => {
+      const bytes = await readFile(`public${url}`);
+      const loader = new GLTFLoader();
+      loader.register(() => ({
+        name: "EXT_texture_webp",
+        loadTexture: async () => new T.Texture(),
+      }));
+      return (
+        await loader.parseAsync(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+          "",
+        )
+      ).scene;
+    },
+    loadTexture: async () => new T.Texture(),
+  })!;
+  await scene.userData.assetReady;
+  scene.updateMatrixWorld(true);
+  const occlusion = new MeetingWallOcclusion();
+  occlusion.enter(scene.userData.meetingWalls);
+  for (const camera of [new T.Vector3(37, 1.3, 20), new T.Vector3(50, 1.3, 5)]) {
+    const target = new T.Vector3(37, 1.2, 5);
+    const ray = new T.Raycaster(
+      camera,
+      target.clone().sub(camera).normalize(),
+      0,
+      camera.distanceTo(target),
+    );
+    const wallHits = ray.intersectObjects(scene.userData.meetingWalls, true);
+    assert.ok(wallHits.length > 0, `회의실 경계 관통: ${camera.toArray()}`);
+    occlusion.update(camera, [target]);
+    for (const hit of wallHits) {
+      assert.ok(hit.object instanceof T.Mesh);
+      for (const material of Array.isArray(hit.object.material)
+        ? hit.object.material
+        : [hit.object.material]) {
+        assert.ok(
+          material.transparent && material.opacity <= 0.12,
+          `벽이 불투명: ${hit.object.parent?.name}`,
+        );
+      }
+    }
+  }
+  // 브라우저에서 확인한 충돌 좌표와 실제 착석 모델 위치가 약 0.85m 다르다.
+  const actor = { x: 1135.530705, y: 111.77254, walking: false };
+  const seats = furnitureSeats(map.objects);
+  const pose = seatAt(seats, actor.x / 32, actor.y / 32, false)!;
+  assert.equal(pose.x, 36 + 1 / 3);
+  const renderer = Object.assign(Object.create(OfficeRenderer.prototype), {
+    lastActors: [actor],
+    seats,
+    meetingSpace: { bounds: { x: 32, y: 0, width: 10, height: 11 } },
+  }) as { meetingOcclusionTargets(): T.Vector3[] };
+  const targets = renderer.meetingOcclusionTargets();
+  const camera = new T.Vector3(61.5932573, 5.0902789, -11.3680473);
+  occlusion.update(camera, targets);
+  const actualTarget = new T.Vector3(pose.x, (pose.elevation ?? 0) + 1.2, pose.z);
+  const ray = new T.Raycaster(
+    camera,
+    actualTarget.clone().sub(camera).normalize(),
+    0,
+    camera.distanceTo(actualTarget),
+  );
+  const eastWall = scene.getObjectByName("meeting-wall-plane:x:41.8800")!;
+  const eastHits = ray.intersectObject(eastWall, true);
+  assert.ok(eastHits.length > 0, "실제 착석 캐릭터 시선은 흰 동벽을 관통한다");
+  for (const hit of eastHits) {
+    assert.ok(hit.object instanceof T.Mesh);
+    for (const material of Array.isArray(hit.object.material)
+      ? hit.object.material
+      : [hit.object.material])
+      assert.ok(
+        material.transparent && material.opacity <= 0.12,
+        "착석 시각 앵커 앞 동벽도 투명화해야 한다",
+      );
+  }
+  occlusion.dispose();
+});
 
 test("회의벽은 준비 완료와 정적 배칭 이후에도 개별 차폐와 복원이 가능하다", () => {
   const root = new T.Group();
