@@ -477,7 +477,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
           npc.spatialTarget = null;
           npc.phase = distance(npc, { x: npc.homeX, y: npc.homeY }) <= 2 ? "idle" : "ambient";
           npc.ownerSocketId = null;
-          if (!target.seatId) releaseActor(state, npc.npcId);
+          if (npc.phase === "idle") state.excursions.delete(npc.npcId);
+          else state.excursions.add(npc.npcId);
+          if (!target.seatId || npc.phase === "idle") releaseActor(state, npc.npcId);
+          else {
+            // 검증된 복귀 도착 후에는 일반 좌석 예약으로 넘긴다.
+            reservation.spatial = false;
+            reservation.expires = now() + 60_000;
+          }
         }
         changed(state, npc);
         broadcast(channelId, state);
