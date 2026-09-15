@@ -6,6 +6,7 @@ coverage/
 test-results/
 playwright-report/
 blob-report/
+.dryforge/
 
 # 생성물 — 손으로 고치지 않으므로 포매팅 대상이 아니다
 public/third-party-licenses.html
