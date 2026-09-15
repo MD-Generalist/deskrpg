@@ -321,6 +321,8 @@ export function addCreativeStudioScene(
     } else scene.userData.unhandledObjects.push(object);
   }
   for (const d of creativeStudioDecorations()) {
+    // 벽 게시판은 공통 상호작용 모듈에서 렌더링한다.
+    if (d.object.type === "studio_art_wall") continue;
     const host = new T.Group();
     const [x, y, z] = d.position;
     host.position.set(x, y, z);

@@ -19,7 +19,7 @@ assert.ok(["trading", "agency", "tech", "executive", "publishing"].includes(envi
  import {furnitureSeats} from './src/game/three/seating';
  const map=tiledSnapshot(buildOfficeEnvironment('${environment}'));
  const r:any=new OfficeRenderer(document.getElementById('view')!,document.getElementById('labels')!);
- Object.assign(window,{r,map,seats:furnitureSeats(map.objects)});
+ Object.assign(window,{r,map,seats:furnitureSeats(map.objects),sofaSeats:furnitureSeats(map.objects.filter(o=>o.type.includes("sofa")))});
  r.attach({map:()=>map,mapKey:()=> 'tech-review',actors:()=>[],setPresentation:()=>{},editor:()=>({enabled:false}),walkable:()=>true,pointer:()=>{},save:async()=>false,edit:()=>{}} as any);
  r.overview(map.cols,map.rows);r.buildMap(map);r.lastMap='tech-review';
  `,
@@ -112,6 +112,69 @@ assert.ok(["trading", "agency", "tech", "executive", "publishing"].includes(envi
         "base64",
       ),
     );
+    if (process.argv.includes("--interactions")) {
+      const interaction = await page.evaluate(() => {
+        const r = window.r;
+        const project = (x, y, z) => {
+          const p = r.board.position.clone().set(x, y, z).project(r.camera);
+          const rect = r.host.getBoundingClientRect();
+          return new PointerEvent("pointermove", {
+            clientX: rect.left + ((p.x + 1) * rect.width) / 2,
+            clientY: rect.top + ((1 - p.y) * rect.height) / 2,
+            button: 0,
+          });
+        };
+        let seatHover = false,
+          sofaHover = false;
+        for (const seat of window.seats) {
+          r.point(project(seat.x, 0.65, seat.z), "move");
+          if (r.furnitureHighlight.group.visible) {
+            seatHover = true;
+            if (window.sofaSeats.some((s) => s.x === seat.x && s.z === seat.z)) sofaHover = true;
+          }
+        }
+        const actor = {
+          id: "interaction-test",
+          kind: "player",
+          name: "test",
+          x: window.map.cols * 16,
+          y: (window.map.rows - 3) * 32,
+          direction: "up",
+          walking: false,
+        };
+        // 접근 검사 시작점은 실제 연결된 바닥에서 선택한다.
+        const first = window.seats[0];
+        actor.x = (first.anchorX ?? first.x) * 32;
+        actor.y = (first.anchorZ ?? first.z) * 32;
+        let request = null,
+          opened = 0;
+        r.lastActors = [actor];
+        r.bridge.actors = () => [actor];
+        r.bridge.pointer = (kind, x, y) => {
+          if (kind === "down") request = { x, y };
+        };
+        r.onKanbanOpen = () => opened++;
+        const p = r.board.position;
+        r.point(project(p.x, p.y, p.z + 0.14), "move");
+        const boardHover = r.furnitureHighlight.group.visible;
+        r.point(project(p.x, p.y, p.z + 0.14), "down");
+        const before = opened;
+        if (request) {
+          actor.x = request.x;
+          actor.y = request.y;
+          r.tick(performance.now());
+          r.tick(performance.now() + 16);
+        }
+        return { seatHover, sofaHover, boardHover, requested: !!request, before, opened };
+      });
+      console.log({ interaction });
+      assert.ok(interaction.seatHover);
+      assert.ok(interaction.sofaHover);
+      assert.ok(interaction.boardHover);
+      assert.ok(interaction.requested);
+      assert.equal(interaction.before, 0);
+      assert.equal(interaction.opened, 1);
+    }
     const report = await page.evaluate(() => ({
       metrics: window.r.readMetrics(),
       seats: window.seats.length,

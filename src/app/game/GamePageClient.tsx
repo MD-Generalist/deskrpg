@@ -196,6 +196,13 @@ function GamePageInner() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   // 칸반 보드(T8). `kanbanRefreshTick` 은 `kanban:event` 마다 오르고, 모달이 디바운스해 재조회한다.
   const [showKanban, setShowKanban] = useState(false);
+  useEffect(() => {
+    const open = () => setShowKanban(true);
+    EventBus.on("kanban:open", open);
+    return () => {
+      EventBus.off("kanban:open", open);
+    };
+  }, []);
   const [kanbanRefreshTick, setKanbanRefreshTick] = useState(0);
   // 방 알림의 "카드 열기"(R29) — 모달이 마운트될 때 이 카드의 상세를 편다.
   const [kanbanInitialTaskId, setKanbanInitialTaskId] = useState<string | null>(null);

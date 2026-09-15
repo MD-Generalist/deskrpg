@@ -1,3 +1,5 @@
+import { FurnitureHighlight } from "./furniture-highlight";
+import { buildOfficeBoard, boardApproach, BoardArrival } from "./office-kanban";
 import { isPublishingMap, addPublishingArchitecture } from "./publishing-scene";
 import { renderPublishingObject } from "./publishing-assets";
 import { isTradingMap, addTradingArchitecture, joinedPartitionSpan } from "./trading-scene";
@@ -130,6 +132,18 @@ export class OfficeRenderer {
   private mapTimer = 0;
   private bridge: OfficeBridge | null = null;
   private gesture = new PointerGesture();
+  public onKanbanOpen: () => void = () => {};
+  private board: T.Group | null = null;
+  private boardArrival = new BoardArrival();
+  private furnitureHighlight = new FurnitureHighlight();
+  private cancelBoardKey = (e: KeyboardEvent) => {
+    if (
+      ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "escape"].includes(
+        e.key.toLowerCase(),
+      )
+    )
+      this.boardArrival.cancel();
+  };
   private hoveredActorId: string | undefined;
   private selectedActorId: string | undefined;
   private lastActors: ActorSnapshot[] = [];
@@ -230,6 +244,8 @@ export class OfficeRenderer {
     });
     this.resize.observe(host);
     document.addEventListener("visibilitychange", this.benchmarkVisibility);
+    document.addEventListener("keydown", this.cancelBoardKey);
+    this.scene.add(this.furnitureHighlight.group);
     this.tick(0);
   }
   attach(bridge: OfficeBridge) {
@@ -390,6 +406,7 @@ export class OfficeRenderer {
   };
   private pointerCancel = () => this.gesture.cancel();
   private pointerLeave = () => {
+    this.furnitureHighlight.clear();
     this.hoveredActorId = undefined;
     this.cursor.visible = false;
     this.renderer.domElement.style.cursor = "default";
@@ -400,6 +417,9 @@ export class OfficeRenderer {
   };
   private point(e: PointerEvent, kind: "move" | "down") {
     if (!this.bridge) return;
+    let hoverOwner: T.Object3D | null = null;
+    this.renderer.domElement.title = "";
+    if (kind === "down") this.boardArrival.cancel();
     const rect = this.host.getBoundingClientRect();
     this.ray.setFromCamera(
       new T.Vector2(
@@ -408,6 +428,40 @@ export class OfficeRenderer {
       ),
       this.camera,
     );
+    const editing = this.bridge.editor();
+    if (this.board && !editing.enabled && !editing.placement && !editing.spawn) {
+      const boardHit = this.ray.intersectObject(this.board, true)[0];
+      const blocker = this.ray.intersectObjects(this.world.children, true).find((h) => {
+        if (!(h.object instanceof T.Mesh)) return false;
+        for (let o: T.Object3D | null = h.object; o; o = o.parent) if (!o.visible) return false;
+        const materials = Array.isArray(h.object.material)
+          ? h.object.material
+          : [h.object.material];
+        return materials.some((m) => m.visible && !m.transparent);
+      });
+      if (boardHit && (!blocker || boardHit.distance <= blocker.distance + 0.04)) {
+        this.furnitureHighlight.highlight(this.board);
+        this.renderer.domElement.title = "Kanban · 클릭하여 이동";
+        this.renderer.domElement.style.cursor = "pointer";
+        this.cursor.visible = false;
+        if (kind === "down" && e.button === 0) {
+          const player = this.lastActors.find((a) => a.kind === "player");
+          const goal =
+            player &&
+            boardApproach(this.bridge.map(), { x: player.x / 32, y: player.y / 32 }, (x, y) =>
+              this.bridge!.walkable(x, y),
+            );
+          if (goal) {
+            const x = (goal.x + 0.5) * 32,
+              y = (goal.y + 0.5) * 32;
+            this.bridge.pointer("down", x, y, 0, e.clientX, e.clientY, "kanban-target");
+            this.boardArrival.start(x / 32, y / 32, performance.now());
+            this.focus();
+          }
+        }
+        return;
+      }
+    }
     const hit = this.ray.intersectObjects(
       [...this.actors.values()].map((a) => a.model.root),
       true,
@@ -430,6 +484,7 @@ export class OfficeRenderer {
       const picked = pickFurnitureSeat(this.ray, this.world.children);
       const furnitureHit = picked?.hit;
       const furniture = picked?.owner;
+      if (!editing.enabled && !editing.placement && !editing.spawn) hoverOwner = furniture ?? null;
       if (furniture?.userData.seat || furniture?.userData.seats) {
         const candidates: Seat[] = furniture.userData.seats ?? [furniture.userData.seat];
         const free = candidates.filter(
@@ -458,6 +513,7 @@ export class OfficeRenderer {
         } else if (kind === "down") return;
       }
     }
+    this.furnitureHighlight.highlight(hoverOwner);
     this.hoveredActorId = actorId;
     if (kind === "down") this.selectedActorId = actorId;
     this.renderer.domElement.style.cursor = actorId ? "pointer" : "default";
@@ -492,6 +548,14 @@ export class OfficeRenderer {
     return this.renderer.domElement.toDataURL("image/webp", 0.9);
   }
   private buildMap(map: MapSnapshot) {
+    this.furnitureHighlight.clear();
+    this.boardArrival.cancel();
+    if (this.board) {
+      this.board.removeFromParent();
+      disposeTree(this.board);
+    }
+    this.board = buildOfficeBoard(map);
+    if (this.board) this.scene.add(this.board);
     disposeTree(this.world);
     const studio = isCreativeStudioMap(map);
     const tech = isTechStartupMap(map);
@@ -1066,6 +1130,7 @@ export class OfficeRenderer {
     bubble.tabIndex = 0;
     label.dataset.kind = actor.kind;
     label.addEventListener("click", () => {
+      this.boardArrival.cancel();
       this.selectedActorId = actor.id;
       const a = this.lastActors.find((a) => a.id === actor.id);
       if (a && a.kind !== "player") {
@@ -1119,6 +1184,13 @@ export class OfficeRenderer {
           this.speech.delete(id);
         }
       const player = this.lastActors.find((a) => a.kind === "player");
+      if (
+        this.boardArrival.update(
+          player ? { x: player.x / 32, y: player.y / 32, walking: player.walking } : undefined,
+          time,
+        )
+      )
+        this.onKanbanOpen();
       if (this.following && player) {
         const p = pixelToWorld(player.x, player.y),
           target = new T.Vector3(p.x, 0, p.z);
@@ -1334,6 +1406,9 @@ export class OfficeRenderer {
   };
   dispose() {
     this.cancelBenchmark("Renderer disposed");
+    document.removeEventListener("keydown", this.cancelBoardKey);
+    this.boardArrival.cancel();
+    this.furnitureHighlight.dispose();
     document.removeEventListener("visibilitychange", this.benchmarkVisibility);
     this.disposed = true;
     cancelAnimationFrame(this.frame);
