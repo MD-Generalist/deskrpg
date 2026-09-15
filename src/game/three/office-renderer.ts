@@ -171,6 +171,17 @@ export class OfficeRenderer {
       this.boardArrival.cancel();
   };
   private hoveredActorId: string | undefined;
+  /**
+   * 호버 피킹은 프레임당 한 번만, 카메라를 잡고 있지 않을 때만 한다.
+   *
+   * `point()` 는 좌석을 찾느라 월드 전체를 삼각형 단위로 레이캐스트한다
+   * (`pickFurnitureSeat(this.ray, this.world.children)`). 그것을 `pointermove` 마다 돌리면
+   * 카메라를 끄는 동안 렌더 루프와 같은 스레드에서 초당 수십 번 돈다 — 실측(1680×1000,
+   * M2 Max)에서 그 구간 CPU 의 약 59% 가 three 의 레이캐스팅이었고 프레임 p95 가
+   * 9.9ms → 66.6ms 로 뛰었다. 마지막 좌표만 모았다가 tick 에서 한 번 처리한다.
+   */
+  private pendingMove: PointerEvent | null = null;
+  private cameraInteracting = false;
   private selectedActorId: string | undefined;
   private hoveredSeat: SeatVisualTarget | null = null;
   private selectedSeat: SeatVisualTarget | null = null;
@@ -239,6 +250,8 @@ export class OfficeRenderer {
     // A short left click walks; dragging pans without issuing a movement command.
     this.controls.mouseButtons = { LEFT: T.MOUSE.PAN, MIDDLE: T.MOUSE.PAN, RIGHT: T.MOUSE.ROTATE };
     this.controls.addEventListener("start", this.stopFollowing);
+    this.controls.addEventListener("start", this.cameraInteractionStart);
+    this.controls.addEventListener("end", this.cameraInteractionEnd);
     this.meetingCamera = new MeetingCamera(this.camera, this.controls, {
       reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     });
@@ -557,7 +570,21 @@ export class OfficeRenderer {
     if (this.renderer.domElement.hasPointerCapture(e.pointerId))
       this.renderer.domElement.releasePointerCapture(e.pointerId);
   };
-  private pointerCancel = () => this.gesture.cancel();
+  private pointerCancel = () => {
+    this.pendingMove = null;
+    this.gesture.cancel();
+  };
+  /** 카메라를 잡는 동안에는 호버 판정을 쉰다 — 커서 아래 대상이 매 프레임 바뀌어 의미가 없다. */
+  private cameraInteractionStart = () => {
+    this.cameraInteracting = true;
+    this.pendingMove = null;
+    this.hoveredActorId = undefined;
+    this.setHoveredSeat(null);
+    this.renderer.domElement.style.cursor = "default";
+  };
+  private cameraInteractionEnd = () => {
+    this.cameraInteracting = false;
+  };
   private pointerLeave = () => {
     this.furnitureHighlight.clear();
     this.hoveredActorId = undefined;
@@ -566,8 +593,10 @@ export class OfficeRenderer {
     this.setHoveredSeat(null);
   };
   private pointerMove = (e: PointerEvent) => {
+    // 제스처(클릭이냐 드래그냐)는 이벤트마다 봐야 정확하고, 값이 싸다.
     this.gesture.move(e);
-    this.point(e, "move");
+    if (this.cameraInteracting) return;
+    this.pendingMove = e;
   };
   private point(e: PointerEvent, kind: "move" | "down") {
     if (this.meetingEntryWalking) return;
@@ -1408,6 +1437,11 @@ export class OfficeRenderer {
       this.sampleIntervals = [];
       return;
     }
+    if (this.pendingMove) {
+      const move = this.pendingMove;
+      this.pendingMove = null;
+      this.point(move, "move");
+    }
     if (this.bridge) {
       if (time >= this.mapTimer) {
         const fingerprint = this.bridge.mapKey();
@@ -1688,6 +1722,9 @@ export class OfficeRenderer {
     this.resize.disconnect();
     this.bridge?.setPresentation(false);
     this.controls.dispose();
+    this.controls.removeEventListener("start", this.cameraInteractionStart);
+    this.controls.removeEventListener("end", this.cameraInteractionEnd);
+    this.pendingMove = null;
     this.renderer.domElement.removeEventListener("pointerdown", this.pointerDown);
     this.renderer.domElement.removeEventListener("pointerup", this.pointerUp, true);
     this.renderer.domElement.removeEventListener("pointermove", this.pointerMove);
