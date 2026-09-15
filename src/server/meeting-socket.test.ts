@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { MeetingSpatialState } from "../lib/meeting-discussion-state";
 import { createMeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 
 import {
@@ -59,6 +60,158 @@ function createFakeIo(calls: RecordedCall[]) {
     },
   };
 }
+
+test("availability exposes only channel and active, without joining or changing meeting state", async () => {
+  for (const phase of [null, "idle", "assembling", "ready", "returning", "blocked"] as const) {
+    for (const hasNpc of [false, true]) {
+      for (const discussionActive of [false, true]) {
+        const calls: RecordedCall[] = [];
+        const socket = createFakeSocket("s1", calls);
+        const meetingRooms = new Map<string, { participants: Set<string>; messages: [] }>();
+        const state: MeetingSpatialState | null = phase && {
+          channelId: "a",
+          spaceId: "private",
+          generation: 1,
+          phase,
+          participants: [
+            {
+              actorId: "secret-id",
+              kind: hasNpc ? "npc" : "player",
+              state: "walking",
+              seatId: null,
+              target: null,
+            },
+          ],
+          failure: null,
+        };
+        const spatial = new Proxy(
+          {
+            snapshot: (channelId: string) => {
+              assert.equal(channelId, "a");
+              return state;
+            },
+          },
+          {
+            get(target, prop) {
+              assert.equal(
+                prop,
+                "snapshot",
+                "availability must never mutate spatial state or reserve seats",
+              );
+              return target.snapshot;
+            },
+          },
+        ) as ReturnType<typeof createMeetingSpatialCoordinator>;
+        const before = structuredClone(state);
+        registerMeetingSocketHandlers({
+          io: createFakeIo(calls),
+          socket,
+          deps: {
+            meetingRooms,
+            spatial,
+            players: new Map([["s1", { mapId: "a" }]]),
+            lastChatTime: new Map(),
+            chatCooldownMs: 0,
+            user: { userId: "u1" },
+            getParticipationAccess: async (channelId, userId) => {
+              assert.equal(channelId, "a");
+              assert.equal(userId, "u1");
+              return { access: { allowed: true } };
+            },
+            getDiscussionState: () =>
+              discussionActive
+                ? {
+                    topic: "secret",
+                    npcs: [],
+                    mode: "manual",
+                    initiatorId: "u1",
+                    initiatorSocketId: "other",
+                    rawStreams: { npc: "private content" },
+                  }
+                : null,
+          },
+        });
+        await socket.trigger("meeting:availability", { channelId: "a" });
+        assert.deepEqual(calls, [
+          {
+            type: "emit",
+            target: "self",
+            event: "meeting:availability",
+            payload: {
+              channelId: "a",
+              active: discussionActive || (hasNpc && (phase === "assembling" || phase === "ready")),
+            },
+          },
+        ]);
+        assert.equal(meetingRooms.size, 0);
+        assert.deepEqual(state, before);
+      }
+    }
+  }
+});
+
+test("availability denies wrong channel, missing player/access, forbidden access, and channel moves during access await", async () => {
+  for (const scenario of [
+    "wrong-channel",
+    "missing-player",
+    "missing-access",
+    "forbidden",
+    "not-found",
+    "moved",
+    "access-error",
+  ] as const) {
+    const calls: RecordedCall[] = [];
+    const socket = createFakeSocket("s1", calls);
+    const players = new Map(
+      scenario === "missing-player"
+        ? []
+        : [["s1", { mapId: scenario === "wrong-channel" ? "b" : "a" }]],
+    );
+    registerMeetingSocketHandlers({
+      io: createFakeIo(calls),
+      socket,
+      deps: {
+        meetingRooms: new Map(),
+        players,
+        lastChatTime: new Map(),
+        chatCooldownMs: 0,
+        user: { userId: "u1" },
+        getParticipationAccess:
+          scenario === "missing-access"
+            ? undefined
+            : async () => {
+                await Promise.resolve();
+                if (scenario === "moved") players.set("s1", { mapId: "b" });
+                if (scenario === "access-error") throw new Error("access failed");
+                return scenario === "not-found"
+                  ? null
+                  : { access: { allowed: scenario !== "forbidden" } };
+              },
+        getDiscussionState: () => {
+          assert.fail("unauthorized lookup");
+        },
+      },
+    });
+    await socket.trigger("meeting:availability", { channelId: "a" });
+    assert.deepEqual(
+      calls,
+      [
+        {
+          type: "emit",
+          target: "self",
+          event: "channel:access-denied",
+          payload: {
+            channelId: "a",
+            action: "meeting:availability",
+            reason: "forbidden",
+            errorCode: "forbidden",
+          },
+        },
+      ],
+      scenario,
+    );
+  }
+});
 
 test("좌석 예약 await 중 회의실을 나가면 구독과 예약을 모두 되돌린다", async () => {
   const calls: RecordedCall[] = [];
