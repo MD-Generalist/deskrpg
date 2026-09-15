@@ -164,8 +164,11 @@ test("isolated humans walk, share seats and leave independently on the original 
     const seats = latestSpatial(0)!.participants.map((p) => p.seatId);
     expect(new Set(seats).size).toBe(2);
     expect(seats.every(Boolean)).toBeTruthy();
-    await expect(a.getByRole("button", { name: /^(확대|Zoom in)$/ })).toBeDisabled();
-    await expect(a.getByRole("button", { name: /^(축소|Zoom out)$/ })).toBeDisabled();
+    for (const name of [/^(확대|Zoom in)$/, /^(축소|Zoom out)$/]) {
+      const zoom = a.getByRole("button", { name, includeHidden: true });
+      await expect(zoom).toBeDisabled();
+      await expect(zoom).toBeHidden();
+    }
     const sharedMessage = `shared-meeting-${suffix}`;
     await speak(a, sharedMessage);
     await expect(
