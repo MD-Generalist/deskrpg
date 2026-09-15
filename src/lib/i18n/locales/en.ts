@@ -1872,6 +1872,7 @@ const en: Record<string, string> = {
   "settings.loadingGateway": "Loading gateway settings...",
   "settings.gatewayUrlPlaceholder": "http://127.0.0.1:8642",
   "settings.gatewayTokenPlaceholder": "Bearer token",
+  "settings.gatewayTokenSaved": "Saved — enter a new key to replace it",
   "settings.gatewaySource": "Connection Source",
   "settings.gatewayUseSaved": "Saved gateway",
   "settings.gatewayUseCustom": "Direct credentials",

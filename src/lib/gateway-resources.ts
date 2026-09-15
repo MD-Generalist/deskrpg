@@ -84,6 +84,18 @@ function buildDefaultGatewayDisplayName(baseUrl: string) {
   }
 }
 
+/** 키를 그대로 두는 저장에서 쓴다 — 주소만으로 내 게이트웨이를 찾는다. */
+async function findOwnedGatewayByBaseUrl(ownerUserId: string, baseUrl: string) {
+  const [row] = await db
+    .select()
+    .from(gatewayResources)
+    .where(
+      and(eq(gatewayResources.ownerUserId, ownerUserId), eq(gatewayResources.baseUrl, baseUrl)),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 async function findMatchingOwnedGateway(ownerUserId: string, baseUrl: string, token: string) {
   const rows = await db
     .select()
@@ -103,23 +115,30 @@ async function findMatchingOwnedGateway(ownerUserId: string, baseUrl: string, to
   );
 }
 
+/**
+ * `token` 을 주지 않으면(=undefined) 이미 저장된 키를 그대로 둔다. 화면이 기존 키를 돌려받지
+ * 않게 된 뒤로, URL 만 고치는 저장이 키를 빈 값으로 덮어쓰면 안 되기 때문이다.
+ */
 export async function upsertOwnedGatewayResource(input: {
   ownerUserId: string;
   baseUrl: string;
-  token: string;
+  token?: string;
   displayName?: string | null;
 }) {
   const baseUrl = normalizeGatewayBaseUrl(input.baseUrl);
-  const token = input.token.trim();
+  const keepExistingToken = input.token === undefined;
+  const token = (input.token ?? "").trim();
   const displayName = input.displayName?.trim() || buildDefaultGatewayDisplayName(baseUrl);
-  const existing = await findMatchingOwnedGateway(input.ownerUserId, baseUrl, token);
+  const existing = keepExistingToken
+    ? await findOwnedGatewayByBaseUrl(input.ownerUserId, baseUrl)
+    : await findMatchingOwnedGateway(input.ownerUserId, baseUrl, token);
 
   if (existing) {
     const [updated] = await db
       .update(gatewayResources)
       .set({
         displayName,
-        tokenEncrypted: encryptGatewayToken(token),
+        ...(keepExistingToken ? {} : { tokenEncrypted: encryptGatewayToken(token) }),
         updatedAt: nowForDb(),
       })
       .where(eq(gatewayResources.id, existing.id))

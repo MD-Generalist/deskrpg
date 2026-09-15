@@ -65,6 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const probed = await probeDeskrpgPluginWithInfo({
       fetchImpl: transportFetch,
       baseUrl: accessible.resource.baseUrl,
+      // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
       token: decryptGatewayToken(accessible.resource.tokenEncrypted),
     });
     const plugin = probed.capability;
