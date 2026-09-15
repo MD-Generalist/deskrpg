@@ -53,7 +53,9 @@ function getDeskRpgTemplateUploadDir(templateId, options = {}) {
 function isPlaceholderSecret(value) {
   const normalized = value.trim().replace(/^["']|["']$/g, "");
   if (normalized.length < 24) return true;
-  return /^(change|replace|set|your|my|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(normalized);
+  return /^(change|replace|set|your|my|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(
+    normalized,
+  );
 }
 
 function ensureDeskRpgHome(options = {}) {
