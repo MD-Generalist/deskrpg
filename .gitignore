@@ -92,6 +92,7 @@ __pycache__/
 !/deploy/
 /deploy/*
 !/deploy/hostinger/
+!/deploy/office/
 deploy/hostinger/catalog-submission.md
 
 # Development meta — never published

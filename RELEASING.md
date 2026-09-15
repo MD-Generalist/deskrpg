@@ -29,7 +29,9 @@ The only repository publishing secret is `NPM_TOKEN`. GHCR uses the workflow's `
 
 ## Transition and verification
 
-The already-published Docker Hub `dandacompany/deskrpg:2026.9.19` remains a legacy image. Existing Compose defaults and the Hostinger button currently point to that working Docker artifact; they will be changed to GHCR only when the first GHCR public version has passed anonymous pull checks. Do not point a default at a GHCR tag that does not yet exist.
+The migration to GHCR is complete as of `2026.9.20`: that tag and `:latest` passed the anonymous pull check, so every Compose default, the Hostinger button and both READMEs now point at `ghcr.io/dandacompany/deskrpg`. Docker Hub `dandacompany/deskrpg` is frozen at `2026.9.19` and is never published to again. The rule that produced this order still stands: never point a default at a GHCR tag that does not yet exist — bump defaults only after the release run has published and verified the tag.
+
+The Hostinger `compose_url` now tracks `refs/heads/master` instead of a release tag. A tag-pinned URL always lagged one release — the button had to name the tag before the tag existed, so its compose could never contain the image that release published. Reproducibility comes from the image pin *inside* the compose, not from the URL, so nothing is lost and the button no longer needs a per-release bump.
 
 After the next release, verify:
 

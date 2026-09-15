@@ -1,0 +1,14 @@
+#!/command/with-contenv sh
+# 사무실 서비스. 게이트웨이와 같은 컨테이너에서 같은 수명주기로 돈다.
+set -e
+
+HOME_DIR="${DESKRPG_HOME:-/opt/data/deskrpg}"
+PORT="${DESKRPG_PORT:-3000}"
+
+# 게이트웨이 주소는 이 컨테이너 안이다. 사용자가 굳이 다른 곳을 가리키면 그 값을 존중한다.
+export DESKRPG_HOME="$HOME_DIR"
+
+cd "$HOME_DIR" 2>/dev/null || cd /
+
+# deskrpg start 는 포그라운드로 돈다 — s6 가 그대로 감독한다.
+exec deskrpg start -p "$PORT"

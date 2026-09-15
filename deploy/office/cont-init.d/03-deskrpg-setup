@@ -1,0 +1,75 @@
+#!/command/with-contenv sh
+# 사무실과 두뇌를 서로에게 소개하는 자리. 서비스가 뜨기 전에 한 번 돈다.
+#
+# 여기서 하는 일은 넷이다. 모두 없을 때만 만들고, 사람이 정한 값은 덮어쓰지 않는다.
+#   1) DeskRPG 런타임(~/.deskrpg 대신 /opt/data/deskrpg)을 만들고 비밀키를 채운다
+#   2) Hermes API 서버를 켜고 키를 만든다 — DeskRPG 가 붙을 문이다
+#   3) DeskRPG 플러그인을 깔고 활성화한다 — 칸반·크론·사건 스트림이 이걸로 돈다
+#   4) 원하면 둘 다 최신으로 올린다
+set -e
+
+log() { echo "[deskrpg-setup] $*"; }
+
+HOME_DIR="${DESKRPG_HOME:-/opt/data/deskrpg}"
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+PLUGIN_SOURCE="https://github.com/dandacompany/deskrpg-hermes-plugin"
+
+# ── 1. 최신으로 올리기 ────────────────────────────────────────────────
+case "${DESKRPG_AUTO_UPDATE:-true}" in
+    1|true|TRUE|True|yes|YES|Yes)
+        log "최신 버전으로 올리는 중 (끄려면 DESKRPG_AUTO_UPDATE=false)"
+        # 네트워크가 없거나 레지스트리가 흔들려도 컨테이너는 떠야 한다 — 실패는 경고로만 남기고,
+        # 멈춘 갱신이 기동을 영원히 붙잡지 못하도록 시간을 끊는다.
+        #
+        # 버전이 같으면 설치하지 않는다. DeskRPG 는 네이티브 SQLite 모듈을 소스에서 컴파일하므로
+        # 무조건 재설치하면 재시작마다 몇 분을 태운다(실측: 컨테이너 안에서 node-gyp 가 sqlite3 를 빌드).
+        current="$(deskrpg version 2>/dev/null || echo unknown)"
+        latest="$(timeout 60 npm view deskrpg version 2>/dev/null || echo '')"
+        if [ -n "$latest" ] && [ "$latest" != "$current" ]; then
+            log "DeskRPG $current → $latest"
+            timeout "${DESKRPG_UPDATE_TIMEOUT:-900}" npm install -g "deskrpg@$latest" >/dev/null 2>&1 \
+                || log "경고: DeskRPG 갱신을 건너뛴다 — $current 로 계속한다"
+        else
+            log "DeskRPG $current — 이미 최신"
+        fi
+        timeout "${DESKRPG_UPDATE_TIMEOUT:-900}" hermes update >/dev/null 2>&1 \
+            || log "경고: Hermes 갱신을 건너뛴다 — 이미지에 담긴 버전으로 계속한다"
+        ;;
+    *) log "자동 갱신 꺼짐" ;;
+esac
+log "DeskRPG $(deskrpg version 2>/dev/null || echo '?') · Hermes $(hermes --version 2>/dev/null | head -1 || echo '?')"
+
+# ── 2. DeskRPG 런타임 ────────────────────────────────────────────────
+mkdir -p "$HOME_DIR"
+if [ ! -f "$HOME_DIR/.env.local" ]; then
+    log "런타임을 처음 만든다: $HOME_DIR"
+    DESKRPG_HOME="$HOME_DIR" deskrpg init >/dev/null 2>&1 || log "경고: deskrpg init 실패"
+fi
+# 컨테이너 환경변수로 들어온 값이 있으면 런타임 파일에 반영한다(빈 값은 무시).
+if [ -n "${JWT_SECRET:-}" ]; then
+    grep -q "^JWT_SECRET=${JWT_SECRET}$" "$HOME_DIR/.env.local" 2>/dev/null || {
+        sed -i '/^JWT_SECRET=/d' "$HOME_DIR/.env.local" 2>/dev/null || true
+        printf 'JWT_SECRET=%s\n' "$JWT_SECRET" >> "$HOME_DIR/.env.local"
+    }
+fi
+
+# ── 3. Hermes API 서버 ───────────────────────────────────────────────
+hermes config set API_SERVER_ENABLED true >/dev/null 2>&1 || true
+# 같은 컨테이너 안에서만 부른다 — 이 포트를 밖으로 열지 않는다.
+hermes config set API_SERVER_HOST 127.0.0.1 >/dev/null 2>&1 || true
+if ! grep -q "^API_SERVER_KEY=..*" "$HERMES_HOME/.env" 2>/dev/null; then
+    KEY="${HERMES_API_KEY:-$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
+    printf '\nAPI_SERVER_KEY=%s\n' "$KEY" >> "$HERMES_HOME/.env"
+    log "게이트웨이 키를 새로 만들었다 (값은 찍지 않는다)"
+fi
+
+# ── 4. DeskRPG 플러그인 ──────────────────────────────────────────────
+if [ ! -d "$HERMES_HOME/plugins/deskrpg" ]; then
+    log "칸반·크론 플러그인을 설치하는 중"
+    hermes plugins install "$PLUGIN_SOURCE" >/dev/null 2>&1 || log "경고: 플러그인 설치 실패 — 대화는 되지만 칸반·크론은 꺼진다"
+fi
+if [ -d "$HERMES_HOME/plugins/deskrpg" ]; then
+    hermes plugins enable deskrpg >/dev/null 2>&1 || true
+fi
+
+log "준비 완료 — 사무실 3000, 소켓 3001, 대시보드 9119"

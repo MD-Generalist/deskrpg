@@ -27,7 +27,7 @@ SMOKE=0
 TEST_BUILD=0
 TEST_KEEP=0
 TEST_PROJECT="deskrpg-tc-test"
-TEST_IMAGE="${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}"
+TEST_IMAGE="${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}"
 TEST_ENV_FILE="deploy/.env.production"
 TEST_APP_PORT="${DESKRPG_TEST_APP_PORT:-3104}"
 TEST_ADMIN_PORT="${DESKRPG_TEST_ADMIN_PORT:-3105}"
@@ -157,7 +157,7 @@ if [[ "$TASK" == "pre-deploy" ]]; then
   require_env_value "$TEST_ENV_FILE" JWT_SECRET
   require_env_value "$TEST_ENV_FILE" POSTGRES_PASSWORD
 
-  IMAGE="${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}"
+  IMAGE="${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}"
   echo "Checking image availability: $IMAGE"
   docker pull "$IMAGE"
 

@@ -4,7 +4,7 @@
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG home screen" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.20/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/deploy/hostinger/docker-compose.yml)
 
 Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
 
@@ -109,7 +109,7 @@ Before the first run, open `.env.docker` and set:
 
 DeskRPG will open on `http://localhost:3102`.
 
-During the registry transition the default image remains the already-published Docker Hub `dandacompany/deskrpg:latest` (release `2026.9.19`). New public images will be published to GHCR only: `ghcr.io/dandacompany/deskrpg:<release-version>`. After the first GHCR release is publicly pullable, change `DESKRPG_IMAGE` in `.env.docker` to that pinned GHCR version; the Compose default will be switched then.
+Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.20` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
 
 If you prefer the explicit file path version, you can run:
 
@@ -127,7 +127,7 @@ JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
 
 DeskRPG will open on `http://localhost:3102`.
 
-To pin the existing legacy image, add `DESKRPG_IMAGE=dandacompany/deskrpg:2026.9.19` before the command. Future releases use `ghcr.io/dandacompany/deskrpg:<release-version>` after that version is published.
+To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.20` before the command.
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
 

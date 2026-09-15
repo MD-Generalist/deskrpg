@@ -17,7 +17,7 @@ services:
       retries: 5
 
   deskrpg-app:
-    image: ${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}
+    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
     restart: unless-stopped
     ports:
       - "${DESKRPG_TEST_APP_PORT:-3104}:3000"

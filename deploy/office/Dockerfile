@@ -1,0 +1,35 @@
+# DeskRPG Office — 사무실(DeskRPG)과 두뇌(Hermes Agent)를 한 컨테이너에 담는다.
+#
+# DeskRPG 는 Hermes 없이는 아무 일도 하지 못한다. 둘을 따로 배포하면 사용자는 주소·키·버전을
+# 손으로 맞춰야 하고, 그 자리에서 대부분 막힌다. 그래서 공식 Hermes 이미지를 바탕에 깔고
+# DeskRPG 를 얹어, 게이트웨이·대시보드·사무실이 같은 수명주기로 뜨고 지게 만든다.
+#
+# 공식 이미지에 이미 있는 것을 다시 만들지 않는다: s6 감독 트리, dashboard 서비스,
+# Node 26, HERMES_HOME(/opt/data) 볼륨. 우리는 서비스 하나(deskrpg)와 초기화 훅 하나를 더한다.
+#
+# amd64 로 빌드할 것. 공식 latest 의 arm64 변종은 2026-06 버전(0.21.1 미만)이라 플러그인이
+# 로드되지 않는다(실측). VPS 는 amd64 이므로 문제되지 않지만, Apple Silicon 에서 그냥 빌드하면
+# 낡은 바탕을 깔게 된다.
+FROM --platform=linux/amd64 nousresearch/hermes-agent:latest
+
+LABEL org.opencontainers.image.title="DeskRPG Office" \
+      org.opencontainers.image.description="DeskRPG + Hermes Agent in one container (gateway, dashboard, virtual office)" \
+      org.opencontainers.image.source="https://github.com/dandacompany/deskrpg" \
+      org.opencontainers.image.licenses="MIT"
+
+# 빌드 시점의 최신 DeskRPG. 컨테이너가 뜰 때 다시 최신으로 올릴지는 DESKRPG_AUTO_UPDATE 가 정한다.
+RUN npm install -g deskrpg@latest && npm cache clean --force
+
+# 사무실 서비스와 초기화 훅
+COPY s6-rc.d/deskrpg /etc/s6-overlay/s6-rc.d/deskrpg
+COPY cont-init.d/03-deskrpg-setup /etc/cont-init.d/03-deskrpg-setup
+RUN chmod +x /etc/s6-overlay/s6-rc.d/deskrpg/run /etc/s6-overlay/s6-rc.d/deskrpg/finish \
+      /etc/cont-init.d/03-deskrpg-setup \
+ && touch /etc/s6-overlay/s6-rc.d/user/contents.d/deskrpg
+
+# 3000 사무실(HTTP) · 3001 소켓 · 8642 Hermes API · 9119 대시보드
+EXPOSE 3000 3001 9119
+
+ENV DESKRPG_HOME=/opt/data/deskrpg \
+    DESKRPG_AUTO_UPDATE=true \
+    HERMES_DASHBOARD=true

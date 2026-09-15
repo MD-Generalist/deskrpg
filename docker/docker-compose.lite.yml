@@ -2,7 +2,7 @@
 # Lightweight single-container deployment. Ideal for self-hosting without PostgreSQL.
 services:
   deskrpg-app:
-    image: ${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}
+    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
     container_name: deskrpg-app
     restart: unless-stopped
     ports:
