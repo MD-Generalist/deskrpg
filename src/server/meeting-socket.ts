@@ -189,115 +189,148 @@ export function registerMeetingSocketHandlers({
     socket.emit("meeting:availability", { channelId, active });
   });
 
-  socket.on("meeting:join", async (payload: unknown) => {
+  const joinGenerations = new Map<string, number>();
+  let disconnected = false;
+  let admissionQueue = Promise.resolve();
+  const enqueueAdmission = (operation: () => Promise<void>) => {
+    const pending = admissionQueue.then(operation);
+    admissionQueue = pending.catch(() => {});
+    return pending;
+  };
+  const invalidateJoin = (channelId: string) => {
+    const generation = (joinGenerations.get(channelId) ?? 0) + 1;
+    joinGenerations.set(channelId, generation);
+    return generation;
+  };
+  socket.on("disconnect", () => {
+    disconnected = true;
+  });
+
+  socket.on("meeting:join", (payload: unknown) => {
     const input = (payload ?? {}) as {
       channelId?: string;
       characterName?: string;
       appearance?: unknown;
     };
     const { channelId, characterName, appearance } = input;
-    if (!channelId) return;
+    if (typeof channelId !== "string" || !channelId) return;
+    const generation = invalidateJoin(channelId);
+    const current = () =>
+      !disconnected &&
+      joinGenerations.get(channelId) === generation &&
+      players.get(socket.id)?.mapId === channelId;
+    // Serialize admission and release so an old rollback cannot release a newer seat.
+    return enqueueAdmission(async () => {
+      if (!current()) return;
 
-    if (getParticipationAccess) {
-      const accessResult = await getParticipationAccess(channelId, user.userId);
-      if (!accessResult) {
-        emitForbidden(socket, channelId, "meeting:join");
-        return;
-      }
-
-      if (!accessResult.access.allowed) {
-        if (emitChannelAccessDenied) {
-          emitChannelAccessDenied(socket, {
-            channelId,
-            action: "meeting:join",
-            reason: accessResult.access.reason as Parameters<
-              NonNullable<typeof emitChannelAccessDenied>
-            >[1]["reason"],
-          });
-        } else {
+      if (getParticipationAccess) {
+        const accessResult = await getParticipationAccess(channelId, user.userId);
+        if (!accessResult) {
           emitForbidden(socket, channelId, "meeting:join");
+          return;
         }
+
+        if (!accessResult.access.allowed) {
+          if (emitChannelAccessDenied) {
+            emitChannelAccessDenied(socket, {
+              channelId,
+              action: "meeting:join",
+              reason: accessResult.access.reason as Parameters<
+                NonNullable<typeof emitChannelAccessDenied>
+              >[1]["reason"],
+            });
+          } else {
+            emitForbidden(socket, channelId, "meeting:join");
+          }
+          return;
+        }
+      }
+
+      if (!current()) return;
+      if (
+        deps.isInMeetingSpace &&
+        !(await deps.isInMeetingSpace(channelId, socket.id).catch(() => false))
+      ) {
+        socket.emit("meeting:error", { error: "not_in_meeting_space" });
         return;
       }
-    }
+      if (!current()) return;
+      const room = ensureMeetingRoom(meetingRooms, channelId);
+      room.participants.add(socket.id);
+      socket.join(getMeetingRoomId(channelId));
+      await deps.spatial?.joinPlayer(channelId, user.userId, socket.id);
+      if (
+        !current() ||
+        !room.participants.has(socket.id) ||
+        (deps.isInMeetingSpace &&
+          !(await deps.isInMeetingSpace(channelId, socket.id).catch(() => false))) ||
+        !current()
+      ) {
+        room.participants.delete(socket.id);
+        socket.leave(getMeetingRoomId(channelId));
+        await deps.spatial?.leavePlayer(channelId, user.userId, socket.id);
+        return;
+      }
 
-    if (
-      deps.isInMeetingSpace &&
-      !(await deps.isInMeetingSpace(channelId, socket.id).catch(() => false))
-    ) {
-      socket.emit("meeting:error", { error: "not_in_meeting_space" });
-      return;
-    }
-    const room = ensureMeetingRoom(meetingRooms, channelId);
-    room.participants.add(socket.id);
-    socket.join(getMeetingRoomId(channelId));
-    await deps.spatial?.joinPlayer(channelId, user.userId, socket.id);
-    if (
-      !room.participants.has(socket.id) ||
-      (deps.isInMeetingSpace &&
-        !(await deps.isInMeetingSpace(channelId, socket.id).catch(() => false)))
-    ) {
-      room.participants.delete(socket.id);
-      socket.leave(getMeetingRoomId(channelId));
-      await deps.spatial?.leavePlayer(channelId, user.userId, socket.id);
-      return;
-    }
+      const existingPlayer = players.get(socket.id);
+      const displayName =
+        existingPlayer?.characterName || characterName || user.nickname || "Unknown";
+      const displayAppearance = existingPlayer?.appearance ?? appearance ?? null;
 
-    const existingPlayer = players.get(socket.id);
-    const displayName =
-      existingPlayer?.characterName || characterName || user.nickname || "Unknown";
-    const displayAppearance = existingPlayer?.appearance ?? appearance ?? null;
+      if (!existingPlayer && storeMeetingFallbackPlayer) {
+        players.set(socket.id, {
+          id: socket.id,
+          userId: user.userId,
+          characterName: displayName,
+          appearance: displayAppearance,
+          mapId: channelId,
+          x: 0,
+          y: 0,
+          direction: "down",
+          animation: "idle",
+        });
+      }
 
-    if (!existingPlayer && storeMeetingFallbackPlayer) {
-      players.set(socket.id, {
+      const participantList = Array.from(room.participants)
+        .map((participantId) => {
+          const participant = players.get(participantId);
+          if (!participant) return null;
+          return {
+            id: participantId,
+            userId: participantId === socket.id ? user.userId : participant.userId,
+            name: participant.characterName || "Unknown",
+            appearance: participant.appearance,
+          };
+        })
+        .filter(Boolean);
+
+      socket.emit("meeting:state", {
+        participants: participantList,
+        messages: room.messages.slice(-50),
+        discussion: deps.getDiscussionState?.(channelId) ?? null,
+        spatial: deps.spatial?.snapshot(channelId) ?? null,
+        isInitiator: deps.getDiscussionState?.(channelId)?.initiatorId === user.userId,
+      });
+
+      socket.to(getMeetingRoomId(channelId)).emit("meeting:participant-joined", {
         id: socket.id,
         userId: user.userId,
-        characterName: displayName,
+        name: displayName,
         appearance: displayAppearance,
-        mapId: channelId,
-        x: 0,
-        y: 0,
-        direction: "down",
-        animation: "idle",
       });
-    }
-
-    const participantList = Array.from(room.participants)
-      .map((participantId) => {
-        const participant = players.get(participantId);
-        if (!participant) return null;
-        return {
-          id: participantId,
-          userId: participantId === socket.id ? user.userId : participant.userId,
-          name: participant.characterName || "Unknown",
-          appearance: participant.appearance,
-        };
-      })
-      .filter(Boolean);
-
-    socket.emit("meeting:state", {
-      participants: participantList,
-      messages: room.messages.slice(-50),
-      discussion: deps.getDiscussionState?.(channelId) ?? null,
-      spatial: deps.spatial?.snapshot(channelId) ?? null,
-      isInitiator: deps.getDiscussionState?.(channelId)?.initiatorId === user.userId,
-    });
-
-    socket.to(getMeetingRoomId(channelId)).emit("meeting:participant-joined", {
-      id: socket.id,
-      userId: user.userId,
-      name: displayName,
-      appearance: displayAppearance,
     });
   });
 
   socket.on("meeting:leave", (payload: unknown) => {
     const { channelId } = (payload ?? {}) as { channelId?: string };
-    if (!channelId) return;
+    if (typeof channelId !== "string" || !channelId) return;
+    invalidateJoin(channelId);
     const room = meetingRooms.get(channelId);
     if (!room || !room.participants.has(socket.id)) return;
     room.participants.delete(socket.id);
-    void deps.spatial?.leavePlayer(channelId, user.userId, socket.id);
+    void enqueueAdmission(async () => {
+      await deps.spatial?.leavePlayer(channelId, user.userId, socket.id);
+    });
     socket.leave(getMeetingRoomId(channelId));
     socket.to(getMeetingRoomId(channelId)).emit("meeting:participant-left", {
       id: socket.id,

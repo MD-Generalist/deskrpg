@@ -258,6 +258,160 @@ test("좌석 예약 await 중 회의실을 나가면 구독과 예약을 모두 
   assert.equal(spatial.snapshot("a")?.participants.length, 0);
 });
 
+test("pending meeting admission is cancelled by leave, disconnect, or channel movement at each await", async () => {
+  for (const pauseAt of ["access", "space", "reserve", "space-after-reserve"] as const) {
+    for (const cancel of ["leave", "disconnect", "move"] as const) {
+      const calls: RecordedCall[] = [];
+      const socket = createFakeSocket("s1", calls);
+      const players = new Map([["s1", { mapId: "a" }]]);
+      const meetingRooms = new Map<string, { participants: Set<string>; messages: [] }>();
+      let resume!: () => void;
+      let paused!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      const reached = new Promise<void>((resolve) => {
+        paused = resolve;
+      });
+      const pause = async (stage: typeof pauseAt) => {
+        if (stage === pauseAt) {
+          paused();
+          await gate;
+        }
+      };
+      const reserved = new Set<string>();
+      let spaceChecks = 0;
+      const spatial = createMeetingSpatialCoordinator({
+        layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "seat" }] }),
+        capture: async () => null,
+        reserve: async (_channelId, id) => {
+          await pause("reserve");
+          reserved.add(id);
+          return true;
+        },
+        move: async () => true,
+        release: async (_channelId, id) => {
+          reserved.delete(id);
+        },
+        returnTarget: async (_c, _a, p) => p,
+        publish: () => {},
+      });
+      registerMeetingSocketHandlers({
+        io: createFakeIo(calls),
+        socket,
+        deps: {
+          meetingRooms,
+          players,
+          spatial,
+          lastChatTime: new Map(),
+          chatCooldownMs: 0,
+          user: { userId: "u1" },
+          getParticipationAccess: async () => {
+            await pause("access");
+            return { access: { allowed: true } };
+          },
+          isInMeetingSpace: async () => {
+            await pause(++spaceChecks === 1 ? "space" : "space-after-reserve");
+            return true;
+          },
+        },
+      });
+      const joining = socket.trigger("meeting:join", { channelId: "a" });
+      await reached;
+      if (cancel === "move") players.set("s1", { mapId: "b" });
+      else
+        await socket.trigger(cancel === "leave" ? "meeting:leave" : "disconnect", {
+          channelId: "a",
+        });
+      resume();
+      await joining;
+      assert.equal(
+        meetingRooms.get("a")?.participants.has("s1") ?? false,
+        false,
+        `${pauseAt}/${cancel}`,
+      );
+      assert.equal(reserved.size, 0, `${pauseAt}/${cancel}: reservation leak`);
+      assert.equal(spatial.snapshot("a")?.participants.length ?? 0, 0);
+      assert.equal(
+        calls.some(
+          (call) => call.event === "meeting:state" || call.event === "meeting:participant-joined",
+        ),
+        false,
+      );
+    }
+  }
+});
+
+test("leave then rejoin during seat reservation keeps only the newest admission and duplicate joins reuse its seat", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("s1", calls);
+  const meetingRooms = new Map<string, { participants: Set<string>; messages: [] }>();
+  let resume!: () => void;
+  let paused!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  const reached = new Promise<void>((resolve) => {
+    paused = resolve;
+  });
+  const reserved = new Set<string>();
+  let reservations = 0;
+  const spatial = createMeetingSpatialCoordinator({
+    layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "seat" }] }),
+    capture: async () => null,
+    reserve: async (_channelId, id) => {
+      reservations++;
+      if (reservations === 1) {
+        paused();
+        await gate;
+      }
+      reserved.add(id);
+      return true;
+    },
+    move: async () => true,
+    release: async (_channelId, id) => {
+      reserved.delete(id);
+    },
+    returnTarget: async (_c, _a, p) => p,
+    publish: () => {},
+  });
+  registerMeetingSocketHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      meetingRooms,
+      players: new Map([["s1", { mapId: "a" }]]),
+      spatial,
+      lastChatTime: new Map(),
+      chatCooldownMs: 0,
+      user: { userId: "u1" },
+      getParticipationAccess: async () => ({ access: { allowed: true } }),
+      isInMeetingSpace: async () => true,
+    },
+  });
+  const first = socket.trigger("meeting:join", { channelId: "a" });
+  await reached;
+  const superseded = socket.trigger("meeting:join", { channelId: "a" });
+  await socket.trigger("meeting:leave", { channelId: "a" });
+  await socket.trigger("meeting:leave", { channelId: "a" });
+  const latest = socket.trigger("meeting:join", { channelId: "a" });
+  resume();
+  await Promise.all([first, superseded, latest]);
+  assert.equal(calls.filter((call) => call.event === "meeting:state").length, 1);
+  assert.equal(reservations, 2);
+  assert.deepEqual([...reserved], ["s1"]);
+  assert.deepEqual([...meetingRooms.get("a")!.participants], ["s1"]);
+  assert.equal(spatial.snapshot("a")?.participants.length, 1);
+  await socket.trigger("meeting:join", { channelId: "a" });
+  assert.equal(reservations, 2, "duplicate admission reuses the existing seat");
+  await socket.trigger("meeting:leave", { channelId: "a" });
+  await socket.trigger("meeting:leave", { channelId: "a" });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(reserved.size, 0);
+  assert.equal(meetingRooms.get("a")?.participants.size, 0);
+  assert.equal(spatial.snapshot("a")?.participants.length, 0);
+});
+
 test("registerMeetingSocketHandlers joins the room and emits meeting state", async () => {
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("socket-1", calls);
@@ -273,6 +427,7 @@ test("registerMeetingSocketHandlers joins the room and emits meeting state", asy
           {
             characterName: "Dante",
             appearance: { sprite: "demo" },
+            mapId: "channel-1",
           },
         ],
       ]),
@@ -412,7 +567,7 @@ test("authorized late observer and reconnected initiator receive the resolved di
       socket,
       deps: {
         meetingRooms: new Map(),
-        players: new Map(),
+        players: new Map([[socket.id, { mapId: "channel-1" }]]),
         lastChatTime: new Map(),
         chatCooldownMs: 2000,
         user: { userId },
