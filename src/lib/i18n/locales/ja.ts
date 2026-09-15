@@ -35,6 +35,7 @@ const ja: Record<string, string> = {
   "common.logout": "ログアウト",
   "common.language": "言語",
   "common.copy": "コピー",
+  "common.copied": "コピーしました",
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -2235,6 +2236,8 @@ const ja: Record<string, string> = {
   "auth.heroSubtitle": "Hermes AIの仲間と働く、自分だけの3Dオフィス",
   "auth.getStarted": "はじめる",
   "auth.setupDescription": "管理者アカウントを作成して始めましょう",
+  "auth.setupAdminNotice":
+    "最初に作るアカウントがこのサーバーの管理者になります。他の人がアクセスできる場所なら、アカウントを作った後は登録を閉じてください。",
   "channels.backToChannels": "チャンネル一覧に戻る",
   "chat.returnNpcToOrigin": "NPCを元の位置に戻す",
   "chat.options": "チャットオプション",

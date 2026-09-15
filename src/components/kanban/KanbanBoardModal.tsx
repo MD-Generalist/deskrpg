@@ -26,6 +26,7 @@ import {
   type BoardBlocker,
   type TaskFormValues,
 } from "./kanban-view-model";
+import { CopyCommand } from "../CopyCommand";
 
 interface KanbanBoardModalProps {
   channelId: string;
@@ -424,9 +425,7 @@ function Blocker({ blocker, onRetry }: { blocker: BoardBlocker; onRetry: () => v
           <p className="text-text-secondary mb-2">
             {t("kanban.blocker.upgradeBody", { minVersion: blocker.minVersion })}
           </p>
-          <pre className="rounded-md bg-bg-deep p-3 text-[11px] whitespace-pre-wrap break-all text-text">
-            {blocker.command}
-          </pre>
+          <CopyCommand command={blocker.command} />
         </>
       )}
       {blocker.kind === "gateway_not_bound" && (

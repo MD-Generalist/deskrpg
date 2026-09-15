@@ -8,6 +8,7 @@ import { useT } from "@/lib/i18n";
 import { HERMES_AGENT_REPO_URL, PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 import Toast from "@/components/ui/Toast";
 import { quickStartGamePath } from "@/lib/quick-start";
+import { CopyCommand } from "../CopyCommand";
 
 /**
  * 게이트웨이가 **하나도 없는** 사용자에게 보여주는 온보딩 안내.
@@ -93,9 +94,7 @@ export default function GatewayOnboardingGuide() {
         <li>
           <p className="text-sm font-semibold">{t("gateways.onboarding.step3Title")}</p>
           <p className="mt-1 text-sm text-text-muted">{t("gateways.onboarding.step3Body")}</p>
-          <pre className="mt-2 overflow-x-auto rounded-lg bg-bg px-3 py-2 text-xs text-text">
-            <code>{PLUGIN_INSTALL_COMMAND}</code>
-          </pre>
+          <CopyCommand command={PLUGIN_INSTALL_COMMAND} className="mt-2" />
         </li>
 
         <li>

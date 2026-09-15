@@ -34,6 +34,7 @@ const ko: Record<string, string> = {
   "common.logout": "로그아웃",
   "common.language": "언어",
   "common.copy": "복사",
+  "common.copied": "복사됨",
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -2221,6 +2222,8 @@ const ko: Record<string, string> = {
   "auth.heroSubtitle": "Hermes AI 동료와 함께 일하는, 나만의 3D 오피스",
   "auth.getStarted": "시작하기",
   "auth.setupDescription": "관리자 계정을 만들어 시작하세요",
+  "auth.setupAdminNotice":
+    "지금 만드는 첫 계정이 이 서버의 관리자가 됩니다. 여러 사람이 접속할 수 있는 곳이라면, 계정을 만든 뒤 가입을 닫으세요.",
   "channels.backToChannels": "채널 목록으로 돌아가기",
   "chat.returnNpcToOrigin": "NPC를 원래 자리로 복귀",
   "chat.options": "채팅 옵션",

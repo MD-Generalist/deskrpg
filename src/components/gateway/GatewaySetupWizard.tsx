@@ -19,6 +19,7 @@ import {
   isSetupWarningBlocking,
 } from "./setup-copy";
 import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
+import { CopyCommand } from "../CopyCommand";
 
 const API = "/api/gateways/setup";
 // 고정 커밋·버전은 손으로 베끼지 않는다 — pin.ts 가 정본이고 pin.test.ts 가 호스트 스크립트와 대조한다.
@@ -595,9 +596,10 @@ export default function GatewaySetupWizard({
                 ) : (
                   <div className="rounded-lg border border-border bg-bg p-4 text-sm text-text-muted">
                     <p>{t("hermes.wizard.install.unavailable")}</p>
-                    <pre className="mt-3 overflow-x-auto rounded bg-surface-raised p-3 text-xs text-text">
-                      {t("hermes.wizard.install.enableCommand")}
-                    </pre>
+                    <CopyCommand
+                      command={t("hermes.wizard.install.enableCommand")}
+                      className="mt-3"
+                    />
                     <p className="mt-2">{t("hermes.wizard.install.enableHint")}</p>
                   </div>
                 ))}

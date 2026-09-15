@@ -34,6 +34,7 @@ const zh: Record<string, string> = {
   "common.logout": "退出登录",
   "common.language": "语言",
   "common.copy": "复制",
+  "common.copied": "已复制",
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -2184,6 +2185,8 @@ const zh: Record<string, string> = {
   "auth.heroSubtitle": "与 Hermes AI 同事一起工作的专属 3D 办公室",
   "auth.getStarted": "开始使用",
   "auth.setupDescription": "创建管理员账户以开始使用",
+  "auth.setupAdminNotice":
+    "您创建的第一个账号将成为此服务器的管理员。如果其他人可以访问此实例，请在创建账号后关闭注册。",
   "channels.backToChannels": "返回频道列表",
   "chat.returnNpcToOrigin": "让 NPC 返回原位",
   "chat.options": "聊天选项",
