@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveSeatAction, seatReservationId } from "./seat-action";
+import {
+  resolveSeatAction,
+  resolveSeatIntent,
+  seatReservationId,
+  seatSelectionHighlighted,
+} from "./seat-action";
 
 const seats = [
   { x: 4, z: 3, anchorX: 4.5, anchorZ: 4.5, direction: "down" },
@@ -40,4 +45,18 @@ test("seat availability is checked at the navigation anchor", () => {
 
 test("world anchors match the server's pixel reservation IDs", () => {
   assert.equal(seatReservationId(4.5, 7.5), "144:240");
+});
+
+test("a selected seat stays highlighted while its movement intent is active", () => {
+  assert.equal(seatSelectionHighlighted("144:240", "144:240", 3, true), true);
+});
+
+test("a selected seat stops highlighting on arrival or rejected intent", () => {
+  assert.equal(seatSelectionHighlighted("144:240", "144:240", 0.2, false), false);
+  assert.equal(seatSelectionHighlighted("144:240", null, 3, false), false);
+});
+
+test("a newly clicked seat path supersedes the seat the player is leaving", () => {
+  assert.equal(resolveSeatIntent({ x: 8, y: 5, seat: true }, "144:240"), "272:176");
+  assert.equal(resolveSeatIntent({ x: 8, y: 5, seat: false }, "144:240"), "144:240");
 });

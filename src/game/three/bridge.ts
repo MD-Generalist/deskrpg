@@ -66,6 +66,8 @@ export interface OfficeBridge {
   walkable(col: number, row: number): boolean;
   /** Includes authoritative reservations that may not have reached the chair yet. */
   seatAvailable?(x: number, z: number): boolean;
+  /** Server-pixel reservation ID for the player's current or approaching seat. */
+  seatIntent?(): string | null;
   setPresentation(active: boolean): void;
 }
 export function pixelToWorld(x: number, y: number) {

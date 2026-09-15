@@ -171,47 +171,6 @@
 .office-actor-labels {
   pointer-events: none;
 }
-.office-seat-action {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 4;
-  pointer-events: auto;
-  min-height: 36px;
-  padding: 8px 13px;
-  border: 1px solid #aebfa8;
-  border-radius: 8px;
-  background: #fffdf5;
-  color: #344b3c;
-  box-shadow: 0 6px 18px #26372c2b;
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.office-seat-action::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  border-right: 1px solid #aebfa8;
-  border-bottom: 1px solid #aebfa8;
-  background: #fffdf5;
-  transform: translate(-50%, -50%) rotate(45deg);
-}
-.office-seat-action:hover {
-  border-color: #708b72;
-  background: #edf3e8;
-}
-.office-seat-action:focus-visible {
-  outline: 2px solid #55775d;
-  outline-offset: 2px;
-}
-.office-seat-action[hidden] {
-  display: none;
-}
 .office-actor-label {
   position: absolute;
   top: 0;

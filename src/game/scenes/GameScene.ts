@@ -29,7 +29,7 @@ import {
   type AmbientZone,
 } from "../ambient-zones";
 import { isSeatAnchor, commonAreaSeats } from "../three/seating";
-import { seatReservationId } from "../three/seat-action";
+import { resolveSeatIntent, seatReservationId } from "../three/seat-action";
 import {
   AmbientDepartures,
   ambientAllowed,
@@ -1534,6 +1534,13 @@ export class GameScene extends Phaser.Scene {
       if (!this.isWalkable(col, row) || this.isTileOccupied(col, row)) return false;
       const seatId = seatReservationId(col + 0.5, row + 0.5);
       return !this.motionSnapshot.current?.seats.some((seat) => seat.seatId === seatId);
+    },
+    seatIntent: () => {
+      const goal = this.currentPath?.[this.currentPath.length - 1];
+      return resolveSeatIntent(
+        goal ? { x: goal.x, y: goal.y, seat: isSeatAnchor(this.mapObjects, goal.x, goal.y) } : null,
+        this.playerSeatGoal,
+      );
     },
     setPresentation: (active) => {
       this.sys.settings.visible = !active;

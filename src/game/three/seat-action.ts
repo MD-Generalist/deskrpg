@@ -13,6 +13,24 @@ export function seatReservationId(x: number, z: number) {
   return `${x * PIXELS_PER_TILE}:${z * PIXELS_PER_TILE}`;
 }
 
+/** Prefer a newly selected seat path over the seat the player is currently leaving. */
+export function resolveSeatIntent(
+  pathGoal: { x: number; y: number; seat: boolean } | null | undefined,
+  currentSeatId: string | null,
+) {
+  return pathGoal?.seat ? seatReservationId(pathGoal.x + 0.5, pathGoal.y + 0.5) : currentSeatId;
+}
+
+/** Keep selection feedback only while the matching trip is still underway. */
+export function seatSelectionHighlighted(
+  selectedId: string,
+  activeIntentId: string | null,
+  playerDistance: number,
+  walking: boolean,
+) {
+  return selectedId === activeIntentId && (walking || playerDistance >= 0.45);
+}
+
 type SeatPoint = {
   x: number;
   z: number;

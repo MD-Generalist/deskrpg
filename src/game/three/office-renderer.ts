@@ -18,7 +18,13 @@ import { detailSurfaces, surfaceTexture } from "./surface-detail";
 import { resolveSeat, seatAt, sofaSeats, furnitureSeats, type Seat } from "./seating";
 import { PointerGesture } from "./pointer-gesture";
 import { pickFurnitureSeat } from "./seat-picking";
-import { resolveSeatAction, type SeatAction } from "./seat-action";
+import {
+  resolveSeatAction,
+  seatReservationId,
+  seatSelectionHighlighted,
+  type SeatAction,
+} from "./seat-action";
+import { createSeatHighlight } from "./seat-highlight";
 import { resolveOfficeLook } from "./office-looks";
 import { isOfficeEnvironmentId } from "./office-environment-theme";
 import * as T from "three";
@@ -80,6 +86,11 @@ type RenderedActor = {
   lookId?: string;
 };
 
+type SeatVisualTarget = {
+  action: SeatAction;
+  owner: T.Object3D;
+};
+
 /** Three.js presentation consumes the existing gameplay state; it never emits socket payloads. */
 export class OfficeRenderer {
   private speechRail = document.createElement("div");
@@ -115,9 +126,10 @@ export class OfficeRenderer {
   private gesture = new PointerGesture();
   private hoveredActorId: string | undefined;
   private selectedActorId: string | undefined;
-  private seatAction: SeatAction | null = null;
-  private seatActionHideTimer: ReturnType<typeof setTimeout> | null = null;
-  private seatActionButton = document.createElement("button");
+  private hoveredSeat: SeatVisualTarget | null = null;
+  private selectedSeat: SeatVisualTarget | null = null;
+  private seatHighlight: T.Group | null = null;
+  private highlightedSeatKey = "";
   private lastActors: ActorSnapshot[] = [];
   private speech = new Map<string, number>();
   private benchmark: {
@@ -162,16 +174,7 @@ export class OfficeRenderer {
       document.documentElement.lang.startsWith("ko") ? "현재 화면의 대화" : "Conversations in view",
     );
     this.speechRail.tabIndex = 0;
-    this.seatActionButton.type = "button";
-    this.seatActionButton.className = "office-seat-action";
-    this.seatActionButton.textContent = "Sit here";
-    this.seatActionButton.hidden = true;
-    this.seatActionButton.addEventListener("pointerenter", this.cancelSeatActionHide);
-    this.seatActionButton.addEventListener("pointerleave", this.scheduleSeatActionHide);
-    this.seatActionButton.addEventListener("pointerdown", this.stopSeatActionPointer);
-    this.seatActionButton.addEventListener("click", this.activateSeatAction);
-    document.addEventListener("keydown", this.seatActionKeyDown);
-    this.labels.append(this.speechRail, this.seatActionButton);
+    this.labels.append(this.speechRail);
     this.scene.add(this.world, this.sky, this.sun, this.sun.target, this.fill, this.fill.target);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -233,10 +236,6 @@ export class OfficeRenderer {
     bridge.setPresentation(true);
     this.lastMap = "";
     this.mapTimer = 0;
-  }
-  setSeatActionLabel(label: string) {
-    this.seatActionButton.textContent = label;
-    this.seatActionButton.setAttribute("aria-label", label);
   }
   /** Diagnostics are public instance APIs, without a global browser hook. */
   readMetrics(): FrameMetrics {
@@ -347,25 +346,30 @@ export class OfficeRenderer {
   private stopFollowing = () => {
     this.following = false;
     this.overviewDimensions = null;
-    this.hideSeatAction();
+    this.setHoveredSeat(null);
   };
-  private stopSeatActionPointer = (event: PointerEvent) => event.stopPropagation();
-  private cancelSeatActionHide = () => {
-    if (this.seatActionHideTimer) clearTimeout(this.seatActionHideTimer);
-    this.seatActionHideTimer = null;
-  };
-  private scheduleSeatActionHide = () => {
-    this.cancelSeatActionHide();
-    this.seatActionHideTimer = setTimeout(() => this.hideSeatAction(), 140);
-  };
-  private hideSeatAction = () => {
-    this.cancelSeatActionHide();
-    this.seatAction = null;
-    this.seatActionButton.hidden = true;
-  };
-  private seatActionKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") this.hideSeatAction();
-  };
+  private setHoveredSeat(target: SeatVisualTarget | null) {
+    this.hoveredSeat = target;
+    this.refreshSeatHighlight();
+  }
+  private setSelectedSeat(target: SeatVisualTarget | null) {
+    this.selectedSeat = target;
+    this.refreshSeatHighlight();
+  }
+  private refreshSeatHighlight() {
+    const target = this.hoveredSeat ?? this.selectedSeat;
+    const key = target
+      ? `${target.owner.uuid}:${seatReservationId(target.action.x, target.action.z)}`
+      : "";
+    if (key === this.highlightedSeatKey) return;
+    if (this.seatHighlight) {
+      this.scene.remove(this.seatHighlight);
+      disposeTree(this.seatHighlight);
+    }
+    this.seatHighlight = target ? createSeatHighlight(target.owner) : null;
+    if (this.seatHighlight) this.scene.add(this.seatHighlight);
+    this.highlightedSeatKey = key;
+  }
   private seatAvailable(action: Pick<SeatAction, "x" | "z">) {
     if (!this.bridge) return false;
     if (this.bridge.seatAvailable) return this.bridge.seatAvailable(action.x, action.z);
@@ -375,48 +379,6 @@ export class OfficeRenderer {
         (actor) => Math.hypot(actor.x / 32 - action.x, actor.y / 32 - action.z) < 0.45,
       )
     );
-  }
-  private activateSeatAction = (event: MouseEvent) => {
-    event.stopPropagation();
-    const action = this.seatAction;
-    const bridge = this.bridge;
-    if (!action || !bridge || !this.seatAvailable(action)) {
-      this.hideSeatAction();
-      return;
-    }
-    const rect = this.host.getBoundingClientRect();
-    const pixel = worldToPixel(action.x, action.z);
-    const screen = new T.Vector3(action.seatX, 0.8, action.seatZ).project(this.camera);
-    bridge.pointer(
-      "down",
-      pixel.x,
-      pixel.y,
-      0,
-      rect.left + ((screen.x + 1) * rect.width) / 2,
-      rect.top + ((1 - screen.y) * rect.height) / 2,
-      "seat-target",
-    );
-    this.selectedActorId = "seat-target";
-    this.hideSeatAction();
-    this.focus();
-  };
-  private showSeatAction(action: SeatAction) {
-    this.cancelSeatActionHide();
-    this.seatAction = action;
-    this.seatActionButton.hidden = false;
-    this.positionSeatAction();
-  }
-  private positionSeatAction() {
-    if (!this.seatAction || this.seatActionButton.hidden) return;
-    const { seatX, seatZ } = this.seatAction;
-    const screen = new T.Vector3(seatX, 0.8, seatZ).project(this.camera);
-    const visible =
-      screen.z >= -1 && screen.z <= 1 && Math.abs(screen.x) <= 1 && Math.abs(screen.y) <= 1;
-    if (!visible) {
-      this.hideSeatAction();
-      return;
-    }
-    this.seatActionButton.style.transform = `translate(-50%, -100%) translate(${((screen.x + 1) * this.host.clientWidth) / 2}px, ${((1 - screen.y) * this.host.clientHeight) / 2 - 8}px)`;
   }
   private contextMenu = (event: Event) => event.preventDefault();
   private pointerDown = (e: PointerEvent) => {
@@ -434,7 +396,7 @@ export class OfficeRenderer {
     this.hoveredActorId = undefined;
     this.cursor.visible = false;
     this.renderer.domElement.style.cursor = "default";
-    this.scheduleSeatActionHide();
+    this.setHoveredSeat(null);
   };
   private pointerMove = (e: PointerEvent) => {
     this.gesture.move(e);
@@ -488,21 +450,22 @@ export class OfficeRenderer {
           return this.seatAvailable({ x, z });
         });
         if (!action) {
-          this.hideSeatAction();
+          this.setHoveredSeat(null);
           this.renderer.domElement.style.cursor = "default";
           return;
         }
         target = new T.Vector3(action.x, 0, action.z);
         actorId = "seat-target"; // Avoid legacy nearby-NPC selection when clicking an adjacent cushion.
-        this.showSeatAction(action);
+        const seatTarget = { action, owner: furniture };
+        if (kind === "move") this.setHoveredSeat(seatTarget);
         if (kind === "down") {
-          this.focus();
-          return;
+          this.setSelectedSeat(seatTarget);
+          if (e.pointerType !== "mouse") this.setHoveredSeat(null);
         }
       }
     }
-    if (kind === "move" && actorId !== "seat-target") this.scheduleSeatActionHide();
-    if (kind === "down" && actorId !== "seat-target") this.hideSeatAction();
+    if (kind === "move" && actorId !== "seat-target") this.setHoveredSeat(null);
+    if (kind === "down" && actorId !== "seat-target") this.setSelectedSeat(null);
     this.hoveredActorId = actorId;
     if (kind === "down") this.selectedActorId = actorId;
     this.renderer.domElement.style.cursor = actorId ? "pointer" : "default";
@@ -531,6 +494,8 @@ export class OfficeRenderer {
     if (kind === "down" && e.button === 0) this.focus();
   }
   private buildMap(map: MapSnapshot) {
+    this.setHoveredSeat(null);
+    this.setSelectedSeat(null);
     disposeTree(this.world);
     const p = isOfficeEnvironmentId(map.environment)
       ? environmentPalettes[map.environment]
@@ -1046,6 +1011,20 @@ export class OfficeRenderer {
           this.speech.delete(id);
         }
       const player = this.lastActors.find((a) => a.kind === "player");
+      if (player && this.selectedSeat) {
+        const action = this.selectedSeat.action;
+        const playerWorld = pixelToWorld(player.x, player.y);
+        const selectedId = seatReservationId(action.x, action.z);
+        if (
+          !seatSelectionHighlighted(
+            selectedId,
+            this.bridge.seatIntent?.() ?? selectedId,
+            Math.hypot(playerWorld.x - action.x, playerWorld.z - action.z),
+            player.walking,
+          )
+        )
+          this.setSelectedSeat(null);
+      }
       if (this.following && player) {
         const p = pixelToWorld(player.x, player.y),
           target = new T.Vector3(p.x, 0, p.z);
@@ -1054,7 +1033,6 @@ export class OfficeRenderer {
         this.camera.position.add(offset);
       }
       this.controls.update();
-      this.positionSeatAction();
       const labelAnchors: ActorLabelAnchor[] = [];
       const viewportWidth = this.host.clientWidth;
       const viewportHeight = this.host.clientHeight;
@@ -1246,8 +1224,8 @@ export class OfficeRenderer {
   dispose() {
     this.cancelBenchmark("Renderer disposed");
     document.removeEventListener("visibilitychange", this.benchmarkVisibility);
-    document.removeEventListener("keydown", this.seatActionKeyDown);
-    this.hideSeatAction();
+    this.setHoveredSeat(null);
+    this.setSelectedSeat(null);
     this.disposed = true;
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
