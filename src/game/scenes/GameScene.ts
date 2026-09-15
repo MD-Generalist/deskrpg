@@ -1,3 +1,4 @@
+import { withRuntimeTileset } from "../tiled-runtime";
 import { effectiveMapSpawn } from "../../lib/effective-map-spawn";
 import { tiledDirection, tiledVariant } from "../../lib/tiled-geometry";
 import { RemoteNpcPresentation } from "../remote-npc-presentation";
@@ -2681,6 +2682,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private loadTiledMap(tiledJson: Record<string, unknown>): void {
+    tiledJson = withRuntimeTileset(tiledJson);
     this.tiledMode = true;
     this.officeEnvironment = resolveOfficeEnvironment(tiledJson);
     this.officeEnvironmentVersion = resolveOfficeEnvironmentVersion(tiledJson);

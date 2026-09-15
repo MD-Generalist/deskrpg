@@ -273,6 +273,27 @@ const studioKit = (
 });
 
 export const SCENE_ASSETS = {
+  "pub-binding-bench": {
+    url: "/assets/shared/publishing/pub-binding-bench-v1.glb",
+    category: "furniture",
+    tags: ["shared", "publishing", "pub-binding-bench"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9850000143051147, -1.0728836485895954e-8, -0.4749999940395355],
+      max: [0.9850000143051147, 1.2000000476837158, 0.4754999876022339],
+    },
+    maxHeight: 1.2000000476837158,
+    fallback: "publishing-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-publishing-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
   "pub-library": {
     url: "/assets/shared/publishing/pub-library-v1.glb",
     category: "furniture",

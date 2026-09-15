@@ -34,7 +34,7 @@ test("publishing reference has three four-seat islands and a continuous wall lib
     12,
   );
   assert.equal(snapshot.objects.filter((o) => o.variant?.startsWith("pub-library")).length, 5);
-  assert.equal(snapshot.objects.filter((o) => o.variant === "pub-newbook-display").length, 6);
+  assert.equal(snapshot.objects.filter((o) => o.variant === "pub-newbook-display").length, 10);
 });
 
 test("publishing doorway and every open floor cell connect to the entrance", () => {

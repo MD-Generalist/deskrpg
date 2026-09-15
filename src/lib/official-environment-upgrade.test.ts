@@ -1,3 +1,4 @@
+import publishingV3Initial from "./fixtures/official-publishing-v3-initial.json";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -257,3 +258,14 @@ for (const edit of ["object", "layer-order", "metadata", "spawn", "dimension"]) 
     }
   });
 }
+
+test("출판사 초기 v3만 집기 보강본으로 갱신하고 수정본을 보존한다", () => {
+  assert.deepEqual(
+    upgradeOfficialEnvironmentMap(publishingV3Initial).map,
+    buildOfficeEnvironment("publishing"),
+  );
+  const edited = structuredClone(publishingV3Initial);
+  edited.width += 1;
+  assert.equal(upgradeOfficialEnvironmentMap(edited).upgraded, false);
+  assert.equal(upgradeOfficialEnvironmentMap(buildOfficeEnvironment("publishing")).upgraded, false);
+});

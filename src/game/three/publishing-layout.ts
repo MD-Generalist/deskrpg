@@ -77,8 +77,15 @@ export function furnishPublishing(add: CreativeStudioAdd) {
   add("microwave_cabinet", 1, 10, { variant: "coffee-station", direction: "right" });
   add("bookshelf", 1, 13, { variant: "studio-oak", direction: "right" });
   add("office_locker", 1, 17, { variant: "olive" });
+  // 벽면 수납을 연결해 중앙 통로를 유지하면서 출판 집기 밀도를 높인다.
+  for (const row of [14, 18])
+    add("studio_shelf", 1, row, { variant: "pub-newbook-display", direction: "right" });
+  for (const col of [10, 18]) add("studio_shelf", col, 9, { variant: "pub-newbook-display" });
   for (const row of [10, 13, 16, 19])
-    add("studio_shelf", 27, row, { variant: "pub-print-bench", direction: "right" });
+    add("studio_shelf", 27, row, {
+      variant: row === 13 || row === 19 ? "pub-binding-bench" : "pub-print-bench",
+      direction: "right",
+    });
   add("reception_desk", 3, 21, { variant: "studio-oak" });
   add("chair", 3, 20, {
     variant: "olive-office",

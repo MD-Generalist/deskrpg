@@ -1,3 +1,4 @@
+import publishingV3Initial from "./fixtures/official-publishing-v3-initial.json";
 import agencyV2 from "./fixtures/official-agency-v2.json";
 import agencyV3 from "./fixtures/official-agency-v3.json";
 import agencyV4 from "./fixtures/official-agency-v4.json";
@@ -15,6 +16,9 @@ export function upgradeOfficialEnvironmentMap(map: unknown): {
   fromVersion?: number;
 } {
   const parsed = parseDbJson(map);
+  if (sameJsonSnapshot(parsed, publishingV3Initial)) {
+    return { map: buildOfficeEnvironment("publishing"), upgraded: true, fromVersion: 3 };
+  }
   if (sameJsonSnapshot(parsed, publishingV2)) {
     return { map: buildOfficeEnvironment("publishing"), upgraded: true, fromVersion: 2 };
   }
