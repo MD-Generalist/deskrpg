@@ -1,5 +1,49 @@
 # E2E — 브라우저에서 실제 NPC 대화를 검증한다
 
+## 실제 맵 회의: Hermes 없이 두 사람 검증
+
+`meeting-spatial.spec.ts`는 독립된 Chrome browser context 두 개를 사용한다. 기존 사용자
+소켓을 끊지 않도록 매번 합성 계정 두 개, 캐릭터 두 개, 새 공개 채널을 API로 만든다.
+등록 시 앱이 만드는 기본 프로젝트도 해당 합성 계정에 남는다. **버릴 수 있는 로컬 DB에서만**
+실행한다. 기존 사용자 데이터는 지우지 않으며 테스트 데이터도 자동 삭제하지 않는다.
+
+```bash
+DESKRPG_E2E_ALLOW_SEED=isolated-local \
+DESKRPG_E2E_BASE_URL=http://localhost:3040 \
+DESKRPG_E2E_LOGIN_ID=<isolated-admin> \
+DESKRPG_E2E_PASSWORD=<isolated-admin-password> \
+npx playwright test e2e/meeting-spatial.spec.ts
+```
+
+명시적 seed opt-in이 없으면 skip하며, loopback 이외 호스트는 거부한다. 관리자 API 계정,
+가입 허용, 기본 그룹, 공식 tech 템플릿과 이미 실행 중인 서버가 필요하다. 서버를 시작하거나
+재시작하지 않는다. 설치된 Chrome의 headless 모드만 사용하고 브라우저를 내려받지 않는다.
+서로 다른 browser context는 같은 localhost에서도 쿠키가 분리된다.
+
+검증 범위: 실제 `player:move` 이후 `meeting:join`과 서버의 단일 참가자 승인, 원래
+canvas 유지, 입장만으로 AI가 시작되지 않음, 두 사용자에게 같은 서버 좌석 상태, 서로 다른
+실제 좌석, 개인 카메라 수동 회전/자동 복귀, 모바일 퇴장 버튼, 개인 퇴장/재입장,
+준비 화면의 사람끼리 채팅과 참가 전·퇴장 후 사용자에게 회의 채팅이 전달되지 않음.
+웹소켓 이벤트는 관찰만 하며 앱 상태·이동·회의 이벤트를 주입하지 않는다.
+`meeting-websocket-evidence` 첨부 파일에 송수신 순서와 좌석 상태를 남긴다.
+
+Hermes가 필요한 NPC 집결 → 브로커 1회 실행 → 실제 발언 스트림/중지/복귀는 이 테스트의
+통과로 검증되지 않는다. 공식 다섯 맵·legacy/Tiled의 좌표 보존과 정규화 멱등성도 별도
+단위 테스트/맵 검증 대상이며 두 사용자 상세 시나리오는 tech 맵 한 개만 실행한다.
+
+`DESKRPG_E2E_MEETING_MATRIX=1`을 추가하면 공식 맵 다섯 개와 legacy/Tiled annex의 실제
+UI 진입·원본 canvas·착석·개인 퇴장을 순차 확인한다. 합성 계정 한 개와 신규 채널 일곱 개를
+추가 생성한다. 공식 템플릿은 `deskrpg-office-v2:<kind>` 태그로, 호환성 맵은 기존
+`회의검증 legacy`·`회의검증 tiled` 템플릿으로 찾으며 없으면 실패한다. 맵별 화면과 웹소켓
+첨부 파일을 남기고, 한 맵의 실패가 나머지 맵의 실행을 생략하게 하지 않는다.
+legacy에서는 annex까지의 긴 도보 중 실제 취소 버튼을 누른 뒤, 회의 join이 발송되지
+않았음을 확인하고 다시 진입한다. 취소 클릭을 먼저 대기시켜 짧은 UI 상태의 관찰 지연을 줄인다.
+
+Tiled 합성 템플릿의 바닥 GID는 실제 tileset 정의와 맞아야 한다. `tilesets: []`인 빈 맵은
+바닥도 0으로 시드한다. 정의 없는 GID 1로 채우면 회의 진입 전에 Phaser 맵 로딩이 실패한다.
+성공한 맵의 캡처도 보관하려면 `--reporter=list,html`과 `PLAYWRIGHT_HTML_OPEN=never`를 사용한다.
+보고서에는 합성 계정의 요청·메시지가 포함될 수 있으므로 공개 저장소에 올리지 않는다.
+
 단위 테스트(`npm run test`, node:test)는 어댑터·엔진의 계약을 고정한다. 이 스위트는 그 위에서
 **사람이 실제로 밟는 경로**를 검증한다 — 로그인한 채로 맵에 들어가, NPC 옆까지 걸어가, 말을
 걸고, 살아 있는 Hermes 게이트웨이로부터 답을 받는 것까지.

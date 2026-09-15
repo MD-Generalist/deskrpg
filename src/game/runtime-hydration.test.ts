@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { copyMotionContinuation, playerMotionGoal } from "./runtime-hydration";
 import { RemoteNpcPresentation } from "./remote-npc-presentation";
-import { adoptNpcMotionHome, untouchedSpawn } from "./motion-snapshot";
+import { adoptNpcMotionHome, untouchedSpawn, type MotionNpc } from "./motion-snapshot";
 
 const source = readFileSync(new URL("./scenes/GameScene.ts", import.meta.url), "utf8");
 
@@ -53,6 +53,81 @@ function evaluate(code: string, extra: object = {}) {
     scope,
   );
 }
+
+test("actual bridge local actor learns its user identity from meeting state and refreshes after reconnect", () => {
+  const ast = ts.createSourceFile("GameScene.ts", source, ts.ScriptTarget.Latest, true);
+  let listener: ts.Expression | undefined;
+  let actors: ts.Expression | undefined;
+  let disconnect: ts.Expression | undefined;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(ast) === "listen" &&
+      ts.isStringLiteral(node.arguments[0]) &&
+      node.arguments[0].text === "meeting:state"
+    )
+      listener = node.arguments[1];
+    if (ts.isPropertyAssignment(node) && node.name.getText(ast) === "actors")
+      actors = node.initializer;
+    if (ts.isPropertyDeclaration(node) && node.name.getText(ast) === "handleSocketDisconnect")
+      disconnect = node.initializer;
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.ok(listener, "GameScene must consume the authoritative meeting:state listener");
+  assert.ok(actors);
+  assert.ok(disconnect);
+  const socket = { id: "socket-old", connected: true };
+  const Bridge = evaluate(
+    `(class {
+    actors = ${actors.getText(ast)};
+    meetingState = ${listener.getText(ast)};
+    disconnect = ${disconnect.getText(ast)};
+  })`,
+    { socket, DIR_NUM_TO_NAME: { 0: "down" }, Phaser: { GameObjects: { Sprite: class {} } } },
+  );
+  const runtime = Object.assign(new Bridge(), {
+    socket,
+    npcSprites: [],
+    remotePlayers: new Map(),
+    playerReady: true,
+    player: { x: 80, y: 80 },
+    characterName: "Local",
+    characterId: "character-is-not-user",
+    currentDirection: 0,
+    time: { now: 0 },
+    speechPreviews: { get() {} },
+    cancelMeetingEntry() {},
+    spatialNpcRoutes: new Map(),
+    rejoin: { onDisconnect() {} },
+    motionSnapshot: { clear() {} },
+    pendingSeatClaims: new Set(),
+    motionGeneration: 0,
+  });
+  const actor = () => runtime.actors().find((entry: { kind: string }) => entry.kind === "player");
+  assert.equal(actor().userId, undefined);
+  runtime.meetingState({
+    participants: [
+      { id: "peer", userId: "peer-user" },
+      { id: socket.id, userId: "user-old" },
+    ],
+  });
+  assert.equal(actor().id, "socket-old");
+  assert.equal(actor().userId, "user-old");
+  socket.connected = false;
+  runtime.disconnect();
+  assert.equal(actor().userId, undefined);
+  runtime.meetingState({ participants: [{ id: socket.id, userId: "stale-user" }] });
+  assert.equal(actor().userId, undefined, "disconnected snapshots cannot restore identity");
+  socket.id = "socket-new";
+  socket.connected = true;
+  runtime.meetingState({ participants: [{ id: "socket-old", userId: "stale-user" }] });
+  assert.equal(actor().userId, undefined, "old socket roster cannot identify reconnected actor");
+  runtime.meetingState({ participants: [{ id: socket.id, userId: "user-new" }] });
+  assert.equal(actor().userId, "user-new");
+  socket.id = "socket-newer";
+  assert.equal(actor().userId, undefined, "identity never carries across an unhydrated socket id");
+});
 const spawnStart =
   source.indexOf('listen("player:spawn", (position: PlayerSpawnState) => {') +
   'listen("player:spawn", (position: PlayerSpawnState) => {'.length;
@@ -202,13 +277,96 @@ const applyNpcSource = source.slice(
   source.indexOf("  private applyMotionNpc("),
   source.indexOf("  private restoreMotionNpc("),
 );
-const NpcController = evaluate(`(class { ${applyNpcSource} })`, {
-  copyMotionContinuation,
-  createAmbientSchedule: () => {
-    throw new Error("must not reset restored schedule");
+const spatialNpcSource = source.slice(
+  source.indexOf("  private applySpatialNpc("),
+  source.indexOf("  private updateSpatialNpc("),
+);
+const removeNpcSource = source.slice(
+  source.indexOf("  private removeNpcById("),
+  source.indexOf("  private setupSocketListeners("),
+);
+const NpcController = evaluate(
+  `(class { spatialNpcRoutes = new Map(); ${applyNpcSource} ${spatialNpcSource} ${removeNpcSource} })`,
+  {
+    copyMotionContinuation,
+    createAmbientSchedule: () => {
+      throw new Error("must not reset restored schedule");
+    },
+    AmbientExitPolicy: class {},
+    EventBus: { emit() {} },
   },
-  AmbientExitPolicy: class {},
-  EventBus: { emit() {} },
+);
+
+for (const reason of ["home", "forced-hydration"] as const) {
+  test(`실제 공간 이동은 ${reason} 권위 재설정 뒤 같은 세대의 경로를 다시 시작한다`, () => {
+    const starts: unknown[] = [];
+    const runtime = Object.assign(new NpcController(), {
+      socket: { id: "driver", emit() {} },
+      motionSnapshot: { current: { ambientLeaderId: "driver", seats: [] } },
+      npcOwnership: { owner: () => "driver", clear() {} },
+      takeNpcOwnership() {},
+      traffic: { clear() {} },
+      time: { now: 0 },
+      npcPathfinder: () => () => [
+        { x: 0, y: 0 },
+        { x: 4, y: 4 },
+      ],
+      createNpcWalkValidator: () => () => true,
+    });
+    const npc = {
+      id: "npc",
+      homeCol: 0,
+      homeRow: 0,
+      pixelX: 16,
+      pixelY: 16,
+      motionLocallyDriven: true,
+      sprite: { setPosition() {} },
+      nameLabel: { setPosition() {} },
+      path: null as unknown,
+      cancelMovement() {
+        this.path = null;
+      },
+      startStroll(path: unknown) {
+        this.path = path;
+        starts.push(path);
+      },
+    };
+    const state: MotionNpc = {
+      npcId: "npc",
+      x: 16,
+      y: 16,
+      homeX: 16,
+      homeY: 16,
+      direction: "down",
+      ownerSocketId: "driver",
+      phase: "called",
+      moving: true,
+      revision: 1,
+      spatialTarget: { generation: 1, x: 144, y: 144, returning: false, seatId: null },
+    };
+    runtime.applyMotionNpc(npc, state);
+    assert.equal(starts.length, 1);
+    runtime.applyMotionNpc(npc, state);
+    assert.equal(starts.length, 1, "동일 상태 에코는 경로를 다시 시작하지 않는다");
+    runtime.applyMotionNpc(
+      npc,
+      { ...state, homeX: reason === "home" ? 80 : 16 },
+      reason === "forced-hydration",
+    );
+    assert.equal(starts.length, 2);
+    assert.ok(npc.path, "재설정으로 취소된 경로가 비어 있으면 이동이 멎는다");
+    assert.equal(npc.homeCol, reason === "home" ? 2 : 0);
+  });
+}
+
+test("실제 NPC 제거는 스프라이트가 없어도 공간 이동 세대 캐시를 비운다", () => {
+  const runtime = Object.assign(new NpcController(), {
+    npcOwnership: { clear() {} },
+    npcSprites: [],
+  });
+  runtime.spatialNpcRoutes.set("npc", { generation: 1, done: false });
+  runtime.removeNpcById("npc");
+  assert.equal(runtime.spatialNpcRoutes.has("npc"), false);
 });
 test("real NPC hydration resumes ambient destination without resetting its break clock", () => {
   const runtime = Object.assign(new NpcController(), {

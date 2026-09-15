@@ -10,6 +10,10 @@ import {
 } from "./player-resume-state";
 import { setNpcActive } from "../lib/npc-roster";
 import { createNpcCoordination } from "./npc-coordination";
+import {
+  createMeetingSpatialCoordinator,
+  type MeetingSpatialCoordinator,
+} from "./meeting-spatial-coordinator";
 import { deriveChannelMotionLayout, closestValidUnoccupiedSpawn } from "./channel-motion-layout";
 import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
 import { runTrackedDm, executeDmAdapter } from "./dm-response-runtime";
@@ -1031,6 +1035,18 @@ export function setupSocketHandlers(io: Server) {
         : undefined;
     },
     loadChannel: loadMotionLayout,
+    onSpatialArrival: (channelId, actorId, generation) =>
+      spatial.arrived(channelId, actorId, generation),
+    onSpatialBlocked: (channelId, actorId, reason, generation) =>
+      spatial.block(channelId, actorId, reason, generation),
+    onSpatialPlayerArrival: (channelId, userId, socketId) =>
+      spatial.playerArrived(channelId, userId, socketId),
+    onSpatialPlayerBlocked: (channelId, userId) =>
+      spatial.block(channelId, userId, "participant_left"),
+  });
+  const spatial: MeetingSpatialCoordinator = createMeetingSpatialCoordinator({
+    ...coordination.spatial,
+    publish: (state) => io.to(`meeting-${state.channelId}`).emit("meeting:spatial-state", state),
   });
 
   const mapRefresh = createChannelMapRefresh({
@@ -1038,6 +1054,13 @@ export function setupSocketHandlers(io: Server) {
       io.to(id).emit("map:refresh", { channelId: id, protocolVersion: 1, phase: "begin" });
     },
     reset: async (id) => {
+      // 이전 맵의 집결·착석·복귀와 구독은 새 맵에서 다시 승인받는다.
+      spatial.reset(id);
+      activeBrokers.get(id)?.stop();
+      activeBrokers.delete(id);
+      discussionInitiators.delete(id);
+      meetingRooms.get(id)?.participants.clear();
+      io.in(`meeting-${id}`).socketsLeave(`meeting-${id}`);
       await coordination.reset(id);
       playerResumeStates.clearChannel(id);
       for (const [socketId, player] of players)
@@ -1627,6 +1650,9 @@ export function setupSocketHandlers(io: Server) {
       socket,
       deps: {
         meetingRooms,
+        spatial,
+        isInMeetingSpace: (channelId, socketId) =>
+          coordination.spatial.isInside(channelId, socketId),
         getDiscussionState: (channelId) => activeBrokers.get(channelId)?.discussionState ?? null,
         players,
         lastChatTime,
@@ -1721,7 +1747,24 @@ export function setupSocketHandlers(io: Server) {
         user,
         adapterRegistry,
         getNpcConfigsForChannel,
-        canControlMeeting,
+        canControlMeeting: async (channelId, userId) => {
+          const access = await getSocketChannelParticipationAccess(channelId, userId);
+          return (
+            !!access?.access.allowed &&
+            (spatial.snapshot(channelId)?.phase !== "idle" && spatial.snapshot(channelId)
+              ? spatial.owner(channelId) === userId || (await isChannelOwner(channelId, userId))
+              : await canControlMeeting(channelId, userId))
+          );
+        },
+        spatial,
+        canStartMeeting: async (channelId, userId) => {
+          const access = await getSocketChannelParticipationAccess(channelId, userId);
+          return (
+            !!access?.access.allowed &&
+            !!meetingRooms.get(channelId)?.participants.has(socket.id) &&
+            players.get(socket.id)?.mapId === channelId
+          );
+        },
         generateMeetingSummary,
         persistMeetingMinutes,
       },
@@ -1762,6 +1805,7 @@ export function setupSocketHandlers(io: Server) {
       for (const [channelId, room] of meetingRooms.entries()) {
         if (room.participants.has(socket.id)) {
           room.participants.delete(socket.id);
+          void spatial.leavePlayer(channelId, user.userId, socket.id);
           socket.to(`meeting-${channelId}`).emit("meeting:participant-left", { id: socket.id });
         }
       }

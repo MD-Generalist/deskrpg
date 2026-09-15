@@ -1,4 +1,5 @@
 import type { MotionContinuation } from "../server/npc-motion-continuation";
+import type { SpatialMotionTarget } from "../lib/meeting-discussion-state";
 export type { MotionContinuation } from "../server/npc-motion-continuation";
 export type MotionNpc = {
   npcId: string;
@@ -12,13 +13,21 @@ export type MotionNpc = {
   moving: boolean;
   revision: number;
   continuation?: MotionContinuation | null;
+  spatialTarget?: SpatialMotionTarget | null;
 };
 export type MotionSnapshot = {
   channelId: string;
   revision: number;
   ambientLeaderId: string | null;
   npcs: MotionNpc[];
-  seats: { seatId: string; actorId: string; ownerSocketId: string; x: number; y: number }[];
+  seats: {
+    seatId: string;
+    actorId: string;
+    ownerSocketId: string;
+    x: number;
+    y: number;
+    spatial?: boolean;
+  }[];
 };
 /** Retained independently from asynchronous sprite/model readiness. */
 export class MotionSnapshotCache {

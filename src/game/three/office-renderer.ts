@@ -10,6 +10,9 @@ import { finalizeStudioScene, renderCreativeStudioObject } from "./creative-stud
 import { addCreativeStudioScene } from "./creative-studio-renderer";
 import { isCreativeStudioMap, creativeStudioOverview } from "./creative-studio-architecture";
 import { furnitureOffset } from "./executive-lounge-layout";
+import { MeetingCamera, type MeetingSpeaker, type MeetingCameraOptions } from "./meeting-camera";
+import { MeetingWallOcclusion } from "./meeting-wall-occlusion";
+import type { MeetingSpace } from "../meeting-space";
 import { attachFurnitureAsset, attachSceneAsset } from "./furniture-asset";
 import { disposeTree } from "./dispose-tree";
 export { disposeTree } from "./dispose-tree";
@@ -121,6 +124,16 @@ export class OfficeRenderer {
   private seats: Seat[] = [];
   private camera = new T.PerspectiveCamera(38, 1, 0.1, 250);
   private controls: OrbitControls;
+  private meetingCamera: MeetingCamera;
+  private meetingWalls = new MeetingWallOcclusion();
+  private meetingWallObjects: T.Object3D[] = [];
+  private meetingSpace: MeetingSpace | null = null;
+  private meetingPreviousFollow = false;
+  private meetingPreviousOverview: { cols: number; rows: number } | null = null;
+  private meetingRightInset = 0;
+  private meetingPointer: { x: number; y: number } | null = null;
+  /** Instance-local UI notification; no socket or React dependency. */
+  onMeetingCameraChange?: (state: { active: boolean; automatic: boolean }) => void;
   private world = new T.Group();
   private actors = new Map<string, RenderedActor>();
   private ray = new T.Raycaster();
@@ -139,6 +152,7 @@ export class OfficeRenderer {
   private following = true;
   private overviewDimensions: { cols: number; rows: number } | null = null;
   private lastMap = "";
+  private lastMapStructure = "";
   private mapTimer = 0;
   private bridge: OfficeBridge | null = null;
   private gesture = new PointerGesture();
@@ -213,6 +227,9 @@ export class OfficeRenderer {
     // A short left click walks; dragging pans without issuing a movement command.
     this.controls.mouseButtons = { LEFT: T.MOUSE.PAN, MIDDLE: T.MOUSE.PAN, RIGHT: T.MOUSE.ROTATE };
     this.controls.addEventListener("start", this.stopFollowing);
+    this.meetingCamera = new MeetingCamera(this.camera, this.controls, {
+      reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    });
     this.cursor = new T.Mesh(
       new T.PlaneGeometry(0.96, 0.96),
       new T.MeshBasicMaterial({
@@ -241,6 +258,7 @@ export class OfficeRenderer {
       this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
+      this.meetingCamera.setViewport(width, height, this.meetingRightInset);
       if (this.overviewDimensions)
         this.overview(this.overviewDimensions.cols, this.overviewDimensions.rows);
     });
@@ -249,6 +267,7 @@ export class OfficeRenderer {
     this.tick(0);
   }
   attach(bridge: OfficeBridge) {
+    this.exitMeeting();
     this.bridge?.setPresentation(false);
     this.bridge = bridge;
     bridge.setPresentation(true);
@@ -314,6 +333,7 @@ export class OfficeRenderer {
     if (document.hidden) this.cancelBenchmark("Document became hidden");
   };
   showRoom(x: number, z: number, distance = 15) {
+    if (this.meetingCamera.active) return;
     this.following = false;
     this.overviewDimensions = null;
     this.controls.target.set(x, 0, z);
@@ -328,10 +348,12 @@ export class OfficeRenderer {
     this.mapTimer = 0;
   }
   focus() {
+    if (this.meetingCamera.active) return;
     this.following = true;
     this.overviewDimensions = null;
   }
   overview(cols: number, rows: number) {
+    if (this.meetingCamera.active) return;
     this.following = false;
     const studio =
       this.bridge &&
@@ -362,6 +384,7 @@ export class OfficeRenderer {
     }
   }
   setCameraAngle(top: boolean) {
+    this.pauseMeetingAuto();
     this.stopFollowing();
     const offset = this.camera.position.clone().sub(this.controls.target);
     const spherical = new T.Spherical().setFromVector3(offset);
@@ -372,6 +395,7 @@ export class OfficeRenderer {
     this.controls.update();
   }
   rotateCamera(direction: number) {
+    this.pauseMeetingAuto();
     this.stopFollowing();
     const offset = this.camera.position.clone().sub(this.controls.target);
     offset.applyAxisAngle(new T.Vector3(0, 1, 0), (direction * Math.PI) / 4);
@@ -379,6 +403,7 @@ export class OfficeRenderer {
     this.controls.update();
   }
   zoom(factor: number) {
+    if (this.meetingCamera.active) return;
     this.stopFollowing();
     this.camera.position
       .sub(this.controls.target)
@@ -388,6 +413,70 @@ export class OfficeRenderer {
   }
   talk(id: string) {
     this.speech.set(speechActorId(this.lastActors, id), performance.now() + 4000);
+  }
+  /** Uses the same map, renderer and actual actor snapshots as normal office mode. */
+  enterMeeting(space = this.bridge?.map().meetingSpace): boolean {
+    if (!space) return false;
+    if (this.bridge && this.lastMap !== this.bridge.mapKey()) {
+      this.buildMap(this.bridge.map());
+      this.lastMap = this.bridge.mapKey();
+    }
+    if (this.meetingCamera.active && this.meetingSpace?.id === space.id) return true;
+    if (this.meetingCamera.active) this.exitMeeting();
+    this.meetingPreviousFollow = this.following;
+    this.meetingPreviousOverview = this.overviewDimensions;
+    this.following = false;
+    this.overviewDimensions = null;
+    this.meetingSpace = space;
+    this.meetingCamera.setViewport(
+      this.host.clientWidth,
+      this.host.clientHeight,
+      this.meetingRightInset,
+    );
+    this.meetingCamera.enter(space);
+    this.meetingWalls.enter(this.meetingWallObjects);
+    this.host.dataset.meeting = "true";
+    this.cursor.visible = false;
+    this.setHoveredSeat(null);
+    this.onMeetingCameraChange?.(this.meetingCameraState());
+    return true;
+  }
+  exitMeeting() {
+    const active = this.meetingCamera.active;
+    this.meetingWalls.dispose();
+    this.meetingCamera.exit();
+    this.meetingSpace = null;
+    this.meetingPointer = null;
+    delete this.host.dataset.meeting;
+    if (active) {
+      this.following = this.meetingPreviousFollow;
+      this.overviewDimensions = this.meetingPreviousOverview;
+    }
+    this.onMeetingCameraChange?.(this.meetingCameraState());
+  }
+  /** The caller supplies actual speech, using one stable utterance ID per turn. */
+  setMeetingSpeaker(speaker: MeetingSpeaker | null) {
+    this.meetingCamera.setSpeaker(speaker);
+  }
+  configureMeetingCamera(options: MeetingCameraOptions) {
+    this.meetingCamera.configure(options);
+  }
+  resumeMeetingAuto() {
+    this.meetingCamera.resumeAuto();
+    this.onMeetingCameraChange?.(this.meetingCameraState());
+  }
+  meetingCameraState() {
+    return { active: this.meetingCamera.active, automatic: this.meetingCamera.automatic };
+  }
+  /** Inset only for a panel overlaying this canvas; use zero if layout already excludes it. */
+  setMeetingViewport(rightInsetPx: number) {
+    this.meetingRightInset = rightInsetPx;
+    this.meetingCamera.setViewport(this.host.clientWidth, this.host.clientHeight, rightInsetPx);
+  }
+  private pauseMeetingAuto() {
+    if (!this.meetingCamera.active || !this.meetingCamera.automatic) return;
+    this.meetingCamera.manualRotate();
+    this.onMeetingCameraChange?.(this.meetingCameraState());
   }
   private stopFollowing = () => {
     this.following = false;
@@ -428,6 +517,7 @@ export class OfficeRenderer {
   }
   private contextMenu = (event: Event) => event.preventDefault();
   private pointerDown = (e: PointerEvent) => {
+    if (this.meetingCamera.active) this.meetingPointer = { x: e.clientX, y: e.clientY };
     this.gesture.start(e);
     if (e.isPrimary && (e.button === 0 || e.button === 2))
       this.renderer.domElement.setPointerCapture(e.pointerId);
@@ -449,6 +539,18 @@ export class OfficeRenderer {
     this.point(e, "move");
   };
   private point(e: PointerEvent, kind: "move" | "down") {
+    if (this.meetingCamera.active) {
+      // OrbitControls owns meeting input; clicks never walk or edit the actual map.
+      if (kind === "move" && e.buttons) {
+        if (
+          this.meetingPointer &&
+          (e.clientX !== this.meetingPointer.x || e.clientY !== this.meetingPointer.y)
+        )
+          this.pauseMeetingAuto();
+        this.meetingPointer = { x: e.clientX, y: e.clientY };
+      } else this.meetingPointer = null;
+      return;
+    }
     if (!this.bridge) return;
     const editor = this.bridge.editor();
     const rect = this.host.getBoundingClientRect();
@@ -546,6 +648,28 @@ export class OfficeRenderer {
     return this.renderer.domElement.toDataURL("image/webp", 0.9);
   }
   private buildMap(map: MapSnapshot) {
+    // mapKey에는 늦게 로드된 액터 텍스처 수도 포함된다. 자산 갱신은 지도 변경과 구분한다.
+    const structure = JSON.stringify([
+      map.cols,
+      map.rows,
+      map.floor,
+      map.walls,
+      map.blocked,
+      map.objects,
+      map.tiled,
+      map.environment,
+      map.environmentVersion,
+      map.meetingSpace,
+    ]);
+    const keepMeeting = this.meetingCamera.active && structure === this.lastMapStructure;
+    if (keepMeeting) this.meetingWalls.dispose();
+    else this.exitMeeting();
+    this.lastMapStructure = structure;
+    this.meetingWallObjects = [];
+    const registerMeetingWalls = (walls: T.Object3D[]) => {
+      for (const wall of walls) wall.userData.meetingWall = true;
+      this.meetingWallObjects.push(...walls);
+    };
     this.setHoveredSeat(null);
     this.setSelectedSeat(null);
     disposeTree(this.world);
@@ -761,25 +885,38 @@ export class OfficeRenderer {
       const cells = architecture.flatMap((row, y) =>
         row.flatMap((tile, x) => (tile === 2 ? [{ x, y }] : [])),
       );
+      const ordinaryCells = map.meetingSpace ? [] : cells;
       const walls = new T.InstancedMesh(
         new T.BoxGeometry(1, 1.5, 1),
         new T.MeshStandardMaterial({ color: p.wall, roughness: 0.9 }),
-        cells.length,
+        ordinaryCells.length,
       );
       const matrix = new T.Matrix4();
-      cells.forEach((c, i) => {
+      ordinaryCells.forEach((c, i) => {
         matrix.makeTranslation(c.x + 0.5, 0.75, c.y + 0.5);
         walls.setMatrixAt(i, matrix);
       });
       walls.castShadow = true;
       walls.receiveShadow = true;
       this.world.add(walls);
+      for (const c of map.meetingSpace ? cells : []) {
+        const wall = new T.Mesh(walls.geometry, walls.material);
+        wall.position.set(c.x + 0.5, 0.75, c.y + 0.5);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        wall.userData.meetingWall = true;
+        this.world.add(wall);
+        this.meetingWallObjects.push(wall);
+      }
       architecture.forEach((row, y) =>
         row.forEach((tile, x) => {
           if (tile === 7) {
-            round(this.world, 0.08, 1.45, 0.15, p.wood, x + 0.08, 0.725, y + 0.5);
-            round(this.world, 0.08, 1.45, 0.15, p.wood, x + 0.92, 0.725, y + 0.5);
-            round(this.world, 0.92, 0.1, 0.15, p.wood, x + 0.5, 1.4, y + 0.5);
+            const window = new T.Group();
+            this.world.add(window);
+            registerMeetingWalls([window]);
+            round(window, 0.08, 1.45, 0.15, p.wood, x + 0.08, 0.725, y + 0.5);
+            round(window, 0.08, 1.45, 0.15, p.wood, x + 0.92, 0.725, y + 0.5);
+            round(window, 0.92, 0.1, 0.15, p.wood, x + 0.5, 1.4, y + 0.5);
           } else if (tile === 12)
             round(this.world, 0.98, 0.015, 0.98, "#8caa8b", x + 0.5, 0.01, y + 0.5);
         }),
@@ -813,18 +950,23 @@ export class OfficeRenderer {
     let remainingFurniture = furniture;
     if (studio) {
       const composition = addCreativeStudioScene(this.world, map)!;
+      registerMeetingWalls(composition.userData.meetingWalls);
       void composition.userData.assetReady.then(() => {
-        if (!this.disposed && composition.parent === this.world)
+        if (!this.disposed && composition.parent === this.world) {
+          if (this.meetingCamera.active) this.meetingWalls.enter(this.meetingWallObjects);
           captureStudioReflection(this.renderer, this.scene, composition);
+        }
       });
       remainingFurniture = composition.userData.unhandledObjects;
     }
-    if (publishing) addPublishingArchitecture(this.world, map);
-    if (trading) addTradingArchitecture(this.world, map);
+    if (publishing)
+      registerMeetingWalls(addPublishingArchitecture(this.world, map).userData.meetingWalls);
+    if (trading)
+      registerMeetingWalls(addTradingArchitecture(this.world, map).userData.meetingWalls);
     if (tech) addTechStartupSurfaces(this.world, map);
-    if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
+    if (executive) registerMeetingWalls(addExecutiveArchitecture(this.world, map.cols, map.rows));
     if (finishedPerimeter && !executive && !studio && !trading && !publishing)
-      addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
+      registerMeetingWalls(addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood));
     if (
       finishedPerimeter &&
       map.environment &&
@@ -839,7 +981,19 @@ export class OfficeRenderer {
         hasLegacyPartitions: finishedPerimeter,
       });
     this.seats = furnitureSeats(furniture);
+    const annexWalls = new Map(
+      map.meetingSpace?.generatedAnnexWalls?.map((wall) => [wall.id, wall]) ?? [],
+    );
     for (const object of remainingFurniture) {
+      const marker = annexWalls.get(object.id);
+      const annexDisplay =
+        marker?.type === "room_wall_h" &&
+        object.type === marker.type &&
+        marker.col === object.col &&
+        marker.row === object.row
+          ? marker.display
+          : undefined;
+      if (annexDisplay === "hidden") continue;
       if (
         trading &&
         (object.variant === "trading-perimeter" || object.variant === "trading-world-map")
@@ -871,7 +1025,9 @@ export class OfficeRenderer {
       group.name = `generic-object:${object.id}`;
       group.userData.mapObjectId = object.id;
       this.world.add(group);
-      const type = object.type;
+      if (["room_wall_h", "room_wall_v", "cubicle_wall", "glass_partition"].includes(object.type))
+        registerMeetingWalls([group]);
+      const type = annexDisplay === "vertical" ? "room_wall_v" : object.type;
       if ((trading || publishing) && type === "glass_partition") {
         const span = joinedPartitionSpan(object, furniture);
         group.position.set(span.x, 0, span.z);
@@ -887,7 +1043,13 @@ export class OfficeRenderer {
         continue;
       }
       if (type === "room_wall_h" || type === "room_wall_v") {
+        if (annexDisplay === "corner") {
+          addRoomPartition(group, false);
+          addRoomPartition(group, true);
+          continue;
+        }
         const junction =
+          annexDisplay !== "vertical" &&
           type === "room_wall_v" &&
           furniture.some(
             (other) =>
@@ -1070,9 +1232,11 @@ export class OfficeRenderer {
         if (this.disposed || marker.parent !== this.world) return false;
         // Shared finalizer deduplicates textures and keeps exact seat pick proxies.
         finalizeStudioScene(this.world);
+        if (this.meetingCamera.active) this.meetingWalls.enter(this.meetingWallObjects);
         marker.userData.assetStatus = results.every(Boolean) ? "ready" : "failed";
         return results.every(Boolean);
       });
+      if (keepMeeting) this.meetingWalls.enter(this.meetingWallObjects);
       return;
     }
     if (studio) {
@@ -1080,6 +1244,7 @@ export class OfficeRenderer {
       for (const group of this.world.children)
         if (group instanceof T.Group && group.name.startsWith("generic-object:"))
           batchStaticFurniture(group, true, { vertexColors: true, batchSeats: true });
+      if (keepMeeting) this.meetingWalls.enter(this.meetingWallObjects);
       return;
     }
     detailSurfaces(
@@ -1094,6 +1259,7 @@ export class OfficeRenderer {
     );
     batchStaticFurniture(this.world, true, { vertexColors: true, batchSeats: true });
     batchCoplanarGlass(this.world);
+    if (keepMeeting) this.meetingWalls.enter(this.meetingWallObjects);
   }
   private createLabel(actor: ActorSnapshot): RenderedActor {
     const color =
@@ -1189,7 +1355,7 @@ export class OfficeRenderer {
         )
           this.setSelectedSeat(null);
       }
-      if (this.following && player) {
+      if (!this.meetingCamera.active && this.following && player) {
         const p = pixelToWorld(player.x, player.y),
           target = new T.Vector3(p.x, 0, p.z);
         const offset = target.sub(this.controls.target).multiplyScalar(0.08);
@@ -1197,6 +1363,23 @@ export class OfficeRenderer {
         this.camera.position.add(offset);
       }
       this.controls.update();
+      this.meetingCamera.update(
+        this.priorFrame ? Math.min(0.1, (time - this.priorFrame) / 1000) : 0,
+        this.lastActors,
+      );
+      if (this.meetingSpace) {
+        const b = this.meetingSpace.bounds;
+        const targets = this.lastActors
+          .filter(
+            (a) =>
+              a.x / 32 >= b.x &&
+              a.x / 32 <= b.x + b.width &&
+              a.y / 32 >= b.y &&
+              a.y / 32 <= b.y + b.height,
+          )
+          .map((a) => new T.Vector3(a.x / 32, 1.2, a.y / 32));
+        this.meetingWalls.update(this.camera.position, targets);
+      }
       const labelAnchors: ActorLabelAnchor[] = [];
       const viewportWidth = this.host.clientWidth;
       const viewportHeight = this.host.clientHeight;
@@ -1403,6 +1586,9 @@ export class OfficeRenderer {
     }
   };
   dispose() {
+    this.exitMeeting();
+    this.meetingCamera.dispose();
+    this.onMeetingCameraChange = undefined;
     this.cancelBenchmark("Renderer disposed");
     document.removeEventListener("visibilitychange", this.benchmarkVisibility);
     this.setHoveredSeat(null);

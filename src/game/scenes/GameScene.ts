@@ -79,6 +79,8 @@ import { getCenteredCameraBounds } from "../camera-layout";
 // Map constants
 // ---------------------------------------------------------------------------
 
+import { normalizeMeetingMap, prepareMeetingMapSave } from "../meeting-map-normalization";
+import { insideMeetingSpace, type MeetingSpace } from "../meeting-space";
 const MAP_COLS = 40;
 const MAP_ROWS = 30;
 const TILE_SIZE = 32;
@@ -975,6 +977,162 @@ class NpcSprite {
 // ---------------------------------------------------------------------------
 
 export class GameScene extends Phaser.Scene {
+  private meetingMode = false;
+  private meetingEntryPending = false;
+  private meetingEntryStartedAt = 0;
+  private meetingEntryPath: NavigationPoint[] | null = null;
+  private meetingSeatTarget: string | null = null;
+  private spatialNpcRoutes = new Map<string, { generation: number; done: boolean }>();
+
+  /** 도착 사건만 UI의 회의 참여를 허용한다. 요청 자체는 참가 등록을 하지 않는다. */
+  isInMeetingSpace(): boolean {
+    return (
+      !!this.player &&
+      !!this.meetingSpace &&
+      insideMeetingSpace(this.meetingSpace.bounds, this.player.x / 32, this.player.y / 32)
+    );
+  }
+  requestMeetingEntry(): boolean {
+    if (this.meetingEntryPending) return false;
+    if (!this.player || !this.canMovePlayer() || !this.meetingSpace) {
+      EventBus.emit("meeting:entry-state", { status: "failed", reasonCode: "map_unavailable" });
+      return false;
+    }
+    if (insideMeetingSpace(this.meetingSpace.bounds, this.player.x / 32, this.player.y / 32)) {
+      this.currentPath = null;
+      this.clearPathLine();
+      this.traffic.clear("player:local");
+      EventBus.emit("meeting:entry-state", { status: "arrived" });
+      return true;
+    }
+    const target = this.meetingSpace.entry;
+    const path = this.findPlayerPath(
+      Math.floor(this.player.x / 32),
+      Math.floor(this.player.y / 32),
+      Math.floor(target.x),
+      Math.floor(target.y),
+    );
+    if (!path?.length) {
+      EventBus.emit("meeting:entry-state", { status: "failed", reasonCode: "path_unavailable" });
+      return false;
+    }
+    this.meetingEntryPending = true;
+    this.meetingEntryStartedAt = this.time.now;
+    this.currentPath = path;
+    this.meetingEntryPath = path;
+    this.pathIndex = 0;
+    this.pathLastDist = Infinity;
+    this.pathStuckTimer = 0;
+    this.targetNpcId = null;
+    EventBus.emit("meeting:entry-state", { status: "walking" });
+    return true;
+  }
+  cancelMeetingEntry(): void {
+    if (!this.meetingEntryPending) return;
+    this.meetingEntryPending = false;
+    if (this.currentPath === this.meetingEntryPath) {
+      this.currentPath = null;
+      this.clearPathLine();
+    }
+    this.meetingEntryPath = null;
+    EventBus.emit("meeting:entry-state", { status: "cancelled" });
+  }
+  setMeetingMode(active: boolean): void {
+    this.meetingMode = active;
+    if (active && !this.meetingSeatTarget) {
+      this.currentPath = null;
+      this.clearPathLine();
+    }
+    if (!active && this.meetingSeatTarget) {
+      this.currentPath = null;
+      this.meetingSeatTarget = null;
+      this.clearPathLine();
+    }
+  }
+  private applySpatialNpc(npc: NpcSprite, state: MotionNpc) {
+    const target = state.spatialTarget!;
+    if (state.ownerSocketId !== this.socket?.id) {
+      this.spatialNpcRoutes.delete(npc.id);
+      return;
+    }
+    if (!state.moving) {
+      npc.cancelMovement();
+      npc.moveState = "waiting";
+      return;
+    }
+    const route = this.spatialNpcRoutes.get(npc.id);
+    if (route?.generation === target.generation) return;
+    this.spatialNpcRoutes.set(npc.id, { generation: target.generation, done: false });
+    npc.cancelMovement();
+    npc.destinationTag = null;
+    npc.purposeAccessOrigin = null;
+    npc.ambientExitPolicy = null;
+    const path = this.npcPathfinder(npc)(
+      Math.floor(npc.pixelX / 32),
+      Math.floor(npc.pixelY / 32),
+      Math.floor(target.x / 32),
+      Math.floor(target.y / 32),
+      this.createNpcWalkValidator(),
+    );
+    if (!path?.length) {
+      this.socket?.emit("npc:spatial-failed", {
+        channelId: this.channelId,
+        npcId: npc.id,
+        generation: target.generation,
+      });
+      return;
+    }
+    path[path.length - 1] = { x: target.x / 32 - 0.5, y: target.y / 32 - 0.5 };
+    npc.startStroll(path);
+  }
+  private updateSpatialNpc(npc: NpcSprite, state: MotionNpc): void {
+    const target = state.spatialTarget!;
+    if (state.ownerSocketId !== this.socket?.id || !state.moving) return;
+    this.applySpatialNpc(npc, state);
+    const route = this.spatialNpcRoutes.get(npc.id);
+    if (!route || route.done) return;
+    const result = npc.updateMovement(
+      this.game.loop.delta,
+      this.player.x,
+      this.player.y,
+      this.npcPathfinder(npc),
+      this.createNpcWalkValidator(),
+      (position, goal, amount) =>
+        this.traffic.step(
+          npc.id,
+          position,
+          goal,
+          amount,
+          this.time.now,
+          (x, y) => this.isWalkable(x, y),
+          this.trafficActors(),
+        ),
+    );
+    if (Math.hypot(npc.pixelX - target.x, npc.pixelY - target.y) <= 2) {
+      route.done = true;
+      npc.cancelMovement();
+      npc.moveState = "waiting";
+      this.socket?.emit("npc:position-update", {
+        channelId: this.channelId,
+        npcId: npc.id,
+        x: npc.pixelX,
+        y: npc.pixelY,
+        direction: DIR_NUM_TO_NAME[npc.direction],
+      });
+      this.socket?.emit("npc:arrived", {
+        channelId: this.channelId,
+        npcId: npc.id,
+        generation: target.generation,
+      });
+    } else if (result === "idle" && npc.moveState === "idle") {
+      route.done = true;
+      this.socket?.emit("npc:spatial-failed", {
+        channelId: this.channelId,
+        npcId: npc.id,
+        generation: target.generation,
+      });
+    }
+  }
   private eventScope = createEventScope();
   private presentationPointer: { x: number; y: number } | null = null;
   private presentationActorId: string | undefined;
@@ -1027,6 +1185,8 @@ export class GameScene extends Phaser.Scene {
     npc.remotePresentation ??= new RemoteNpcPresentation(npc.pixelX, npc.pixelY);
     if (reset) {
       npc.cancelMovement();
+      // 권위 재설정이 경로를 취소했으므로 같은 공간 이동 세대도 다시 계획한다.
+      this.spatialNpcRoutes.delete(npc.id);
       npc.pixelX = state.x;
       npc.pixelY = state.y;
       npc.direction = DIR_NAME_MAP[state.direction] ?? DIR_DOWN;
@@ -1042,6 +1202,11 @@ export class GameScene extends Phaser.Scene {
       npc.remotePresentation.accept(state.x, state.y);
     }
     npc.remoteWalkingUntil = !localDriver && state.moving ? this.time.now + 500 : 0;
+    if (state.spatialTarget) {
+      this.applySpatialNpc(npc, state);
+      return;
+    }
+    this.spatialNpcRoutes.delete(npc.id);
     if (force && state.continuation) {
       const restored = copyMotionContinuation(state.continuation);
       npc.ambientSchedule = restored.ambientSchedule;
@@ -1363,6 +1528,10 @@ export class GameScene extends Phaser.Scene {
       if (this.playerReady && this.player)
         actors.push({
           id: this.socket?.id || this.characterId || "local",
+          userId:
+            this.localPlayerIdentity?.socketId === this.socket?.id
+              ? this.localPlayerIdentity?.userId
+              : undefined,
           name: this.characterName,
           kind: "player",
           x: this.player.x,
@@ -1482,6 +1651,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       return {
+        meetingSpace: this.meetingSpace,
         cols: this.effectiveMapCols,
         rows: this.effectiveMapRows,
         floor: this.floorData,
@@ -1562,7 +1732,11 @@ export class GameScene extends Phaser.Scene {
   private socket: Socket | null = null;
   private rejoin = createRejoinTracker();
   private joinedSocketId: string | undefined = undefined;
+  private localPlayerIdentity: { socketId: string; userId: string } | undefined;
   private handleSocketDisconnect = () => {
+    this.localPlayerIdentity = undefined;
+    this.cancelMeetingEntry();
+    this.spatialNpcRoutes.clear();
     this.rejoin.onDisconnect();
     this.motionSnapshot.clear();
     this.peerSnapshotReady = false;
@@ -1667,6 +1841,9 @@ export class GameScene extends Phaser.Scene {
   private mapRevision?: string;
   private channelId: string = "";
   private channelMapData: MapData | null = null;
+  private meetingSpace: MeetingSpace | undefined;
+  private meetingMapSource: Record<string, unknown> | undefined;
+  private mapSavePending = false;
   private tiledMode: boolean = false; // true when using Tiled JSON map (not legacy tilemap)
   private officeEnvironment: string | undefined;
   private officeEnvironmentVersion: number | undefined;
@@ -1856,6 +2033,13 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   create(): void {
+    this.eventScope.on("meeting:request-entry", () => this.requestMeetingEntry());
+    this.eventScope.on("meeting:cancel-entry", () => this.cancelMeetingEntry());
+    this.eventScope.on("meeting:mode", (data: { active: boolean }) =>
+      this.setMeetingMode(data.active),
+    );
+    this.meetingSpace = undefined;
+    this.meetingMapSource = undefined;
     this.officeEnvironment = undefined;
     this.officeEnvironmentVersion = undefined;
     this.ambientZones = [];
@@ -1875,6 +2059,15 @@ export class GameScene extends Phaser.Scene {
     if (initialChannelData) {
       this.channelId = initialChannelData.channelId;
       this.mapRevision = initialChannelData.mapRevision;
+
+      const source = initialChannelData.tiledJson ?? initialChannelData.mapData;
+      if (source) {
+        const normalized = normalizeMeetingMap(source, initialChannelData.mapConfig);
+        this.meetingSpace = normalized.meetingSpace;
+        this.meetingMapSource = normalized.mapData;
+        if (initialChannelData.tiledJson) initialChannelData.tiledJson = normalized.mapData;
+        else initialChannelData.mapData = normalized.mapData;
+      }
 
       if (initialChannelData.tiledJson) {
         // Explicit Tiled JSON passed from game page
@@ -1923,6 +2116,10 @@ export class GameScene extends Phaser.Scene {
       this.floorData = this.channelMapData.layers.floor;
       this.wallsData = this.channelMapData.layers.walls;
       this.mapObjects = this.channelMapData.objects;
+      this.effectiveMapCols = this.floorData[0].length;
+      this.effectiveMapRows = this.floorData.length;
+      this.currentMapPixelWidth = this.effectiveMapCols * TILE_SIZE;
+      this.currentMapPixelHeight = this.effectiveMapRows * TILE_SIZE;
 
       this.createTilemap();
       this.renderObjects();
@@ -2022,8 +2219,8 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    const mapWidth = MAP_COLS * TILE_SIZE;
-    const mapHeight = MAP_ROWS * TILE_SIZE;
+    const mapWidth = this.effectiveMapCols * TILE_SIZE;
+    const mapHeight = this.effectiveMapRows * TILE_SIZE;
 
     this.cameras.main.setZoom(MAIN_CAMERA_ZOOM);
     this.applyMainCameraBounds(mapWidth, mapHeight);
@@ -2485,6 +2682,8 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (!this.player || !this.playerReady || !this.canMovePlayer()) return;
+      if (this.meetingMode) return;
+      this.cancelMeetingEntry();
 
       // Right-click on NPC: context menu
       if (pointer.rightButtonDown()) {
@@ -3085,7 +3284,7 @@ export class GameScene extends Phaser.Scene {
           const objectType = (obj.type as string) || "";
           if (objectType && OBJECT_TYPES[objectType]) {
             this.mapObjects.push({
-              id: generateObjectId(),
+              id: `${layer.id}:${obj.id}`,
               type: objectType,
               col: Math.floor((obj.x as number) / TILE_SIZE),
               row: Math.floor((obj.y as number) / TILE_SIZE),
@@ -3472,13 +3671,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private saveMap(): Promise<boolean> {
-    const mapData: MapData = {
+    if (this.mapSavePending) return Promise.resolve(false);
+    const prepared = prepareMeetingMapSave(this.meetingMapSource, {
       layers: {
         floor: this.floorData,
         walls: this.wallsData,
       },
       objects: this.mapObjects,
-    };
+    });
+    const mapData = prepared.mapData;
+    this.mapSavePending = true;
 
     // Save to localStorage (may fail in restricted contexts)
     try {
@@ -3500,6 +3702,12 @@ export class GameScene extends Phaser.Scene {
     })
       .then((res) => {
         if (res.ok) {
+          this.meetingMapSource = mapData;
+          this.mapObjects = this.mapObjects.map((object) => ({
+            ...object,
+            id: prepared.objectIds[object.id] ?? object.id,
+          }));
+          if (Object.keys(prepared.objectIds).length) this.renderObjects();
           this.socket?.emit("map:layout-saved");
           // Flash the save button green
           const saveBtn = this.children.getByName(
@@ -3520,6 +3728,9 @@ export class GameScene extends Phaser.Scene {
       .catch((err) => {
         console.error("[MapEditor] Server save error:", err);
         return false;
+      })
+      .finally(() => {
+        this.mapSavePending = false;
       });
   }
 
@@ -3555,6 +3766,7 @@ export class GameScene extends Phaser.Scene {
 
   private removeNpcById(npcId: string): void {
     this.npcOwnership.clear(npcId);
+    this.spatialNpcRoutes.delete(npcId);
     const idx = this.npcSprites.findIndex((n) => n.id === npcId);
     if (idx === -1) return;
     const npc = this.npcSprites[idx];
@@ -3600,6 +3812,14 @@ export class GameScene extends Phaser.Scene {
     listen("disconnect", this.handleSocketDisconnect);
     this.socket.off("connect", this.handleSocketConnect);
     listen("connect", this.handleSocketConnect);
+    listen("meeting:state", (state: { participants?: Array<{ id: string; userId?: string }> }) => {
+      if (this.socket !== socket || !socket.connected || !socket.id) return;
+      const local = state.participants?.find((participant) => participant.id === socket.id);
+      this.localPlayerIdentity =
+        typeof local?.userId === "string" && local.userId
+          ? { socketId: socket.id, userId: local.userId }
+          : undefined;
+    });
     registerOnce(EventBus, "socket-rejoin", this.handleSocketRejoin);
     const cleanupSocketRejoinListener = () => {
       EventBus.off("socket-rejoin", this.handleSocketRejoin);
@@ -3614,6 +3834,26 @@ export class GameScene extends Phaser.Scene {
         snapshot.ambientLeaderId === this.socket?.id;
       if (!this.motionSnapshot.accept(snapshot, this.channelId)) return;
       const ownSeat = snapshot.seats.find((seat) => seat.actorId === this.socket?.id);
+      if (ownSeat?.spatial && this.player && this.meetingSeatTarget !== ownSeat.seatId) {
+        this.meetingSeatTarget = ownSeat.seatId;
+        this.playerSeatGoal = ownSeat.seatId.startsWith("standing:") ? null : ownSeat.seatId;
+        const path = this.findPlayerPath(
+          Math.floor(this.player.x / 32),
+          Math.floor(this.player.y / 32),
+          Math.floor(ownSeat.x / 32),
+          Math.floor(ownSeat.y / 32),
+        );
+        if (path?.length) {
+          this.currentPath = path;
+          this.pathIndex = 0;
+          this.pathLastDist = Infinity;
+          this.pathStuckTimer = 0;
+        } else
+          EventBus.emit("meeting:entry-state", {
+            status: "failed",
+            reasonCode: "path_unavailable",
+          });
+      }
       if (first && ownSeat) this.playerSeatGoal = ownSeat.seatId;
       if (
         this.playerSeatGoal &&
@@ -4383,6 +4623,8 @@ export class GameScene extends Phaser.Scene {
   /** 대기 중인 NPC 를 자리로 보낸다 — 타이머 만료와 채널 채팅 닫힘이 같은 경로를 쓴다. */
   private sendNpcHome(npc: NpcSprite): void {
     if (!this.mayDriveNpc(npc)) return;
+    if (this.motionSnapshot.current?.npcs.some((s) => s.npcId === npc.id && s.spatialTarget))
+      return;
     npc.waitTimer = 0;
     this.clearNpcBubble(npc.id);
     this.npcOwnership.startReturn(npc.id);
@@ -4454,6 +4696,12 @@ export class GameScene extends Phaser.Scene {
 
   update(): void {
     this.playerActuallyWalking = false;
+    if (this.meetingEntryPending && this.currentPath !== this.meetingEntryPath)
+      this.cancelMeetingEntry();
+    if (this.meetingEntryPending && this.time.now - this.meetingEntryStartedAt > 120_000) {
+      this.cancelMeetingEntry();
+      EventBus.emit("meeting:entry-state", { status: "failed", reasonCode: "arrival_timeout" });
+    }
     this.publishReturnDiagnostics();
     // Lerp remote players every frame
     for (const remote of this.remotePlayers.values()) {
@@ -4527,6 +4775,8 @@ export class GameScene extends Phaser.Scene {
           (a.ambientSchedule.elapsed - a.ambientSchedule.duration),
       );
       for (const npc of ambientOrder) {
+        if (this.motionSnapshot.current?.npcs.some((s) => s.npcId === npc.id && s.spatialTarget))
+          continue;
         const allowed =
           this.npcOwnership.mayRoam(npc.id, leader) &&
           ambientAllowed(
@@ -4711,12 +4961,23 @@ export class GameScene extends Phaser.Scene {
           })
         ) {
           npc.waitTimer += this.game.loop.delta;
-          if (npc.waitTimer >= npc.waitDurationMs) this.sendNpcHome(npc);
+          if (
+            npc.waitTimer >= npc.waitDurationMs &&
+            !this.motionSnapshot.current?.npcs.some((s) => s.npcId === npc.id && s.spatialTarget)
+          )
+            this.sendNpcHome(npc);
         }
       }
 
       for (const npc of this.npcSprites) {
         if (!this.mayDriveNpc(npc)) continue;
+        const spatialMotion = this.motionSnapshot.current?.npcs.find(
+          (s) => s.npcId === npc.id && s.spatialTarget,
+        );
+        if (spatialMotion) {
+          this.updateSpatialNpc(npc, spatialMotion);
+          continue;
+        }
         if (npc.ambientPaused && npc.moveState === "strolling") continue;
         if (npc.moveState === "idle" || npc.moveState === "waiting") {
           this.traffic.clear(npc.id);
@@ -5001,12 +5262,13 @@ export class GameScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
     // Detect keyboard input
-    const left = this.cursors?.left.isDown;
-    const right = this.cursors?.right.isDown;
-    const up = this.cursors?.up.isDown;
-    const down = this.cursors?.down.isDown;
+    const left = !this.meetingMode && this.cursors?.left.isDown;
+    const right = !this.meetingMode && this.cursors?.right.isDown;
+    const up = !this.meetingMode && this.cursors?.up.isDown;
+    const down = !this.meetingMode && this.cursors?.down.isDown;
     const hasKeyboardInput = left || right || up || down;
     if (hasKeyboardInput) {
+      this.cancelMeetingEntry();
       this.spawnInputStarted = true;
       if (this.playerSeatGoal) {
         this.releaseSeat(this.socket?.id ?? "");
@@ -5089,6 +5351,17 @@ export class GameScene extends Phaser.Scene {
         this.pathStuckTimer = 0;
         this.pathLastDist = Infinity;
         if (this.pathIndex >= this.currentPath.length) {
+          if (this.meetingEntryPending && this.currentPath === this.meetingEntryPath) {
+            this.meetingEntryPending = false;
+            this.meetingEntryPath = null;
+            this.sendPosition(
+              this.player.x,
+              this.player.y,
+              DIR_NUM_TO_NAME[this.currentDirection],
+              "idle",
+            );
+            EventBus.emit("meeting:entry-state", { status: "arrived" });
+          }
           this.currentPath = null;
           this.traffic.clear("player:local");
           this.clearPathLine();

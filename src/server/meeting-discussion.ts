@@ -1,4 +1,5 @@
 import type { MeetingDiscussionState } from "../lib/meeting-discussion-state";
+import type { MeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 import { MEETING_NPC_STREAM_EVENT } from "./meeting-socket";
 import type { AdapterRegistry, NpcAdapter } from "../lib/adapters/types";
 import {
@@ -177,6 +178,8 @@ type RegisterMeetingDiscussionHandlersArgs = {
     adapterRegistry: AdapterRegistry;
     getNpcConfigsForChannel: (channelId: string) => Promise<MeetingNpcConfig[]>;
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
+    spatial?: MeetingSpatialCoordinator;
+    canStartMeeting?: (channelId: string, userId: string) => Promise<boolean> | boolean;
     createMeetingBroker?: (
       config: MeetingBrokerConfig,
       callbacks: MeetingBrokerCallbacks,
@@ -461,7 +464,18 @@ export function registerMeetingDiscussionHandlers({
     };
 
     meetingLog("start-discussion 수신:", { channelId, topic: topic?.slice(0, 40), selectedNpcIds });
-    if (!channelId || !topic) return;
+    if (typeof channelId !== "string" || typeof topic !== "string" || !topic.trim()) return;
+    if (
+      selectedNpcIds !== undefined &&
+      (!Array.isArray(selectedNpcIds) || selectedNpcIds.some((id) => typeof id !== "string"))
+    ) {
+      socket.emit("meeting:error", { error: "invalid_participants" });
+      return;
+    }
+    if (deps.canStartMeeting && !(await deps.canStartMeeting(channelId, user.userId))) {
+      socket.emit("meeting:error", { error: "Permission denied" });
+      return;
+    }
     if (activeBrokers.has(channelId)) {
       socket.emit("meeting:error", { error: "A meeting is already in progress" });
       return;
@@ -479,6 +493,23 @@ export function registerMeetingDiscussionHandlers({
     if (selectedNpcIds && selectedNpcIds.length > 0) {
       const selectedSet = new Set(selectedNpcIds);
       candidateNpcs = candidateNpcs.filter((npc) => selectedSet.has(npc.id));
+    }
+    let spatialGeneration: number | null = null;
+    if (deps.spatial) {
+      spatialGeneration = await deps.spatial.start(
+        channelId,
+        user.userId,
+        selectedNpcIds?.length ? selectedNpcIds : candidateNpcs.map((n) => n.id),
+      );
+      if (spatialGeneration === null) return;
+      discussionInitiators.set(channelId, user.userId);
+      const missing = selectedNpcIds?.find((id) => !npcConfigs.some((n) => n.id === id));
+      if (missing) deps.spatial.block(channelId, missing, "actor_unavailable", spatialGeneration);
+      if (!(await deps.spatial.ready(channelId, spatialGeneration))) return;
+      if (deps.canStartMeeting && !(await deps.canStartMeeting(channelId, user.userId))) {
+        deps.spatial.block(channelId, user.userId, "participant_left", spatialGeneration);
+        return;
+      }
     }
 
     meetingLog(
@@ -678,6 +709,7 @@ export function registerMeetingDiscussionHandlers({
           });
         },
         onMeetingEnd: async (transcript, durationSeconds) => {
+          if (activeBrokers.get(channelId) !== brokerInstance) return;
           let summary: MeetingSummary = { keyTopics: [], conclusions: null };
           // 참가자 중 아무나 한 명에게 요약을 시킨다. 요약 세션 키는 회의 세션과 분리해
           // 요약 프롬프트가 그 NPC 의 회의 맥락에 섞이지 않게 한다.
@@ -693,6 +725,7 @@ export function registerMeetingDiscussionHandlers({
             );
           }
 
+          if (activeBrokers.get(channelId) !== brokerInstance) return;
           const minutesId = await persistMeetingMinutes({
             channelId,
             topic,
@@ -705,6 +738,7 @@ export function registerMeetingDiscussionHandlers({
             conclusions: summary.conclusions,
           });
 
+          if (activeBrokers.get(channelId) !== brokerInstance) return;
           io.to(getMeetingRoomId(channelId)).emit("meeting:end", {
             transcript,
             keyTopics: summary.keyTopics,
@@ -718,6 +752,7 @@ export function registerMeetingDiscussionHandlers({
 
           activeBrokers.delete(channelId);
           discussionInitiators.delete(channelId);
+          void deps.spatial?.cancel(channelId);
         },
         onError: (error) => {
           io.to(getMeetingRoomId(channelId)).emit("meeting:error", { error });
@@ -730,8 +765,29 @@ export function registerMeetingDiscussionHandlers({
     // onParticipantsExcluded가 이미 개별 통지했다 — 이건 "그래서 회의 자체가 시작되지 않았다"는
     // 별도의 최종 신호다.
     if (brokerInstance.config.participants.length === 0) {
+      if (deps.spatial && spatialGeneration !== null)
+        deps.spatial.block(
+          channelId,
+          candidateNpcs[0]?.id ?? user.userId,
+          "backend_unavailable",
+          spatialGeneration,
+        );
       socket.emit("meeting:error", { error: "No AI NPCs in this channel" });
       return;
+    }
+    if (deps.spatial && spatialGeneration !== null) {
+      const excluded = candidateNpcs.find(
+        (n) => !brokerInstance.config.participants.some((p) => p.npcId === n.id),
+      );
+      if (excluded) {
+        deps.spatial.block(channelId, excluded.id, "backend_unavailable", spatialGeneration);
+        return;
+      }
+      if (
+        deps.spatial.snapshot(channelId)?.generation !== spatialGeneration ||
+        deps.spatial.snapshot(channelId)?.phase !== "ready"
+      )
+        return;
     }
 
     meetingLog(
@@ -756,9 +812,11 @@ export function registerMeetingDiscussionHandlers({
     discussionInitiators.set(channelId, user.userId);
 
     brokerInstance.run().catch((error) => {
+      if (activeBrokers.get(channelId) !== brokerInstance) return;
       console.error("[meeting] Broker error:", error);
       activeBrokers.delete(channelId);
       discussionInitiators.delete(channelId);
+      void deps.spatial?.cancel(channelId);
       io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
         error: "Meeting ended due to error",
       });
@@ -806,15 +864,27 @@ export function registerMeetingDiscussionHandlers({
     io.to(getMeetingRoomId(channelId)).emit("meeting:message", userMessage);
   });
 
-  socket.on("meeting:stop", (payload: unknown) => {
+  socket.on("meeting:stop", async (payload: unknown) => {
     const { channelId } = (payload ?? {}) as { channelId?: string };
     if (!channelId) return;
+    if (!(await canControlMeeting(channelId, user.userId))) {
+      socket.emit("meeting:error", { error: "Permission denied" });
+      return;
+    }
+    await deps.spatial?.cancel(channelId);
 
     const broker = activeBrokers.get(channelId);
     if (!broker) return;
 
     broker.stop();
     discussionInitiators.delete(channelId);
+  });
+
+  socket.on("meeting:cancel-preparation", async (payload: unknown) => {
+    const { channelId } = (payload ?? {}) as { channelId?: string };
+    if (!channelId || !(await canControlMeeting(channelId, user.userId))) return;
+    if (activeBrokers.has(channelId)) return;
+    await deps.spatial?.cancel(channelId);
   });
 
   socket.on("meeting:set-mode", async (payload: unknown) => {

@@ -10,13 +10,19 @@ export function isPublishingMap(map: Pick<MapSnapshot, "environment" | "environm
 export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
   const g = new T.Group();
   g.name = "publishing-architecture";
+  const meetingWalls: T.Object3D[] = [];
+  g.userData.meetingWalls = meetingWalls;
   root.add(g);
   const plaster = new T.MeshStandardMaterial({ color: "#e9e1cf", roughness: 0.94 });
   const cap = new T.MeshStandardMaterial({ color: "#b6b0a1", roughness: 0.77 });
   const wall = (w: number, h: number, d: number, x: number, z: number) => {
-    round(g, w, h, d, plaster, x, h / 2, z, 0.025);
-    round(g, w + 0.05, 0.09, d + 0.06, cap, x, h + 0.025, z, 0.012);
-    round(g, w, 0.14, d + 0.045, "#c9bba3", x, 0.09, z, 0.009);
+    const host = new T.Group();
+    host.userData.meetingWall = true;
+    meetingWalls.push(host);
+    g.add(host);
+    round(host, w, h, d, plaster, x, h / 2, z, 0.025);
+    round(host, w + 0.05, 0.09, d + 0.06, cap, x, h + 0.025, z, 0.012);
+    round(host, w, 0.14, d + 0.045, "#c9bba3", x, 0.09, z, 0.009);
   };
   wall(map.cols, 3.05, 0.24, map.cols / 2, 0.5);
   wall(0.24, 2.1, map.rows - 1, 0.5, map.rows / 2);

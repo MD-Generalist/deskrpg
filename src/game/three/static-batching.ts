@@ -2,10 +2,19 @@ import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 // Baking a reflection changes winding; keep those meshes under Three's original front-face handling.
 function eligibleTransform(object: T.Mesh, root: T.Group, inverse: T.Matrix4) {
+  const materials = Array.isArray(object.material) ? object.material : [object.material];
+  // 회의 차폐 재질은 복원 시 폐기되므로 늦은 자산 배칭에 재사용하면 안 된다.
+  if (materials.some((material) => material.userData.meetingOcclusion)) return false;
   if (new T.Matrix4().multiplyMatrices(inverse, object.matrixWorld).determinant() <= 0)
     return false;
   for (let parent: T.Object3D | null = object; parent && parent !== root; parent = parent.parent)
-    if (!parent.visible || parent.renderOrder !== 0 || parent.userData.dynamicAsset) return false;
+    if (
+      !parent.visible ||
+      parent.renderOrder !== 0 ||
+      parent.userData.dynamicAsset ||
+      parent.userData.meetingWall
+    )
+      return false;
   return (
     !object.customDepthMaterial &&
     !object.customDistanceMaterial &&

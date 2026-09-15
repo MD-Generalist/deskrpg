@@ -1,5 +1,6 @@
 import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { db, jsonForDb } from "@/db";
+import { normalizeMeetingMap } from "@/game/meeting-map-normalization";
 import {
   channels,
   channelMembers,
@@ -313,6 +314,18 @@ export async function POST(req: NextRequest) {
     }
 
     const inviteCode = generateChannelInviteCode();
+    let effectiveMap;
+    try {
+      effectiveMap = normalizeMeetingMap(
+        templateTiledJson || { layers: templateLayers, objects: templateObjects },
+        { spawnCol: template.spawnCol, spawnRow: template.spawnRow },
+      );
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "회의실 맵을 확인할 수 없습니다" },
+        { status: 422 },
+      );
+    }
 
     const [channel] = await db
       .insert(channels)
@@ -324,12 +337,7 @@ export async function POST(req: NextRequest) {
         isPublic: channelIsPublic,
         inviteCode,
         maxPlayers: 50,
-        mapData: jsonForDb(
-          templateTiledJson || {
-            layers: templateLayers,
-            objects: templateObjects,
-          },
-        ),
+        mapData: jsonForDb(effectiveMap.mapData),
         mapConfig: jsonForDb({
           cols: template.cols,
           rows: template.rows,

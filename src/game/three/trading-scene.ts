@@ -103,7 +103,9 @@ export function addTradingArchitecture(root: T.Group, map: MapSnapshot) {
   tiles.name = "trading-stone-tiles";
   tiles.receiveShadow = true;
   group.add(tiles);
-  addOfficeFrameRuns(group, tradingFrameRuns(map), "#e6e0d2", "#c3aa82");
+  const meetingWalls = addOfficeFrameRuns(group, tradingFrameRuns(map), "#e6e0d2", "#c3aa82");
+  group.userData.meetingWalls = meetingWalls;
+  for (const wall of meetingWalls) wall.userData.meetingWall = true;
   // Back-wall mural is scene-owned, with readiness observed before capture/batching.
   const mural = new T.Group();
   mural.name = "trading-world-mural";

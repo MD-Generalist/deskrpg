@@ -24,7 +24,7 @@ export function addOfficePerimeter(
   wall: string,
   wood: string,
 ) {
-  addOfficeFrameRuns(root, officePerimeterRuns(cols, rows), wall, wood);
+  return addOfficeFrameRuns(root, officePerimeterRuns(cols, rows), wall, wood);
 }
 
 /** Reusable glazed frame finish for arbitrary axis-aligned office contours. */
@@ -34,6 +34,7 @@ export function addOfficeFrameRuns(
   wall: string,
   wood: string,
 ) {
+  const walls: T.Object3D[] = [];
   const metal = "#35434b";
   for (const run of runs) {
     const vertical = run.x1 === run.x2;
@@ -42,6 +43,7 @@ export function addOfficeFrameRuns(
     g.position.set((run.x1 + run.x2) / 2, 0, (run.z1 + run.z2) / 2);
     if (vertical) g.rotation.y = Math.PI / 2;
     root.add(g);
+    walls.push(g);
     round(g, length, 0.24, 0.18, wall, 0, 0.12, 0, 0.015);
     round(g, length, 0.055, 0.12, metal, 0, run.height, 0, 0.008);
     const material = new T.MeshPhysicalMaterial({
@@ -89,4 +91,5 @@ export function addOfficeFrameRuns(
         round(g, length, 0.035, 0.13, "#f6f3e9", 0, run.height - 0.15 - i * 0.1, 0, 0.007);
     }
   }
+  return walls;
 }

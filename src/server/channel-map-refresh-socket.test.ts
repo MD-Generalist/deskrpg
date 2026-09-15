@@ -18,13 +18,16 @@ import {
 } from "../test-setup/npc-seed";
 import oldMap from "../lib/fixtures/official-agency-v2.json";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
+import { deriveChannelMotionLayout } from "./channel-motion-layout";
 setupThrowawaySqlite("task7-real-socket");
+// 전체 테스트 병렬 실행에서도 실제 기하 투영과 인증 완료를 기다린다.
+const socketDeadlineMs = 10_000;
 const event = <T>(client: Socket, name: string) =>
   new Promise<T>((resolve, reject) => {
     const timeout = setTimeout(() => {
       client.off(name, listener);
       reject(Error("Timed out: " + name));
-    }, 2000);
+    }, socketDeadlineMs);
     const listener = (data: T) => {
       clearTimeout(timeout);
       resolve(data);
@@ -35,8 +38,8 @@ const joinResult = (client: Socket, payload: unknown) =>
   new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
-      reject(Error("join timeout"));
-    }, 2000);
+      reject(Error("join timeout: " + JSON.stringify(payload)));
+    }, socketDeadlineMs);
     const listener = (name: string) => {
       if (["player:spawn", "map:refresh", "join-error"].includes(name)) {
         cleanup();
@@ -90,7 +93,11 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
     });
     clients.push(client);
     await event<void>(client, "connect");
-    await new Promise((r) => setTimeout(r, 10));
+    const deadline = Date.now() + socketDeadlineMs;
+    while (!io.sockets.sockets.get(client.id!)?.listenerCount("player:join")) {
+      assert.ok(Date.now() < deadline, "authenticated socket handlers must be installed");
+      await new Promise((r) => setTimeout(r, 10));
+    }
     return client;
   };
   const join = {
@@ -103,7 +110,22 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
   };
   try {
     const legacy = await open();
-    assert.equal(await joinResult(legacy, join), "player:spawn");
+    const oldLayout = deriveChannelMotionLayout({ mapData: oldMap }, [])!;
+    const entry = oldLayout.meetingSpace!.entry;
+    await db.insert(channelMembers).values({
+      channelId: channel.id,
+      userId: user.id,
+      lastX: entry.x * 32,
+      lastY: entry.y * 32,
+    });
+    assert.equal(
+      await joinResult(legacy, { ...join, x: entry.x * 32, y: entry.y * 32 }),
+      "player:spawn",
+    );
+    const admitted = event<{ spatial: { participants: unknown[] } }>(legacy, "meeting:state");
+    legacy.emit("meeting:join", { channelId: channel.id });
+    assert.ok((await admitted).spatial.participants.length);
+    assert.ok(io.sockets.adapter.rooms.get(`meeting-${channel.id}`)?.has(legacy.id!));
     const lease = await refreshChannelMap("begin", channel.id);
     await db
       .update(channels)
@@ -113,6 +135,10 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
       })
       .where(eq(channels.id, channel.id));
     await refreshChannelMap("finish", channel.id, lease!);
+    assert.equal(
+      io.sockets.adapter.rooms.get(`meeting-${channel.id}`)?.has(legacy.id!) ?? false,
+      false,
+    );
     await new Promise((r) => setTimeout(r, 10));
     assert.notEqual(
       await joinResult(legacy, join),

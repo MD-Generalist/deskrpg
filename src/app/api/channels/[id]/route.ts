@@ -13,6 +13,7 @@ import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
 import { parseDbJson } from "@/lib/db-json";
+import { normalizeMeetingMap } from "@/game/meeting-map-normalization";
 import { getChannelGatewayBinding } from "@/lib/gateway-resources";
 import { getChannelBoard, syncBoardName } from "@/lib/kanban-boards";
 import {
@@ -200,6 +201,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const gatewayBinding = await getChannelGatewayBinding(id);
+    let effectiveMap;
+    try {
+      effectiveMap = normalizeMeetingMap(parsedMapData, parsedMapConfig);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "회의실 맵을 확인할 수 없습니다" },
+        { status: 422 },
+      );
+    }
     const channelWithoutGateway = { ...channel } as Record<string, unknown>;
     delete channelWithoutGateway.gatewayConfig;
     delete channelWithoutGateway.rowRevision;
@@ -207,7 +217,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       channel: {
         ...channelWithoutGateway,
         mapRevision,
-        mapData: parsedMapData,
+        mapData: effectiveMap.mapData,
+        meetingSpace: effectiveMap.meetingSpace,
         mapConfig: parsedMapConfig,
         isOwner,
         isMember,
@@ -248,7 +259,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     // Check ownership
     const rows = await db
-      .select({ ownerId: channels.ownerId, isPublic: channels.isPublic, name: channels.name })
+      .select({
+        ownerId: channels.ownerId,
+        isPublic: channels.isPublic,
+        name: channels.name,
+        mapConfig: channels.mapConfig,
+      })
       .from(channels)
       .where(eq(channels.id, id))
       .limit(1);
@@ -274,7 +290,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (body.name !== undefined) updates.name = body.name.trim();
     if (body.description !== undefined) updates.description = body.description?.trim() || null;
     if (body.maxPlayers !== undefined) updates.maxPlayers = body.maxPlayers;
-    if (body.mapData !== undefined) updates.mapData = jsonForDb(body.mapData);
+    if (body.mapData !== undefined) {
+      try {
+        updates.mapData = jsonForDb(
+          normalizeMeetingMap(body.mapData, body.mapConfig ?? parseDbJson(rows[0].mapConfig))
+            .mapData,
+        );
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "회의실 맵을 확인할 수 없습니다" },
+          { status: 422 },
+        );
+      }
+    }
     if (body.mapConfig !== undefined) updates.mapConfig = jsonForDb(body.mapConfig);
 
     if (body.isPublic !== undefined) {

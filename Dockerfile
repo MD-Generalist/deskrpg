@@ -66,6 +66,9 @@ COPY --from=builder /app/src/lib/object-types.ts ./src/lib/object-types.ts
 COPY --from=builder /app/src/game/navigation.ts ./src/game/navigation.ts
 # Shared catalog/layout/seat modules evolve together; retain their runtime boundary.
 COPY --from=builder /app/src/game/three ./src/game/three
+COPY --from=builder /app/src/game/ambient-zones.ts ./src/game/ambient-zones.ts
+COPY --from=builder /app/src/game/meeting-map-normalization.ts ./src/game/meeting-map-normalization.ts
+COPY --from=builder /app/src/game/meeting-space.ts ./src/game/meeting-space.ts
 COPY --from=builder /app/src/lib/open-chat-formatter.ts ./src/lib/open-chat-formatter.ts
 
 # DB 경계는 통째로 옮긴다. 파일 목록으로 두면 `require("./sqlite-...js")` 처럼

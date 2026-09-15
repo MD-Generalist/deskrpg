@@ -1,5 +1,8 @@
 import type { Server, Socket } from "socket.io";
 import { parseMotionContinuation, type MotionContinuation } from "./npc-motion-continuation";
+import type { MeetingSpatialTarget, SpatialMotionTarget } from "../lib/meeting-discussion-state";
+import { insideMeetingSpace, type MeetingSpace } from "../game/meeting-space";
+import { clearSegment, findPath } from "../game/navigation";
 
 export type NpcMotionPhase = "idle" | "called" | "waiting" | "returning" | "ambient";
 export type NpcMotion = {
@@ -14,12 +17,16 @@ export type NpcMotion = {
   moving: boolean;
   revision: number;
   continuation?: MotionContinuation | null;
+  spatialTarget?: SpatialMotionTarget | null;
 };
 export type CoordinationChannel = {
   sanitizedHomes?: boolean;
   npcs: { id: string; x: number; y: number }[];
   seats: { id: string; x: number; y: number }[];
   bounds?: { width: number; height: number };
+  meetingSpace?: MeetingSpace;
+  canStandAt?: (point: { x: number; y: number }) => boolean;
+  isWalkable?: (x: number, y: number) => boolean;
 };
 export type CoordinationDependencies = {
   getPlayer(
@@ -27,6 +34,15 @@ export type CoordinationDependencies = {
   ): { mapId: string; x?: number; y?: number; userId?: string; characterId?: string } | undefined;
   loadChannel(channelId: string): Promise<CoordinationChannel>;
   now?: () => number;
+  onSpatialArrival?: (channelId: string, actorId: string, generation: number) => void;
+  onSpatialBlocked?: (
+    channelId: string,
+    actorId: string,
+    reason: string,
+    generation: number,
+  ) => void;
+  onSpatialPlayerArrival?: (channelId: string, userId: string, socketId: string) => void;
+  onSpatialPlayerBlocked?: (channelId: string, userId: string) => void;
 };
 type Reservation = {
   seatId: string;
@@ -36,6 +52,7 @@ type Reservation = {
   y: number;
   arrived: boolean;
   expires: number;
+  spatial?: boolean;
 };
 type Channel = {
   source: Promise<Channel>;
@@ -74,6 +91,20 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   };
   const isCurrent = (state: Channel) => channels.get(state.channelId) === state.source;
   const now = dependencies.now ?? Date.now;
+  const spatialLastMotion = new Map<string, number>();
+  const spatialMotionCredit = new Map<string, number>();
+  const validatedPlayers = new Map<string, { x: number; y: number }>();
+  const consumeMotion = (key: string, separation: number, speed: number) => {
+    const elapsed = Math.max(0, (now() - (spatialLastMotion.get(key) ?? now())) / 1000);
+    const credit = Math.min(speed, (spatialMotionCredit.get(key) ?? 8) + elapsed * speed);
+    spatialLastMotion.set(key, now());
+    if (separation > credit) {
+      spatialMotionCredit.set(key, credit);
+      return false;
+    }
+    spatialMotionCredit.set(key, credit - separation);
+    return true;
+  };
   const inactive = new Map<
     string,
     { startedAt: number; expires: number; timer: ReturnType<typeof setTimeout> }
@@ -91,6 +122,9 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   };
   const evict = (channelId: string) => {
     cancelInactive(channelId);
+    // 새 맵에는 이전 위치 검증과 이동 예산을 재사용하지 않는다.
+    for (const cache of [validatedPlayers, spatialLastMotion, spatialMotionCredit])
+      for (const key of cache.keys()) if (key.startsWith(`${channelId}:`)) cache.delete(key);
     const pending = channels.get(channelId);
     channels.delete(channelId);
     void pending
@@ -185,6 +219,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       for (const [seatId, reservation] of state.reservations) {
         if (
           reservation.ownerSocketId === socketId &&
+          !reservation.spatial &&
           state.npcs.get(reservation.actorId)?.phase !== "ambient"
         ) {
           state.reservations.delete(seatId);
@@ -193,6 +228,18 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       }
       for (const npc of state.npcs.values()) {
         if (npc.ownerSocketId !== socketId) continue;
+        if (npc.spatialTarget) {
+          npc.ownerSocketId = leader(state.channelId);
+          npc.moving = false;
+          dependencies.onSpatialBlocked?.(
+            state.channelId,
+            npc.npcId,
+            "driver_disconnected",
+            npc.spatialTarget.generation,
+          );
+          changed(state, npc);
+          continue;
+        }
         npc.ownerSocketId = leader(state.channelId);
         npc.phase = "returning";
         npc.continuation = null;
@@ -203,7 +250,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     }
     if (inactive.has(state.channelId)) return;
     for (const [id, reservation] of state.reservations)
-      if (!reservation.arrived && reservation.expires <= now()) {
+      if (!reservation.spatial && !reservation.arrived && reservation.expires <= now()) {
         state.reservations.delete(id);
         state.revision = nextRevision(state.channelId);
         const npc = state.npcs.get(reservation.actorId);
@@ -226,13 +273,16 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       revision: state.revision,
       ambientLeaderId: leader(channelId),
       npcs: [...state.npcs.values()].map((npc) => ({ ...npc })),
-      seats: [...state.reservations.values()].map(({ seatId, actorId, ownerSocketId, x, y }) => ({
-        seatId,
-        actorId,
-        ownerSocketId,
-        x,
-        y,
-      })),
+      seats: [...state.reservations.values()].map(
+        ({ seatId, actorId, ownerSocketId, x, y, spatial }) => ({
+          seatId,
+          actorId,
+          ownerSocketId,
+          x,
+          y,
+          ...(spatial ? { spatial: true } : {}),
+        }),
+      ),
     };
   };
   const broadcast = (channelId: string, state: Channel) => {
@@ -335,6 +385,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     handle("npc:call", (payload, state, channelId) => {
       const npc = state.npcs.get(String(payload.npcId));
       if (!npc) return { error: "unknown_npc" };
+      if (npc.spatialTarget) return { error: "meeting_reserved" };
       if (npc.ownerSocketId && npc.ownerSocketId !== socket.id && npc.phase !== "ambient")
         return { error: "already_claimed" };
       if (npc.ownerSocketId === socket.id) {
@@ -365,6 +416,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     handle("npc:return-home", (payload, state, channelId) => {
       const npc = state.npcs.get(String(payload.npcId));
       if (!npc) return { error: "unknown_npc" };
+      if (npc.spatialTarget) return { error: "meeting_reserved" };
       if (
         npc.ownerSocketId !== socket.id &&
         !(npc.phase === "ambient" && leader(channelId) === socket.id)
@@ -395,6 +447,20 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         }
         npc.ownerSocketId = null;
       } else if (npc.ownerSocketId !== socket.id) return { error: "not_owner" };
+      if (npc.spatialTarget) {
+        const destination = { x: payload.x as number, y: payload.y as number };
+        if (
+          !consumeMotion(`${channelId}:${npc.npcId}`, distance(npc, destination), 180) ||
+          (state.data.isWalkable &&
+            !clearSegment(
+              { x: npc.x / 32 - 0.5, y: npc.y / 32 - 0.5 },
+              { x: destination.x / 32 - 0.5, y: destination.y / 32 - 0.5 },
+              state.data.isWalkable,
+            ))
+        )
+          return { error: "invalid_motion" };
+        spatialLastMotion.set(`${channelId}:${npc.npcId}`, now());
+      }
       if (continuation.value !== undefined) npc.continuation = continuation.value;
       npc.x = payload.x as number;
       npc.y = payload.y as number;
@@ -433,6 +499,35 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     handle("npc:arrived", (payload, state, channelId) => {
       const npc = state.npcs.get(String(payload.npcId));
       if (!npc) return { error: "unknown_npc" };
+      if (npc.spatialTarget) {
+        const target = npc.spatialTarget;
+        if (npc.ownerSocketId !== socket.id) return { error: "not_owner" };
+        if (payload.generation !== target.generation) return { error: "stale_generation" };
+        if (distance(npc, target) > 2) return { error: "not_at_target" };
+        const reservation = [...state.reservations.values()].find(
+          (r) => r.actorId === npc.npcId && r.x === target.x && r.y === target.y,
+        );
+        if (!reservation || !reservation.arrived) return { error: "reservation_lost" };
+        npc.moving = false;
+        npc.phase = "waiting";
+        if (target.returning) {
+          npc.spatialTarget = null;
+          npc.phase = distance(npc, { x: npc.homeX, y: npc.homeY }) <= 2 ? "idle" : "ambient";
+          npc.ownerSocketId = null;
+          if (npc.phase === "idle") state.excursions.delete(npc.npcId);
+          else state.excursions.add(npc.npcId);
+          if (!target.seatId || npc.phase === "idle") releaseActor(state, npc.npcId);
+          else {
+            // 검증된 복귀 도착 후에는 일반 좌석 예약으로 넘긴다.
+            reservation.spatial = false;
+            reservation.expires = now() + 60_000;
+          }
+        }
+        changed(state, npc);
+        broadcast(channelId, state);
+        dependencies.onSpatialArrival?.(channelId, npc.npcId, target.generation);
+        return;
+      }
       if (npc.phase === "idle" && leader(channelId) === socket.id) {
         broadcast(channelId, state);
         socket.to(channelId).emit("npc:stop-moving", { npcId: npc.npcId });
@@ -465,6 +560,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       if (!seat) return { error: "unknown_seat" };
       const actorId = typeof payload.actorId === "string" ? payload.actorId : socket.id;
       const npc = state.npcs.get(actorId);
+      if (npc?.spatialTarget) return { error: "meeting_reserved" };
       if (
         actorId !== socket.id &&
         (!npc ||
@@ -476,6 +572,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
             )))
       )
         return { error: "not_owner" };
+      const spatialReservation = [...state.reservations.values()].find(
+        (reservation) => reservation.actorId === actorId && reservation.spatial,
+      );
+      if (spatialReservation)
+        return spatialReservation.seatId === seat.id &&
+          spatialReservation.ownerSocketId === socket.id
+          ? { seatId: seat.id }
+          : { error: "meeting_reserved" };
       const existing = state.reservations.get(seat.id);
       if (existing && (existing.actorId !== actorId || existing.ownerSocketId !== socket.id))
         return { error: "seat_occupied" };
@@ -511,12 +615,15 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     handle("seat:release", (payload, state, channelId) => {
       const actorId = typeof payload.actorId === "string" ? payload.actorId : socket.id;
       const npc = state.npcs.get(actorId);
+      if (npc?.spatialTarget) return { error: "meeting_reserved" };
       if (
         actorId !== socket.id &&
         npc?.ownerSocketId !== socket.id &&
         !(npc?.phase === "ambient" && leader(channelId) === socket.id)
       )
         return { error: "not_owner" };
+      if ([...state.reservations.values()].some((r) => r.actorId === actorId && r.spatial))
+        return { error: "meeting_reserved" };
       releaseActor(state, actorId);
       if (
         npc?.phase === "ambient" &&
@@ -527,6 +634,20 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         state.excursions.delete(npc.npcId);
         changed(state, npc);
       }
+      broadcast(channelId, state);
+    });
+    handle("npc:spatial-failed", (payload, state, channelId) => {
+      const npc = state.npcs.get(String(payload.npcId));
+      if (!npc?.spatialTarget || npc.ownerSocketId !== socket.id) return { error: "not_owner" };
+      if (payload.generation !== npc.spatialTarget.generation) return { error: "stale_generation" };
+      npc.moving = false;
+      dependencies.onSpatialBlocked?.(
+        channelId,
+        npc.npcId,
+        "path_unavailable",
+        npc.spatialTarget.generation,
+      );
+      changed(state, npc);
       broadcast(channelId, state);
     });
     socket.on("disconnecting", () => {
@@ -578,6 +699,10 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       const player = dependencies.getPlayer(socket.id);
       if (player && validPoint(state, player.x, player.y))
         state.players.set(socket.id, { x: player.x!, y: player.y! });
+      if (player && validPoint(state, player.x, player.y)) {
+        validatedPlayers.set(`${channelId}:${socket.id}`, { x: player.x!, y: player.y! });
+        spatialLastMotion.set(`${channelId}:${socket.id}`, now());
+      }
       const currentLeader = leader(channelId);
       for (const npc of state.npcs.values()) {
         if (npc.phase === "returning" && !npc.ownerSocketId && currentLeader) {
@@ -603,10 +728,38 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       !validPoint(state, x, y)
     )
       return;
+    const reservation = [...state.reservations.values()].find(
+      (r) => r.actorId === socket.id && r.spatial,
+    );
+    {
+      const key = `${channelId}:${socket.id}`;
+      const previous = validatedPlayers.get(key);
+      if (
+        previous &&
+        (!consumeMotion(key, distance(previous, { x, y }), 220) ||
+          (state.data.isWalkable &&
+            !clearSegment(
+              { x: previous.x / 32 - 0.5, y: previous.y / 32 - 0.5 },
+              { x: x / 32 - 0.5, y: y / 32 - 0.5 },
+              state.data.isWalkable,
+            )))
+      ) {
+        if (reservation) return;
+      } else validatedPlayers.set(key, { x, y });
+      spatialLastMotion.set(key, now());
+    }
     const revision = state.revision;
     state.players.set(socket.id, { x, y });
     prune(state);
+    if (reservation?.arrived && distance(reservation, { x, y }) > 20) {
+      const userId = dependencies.getPlayer(socket.id)?.userId;
+      if (userId) dependencies.onSpatialPlayerBlocked?.(channelId!, userId);
+    }
     updateReservation(state, socket.id, { x, y });
+    if (reservation && distance(reservation, { x, y }) <= 2) {
+      const userId = dependencies.getPlayer(socket.id)?.userId;
+      if (userId) dependencies.onSpatialPlayerArrival?.(channelId!, userId, socket.id);
+    }
     if (state.revision !== revision) broadcast(channelId!, state);
   }
   async function left(socket: Socket, channelId: string) {
@@ -623,6 +776,9 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     }
     if (!isCurrent(state)) return;
     state.players.delete(socket.id);
+    validatedPlayers.delete(`${channelId}:${socket.id}`);
+    spatialLastMotion.delete(`${channelId}:${socket.id}`);
+    spatialMotionCredit.delete(`${channelId}:${socket.id}`);
     const next = leader(channelId, socket.id);
     const key = state.identities.get(socket.id);
     const replacement =
@@ -659,6 +815,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       changed(state);
     }
     for (const npc of state.npcs.values()) {
+      if (npc.ownerSocketId === socket.id && npc.spatialTarget && !replacement) {
+        const generation = npc.spatialTarget.generation;
+        npc.ownerSocketId = next;
+        npc.moving = false;
+        dependencies.onSpatialBlocked?.(channelId, npc.npcId, "driver_disconnected", generation);
+        changed(state, npc);
+        continue;
+      }
       if (npc.ownerSocketId === socket.id && !key) {
         npc.ownerSocketId = next;
         npc.phase = "returning";
@@ -711,16 +875,41 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
           npc.revision = state.revision;
         } else if (previous)
           state.npcs.set(id, { ...previous, homeX: npc.homeX, homeY: npc.homeY });
+        const target = previous?.spatialTarget;
+        if (
+          target &&
+          (reallocated.has(id) ||
+            (target.seatId && !data.seats.some((s) => s.id === target.seatId)) ||
+            (data.canStandAt && !data.canStandAt(target)))
+        ) {
+          state.npcs.get(id)!.moving = false;
+          dependencies.onSpatialBlocked?.(
+            channelId,
+            id,
+            "destination_invalidated",
+            target.generation,
+          );
+        }
       }
       for (const [id, reservation] of old.reservations)
         if (
           !reallocated.has(reservation.actorId) &&
-          data.seats.some((seat) => seat.id === id) &&
+          (data.seats.some((seat) => seat.id === id) ||
+            (reservation.spatial && data.canStandAt?.(reservation))) &&
           (state.npcs.has(reservation.actorId) ||
             state.disconnected.has(reservation.actorId) ||
             members(channelId).includes(reservation.actorId))
         )
           state.reservations.set(id, reservation);
+      for (const [id, previous] of old.npcs) {
+        if (previous.spatialTarget && !state.npcs.has(id))
+          dependencies.onSpatialBlocked?.(
+            channelId,
+            id,
+            "actor_unavailable",
+            previous.spatialTarget.generation,
+          );
+      }
       return state;
     });
     channels.set(channelId, replacement);
@@ -764,5 +953,162 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     return positions;
   }
 
-  return { register, joined, moved, left, invalidate, reset, occupancy };
+  const spatial = {
+    async isInside(channelId: string, socketId: string) {
+      const state = await load(channelId),
+        position = validatedPlayers.get(`${channelId}:${socketId}`);
+      return (
+        isCurrent(state) &&
+        !!position &&
+        !!state.data.meetingSpace &&
+        dependencies.getPlayer(socketId)?.mapId === channelId &&
+        insideMeetingSpace(state.data.meetingSpace.bounds, position.x / 32, position.y / 32)
+      );
+    },
+    async layout(channelId: string) {
+      const state = await load(channelId);
+      if (!isCurrent(state)) throw new Error("stale_channel_layout");
+      if (!state.data.meetingSpace) throw new Error("meeting_space_unavailable");
+      return {
+        spaceId: state.data.meetingSpace.id,
+        targets: [
+          ...state.data.meetingSpace.seatIds.flatMap((id) => {
+            const seat = state.data.seats.find((s) => s.id === id);
+            return seat ? [{ x: seat.x, y: seat.y, seatId: id }] : [];
+          }),
+          ...state.data.meetingSpace.standingPositions.map((p) => ({
+            x: p.x,
+            y: p.y,
+            seatId: null,
+          })),
+        ],
+      };
+    },
+    async capture(channelId: string, actorId: string) {
+      const state = await load(channelId),
+        npc = state.npcs.get(actorId);
+      if (!isCurrent(state)) return null;
+      if (!npc || (npc.ownerSocketId && !npc.spatialTarget && npc.phase !== "ambient")) return null;
+      const seat = [...state.reservations.values()].find((s) => s.actorId === actorId && s.arrived);
+      return {
+        x: npc.x,
+        y: npc.y,
+        seatId: seat?.seatId ?? state.data.seats.find((s) => distance(s, npc) <= 2)?.id ?? null,
+      };
+    },
+    async reserve(channelId: string, actorId: string, target: MeetingSpatialTarget) {
+      const state = await load(channelId);
+      if (!isCurrent(state)) return false;
+      prune(state);
+      if (target.seatId && !state.data.seats.some((s) => s.id === target.seatId)) return false;
+      if (
+        !validPoint(state, target.x, target.y) ||
+        (state.data.canStandAt && !state.data.canStandAt(target))
+      )
+        return false;
+      if (
+        [...state.reservations.values()].some(
+          (s) => s.actorId !== actorId && distance(s, target) < 20,
+        ) ||
+        [...state.npcs.values()].some((n) => n.npcId !== actorId && distance(n, target) < 20) ||
+        [...state.players].some(([id, p]) => id !== actorId && distance(p, target) < 20)
+      )
+        return false;
+      const owner =
+        state.npcs.get(actorId)?.ownerSocketId ??
+        (state.players.has(actorId) ? actorId : leader(channelId));
+      if (!owner) return false;
+      releaseActor(state, actorId);
+      const position = state.npcs.get(actorId) ?? state.players.get(actorId);
+      const seatId = target.seatId ?? `standing:${target.x}:${target.y}`;
+      state.reservations.set(seatId, {
+        seatId,
+        actorId,
+        ownerSocketId: owner,
+        x: target.x,
+        y: target.y,
+        arrived: !!position && distance(position, target) <= 8,
+        expires: Infinity,
+        spatial: true,
+      });
+      changed(state);
+      broadcast(channelId, state);
+      return true;
+    },
+    async move(
+      channelId: string,
+      actorId: string,
+      generation: number,
+      target: MeetingSpatialTarget,
+      returning: boolean,
+    ) {
+      const state = await load(channelId),
+        npc = state.npcs.get(actorId);
+      const owner = leader(channelId);
+      if (!isCurrent(state)) return false;
+      if (!npc || !owner || (npc.ownerSocketId && !npc.spatialTarget && npc.phase !== "ambient"))
+        return false;
+      npc.ownerSocketId = owner;
+      npc.phase = "called";
+      npc.moving = true;
+      npc.continuation = null;
+      npc.spatialTarget = { ...target, generation, returning };
+      spatialLastMotion.set(`${channelId}:${actorId}`, now());
+      spatialMotionCredit.set(`${channelId}:${actorId}`, 8);
+      for (const r of state.reservations.values())
+        if (r.actorId === actorId) r.ownerSocketId = owner;
+      changed(state, npc);
+      broadcast(channelId, state);
+      return true;
+    },
+    async release(channelId: string, actorId: string) {
+      const state = await load(channelId);
+      if (!isCurrent(state)) return;
+      releaseActor(state, actorId);
+      changed(state);
+      broadcast(channelId, state);
+    },
+    async returnTarget(channelId: string, actorId: string, origin: MeetingSpatialTarget) {
+      const state = await load(channelId);
+      if (!isCurrent(state)) return null;
+      const npc = state.npcs.get(actorId);
+      const reachable = (p: { x: number; y: number }) =>
+        !state.data.isWalkable ||
+        (!!npc &&
+          !!findPath(
+            Math.floor(npc.x / 32),
+            Math.floor(npc.y / 32),
+            Math.floor(p.x / 32),
+            Math.floor(p.y / 32),
+            state.data.isWalkable,
+            (a, b) => clearSegment(a, b, state.data.isWalkable!),
+          ));
+      const available = (p: { x: number; y: number }) =>
+        (!state.data.canStandAt || state.data.canStandAt(p)) &&
+        [...state.npcs.values()].every((n) => n.npcId === actorId || distance(n, p) >= 20) &&
+        [...state.players.values()].every((n) => distance(n, p) >= 20) &&
+        [...state.reservations.values()].every(
+          (n) => n.actorId === actorId || distance(n, p) >= 20,
+        );
+      if (
+        available(origin) &&
+        reachable(origin) &&
+        (!origin.seatId || state.data.seats.some((s) => s.id === origin.seatId))
+      )
+        return origin;
+      let best: MeetingSpatialTarget | null = null,
+        bestDistance = Infinity;
+      for (let y = 16; y < (state.data.bounds?.height ?? 0); y += 32)
+        for (let x = 16; x < (state.data.bounds?.width ?? 0); x += 32) {
+          const p = { x, y };
+          const d = distance(p, origin);
+          if (d < bestDistance && available(p) && reachable(p)) {
+            best = { ...p, seatId: null };
+            bestDistance = d;
+          }
+        }
+      return best;
+    },
+  };
+  return { register, joined, moved, left, invalidate, reset, occupancy, spatial };
 }

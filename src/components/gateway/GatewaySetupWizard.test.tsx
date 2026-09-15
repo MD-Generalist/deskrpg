@@ -1063,7 +1063,8 @@ async function prepareFlow(
   handler: (action: string, body: Record<string, unknown>) => Response | undefined,
 ) {
   const f = await fixture(async (url, init) => {
-    if (String(url).includes("?job=")) return response({ job: { id: "j", status: "running", steps: [] } });
+    if (String(url).includes("?job="))
+      return response({ job: { id: "j", status: "running", steps: [] } });
     if (!init?.body) return response(capabilities);
     const body = JSON.parse(String(init.body));
     if (body.action === "discover") return response({ candidates: [candidate] });

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fixture from "../../../lib/fixtures/official-agency-v2.json";
 import { resolveChannelMapUpgrade } from "../../../lib/channel-map-upgrade";
+import { normalizeMeetingMap } from "../../../game/meeting-map-normalization";
+import { mapContentRevision } from "../../../lib/channel-map-revision";
 const selected = {
   id: "channel",
   mapData: fixture as unknown,
@@ -230,7 +232,11 @@ test("real CAS loses to an editor even with identical updatedAt and returns the 
       { params: Promise.resolve({ id: channel.id }) },
     );
     assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).channel.mapData, edited);
+    const returned = (await response.json()).channel;
+    const effective = normalizeMeetingMap(edited);
+    assert.deepEqual(returned.mapData, effective.mapData);
+    assert.deepEqual(returned.meetingSpace, effective.meetingSpace);
+    assert.equal(returned.mapRevision, mapContentRevision(edited));
     const [saved] = await db.select().from(channels).where(eq(channels.id, channel.id));
     assert.deepEqual(JSON.parse(saved.mapData as string), edited);
   } finally {

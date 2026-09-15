@@ -313,6 +313,7 @@ export function addCreativeStudioScene(
       includeDirectorSuite,
     }),
     loads: Promise<boolean>[] = [architecture.userData.assetReady];
+  scene.userData.meetingWalls = architecture.userData.meetingWalls;
   for (const object of map.objects) {
     const host = new T.Group();
     if (renderCreativeStudioObject(host, object, map.objects, options)) {

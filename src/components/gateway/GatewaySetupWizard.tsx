@@ -263,7 +263,11 @@ export default function GatewaySetupWizard({
     const epoch = generation.current;
     const abort = new AbortController();
     setModelChecking(true);
-    void request<{ model?: string }>({ action: "check-model", ...target, candidateId }, "", abort.signal)
+    void request<{ model?: string }>(
+      { action: "check-model", ...target, candidateId },
+      "",
+      abort.signal,
+    )
       .then((data) => {
         if (epoch !== generation.current || abort.signal.aborted) return;
         const next = data.model;
@@ -288,11 +292,7 @@ export default function GatewaySetupWizard({
     }
     void run(
       (signal) =>
-        request<{ job: WizardJob }>(
-          resumeFrom ? { ...body, resumeFrom } : body,
-          "",
-          signal,
-        ),
+        request<{ job: WizardJob }>(resumeFrom ? { ...body, resumeFrom } : body, "", signal),
       ({ job: next }) => {
         setScreen("job");
         acceptJob(next);
@@ -353,7 +353,10 @@ export default function GatewaySetupWizard({
   const modelRecheck = lastCandidateId ? (
     <div className="space-y-2">
       {modelNote && (
-        <p role="status" className="rounded-lg border border-border bg-bg p-3 text-sm text-text-muted">
+        <p
+          role="status"
+          className="rounded-lg border border-border bg-bg p-3 text-sm text-text-muted"
+        >
           {modelNote}
         </p>
       )}

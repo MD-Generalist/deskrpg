@@ -166,6 +166,9 @@ export function addCreativeStudioArchitecture(
     throw Error("Creative studio architecture requires 42 × 26 tiles");
   const shell = new T.Group();
   shell.name = "creative-studio-architecture";
+  const meetingWalls: T.Object3D[] = [];
+  shell.userData.meetingWalls = meetingWalls;
+  const wallPlanes = new Map<string, T.Group>();
   // Isolate asynchronous ownership from outer scene batches. Local batches ignore their root's flag.
   shell.userData.dynamicAsset = true;
   shell.userData.assetStatus = "loading";
@@ -226,10 +229,27 @@ export function addCreativeStudioArchitecture(
     const asset = sceneAsset(id);
     const host = new T.Group();
     host.name = name ?? id;
+    // 기단은 바닥 마감이며, 벽 모듈만 회의 차폐 대상으로 보존한다.
     host.position.set(x, y, z);
     host.scale.set(...scale);
     host.rotation.y = rotation;
-    shell.add(host);
+    if (id !== "shared-cutaway-plinth") {
+      // 연속 벽은 같은 평면 안에서만 배칭한다. 문짝은 독립적으로 차폐/복원한다.
+      const vertical = Math.abs(Math.sin(rotation)) > 0.5;
+      const key = /door|entrance/.test(id)
+        ? `door:${host.uuid}`
+        : `${vertical ? "x" : "z"}:${(vertical ? x : z).toFixed(4)}`;
+      let plane = wallPlanes.get(key);
+      if (!plane) {
+        plane = new T.Group();
+        plane.name = `meeting-wall-plane:${key}`;
+        plane.userData.meetingWall = true;
+        wallPlanes.set(key, plane);
+        meetingWalls.push(plane);
+        shell.add(plane);
+      }
+      plane.add(host);
+    } else shell.add(host);
     const [min, max] = [asset.bounds.min, asset.bounds.max];
     const w = max[0] - min[0],
       h = max[1] - min[1],
@@ -456,6 +476,8 @@ export function addCreativeStudioArchitecture(
   });
   const feature = new T.Group();
   feature.name = "pantry-coral-feature-wall";
+  feature.userData.meetingWall = true;
+  meetingWalls.push(feature);
   shell.add(feature);
   box(feature, 4, 2.4, 0.1, 39, 1.2, front + 0.12, coral);
   const glow = new T.MeshStandardMaterial({
@@ -508,6 +530,10 @@ export function addCreativeStudioArchitecture(
     }
     retiredTextures.forEach((texture) => texture.dispose());
     shell.userData.studioLabelOccluders = captureStudioLabelOccluders(shell);
+    for (const plane of wallPlanes.values()) {
+      batchCoplanarGlass(plane);
+      batchStaticFurniture(plane, true);
+    }
     batchCoplanarGlass(shell);
     batchStaticFurniture(shell, true);
     shell.userData.assetStatus = "ready";

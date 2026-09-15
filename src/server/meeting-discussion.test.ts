@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AdapterRegistry } from "../lib/adapters/types";
+import { createMeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 import {
   defaultCreateMeetingBroker,
   meetingSessionScope,
@@ -17,6 +18,118 @@ type RecordedCall = {
   event: string;
   payload: unknown;
 };
+
+for (const stage of ["entry", "summary", "persist", "run-error"] as const) {
+  test(`이전 브로커의 ${stage} 완료는 맵 교체 후 새 회의를 종료하지 않는다`, async () => {
+    const calls: RecordedCall[] = [];
+    const socket = createFakeSocket("socket-1", calls);
+    const activeBrokers = new Map<string, MeetingBrokerLike>();
+    const discussionInitiators = new Map<string, string>();
+    const registry = new AdapterRegistry();
+    registry.register(recordingAdapter(["ok"]));
+    type Factory = NonNullable<
+      Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"]["createMeetingBroker"]
+    >;
+    const callbacks: Parameters<Factory>[1][] = [];
+    let resume!: () => void;
+    const gate = new Promise<void>((r) => {
+      resume = r;
+    });
+    let entered!: () => void;
+    const waiting = new Promise<void>((r) => {
+      entered = r;
+    });
+    let rejectRun!: (error: Error) => void;
+    let persisted = 0;
+    let cancelled = 0;
+    const deps: Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"] = {
+      activeBrokers,
+      discussionInitiators,
+      meetingRooms: new Map([["a", { participants: new Set(["socket-1"]), messages: [] }]]),
+      players: new Map(),
+      user: { userId: "u1" },
+      adapterRegistry: registry,
+      canControlMeeting: () => true,
+      getNpcConfigsForChannel: async () => [npcConfig({ adapterType: "cli" })],
+      createMeetingBroker: (_config, cb) => {
+        callbacks.push(cb);
+        const old = callbacks.length === 1;
+        return {
+          config: { participants: [{ npcId: "npc-1", displayName: "NPC" }] },
+          turns: [],
+          isRunning: () => true,
+          stop: () => {},
+          run: () =>
+            old && stage === "run-error"
+              ? new Promise<void>((_r, reject) => {
+                  rejectRun = reject;
+                })
+              : Promise.resolve(),
+        } as unknown as MeetingBrokerLike;
+      },
+      generateMeetingSummary: async () => {
+        if (stage === "summary") {
+          entered();
+          await gate;
+        }
+        return { keyTopics: [], conclusions: null };
+      },
+      persistMeetingMinutes: async () => {
+        persisted++;
+        if (stage === "persist") {
+          entered();
+          await gate;
+        }
+        return null;
+      },
+    };
+    registerMeetingDiscussionHandlers({ io: createFakeIo(calls), socket, deps });
+    await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "old" });
+    let completion: void | Promise<void>;
+    if (stage === "summary" || stage === "persist") {
+      await socket.trigger("meeting:stop", { channelId: "a" });
+      completion = callbacks[0].onMeetingEnd!("old transcript", 1);
+      await waiting;
+    }
+    activeBrokers.delete("a");
+    discussionInitiators.delete("a");
+    await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "fresh" });
+    const fresh = activeBrokers.get("a");
+    deps.spatial = {
+      cancel: async () => {
+        cancelled++;
+      },
+    } as unknown as ReturnType<typeof createMeetingSpatialCoordinator>;
+    if (stage === "entry") await callbacks[0].onMeetingEnd!("old transcript", 1);
+    else if (stage === "run-error") {
+      rejectRun(new Error("old run failed"));
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    } else {
+      resume();
+      await completion!;
+    }
+    assert.equal(activeBrokers.get("a"), fresh);
+    assert.equal(discussionInitiators.get("a"), "u1");
+    assert.equal(cancelled, 0);
+    assert.equal(persisted, stage === "persist" ? 1 : 0);
+    assert.equal(
+      calls.filter((call) => ["meeting:end", "meeting:error"].includes(call.event)).length,
+      0,
+    );
+    if (stage === "entry") {
+      await socket.trigger("meeting:stop", { channelId: "a" });
+      assert.equal(
+        activeBrokers.get("a"),
+        fresh,
+        "정상 stop은 완료 콜백까지 현재 브로커를 유지한다",
+      );
+      await callbacks[1].onMeetingEnd!("fresh transcript", 2);
+      assert.equal(activeBrokers.has("a"), false);
+      assert.equal(calls.filter((call) => call.event === "meeting:end").length, 1);
+      assert.equal(cancelled, 2);
+    }
+  });
+}
 
 function createFakeSocket(id: string, calls: RecordedCall[]) {
   const handlers = new Map<string, (payload: unknown) => unknown>();
@@ -48,6 +161,73 @@ function createFakeIo(calls: RecordedCall[]) {
     },
   };
 }
+
+test("실제 집결 전 브로커를 만들지 않고 전원 도착 뒤 정확히 한 번 시작한다", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("socket-1", calls);
+  const spatial = createMeetingSpatialCoordinator({
+    layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "80:80" }] }),
+    capture: async () => ({ x: 16, y: 16, seatId: null }),
+    reserve: async () => true,
+    move: async () => true,
+    release: async () => {},
+    returnTarget: async (_c, _a, p) => p,
+    publish: () => {},
+  });
+  let created = 0,
+    ran = 0;
+  registerMeetingDiscussionHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      activeBrokers: new Map(),
+      discussionInitiators: new Map(),
+      meetingRooms: new Map([["a", { participants: new Set(["socket-1"]), messages: [] }]]),
+      players: new Map(),
+      user: { userId: "u1" },
+      adapterRegistry: new AdapterRegistry(),
+      spatial,
+      canStartMeeting: () => true,
+      canControlMeeting: () => true,
+      getNpcConfigsForChannel: async () => [
+        { id: "n1", name: "NPC", agentId: null, sessionKeyPrefix: "a" },
+      ],
+      createMeetingBroker: () => {
+        created++;
+        return {
+          config: { participants: [{ npcId: "n1", displayName: "NPC" }] },
+          turns: [],
+          run: async () => {
+            ran++;
+          },
+          isRunning: () => true,
+          stop: () => {},
+        } as unknown as MeetingBrokerLike;
+      },
+      generateMeetingSummary: async () => ({ keyTopics: [], conclusions: null }),
+      persistMeetingMinutes: async () => null,
+    },
+  });
+  const pending = socket.trigger("meeting:start-discussion", {
+    channelId: "a",
+    topic: "topic",
+    selectedNpcIds: ["n1"],
+  });
+  // 파일 I/O·실제 서버 없이 async 집결 예약의 마이크로태스크를 모두 진행한다.
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  assert.equal(created, 0);
+  assert.equal(spatial.snapshot("a")?.phase, "assembling");
+  await socket.trigger("meeting:start-discussion", {
+    channelId: "a",
+    topic: "duplicate",
+    selectedNpcIds: ["n1"],
+  });
+  assert.equal(created, 0);
+  spatial.arrived("a", "n1", spatial.snapshot("a")!.generation);
+  await pending;
+  assert.equal(created, 1);
+  assert.equal(ran, 1);
+});
 
 test("registerMeetingDiscussionHandlers starts a broker and emits mode change", async () => {
   const calls: RecordedCall[] = [];
