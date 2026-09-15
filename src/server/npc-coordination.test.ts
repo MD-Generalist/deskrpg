@@ -15,7 +15,14 @@ type Snapshot = {
   revision: number;
   ambientLeaderId: string | null;
   npcs: NpcMotion[];
-  seats: { seatId: string; actorId: string; ownerSocketId: string; x: number; y: number }[];
+  seats: {
+    seatId: string;
+    actorId: string;
+    ownerSocketId: string;
+    x: number;
+    y: number;
+    spatial?: boolean;
+  }[];
 };
 type Client = { socket: ClientSocket; latest: Snapshot; events: string[] };
 const channel: CoordinationChannel = {
@@ -53,7 +60,11 @@ function stateEvent(client: Client, predicate: (state: Snapshot) => boolean) {
   });
 }
 async function harness(
-  options: { now?: () => number; load?: (id: string) => Promise<CoordinationChannel> } = {},
+  options: {
+    now?: () => number;
+    load?: (id: string) => Promise<CoordinationChannel>;
+    onSpatialPlayerArrival?: (channelId: string, userId: string, socketId: string) => void;
+  } = {},
 ) {
   const http = createServer();
   const io = new Server(http, { transports: ["websocket"] });
@@ -75,6 +86,7 @@ async function harness(
           : { ...channel, npcs: [{ id: "foreign", x: 32, y: 32 }] };
     },
     now: options.now,
+    onSpatialPlayerArrival: options.onSpatialPlayerArrival,
   });
   io.on("connection", (socket) => {
     servers.set(socket.id, socket);
@@ -130,6 +142,46 @@ async function harness(
       if (http.listening) await new Promise<void>((resolve) => http.close(() => resolve()));
     },
   };
+}
+
+for (const attempt of ["same-seat", "different-seat", "release"] as const) {
+  test(`meeting player reservation survives legacy ${attempt}`, async () => {
+    let now = 0;
+    const arrivals: string[] = [];
+    const h = await harness({
+      now: () => now,
+      onSpatialPlayerArrival: (_channel, userId) => arrivals.push(userId),
+    });
+    try {
+      const a = await h.connect("a", { userId: "meeting-user", characterId: "character" });
+      const reserved = stateEvent(a, (s) => s.seats.some((seat) => seat.spatial === true));
+      assert.equal(
+        await h.coord.spatial.reserve("a", a.socket.id!, { x: 128, y: 128, seatId: "128:128" }),
+        true,
+      );
+      await reserved;
+      const result = await ack(
+        a,
+        attempt === "release" ? "seat:release" : "seat:claim",
+        attempt === "release" ? {} : { seatId: attempt === "same-seat" ? "128:128" : "192:128" },
+      );
+      if (attempt === "same-seat") assert.equal(result.ok, true);
+      else assert.equal(result.error, "meeting_reserved");
+      assert.equal(a.latest.seats.length, 1);
+      assert.equal(a.latest.seats[0].seatId, "128:128");
+      assert.equal(a.latest.seats[0].spatial, true);
+      now += 1000;
+      await h.coord.moved(h.servers.get(a.socket.id!)!, 200, 200);
+      now += 1000;
+      await h.coord.moved(h.servers.get(a.socket.id!)!, 128, 128);
+      assert.deepEqual(arrivals, ["meeting-user"]);
+      const released = stateEvent(a, (s) => s.seats.length === 0);
+      await h.coord.spatial.release("a", a.socket.id!);
+      await released;
+    } finally {
+      await h.close();
+    }
+  });
 }
 
 test("real sockets reject unauthenticated/cross-channel/nonmember/invalid motion", async () => {
