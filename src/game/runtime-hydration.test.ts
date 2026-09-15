@@ -52,6 +52,81 @@ function evaluate(code: string, extra: object = {}) {
     scope,
   );
 }
+
+test("actual bridge local actor learns its user identity from meeting state and refreshes after reconnect", () => {
+  const ast = ts.createSourceFile("GameScene.ts", source, ts.ScriptTarget.Latest, true);
+  let listener: ts.Expression | undefined;
+  let actors: ts.Expression | undefined;
+  let disconnect: ts.Expression | undefined;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(ast) === "listen" &&
+      ts.isStringLiteral(node.arguments[0]) &&
+      node.arguments[0].text === "meeting:state"
+    )
+      listener = node.arguments[1];
+    if (ts.isPropertyAssignment(node) && node.name.getText(ast) === "actors")
+      actors = node.initializer;
+    if (ts.isPropertyDeclaration(node) && node.name.getText(ast) === "handleSocketDisconnect")
+      disconnect = node.initializer;
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.ok(listener, "GameScene must consume the authoritative meeting:state listener");
+  assert.ok(actors);
+  assert.ok(disconnect);
+  const socket = { id: "socket-old", connected: true };
+  const Bridge = evaluate(
+    `(class {
+    actors = ${actors.getText(ast)};
+    meetingState = ${listener.getText(ast)};
+    disconnect = ${disconnect.getText(ast)};
+  })`,
+    { socket, DIR_NUM_TO_NAME: { 0: "down" }, Phaser: { GameObjects: { Sprite: class {} } } },
+  );
+  const runtime = Object.assign(new Bridge(), {
+    socket,
+    npcSprites: [],
+    remotePlayers: new Map(),
+    playerReady: true,
+    player: { x: 80, y: 80 },
+    characterName: "Local",
+    characterId: "character-is-not-user",
+    currentDirection: 0,
+    time: { now: 0 },
+    speechPreviews: { get() {} },
+    cancelMeetingEntry() {},
+    spatialNpcRoutes: new Map(),
+    rejoin: { onDisconnect() {} },
+    motionSnapshot: { clear() {} },
+    pendingSeatClaims: new Set(),
+    motionGeneration: 0,
+  });
+  const actor = () => runtime.actors().find((entry: { kind: string }) => entry.kind === "player");
+  assert.equal(actor().userId, undefined);
+  runtime.meetingState({
+    participants: [
+      { id: "peer", userId: "peer-user" },
+      { id: socket.id, userId: "user-old" },
+    ],
+  });
+  assert.equal(actor().id, "socket-old");
+  assert.equal(actor().userId, "user-old");
+  socket.connected = false;
+  runtime.disconnect();
+  assert.equal(actor().userId, undefined);
+  runtime.meetingState({ participants: [{ id: socket.id, userId: "stale-user" }] });
+  assert.equal(actor().userId, undefined, "disconnected snapshots cannot restore identity");
+  socket.id = "socket-new";
+  socket.connected = true;
+  runtime.meetingState({ participants: [{ id: "socket-old", userId: "stale-user" }] });
+  assert.equal(actor().userId, undefined, "old socket roster cannot identify reconnected actor");
+  runtime.meetingState({ participants: [{ id: socket.id, userId: "user-new" }] });
+  assert.equal(actor().userId, "user-new");
+  socket.id = "socket-newer";
+  assert.equal(actor().userId, undefined, "identity never carries across an unhydrated socket id");
+});
 const spawnStart =
   source.indexOf('listen("player:spawn", (position: PlayerSpawnState) => {') +
   'listen("player:spawn", (position: PlayerSpawnState) => {'.length;

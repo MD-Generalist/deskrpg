@@ -1522,6 +1522,10 @@ export class GameScene extends Phaser.Scene {
       if (this.playerReady && this.player)
         actors.push({
           id: this.socket?.id || this.characterId || "local",
+          userId:
+            this.localPlayerIdentity?.socketId === this.socket?.id
+              ? this.localPlayerIdentity?.userId
+              : undefined,
           name: this.characterName,
           kind: "player",
           x: this.player.x,
@@ -1722,7 +1726,9 @@ export class GameScene extends Phaser.Scene {
   private socket: Socket | null = null;
   private rejoin = createRejoinTracker();
   private joinedSocketId: string | undefined = undefined;
+  private localPlayerIdentity: { socketId: string; userId: string } | undefined;
   private handleSocketDisconnect = () => {
+    this.localPlayerIdentity = undefined;
     this.cancelMeetingEntry();
     this.spatialNpcRoutes.clear();
     this.rejoin.onDisconnect();
@@ -3787,6 +3793,14 @@ export class GameScene extends Phaser.Scene {
     listen("disconnect", this.handleSocketDisconnect);
     this.socket.off("connect", this.handleSocketConnect);
     listen("connect", this.handleSocketConnect);
+    listen("meeting:state", (state: { participants?: Array<{ id: string; userId?: string }> }) => {
+      if (this.socket !== socket || !socket.connected || !socket.id) return;
+      const local = state.participants?.find((participant) => participant.id === socket.id);
+      this.localPlayerIdentity =
+        typeof local?.userId === "string" && local.userId
+          ? { socketId: socket.id, userId: local.userId }
+          : undefined;
+    });
     registerOnce(EventBus, "socket-rejoin", this.handleSocketRejoin);
     const cleanupSocketRejoinListener = () => {
       EventBus.off("socket-rejoin", this.handleSocketRejoin);
