@@ -84,7 +84,8 @@ jobs:
       - name: Wait for registry propagation
         run: |
           V="${{ needs.verify.outputs.version }}"
-          for i in $(seq 1 24); do
+          # 대용량 런타임 에셋의 npm 레지스트리 처리에는 2분 이상 걸릴 수 있다.
+          for i in $(seq 1 240); do
             npm view "deskrpg@$V" version >/dev/null 2>&1 && { echo "propagated after $i"; exit 0; }
             sleep 5
           done
