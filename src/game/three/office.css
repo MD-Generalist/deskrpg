@@ -7,6 +7,15 @@
   background: #e9eee2;
 }
 
+.office-presentation[data-meeting="true"] canvas {
+  cursor: grab;
+  touch-action: none;
+}
+
+.office-presentation[data-meeting="true"] canvas:active {
+  cursor: grabbing;
+}
+
 .conversation-workspace {
   grid-template-columns:
     var(--workspace-nav-width, 264px)
