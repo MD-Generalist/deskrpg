@@ -4,7 +4,7 @@ English README: [README.md](README.md)
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG 홈 화면" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.19/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.20/deploy/hostinger/docker-compose.yml)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
@@ -14,7 +14,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.9.19` — 각 오피스 맵의 회의실로 걸어 들어가 회의하고 발언자를 따라가는 카메라를 사용할 수 있습니다. Hermes 연결 설정과 칸반 이동 흐름도 개선했습니다.
+- 버전: `v2026.9.20` — npm 전역 설치본이 정상적으로 기동합니다. 연결 마법사가 Hermes 설치·서비스 등록·빈 포트 제안·모델 로그인 확인·설치 진행 표시·실패 재개까지 맡습니다.
 
 ## 무엇을 할 수 있나요
 
@@ -48,7 +48,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 레포를 클론하지 않고 설치형 앱처럼 바로 쓰고 싶다면 이 방식이 가장 간단합니다.
 
-**현재 릴리스 주의:** npm `2026.9.18`·`2026.9.19`는 `node_modules`에 설치하면 `Cannot find module '@/db'` 때문에 기동하지 못합니다. 수정은 `master`에 반영했지만 게시된 npm 버전은 바꿀 수 없습니다. 다음 검증된 릴리스 전까지는 아래 저장소 실행 또는 Docker 방법을 사용하세요. 다음 릴리스 파이프라인은 레지스트리에서 설치한 패키지를 직접 기동해 확인합니다.
+**옛 릴리스 주의:** npm `2026.9.18`·`2026.9.19`는 `node_modules`에 설치하면 `Cannot find module '@/db'` 때문에 기동하지 못합니다. `2026.9.20` 이상을 쓰세요 — 릴리스 파이프라인이 레지스트리에서 설치한 패키지를 직접 기동해 확인합니다.
 
 ```bash
 npx deskrpg init

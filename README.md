@@ -4,7 +4,7 @@
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG home screen" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.19/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.20/deploy/hostinger/docker-compose.yml)
 
 Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
 
@@ -14,7 +14,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.9.19` — Meetings now take place inside each office map, with walk-in entry and a rotating speaker camera. Hermes gateway setup and kanban navigation are improved.
+- Version: `v2026.9.20` — The npm package now starts when installed globally. The gateway setup wizard installs Hermes, registers the service, suggests a free port, checks the model login, shows install progress and resumes a failed run.
 
 ## What You Can Do
 
@@ -48,7 +48,7 @@ Choose one of these five ways to start DeskRPG.
 
 This is the simplest self-hosted path if you want DeskRPG as an installed app instead of a cloned repo.
 
-**Current release warning:** npm versions `2026.9.18` and `2026.9.19` cannot start when installed under `node_modules` (`Cannot find module '@/db'`). The fix is on `master`, but npm packages cannot be changed after publishing. Until the next verified release, use the repository or Docker paths below. The next release workflow will boot the registry-installed package before announcing it.
+**Older releases:** npm `2026.9.18` and `2026.9.19` cannot start when installed under `node_modules` (`Cannot find module '@/db'`). Use `2026.9.20` or later — the release pipeline now boots the registry-installed package before announcing it.
 
 ```bash
 npx deskrpg init
