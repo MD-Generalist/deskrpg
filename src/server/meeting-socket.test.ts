@@ -260,7 +260,7 @@ test("좌석 예약 await 중 회의실을 나가면 구독과 예약을 모두 
 
 test("pending meeting admission is cancelled by leave, disconnect, or channel movement at each await", async () => {
   for (const pauseAt of ["access", "space", "reserve", "space-after-reserve"] as const) {
-    for (const cancel of ["leave", "disconnect", "move"] as const) {
+    for (const cancel of ["leave", "disconnect", "move", "roundtrip"] as const) {
       const calls: RecordedCall[] = [];
       const socket = createFakeSocket("s1", calls);
       const players = new Map([["s1", { mapId: "a" }]]);
@@ -318,7 +318,10 @@ test("pending meeting admission is cancelled by leave, disconnect, or channel mo
       });
       const joining = socket.trigger("meeting:join", { channelId: "a" });
       await reached;
-      if (cancel === "move") players.set("s1", { mapId: "b" });
+      if (cancel === "roundtrip") {
+        players.set("s1", { mapId: "b" });
+        players.set("s1", { mapId: "a" });
+      } else if (cancel === "move") players.set("s1", { mapId: "b" });
       else
         await socket.trigger(cancel === "leave" ? "meeting:leave" : "disconnect", {
           channelId: "a",
@@ -410,6 +413,69 @@ test("leave then rejoin during seat reservation keeps only the newest admission 
   assert.equal(reserved.size, 0);
   assert.equal(meetingRooms.get("a")?.participants.size, 0);
   assert.equal(spatial.snapshot("a")?.participants.length, 0);
+});
+
+test("superseding an existing participant's duplicate join never releases their assembling seat", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("s1", calls);
+  const released: string[] = [];
+  const spatial = createMeetingSpatialCoordinator({
+    layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "seat" }] }),
+    capture: async () => ({ x: 0, y: 0, seatId: null }),
+    reserve: async () => true,
+    move: async () => true,
+    release: async (_channelId, id) => {
+      released.push(id);
+    },
+    returnTarget: async (_c, _a, p) => p,
+    publish: () => {},
+  });
+  const meetingRooms = new Map<string, { participants: Set<string>; messages: [] }>();
+  let resume!: () => void;
+  let paused!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  const reached = new Promise<void>((resolve) => {
+    paused = resolve;
+  });
+  let spaceChecks = 0;
+  registerMeetingSocketHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      meetingRooms,
+      spatial,
+      players: new Map([["s1", { mapId: "a" }]]),
+      lastChatTime: new Map(),
+      chatCooldownMs: 0,
+      user: { userId: "u1" },
+      getParticipationAccess: async () => ({ access: { allowed: true } }),
+      isInMeetingSpace: async () => {
+        if (++spaceChecks === 4) {
+          paused();
+          await gate;
+        }
+        return true;
+      },
+    },
+  });
+  await socket.trigger("meeting:join", { channelId: "a" });
+  await spatial.start("a", "u1", ["npc1"]);
+  assert.equal(spatial.snapshot("a")?.phase, "assembling");
+  const firstDuplicate = socket.trigger("meeting:join", { channelId: "a" });
+  await reached;
+  const secondDuplicate = socket.trigger("meeting:join", { channelId: "a" });
+  resume();
+  await Promise.all([firstDuplicate, secondDuplicate]);
+  assert.deepEqual(released, [], "superseded observer request must not release existing admission");
+  assert.equal(spatial.snapshot("a")?.phase, "assembling");
+  assert.equal(spatial.snapshot("a")?.participants.filter((p) => p.kind === "player").length, 1);
+  assert.equal(meetingRooms.get("a")?.participants.has("s1"), true);
+  assert.equal(
+    calls.some((call) => call.type === "leave"),
+    false,
+  );
 });
 
 test("registerMeetingSocketHandlers joins the room and emits meeting state", async () => {

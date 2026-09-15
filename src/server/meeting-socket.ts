@@ -215,10 +215,12 @@ export function registerMeetingSocketHandlers({
     const { channelId, characterName, appearance } = input;
     if (typeof channelId !== "string" || !channelId) return;
     const generation = invalidateJoin(channelId);
-    const current = () =>
+    const requestPlayer = players.get(socket.id);
+    const samePlayer = () =>
       !disconnected &&
-      joinGenerations.get(channelId) === generation &&
+      players.get(socket.id) === requestPlayer &&
       players.get(socket.id)?.mapId === channelId;
+    const current = () => samePlayer() && joinGenerations.get(channelId) === generation;
     // Serialize admission and release so an old rollback cannot release a newer seat.
     return enqueueAdmission(async () => {
       if (!current()) return;
@@ -256,16 +258,20 @@ export function registerMeetingSocketHandlers({
       }
       if (!current()) return;
       const room = ensureMeetingRoom(meetingRooms, channelId);
+      const alreadyAdmitted = room.participants.has(socket.id);
       room.participants.add(socket.id);
       socket.join(getMeetingRoomId(channelId));
       await deps.spatial?.joinPlayer(channelId, user.userId, socket.id);
-      if (
-        !current() ||
-        !room.participants.has(socket.id) ||
-        (deps.isInMeetingSpace &&
-          !(await deps.isInMeetingSpace(channelId, socket.id).catch(() => false))) ||
-        !current()
-      ) {
+      const stillInside =
+        samePlayer() &&
+        room.participants.has(socket.id) &&
+        (!deps.isInMeetingSpace ||
+          (await deps.isInMeetingSpace(channelId, socket.id).catch(() => false)));
+      if (!current() || !room.participants.has(socket.id) || !stillInside) {
+        // Superseding a duplicate read must not release an existing participant's seat.
+        // Actual leave, movement, or disconnect still tears down the admission.
+        if (alreadyAdmitted && samePlayer() && room.participants.has(socket.id) && stillInside)
+          return;
         room.participants.delete(socket.id);
         socket.leave(getMeetingRoomId(channelId));
         await deps.spatial?.leavePlayer(channelId, user.userId, socket.id);
