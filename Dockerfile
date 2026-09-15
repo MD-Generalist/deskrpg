@@ -23,6 +23,7 @@ ENV NEXT_PUBLIC_REGISTRATION_DISABLED=$NEXT_PUBLIC_REGISTRATION_DISABLED
 RUN npm run build
 
 FROM base AS runner
+LABEL org.opencontainers.image.source="https://github.com/dandacompany/deskrpg"
 WORKDIR /app
 ENV NODE_ENV=production
 # CLI adapter tools (optional; re-declared for runner stage)

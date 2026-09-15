@@ -48,6 +48,8 @@ Choose one of these five ways to start DeskRPG.
 
 This is the simplest self-hosted path if you want DeskRPG as an installed app instead of a cloned repo.
 
+**Current release warning:** npm versions `2026.9.18` and `2026.9.19` cannot start when installed under `node_modules` (`Cannot find module '@/db'`). The fix is on `master`, but npm packages cannot be changed after publishing. Until the next verified release, use the repository or Docker paths below. The next release workflow will boot the registry-installed package before announcing it.
+
 ```bash
 npx deskrpg init
 npx deskrpg start
@@ -107,8 +109,7 @@ Before the first run, open `.env.docker` and set:
 
 DeskRPG will open on `http://localhost:3102`.
 
-The default image is `dandacompany/deskrpg:latest`.
-If you want to pin a release, change `DESKRPG_IMAGE` in `.env.docker` to something like `dandacompany/deskrpg:2026.4.6`.
+During the registry transition the default image remains the already-published Docker Hub `dandacompany/deskrpg:latest` (release `2026.9.19`). New public images will be published to GHCR only: `ghcr.io/dandacompany/deskrpg:<release-version>`. After the first GHCR release is publicly pullable, change `DESKRPG_IMAGE` in `.env.docker` to that pinned GHCR version; the Compose default will be switched then.
 
 If you prefer the explicit file path version, you can run:
 
@@ -126,7 +127,7 @@ JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
 
 DeskRPG will open on `http://localhost:3102`.
 
-To pin a specific image version, add `DESKRPG_IMAGE=dandacompany/deskrpg:2026.4.6` before the command.
+To pin the existing legacy image, add `DESKRPG_IMAGE=dandacompany/deskrpg:2026.9.19` before the command. Future releases use `ghcr.io/dandacompany/deskrpg:<release-version>` after that version is published.
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
 

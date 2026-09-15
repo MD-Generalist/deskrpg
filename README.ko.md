@@ -48,6 +48,8 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 레포를 클론하지 않고 설치형 앱처럼 바로 쓰고 싶다면 이 방식이 가장 간단합니다.
 
+**현재 릴리스 주의:** npm `2026.9.18`·`2026.9.19`는 `node_modules`에 설치하면 `Cannot find module '@/db'` 때문에 기동하지 못합니다. 수정은 `master`에 반영했지만 게시된 npm 버전은 바꿀 수 없습니다. 다음 검증된 릴리스 전까지는 아래 저장소 실행 또는 Docker 방법을 사용하세요. 다음 릴리스 파이프라인은 레지스트리에서 설치한 패키지를 직접 기동해 확인합니다.
+
 ```bash
 npx deskrpg init
 npx deskrpg start
@@ -107,8 +109,7 @@ docker compose --env-file .env.docker up -d
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
-기본 이미지는 `dandacompany/deskrpg:latest`입니다.
-특정 릴리스를 고정하고 싶다면 `.env.docker`의 `DESKRPG_IMAGE`를 `dandacompany/deskrpg:2026.4.6`처럼 바꾸면 됩니다.
+레지스트리 전환 기간에는 이미 게시된 Docker Hub `dandacompany/deskrpg:latest`(릴리스 `2026.9.19`)가 기본 이미지입니다. 새 공개 이미지는 GHCR `ghcr.io/dandacompany/deskrpg:<릴리스-버전>`에만 게시됩니다. 첫 GHCR 릴리스의 공개 pull이 확인되면 `.env.docker`의 `DESKRPG_IMAGE`를 해당 버전으로 고정하세요. 그때 Compose 기본값도 전환합니다.
 
 명시적으로 파일 경로를 지정하고 싶다면 아래 명령을 사용해도 됩니다.
 
@@ -126,7 +127,7 @@ JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
-특정 이미지 버전을 쓰고 싶다면 명령 앞에 `DESKRPG_IMAGE=dandacompany/deskrpg:2026.4.6`을 붙이면 됩니다.
+기존 이미지를 고정하려면 명령 앞에 `DESKRPG_IMAGE=dandacompany/deskrpg:2026.9.19`를 붙이면 됩니다. 다음 릴리스부터는 게시가 확인된 `ghcr.io/dandacompany/deskrpg:<릴리스-버전>`을 사용하세요.
 
 빠르게 시작하려면 SQLite, 오래 운영하려면 PostgreSQL을 선택하면 됩니다.
 

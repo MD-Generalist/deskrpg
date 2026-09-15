@@ -1,5 +1,14 @@
 # 회의 모드 엔지니어링 노트
 
+- npm 전역 설치본은 `node_modules/deskrpg/src`에 놓인다. `tsx`의 tsconfig 경로 별칭은 그 위치에 적용되지
+  않아 공개 `2026.9.18`·`2026.9.19`의 `deskrpg start`가 첫 `@/db`에서 죽었다. 소스/도커 기동만으로
+  npm 경로를 검증했다고 보지 말고, 레지스트리 설치본을 격리 prefix의 `node_modules`에 두어
+  `init`→`start`→`/auth`까지 확인한다. 새 런타임 파일은 npm `files`와 Dockerfile COPY 양쪽에 포함한다.
+- master CI의 GHCR `sha-<full-SHA>` 푸시는 운영 후보 게시일 뿐 자동 운영 전환이 아니다. CI 전체 초록
+  확인 후 digest로 고정한다. 날짜 태그 공개 릴리스는 amd64/arm64 네이티브 러너에서 별도 빌드하고
+  매니페스트를 묶는다. 첫 GHCR 공개 태그가 익명 pull 가능해지기 전에는 기존 Compose 기본 이미지를
+  존재하지 않는 GHCR `:latest`로 바꾸지 않는다.
+
 - 좌석에 도착했는데 준비 상태가 계속 walking이면 도착 거리부터 늘리지 않는다. 늦은 일반 `seat:claim`이
   회의 예약을 일반 예약으로 교체하면 공간 도착 콜백이 사라진다. 같은 소유자의 같은 회의 좌석 재요청은 예약을
   유지한 성공으로 처리하고 일반 변경·해제는 거절한다. 실제 move→arrival 콜백과 개인 퇴장 예약 해제를 함께 검증한다.

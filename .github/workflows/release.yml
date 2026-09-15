@@ -1,12 +1,11 @@
 name: Release
 
-# 날짜 태그(YYYY.M.D)를 밀면 npm → Docker Hub → GitHub Release 를 한 번에 낸다.
+# 날짜 태그(YYYY.M.D)를 밀면 npm → GHCR → GitHub Release 를 한 번에 낸다.
 # 사람이 하는 일은 버전 커밋과 `git push origin <tag>` 뿐이다.
 #
 # 필요한 시크릿:
 #   NPM_TOKEN            — npmjs granular token(publish, 패키지 deskrpg). --provenance 로 서명한다.
-#   DOCKERHUB_USERNAME   — 이미 등록됨
-#   DOCKERHUB_TOKEN      — 이미 등록됨
+#   GHCR 는 저장소 GITHUB_TOKEN (packages: write) 를 사용한다.
 on:
   push:
     tags: ["20[0-9][0-9].[0-9]*.[0-9]*"]
@@ -19,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: dandacompany/deskrpg
+  IMAGE: ghcr.io/dandacompany/deskrpg
 
 jobs:
   # 태그와 package.json 이 다르면 아무것도 내보내지 않는다.
@@ -31,9 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - id: ver
         run: |
+          # 날짜 태그는 반드시 이미 master 에 올라온 커밋을 가리켜야 한다.
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master; then
+            echo "태그 커밋은 origin/master 에 포함되어야 합니다." >&2
+            exit 1
+          fi
           TAG="${GITHUB_REF_NAME}"
           PKG="$(node -p "require('./package.json').version")"
           if [ "$TAG" != "$PKG" ]; then
@@ -52,11 +58,17 @@ jobs:
       - run: npm run test
       - run: npm run typecheck
       - run: npm run lint
+      # 공개 npm 에 쓰기 전에 tarball 을 node_modules 에 설치해 기동을 확인한다.
+      - name: Smoke npm tarball before publishing
+        run: |
+          smoke_dir="$(mktemp -d)"
+          tarball="$(npm pack --pack-destination "$smoke_dir" --silent)"
+          bash scripts/smoke-npm-install.sh "$smoke_dir/$tarball"
 
   npm:
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write # npm --provenance (Sigstore OIDC)
@@ -86,43 +98,89 @@ jobs:
           V="${{ needs.verify.outputs.version }}"
           # 대용량 런타임 에셋의 npm 레지스트리 처리에는 2분 이상 걸릴 수 있다.
           for i in $(seq 1 240); do
-            npm view "deskrpg@$V" version >/dev/null 2>&1 && { echo "propagated after $i"; exit 0; }
+            npm view "deskrpg@$V" version >/dev/null 2>&1 && { echo "propagated after attempt $i"; exit 0; }
             sleep 5
           done
           echo "registry never propagated" >&2; exit 1
+      # 소스 트리에서의 테스트는 npm 전역 설치 위치(node_modules) 문제를 못 잡았다.
+      - name: Smoke registry-installed npm CLI
+        env:
+          V: ${{ needs.verify.outputs.version }}
+        run: bash scripts/smoke-npm-install.sh "deskrpg@$V"
 
-  docker:
+  docker-platform:
     needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # amd64 + arm64 둘 다 — arm64 만 올리면 Intel 사용자가 exec format error 를 본다.
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # 각 네이티브 러너에서 한 플랫폼만 빌드한다. QEMU 크로스 빌드는 없다.
       - uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.arch }}
           push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}
-            ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Verify both platforms
+          tags: ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+
+  docker-manifest:
+    # npm 설치 스모크가 실패하면 :latest 를 공개하지 않는다.
+    needs: [verify, npm, docker-platform]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Join native platform images
+        env:
+          V: ${{ needs.verify.outputs.version }}
         run: |
-          docker buildx imagetools inspect "$IMAGE:${{ needs.verify.outputs.version }}" | grep -E "Platform:\s+linux/(amd64|arm64)" | tee /tmp/platforms
-          [ "$(wc -l < /tmp/platforms)" -ge 2 ]
+          docker buildx imagetools create \
+            -t "$IMAGE:$V" -t "$IMAGE:latest" \
+            "$IMAGE:$V-amd64" "$IMAGE:$V-arm64"
+      - name: Verify both platforms
+        env:
+          V: ${{ needs.verify.outputs.version }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE:$V" > /tmp/deskrpg-platforms
+          grep -Eq 'Platform:[[:space:]]+linux/amd64' /tmp/deskrpg-platforms
+          grep -Eq 'Platform:[[:space:]]+linux/arm64' /tmp/deskrpg-platforms
+      - name: Verify public anonymous pull
+        env:
+          V: ${{ needs.verify.outputs.version }}
+        run: |
+          docker logout ghcr.io
+          docker buildx imagetools inspect "$IMAGE:$V" > /dev/null
 
   github-release:
-    needs: [verify, npm, docker]
+    needs: [verify, npm, docker-manifest]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -146,11 +204,11 @@ jobs:
             echo "### Install"
             echo '```'
             echo "npm install -g deskrpg@$V"
-            echo "docker pull dandacompany/deskrpg:$V   # linux/amd64 + linux/arm64"
+            echo "docker pull ghcr.io/dandacompany/deskrpg:$V   # linux/amd64 + linux/arm64"
             echo '```'
             echo
             echo "- npm: https://www.npmjs.com/package/deskrpg/v/$V (provenance signed)"
-            echo "- Docker Hub: https://hub.docker.com/r/dandacompany/deskrpg/tags?name=$V"
+            echo "- GHCR: https://github.com/dandacompany/deskrpg/pkgs/container/deskrpg"
           } > /tmp/notes.md
       - env:
           GH_TOKEN: ${{ github.token }}
