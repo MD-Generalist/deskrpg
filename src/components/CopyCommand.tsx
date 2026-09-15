@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useT } from "../lib/i18n";
+
+// 클립보드 API의 제공 여부에는 구독 이벤트가 없으며 서버에서는 사용할 수 없다.
+const subscribeClipboard = () => () => {};
+const clipboardAvailable = () =>
+  typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
+const serverClipboardAvailable = () => false;
 
 /**
  * 붙여넣어야 하는 명령을 보여 주고 복사 버튼을 붙인다.
@@ -16,11 +22,14 @@ import { useT } from "../lib/i18n";
 export function CopyCommand({ command, className }: { command: string; className?: string }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
-  const [canCopy, setCanCopy] = useState(false);
+  const canCopy = useSyncExternalStore(
+    subscribeClipboard,
+    clipboardAvailable,
+    serverClipboardAvailable,
+  );
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setCanCopy(typeof navigator !== "undefined" && Boolean(navigator.clipboard?.writeText));
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
