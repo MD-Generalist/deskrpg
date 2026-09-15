@@ -44,10 +44,14 @@ export function joinedPartitionSpan(object: MapObject, objects: readonly MapObje
       row = object.row + (vertical ? side : 0);
     const perpendicular = objects.some(
       (o) =>
-        (o.type === "glass_partition" || o.variant === "trading-perimeter") &&
+        (o.type === "glass_partition" ||
+          o.variant === "trading-perimeter" ||
+          o.type === "cubicle_wall") &&
         o.col === col &&
         o.row === row &&
-        (o.variant === "trading-perimeter" || (o.direction === "right") !== vertical),
+        (o.variant === "trading-perimeter" ||
+          o.type === "cubicle_wall" ||
+          (o.direction === "right") !== vertical),
     );
     if (perpendicular) {
       length += 0.5;

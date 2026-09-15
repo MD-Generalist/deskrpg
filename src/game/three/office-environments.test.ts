@@ -59,7 +59,7 @@ for (const environment of OFFICE_ENVIRONMENTS) {
             ? 20
             : environment.id === "trading"
               ? 30
-              : 22,
+              : 26,
     );
     assert.equal(map.tilewidth, 32);
     assert.equal(map.tileheight, 32);

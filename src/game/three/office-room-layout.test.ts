@@ -33,6 +33,16 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
       assert.equal(world.children.length, 0);
       return;
     }
+    if (id === "publishing") {
+      assert.equal(zones.length, 5);
+      assert.ok(zones.every((zone) => zone.roaming));
+      assert.equal(map.width, 30);
+      assert.equal(map.height, 26);
+      const world = new T.Group();
+      addOfficeRoomSurfaces(world, id, { environmentVersion: snapshot.environmentVersion });
+      assert.equal(world.children.length, 0, "new layout omits retired CEO surfaces");
+      return;
+    }
     if (id === "tech") {
       assert.equal(map.width, 44);
       assert.equal(map.height, 20);

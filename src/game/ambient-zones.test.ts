@@ -7,11 +7,10 @@ import {
   findTaggedDestinationPath,
   readAmbientZones,
 } from "./ambient-zones";
+import publishingV2 from "../lib/fixtures/official-publishing-v2.json";
 import { buildOfficeEnvironment } from "./three/office-environments";
 test("map-owned excluded rooms reject destinations and through paths, but permit exit", () => {
-  const zones = readAmbientZones(
-    buildOfficeEnvironment("publishing") as unknown as Record<string, unknown>,
-  );
+  const zones = readAmbientZones(publishingV2 as unknown as Record<string, unknown>);
   assert.equal(zones.length, 3);
   assert.equal(ambientTileAllowed(zones, 4, 5), false);
   assert.equal(ambientTileAllowed(zones, 14, 4), true);
@@ -181,7 +180,7 @@ import { TrafficCoordinator } from "./traffic";
 import { ACTOR_RADIUS, clearSegment } from "./navigation";
 
 for (const { id } of OFFICE_ENVIRONMENTS) {
-  if (id === "agency") continue;
+  if (id === "agency" || id === "publishing") continue;
   test(`${id}: an inside worker fully exits ${id === "tech" ? "server room" : "CEO"} through incremental traffic and cannot reenter`, () => {
     const map = buildOfficeEnvironment(id);
     const zones = readAmbientZones(map as unknown as Record<string, unknown>);
@@ -255,4 +254,13 @@ test("exit permit survives the center crossing only until the full body clears",
     false,
     "body overlap alone cannot originate permission",
   );
+});
+
+test("publishing reference rooms allow wandering without obsolete CEO exclusion", () => {
+  const zones = readAmbientZones(
+    buildOfficeEnvironment("publishing") as unknown as Record<string, unknown>,
+  );
+  assert.equal(zones.length, 5);
+  assert.ok(zones.every((zone) => zone.roaming));
+  assert.equal(ambientTileAllowed(zones, 4, 5), true);
 });

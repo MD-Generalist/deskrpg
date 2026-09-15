@@ -1,12 +1,13 @@
+import type { TiledMap } from "../components/map-editor/hooks/useMapEditor";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { clearMovementSegment, clearSegment, findPath } from "./navigation";
 import { clearTraffic, TrafficCoordinator } from "./traffic";
-import { buildOfficeEnvironment } from "./three/office-environments";
+import publishingV2 from "../lib/fixtures/official-publishing-v2.json";
 import { tiledSnapshot } from "./three/tiled-preview";
 
-test("live table/partition edge positions escape shallow penetration and reach their clicked goals", () => {
-  const blocked = new Set(tiledSnapshot(buildOfficeEnvironment("publishing")).blocked);
+test("recorded legacy table/partition edge positions escape shallow penetration and reach their clicked goals", () => {
+  const blocked = new Set(tiledSnapshot(publishingV2 as TiledMap).blocked);
   const floor = (x: number, y: number) =>
     x >= 1 && x < 29 && y >= 1 && y < 21 && !blocked.has(`${x},${y}`);
   for (const [origin, goal] of [

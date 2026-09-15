@@ -1,3 +1,5 @@
+import { isPublishingMap, addPublishingArchitecture } from "./publishing-scene";
+import { renderPublishingObject } from "./publishing-assets";
 import { isTradingMap, addTradingArchitecture, joinedPartitionSpan } from "./trading-scene";
 import { renderTradingObject } from "./trading-assets";
 import { attachSceneAsset as attachCatalogAsset, type SceneAssetId } from "./scene-asset-catalog";
@@ -319,7 +321,8 @@ export class OfficeRenderer {
       this.bridge &&
       (isCreativeStudioMap(this.bridge.map()) ||
         isTechStartupMap(this.bridge.map()) ||
-        isTradingMap(this.bridge.map()));
+        isTradingMap(this.bridge.map()) ||
+        isPublishingMap(this.bridge.map()));
     this.controls.target.set(cols / 2, studio ? 1.2 : 0, rows / 2);
     this.overviewDimensions = { cols, rows };
     const aspect = this.host.clientWidth / Math.max(1, this.host.clientHeight);
@@ -493,15 +496,18 @@ export class OfficeRenderer {
     const studio = isCreativeStudioMap(map);
     const tech = isTechStartupMap(map);
     const trading = isTradingMap(map);
-    const p = trading
-      ? { floor: "#c4bfb3", wall: "#e7e1d4", wood: "#c3aa82", outside: "#f2efe4" }
-      : tech
-        ? { floor: "#c6c8c7", wall: "#edf0ed", wood: "#c4ac89", outside: "#edf0e6" }
-        : studio
-          ? { floor: "#dfcdb0", wall: "#e5dfd2", wood: "#c9ae86", outside: "#f4f0e7" }
-          : isOfficeEnvironmentId(map.environment)
-            ? environmentPalettes[map.environment]
-            : palettes[this.theme];
+    const publishing = isPublishingMap(map);
+    const p = publishing
+      ? { floor: "#d1b487", wall: "#e9e1cf", wood: "#b09369", outside: "#f4f0e6" }
+      : trading
+        ? { floor: "#c4bfb3", wall: "#e7e1d4", wood: "#c3aa82", outside: "#f2efe4" }
+        : tech
+          ? { floor: "#c6c8c7", wall: "#edf0ed", wood: "#c4ac89", outside: "#edf0e6" }
+          : studio
+            ? { floor: "#dfcdb0", wall: "#e5dfd2", wood: "#c9ae86", outside: "#f4f0e7" }
+            : isOfficeEnvironmentId(map.environment)
+              ? environmentPalettes[map.environment]
+              : palettes[this.theme];
     const lighting = officeLighting(
       isOfficeEnvironmentId(map.environment) ? map.environment : undefined,
       studio ? 3 : undefined,
@@ -745,6 +751,7 @@ export class OfficeRenderer {
     const finishedPerimeter =
       tech ||
       trading ||
+      publishing ||
       (!!map.environment && furniture.some((object) => object.type === "room_wall_h"));
     const executive = map.environment === "executive";
     let remainingFurniture = furniture;
@@ -756,12 +763,21 @@ export class OfficeRenderer {
       });
       remainingFurniture = composition.userData.unhandledObjects;
     }
+    if (publishing) addPublishingArchitecture(this.world, map);
     if (trading) addTradingArchitecture(this.world, map);
     if (tech) addTechStartupSurfaces(this.world, map);
     if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
-    if (finishedPerimeter && !executive && !studio && !trading)
+    if (finishedPerimeter && !executive && !studio && !trading && !publishing)
       addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
-    if (finishedPerimeter && map.environment && !executive && !studio && !tech && !trading)
+    if (
+      finishedPerimeter &&
+      map.environment &&
+      !executive &&
+      !studio &&
+      !tech &&
+      !trading &&
+      !publishing
+    )
       addOfficeRoomSurfaces(this.world, map.environment, {
         environmentVersion: map.environmentVersion,
         hasLegacyPartitions: finishedPerimeter,
@@ -800,7 +816,7 @@ export class OfficeRenderer {
       group.userData.mapObjectId = object.id;
       this.world.add(group);
       const type = object.type;
-      if (trading && type === "glass_partition") {
+      if ((trading || publishing) && type === "glass_partition") {
         const span = joinedPartitionSpan(object, furniture);
         group.position.set(span.x, 0, span.z);
         group.rotation.y = 0;
@@ -838,15 +854,20 @@ export class OfficeRenderer {
         group.userData.seat = seat;
         group.position.set(seat.x, 0, seat.z);
       }
-      if (trading && renderTradingObject(group, object)) {
+      if (publishing && renderPublishingObject(group, object)) {
         void attachCatalogAsset(group, object.variant as SceneAssetId);
         continue;
       }
-      if ((tech || trading) && renderTechStartupObject(group, object, furniture)) {
+      if ((trading || publishing) && renderTradingObject(group, object)) {
         void attachCatalogAsset(group, object.variant as SceneAssetId);
         continue;
       }
-      if ((tech || trading) && renderCreativeStudioObject(group, object, furniture)) continue;
+      if ((tech || trading || publishing) && renderTechStartupObject(group, object, furniture)) {
+        void attachCatalogAsset(group, object.variant as SceneAssetId);
+        continue;
+      }
+      if ((tech || trading || publishing) && renderCreativeStudioObject(group, object, furniture))
+        continue;
       const roomFurniture = buildRoomFurniture(type, executive);
       if (roomFurniture) {
         const seats = sofaSeats(object);
@@ -976,9 +997,13 @@ export class OfficeRenderer {
           0,
         );
     }
-    if (tech || trading) {
+    if (tech || trading || publishing) {
       const marker = new T.Group();
-      marker.name = trading ? "trading-scene-ready" : "tech-scene-ready";
+      marker.name = publishing
+        ? "publishing-scene-ready"
+        : trading
+          ? "trading-scene-ready"
+          : "tech-scene-ready";
       marker.userData.assetStatus = "loading";
       this.world.add(marker);
       const loads: Promise<boolean>[] = [];

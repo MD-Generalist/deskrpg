@@ -66,7 +66,7 @@ export function officeRoomsForSurface(
   context: OfficeRoomSurfaceContext = {},
 ): readonly OfficeRoom[] | undefined {
   if (
-    (environment === "tech" || environment === "trading") &&
+    (environment === "tech" || environment === "trading" || environment === "publishing") &&
     (context.environmentVersion ?? 2) >= 3
   )
     return undefined;

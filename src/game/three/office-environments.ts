@@ -1,3 +1,9 @@
+import {
+  PUBLISHING_SIZE,
+  PUBLISHING_ENTRANCE,
+  PUBLISHING_ZONES,
+  furnishPublishing,
+} from "./publishing-layout";
 import { officeFootprintLayers } from "./office-layout-modules";
 import {
   TRADING_SIZE,
@@ -167,7 +173,7 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
           ? TECH_STARTUP_SIZE.cols
           : id === "trading"
             ? TRADING_SIZE.cols
-            : 30;
+            : PUBLISHING_SIZE.cols;
   const rows =
     id === "agency"
       ? CREATIVE_STUDIO_SIZE.rows
@@ -177,7 +183,7 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
           ? TECH_STARTUP_SIZE.rows
           : id === "trading"
             ? TRADING_SIZE.rows
-            : 22;
+            : PUBLISHING_SIZE.rows;
   const entrance =
     id === "agency"
       ? CREATIVE_STUDIO_ENTRANCE.spawnCol
@@ -185,7 +191,9 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
         ? TECH_STARTUP_ENTRANCE.spawnCol
         : id === "trading"
           ? TRADING_ENTRANCE.spawnCol
-          : Math.floor(cols / 2);
+          : id === "publishing"
+            ? PUBLISHING_ENTRANCE.spawnCol
+            : Math.floor(cols / 2);
   const map = createOfficeBaseMap(environment.nameEn, cols, rows, 32);
   const layer = map.layers.find((entry) => entry.name === "Objects")!;
   const objects: TiledObject[] = [];
@@ -245,8 +253,9 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
     furnishTrading(add);
   } else if (id === "agency") furnishCreativeStudio(add);
   else if (id === "tech") furnishTechStartup(add);
+  else if (id === "publishing") furnishPublishing(add);
   else furnishOfficeRooms(id, (type, x, y, direction) => add(type, x, y, { direction }));
-  if (id !== "agency" && id !== "tech" && id !== "trading")
+  if (id !== "agency" && id !== "tech" && id !== "trading" && id !== "publishing")
     for (const x of [1, cols - 2])
       for (const y of [1, rows - 2]) {
         if (!objects.some((object) => object.x === x * 32 && object.y === y * 32))
@@ -293,14 +302,16 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
               ? TECH_STARTUP_ZONES
               : id === "trading"
                 ? TRADING_ZONES
-                : OFFICE_ROOMS[id].map((room) => ({
-                    id: room.id,
-                    x: room.x,
-                    y: room.z,
-                    width: room.width,
-                    height: room.depth + 1,
-                    roaming: room.id !== "ceo",
-                  })),
+                : id === "publishing"
+                  ? PUBLISHING_ZONES
+                  : OFFICE_ROOMS[id].map((room) => ({
+                      id: room.id,
+                      x: room.x,
+                      y: room.z,
+                      width: room.width,
+                      height: room.depth + 1,
+                      roaming: room.id !== "ceo",
+                    })),
         ),
       },
     ],
@@ -308,7 +319,13 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
       name: "officeEnvironmentVersion",
       type: "int",
       value:
-        id === "agency" ? 5 : id === "executive" ? 5 : id === "tech" || id === "trading" ? 3 : 2,
+        id === "agency"
+          ? 5
+          : id === "executive"
+            ? 5
+            : id === "tech" || id === "trading" || id === "publishing"
+              ? 3
+              : 2,
     },
   ];
   return map;

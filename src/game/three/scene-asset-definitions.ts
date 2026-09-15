@@ -17,7 +17,8 @@ export type SceneAssetFallback =
   | "studio-furniture"
   | "creative-studio-kit"
   | "tech-furniture"
-  | "trading-furniture";
+  | "trading-furniture"
+  | "publishing-furniture";
 
 export type SceneMaterialSlot =
   | "upholstery"
@@ -198,6 +199,7 @@ export const STUDIO_UPHOLSTERY_VARIANTS = {
   "off-white": { upholstery: "#e7dfd1" },
   blue: { upholstery: "#527ea3" },
   navy: { upholstery: "#263e59" },
+  olive: { upholstery: "#737b60" },
   mint: { upholstery: "#9dbca8" },
   graphite: { upholstery: "#30383d" },
   teal: { upholstery: "#377f7b" },
@@ -271,6 +273,132 @@ const studioKit = (
 });
 
 export const SCENE_ASSETS = {
+  "pub-library": {
+    url: "/assets/shared/publishing/pub-library-v1.glb",
+    category: "furniture",
+    tags: ["shared", "publishing", "pub-library"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9900000095367432, -4.7683716530855236e-8, -0.4675000011920929],
+      max: [0.9900000095367432, 2.9000000953674316, 0.3675000071525574],
+    },
+    maxHeight: 2.9000000953674316,
+    fallback: "publishing-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-publishing-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "pub-library-ladder": {
+    url: "/assets/shared/publishing/pub-library-ladder-v1.glb",
+    category: "furniture",
+    tags: ["shared", "publishing", "pub-library-ladder"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9900000095367432, -4.7683716530855236e-8, -0.4675000011920929],
+      max: [0.9900000095367432, 2.9000000953674316, 0.48249998688697815],
+    },
+    maxHeight: 2.9000000953674316,
+    fallback: "publishing-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-publishing-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "pub-proof-desk": {
+    url: "/assets/shared/publishing/pub-proof-desk-v1.glb",
+    category: "furniture",
+    tags: ["shared", "publishing", "pub-proof-desk"],
+    destinationTags: [],
+    footprint: [4, 1],
+    bounds: {
+      units: "meters",
+      min: [-1.9800000190734863, -1.19209286886246e-9, -0.4749999940395355],
+      max: [1.9800000190734863, 1.2103056907653809, 0.4749999940395355],
+    },
+    maxHeight: 1.2103056907653809,
+    fallback: "publishing-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-publishing-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "pub-newbook-display": {
+    url: "/assets/shared/publishing/pub-newbook-display-v1.glb",
+    category: "furniture",
+    tags: ["shared", "publishing", "pub-newbook-display"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9925000071525574, 3.5762786065873797e-9, -0.3400000035762787],
+      max: [0.9925000071525574, 1.190000057220459, 0.3400000035762787],
+    },
+    maxHeight: 1.190000057220459,
+    fallback: "publishing-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-publishing-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "pub-print-bench": {
+    url: "/assets/shared/publishing/pub-print-bench-v1.glb",
+    category: "furniture",
+    tags: ["shared", "publishing", "pub-print-bench"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9850000143051147, -1.0728836485895954e-8, -0.4749999940395355],
+      max: [0.9850000143051147, 1.3224999904632568, 0.47999998927116394],
+    },
+    maxHeight: 1.3224999904632568,
+    fallback: "publishing-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-publishing-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "pub-workstation": {
+    url: "/assets/shared/publishing/pub-workstation-v1.glb",
+    category: "furniture",
+    tags: ["shared", "publishing", "pub-workstation"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9900000095367432, -1.0728836485895954e-8, -0.47999998927116394],
+      max: [0.9900000095367432, 1.4082363843917847, 0.47999998927116394],
+    },
+    maxHeight: 1.4082363843917847,
+    fallback: "publishing-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-publishing-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
   "trade-round-table": {
     url: "/assets/shared/trading/trade-round-table-v1.glb",
     category: "furniture",
@@ -714,7 +842,12 @@ export const SCENE_ASSETS = {
     destinationTags: ["lounge"],
   }),
   "shared-stool": studioFurniture("stool", 0.61, 0.73, 0.61, [1, 1], {
-    variants: { blue: { oak: "#527ea3" }, mint: { oak: "#9dbca8" }, graphite: { oak: "#30383d" } },
+    variants: {
+      olive: { oak: "#737b60" },
+      blue: { oak: "#527ea3" },
+      mint: { oak: "#9dbca8" },
+      graphite: { oak: "#30383d" },
+    },
     seats: [{ anchor: [0, 0], visual: [0, 0.72, 0], actorElevation: 0.24, direction: "down" }],
     destinationTags: ["pantry", "stool"],
   }),
@@ -912,6 +1045,7 @@ export function studioFurnitureAsset(object: {
     variant && Object.hasOwn(STUDIO_UPHOLSTERY_VARIANTS, variant) ? variant : "off-white";
   if (type === "desk" && variant === "studio-oak") return { id: "shared-workstation" };
   if (type === "chair") {
+    if (variant === "olive-office") return { id: "shared-office-chair", variant: "olive" };
     if (variant === "navy-office") return { id: "shared-office-chair", variant: "navy" };
     if (variant === "graphite") return { id: "shared-office-chair", variant: "graphite" };
     if (variant === "office-neutral") return { id: "shared-office-chair", variant: "neutral" };
@@ -936,7 +1070,8 @@ export function studioFurnitureAsset(object: {
   if (type === "studio_stool")
     return {
       id: "shared-stool",
-      variant: variant && ["blue", "mint", "graphite"].includes(variant) ? variant : undefined,
+      variant:
+        variant && ["olive", "blue", "mint", "graphite"].includes(variant) ? variant : undefined,
     };
   if (type === "studio_round_table") return { id: "shared-round-table" };
   if (type === "studio_worktable") return { id: "shared-production-table" };

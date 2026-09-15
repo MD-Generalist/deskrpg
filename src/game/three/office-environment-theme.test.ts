@@ -20,7 +20,7 @@ for (const entry of OFFICE_ENVIRONMENTS) {
         ? 5
         : entry.id === "executive"
           ? 5
-          : entry.id === "tech" || entry.id === "trading"
+          : entry.id === "tech" || entry.id === "trading" || entry.id === "publishing"
             ? 3
             : 2,
     );

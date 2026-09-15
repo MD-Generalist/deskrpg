@@ -15,7 +15,7 @@ test("registers valid selected environment with existing template API", async ()
     const body = JSON.parse(String(options.body));
     assert.equal(validateMapTemplate(body), null);
     assert.deepEqual(body.tiledJson, buildOfficeEnvironment("publishing"));
-    assert.equal(body.tags, "deskrpg-office-v2:publishing");
+    assert.equal(body.tags, "deskrpg-office-v3:publishing");
     return reply({ template: { id: "saved-template" } }, 201);
   };
   assert.equal(await ensureOfficeEnvironmentTemplate("publishing", request), "saved-template");
@@ -159,7 +159,7 @@ test("room rollout creates v2 separately and never reads or updates legacy v1 te
       assert.equal(options.method, "POST");
       assert.equal(
         JSON.parse(String(options.body)).tags,
-        `deskrpg-office-v${id === "agency" ? 5 : id === "tech" || id === "trading" ? 3 : 2}:${id}`,
+        `deskrpg-office-v${id === "agency" ? 5 : id === "tech" || id === "trading" || id === "publishing" ? 3 : 2}:${id}`,
       );
       return reply({ template: { id: "new-room-template" } }, 201);
     };
@@ -232,5 +232,23 @@ test("trading keeps the v2 template intact and registers the v3 reference layout
     return reply({ template: { id: "trading-v3" } });
   };
   assert.equal(await ensureOfficeEnvironmentTemplate("trading", request), "trading-v3");
+  assert.deepEqual(calls, ["GET /api/map-templates", "POST /api/map-templates"]);
+});
+
+test("publishing keeps the v2 template intact and registers the v3 reference layout", async () => {
+  const calls: string[] = [];
+  const request: typeof fetch = async (url, options) => {
+    calls.push(`${options?.method ?? "GET"} ${url}`);
+    if (!options)
+      return reply({
+        templates: [{ id: "legacy-publishing", tags: "deskrpg-office-v2:publishing" }],
+      });
+    const body = JSON.parse(String(options.body));
+    assert.equal(body.tags, "deskrpg-office-v3:publishing");
+    assert.deepEqual(body.tiledJson, buildOfficeEnvironment("publishing"));
+    assert.equal(validateMapTemplate(body), null);
+    return reply({ template: { id: "publishing-v3" } });
+  };
+  assert.equal(await ensureOfficeEnvironmentTemplate("publishing", request), "publishing-v3");
   assert.deepEqual(calls, ["GET /api/map-templates", "POST /api/map-templates"]);
 });

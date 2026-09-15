@@ -17,7 +17,7 @@ window.buildTech = async () => {
  const result = {};
  for (const id of Object.keys(TECH_STARTUP_ASSETS)) {
   const root = buildTechStartupAsset(id);
-  detailSurfaces(root, ['#cdb58c'], ['#719078','#5e7d65','#426477','#738d83'], ['#262d33','#9ca5aa']);
+  detailSurfaces(root, ${JSON.stringify(config.woodColors ?? ["#cdb58c"])}, ['#719078','#5e7d65','#426477','#738d83'], ['#262d33','#9ca5aa']);
   const processed = new Set();
   root.traverse(o => {
     if (!o.isMesh) return;

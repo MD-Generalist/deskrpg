@@ -1,0 +1,92 @@
+{
+  "pub-library": {
+    "file": "pub-library-v1.glb",
+    "bytes": 312048,
+    "triangles": 3376,
+    "meshes": 9,
+    "bounds": {
+      "min": [-0.9900000095367432, -4.7683716530855236e-8, -0.4675000011920929],
+      "max": [0.9900000095367432, 2.9000000953674316, 0.3675000071525574]
+    },
+    "sha256": "89c962a458e8b251790273fb0571a839342661e13b1c8196f2ff8489309ec568",
+    "source": "src/game/three/publishing-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-publishing-assets.cjs"
+  },
+  "pub-library-ladder": {
+    "file": "pub-library-ladder-v1.glb",
+    "bytes": 332248,
+    "triangles": 3508,
+    "meshes": 10,
+    "bounds": {
+      "min": [-0.9900000095367432, -4.7683716530855236e-8, -0.4675000011920929],
+      "max": [0.9900000095367432, 2.9000000953674316, 0.48249998688697815]
+    },
+    "sha256": "cf8f2f0e02c3e9d2531e88ff89ffd68d58e2b97522e2596a90bfbfa770eef01c",
+    "source": "src/game/three/publishing-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-publishing-assets.cjs"
+  },
+  "pub-proof-desk": {
+    "file": "pub-proof-desk-v1.glb",
+    "bytes": 217324,
+    "triangles": 1772,
+    "meshes": 8,
+    "bounds": {
+      "min": [-1.9800000190734863, -1.19209286886246e-9, -0.4749999940395355],
+      "max": [1.9800000190734863, 1.2103056907653809, 0.4749999940395355]
+    },
+    "sha256": "386137bfc68c1dc1a6d9cd41fdde97973d5b807d987fe97665c58393fc090744",
+    "source": "src/game/three/publishing-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-publishing-assets.cjs"
+  },
+  "pub-newbook-display": {
+    "file": "pub-newbook-display-v1.glb",
+    "bytes": 134240,
+    "triangles": 804,
+    "meshes": 9,
+    "bounds": {
+      "min": [-0.9925000071525574, 3.5762786065873797e-9, -0.3400000035762787],
+      "max": [0.9925000071525574, 1.190000057220459, 0.3400000035762787]
+    },
+    "sha256": "281f6a46b36d75a858e79735737a1581b3a7317617da5e755bc5e85f1e6c4b65",
+    "source": "src/game/three/publishing-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-publishing-assets.cjs"
+  },
+  "pub-print-bench": {
+    "file": "pub-print-bench-v1.glb",
+    "bytes": 138020,
+    "triangles": 432,
+    "meshes": 5,
+    "bounds": {
+      "min": [-0.9850000143051147, -1.0728836485895954e-8, -0.4749999940395355],
+      "max": [0.9850000143051147, 1.3224999904632568, 0.47999998927116394]
+    },
+    "sha256": "87d0dc471d304c979a5f3c9815d9ef42812c0e8e4ba3580a228860b60535da93",
+    "source": "src/game/three/publishing-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-publishing-assets.cjs"
+  },
+  "pub-workstation": {
+    "file": "pub-workstation-v1.glb",
+    "bytes": 248632,
+    "triangles": 1116,
+    "meshes": 11,
+    "bounds": {
+      "min": [-0.9900000095367432, -1.0728836485895954e-8, -0.47999998927116394],
+      "max": [0.9900000095367432, 1.4082363843917847, 0.47999998927116394]
+    },
+    "sha256": "03090ae5b52481247a05d09cc7c3d29f31651fc68b8f18488df04e90376a903b",
+    "source": "src/game/three/publishing-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-publishing-assets.cjs"
+  }
+}

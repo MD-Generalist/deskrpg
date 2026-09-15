@@ -1,10 +1,11 @@
+import type { TiledMap } from "../../components/map-editor/hooks/useMapEditor";
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as T from "three";
 import { addRoomPartition, addRoomTJunction } from "./room-architecture";
 import { PUBLISHING_ROOMS } from "./publishing-room-layout";
 import { batchStaticFurniture } from "./static-batching";
-import { buildOfficeEnvironment } from "./office-environments";
+import publishingV2 from "../../lib/fixtures/official-publishing-v2.json";
 import { tiledSnapshot } from "./tiled-preview";
 
 test("full-height glass partitions remain visible after static batching", () => {
@@ -33,8 +34,8 @@ test("full-height glass partitions remain visible after static batching", () => 
   }
 });
 
-test("publishing rooms keep two-tile doors and a continuous two-tile corridor", () => {
-  const snapshot = tiledSnapshot(buildOfficeEnvironment("publishing"));
+test("legacy publishing v2 rooms keep two-tile doors and a continuous two-tile corridor", () => {
+  const snapshot = tiledSnapshot(publishingV2 as TiledMap);
   const blocked = new Set(snapshot.blocked);
   for (const room of PUBLISHING_ROOMS) {
     for (let x: number = room.x; x < room.x + room.width; x++) {
