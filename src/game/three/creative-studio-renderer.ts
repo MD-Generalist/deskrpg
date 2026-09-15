@@ -43,10 +43,26 @@ export function studioObjectDirection(object: MapObject, objects: readonly MapOb
   }
   return object.direction ?? "down";
 }
-function plantFallback() {
+function plantFallback(variant?: string) {
   const root = new T.Group();
   round(root, 0.26, 0.32, 0.26, "#d4c3a2", 0, 0.16, 0, 0.025);
   round(root, 0.035, 0.85, 0.035, "#66573d", 0, 0.72, 0, 0.01);
+  if (variant === "monstera") {
+    const leafMaterial = new T.MeshStandardMaterial({ color: "#477052", roughness: 0.88 });
+    for (let i = 0; i < 7; i++) {
+      const angle = (i * Math.PI * 2) / 7;
+      const stem = round(root, 0.018, 0.62, 0.018, "#587259", 0, 0.67, 0, 0.006);
+      stem.rotation.z = Math.sin(angle) * 0.42;
+      stem.rotation.x = Math.cos(angle) * 0.42;
+      const leaf = new T.Mesh(new T.SphereGeometry(0.25, 12, 8), leafMaterial);
+      leaf.position.set(Math.sin(angle) * 0.25, 0.96 + (i % 2) * 0.12, Math.cos(angle) * 0.25);
+      leaf.scale.set(1.35, 0.18, 0.8);
+      leaf.rotation.y = angle;
+      leaf.castShadow = true;
+      root.add(leaf);
+    }
+    return root;
+  }
   const foliage = new T.Mesh(
     new T.SphereGeometry(0.28, 10, 8),
     new T.MeshStandardMaterial({ color: "#53744b", roughness: 0.85 }),
@@ -70,8 +86,14 @@ export function renderCreativeStudioObject(
   }
   const selection = studioFurnitureAsset(object),
     kit = creativeStudioKitFor(object),
-    plant = object.type === "plant";
-  if (!selection && !kit && !plant && object.type !== "meeting_display") return false;
+    plant = object.type === "plant",
+    roomFurniture = [
+      "meeting_display",
+      "kitchen_counter",
+      "microwave_cabinet",
+      "refrigerator",
+    ].includes(object.type);
+  if (!selection && !kit && !plant && !roomFurniture) return false;
   const size = getObjectDimensions(object.type, object.direction),
     offset = furnitureOffset(object),
     direction = studioObjectDirection(object, objects);
@@ -103,13 +125,19 @@ export function renderCreativeStudioObject(
   }
   if (kit) loads.push(attachCreativeStudioKit(host, object, options));
   if (plant) {
-    const body = plantFallback();
+    const body = plantFallback(object.variant);
     host.add(body);
-    loads.push(
-      attachSceneAsset(body, object.variant === "olive" ? "shared-olive" : "shared-ficus", options),
-    );
+    if (object.variant === "monstera") loads.push(Promise.resolve(true));
+    else
+      loads.push(
+        attachSceneAsset(
+          body,
+          object.variant === "olive" ? "shared-olive" : "shared-ficus",
+          options,
+        ),
+      );
   }
-  if (object.type === "meeting_display") host.add(buildRoomFurniture("meeting_display")!);
+  if (roomFurniture) host.add(buildRoomFurniture(object.type)!);
   host.userData.assetStatus = "loading";
   host.userData.dynamicAsset = true;
   host.userData.assetReady = Promise.all(loads).then((results) => {

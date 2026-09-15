@@ -33,7 +33,7 @@ test("agency is the deterministic 42x26 creative studio", () => {
   assert.equal(map.height, 26);
   assert.equal(
     properties?.find((property) => property.name === "officeEnvironmentVersion")?.value,
-    3,
+    4,
   );
   assert.deepEqual(
     CREATIVE_STUDIO_ZONES.map((zone) => zone.id),
@@ -84,6 +84,47 @@ test("creative studio places every signature zone with typed collision geometry"
         occupied.set(tile, object.type);
       }
   }
+});
+
+test("creative studio fills its open plan with working clusters, dividers, and support props", () => {
+  const objects = tiledSnapshot(buildOfficeEnvironment("agency")).objects;
+  const count = (type: string) => objects.filter((object) => object.type === type).length;
+
+  assert.ok(
+    objects.filter((object) => object.type !== "wall").length >= 110,
+    "reference-scale density cannot regress to the sparse first studio",
+  );
+  assert.equal(count("desk"), 10, "two four-person pods and one two-person work island");
+  assert.equal(count("computer"), 10, "every work desk is dressed with a monitor");
+  const workstationBands = new Set(
+    objects
+      .filter((object) => object.type === "desk")
+      .map((object) => (object.col < 16 ? "rear-west" : object.col < 24 ? "rear-centre" : "rear-east")),
+  );
+  assert.deepEqual(
+    [...workstationBands].sort(),
+    ["rear-centre", "rear-east", "rear-west"],
+    "workstations remain distributed across three islands",
+  );
+  const workstationZone = CREATIVE_STUDIO_ZONES.find((zone) => zone.id === "workstations")!;
+  for (const object of objects.filter(
+    (object) => object.type === "chair" && object.destinationTags?.includes("desk"),
+  )) {
+    assert.ok(
+      object.col >= workstationZone.x &&
+        object.col < workstationZone.x + workstationZone.width &&
+        object.row >= workstationZone.y &&
+        object.row < workstationZone.y + workstationZone.height,
+      `work seat ${object.col},${object.row} stays in its ambient zone`,
+    );
+  }
+  assert.ok(count("studio_shelf") >= 10, "low storage and shelving divide the open zones");
+  assert.ok(count("plant") >= 6, "planting varies the open floor edges");
+  assert.ok(count("photo_light") >= 3, "photo bay has key, fill, and reflector equipment");
+  assert.equal(count("studio_stool"), 4, "pantry bar seating matches the reference");
+  assert.ok(count("studio_sofa") >= 3, "the central lounge uses a broad modular curve");
+  for (const type of ["kitchen_counter", "microwave_cabinet", "refrigerator"])
+    assert.ok(count(type) >= 1, `pantry includes ${type}`);
 });
 
 test("studio object types publish stable footprints, rotation, and collision behavior", () => {
@@ -173,6 +214,10 @@ test("creative studio entrance, circulation lanes, and all seat anchors stay rea
     0,
   );
   assert.equal(deferredCatalogAnchors, CREATIVE_STUDIO_SEAT_CONTRACT.deferredCatalogAnchors);
+  assert.equal(
+    CREATIVE_STUDIO_SEAT_CONTRACT.tileGridAnchors + deferredCatalogAnchors,
+    CREATIVE_STUDIO_SEAT_CONTRACT.totalAnchors,
+  );
   const seats = furnitureSeats(snapshot.objects);
   assert.ok(seats.length >= CREATIVE_STUDIO_SEAT_CONTRACT.tileGridAnchors);
   for (const seat of seats) {

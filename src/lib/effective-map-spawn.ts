@@ -8,12 +8,17 @@ export function isCreativeStudioMap(mapData: unknown): boolean {
   return layers.some(
     (layer) =>
       layer.properties?.some((p) => p.name === "officeEnvironment" && p.value === "agency") &&
-      layer.properties?.some((p) => p.name === "officeEnvironmentVersion" && p.value === 3),
+      layer.properties?.some(
+        (p) =>
+          p.name === "officeEnvironmentVersion" &&
+          typeof p.value === "number" &&
+          p.value >= 3,
+      ),
   );
 }
 
 type Point = { col: number; row: number };
-/** Tiled is authoritative for v3; legacy maps retain explicitly configured spawn. */
+/** Tiled is authoritative for creative-studio v3+; legacy maps retain configured spawn. */
 export function effectiveMapSpawn(mapData: unknown, mapConfig?: unknown): Point | null {
   const map = parseDbObject(mapData),
     config = parseDbObject(mapConfig);

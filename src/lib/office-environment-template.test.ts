@@ -157,7 +157,7 @@ test("room rollout creates v2 separately and never reads or updates legacy v1 te
       assert.equal(options.method, "POST");
       assert.equal(
         JSON.parse(String(options.body)).tags,
-        `deskrpg-office-v${id === "agency" ? 3 : 2}:${id}`,
+        `deskrpg-office-v${id === "agency" ? 4 : 2}:${id}`,
       );
       return reply({ template: { id: "new-room-template" } }, 201);
     };
@@ -166,17 +166,17 @@ test("room rollout creates v2 separately and never reads or updates legacy v1 te
   }
 });
 
-test("agency skips v2 evidence and registers v3 with the actual Tiled entrance spawn", async () => {
+test("agency skips old evidence and registers v4 with the actual Tiled entrance spawn", async () => {
   const request: typeof fetch = async (url, options) => {
     if (!options) {
       assert.equal(url, "/api/map-templates");
       return reply({ templates: [{ id: "legacy", tags: "deskrpg-office-v2:agency" }] });
     }
     const body = JSON.parse(String(options.body));
-    assert.equal(body.tags, "deskrpg-office-v3:agency");
+    assert.equal(body.tags, "deskrpg-office-v4:agency");
     assert.equal(body.spawnCol, 23);
     assert.equal(body.spawnRow, 23);
-    return reply({ template: { id: "v3" } });
+    return reply({ template: { id: "v4" } });
   };
-  assert.equal(await ensureOfficeEnvironmentTemplate("agency", request), "v3");
+  assert.equal(await ensureOfficeEnvironmentTemplate("agency", request), "v4");
 });

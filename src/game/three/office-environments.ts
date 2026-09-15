@@ -236,7 +236,7 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
     {
       name: "officeEnvironmentVersion",
       type: "int",
-      value: id === "agency" ? 3 : id === "executive" ? 5 : 2,
+      value: id === "agency" ? 4 : id === "executive" ? 5 : 2,
     },
   ];
   return map;

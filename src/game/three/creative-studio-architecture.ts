@@ -21,7 +21,7 @@ export function isCreativeStudioMap(map: {
 }) {
   return (
     map.environment === "agency" &&
-    map.environmentVersion === 3 &&
+    (map.environmentVersion ?? 0) >= 3 &&
     map.cols === 42 &&
     map.rows === 26
   );

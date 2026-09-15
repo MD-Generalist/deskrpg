@@ -1,7 +1,7 @@
 import { Mesh, PCFShadowMap, PCFSoftShadowMap, type Object3D, type ShadowMapType } from "three";
 import type { OfficeEnvironmentId } from "./office-environments";
 export function officeLighting(environment?: OfficeEnvironmentId, environmentVersion?: number) {
-  const studio = environment === "agency" && environmentVersion === 3;
+  const studio = environment === "agency" && (environmentVersion ?? 0) >= 3;
   return {
     // Three's PCFSoft branch ignores radius; studio uses its supported 17-tap PCF
     // kernel with wider texel offsets. Legacy environments retain their exact filter.

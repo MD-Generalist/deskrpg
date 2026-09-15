@@ -18,7 +18,7 @@ const source = () => {
   g.add(new T.Mesh(new T.BoxGeometry(0.1, 0.1, 0.1), new T.MeshStandardMaterial()));
   return g;
 };
-test("v3 adapter builds architecture once, resolves all objects and retains 38 seats after late batching", async () => {
+test("studio adapter builds architecture once, resolves all objects and retains 51 seats after late batching", async () => {
   const map = tiledSnapshot(buildOfficeEnvironment("agency")),
     root = new T.Group(),
     calls = new Map<string, number>();
@@ -42,7 +42,7 @@ test("v3 adapter builds architecture once, resolves all objects and retains 38 s
     seats += o.userData.seats?.length ?? (o.userData.seat ? 1 : 0);
     assert.ok(!o.userData.dynamicAsset);
   });
-  assert.equal(seats, 38);
+  assert.equal(seats, 51);
   for (const object of map.objects) {
     const host = new T.Group();
     assert.equal(
@@ -53,7 +53,7 @@ test("v3 adapter builds architecture once, resolves all objects and retains 38 s
     await host.userData.assetReady;
     disposeTree(host);
   }
-  assert.equal(furnitureSeats(map.objects).length, 38);
+  assert.equal(furnitureSeats(map.objects).length, 51);
   disposeTree(root);
 });
 test("legacy/custom agency gate does not compose a studio scene", () => {
@@ -109,6 +109,29 @@ test("studio dressing adds shared rugs and plants without new navigation objects
   assert.ok(decorations.some((d) => d.id === "shared-round-rug"));
   assert.ok(decorations.some((d) => d.id === "shared-woven-rug"));
 });
+test("monstera placements keep a distinct broad-leaf fallback without requesting the ficus asset", async () => {
+  const host = new T.Group();
+  let loadCalls = 0;
+  assert.equal(
+    renderCreativeStudioObject(
+      host,
+      { id: "monstera", type: "plant", variant: "monstera", col: 29, row: 14 },
+      [],
+      {
+        load: async () => {
+          loadCalls += 1;
+          return source();
+        },
+      },
+    ),
+    true,
+  );
+  assert.equal(await host.userData.assetReady, true);
+  assert.equal(loadCalls, 0);
+  const bounds = new T.Box3().setFromObject(host);
+  assert.ok(bounds.max.x - bounds.min.x > 0.7, "broad leaves differ from the narrow tree fallback");
+  disposeTree(host);
+});
 test("reference camera fills the wide viewport while retaining all shell corners", () => {
   const preset = creativeStudioOverview(42, 26, 1748 / 900),
     camera = new T.PerspectiveCamera(38, 1748 / 900, 0.1, 1000);
@@ -151,7 +174,7 @@ test("late batching shares byte-identical PBR images across independent GLB sour
   assert.equal(root.children.filter((o) => o instanceof T.Mesh && o.visible).length, 1);
 });
 
-test("edited v3 studio returns collision-bearing generic objects to the renderer without duplicating owned content", async () => {
+test("edited studio returns collision-bearing generic objects to the renderer without duplicating owned content", async () => {
   const map = tiledSnapshot(buildOfficeEnvironment("agency"));
   const bookshelf = { id: "custom-bookshelf", type: "bookshelf" as const, col: 4, row: 15 };
   map.objects.push(bookshelf);
