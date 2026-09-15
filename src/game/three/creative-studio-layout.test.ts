@@ -86,6 +86,19 @@ test("creative studio places every signature zone with typed collision geometry"
   }
 });
 
+test("creative studio fills its open plan with working clusters, dividers, and support props", () => {
+  const objects = tiledSnapshot(buildOfficeEnvironment("agency")).objects;
+  const count = (type: string) => objects.filter((object) => object.type === type).length;
+
+  assert.equal(count("desk"), 8, "two four-person workstation pods");
+  assert.ok(count("studio_shelf") >= 10, "low storage and shelving divide the open zones");
+  assert.ok(count("plant") >= 6, "planting varies the open floor edges");
+  assert.ok(count("photo_light") >= 3, "photo bay has key, fill, and reflector equipment");
+  assert.equal(count("studio_stool"), 3, "pantry bar seating remains available");
+  for (const type of ["kitchen_counter", "microwave_cabinet", "refrigerator"])
+    assert.ok(count(type) >= 1, `pantry includes ${type}`);
+});
+
 test("studio object types publish stable footprints, rotation, and collision behavior", () => {
   const contracts = {
     studio_worktable: [6, 3, true],
@@ -173,6 +186,10 @@ test("creative studio entrance, circulation lanes, and all seat anchors stay rea
     0,
   );
   assert.equal(deferredCatalogAnchors, CREATIVE_STUDIO_SEAT_CONTRACT.deferredCatalogAnchors);
+  assert.equal(
+    CREATIVE_STUDIO_SEAT_CONTRACT.tileGridAnchors + deferredCatalogAnchors,
+    CREATIVE_STUDIO_SEAT_CONTRACT.totalAnchors,
+  );
   const seats = furnitureSeats(snapshot.objects);
   assert.ok(seats.length >= CREATIVE_STUDIO_SEAT_CONTRACT.tileGridAnchors);
   for (const seat of seats) {

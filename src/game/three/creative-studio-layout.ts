@@ -112,10 +112,10 @@ export type CreativeStudioAdd = (
 
 /** Tile anchors ship now; Task 4 must add catalog-local anchors without moving this navigation grid. */
 export const CREATIVE_STUDIO_SEAT_CONTRACT = Object.freeze({
-  tileGridAnchors: 29,
+  tileGridAnchors: 34,
   deferredCatalogSeatsPerObject: Object.freeze({ studio_sofa: 3, studio_stool: 1 }),
   deferredCatalogAnchors: 9,
-  totalAnchors: 38,
+  totalAnchors: 43,
 } as const);
 
 export function furnishCreativeStudio(add: CreativeStudioAdd) {
@@ -127,6 +127,15 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
   add("studio_shelf", 1, 5, {
     direction: "right",
     variant: "equipment",
+    destinationTags: ["photo"],
+  });
+  add("studio_shelf", 5, 5, {
+    variant: "prop-storage",
+    destinationTags: ["photo"],
+  });
+  add("photo_light", 7, 7, {
+    direction: "left",
+    variant: "reflector",
     destinationTags: ["photo"],
   });
   for (const row of [5, 6, 7])
@@ -154,6 +163,31 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
       destinationTags: ["work", "desk"],
     });
   add("studio_shelf", 19, 2, { variant: "credenza" });
+  // 두 번째 4인 업무석 군집을 배치해 소규모 팀이 함께 작업할 수 있게 한다.
+  for (const [col, row] of [
+    [17, 3],
+    [18, 3],
+    [17, 4],
+    [18, 4],
+  ] as const) {
+    add("desk", col, row, { variant: "studio-oak", destinationTags: ["work", "desk"] });
+    add("computer", col, row, { variant: "studio-monitor" });
+  }
+  for (const [col, row, direction] of [
+    [17, 2, "down"],
+    [18, 2, "down"],
+    [17, 5, "up"],
+    [18, 5, "up"],
+  ] as const)
+    add("chair", col, row, {
+      direction,
+      variant: "office-color",
+      destinationTags: ["work", "desk"],
+    });
+  add("studio_shelf", 20, 6, {
+    variant: "materials",
+    destinationTags: ["work", "desk"],
+  });
   add("plant", 22, 2, { variant: "ficus" });
 
   // Ideation table. Eight tile-grid chairs are the Task 2 navigation fallback.
@@ -184,6 +218,8 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
   add("office_armchair", 23, 11, { direction: "right", variant: "teal" });
   add("office_armchair", 28, 11, { direction: "left", variant: "coral" });
   add("plant", 29, 7, { variant: "olive" });
+  add("studio_shelf", 22, 14, { variant: "low-divider", destinationTags: ["lounge"] });
+  add("plant", 29, 14, { variant: "monstera" });
 
   // Dressed production table with eight independently reachable legacy chairs.
   add("studio_worktable", 20, 18, {
@@ -206,6 +242,12 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
       destinationTags: ["production", "worktable"],
     });
   add("studio_shelf", 16, 21, { variant: "sample-rack", destinationTags: ["production"] });
+  add("studio_shelf", 27, 18, {
+    direction: "right",
+    variant: "material-library",
+    destinationTags: ["production"],
+  });
+  add("studio_shelf", 27, 21, { variant: "print-rack", destinationTags: ["production"] });
 
   // Glass meeting enclosure. The opening at rows 8-9 connects to the east spine.
   for (const row of [2, 3, 4, 5, 6, 7, 10])
@@ -232,6 +274,12 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
       variant: "oak",
       destinationTags: ["pantry", "stool"],
     });
+  add("kitchen_counter", 33, 14, { variant: "sink", destinationTags: ["pantry"] });
+  add("microwave_cabinet", 35, 14, {
+    variant: "coffee-station",
+    destinationTags: ["pantry"],
+  });
+  add("refrigerator", 40, 14, { variant: "under-counter", destinationTags: ["pantry"] });
   add("plant", 40, 17, { variant: "ficus" });
 
   // Informal front-right lounge and reference storage.
@@ -243,5 +291,11 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
   });
   add("meeting_table", 35, 22, { variant: "round-low", destinationTags: ["lounge"] });
   add("office_armchair", 33, 22, { direction: "right", variant: "mustard" });
+  add("office_armchair", 38, 22, {
+    direction: "left",
+    variant: "coral",
+    destinationTags: ["lounge", "sofa"],
+  });
+  add("plant", 32, 24, { variant: "monstera" });
   add("plant", 40, 24, { variant: "olive" });
 }
