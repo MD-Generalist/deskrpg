@@ -280,12 +280,14 @@ function assertProvisionRequest(provision: SetupProvisionRequest | undefined) {
 }
 export async function prepareHost(
   execute: HostExecutor,
-  candidateId: string,
+  initialCandidateId: string,
   onStep: (step: string) => void,
   signal?: AbortSignal,
   timezone?: string,
   provision?: SetupProvisionRequest,
 ): Promise<PreparedHost> {
+  // 서비스를 등록하면 유닛 정의가 생기고 후보 id(정의의 해시)가 바뀐다. 이후 단계는 새 id 를 써야 한다.
+  let candidateId = initialCandidateId;
   const stage = async (step: string, action: string, option?: string) => {
     checkAbort(signal);
     onStep(step);
@@ -329,8 +331,11 @@ export async function prepareHost(
     }
   }
   // A unit must exist before anything tries to restart the gateway through it.
-  if (state.changes.includes("installing_service"))
-    await stage("installing_service", "install-service");
+  if (state.changes.includes("installing_service")) {
+    const installed = record(await stage("installing_service", "install-service"));
+    if (typeof installed.candidateId === "string" && installed.candidateId.length === 64)
+      candidateId = installed.candidateId;
+  }
   if (state.changes.includes("updating_plugin")) await stage("updating_plugin", "install");
   else if (!state.candidate.pluginInstalled || !state.candidate.pluginEnabled)
     await stage(

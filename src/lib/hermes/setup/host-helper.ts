@@ -378,6 +378,13 @@ def profile_names(cfg):
     allow = allowlist(cfg)
     return [(name,home) for name,home in homes() if name == 'default' or allow is None or name in allow]
 
+def needs_service(owner):
+    # 유닛이 없는 호스트를 알아보는 유일한 규칙이다. service 이름으로 판정하면 안 된다 —
+    # 리눅스 분기는 유닛 파일이 없어도 'hermes-gateway.service' 라는 이름을 먼저 채우므로
+    # service == 'manual' 은 macOS 에서만 참이 된다(실측: 새 설치에서 등록 단계가 통째로 빠졌다).
+    # identity_mismatch/ambiguous 는 남의 유닛이거나 손댄 유닛이라는 뜻이므로 덮어쓰지 않는다.
+    return not owner['command'] and owner['warning'] == 'managed_service_required'
+
 def preflight(name, home, item):
     public, owner, cfg, token, plugin_name = item
     if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
@@ -462,7 +469,7 @@ def main(action, candidate_id=None, option=None):
                 if warning: public['warning'] = warning
         except Failure as error: public['warning'] = str(error)
         changes = []
-        if owner['service'] == 'manual': changes.append('installing_service')
+        if needs_service(owner): changes.append('installing_service')
         if not public['pluginInstalled']: changes.append('installing_plugin')
         elif version_below(public['pluginVersion'], PLUGIN_VERSION): changes.append('updating_plugin')
         elif not public['pluginEnabled']: changes.append('enabling_plugin')
@@ -485,13 +492,16 @@ def main(action, candidate_id=None, option=None):
         # before it. Hermes writes the unit itself — DeskRPG never authors one, because only a
         # Hermes-authored unit can pass the identity check that authorizes a restart later.
         if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
-        if owner['service'] != 'manual': return {'ok': True}
+        if not needs_service(owner): return {'ok': True}
         assert_port_owned(public, owner)
         env = {**os.environ, 'HERMES_HOME': str(home)}
         if bounded([sys.executable, '-m', 'hermes_cli.main', '--profile', name, 'gateway', 'install'], env)[0]:
             fail('service_install_failed')
-        if identity(name, home)['service'] == 'manual': fail('service_install_failed')
-        return {'ok': True}
+        fresh = identity(name, home)
+        if needs_service(fresh): fail('service_install_failed')
+        # 후보 id 는 서비스 정의의 해시를 포함한다. 유닛을 막 만들었으므로 id 가 바뀌었다 —
+        # 새 id 를 돌려주지 않으면 이어지는 모든 단계가 candidate_changed 로 죽는다(실측).
+        return {'ok': True, 'candidateId': fresh['id']}
     if action == 'create-profile':
         # 프로필을 늘리는 것은 리스너 소유자(default)만 한다.
         if name != 'default': fail('profile_provision_forbidden')
@@ -576,13 +586,16 @@ def main(action, candidate_id=None, option=None):
         if config(home).get('timezone') != value: fail('timezone_write_failed')
     elif action == 'configure':
         # Preserve existing config shapes while setting the effective merged API block.
-        cfg.setdefault('gateway', {})
+        # gateway 키가 있으나 값이 비어 있으면 setdefault 는 None 을 돌려준다 — 새로 설치한
+        # Hermes 의 config.yaml 이 정확히 그 모양이라 여기서 TypeError 로 죽었다(실측).
+        gateway_block = mapping(cfg.get('gateway'))
+        cfg['gateway'] = gateway_block
         if name == 'default':
-            cfg['gateway']['multiplex_profiles'] = True
+            gateway_block['multiplex_profiles'] = True
             if 'multiplex_profiles' in cfg: cfg['multiplex_profiles'] = True
-        api = mapping(cfg['gateway'].get('api_server'))
+        api = mapping(gateway_block.get('api_server'))
         api['enabled'] = True
-        cfg['gateway']['api_server'] = api
+        gateway_block['api_server'] = api
         atomic(home / 'config.yaml', yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
         if not token:
             old = read(home / '.env')

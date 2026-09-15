@@ -806,7 +806,9 @@ print(json.dumps({'result':result,'argv':calls[0][1:],'written':written}))
 `,
     { config: { gateway: { multiplex_profiles: true } } },
   );
-  assert.deepEqual(result.body.result, { ok: true });
+  assert.equal(result.body.result.ok, true);
+  // 유닛을 만들면 후보 id(정의의 해시)가 바뀐다 — 새 id 를 돌려줘야 이어지는 단계가 산다.
+  assert.match(result.body.result.candidateId, /^[0-9a-f]{64}$/);
   assert.deepEqual(result.body.argv, [
     "-m",
     "hermes_cli.main",
@@ -1465,4 +1467,66 @@ test("설치 오류 코드는 화이트리스트 밖이면 원문을 흘리지 �
     installHermesHost(fake([{ error: "token=secret leaked" }]).execute),
     /^Error: host_operation_failed$/,
   );
+});
+
+// 리눅스는 유닛 파일이 없어도 service 이름('hermes-gateway.service')을 먼저 채운다.
+// 이름으로 판정하던 때 새 설치에서 등록 단계가 통째로 빠졌다(실측: MiniPC 신규 계정).
+const UNIT_MISSING_LINUX = String.raw`
+state = {'installed': False}
+def linux_identity(name,home):
+    result = fixture_identity(name,home)
+    if not state['installed']:
+        result['command'] = None
+        result['warning'] = 'managed_service_required'
+    return result
+identity = linux_identity
+`;
+test("서비스 이름이 채워져 있어도 유닛이 없으면 installing_service 가 계획에 들어간다", () => {
+  const result = fixture(
+    UNIT_MISSING_LINUX +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps(main('inspect', id)))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.ok(result.body.changes.includes("installing_service"));
+});
+test("유닛이 이미 멀쩡하면 등록 단계를 넣지 않는다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps(main('inspect', id)))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.ok(!result.body.changes.includes("installing_service"));
+});
+test("남의 유닛(identity_mismatch)은 등록 대상으로 보지 않는다", () => {
+  // 손댄 유닛·남의 유닛을 gateway install 로 덮어쓰면 안 된다.
+  const result = fixture(
+    String.raw`
+def mismatched(name,home):
+    result = fixture_identity(name,home)
+    result['command'] = None
+    result['warning'] = 'service_identity_mismatch'
+    return result
+identity = mismatched
+id = main('discover')['candidates'][0]['id']
+print(json.dumps(main('inspect', id)))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.ok(!result.body.changes.includes("installing_service"));
+});
+test("gateway 값이 비어 있는 설정에서도 configure 가 죽지 않는다", () => {
+  // 새로 설치한 Hermes 의 config.yaml 은 `gateway:` 키가 값 없이 들어 있다(실측).
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps(main('configure', id)))
+`,
+    { config: { gateway: null } },
+  );
+  assert.deepEqual(result.body, { ok: true });
 });
