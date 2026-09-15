@@ -161,6 +161,34 @@ export function registerMeetingSocketHandlers({
     onMeetingChat,
   } = deps;
 
+  // Pre-join CTA discovery is requester-only and never subscribes to meeting content.
+  socket.on("meeting:availability", async (payload: unknown) => {
+    const { channelId } = (payload ?? {}) as { channelId?: unknown };
+    if (typeof channelId !== "string" || !channelId) return;
+    const deny = (reason?: string) => {
+      if (emitChannelAccessDenied) {
+        emitChannelAccessDenied(socket, { channelId, action: "meeting:availability", reason });
+      } else {
+        emitForbidden(socket, channelId, "meeting:availability");
+      }
+    };
+    if (players.get(socket.id)?.mapId !== channelId || !getParticipationAccess) {
+      deny("forbidden");
+      return;
+    }
+    const accessResult = await getParticipationAccess(channelId, user.userId).catch(() => null);
+    if (players.get(socket.id)?.mapId !== channelId || !accessResult?.access.allowed) {
+      deny(accessResult?.access.reason ?? "forbidden");
+      return;
+    }
+    const spatial = deps.spatial?.snapshot(channelId);
+    const active =
+      deps.getDiscussionState?.(channelId) != null ||
+      ((spatial?.phase === "assembling" || spatial?.phase === "ready") &&
+        spatial.participants.some((participant) => participant.kind === "npc"));
+    socket.emit("meeting:availability", { channelId, active });
+  });
+
   socket.on("meeting:join", async (payload: unknown) => {
     const input = (payload ?? {}) as {
       channelId?: string;
