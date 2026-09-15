@@ -1,7 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/.dryforge/
 /node_modules
 /.pnp
 .pnp.*
@@ -44,7 +43,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# LPC spritesheet assets (downloaded via scripts/download-lpc-assets.sh)
+# Agent/tool working directories; ignored files may still be unique, so inspect before removing a worktree.
 .superpowers/
 # .github 은 개발 메타(.claude/.codex 등)와 함께 묶여 무시됐지만, workflows 는
 # 저장소 인프라다 — 원격에 파일이 없으면 CI 가 아예 돌지 않는다.
@@ -52,6 +51,9 @@ next-env.d.ts
 !.github/workflows/
 .claude/
 .codex/
+.agents/
+.gemini/
+/.dryforge/
 scripts/local/
 data/
 db.sqlite
@@ -64,8 +66,6 @@ docs/
 AGENTS.md
 CLAUDE.md
 GEMINI.md
-.agents/
-.gemini/
 e2e/README.md
 assets/lpc-office-tilesets/
 public/assets/built-in/downloads/
@@ -94,9 +94,3 @@ __pycache__/
 !/deploy/hostinger/
 !/deploy/office/
 deploy/hostinger/catalog-submission.md
-
-# Development meta — never published
-/docs/superpowers/
-
-# dryforge 3-doc / worktrees (local only)
-/.dryforge
