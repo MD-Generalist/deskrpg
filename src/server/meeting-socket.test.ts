@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createMeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 
 import {
   MEETING_NPC_STREAM_EVENT,
@@ -58,6 +59,51 @@ function createFakeIo(calls: RecordedCall[]) {
     },
   };
 }
+
+test("좌석 예약 await 중 회의실을 나가면 구독과 예약을 모두 되돌린다", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("s1", calls);
+  let inside = true;
+  const released: string[] = [];
+  const spatial = createMeetingSpatialCoordinator({
+    layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "80:80" }] }),
+    capture: async () => null,
+    reserve: async () => {
+      inside = false;
+      return true;
+    },
+    move: async () => true,
+    release: async (_c, id) => {
+      released.push(id);
+    },
+    returnTarget: async (_c, _a, p) => p,
+    publish: () => {},
+  });
+  const meetingRooms = new Map<string, { participants: Set<string>; messages: [] }>();
+  registerMeetingSocketHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      meetingRooms,
+      spatial,
+      players: new Map([["s1", { userId: "u1", mapId: "a" }]]),
+      lastChatTime: new Map(),
+      chatCooldownMs: 0,
+      user: { userId: "u1" },
+      getParticipationAccess: async () => ({ access: { allowed: true } }),
+      isInMeetingSpace: async () => inside,
+    },
+  });
+  await socket.trigger("meeting:join", { channelId: "a" });
+  assert.equal(meetingRooms.get("a")?.participants.has("s1"), false);
+  assert.equal(calls.filter((c) => c.type === "leave" && c.target === "meeting-a").length, 1);
+  assert.deepEqual(released, ["s1"]);
+  assert.equal(
+    calls.some((c) => c.event === "meeting:state"),
+    false,
+  );
+  assert.equal(spatial.snapshot("a")?.participants.length, 0);
+});
 
 test("registerMeetingSocketHandlers joins the room and emits meeting state", async () => {
   const calls: RecordedCall[] = [];

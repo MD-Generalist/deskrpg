@@ -5,6 +5,10 @@ import {
 } from "./player-resume-state";
 import { setNpcActive } from "../lib/npc-roster";
 import { createNpcCoordination } from "./npc-coordination";
+import {
+  createMeetingSpatialCoordinator,
+  type MeetingSpatialCoordinator,
+} from "./meeting-spatial-coordinator";
 import { deriveChannelMotionLayout, closestValidUnoccupiedSpawn } from "./channel-motion-layout";
 import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
 import { runTrackedDm, executeDmAdapter } from "./dm-response-runtime";
@@ -997,6 +1001,18 @@ export function setupSocketHandlers(io: Server) {
   const coordination = createNpcCoordination(io, {
     getPlayer: (id) => players.get(id),
     loadChannel: loadMotionLayout,
+    onSpatialArrival: (channelId, actorId, generation) =>
+      spatial.arrived(channelId, actorId, generation),
+    onSpatialBlocked: (channelId, actorId, reason, generation) =>
+      spatial.block(channelId, actorId, reason, generation),
+    onSpatialPlayerArrival: (channelId, userId, socketId) =>
+      spatial.playerArrived(channelId, userId, socketId),
+    onSpatialPlayerBlocked: (channelId, userId) =>
+      spatial.block(channelId, userId, "participant_left"),
+  });
+  const spatial: MeetingSpatialCoordinator = createMeetingSpatialCoordinator({
+    ...coordination.spatial,
+    publish: (state) => io.to(`meeting-${state.channelId}`).emit("meeting:spatial-state", state),
   });
 
   // 묶인 채널의 자동화 사건 폴러. 뜨지 못해도 채팅·이동은 되어야 하므로 실패는 로그만.
@@ -1485,6 +1501,9 @@ export function setupSocketHandlers(io: Server) {
       socket,
       deps: {
         meetingRooms,
+        spatial,
+        isInMeetingSpace: (channelId, socketId) =>
+          coordination.spatial.isInside(channelId, socketId),
         getDiscussionState: (channelId) => activeBrokers.get(channelId)?.discussionState ?? null,
         players,
         lastChatTime,
@@ -1578,7 +1597,24 @@ export function setupSocketHandlers(io: Server) {
         user,
         adapterRegistry,
         getNpcConfigsForChannel,
-        canControlMeeting,
+        canControlMeeting: async (channelId, userId) => {
+          const access = await getSocketChannelParticipationAccess(channelId, userId);
+          return (
+            !!access?.access.allowed &&
+            (spatial.snapshot(channelId)?.phase !== "idle" && spatial.snapshot(channelId)
+              ? spatial.owner(channelId) === userId || (await isChannelOwner(channelId, userId))
+              : await canControlMeeting(channelId, userId))
+          );
+        },
+        spatial,
+        canStartMeeting: async (channelId, userId) => {
+          const access = await getSocketChannelParticipationAccess(channelId, userId);
+          return (
+            !!access?.access.allowed &&
+            !!meetingRooms.get(channelId)?.participants.has(socket.id) &&
+            players.get(socket.id)?.mapId === channelId
+          );
+        },
         generateMeetingSummary,
         persistMeetingMinutes,
       },
@@ -1619,6 +1655,7 @@ export function setupSocketHandlers(io: Server) {
       for (const [channelId, room] of meetingRooms.entries()) {
         if (room.participants.has(socket.id)) {
           room.participants.delete(socket.id);
+          void spatial.leavePlayer(channelId, user.userId, socket.id);
           socket.to(`meeting-${channelId}`).emit("meeting:participant-left", { id: socket.id });
         }
       }

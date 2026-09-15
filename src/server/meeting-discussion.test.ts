@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AdapterRegistry } from "../lib/adapters/types";
+import { createMeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 import {
   defaultCreateMeetingBroker,
   meetingSessionScope,
@@ -48,6 +49,73 @@ function createFakeIo(calls: RecordedCall[]) {
     },
   };
 }
+
+test("실제 집결 전 브로커를 만들지 않고 전원 도착 뒤 정확히 한 번 시작한다", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("socket-1", calls);
+  const spatial = createMeetingSpatialCoordinator({
+    layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "80:80" }] }),
+    capture: async () => ({ x: 16, y: 16, seatId: null }),
+    reserve: async () => true,
+    move: async () => true,
+    release: async () => {},
+    returnTarget: async (_c, _a, p) => p,
+    publish: () => {},
+  });
+  let created = 0,
+    ran = 0;
+  registerMeetingDiscussionHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      activeBrokers: new Map(),
+      discussionInitiators: new Map(),
+      meetingRooms: new Map([["a", { participants: new Set(["socket-1"]), messages: [] }]]),
+      players: new Map(),
+      user: { userId: "u1" },
+      adapterRegistry: new AdapterRegistry(),
+      spatial,
+      canStartMeeting: () => true,
+      canControlMeeting: () => true,
+      getNpcConfigsForChannel: async () => [
+        { id: "n1", name: "NPC", agentId: null, sessionKeyPrefix: "a" },
+      ],
+      createMeetingBroker: () => {
+        created++;
+        return {
+          config: { participants: [{ npcId: "n1", displayName: "NPC" }] },
+          turns: [],
+          run: async () => {
+            ran++;
+          },
+          isRunning: () => true,
+          stop: () => {},
+        } as unknown as MeetingBrokerLike;
+      },
+      generateMeetingSummary: async () => ({ keyTopics: [], conclusions: null }),
+      persistMeetingMinutes: async () => null,
+    },
+  });
+  const pending = socket.trigger("meeting:start-discussion", {
+    channelId: "a",
+    topic: "topic",
+    selectedNpcIds: ["n1"],
+  });
+  // 파일 I/O·실제 서버 없이 async 집결 예약의 마이크로태스크를 모두 진행한다.
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  assert.equal(created, 0);
+  assert.equal(spatial.snapshot("a")?.phase, "assembling");
+  await socket.trigger("meeting:start-discussion", {
+    channelId: "a",
+    topic: "duplicate",
+    selectedNpcIds: ["n1"],
+  });
+  assert.equal(created, 0);
+  spatial.arrived("a", "n1", spatial.snapshot("a")!.generation);
+  await pending;
+  assert.equal(created, 1);
+  assert.equal(ran, 1);
+});
 
 test("registerMeetingDiscussionHandlers starts a broker and emits mode change", async () => {
   const calls: RecordedCall[] = [];
