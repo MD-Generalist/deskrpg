@@ -32,6 +32,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: 공개 트리 메타 파일 검사
+        run: bash scripts/check-public-tree.sh
       - id: ver
         run: |
           # 날짜 태그는 반드시 이미 master 에 올라온 커밋을 가리켜야 한다.

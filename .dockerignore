@@ -3,6 +3,8 @@ node_modules
 .git
 .codex
 .claude
+.agents
+.gemini
 .superpowers
 docs
 tmp
@@ -23,6 +25,7 @@ build
 next-env.d.ts
 AGENTS.md
 CLAUDE.md
+GEMINI.md
 assets/lpc-office-tilesets
 public/assets/built-in/downloads
 db.sqlite

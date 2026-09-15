@@ -59,11 +59,14 @@ db.sqlite
 *.db
 *.db-shm
 *.db-wal
+# Public Git tree must not contain developer-only instructions or plans.
 docs/
-.claude/
-.codex/
 AGENTS.md
 CLAUDE.md
+GEMINI.md
+.agents/
+.gemini/
+e2e/README.md
 assets/lpc-office-tilesets/
 public/assets/built-in/downloads/
 tmp/*
@@ -89,6 +92,7 @@ __pycache__/
 !/deploy/
 /deploy/*
 !/deploy/hostinger/
+deploy/hostinger/catalog-submission.md
 
 # Development meta — never published
 /docs/superpowers/

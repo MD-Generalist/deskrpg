@@ -31,7 +31,7 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       INTERNAL_HOSTNAME: 0.0.0.0
       # Only the DeskRPG server host may run the gateway setup wizard; keep it off on a VPS
-      # unless you know why you need it (see docs/gateway-setup.md).
+      # unless you explicitly intend to authorize host-level setup operations.
       DESKRPG_HOST_SETUP_ENABLED: ${DESKRPG_HOST_SETUP_ENABLED:-0}
     volumes:
       - deskrpg-data:/app/data
