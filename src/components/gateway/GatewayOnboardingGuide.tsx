@@ -1,9 +1,13 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { useT } from "@/lib/i18n";
 import { HERMES_AGENT_REPO_URL, PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
+import Toast from "@/components/ui/Toast";
+import { quickStartGamePath } from "@/lib/quick-start";
 
 /**
  * 게이트웨이가 **하나도 없는** 사용자에게 보여주는 온보딩 안내.
@@ -14,8 +18,46 @@ import { HERMES_AGENT_REPO_URL, PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plug
  */
 export const GATEWAY_EXAMPLE_BASE_URL = "http://127.0.0.1:8642";
 
+const TOAST_MS = 3000;
+
 export default function GatewayOnboardingGuide() {
   const t = useT();
+  const router = useRouter();
+  const [running, setRunning] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => clearTimeout(toastTimer.current ?? undefined), []);
+
+  const fail = useCallback((message: string) => {
+    clearTimeout(toastTimer.current ?? undefined);
+    setToast(message);
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+  }, []);
+
+  /**
+   * 게이트웨이가 없어도 사무실은 만들 수 있다 — 서버가 캐릭터·채널을 기본값으로
+   * 만들고(이미 있으면 그것을 그대로 쓰고) 식별자 둘만 돌려준다.
+   */
+  const quickStart = useCallback(async () => {
+    if (running) return;
+    setRunning(true);
+    try {
+      const response = await fetch("/api/quick-start", { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || typeof payload?.channelId !== "string") {
+        fail(t("quickStart.failed"));
+        return;
+      }
+      router.push(
+        quickStartGamePath({ channelId: payload.channelId, characterId: payload.characterId }),
+      );
+    } catch {
+      fail(t("quickStart.failed"));
+    } finally {
+      setRunning(false);
+    }
+  }, [fail, router, running, t]);
 
   return (
     <section className="mb-6 rounded-xl border border-primary/30 bg-surface p-5">
@@ -72,9 +114,19 @@ export default function GatewayOnboardingGuide() {
             >
               {t("gateways.onboarding.step4ChannelLink")}
             </Link>
+            <button
+              type="button"
+              onClick={quickStart}
+              disabled={running}
+              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+            >
+              {t("gateways.onboarding.quickStart")}
+            </button>
           </div>
+          <p className="mt-1 text-sm text-text-muted">{t("gateways.onboarding.quickStartHint")}</p>
         </li>
       </ol>
+      <Toast message={toast ?? ""} visible={toast !== null} />
     </section>
   );
 }

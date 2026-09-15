@@ -155,6 +155,8 @@ HERMES_MIN = '0.21.1'
 SOURCE = 'https://github.com/dandacompany/deskrpg-hermes-plugin'
 TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
 LOCK = None
+PORT_MIN = 8642
+PORT_MAX = 8699
 class Failure(Exception): pass
 def fail(code): raise Failure(code)
 def version_parts(value):
@@ -398,6 +400,25 @@ def assert_port_owned(public, owner):
     if not connections or any(c.pid not in owned for c in connections): fail('port_conflict')
     return True
 
+def port_free(port):
+    # 남의 리스너는 절대 건드리지 않는다. 바인드가 되는지만 보고 곧바로 닫는다.
+    sock = socket.socket()
+    try:
+        sock.bind(('127.0.0.1', port))
+        return True
+    except OSError: return False
+    finally: sock.close()
+def suggest_port(current):
+    # 이 홈의 다른 프로필이 쓰는 포트와 지금 열려 있는 포트를 피해 가장 작은 빈 포트를 고른다.
+    # 하나도 못 고르면 None 이다 — 제안 없이 오류만 나가고 흐름은 그대로다.
+    used = {current}
+    for unused_name, childhome in homes():
+        try: used.add(settings(childhome)[3])
+        except Exception: pass
+    for port in range(PORT_MIN, PORT_MAX + 1):
+        if port not in used and port_free(port): return port
+    return None
+
 def allowlist(cfg):
     gateway = mapping(cfg.get('gateway'))
     allow = cfg.get('multiplex_profile_allowlist', gateway.get('multiplex_profile_allowlist'))
@@ -471,7 +492,7 @@ def bounded(argv, env):
 def main(action, candidate_id=None, option=None):
     global LOCK
     if ROOT.is_symlink(): fail('unsafe_host_path')
-    if action in ('install','configure','restart','install-service','set-timezone','create-profile','provision-key'):
+    if action in ('install','configure','restart','install-service','set-timezone','set-port','create-profile','provision-key'):
         # A host-wide advisory lock also protects against a retry from a restarted DeskRPG server.
         # Keep it inherited by the installer until the entire bounded action exits.
         import fcntl
@@ -501,8 +522,28 @@ def main(action, candidate_id=None, option=None):
         if auth.returncode == 0 and 'logged in' in (auth.stdout or '').lower():
             return {'ok': True, 'model': 'ready'}
         return {'ok': True, 'model': 'missing'}
+    if action == 'set-port':
+        # 운영자가 화면에서 명시적으로 수락한 포트만 여기까지 온다. 소유권 판정은 건드리지 않는다 —
+        # 이 프로필의 .env 만 고치고, 실제 적용은 이어지는 restart 단계가 한다.
+        try: value = int(option) if isinstance(option, str) and option.strip() else 0
+        except (ValueError, TypeError): fail('invalid_host_operation')
+        if not 1024 <= value <= 65535: fail('invalid_host_operation')
+        old = read(home / '.env')
+        kept = [line for line in old.splitlines() if not re.match(r'^\s*(export\s+)?API_SERVER_PORT\s*=', line)]
+        body = '\n'.join(kept).rstrip('\n')
+        try: atomic(home / '.env', (body + '\n' if body else '') + 'API_SERVER_PORT=' + str(value) + '\n')
+        except Failure: raise
+        except Exception: fail('port_write_failed')
+        if settings(home)[3] != value: fail('port_write_failed')
+        return {'ok': True, 'port': value}
     if action == 'inspect':
-        listening = assert_port_owned(public, owner)
+        try: listening = assert_port_owned(public, owner)
+        except Failure as conflict:
+            # 충돌일 때만 대안을 하나 얹는다. 못 고르면 그대로 오류만 나간다.
+            if str(conflict) == 'port_conflict':
+                suggestion = suggest_port(public['port'])
+                if suggestion is not None: conflict.suggestion = suggestion
+            raise
         status, warning = probe(public,token) if listening else ('unknown','gateway_unreachable')
         if warning and 'warning' not in public: public['warning'] = warning
         preparation_safe = False
@@ -678,6 +719,11 @@ def main(action, candidate_id=None, option=None):
 
 def entry(action, candidate_id, option=None):
     try: print(json.dumps(main(action,candidate_id,option)))
-    except Failure as error: print(json.dumps({'error':str(error)}))
+    except Failure as error:
+        body = {'error': str(error)}
+        suggestion = getattr(error, 'suggestion', None)
+        # 코드 하나와 숫자 하나뿐이다. 호스트의 어떤 원문도 여기에 실리지 않는다.
+        if isinstance(suggestion, int) and not isinstance(suggestion, bool): body['suggestedPort'] = suggestion
+        print(json.dumps(body))
     except Exception: print(json.dumps({'error':'host_operation_failed'}))
 `;

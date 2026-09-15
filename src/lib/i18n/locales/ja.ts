@@ -229,6 +229,16 @@ const ja: Record<string, string> = {
   "hermes.wizard.step.installingService": "ゲートウェイをサービスとして登録",
   "hermes.wizard.step.updatingPlugin": "DeskRPGプラグインを更新",
   "hermes.wizard.step.settingTimezone": "ゲートウェイのタイムゾーンを設定",
+  "hermes.wizard.step.settingPort": "ゲートウェイ API ポートの変更",
+  "hermes.wizard.error.portWriteFailed":
+    "ゲートウェイプロファイルの .env に新しいポートを書き込めませんでした。管理者が該当プロファイルの .env の書き込み権限を確認してから再試行してください。既存のポート設定はそのままです。",
+  "hermes.wizard.port.title": "別のポートに変更しますか？",
+  "hermes.wizard.port.body":
+    "選択した API ポートを別のプロセスが使用しています。空いているポート {port} に変更して続行できます。他のプロセスには触れません。",
+  "hermes.wizard.port.restartNote":
+    "ポートを変更すると、このプロファイルの .env のみを書き換えてゲートウェイを再起動します。既存のポート値は上書きされます。",
+  "hermes.wizard.port.apply": "ポート {port} に変更して続行",
+  "hermes.wizard.port.applying": "ポートを変更しています…",
   "hermes.wizard.error.hermesVersionUnsupported":
     "Hermes 0.21.1以上が必要です。サーバーでhermes updateを実行してから再確認してください。",
   "hermes.wizard.error.pluginUpdateFailed":
@@ -1866,6 +1876,10 @@ const ja: Record<string, string> = {
     "Hermes をまだ起動できていなければ、先にキャラクターとチャンネルを作っても構いません。準備ができたらこの画面で登録できます。",
   "gateways.onboarding.step4CharacterLink": "キャラクターを作成",
   "gateways.onboarding.step4ChannelLink": "チャンネルを作成",
+  "gateways.onboarding.quickStart": "クイックスタートでオフィスを作る",
+  "gateways.onboarding.quickStartHint":
+    "キャラクターとチャンネルを既定値で作成し、そのまま入室します。",
+  "quickStart.failed": "クイックスタートに失敗しました。しばらくしてからもう一度お試しください。",
   "gateways.owner": "所有",
   "gateways.shared": "共有",
   "gateways.statusValid": "接続確認済み",
@@ -2635,6 +2649,15 @@ const ja: Record<string, string> = {
   "kanban.settings.maxInProgressPerProfile": "プロファイルごとの同時実行の上限",
   "kanban.settings.resolved": "適用値: {value}",
   "kanban.settings.saved": "保存しました",
+
+  // Diagnostics (admin)
+  "diagnostics.title": "診断",
+  "diagnostics.environment": "環境",
+  "diagnostics.database": "データベース",
+  "diagnostics.hostSetup": "ホスト設定",
+  "diagnostics.gateways": "ゲートウェイ",
+  "diagnostics.none": "問題なし",
+  "diagnostics.failed": "診断を読み込めませんでした",
 };
 
 export default ja;

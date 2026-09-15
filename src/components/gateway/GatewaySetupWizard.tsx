@@ -46,6 +46,9 @@ type WizardCapabilities = SetupCapabilities & { canInstallHermes?: boolean };
 // 계약: ^[a-z0-9][a-z0-9_-]{0,63}$ — 서버가 다시 검증하지만 화면에서 먼저 안내한다.
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const PROFILE_DESCRIPTION_MAX = 200;
+// 계약: 제안 포트는 8642~8699 에서만 나온다. 서버도 같은 범위로 거른다.
+const PORT_SUGGEST_MIN = 8642;
+const PORT_SUGGEST_MAX = 8699;
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
@@ -82,6 +85,9 @@ export default function GatewaySetupWizard({
   const [modelChecking, setModelChecking] = useState(false);
   // 마지막으로 연결을 시도한 후보와 prepare 본문 — 다시 확인과 이어서 실행이 쓴다.
   const [lastCandidateId, setLastCandidateId] = useState<string | null>(null);
+  // 호스트가 고른 대안 포트. 사용자가 명시적으로 버튼을 눌러야만 서버로 올라간다.
+  const [portSuggestion, setPortSuggestion] = useState<number | null>(null);
+  const [portCandidateId, setPortCandidateId] = useState<string | null>(null);
   const [lastPrepare, setLastPrepare] = useState<Record<string, unknown> | null>(null);
   // 이어서 실행할 때 건너뛰기로 한 단계들(요청 시점의 completed).
   const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
@@ -115,7 +121,12 @@ export default function GatewaySetupWizard({
         : { signal },
     );
     const data = await res.json();
-    if (!res.ok) throw { errorCode: data.errorCode ?? "setup_failed" };
+    if (!res.ok)
+      throw {
+        errorCode: data.errorCode ?? "setup_failed",
+        // 포트 충돌에만 실린다. 숫자가 아니면 제안이 없었던 것으로 본다.
+        suggestedPort: typeof data.suggestedPort === "number" ? data.suggestedPort : undefined,
+      };
     return data;
   }
   useEffect(() => {
@@ -139,6 +150,7 @@ export default function GatewaySetupWizard({
     controller.current?.abort();
     setBusy(false);
     setErrorCode(null);
+    setPortSuggestion(null);
     setScreen(next);
     setToken("");
   }
@@ -149,12 +161,25 @@ export default function GatewaySetupWizard({
     controller.current = abort;
     setBusy(true);
     setErrorCode(null);
+    setPortSuggestion(null);
     try {
       const value = await job(abort.signal);
       if (epoch === generation.current) apply(value);
     } catch (error) {
-      if (epoch === generation.current && !abort.signal.aborted)
-        setErrorCode((error as { errorCode?: string })?.errorCode ?? "setup_failed");
+      if (epoch === generation.current && !abort.signal.aborted) {
+        const failed = error as { errorCode?: string; suggestedPort?: number };
+        setErrorCode(failed?.errorCode ?? "setup_failed");
+        // 제안 범위 밖이거나 정수가 아니면 버린다 — 제안이 없어도 흐름은 그대로다.
+        setPortSuggestion(
+          failed?.errorCode === "port_conflict" &&
+            typeof failed.suggestedPort === "number" &&
+            Number.isInteger(failed.suggestedPort) &&
+            failed.suggestedPort >= PORT_SUGGEST_MIN &&
+            failed.suggestedPort <= PORT_SUGGEST_MAX
+            ? failed.suggestedPort
+            : null,
+        );
+      }
     } finally {
       if (epoch === generation.current) setBusy(false);
     }
@@ -170,6 +195,8 @@ export default function GatewaySetupWizard({
     setProvisionKeys([]);
     setModelState(null);
     setSkippedSteps([]);
+    setPortSuggestion(null);
+    setPortCandidateId(null);
     void run(
       (signal) =>
         request<{ candidates: SetupCandidate[] }>(
@@ -182,6 +209,8 @@ export default function GatewaySetupWizard({
   }
   const target = { mode, ...(mode === "ssh" ? { hostId } : {}) };
   function inspect(candidateId: string) {
+    // 충돌이 나면 오류만 남으므로, 어느 후보였는지는 요청 시점에 기억해 둔다.
+    setPortCandidateId(candidateId);
     void run(
       (signal) =>
         request<SetupInspection>({ action: "inspect", ...target, candidateId }, "", signal),
@@ -263,7 +292,11 @@ export default function GatewaySetupWizard({
     const epoch = generation.current;
     const abort = new AbortController();
     setModelChecking(true);
-    void request<{ model?: string }>({ action: "check-model", ...target, candidateId }, "", abort.signal)
+    void request<{ model?: string }>(
+      { action: "check-model", ...target, candidateId },
+      "",
+      abort.signal,
+    )
       .then((data) => {
         if (epoch !== generation.current || abort.signal.aborted) return;
         const next = data.model;
@@ -288,11 +321,7 @@ export default function GatewaySetupWizard({
     }
     void run(
       (signal) =>
-        request<{ job: WizardJob }>(
-          resumeFrom ? { ...body, resumeFrom } : body,
-          "",
-          signal,
-        ),
+        request<{ job: WizardJob }>(resumeFrom ? { ...body, resumeFrom } : body, "", signal),
       ({ job: next }) => {
         setScreen("job");
         acceptJob(next);
@@ -353,7 +382,10 @@ export default function GatewaySetupWizard({
   const modelRecheck = lastCandidateId ? (
     <div className="space-y-2">
       {modelNote && (
-        <p role="status" className="rounded-lg border border-border bg-bg p-3 text-sm text-text-muted">
+        <p
+          role="status"
+          className="rounded-lg border border-border bg-bg p-3 text-sm text-text-muted"
+        >
           {modelNote}
         </p>
       )}
@@ -430,6 +462,35 @@ export default function GatewaySetupWizard({
         <p role="alert" className="mt-4 rounded-lg border border-danger/30 p-3 text-sm text-danger">
           {errorMessage(errorCode)}
         </p>
+      )}
+      {/* 제안은 보여 주기만 한다. 명시적으로 이 버튼을 눌러야 서버가 `.env` 를 고친다. */}
+      {portSuggestion !== null && portCandidateId && screen !== "job" && (
+        <article className="mt-4 rounded-lg border border-primary/40 bg-bg p-4">
+          <h3 className="font-semibold">{t("hermes.wizard.port.title")}</h3>
+          <p className="mt-1 text-sm text-text-muted">
+            {t("hermes.wizard.port.body", { port: portSuggestion })}
+          </p>
+          <p className="mt-1 text-xs text-text-muted">{t("hermes.wizard.port.restartNote")}</p>
+          <button
+            type="button"
+            name="accept-suggested-port"
+            className={`${button} mt-3`}
+            disabled={busy}
+            onClick={() =>
+              submitPrepare({
+                action: "prepare",
+                ...target,
+                candidateId: portCandidateId,
+                profiles: [],
+                setPort: portSuggestion,
+              })
+            }
+          >
+            {busy
+              ? t("hermes.wizard.port.applying")
+              : t("hermes.wizard.port.apply", { port: portSuggestion })}
+          </button>
+        </article>
       )}
       {screen === "choice" && (
         <>
@@ -514,8 +575,10 @@ export default function GatewaySetupWizard({
                       onClick={() =>
                         void run(
                           (signal) =>
+                            // 라우트는 install-hermes 라는 액션을 모른다 — 설치는 prepare 의
+                            // installHermes 플래그다. 설치 전에는 후보가 없으므로 candidateId 는 비운다.
                             request<{ job: WizardJob }>(
-                              { action: "install-hermes", ...target },
+                              { action: "prepare", installHermes: true, profiles: [], ...target },
                               "",
                               signal,
                             ),

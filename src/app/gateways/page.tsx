@@ -9,6 +9,7 @@ import LogoutButton from "@/components/LogoutButton";
 import GatewaySetupWizard from "@/components/gateway/GatewaySetupWizard";
 import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
+import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { useT, useLocale } from "@/lib/i18n";
@@ -781,6 +782,9 @@ function GatewayManagementPageInner() {
                 </div>
               )}
             </section>
+
+            {/* 관리자에게만 보이는 진단. 권한이 없으면 스스로 사라진다. */}
+            <DiagnosticsPanel />
           </main>
         </div>
       </div>

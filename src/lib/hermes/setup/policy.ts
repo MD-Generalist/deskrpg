@@ -89,6 +89,7 @@ const SAFE_CODES = new Set([
   "service_install_failed",
   "timezone_invalid",
   "timezone_write_failed",
+  "port_write_failed",
   "plugin_security_review_required",
   "plugin_source_unavailable",
   "plugin_enable_failed",
@@ -161,6 +162,18 @@ export function validateProfileDescription(value: unknown): string | undefined {
   if (!trimmed) return undefined;
   if (trimmed.length > 200 || /[\r\n\0]/.test(trimmed)) throw new Error("profile_name_invalid");
   return trimmed;
+}
+/**
+ * 마법사가 대안 포트를 고르는 범위. 호스트도 같은 범위를 쓴다.
+ * 수락된 값은 화면이 명시적 동의를 받은 뒤에만 올라온다.
+ */
+export const SETUP_PORT_SUGGEST_MIN = 8642;
+export const SETUP_PORT_SUGGEST_MAX = 8699;
+/** `set-port` 가 받는 값. 제안 범위보다 넓게 허용하되 예약 포트와 범위 밖은 거부한다. */
+export function validateSetupPort(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1024 || value > 65535)
+    throw new Error("setup_invalid_request");
+  return value;
 }
 const TIMEZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+\-.]+)*$/;
 /** IANA 이름 모양만 통과시킨다. 실제 존재 여부는 호스트가 판정한다. */
