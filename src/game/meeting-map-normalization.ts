@@ -544,19 +544,36 @@ export function normalizeMeetingMap(
   const open = key(edge.x, edge.y);
   if (g.tiled) {
     const tiled = map as unknown as TiledGeometryMap;
+    const tilesets = Array.isArray(map.tilesets) ? map.tilesets.filter(record) : [];
     for (const layer of tiled.layers) {
       if (layer.type === "tilelayer") {
         const old = layer.data!;
+        // 정의가 확인된 기존 바닥만 재사용한다. 뒤집기 플래그는 판정 때만 제거한다.
+        const floorGid =
+          layer.name.toLowerCase() === "floor"
+            ? (old.find((value) => {
+                const gid = value & 0x0fffffff;
+                return (
+                  gid > 0 &&
+                  tilesets.some(
+                    (set) =>
+                      typeof set.firstgid === "number" &&
+                      typeof set.tilecount === "number" &&
+                      Number.isInteger(set.firstgid) &&
+                      set.firstgid > 0 &&
+                      Number.isInteger(set.tilecount) &&
+                      gid >= set.firstgid &&
+                      gid < set.firstgid + set.tilecount,
+                  )
+                );
+              }) ?? 0)
+            : 0;
         layer.data = Array.from({ length: cols * rows }, (_, i) => {
           const x = i % cols,
             y = Math.floor(i / cols);
           if (key(x, y) === open && ["walls", "collision"].includes(layer.name.toLowerCase()))
             return 0;
-          return x < oldCols && y < oldRows
-            ? old[y * oldCols + x]
-            : layer.name.toLowerCase() === "floor"
-              ? 1
-              : 0;
+          return x < oldCols && y < oldRows ? old[y * oldCols + x] : floorGid;
         });
         Object.assign(layer, { width: cols, height: rows });
       } else

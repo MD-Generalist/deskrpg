@@ -19,6 +19,43 @@ const legacy = () => ({
   },
   objects: [{ id: "kept-desk", type: "desk", col: 3, row: 3 }],
 });
+for (const { name, gid, tilesets } of [
+  { name: "빈 타일셋", gid: 0, tilesets: [] },
+  { name: "100부터 시작하는 타일셋", gid: 100, tilesets: [{ firstgid: 100, tilecount: 1 }] },
+  {
+    name: "뒤집힌 타일",
+    gid: 0x80000064,
+    tilesets: [{ firstgid: 100, tilecount: 1 }],
+  },
+]) {
+  test(`Tiled 증축 바닥은 정의된 기존 GID를 보존한다: ${name}`, () => {
+    const input = {
+      tiledversion: "1.10.2",
+      width: 14,
+      height: 12,
+      tilewidth: 32,
+      tileheight: 32,
+      tilesets,
+      layers: [
+        { id: 1, name: "Floor", type: "tilelayer", data: Array(14 * 12).fill(gid) },
+        { id: 2, name: "Walls", type: "tilelayer", data: Array(14 * 12).fill(0) },
+        { id: 3, name: "Objects", type: "objectgroup", objects: [] },
+      ],
+    };
+    const before = structuredClone(input);
+    const result = normalizeMeetingMap(input);
+    const after = result.mapData as unknown as TiledGeometryMap;
+    const floor = after.layers.find((layer) => layer.name === "Floor")!.data!;
+    assert.equal(floor[input.width], gid, "새 바닥에 미정의 GID를 생성하지 않는다");
+    assert.ok(floor.every((value) => value === gid));
+    for (let y = 0; y < input.height; y++)
+      for (let x = 0; x < input.width; x++)
+        assert.equal(floor[y * after.width + x], before.layers[0].data![y * input.width + x]);
+    assert.deepEqual(result.mapData.tilesets, tilesets);
+    assert.deepEqual(input, before);
+    assert.deepEqual(normalizeMeetingMap(result.mapData), result);
+  });
+}
 test("증축은 원본 좌표와 객체를 보존하고 재실행해도 누적되지 않는다", () => {
   const input = legacy();
   const before = structuredClone(input);
