@@ -9,6 +9,7 @@ import {
   validateGatewayUrl,
   safeSetupError,
   validateTimezone,
+  validateSetupPort,
   collectSetupWarnings,
 } from "./policy";
 
@@ -164,4 +165,16 @@ test("판정이 unknown 이거나 없으면 기존 규칙 그대로다", () => {
 });
 test("계약 3의 새 오류 코드도 화이트리스트를 통과한다", () => {
   assert.equal(safeSetupError(new Error("resume_unavailable")), "resume_unavailable");
+});
+
+test("수락한 포트는 1024~65535 정수만 통과한다", () => {
+  assert.equal(validateSetupPort(8643), 8643);
+  assert.equal(validateSetupPort(1024), 1024);
+  assert.equal(validateSetupPort(65535), 65535);
+  for (const value of [1023, 65536, 8643.5, "8643", null, undefined, NaN, Infinity])
+    assert.throws(() => validateSetupPort(value), /setup_invalid_request/);
+});
+test("포트 쓰기 실패는 화이트리스트 코드로 그대로 나간다", () => {
+  assert.equal(safeSetupError(new Error("port_write_failed")), "port_write_failed");
+  assert.equal(safeSetupError(new Error("port_write_failed /home/op/.env")), "setup_failed");
 });

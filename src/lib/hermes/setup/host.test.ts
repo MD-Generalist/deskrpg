@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { checkModelHost, discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
+import {
+  SetupPortConflictError,
+  checkModelHost,
+  discoverHost,
+  inspectHost,
+  installHermesHost,
+  prepareHost,
+} from "./host";
 import type { HostExecutor, SetupCandidate } from "./types";
 const candidate: SetupCandidate = {
   id: "a".repeat(64),
@@ -1721,4 +1728,121 @@ test("건너뛰기를 주지 않으면 모든 단계가 그대로 돈다", async
     "restarting_gateway",
     "verifying_gateway",
   ]);
+});
+
+test("포트 충돌에 대안 포트가 있으면 오류에 함께 실린다", async () => {
+  const f = fake([{ error: "port_conflict", suggestedPort: 8643 }]);
+  await assert.rejects(inspectHost(f.execute, candidate.id), (error: unknown) => {
+    assert.ok(error instanceof SetupPortConflictError);
+    assert.equal((error as Error).message, "port_conflict");
+    assert.equal((error as SetupPortConflictError).suggestedPort, 8643);
+    return true;
+  });
+});
+test("제안 범위 밖이거나 숫자가 아닌 포트 제안은 버린다", async () => {
+  for (const suggestedPort of [8641, 8700, 0, "8643", 8643.5, null]) {
+    const f = fake([{ error: "port_conflict", suggestedPort }]);
+    await assert.rejects(inspectHost(f.execute, candidate.id), (error: unknown) => {
+      assert.ok(error instanceof SetupPortConflictError);
+      assert.equal((error as SetupPortConflictError).suggestedPort, undefined);
+      return true;
+    });
+  }
+});
+test("제안이 없으면 포트 충돌은 지금처럼 코드만 남는다", async () => {
+  const f = fake([{ error: "port_conflict" }]);
+  await assert.rejects(inspectHost(f.execute, candidate.id), (error: unknown) => {
+    assert.ok(error instanceof SetupPortConflictError);
+    assert.equal((error as SetupPortConflictError).suggestedPort, undefined);
+    return true;
+  });
+});
+/** 플러그인이 이미 준비된 후보 — 포트 단계만 남겨 단계 순서를 또렷하게 본다. */
+const readyCandidate: SetupCandidate = {
+  ...candidate,
+  pluginInstalled: true,
+  pluginEnabled: true,
+  pluginVersion: "0.6.0",
+};
+test("수락한 포트는 inspect 직전에 set-port 로 한 번만 쓰인다", async () => {
+  const f = fake([
+    { ok: true, port: 8643 },
+    { candidate: readyCandidate, pluginStatus: "plugin_ready", changes: [] },
+    {
+      prepared: {
+        baseUrl: "http://127.0.0.1:8642",
+        token: "existing-private-token",
+        profiles: [{ name: "default", token: "existing-private-token" }],
+      },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(
+    f.execute,
+    candidate.id,
+    (s) => steps.push(s),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    8643,
+  );
+  assert.deepEqual(steps, ["setting_port", "inspecting", "verifying_gateway"]);
+  const sent = JSON.parse(String(f.calls[0].input)).script as string;
+  assert.match(sent, /entry\("set-port", "[a-f0-9]{64}", "8643"\)/);
+});
+test("동의가 없으면 set-port 는 호출되지 않는다", async () => {
+  const f = fake([
+    { candidate: readyCandidate, pluginStatus: "plugin_ready", changes: [] },
+    {
+      prepared: {
+        baseUrl: "http://127.0.0.1:8642",
+        token: "existing-private-token",
+        profiles: [{ name: "default", token: "existing-private-token" }],
+      },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
+  assert.deepEqual(steps, ["inspecting", "verifying_gateway"]);
+  // 호스트 스크립트 본문에는 'set-port' 문자열이 늘 들어 있다 — 실제 호출인 entry() 로만 본다.
+  assert.ok(
+    f.calls.every((call) => !/entry\("set-port"/.test(JSON.parse(String(call.input)).script)),
+  );
+});
+test("set-port 는 범위 밖 값을 호스트에 보내기 전에 거부한다", async () => {
+  for (const port of [1023, 65536, 0]) {
+    const f = fake([]);
+    await assert.rejects(
+      prepareHost(
+        f.execute,
+        candidate.id,
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        port,
+      ),
+      /setup_invalid_request/,
+    );
+    assert.equal(f.calls.length, 0);
+  }
+});
+test("포트 쓰기 실패는 port_write_failed 로 나가고 뒤 단계는 돌지 않는다", async () => {
+  const f = fake([{ error: "port_write_failed", detail: "/home/op/.env" }]);
+  await assert.rejects(
+    prepareHost(
+      f.execute,
+      candidate.id,
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      8643,
+    ),
+    /^Error: port_write_failed$/,
+  );
+  assert.equal(f.calls.length, 1);
 });

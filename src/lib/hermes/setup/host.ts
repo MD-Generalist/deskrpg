@@ -41,6 +41,7 @@ export const HOST_ERROR_CODES = new Set([
   "service_install_failed",
   "timezone_invalid",
   "timezone_write_failed",
+  "port_write_failed",
   "gateway_restart_failed",
   "gateway_verification_failed",
   "profile_verification_failed",
@@ -57,6 +58,29 @@ export const HOST_ERROR_CODES = new Set([
 /** 실패가 아닌 알림만 담는다. 오류 경로에는 절대 오르지 않는다. */
 const HOST_WARNING_CODES = new Set(["profile_not_served", "model_provider_required"]);
 const DIGEST = /^[a-f0-9]{64}$/;
+/** 마법사가 제안할 수 있는 포트 범위. 호스트가 이 밖의 값을 올리면 제안 자체를 버린다. */
+const SUGGEST_MIN = 8642;
+const SUGGEST_MAX = 8699;
+/**
+ * `port_conflict` 만 대안 포트를 하나 들고 온다. 코드는 그대로이고 숫자 하나만 더 실린다 —
+ * 제안이 없으면 `suggestedPort` 는 undefined 이고 화면은 지금처럼 오류만 보여 준다.
+ */
+export class SetupPortConflictError extends Error {
+  readonly suggestedPort?: number;
+  constructor(suggestedPort?: number) {
+    // 이름은 Error 그대로 둔다 — 오류 문자열을 코드로 비교하는 기존 경로가 바뀌면 안 된다.
+    super("port_conflict");
+    if (suggestedPort !== undefined) this.suggestedPort = suggestedPort;
+  }
+}
+function suggestedPort(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= SUGGEST_MIN &&
+    value <= SUGGEST_MAX
+    ? value
+    : undefined;
+}
 /**
  * 설치 진행 이정표. 호스트가 무엇을 올리든 이 목록 밖의 값은 버린다 —
  * 줄 내용이 코드를 가장해 잡에 실리는 경로를 아예 없앤다.
@@ -144,6 +168,11 @@ async function invoke(
     if (action === "set-timezone") {
       if (option.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-.]+)*$/.test(option))
         throw new Error("timezone_invalid");
+    } else if (action === "set-port") {
+      // 숫자 문자열만 받는다. 범위 판정은 호스트가 또 한다 — 여기서 먼저 잘라 호스트 호출 자체를 막는다.
+      const port = Number(option);
+      if (!/^[0-9]{4,5}$/.test(option) || !Number.isInteger(port) || port < 1024 || port > 65535)
+        throw new Error("setup_invalid_request");
     } else if (option.length > 1024 || /[\r\n\0]/.test(option))
       throw new Error("setup_invalid_request");
   }
@@ -178,12 +207,15 @@ async function invoke(
     if (result.code !== 0 || result.stdout.length > 262144)
       throw new Error("host_operation_failed");
     const body = record(JSON.parse(result.stdout));
-    if ("error" in body)
-      throw new Error(
+    if ("error" in body) {
+      const code =
         typeof body.error === "string" && HOST_ERROR_CODES.has(body.error)
           ? body.error
-          : "host_operation_failed",
-      );
+          : "host_operation_failed";
+      if (code === "port_conflict")
+        throw new SetupPortConflictError(suggestedPort(body.suggestedPort));
+      throw new Error(code);
+    }
     return body;
   } catch (error) {
     if (signal?.aborted) throw new Error("setup_cancelled");
@@ -326,6 +358,8 @@ export async function prepareHost(
   provision?: SetupProvisionRequest,
   /** 재개에서 이미 성공한 단계. 되돌리지 않고 다시 하지도 않는다. `inspecting` 은 언제나 다시 돈다. */
   skipStep?: (step: string) => boolean,
+  /** 화면이 제안을 명시적으로 수락했을 때만 온다. 후보 홈의 `.env` 에만 쓴다. */
+  setPort?: number,
 ): Promise<PreparedHost> {
   const skip = (step: string) => skipStep?.(step) === true;
   // 서비스를 등록하면 유닛 정의가 생기고 후보 id(정의의 해시)가 바뀐다. 이후 단계는 새 id 를 써야 한다.
@@ -338,6 +372,10 @@ export async function prepareHost(
   };
   const requestedKeys = assertProvisionRequest(provision);
   const warnings: string[] = [];
+  // 포트를 먼저 옮겨야 이어지는 inspect 가 빈 포트를 보고 충돌 없이 진행한다.
+  // 실제 적용은 아래 `restarting_gateway` 가 한다 — 여기서는 `.env` 만 고친다.
+  if (setPort !== undefined && !skip("setting_port"))
+    await stage("setting_port", "set-port", String(setPort));
   const state = inspection(await stage("inspecting", "inspect"));
   // 새 프로필은 플러그인·API 작업보다 앞에 만들어야 재시작 한 번으로 서빙된다.
   const provisionKeys = [...requestedKeys];

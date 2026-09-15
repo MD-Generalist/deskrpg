@@ -165,9 +165,15 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
 
                 {/* Fresh install description */}
                 {!hasUsers && (
-                  <p className="text-center text-sm text-text-secondary mb-5">
-                    {t("auth.setupDescription")}
-                  </p>
+                  <div className="mb-5 space-y-2">
+                    <p className="text-center text-sm text-text-secondary">
+                      {t("auth.setupDescription")}
+                    </p>
+                    {/* 첫 계정이 곧 관리자다. 공개 서버에 올린 사람에게는 가입을 언제 닫아야 하는지가 중요하다. */}
+                    <p className="text-center text-xs text-text-muted">
+                      {t("auth.setupAdminNotice")}
+                    </p>
+                  </div>
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-3">

@@ -72,6 +72,7 @@ const en: Record<string, string> = {
   "common.logout": "Logout",
   "common.language": "Language",
   "common.copy": "Copy",
+  "common.copied": "Copied",
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -263,6 +264,16 @@ const en: Record<string, string> = {
   "hermes.wizard.step.installingService": "Register the gateway service",
   "hermes.wizard.step.updatingPlugin": "Update the DeskRPG plugin",
   "hermes.wizard.step.settingTimezone": "Set the gateway time zone",
+  "hermes.wizard.step.settingPort": "Change the gateway API port",
+  "hermes.wizard.error.portWriteFailed":
+    "Could not write the new port to the gateway profile's .env. Ask an administrator to check write permission on that profile's .env and try again. The existing port setting is unchanged.",
+  "hermes.wizard.port.title": "Use a different port?",
+  "hermes.wizard.port.body":
+    "Another process is using the selected API port. You can continue on the free port {port}. The other process is left untouched.",
+  "hermes.wizard.port.restartNote":
+    "Changing the port edits only this profile's .env and restarts the gateway. An existing port value is overwritten.",
+  "hermes.wizard.port.apply": "Switch to port {port} and continue",
+  "hermes.wizard.port.applying": "Changing the port…",
   "hermes.wizard.error.hermesVersionUnsupported":
     "Hermes 0.21.1 or newer is required. Run hermes update on the server, then check again.",
   "hermes.wizard.error.pluginUpdateFailed":
@@ -1897,6 +1908,10 @@ const en: Record<string, string> = {
     "If Hermes is not running yet, you can still create a character and a channel first, and register the gateway here once it is ready.",
   "gateways.onboarding.step4CharacterLink": "Create a character",
   "gateways.onboarding.step4ChannelLink": "Create a channel",
+  "gateways.onboarding.quickStart": "Quick start — build my office",
+  "gateways.onboarding.quickStartHint":
+    "Creates a character and a channel with defaults, then takes you straight in.",
+  "quickStart.failed": "Quick start failed. Please try again in a moment.",
   "gateways.owner": "Owner",
   "gateways.shared": "Shared",
   "gateways.statusValid": "Validated",
@@ -2251,6 +2266,8 @@ const en: Record<string, string> = {
   "auth.heroSubtitle": "Your own 3D office, with Hermes AI coworkers.",
   "auth.getStarted": "Get Started",
   "auth.setupDescription": "Create an admin account to get started",
+  "auth.setupAdminNotice":
+    "The first account you create becomes this server's administrator. If other people can reach this instance, close signups once your account exists.",
   "channels.backToChannels": "Back to Channels",
   "chat.returnNpcToOrigin": "Return NPC to original position",
   "chat.options": "Chat options",
@@ -2665,6 +2682,15 @@ const en: Record<string, string> = {
   "kanban.settings.maxInProgressPerProfile": "Max in progress per profile",
   "kanban.settings.resolved": "Effective: {value}",
   "kanban.settings.saved": "Saved",
+
+  // Diagnostics (admin)
+  "diagnostics.title": "Diagnostics",
+  "diagnostics.environment": "Environment",
+  "diagnostics.database": "Database",
+  "diagnostics.hostSetup": "Host setup",
+  "diagnostics.gateways": "Gateways",
+  "diagnostics.none": "No problems",
+  "diagnostics.failed": "Could not load diagnostics",
 };
 
 export default en;

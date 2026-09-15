@@ -5,6 +5,7 @@ import {
   safeSetupError,
   validateProfileDescription,
   validateProfileName,
+  validateSetupPort,
   validateTimezone,
 } from "@/lib/hermes/setup/policy";
 import {
@@ -18,6 +19,7 @@ import {
   connectSetupUrl,
 } from "@/lib/hermes/setup/service";
 import type { HostTarget, SetupProvisionRequest } from "@/lib/hermes/setup/types";
+import { SetupPortConflictError } from "@/lib/hermes/setup/host";
 import { isValidProfileName } from "@/lib/hermes/profile-name";
 
 export const runtime = "nodejs";
@@ -52,10 +54,18 @@ function failure(error: unknown) {
       ? 403
       : code === "setup_not_found"
         ? 404
-        : code === "setup_busy" || code === "profile_exists" || code === "resume_unavailable"
+        : code === "setup_busy" ||
+            code === "profile_exists" ||
+            code === "resume_unavailable" ||
+            code === "port_write_failed"
           ? 409
           : 400;
-  return response({ error: code, errorCode: code }, status);
+  // 충돌에만 숫자 하나가 더 붙는다. 제안이 없으면 지금처럼 코드만 나간다.
+  const suggestion =
+    error instanceof SetupPortConflictError && error.suggestedPort !== undefined
+      ? { suggestedPort: error.suggestedPort }
+      : {};
+  return response({ error: code, errorCode: code, ...suggestion }, status);
 }
 /** 호스트에 넘기기 전에 서버가 같은 규칙으로 다시 본다. 호스트는 이것을 신뢰하지 않고 또 검증한다. */
 function readProvision(body: Record<string, unknown>): SetupProvisionRequest | undefined {
@@ -147,6 +157,11 @@ export async function POST(req: NextRequest) {
       )
         throw new Error("setup_invalid_request");
       const resumeFrom = typeof body.resumeFrom === "string" ? body.resumeFrom : undefined;
+      // 화면이 제안을 수락했을 때만 실린다. 값은 여기서 한 번, 호스트에서 또 한 번 검증한다.
+      const setPort =
+        body.setPort === undefined || body.setPort === null
+          ? undefined
+          : validateSetupPort(body.setPort);
       return response(
         {
           job: await startSetup(
@@ -158,6 +173,7 @@ export async function POST(req: NextRequest) {
             readProvision(body),
             installHermes,
             resumeFrom,
+            setPort,
           ),
         },
         202,

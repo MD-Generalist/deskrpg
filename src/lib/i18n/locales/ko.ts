@@ -72,6 +72,7 @@ const ko: Record<string, string> = {
   "common.logout": "로그아웃",
   "common.language": "언어",
   "common.copy": "복사",
+  "common.copied": "복사됨",
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -260,6 +261,16 @@ const ko: Record<string, string> = {
   "hermes.wizard.step.installingService": "게이트웨이 서비스 등록",
   "hermes.wizard.step.updatingPlugin": "DeskRPG 플러그인 갱신",
   "hermes.wizard.step.settingTimezone": "게이트웨이 시간대 설정",
+  "hermes.wizard.step.settingPort": "게이트웨이 API 포트 변경",
+  "hermes.wizard.error.portWriteFailed":
+    "게이트웨이 프로필의 .env 에 새 포트를 쓰지 못했습니다. 관리자가 해당 프로필의 .env 쓰기 권한을 확인한 뒤 다시 시도하세요. 기존 포트 설정은 그대로입니다.",
+  "hermes.wizard.port.title": "다른 포트로 바꿀까요?",
+  "hermes.wizard.port.body":
+    "선택한 API 포트를 다른 프로세스가 쓰고 있습니다. 비어 있는 포트 {port} 로 바꿔 계속할 수 있습니다. 다른 프로세스는 건드리지 않습니다.",
+  "hermes.wizard.port.restartNote":
+    "포트를 바꾸면 이 프로필의 .env 만 수정하고 게이트웨이를 재시작합니다. 기존 포트 값이 있으면 덮어씁니다.",
+  "hermes.wizard.port.apply": "포트 {port} 로 바꾸고 계속",
+  "hermes.wizard.port.applying": "포트를 바꾸는 중…",
   "hermes.wizard.error.hermesVersionUnsupported":
     "Hermes 0.21.1 이상이 필요합니다. 서버에서 hermes update 를 실행해 올린 뒤 다시 확인하세요.",
   "hermes.wizard.error.pluginUpdateFailed":
@@ -1893,6 +1904,9 @@ const ko: Record<string, string> = {
     "아직 Hermes 를 띄우지 못했다면 캐릭터와 채널을 먼저 만들어 두어도 됩니다. 게이트웨이는 준비된 뒤에 이 화면에서 등록하면 됩니다.",
   "gateways.onboarding.step4CharacterLink": "캐릭터 만들기",
   "gateways.onboarding.step4ChannelLink": "채널 만들기",
+  "gateways.onboarding.quickStart": "빠른 시작으로 사무실 만들기",
+  "gateways.onboarding.quickStartHint": "캐릭터와 채널을 기본값으로 만들어 바로 들어갑니다.",
+  "quickStart.failed": "빠른 시작에 실패했습니다. 잠시 후 다시 시도해 주세요.",
   "gateways.owner": "소유",
   "gateways.shared": "공유됨",
   "gateways.statusValid": "연결 확인됨",
@@ -2246,6 +2260,8 @@ const ko: Record<string, string> = {
   "auth.heroSubtitle": "Hermes AI 동료와 함께 일하는, 나만의 3D 오피스",
   "auth.getStarted": "시작하기",
   "auth.setupDescription": "관리자 계정을 만들어 시작하세요",
+  "auth.setupAdminNotice":
+    "지금 만드는 첫 계정이 이 서버의 관리자가 됩니다. 여러 사람이 접속할 수 있는 곳이라면, 계정을 만든 뒤 가입을 닫으세요.",
   "channels.backToChannels": "채널 목록으로 돌아가기",
   "chat.returnNpcToOrigin": "NPC를 원래 자리로 복귀",
   "chat.options": "채팅 옵션",
@@ -2656,6 +2672,15 @@ const ko: Record<string, string> = {
   "kanban.settings.maxInProgressPerProfile": "프로필당 동시 실행 최대",
   "kanban.settings.resolved": "적용 값: {value}",
   "kanban.settings.saved": "저장했습니다",
+
+  // Diagnostics (admin)
+  "diagnostics.title": "진단",
+  "diagnostics.environment": "환경",
+  "diagnostics.database": "데이터베이스",
+  "diagnostics.hostSetup": "호스트 설정",
+  "diagnostics.gateways": "게이트웨이",
+  "diagnostics.none": "문제 없음",
+  "diagnostics.failed": "진단을 불러오지 못했습니다",
 };
 
 export default ko;

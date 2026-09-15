@@ -72,6 +72,7 @@ const zh: Record<string, string> = {
   "common.logout": "退出登录",
   "common.language": "语言",
   "common.copy": "复制",
+  "common.copied": "已复制",
 
   // Auth
   "auth.title": "DeskRPG for Hermes",
@@ -258,6 +259,16 @@ const zh: Record<string, string> = {
   "hermes.wizard.step.installingService": "注册网关服务",
   "hermes.wizard.step.updatingPlugin": "更新DeskRPG插件",
   "hermes.wizard.step.settingTimezone": "设置网关时区",
+  "hermes.wizard.step.settingPort": "更改网关 API 端口",
+  "hermes.wizard.error.portWriteFailed":
+    "未能将新端口写入网关配置文件的 .env。请管理员确认该配置文件 .env 的写入权限后重试。现有端口设置保持不变。",
+  "hermes.wizard.port.title": "要换一个端口吗？",
+  "hermes.wizard.port.body":
+    "所选的 API 端口正被其他进程占用。可以改用空闲端口 {port} 继续。不会影响其他进程。",
+  "hermes.wizard.port.restartNote":
+    "更改端口只会修改此配置文件的 .env 并重启网关。已有的端口值会被覆盖。",
+  "hermes.wizard.port.apply": "改用端口 {port} 并继续",
+  "hermes.wizard.port.applying": "正在更改端口…",
   "hermes.wizard.error.hermesVersionUnsupported":
     "需要Hermes 0.21.1或更高版本。请在服务器上执行hermes update，然后重新检查。",
   "hermes.wizard.error.pluginUpdateFailed":
@@ -1860,6 +1871,9 @@ const zh: Record<string, string> = {
     "如果还没启动 Hermes，可以先创建角色和频道，准备好之后再回到本页面注册网关。",
   "gateways.onboarding.step4CharacterLink": "创建角色",
   "gateways.onboarding.step4ChannelLink": "创建频道",
+  "gateways.onboarding.quickStart": "快速开始，创建我的办公室",
+  "gateways.onboarding.quickStartHint": "使用默认值创建角色和频道，然后直接进入。",
+  "quickStart.failed": "快速开始失败，请稍后重试。",
   "gateways.owner": "所有者",
   "gateways.shared": "共享",
   "gateways.statusValid": "已验证",
@@ -2209,6 +2223,8 @@ const zh: Record<string, string> = {
   "auth.heroSubtitle": "与 Hermes AI 同事一起工作的专属 3D 办公室",
   "auth.getStarted": "开始使用",
   "auth.setupDescription": "创建管理员账户以开始使用",
+  "auth.setupAdminNotice":
+    "您创建的第一个账号将成为此服务器的管理员。如果其他人可以访问此实例，请在创建账号后关闭注册。",
   "channels.backToChannels": "返回频道列表",
   "chat.returnNpcToOrigin": "让 NPC 返回原位",
   "chat.options": "聊天选项",
@@ -2611,6 +2627,15 @@ const zh: Record<string, string> = {
   "kanban.settings.maxInProgressPerProfile": "每个配置的最大并行数",
   "kanban.settings.resolved": "生效值：{value}",
   "kanban.settings.saved": "已保存",
+
+  // Diagnostics (admin)
+  "diagnostics.title": "诊断",
+  "diagnostics.environment": "环境",
+  "diagnostics.database": "数据库",
+  "diagnostics.hostSetup": "主机设置",
+  "diagnostics.gateways": "网关",
+  "diagnostics.none": "没有问题",
+  "diagnostics.failed": "无法加载诊断信息",
 };
 
 export default zh;

@@ -687,11 +687,17 @@ function typeInto(node: HTMLInputElement, value: string) {
   node.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-async function reachEmptyDiscovery(caps: Record<string, unknown>, sent?: string[]) {
+async function reachEmptyDiscovery(
+  caps: Record<string, unknown>,
+  sent?: string[],
+  bodies?: Record<string, unknown>[],
+) {
   const f = await fixture(async (_url, init) => {
     if (!init?.body) return response({ ...capabilities, ...caps });
-    const { action } = JSON.parse(String(init.body));
+    const body = JSON.parse(String(init.body));
+    const { action } = body;
     sent?.push(action);
+    bodies?.push(body);
     if (action === "discover") return response({ candidates: [] });
     return response({ job: { id: "j", status: "running", steps: ["installing_hermes"] } });
   });
@@ -727,9 +733,10 @@ test("설치 게이트가 켜지면 동의 체크박스가 기본 꺼짐으로 �
   }
 });
 
-test("동의하지 않으면 설치가 시작되지 않고, 동의해야 install-hermes 가 나간다", async () => {
+test("동의하지 않으면 설치가 시작되지 않고, 동의해야 설치 요청이 나간다", async () => {
   const sent: string[] = [];
-  const f = await reachEmptyDiscovery({ canInstallHermes: true }, sent);
+  const bodies: Record<string, unknown>[] = [];
+  const f = await reachEmptyDiscovery({ canInstallHermes: true }, sent, bodies);
   try {
     const start = Array.from(f.host.querySelectorAll("button")).find(
       (b) => b.textContent === "Hermes 설치 시작",
@@ -745,7 +752,10 @@ test("동의하지 않으면 설치가 시작되지 않고, 동의해야 install
         .find((b) => b.textContent === "Hermes 설치 시작")!
         .click(),
     );
-    assert.equal(sent.at(-1), "install-hermes");
+    // 라우트가 아는 액션이어야 한다. 예전에는 install-hermes 를 보내 setup_invalid_request 로
+    // 떨어졌고, 그래서 설치 버튼이 아무 일도 하지 않았다(실측).
+    assert.equal(sent.at(-1), "prepare");
+    assert.equal(bodies.at(-1)?.installHermes, true);
     assert.match(f.host.textContent!, /Hermes 설치/);
   } finally {
     await f.cleanup();
@@ -1291,6 +1301,122 @@ test("resume_unavailable 은 다시 시작 경로를 알려 주는 안내로 바
       .join("\n");
     assert.match(alerts, /설치 찾기부터 다시 시작/);
     assert.doesNotMatch(alerts, /resume_unavailable/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+/** 카드 버튼은 라벨과 설명을 함께 담는다 — 포함으로 찾는다. */
+async function clickIncluding(host: HTMLElement, text: string) {
+  const button = Array.from(host.querySelectorAll("button")).find((item) =>
+    item.textContent?.includes(text),
+  );
+  assert.ok(button, text);
+  await act(async () => button.click());
+}
+
+test("포트 충돌 제안은 동의 버튼을 눌러야 setPort 로 올라간다", async () => {
+  const sent: Record<string, unknown>[] = [];
+  const f = await fixture(async (_url, init) => {
+    if (!init?.body) return response(capabilities);
+    const body = JSON.parse(String(init.body));
+    sent.push(body);
+    if (body.action === "discover") return response({ candidates: [candidate] });
+    if (body.action === "inspect")
+      return new Response(
+        JSON.stringify({
+          error: "port_conflict",
+          errorCode: "port_conflict",
+          suggestedPort: 8643,
+        }),
+        { status: 400 },
+      );
+    return response({ job: { id: "job", status: "running", steps: ["setting_port"] } });
+  });
+  try {
+    await clickIncluding(f.host, "로컬 연결");
+    await clickIncluding(f.host, "연결하기");
+    // 제안은 보이지만 아직 아무것도 보내지 않았다.
+    assert.match(f.host.textContent!, /8643/);
+    assert.deepEqual(
+      sent.map((body) => body.action),
+      ["discover", "inspect"],
+    );
+    await clickIncluding(f.host, "바꾸고 계속");
+    const prepare = sent.at(-1)!;
+    assert.equal(prepare.action, "prepare");
+    assert.equal(prepare.setPort, 8643);
+    assert.equal(prepare.candidateId, candidate.id);
+  } finally {
+    await f.cleanup();
+  }
+});
+test("제안이 없는 포트 충돌은 오류만 보여 주고 흐름을 막지 않는다", async () => {
+  const f = await fixture(async (_url, init) => {
+    if (!init?.body) return response(capabilities);
+    const body = JSON.parse(String(init.body));
+    if (body.action === "discover") return response({ candidates: [candidate] });
+    return new Response(JSON.stringify({ error: "port_conflict", errorCode: "port_conflict" }), {
+      status: 400,
+    });
+  });
+  try {
+    await clickIncluding(f.host, "로컬 연결");
+    await clickIncluding(f.host, "연결하기");
+    assert.match(f.host.textContent!, /포트/);
+    assert.doesNotMatch(f.host.textContent!, /바꾸고 계속/);
+    assert.ok(
+      Array.from(f.host.querySelectorAll("button")).some((b) =>
+        b.textContent?.includes("다시 확인"),
+      ),
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+test("범위 밖 제안 포트는 화면이 버린다", async () => {
+  const f = await fixture(async (_url, init) => {
+    if (!init?.body) return response(capabilities);
+    const body = JSON.parse(String(init.body));
+    if (body.action === "discover") return response({ candidates: [candidate] });
+    return new Response(
+      JSON.stringify({ error: "port_conflict", errorCode: "port_conflict", suggestedPort: 22 }),
+      { status: 400 },
+    );
+  });
+  try {
+    await clickIncluding(f.host, "로컬 연결");
+    await clickIncluding(f.host, "연결하기");
+    assert.doesNotMatch(f.host.textContent!, /바꾸고 계속/);
+  } finally {
+    await f.cleanup();
+  }
+});
+test("포트 쓰기 실패는 안전한 안내로만 나온다", async () => {
+  const f = await fixture(async (_url, init) => {
+    if (!init?.body) return response(capabilities);
+    const body = JSON.parse(String(init.body));
+    if (body.action === "discover") return response({ candidates: [candidate] });
+    if (body.action === "inspect")
+      return new Response(
+        JSON.stringify({
+          error: "port_conflict",
+          errorCode: "port_conflict",
+          suggestedPort: 8643,
+        }),
+        { status: 400 },
+      );
+    return new Response(
+      JSON.stringify({ error: "port_write_failed", errorCode: "port_write_failed" }),
+      { status: 409 },
+    );
+  });
+  try {
+    await clickIncluding(f.host, "로컬 연결");
+    await clickIncluding(f.host, "연결하기");
+    await clickIncluding(f.host, "바꾸고 계속");
+    assert.match(f.host.textContent!, /\.env/);
+    assert.doesNotMatch(f.host.textContent!, /port_write_failed/);
   } finally {
     await f.cleanup();
   }

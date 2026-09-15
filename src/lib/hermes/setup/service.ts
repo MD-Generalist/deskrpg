@@ -43,6 +43,7 @@ const STEPS = new Set([
   "updating_plugin",
   "configuring_api",
   "setting_timezone",
+  "setting_port",
   "restarting_gateway",
   "verifying_gateway",
   "checking_model",
@@ -159,6 +160,8 @@ export async function startSetup(
   provision?: SetupProvisionRequest,
   installHermes?: boolean,
   resumeFrom?: string,
+  /** 화면이 대안 포트 제안을 명시적으로 수락했을 때만 온다. */
+  setPort?: number,
 ) {
   const executor = await requireHost(userId, target);
   // 게이트 셋(호스트 설정 + DESKRPG_HERMES_INSTALL_ENABLED + local)을 모두 통과해야 한다.
@@ -243,6 +246,7 @@ export async function startSetup(
         timezone,
         provision,
         done,
+        setPort,
       );
       const collected = collectSetupWarnings(prepared.warnings, Boolean(installHermes));
       if (collected.length) jobs.update(userId, job.id, { warnings: collected });
