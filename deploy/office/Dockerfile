@@ -30,10 +30,13 @@ RUN for attempt in 1 2 3 4 5; do \
 
 # 사무실 서비스와 초기화 훅
 COPY s6-rc.d/deskrpg /etc/s6-overlay/s6-rc.d/deskrpg
+COPY s6-rc.d/hermes-gateway /etc/s6-overlay/s6-rc.d/hermes-gateway
+COPY scripts/start-gateway /opt/deskrpg/start-gateway
 COPY cont-init.d/03-deskrpg-setup /etc/cont-init.d/03-deskrpg-setup
 RUN chmod +x /etc/s6-overlay/s6-rc.d/deskrpg/run /etc/s6-overlay/s6-rc.d/deskrpg/finish \
-      /etc/cont-init.d/03-deskrpg-setup \
- && touch /etc/s6-overlay/s6-rc.d/user/contents.d/deskrpg
+      /opt/deskrpg/start-gateway /etc/cont-init.d/03-deskrpg-setup \
+ && touch /etc/s6-overlay/s6-rc.d/user/contents.d/deskrpg \
+ && touch /etc/s6-overlay/s6-rc.d/user/contents.d/hermes-gateway
 
 # 3000 사무실(HTTP) · 3001 소켓 · 8642 Hermes API · 9119 대시보드
 EXPOSE 3000 3001 9119

@@ -82,30 +82,7 @@ if [ -d "$HERMES_HOME/plugins/deskrpg" ]; then
     hermes plugins enable deskrpg >/dev/null 2>&1 || true
 fi
 
-# ── 5. 게이트웨이 기동 ───────────────────────────────────────────────
-# 공식 이미지는 gateway-default s6 서비스를 등록만 하고 켜지 않는다(실측:
-# `s6-svstat /run/service/gateway-default` → `down (not started yet)`). 아무도 부르지 않으면
-# DeskRPG 가 붙을 문이 영영 열리지 않는다. `hermes gateway run` 은 s6 에 서비스를 올리고
-# 곧바로 돌아온다 — 포그라운드로 붙잡지 않는다.
-log "게이트웨이를 켜는 중"
-hermes gateway run >/dev/null 2>&1 || log "경고: 게이트웨이 기동 명령이 실패했다"
-
-# 켜졌는지는 말로 하지 말고 확인한다. 조용히 실패하면 사용자는 마법사 화면에서야 알게 된다.
-gateway_up=""
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:8642/" 2>/dev/null \
-       || curl -s -o /dev/null --max-time 2 -w '%{http_code}' "http://127.0.0.1:8642/" 2>/dev/null | grep -q '[1-5]..'; then
-        gateway_up=1
-        break
-    fi
-    sleep 3
-done
-if [ -n "$gateway_up" ]; then
-    log "게이트웨이가 127.0.0.1:8642 에서 응답한다"
-else
-    log "경고: 게이트웨이가 8642 를 열지 않았다 — 모델 제공자 키가 없으면 여기서 멈춘다."
-    # 백틱은 큰따옴표 안에서 명령 치환이 된다 — 안내 문구는 작은따옴표로 싼다.
-    log '        docker exec -it <컨테이너> hermes model 로 로그인하거나 OPENROUTER_API_KEY 를 주고 다시 시작하세요.'
-fi
+# 게이트웨이 기동은 여기서 하지 않는다. cont-init 시점에는 s6 감독 트리가 아직 새 서비스를
+# 받지 못해 `hermes gateway run` 이 실패한다(실측). s6-rc.d/hermes-gateway oneshot 이 맡는다.
 
 log "준비 완료 — 사무실 3000, 소켓 3001, 대시보드 9119"

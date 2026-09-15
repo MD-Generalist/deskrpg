@@ -39,6 +39,14 @@ compose 의 비밀 기본값은 **전부 비어 있습니다.** 공개된 파일
 비밀은 `openssl rand -hex 32` 로 만듭니다. HTTPS 는 Hostinger 의 Traefik 프로젝트를 한 번
 배포해 두면 이 compose 가 알아서 붙습니다.
 
+## 모델 제공자는 선택이 아니다
+
+제공자 키가 없으면 **게이트웨이가 아예 뜨지 않습니다**(실측). 사무실 화면과 대시보드는 열리지만
+DeskRPG 가 붙을 문(컨테이너 안 8642)이 열리지 않아 직원을 한 명도 고용할 수 없습니다.
+`OPENROUTER_API_KEY`(또는 `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`)를 넣거나
+`docker exec -it deskrpg-office hermes model` 로 로그인한 뒤 컨테이너를 다시 시작하세요.
+열렸는지는 컨테이너 로그의 `[deskrpg-gateway]` 줄이 알려 줍니다.
+
 ## 처음 켠 뒤
 
 1. `https://deskrpg.<내 호스트>` 에서 첫 계정을 만듭니다. **첫 계정이 관리자**입니다.

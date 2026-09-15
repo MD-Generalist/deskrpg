@@ -1,0 +1,32 @@
+#!/command/with-contenv sh
+# Hermes 게이트웨이를 켠다 — DeskRPG 가 붙을 문(8642)을 여는 유일한 주체다.
+#
+# 공식 이미지는 gateway-default s6 서비스를 등록만 하고 켜지 않는다(실측:
+# `s6-svstat /run/service/gateway-default` → `down (not started yet)`).
+#
+# cont-init 에서 부르면 안 된다. 그 시점에는 s6 감독 트리가 아직 새 서비스를 받지 못해
+# `hermes gateway run` 이 실패한다(실측: "경고: 게이트웨이 기동 명령이 실패했다").
+# 그래서 s6 가 올라온 뒤 도는 oneshot 으로 부른다. 이 명령은 서비스를 올리고 곧 돌아온다.
+set -e
+
+log() { echo "[deskrpg-gateway] $*"; }
+
+log "게이트웨이를 켜는 중"
+hermes gateway run >/dev/null 2>&1 || log "경고: 게이트웨이 기동 명령이 실패했다"
+
+# 열렸는지는 말로 하지 말고 확인한다. 조용히 실패하면 사용자는 마법사 화면에서야 알게 된다.
+port="$(grep -m1 '^API_SERVER_PORT=' "${HERMES_HOME:-/opt/data}/.env" 2>/dev/null | cut -d= -f2-)"
+port="${port:-8642}"
+i=0
+while [ "$i" -lt 20 ]; do
+    if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$port/v1/models"; then
+        log "게이트웨이가 127.0.0.1:$port 에서 응답한다"
+        exit 0
+    fi
+    i=$((i + 1))
+    sleep 3
+done
+
+log "경고: 게이트웨이가 $port 를 열지 않았다."
+log "       모델 제공자가 없으면 여기서 멈춘다 — OPENROUTER_API_KEY(또는 OPENAI/ANTHROPIC)를 주거나,"
+log "       docker exec -it <컨테이너> hermes model 로 로그인한 뒤 컨테이너를 다시 시작하세요."
