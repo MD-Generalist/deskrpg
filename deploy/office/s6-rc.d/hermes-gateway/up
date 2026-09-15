@@ -1,1 +1,1 @@
-/command/with-contenv sh /opt/deskrpg/start-gateway
+background { /command/with-contenv sh /opt/deskrpg/start-gateway }

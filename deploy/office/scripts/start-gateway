@@ -4,29 +4,44 @@
 # 공식 이미지는 gateway-default s6 서비스를 등록만 하고 켜지 않는다(실측:
 # `s6-svstat /run/service/gateway-default` → `down (not started yet)`).
 #
-# cont-init 에서 부르면 안 된다. 그 시점에는 s6 감독 트리가 아직 새 서비스를 받지 못해
-# `hermes gateway run` 이 실패한다(실측: "경고: 게이트웨이 기동 명령이 실패했다").
-# 그래서 s6 가 올라온 뒤 도는 oneshot 으로 부른다. 이 명령은 서비스를 올리고 곧 돌아온다.
+# 두 가지를 실측으로 배웠다:
+#   1) cont-init 시점에는 너무 일러 `hermes gateway run` 이 실패한다.
+#   2) s6 oneshot 으로 옮겨도 부팅 도중에는 여전히 실패한다 — 이 명령은 살아 있는 감독
+#      트리에 서비스를 붙이므로 트리가 자리를 잡은 뒤라야 한다. 나중에 같은 명령을
+#      docker exec 로 부르면 곧바로 성공한다.
+# 그래서 재시도하고, 부팅을 붙잡지 않도록 up 파일이 이 스크립트를 background 로 돌린다.
 set -e
 
 log() { echo "[deskrpg-gateway] $*"; }
+DIAG="${HERMES_HOME:-/opt/data}/logs/deskrpg-gateway.log"
+mkdir -p "$(dirname "$DIAG")" 2>/dev/null || true
 
-log "게이트웨이를 켜는 중"
-hermes gateway run >/dev/null 2>&1 || log "경고: 게이트웨이 기동 명령이 실패했다"
-
-# 열렸는지는 말로 하지 말고 확인한다. 조용히 실패하면 사용자는 마법사 화면에서야 알게 된다.
 port="$(grep -m1 '^API_SERVER_PORT=' "${HERMES_HOME:-/opt/data}/.env" 2>/dev/null | cut -d= -f2-)"
 port="${port:-8642}"
-i=0
-while [ "$i" -lt 20 ]; do
-    if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$port/v1/models"; then
+
+up() { curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$port/v1/models"; }
+
+log "게이트웨이를 켜는 중"
+attempt=0
+while [ "$attempt" -lt 10 ]; do
+    attempt=$((attempt + 1))
+    if up; then
         log "게이트웨이가 127.0.0.1:$port 에서 응답한다"
         exit 0
     fi
-    i=$((i + 1))
-    sleep 3
+    # 실패 원인은 화면이 아니라 파일에 남긴다 — 부팅 로그를 어지럽히지 않는다.
+    hermes gateway run >>"$DIAG" 2>&1 || log "게이트웨이 기동 시도 $attempt 실패 — 다시 시도한다"
+    i=0
+    while [ "$i" -lt 10 ]; do
+        if up; then
+            log "게이트웨이가 127.0.0.1:$port 에서 응답한다 (시도 $attempt)"
+            exit 0
+        fi
+        i=$((i + 1))
+        sleep 3
+    done
 done
 
-log "경고: 게이트웨이가 $port 를 열지 않았다."
+log "경고: 게이트웨이가 $port 를 열지 않았다. 자세한 내용은 컨테이너 안 $DIAG"
 log "       모델 제공자가 없으면 여기서 멈춘다 — OPENROUTER_API_KEY(또는 OPENAI/ANTHROPIC)를 주거나,"
 log "       docker exec -it <컨테이너> hermes model 로 로그인한 뒤 컨테이너를 다시 시작하세요."
