@@ -2585,6 +2585,8 @@ const en: Record<string, string> = {
   "kanban.blocker.upgradeBody":
     "deskrpg-hermes-plugin {minVersion} or newer is required. Run the command below on the gateway host, then restart the gateway.",
   "kanban.blocker.gatewayTitle": "Gateway connection required",
+  "kanban.blocker.connectGateway": "Connect gateway",
+  "kanban.blocker.gatewayAskOwner": "Ask the channel owner to connect an AI gateway.",
   "kanban.blocker.gatewayBody":
     "This channel has no AI gateway bound. Connect one under Channel settings → AI gateway.",
   "kanban.blocker.boardTitle": "Could not prepare the board",

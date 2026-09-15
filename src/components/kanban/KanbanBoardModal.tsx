@@ -30,6 +30,7 @@ import { CopyCommand } from "../CopyCommand";
 
 interface KanbanBoardModalProps {
   channelId: string;
+  onConnectGateway?: () => void;
   onClose: () => void;
   /** `kanban:event` 가 올 때마다 1 씩 오른다(GamePageClient 가 소켓을 든다). 디바운스해 재조회. */
   refreshTick?: number;
@@ -76,6 +77,7 @@ function formFromTask(task: KanbanTask & Record<string, unknown>, npcs: BoardRes
 export default function KanbanBoardModal({
   channelId,
   onClose,
+  onConnectGateway,
   refreshTick = 0,
   debounceMs = KANBAN_EVENT_DEBOUNCE_MS,
   initialTaskId = null,
@@ -338,7 +340,11 @@ export default function KanbanBoardModal({
             {loading && !board && !blocker ? (
               <div className="text-xs text-text-dim">{t("common.loading")}</div>
             ) : blocker ? (
-              <Blocker blocker={blocker} onRetry={() => void reload()} />
+              <Blocker
+                blocker={blocker}
+                onRetry={() => void reload()}
+                onConnectGateway={onConnectGateway}
+              />
             ) : (
               <div className="flex h-full gap-3">
                 {columns.map((column) => (
@@ -401,7 +407,15 @@ export default function KanbanBoardModal({
   );
 }
 
-function Blocker({ blocker, onRetry }: { blocker: BoardBlocker; onRetry: () => void }) {
+function Blocker({
+  blocker,
+  onRetry,
+  onConnectGateway,
+}: {
+  blocker: BoardBlocker;
+  onRetry: () => void;
+  onConnectGateway?: () => void;
+}) {
   const t = useT();
   const title =
     blocker.kind === "upgrade_required"
@@ -429,7 +443,9 @@ function Blocker({ blocker, onRetry }: { blocker: BoardBlocker; onRetry: () => v
         </>
       )}
       {blocker.kind === "gateway_not_bound" && (
-        <p className="text-text-secondary">{t("kanban.blocker.gatewayBody")}</p>
+        <p className="text-text-secondary">
+          {t(onConnectGateway ? "kanban.blocker.gatewayBody" : "kanban.blocker.gatewayAskOwner")}
+        </p>
       )}
       {blocker.kind === "board_unavailable" && (
         <p className="text-text-secondary break-words">
@@ -442,13 +458,17 @@ function Blocker({ blocker, onRetry }: { blocker: BoardBlocker; onRetry: () => v
           {failureLine(blocker)}
         </p>
       )}
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-3 px-3 py-1.5 rounded-lg bg-surface-raised text-text-secondary hover:brightness-125"
-      >
-        {t("common.retry")}
-      </button>
+      {(blocker.kind !== "gateway_not_bound" || onConnectGateway) && (
+        <button
+          type="button"
+          onClick={blocker.kind === "gateway_not_bound" ? onConnectGateway : onRetry}
+          className="mt-3 px-3 py-1.5 rounded-lg bg-surface-raised text-text-secondary hover:brightness-125"
+        >
+          {t(
+            blocker.kind === "gateway_not_bound" ? "kanban.blocker.connectGateway" : "common.retry",
+          )}
+        </button>
+      )}
     </div>
   );
 }

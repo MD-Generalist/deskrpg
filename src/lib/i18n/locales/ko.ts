@@ -2575,6 +2575,8 @@ const ko: Record<string, string> = {
   "kanban.blocker.upgradeBody":
     "deskrpg-hermes-plugin {minVersion} 이상이 필요합니다. 게이트웨이 호스트에서 아래 명령을 실행한 뒤 게이트웨이를 재시작하세요.",
   "kanban.blocker.gatewayTitle": "게이트웨이 연결 필요",
+  "kanban.blocker.connectGateway": "게이트웨이 연결하기",
+  "kanban.blocker.gatewayAskOwner": "채널 소유자에게 AI 게이트웨이 연결을 요청하세요.",
   "kanban.blocker.gatewayBody":
     "이 채널에 AI 게이트웨이가 연결돼 있지 않습니다. 채널 설정 → AI 게이트웨이에서 연결하세요.",
   "kanban.blocker.boardTitle": "보드를 확보하지 못했습니다",

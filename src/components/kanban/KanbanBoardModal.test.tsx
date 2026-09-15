@@ -58,7 +58,10 @@ const json = (data: unknown, init?: ResponseInit) =>
     ...init,
   });
 
-async function mount(handler: Handler, props: { refreshTick?: number; debounceMs?: number } = {}) {
+async function mount(
+  handler: Handler,
+  props: { refreshTick?: number; debounceMs?: number; onConnectGateway?: () => void } = {},
+) {
   const original = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -330,6 +333,25 @@ test("R26: a kanban:event tick refetches the board after the debounce", async ()
     });
     const after = f.calls.filter((c) => c.endsWith("/kanban/board")).length;
     assert.equal(after, before + 1, "two ticks inside the debounce window collapse into one fetch");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("unbound gateway offers connection to owners and guidance to members", async () => {
+  let connects = 0;
+  const f = await mount(() => json({ code: "gateway_not_bound" }, { status: 409 }), {
+    onConnectGateway: () => {
+      connects++;
+    },
+  });
+  try {
+    await f.click("게이트웨이 연결하기");
+    assert.equal(connects, 1);
+    assert.ok(!f.host.querySelector("[data-blocker]")?.textContent?.includes("재시도"));
+    await f.render({});
+    assert.match(f.host.textContent ?? "", /채널 소유자에게/);
+    assert.equal(f.host.querySelector("[data-blocker] button"), null);
   } finally {
     await f.cleanup();
   }

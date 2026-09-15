@@ -2532,6 +2532,8 @@ const zh: Record<string, string> = {
   "kanban.blocker.upgradeBody":
     "需要 deskrpg-hermes-plugin {minVersion} 或更高版本。请在网关主机上运行以下命令，然后重启网关。",
   "kanban.blocker.gatewayTitle": "需要连接网关",
+  "kanban.blocker.connectGateway": "连接网关",
+  "kanban.blocker.gatewayAskOwner": "请联系频道所有者连接 AI 网关。",
   "kanban.blocker.gatewayBody": "此频道尚未绑定 AI 网关。请在频道设置 → AI 网关中连接。",
   "kanban.blocker.boardTitle": "无法准备看板",
   "kanban.blocker.errorTitle": "无法加载看板",

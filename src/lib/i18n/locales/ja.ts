@@ -2593,6 +2593,8 @@ const ja: Record<string, string> = {
   "kanban.blocker.upgradeBody":
     "deskrpg-hermes-plugin {minVersion} 以上が必要です。ゲートウェイホストで以下のコマンドを実行し、ゲートウェイを再起動してください。",
   "kanban.blocker.gatewayTitle": "ゲートウェイ接続が必要です",
+  "kanban.blocker.connectGateway": "ゲートウェイを接続",
+  "kanban.blocker.gatewayAskOwner": "チャンネル所有者に AI ゲートウェイの接続を依頼してください。",
   "kanban.blocker.gatewayBody":
     "このチャンネルには AI ゲートウェイが接続されていません。チャンネル設定 → AI ゲートウェイから接続してください。",
   "kanban.blocker.boardTitle": "ボードを準備できませんでした",

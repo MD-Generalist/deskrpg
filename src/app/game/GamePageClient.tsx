@@ -312,6 +312,7 @@ function GamePageInner() {
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
+  const returnToKanbanRef = useRef(false);
   const [channelSettingsInitialTab, setChannelSettingsInitialTab] = useState<
     "settings" | "members" | "gateway"
   >("settings");
@@ -2777,6 +2778,15 @@ function GamePageInner() {
           refreshTick={kanbanRefreshTick}
           initialTaskId={kanbanInitialTaskId}
           onClose={closeKanban}
+          onConnectGateway={
+            isOwner
+              ? () => {
+                  returnToKanbanRef.current = true;
+                  setShowKanban(false);
+                  openChannelSettings("gateway");
+                }
+              : undefined
+          }
         />
       )}
 
@@ -2807,9 +2817,23 @@ function GamePageInner() {
           isPublic={channel.isPublic}
           inviteCode={channel.inviteCode}
           initialTab={channelSettingsInitialTab}
-          onClose={() => setShowChannelSettings(false)}
+          onClose={() => {
+            setShowChannelSettings(false);
+            if (returnToKanbanRef.current) {
+              returnToKanbanRef.current = false;
+              setShowKanban(true);
+            }
+          }}
           onUpdated={(data) => {
             if (data.gatewayConfig) void refreshNpcLists();
+            if (
+              returnToKanbanRef.current &&
+              (data.gatewayConfig?.gatewayId || data.gatewayConfig?.url)
+            ) {
+              returnToKanbanRef.current = false;
+              setShowChannelSettings(false);
+              setShowKanban(true);
+            }
             setChannel((prev) => {
               if (!prev) return prev;
               return {
