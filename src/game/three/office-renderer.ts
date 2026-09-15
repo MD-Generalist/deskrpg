@@ -614,6 +614,10 @@ export class OfficeRenderer {
     else this.exitMeeting();
     this.lastMapStructure = structure;
     this.meetingWallObjects = [];
+    const registerMeetingWalls = (walls: T.Object3D[]) => {
+      for (const wall of walls) wall.userData.dynamicAsset = true;
+      this.meetingWallObjects.push(...walls);
+    };
     this.setHoveredSeat(null);
     this.setSelectedSeat(null);
     disposeTree(this.world);
@@ -805,8 +809,7 @@ export class OfficeRenderer {
       const cells = architecture.flatMap((row, y) =>
         row.flatMap((tile, x) => (tile === 2 ? [{ x, y }] : [])),
       );
-      const meetingKeys = new Set(map.meetingSpace?.wallTileKeys ?? []);
-      const ordinaryCells = cells.filter((c) => !meetingKeys.has(`${c.x},${c.y}`));
+      const ordinaryCells = map.meetingSpace ? [] : cells;
       const walls = new T.InstancedMesh(
         new T.BoxGeometry(1, 1.5, 1),
         new T.MeshStandardMaterial({ color: p.wall, roughness: 0.9 }),
@@ -820,7 +823,7 @@ export class OfficeRenderer {
       walls.castShadow = true;
       walls.receiveShadow = true;
       this.world.add(walls);
-      for (const c of cells.filter((c) => meetingKeys.has(`${c.x},${c.y}`))) {
+      for (const c of map.meetingSpace ? cells : []) {
         const wall = new T.Mesh(walls.geometry, walls.material);
         wall.position.set(c.x + 0.5, 0.75, c.y + 0.5);
         wall.castShadow = true;
@@ -834,10 +837,7 @@ export class OfficeRenderer {
           if (tile === 7) {
             const window = new T.Group();
             this.world.add(window);
-            if (meetingKeys.has(`${x},${y}`)) {
-              window.userData.dynamicAsset = true;
-              this.meetingWallObjects.push(window);
-            }
+            registerMeetingWalls([window]);
             round(window, 0.08, 1.45, 0.15, p.wood, x + 0.08, 0.725, y + 0.5);
             round(window, 0.08, 1.45, 0.15, p.wood, x + 0.92, 0.725, y + 0.5);
             round(window, 0.92, 0.1, 0.15, p.wood, x + 0.5, 1.4, y + 0.5);
@@ -868,9 +868,9 @@ export class OfficeRenderer {
     const finishedPerimeter =
       !!map.environment && furniture.some((object) => object.type === "room_wall_h");
     const executive = map.environment === "executive";
-    if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
+    if (executive) registerMeetingWalls(addExecutiveArchitecture(this.world, map.cols, map.rows));
     if (finishedPerimeter && !executive)
-      addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
+      registerMeetingWalls(addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood));
     if (finishedPerimeter && map.environment && !executive)
       addOfficeRoomSurfaces(this.world, map.environment, {
         environmentVersion: map.environmentVersion,
@@ -901,10 +901,8 @@ export class OfficeRenderer {
           : object.direction || "down"
       ];
       this.world.add(group);
-      if (map.meetingSpace?.wallObjectIds.includes(object.id)) {
-        group.userData.dynamicAsset = true;
-        this.meetingWallObjects.push(group);
-      }
+      if (["room_wall_h", "room_wall_v", "cubicle_wall"].includes(object.type))
+        registerMeetingWalls([group]);
       const type = object.type;
       if (type === "room_wall_h" || type === "room_wall_v") {
         const junction =

@@ -134,6 +134,85 @@ function rebuildingRenderer() {
   };
 }
 
+for (const environment of ["executive", "tech", undefined]) {
+  test(`renderer registers all indoor walls, including ${environment ?? "legacy"} shell occluders`, () => {
+    const fixture = rebuildingRenderer();
+    const map: MapSnapshot = {
+      ...fixture.map(),
+      environment,
+      floor: [[0, 0, 0, 0, 0, 2, 7]],
+      walls: [],
+      objects: [
+        { id: "distant-wall", type: "room_wall_h", col: 3, row: 3 },
+        { id: "distant-cubicle", type: "cubicle_wall", col: 8, row: 3 },
+        { id: "floor-rug", type: "rug", col: 5, row: 5 },
+      ],
+      meetingSpace: { ...space, wallObjectIds: [], wallTileKeys: [] },
+    };
+    fixture.rebuild(map);
+    const candidates = (fixture.renderer as unknown as { meetingWallObjects: T.Object3D[] })
+      .meetingWallObjects;
+    const meshes = new Set<T.Mesh>();
+    for (const candidate of candidates)
+      candidate.traverse((child) => {
+        if (child instanceof T.Mesh) meshes.add(child);
+      });
+    const points = [
+      [new T.Vector3(5.5, 0.75, -2), new T.Vector3(5.5, 0.75, 2)],
+      [new T.Vector3(3.5, 1, 2), new T.Vector3(3.5, 1, 5)],
+    ];
+    if (environment) points.push([new T.Vector3(-2, 0.6, 6), new T.Vector3(4, 0.6, 6)]);
+    fixture.world.updateMatrixWorld(true);
+    const originals = new Map([...meshes].map((mesh) => [mesh, mesh.material]));
+    for (const [camera, target] of points) {
+      const ray = new T.Raycaster(
+        camera,
+        target.clone().sub(camera).normalize(),
+        0,
+        camera.distanceTo(target),
+      );
+      const hits = ray
+        .intersectObject(fixture.world, true)
+        .filter((hit) => hit.object instanceof T.Mesh);
+      assert.ok(hits.length > 0);
+      for (const hit of hits)
+        assert.ok(meshes.has(hit.object as T.Mesh), `unregistered wall at ${hit.point.toArray()}`);
+      fixture.meetingWalls.enter(candidates);
+      fixture.meetingWalls.update(camera, [target]);
+      const blocking = new Set(hits.map((hit) => hit.object));
+      let disposed = 0;
+      let clones = 0;
+      for (const mesh of meshes) {
+        if (!blocking.has(mesh)) {
+          assert.equal(mesh.material, originals.get(mesh));
+          continue;
+        }
+        assert.notEqual(mesh.material, originals.get(mesh));
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const material of materials) {
+          assert.ok(material.opacity <= 0.12);
+          clones++;
+          material.addEventListener("dispose", () => disposed++);
+        }
+      }
+      fixture.meetingWalls.dispose();
+      assert.equal(disposed, clones);
+      for (const mesh of meshes) assert.equal(mesh.material, originals.get(mesh));
+    }
+    assert.ok(
+      [...meshes].every((mesh) => !(mesh instanceof T.InstancedMesh)),
+      "candidate geometry survives batching",
+    );
+    const floorRay = new T.Raycaster(new T.Vector3(5.5, 2, 5.5), new T.Vector3(0, -1, 0));
+    const floorHits = floorRay.intersectObject(fixture.world, true);
+    assert.ok(floorHits.length > 0);
+    assert.ok(
+      floorHits.every((hit) => !meshes.has(hit.object as T.Mesh)),
+      "floor and rugs are not wall candidates",
+    );
+  });
+}
+
 test("같은 지도의 늦은 텍스처 갱신은 회의·수동 방향·발언·복원값을 유지한다", () => {
   const fixture = rebuildingRenderer();
   const { renderer, camera, controls, meeting } = fixture;
