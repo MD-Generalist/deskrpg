@@ -1169,6 +1169,28 @@ export default function MeetingRoom({
               </div>
             ) : null
           }
+          footer={
+            !meetingEnded ? (
+              <div data-meeting-chat-input className="border-t border-border bg-bg">
+                <ChatInput
+                  onSend={(msg) => handleSend(msg)}
+                  placeholder={t("meeting.speakToMeeting")}
+                  disabled={joinState !== "joined"}
+                  disabledPlaceholder={t(
+                    joinState === "joining" ? "meeting.joining" : "meeting.disconnected",
+                  )}
+                  cooldown={cooldown}
+                  accentColor="indigo"
+                  mentionCandidates={
+                    displayedNpcs.length
+                      ? displayedNpcs.map((n) => ({ id: n.id, name: n.name }))
+                      : undefined
+                  }
+                  autoFocus
+                />
+              </div>
+            ) : undefined
+          }
         >
           {/* Messages or Topic Input */}
           {meetingActive ? (
@@ -1246,18 +1268,6 @@ export default function MeetingRoom({
                     </div>
                   );
                 })}
-              </div>
-
-              {/* Input for active meeting */}
-              <div className="sticky bottom-0 z-10 flex-shrink-0 border-t border-border bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/85">
-                <ChatInput
-                  onSend={(msg) => handleSend(msg)}
-                  placeholder={t("meeting.speakToMeeting")}
-                  cooldown={cooldown}
-                  accentColor="indigo"
-                  mentionCandidates={displayedNpcs.map((n) => ({ id: n.id, name: n.name }))}
-                  autoFocus
-                />
               </div>
             </div>
           ) : meetingEnded && lastMeetingResult ? (

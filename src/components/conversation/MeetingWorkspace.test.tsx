@@ -68,7 +68,10 @@ class MeetingSocket {
   }
 }
 
-async function mountMeeting(socket: MeetingSocket) {
+async function mountMeeting(
+  socket: MeetingSocket,
+  npcs = [{ id: "npc-one", name: "NPC", appearance: null }],
+) {
   const element = document.createElement("div");
   document.body.appendChild(element);
   const root = createRoot(element);
@@ -83,7 +86,7 @@ async function mountMeeting(socket: MeetingSocket) {
             appearance: { gender: "female", body: "female" } as never,
           }}
           socket={socket as never}
-          npcs={[{ id: "npc-one", name: "NPC", appearance: null }]}
+          npcs={npcs}
           onLeave={() => {}}
         />
       </I18nProvider>,
@@ -103,6 +106,60 @@ const initialState = {
   messages: [],
   discussion: null,
 };
+
+test("NPC 없이 참가한 두 사람은 준비 화면에서 채팅하고 AI 시작은 비활성이다", async (context) => {
+  const socket = new MeetingSocket();
+  const view = await mountMeeting(socket, []);
+  context.after(() => view.close());
+  const input = view.element.querySelector<HTMLTextAreaElement>(
+    "[data-meeting-chat-input] textarea",
+  );
+  assert.ok(input, "주제 입력과 별개인 채팅 입력이 있어야 한다");
+  assert.equal(input.readOnly, true, "참가 확인 전에는 입력 불가");
+  await act(async () =>
+    socket.receive("meeting:state", {
+      ...initialState,
+      participants: [
+        ...initialState.participants,
+        { id: "socket-two", userId: "user-two", name: "동료", appearance: null },
+      ],
+    }),
+  );
+  assert.equal(input.readOnly, false);
+  assert.ok(view.element.querySelector("[data-meeting-start]"));
+  assert.equal(
+    view.element.querySelector<HTMLButtonElement>("[data-meeting-start]")!.disabled,
+    true,
+  );
+  await act(async () => fireEvent.change(input, { target: { value: "안녕하세요" } }));
+  await act(async () => fireEvent.keyDown(input, { key: "Enter" }));
+  assert.deepEqual(socket.calls.find((call) => call.event === "meeting:chat")?.payload, {
+    channelId: "channel",
+    message: "안녕하세요",
+  });
+  assert.equal(
+    socket.calls.some(
+      (call) => call.event === "meeting:start-discussion" || call.event === "meeting:user-speak",
+    ),
+    false,
+  );
+  await act(async () =>
+    socket.receive("meeting:message", {
+      id: "human-chat",
+      senderId: "socket-two",
+      senderType: "user",
+      sender: "동료",
+      content: "반갑습니다",
+      timestamp: 1,
+    }),
+  );
+  assert.match(view.element.textContent ?? "", /반갑습니다/);
+  await act(async () => {
+    socket.connected = false;
+    socket.receive("disconnect");
+  });
+  assert.equal(input.readOnly, true, "끊긴 동안 입력 불가");
+});
 
 test("참가 성공 전에는 확정하지 않고 재연결/패널 접기로 토론을 자동 시작하지 않는다", async () => {
   const socket = new MeetingSocket();
