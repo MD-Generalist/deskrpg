@@ -1,4 +1,5 @@
 import type { MeetingDiscussionState } from "../lib/meeting-discussion-state";
+import type { MeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 export const MEETING_NPC_STREAM_EVENT = "meeting:npc-stream";
 
 type MeetingRoom = {
@@ -64,6 +65,8 @@ type RegisterMeetingSocketHandlersArgs = {
   deps: {
     meetingRooms: Map<string, MeetingRoom>;
     getDiscussionState?: (channelId: string) => MeetingDiscussionState | null;
+    spatial?: MeetingSpatialCoordinator;
+    isInMeetingSpace?: (channelId: string, socketId: string) => Promise<boolean>;
     players: Map<string, MeetingPlayer>;
     lastChatTime: Map<string, number>;
     chatCooldownMs: number;
@@ -190,9 +193,27 @@ export function registerMeetingSocketHandlers({
       }
     }
 
+    if (
+      deps.isInMeetingSpace &&
+      !(await deps.isInMeetingSpace(channelId, socket.id).catch(() => false))
+    ) {
+      socket.emit("meeting:error", { error: "not_in_meeting_space" });
+      return;
+    }
     const room = ensureMeetingRoom(meetingRooms, channelId);
     room.participants.add(socket.id);
     socket.join(getMeetingRoomId(channelId));
+    await deps.spatial?.joinPlayer(channelId, user.userId, socket.id);
+    if (
+      !room.participants.has(socket.id) ||
+      (deps.isInMeetingSpace &&
+        !(await deps.isInMeetingSpace(channelId, socket.id).catch(() => false)))
+    ) {
+      room.participants.delete(socket.id);
+      socket.leave(getMeetingRoomId(channelId));
+      await deps.spatial?.leavePlayer(channelId, user.userId, socket.id);
+      return;
+    }
 
     const existingPlayer = players.get(socket.id);
     const displayName =
@@ -230,6 +251,7 @@ export function registerMeetingSocketHandlers({
       participants: participantList,
       messages: room.messages.slice(-50),
       discussion: deps.getDiscussionState?.(channelId) ?? null,
+      spatial: deps.spatial?.snapshot(channelId) ?? null,
       isInitiator: deps.getDiscussionState?.(channelId)?.initiatorId === user.userId,
     });
 
@@ -245,8 +267,9 @@ export function registerMeetingSocketHandlers({
     const { channelId } = (payload ?? {}) as { channelId?: string };
     if (!channelId) return;
     const room = meetingRooms.get(channelId);
-    if (!room) return;
+    if (!room || !room.participants.has(socket.id)) return;
     room.participants.delete(socket.id);
+    void deps.spatial?.leavePlayer(channelId, user.userId, socket.id);
     socket.leave(getMeetingRoomId(channelId));
     socket.to(getMeetingRoomId(channelId)).emit("meeting:participant-left", {
       id: socket.id,
