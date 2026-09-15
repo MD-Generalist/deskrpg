@@ -46,7 +46,7 @@ test("all catalog GLBs, studio surfaces, thumbnail and build reports ship throug
     // The fixture is traced into the Next API; public URLs need explicit copies.
     if (file.startsWith("public/")) assert.ok(covered(docker, file), `Docker omits ${file}`);
   }
-  assert.ok(runtime.includes("public/assets/environments/creative-studio/agency-v3.webp"));
+  assert.ok(runtime.includes("public/assets/environments/creative-studio/agency-v4.webp"));
 });
 test("every generated studio GLB is catalogued and covered by its measured build report", () => {
   let count = 0;
