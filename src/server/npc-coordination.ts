@@ -78,11 +78,6 @@ const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
 
 /** Process-local authority. DB homes and seat anchors are inputs; no pathfinding or AI calls. */
 export function createNpcCoordination(io: Server, dependencies: CoordinationDependencies) {
-  let diagnosticCount = 0;
-  const diagnostic = (event: string, data: object) => {
-    if (process.env.DEBUG_MEETING_MOTION === "1" && diagnosticCount++ < 2000)
-      console.info("[meeting-motion]", JSON.stringify({ at: Date.now(), event, ...data }));
-  };
   const channels = new Map<string, Promise<Channel>>();
   const now = dependencies.now ?? Date.now;
   const spatialLastMotion = new Map<string, number>();
@@ -521,11 +516,6 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       if (!seat) return { error: "unknown_seat" };
       const actorId = typeof payload.actorId === "string" ? payload.actorId : socket.id;
       const npc = state.npcs.get(actorId);
-      diagnostic("seat-claim", {
-        actorId,
-        seatId: payload.seatId,
-        reservations: [...state.reservations.values()].filter((r) => r.actorId === actorId),
-      });
       if (npc?.spatialTarget) return { error: "meeting_reserved" };
       if (
         actorId !== socket.id &&
@@ -538,6 +528,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
             )))
       )
         return { error: "not_owner" };
+      const spatialReservation = [...state.reservations.values()].find(
+        (reservation) => reservation.actorId === actorId && reservation.spatial,
+      );
+      if (spatialReservation)
+        return spatialReservation.seatId === seat.id &&
+          spatialReservation.ownerSocketId === socket.id
+          ? { seatId: seat.id }
+          : { error: "meeting_reserved" };
       const existing = state.reservations.get(seat.id);
       if (existing && (existing.actorId !== actorId || existing.ownerSocketId !== socket.id))
         return { error: "seat_occupied" };
@@ -573,10 +571,6 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     handle("seat:release", (payload, state, channelId) => {
       const actorId = typeof payload.actorId === "string" ? payload.actorId : socket.id;
       const npc = state.npcs.get(actorId);
-      diagnostic("seat-release", {
-        actorId,
-        reservations: [...state.reservations.values()].filter((r) => r.actorId === actorId),
-      });
       if (npc?.spatialTarget) return { error: "meeting_reserved" };
       if (
         actorId !== socket.id &&
@@ -584,6 +578,8 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         !(npc?.phase === "ambient" && leader(channelId) === socket.id)
       )
         return { error: "not_owner" };
+      if ([...state.reservations.values()].some((r) => r.actorId === actorId && r.spatial))
+        return { error: "meeting_reserved" };
       releaseActor(state, actorId);
       if (
         npc?.phase === "ambient" &&
@@ -687,23 +683,6 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     {
       const key = `${channelId}:${socket.id}`;
       const previous = validatedPlayers.get(key);
-      diagnostic("player-validation", {
-        actorId: socket.id,
-        x,
-        y,
-        previous,
-        last: spatialLastMotion.get(key),
-        credit: spatialMotionCredit.get(key),
-        reservation,
-        pathClear:
-          !previous ||
-          !state.data.isWalkable ||
-          clearSegment(
-            { x: previous.x / 32 - 0.5, y: previous.y / 32 - 0.5 },
-            { x: x / 32 - 0.5, y: y / 32 - 0.5 },
-            state.data.isWalkable,
-          ),
-      });
       if (
         previous &&
         (!consumeMotion(key, distance(previous, { x, y }), 220) ||
@@ -714,13 +693,6 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
               state.data.isWalkable,
             )))
       ) {
-        diagnostic("player-rejected", {
-          actorId: socket.id,
-          x,
-          y,
-          spatial: !!reservation,
-          credit: spatialMotionCredit.get(key),
-        });
         if (reservation) return;
       } else validatedPlayers.set(key, { x, y });
       spatialLastMotion.set(key, now());
@@ -734,7 +706,6 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     }
     updateReservation(state, socket.id, { x, y });
     if (reservation && distance(reservation, { x, y }) <= 2) {
-      diagnostic("player-arrival", { actorId: socket.id, x, y, seatId: reservation.seatId });
       const userId = dependencies.getPlayer(socket.id)?.userId;
       if (userId) dependencies.onSpatialPlayerArrival?.(channelId!, userId, socket.id);
     }
@@ -975,11 +946,6 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         arrived: !!position && distance(position, target) <= 8,
         expires: Infinity,
         spatial: true,
-      });
-      diagnostic("spatial-reserved", {
-        actorId,
-        target,
-        position: position ? { x: position.x, y: position.y } : null,
       });
       changed(state);
       broadcast(channelId, state);

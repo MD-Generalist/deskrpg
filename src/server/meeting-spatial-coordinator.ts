@@ -29,11 +29,6 @@ type Session = {
 
 /** 회의 공간 상태만 관리한다. 실제 좌석과 이동 소유권은 기존 motion 정본에 위임한다. */
 export function createMeetingSpatialCoordinator(deps: Dependencies) {
-  let diagnosticCount = 0;
-  const diagnostic = (event: string, data: object) => {
-    if (process.env.DEBUG_MEETING_MOTION === "1" && diagnosticCount++ < 500)
-      console.info("[meeting-motion]", JSON.stringify({ at: Date.now(), event, ...data }));
-  };
   const sessions = new Map<string, Session>();
   const playerSockets = new Map<string, string>();
   const operations = new Map<string, Promise<unknown>>();
@@ -205,13 +200,6 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
       s.state.spaceId = layout.spaceId;
       for (const target of layout.targets)
         if (await deps.reserve(channelId, socketId, target)) {
-          diagnostic("join-reserve-returned", {
-            socketId,
-            generation: s.state.generation,
-            state: p.state,
-            seatId: p.seatId,
-            target,
-          });
           p.state = "walking";
           p.target = { x: target.x, y: target.y };
           p.seatId = target.seatId;
@@ -238,13 +226,6 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
   }
   function arrived(channelId: string, actorId: string, generation: number) {
     const s = sessions.get(channelId);
-    diagnostic("coordinator-arrived", {
-      actorId,
-      generation,
-      currentGeneration: s?.state.generation,
-      cancelled: s?.cancelRequested,
-      participant: s?.state.participants.find((p) => p.actorId === actorId),
-    });
     if (!s || s.state.generation !== generation || s.cancelRequested) return false;
     const p = s.state.participants.find((p) => p.actorId === actorId);
     if (!p || (p.state !== "walking" && p.state !== "returning")) return false;
@@ -325,11 +306,6 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
       enqueue(channelId, () => leavePlayer(channelId, userId, socketId)),
     playerArrived(channelId: string, userId: string, socketId: string) {
       const s = sessions.get(channelId);
-      diagnostic("coordinator-player-arrival", {
-        socketId,
-        registeredSocket: playerSockets.get(`${channelId}:${userId}`),
-        generation: s?.state.generation,
-      });
       if (s && playerSockets.get(`${channelId}:${userId}`) === socketId)
         arrived(channelId, userId, s.state.generation);
     },
