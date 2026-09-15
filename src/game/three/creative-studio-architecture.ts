@@ -156,7 +156,11 @@ export function addCreativeStudioArchitecture(
   root: T.Group,
   cols: number,
   rows: number,
-  options: { load?: SceneAssetLoader; loadTexture?: TextureLoad; includeDirectorSuite?: boolean } = {},
+  options: {
+    load?: SceneAssetLoader;
+    loadTexture?: TextureLoad;
+    includeDirectorSuite?: boolean;
+  } = {},
 ) {
   if (cols !== 42 || rows !== 26)
     throw Error("Creative studio architecture requires 42 × 26 tiles");
@@ -427,14 +431,14 @@ export function addCreativeStudioArchitecture(
       [director.northRow, director.doorRows[0]],
       [director.doorRows[1] + 1, director.southRow + 1],
     ] as const)
-    module(
-      "shared-glass-partition",
-      director.eastCol + 0.5,
-      0,
-      (start + end) / 2,
-      [(end - start) / 2, 0.9, 1],
-      Math.PI / 2,
-    );
+      module(
+        "shared-glass-partition",
+        director.eastCol + 0.5,
+        0,
+        (start + end) / 2,
+        [(end - start) / 2, 0.9, 1],
+        Math.PI / 2,
+      );
     module(
       "shared-glass-door",
       director.eastCol + 0.82,

@@ -21,7 +21,9 @@ for (const environment of OFFICE_ENVIRONMENTS) {
           ? { width: 576, height: 576 }
           : environment.id === "tech"
             ? { width: 1408, height: 640 }
-            : { width: 960, height: 704 },
+            : environment.id === "trading"
+              ? { width: 1408, height: 960 }
+              : { width: 960, height: 704 },
     );
     assert.deepEqual(layout.npcs, [{ id: "npc", x: 496, y: 624 }]);
     const projectedSeats = furnitureSeats(snapshot.objects).map((seat) => ({

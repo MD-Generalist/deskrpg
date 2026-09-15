@@ -4,148 +4,78 @@
     "bytes": 179984,
     "bounds": {
       "units": "meters",
-      "min": [
-        -3.359999895095825,
-        0.009999990463256836,
-        -1.3880000114440918
-      ],
-      "max": [
-        3.359999895095825,
-        2.9000000953674316,
-        1.4199999570846558
-      ]
+      "min": [-3.359999895095825, 0.009999990463256836, -1.3880000114440918],
+      "max": [3.359999895095825, 2.9000000953674316, 1.4199999570846558]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "coral-sweep",
-      "painted-metal",
-      "oak"
-    ]
+    "materialSlots": ["coral-sweep", "painted-metal", "oak"]
   },
   "photo-softbox": {
     "triangles": 892,
     "bytes": 150784,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.4000000059604645,
-        0.018941491842269897,
-        -0.19703218340873718
-      ],
-      "max": [
-        0.4000000059604645,
-        2.075000047683716,
-        0.3785865306854248
-      ]
+      "min": [-0.4000000059604645, 0.018941491842269897, -0.19703218340873718],
+      "max": [0.4000000059604645, 2.075000047683716, 0.3785865306854248]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "painted-metal",
-      "diffuser",
-      "brushed-metal"
-    ]
+    "materialSlots": ["painted-metal", "diffuser", "brushed-metal"]
   },
   "photo-camera-tripod": {
     "triangles": 1340,
     "bytes": 106280,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.3471668064594269,
-        0.018743887543678284,
-        -0.20693591237068176
-      ],
-      "max": [
-        0.3471668064594269,
-        1.5799999237060547,
-        0.39828187227249146
-      ]
+      "min": [-0.3471668064594269, 0.018743887543678284, -0.20693591237068176],
+      "max": [0.3471668064594269, 1.5799999237060547, 0.39828187227249146]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "painted-metal",
-      "lens",
-      "brushed-metal"
-    ]
+    "materialSlots": ["painted-metal", "lens", "brushed-metal"]
   },
   "photo-reflector": {
     "triangles": 1064,
     "bytes": 159556,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.4169999957084656,
-        0.01949159801006317,
-        -0.1722852885723114
-      ],
-      "max": [
-        0.4169999957084656,
-        1.6070001125335693,
-        0.3293760418891907
-      ]
+      "min": [-0.4169999957084656, 0.01949159801006317, -0.1722852885723114],
+      "max": [0.4169999957084656, 1.6070001125335693, 0.3293760418891907]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "painted-metal",
-      "reflector-cloth"
-    ]
+    "materialSlots": ["painted-metal", "reflector-cloth"]
   },
   "photo-equipment-shelf": {
     "triangles": 3384,
     "bytes": 323116,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.949999988079071,
-        0.0,
-        -0.4099999964237213
-      ],
-      "max": [
-        0.949999988079071,
-        2.244999885559082,
-        0.4099999964237213
-      ]
+      "min": [-0.949999988079071, 0.0, -0.4099999964237213],
+      "max": [0.949999988079071, 2.244999885559082, 0.4099999964237213]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "painted-metal",
-      "oak",
-      "paper",
-      "accent-0",
-      "accent-1",
-      "accent-2"
-    ]
+    "materialSlots": ["painted-metal", "oak", "paper", "accent-0", "accent-1", "accent-2"]
   },
   "production-table-dressed": {
     "triangles": 5850,
     "bytes": 469088,
     "bounds": {
       "units": "meters",
-      "min": [
-        -2.5220000743865967,
-        0.8619999885559082,
-        -1.0646286010742188
-      ],
-      "max": [
-        2.5239999294281006,
-        1.16014564037323,
-        0.9816001653671265
-      ]
+      "min": [-2.5220000743865967, 0.8619999885559082, -1.0646286010742188],
+      "max": [2.5239999294281006, 1.16014564037323, 0.9816001653671265]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
@@ -171,16 +101,8 @@
     "bytes": 305384,
     "bounds": {
       "units": "meters",
-      "min": [
-        -1.075465202331543,
-        0.8629999756813049,
-        -1.075465202331543
-      ],
-      "max": [
-        1.075465202331543,
-        1.0049999952316284,
-        1.075465202331543
-      ]
+      "min": [-1.075465202331543, 0.8629999756813049, -1.075465202331543],
+      "max": [1.075465202331543, 1.0049999952316284, 1.075465202331543]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
@@ -204,74 +126,36 @@
     "bytes": 210284,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.8242232203483582,
-        0.783215343952179,
-        0.057500001043081284
-      ],
-      "max": [
-        0.7542232275009155,
-        1.7267847061157227,
-        0.0820000022649765
-      ]
+      "min": [-0.8242232203483582, 0.783215343952179, 0.057500001043081284],
+      "max": [0.7542232275009155, 1.7267847061157227, 0.0820000022649765]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "accent-0",
-      "brushed-metal",
-      "accent-1",
-      "paper",
-      "accent-2",
-      "accent-3"
-    ]
+    "materialSlots": ["accent-0", "brushed-metal", "accent-1", "paper", "accent-2", "accent-3"]
   },
   "sample-display": {
     "triangles": 1872,
     "bytes": 214004,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.815000057220459,
-        1.0625,
-        -0.2900000214576721
-      ],
-      "max": [
-        0.7400000095367432,
-        1.4649999141693115,
-        0.17499999701976776
-      ]
+      "min": [-0.815000057220459, 1.0625, -0.2900000214576721],
+      "max": [0.7400000095367432, 1.4649999141693115, 0.17499999701976776]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "accent-0",
-      "paper",
-      "accent-1",
-      "accent-2",
-      "accent-3",
-      "oak"
-    ]
+    "materialSlots": ["accent-0", "paper", "accent-1", "accent-2", "accent-3", "oak"]
   },
   "pantry-counter-dressed": {
     "triangles": 4746,
     "bytes": 440352,
     "bounds": {
       "units": "meters",
-      "min": [
-        -1.6099998950958252,
-        0.9550000429153442,
-        -0.2150000035762787
-      ],
-      "max": [
-        1.3849999904632568,
-        1.4450000524520874,
-        0.38999998569488525
-      ]
+      "min": [-1.6099998950958252, 0.9550000429153442, -0.2150000035762787],
+      "max": [1.3849999904632568, 1.4450000524520874, 0.38999998569488525]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
@@ -296,45 +180,22 @@
     "bytes": 261808,
     "bounds": {
       "units": "meters",
-      "min": [
-        -1.8900001049041748,
-        1.1949999332427979,
-        -0.05299999937415123
-      ],
-      "max": [
-        1.25,
-        3.044999837875366,
-        0.049000006169080734
-      ]
+      "min": [-1.8900001049041748, 1.1949999332427979, -0.05299999937415123],
+      "max": [1.25, 3.044999837875366, 0.049000006169080734]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "oak",
-      "paper",
-      "accent-0",
-      "accent-2",
-      "accent-1",
-      "accent-3"
-    ]
+    "materialSlots": ["oak", "paper", "accent-0", "accent-2", "accent-1", "accent-3"]
   },
   "workstation-dressed": {
     "triangles": 4242,
     "bytes": 340368,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.421999990940094,
-        0.8629999756813049,
-        -0.2849999964237213
-      ],
-      "max": [
-        0.36000001430511475,
-        1.4000000953674316,
-        0.4088796079158783
-      ]
+      "min": [-0.421999990940094, 0.8629999756813049, -0.2849999964237213],
+      "max": [0.36000001430511475, 1.4000000953674316, 0.4088796079158783]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
@@ -355,55 +216,27 @@
     "bytes": 364196,
     "bounds": {
       "units": "meters",
-      "min": [
-        -1.4122456312179565,
-        0.8629999756813049,
-        -0.6735765933990479
-      ],
-      "max": [
-        1.6439999341964722,
-        1.1150000095367432,
-        0.6796473264694214
-      ]
+      "min": [-1.4122456312179565, 0.8629999756813049, -0.6735765933990479],
+      "max": [1.6439999341964722, 1.1150000095367432, 0.6796473264694214]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "paper",
-      "printed-paper",
-      "ceramic",
-      "coffee",
-      "painted-metal",
-      "lens"
-    ]
+    "materialSlots": ["paper", "printed-paper", "ceramic", "coffee", "painted-metal", "lens"]
   },
   "coffee-table-dressed": {
     "triangles": 788,
     "bytes": 159316,
     "bounds": {
       "units": "meters",
-      "min": [
-        -0.40235257148742676,
-        0.49000000953674316,
-        -0.13787275552749634
-      ],
-      "max": [
-        0.3540000021457672,
-        0.625,
-        0.24750739336013794
-      ]
+      "min": [-0.40235257148742676, 0.49000000953674316, -0.13787275552749634],
+      "max": [0.3540000021457672, 0.625, 0.24750739336013794]
     },
     "seed": 140928,
     "source": "scripts/assets/build-creative-studio-kits.py",
     "license": "repository-original",
     "invalidMesh": false,
-    "materialSlots": [
-      "paper",
-      "printed-paper",
-      "ceramic",
-      "coffee"
-    ]
+    "materialSlots": ["paper", "printed-paper", "ceramic", "coffee"]
   }
 }

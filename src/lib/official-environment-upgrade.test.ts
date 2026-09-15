@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import fixture from "./fixtures/official-agency-v2.json";
 import fixtureV3 from "./fixtures/official-agency-v3.json";
 import fixtureV4 from "./fixtures/official-agency-v4.json";
+import tradingV2 from "./fixtures/official-trading-v2.json";
 import techV2 from "./fixtures/official-tech-v2.json";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
 import { upgradeOfficialEnvironmentMap } from "./official-environment-upgrade";
@@ -114,6 +115,9 @@ for (const map of [
   {},
   buildOfficeEnvironment("agency"),
   buildOfficeEnvironment("tech"),
+  buildOfficeEnvironment("trading"),
+  buildOfficeEnvironment("executive"),
+  buildOfficeEnvironment("publishing"),
 ])
   test(`ineligible input ${typeof map} stays unchanged`, () => {
     const result = upgradeOfficialEnvironmentMap(map);
@@ -149,6 +153,50 @@ for (const [kind, input] of Object.entries({
 for (const edit of ["object", "layer-order", "metadata", "spawn", "dimension"]) {
   test(`tech v2 protects ${edit} edits`, () => {
     const map = structuredClone(techV2);
+    if (edit === "object") map.layers.find((layer) => layer.name === "Objects")!.objects!.pop();
+    if (edit === "layer-order") map.layers.reverse();
+    if (edit === "metadata") Object.assign(map, { custom: true });
+    if (edit === "spawn")
+      map.layers
+        .find((layer) => layer.name === "Objects")!
+        .objects!.find((object) => object.type === "spawn")!.x += 32;
+    if (edit === "dimension") map.width++;
+    for (const input of [map, JSON.stringify(map)]) {
+      const result = upgradeOfficialEnvironmentMap(input);
+      assert.equal(result.upgraded, false);
+      assert.equal(result.map, input);
+    }
+  });
+}
+
+test("trading v2 fixture freezes the previous released map", () => {
+  assert.equal(
+    createHash("sha256")
+      .update(readFileSync(new URL("./fixtures/official-trading-v2.json", import.meta.url)))
+      .digest("hex"),
+    "d88ddb598e9ff86edf5d19551434a3a23ad7b485f843d32f6deed53e09b207cc",
+  );
+  assert.equal(tradingV2.width, 30);
+  assert.equal(tradingV2.height, 22);
+});
+for (const [kind, input] of Object.entries({
+  object: tradingV2,
+  sqlite: JSON.stringify(tradingV2),
+  jsonb: reorder(tradingV2),
+})) {
+  test(`exact trading v2 ${kind} upgrades to v3 without mutation`, () => {
+    const before = JSON.stringify(input);
+    const result = upgradeOfficialEnvironmentMap(input);
+    assert.equal(result.upgraded, true);
+    assert.equal(result.fromVersion, 2);
+    assert.deepEqual(result.map, buildOfficeEnvironment("trading"));
+    assert.notEqual(result.map, upgradeOfficialEnvironmentMap(input).map);
+    assert.equal(JSON.stringify(input), before);
+  });
+}
+for (const edit of ["object", "layer-order", "metadata", "spawn", "dimension"]) {
+  test(`trading v2 protects ${edit} edits`, () => {
+    const map = structuredClone(tradingV2);
     if (edit === "object") map.layers.find((layer) => layer.name === "Objects")!.objects!.pop();
     if (edit === "layer-order") map.layers.reverse();
     if (edit === "metadata") Object.assign(map, { custom: true });

@@ -1,3 +1,5 @@
+import { isTradingMap, addTradingArchitecture, joinedPartitionSpan } from "./trading-scene";
+import { renderTradingObject } from "./trading-assets";
 import { attachSceneAsset as attachCatalogAsset, type SceneAssetId } from "./scene-asset-catalog";
 import { studioLabelOccluded, captureStudioReflection } from "./studio-visibility";
 import { addTechStartupSurfaces, isTechStartupMap, techPartitionSpan } from "./tech-startup-scene";
@@ -315,7 +317,9 @@ export class OfficeRenderer {
     this.following = false;
     const studio =
       this.bridge &&
-      (isCreativeStudioMap(this.bridge.map()) || isTechStartupMap(this.bridge.map()));
+      (isCreativeStudioMap(this.bridge.map()) ||
+        isTechStartupMap(this.bridge.map()) ||
+        isTradingMap(this.bridge.map()));
     this.controls.target.set(cols / 2, studio ? 1.2 : 0, rows / 2);
     this.overviewDimensions = { cols, rows };
     const aspect = this.host.clientWidth / Math.max(1, this.host.clientHeight);
@@ -488,13 +492,16 @@ export class OfficeRenderer {
     disposeTree(this.world);
     const studio = isCreativeStudioMap(map);
     const tech = isTechStartupMap(map);
-    const p = tech
-      ? { floor: "#c6c8c7", wall: "#edf0ed", wood: "#c4ac89", outside: "#edf0e6" }
-      : studio
-        ? { floor: "#dfcdb0", wall: "#e5dfd2", wood: "#c9ae86", outside: "#f4f0e7" }
-        : isOfficeEnvironmentId(map.environment)
-          ? environmentPalettes[map.environment]
-          : palettes[this.theme];
+    const trading = isTradingMap(map);
+    const p = trading
+      ? { floor: "#c4bfb3", wall: "#e7e1d4", wood: "#c3aa82", outside: "#f2efe4" }
+      : tech
+        ? { floor: "#c6c8c7", wall: "#edf0ed", wood: "#c4ac89", outside: "#edf0e6" }
+        : studio
+          ? { floor: "#dfcdb0", wall: "#e5dfd2", wood: "#c9ae86", outside: "#f4f0e7" }
+          : isOfficeEnvironmentId(map.environment)
+            ? environmentPalettes[map.environment]
+            : palettes[this.theme];
     const lighting = officeLighting(
       isOfficeEnvironmentId(map.environment) ? map.environment : undefined,
       studio ? 3 : undefined,
@@ -525,32 +532,34 @@ export class OfficeRenderer {
     });
     this.sun.shadow.camera.updateProjectionMatrix();
     this.renderer.setClearColor(p.outside);
-    round(
-      this.world,
-      map.cols + 0.3,
-      0.3,
-      map.rows + 0.3,
-      p.wood,
-      map.cols / 2,
-      -0.2,
-      map.rows / 2,
-    );
     const floorGrain =
-      isOfficeEnvironmentId(map.environment) && !tech ? surfaceTexture("wood") : null;
+      isOfficeEnvironmentId(map.environment) && !tech && !trading ? surfaceTexture("wood") : null;
     if (floorGrain) floorGrain.repeat.set(map.cols / 3, map.rows / 2);
-    const floor = new T.Mesh(
-      new T.PlaneGeometry(map.cols, map.rows),
-      new T.MeshStandardMaterial({
-        color: p.floor,
-        roughness: 0.85,
-        bumpMap: floorGrain,
-        bumpScale: 0.018,
-      }),
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(map.cols / 2, -0.04, map.rows / 2);
-    floor.receiveShadow = true;
-    this.world.add(floor);
+    if (!trading) {
+      round(
+        this.world,
+        map.cols + 0.3,
+        0.3,
+        map.rows + 0.3,
+        p.wood,
+        map.cols / 2,
+        -0.2,
+        map.rows / 2,
+      );
+      const floor = new T.Mesh(
+        new T.PlaneGeometry(map.cols, map.rows),
+        new T.MeshStandardMaterial({
+          color: p.floor,
+          roughness: 0.85,
+          bumpMap: floorGrain,
+          bumpScale: 0.018,
+        }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.set(map.cols / 2, -0.04, map.rows / 2);
+      floor.receiveShadow = true;
+      this.world.add(floor);
+    }
     if (map.artwork && !isOfficeEnvironmentId(map.environment)) {
       const texture = new T.CanvasTexture(map.artwork);
       texture.colorSpace = T.SRGBColorSpace;
@@ -603,7 +612,8 @@ export class OfficeRenderer {
       isOfficeEnvironmentId(map.environment) &&
       map.environment !== "executive" &&
       !studio &&
-      !tech
+      !tech &&
+      !trading
     ) {
       const finish = officeFinish(map.environment);
       const floorMap = surfaceTexture(finish.floor, "color");
@@ -733,7 +743,9 @@ export class OfficeRenderer {
         );
     const furniture = [...tileObjects, ...map.objects];
     const finishedPerimeter =
-      tech || (!!map.environment && furniture.some((object) => object.type === "room_wall_h"));
+      tech ||
+      trading ||
+      (!!map.environment && furniture.some((object) => object.type === "room_wall_h"));
     const executive = map.environment === "executive";
     let remainingFurniture = furniture;
     if (studio) {
@@ -744,17 +756,23 @@ export class OfficeRenderer {
       });
       remainingFurniture = composition.userData.unhandledObjects;
     }
+    if (trading) addTradingArchitecture(this.world, map);
     if (tech) addTechStartupSurfaces(this.world, map);
     if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
-    if (finishedPerimeter && !executive && !studio)
+    if (finishedPerimeter && !executive && !studio && !trading)
       addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
-    if (finishedPerimeter && map.environment && !executive && !studio && !tech)
+    if (finishedPerimeter && map.environment && !executive && !studio && !tech && !trading)
       addOfficeRoomSurfaces(this.world, map.environment, {
         environmentVersion: map.environmentVersion,
         hasLegacyPartitions: finishedPerimeter,
       });
     this.seats = furnitureSeats(furniture);
     for (const object of remainingFurniture) {
+      if (
+        trading &&
+        (object.variant === "trading-perimeter" || object.variant === "trading-world-map")
+      )
+        continue;
       if (studio && object.type === "glass_partition") continue;
       if (
         (finishedPerimeter || executive || studio) &&
@@ -782,6 +800,13 @@ export class OfficeRenderer {
       group.userData.mapObjectId = object.id;
       this.world.add(group);
       const type = object.type;
+      if (trading && type === "glass_partition") {
+        const span = joinedPartitionSpan(object, furniture);
+        group.position.set(span.x, 0, span.z);
+        group.rotation.y = 0;
+        addRoomPartition(group, span.vertical, span.length);
+        continue;
+      }
       if (tech && type === "glass_partition") {
         const span = techPartitionSpan(object);
         group.position.set(span.x, 0, span.z);
@@ -813,11 +838,15 @@ export class OfficeRenderer {
         group.userData.seat = seat;
         group.position.set(seat.x, 0, seat.z);
       }
-      if (tech && renderTechStartupObject(group, object, furniture)) {
+      if (trading && renderTradingObject(group, object)) {
         void attachCatalogAsset(group, object.variant as SceneAssetId);
         continue;
       }
-      if (tech && renderCreativeStudioObject(group, object, furniture)) continue;
+      if ((tech || trading) && renderTechStartupObject(group, object, furniture)) {
+        void attachCatalogAsset(group, object.variant as SceneAssetId);
+        continue;
+      }
+      if ((tech || trading) && renderCreativeStudioObject(group, object, furniture)) continue;
       const roomFurniture = buildRoomFurniture(type, executive);
       if (roomFurniture) {
         const seats = sofaSeats(object);
@@ -947,9 +976,9 @@ export class OfficeRenderer {
           0,
         );
     }
-    if (tech) {
+    if (tech || trading) {
       const marker = new T.Group();
-      marker.name = "tech-scene-ready";
+      marker.name = trading ? "trading-scene-ready" : "tech-scene-ready";
       marker.userData.assetStatus = "loading";
       this.world.add(marker);
       const loads: Promise<boolean>[] = [];

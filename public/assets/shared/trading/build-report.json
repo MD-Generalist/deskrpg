@@ -1,0 +1,107 @@
+{
+  "trade-round-table": {
+    "file": "trade-round-table-v1.glb",
+    "bytes": 105476,
+    "triangles": 396,
+    "meshes": 4,
+    "bounds": {
+      "min": [-0.8500000238418579, 1.0728836485895954e-8, -0.8500000238418579],
+      "max": [0.8500000238418579, 0.8700000017881394, 0.8500000238418579]
+    },
+    "sha256": "1520831cfb32880df11535864cb2ba2a9bfdd01ffe8ad174f6ebed42d74d7d21",
+    "source": "src/game/three/trading-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-trading-assets.cjs"
+  },
+  "trade-square-table": {
+    "file": "trade-square-table-v1.glb",
+    "bytes": 120100,
+    "triangles": 440,
+    "meshes": 4,
+    "bounds": {
+      "min": [-0.8600000143051147, 1.0728836485895954e-8, -0.8600000143051147],
+      "max": [0.8600000143051147, 0.8700000017881394, 0.8600000143051147]
+    },
+    "sha256": "bc893f5e845c02feaa204db26374b74b592b9305167f85ee2781a45a3fed00a9",
+    "source": "src/game/three/trading-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-trading-assets.cjs"
+  },
+  "trade-coffee-table": {
+    "file": "trade-coffee-table-v1.glb",
+    "bytes": 105476,
+    "triangles": 396,
+    "meshes": 4,
+    "bounds": {
+      "min": [-0.8500000238418579, 2.38418573772492e-9, -0.8500000238418579],
+      "max": [0.8500000238418579, 0.5400000017881393, 0.8500000238418579]
+    },
+    "sha256": "f91bd2309510cc982c11f7ea8accabfd5837beba267e1907e5fe0ffc70663f9e",
+    "source": "src/game/three/trading-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-trading-assets.cjs"
+  },
+  "trade-display-cabinet": {
+    "file": "trade-display-cabinet-v1.glb",
+    "bytes": 529984,
+    "triangles": 4664,
+    "meshes": 12,
+    "bounds": {
+      "min": [-0.9900000095367432, 0.009999999776482582, -0.44999998807907104],
+      "max": [0.9900000095367432, 1.5549999475479126, 0.47099998593330383]
+    },
+    "sha256": "765ed4b4fc8caa05dff8750406c4a9cfedccc933d2cfbc38bd10d6e3cee35669",
+    "source": "src/game/three/trading-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-trading-assets.cjs"
+  },
+  "trade-air-display": {
+    "file": "trade-air-display-v1.glb",
+    "bytes": 282664,
+    "triangles": 2502,
+    "meshes": 8,
+    "bounds": {
+      "min": [-0.9900000095367432, 0.009999999776482582, -0.44999998807907104],
+      "max": [0.9900000095367432, 1.3899999856948853, 0.47099998593330383]
+    },
+    "sha256": "be59ce4bfbe40215af0b7c0b5b5f9f52d721f6ad786452da0d69dd392784b9d9",
+    "source": "src/game/three/trading-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-trading-assets.cjs"
+  },
+  "trade-packing-bench": {
+    "file": "trade-packing-bench-v1.glb",
+    "bytes": 373412,
+    "triangles": 3212,
+    "meshes": 8,
+    "bounds": {
+      "min": [-1.9700000286102295, 3.5762786065873797e-9, -0.4699999988079071],
+      "max": [1.9700000286102295, 1.2610000371932983, 0.4699999988079071]
+    },
+    "sha256": "8319a4c7790173d00158d3ab1bcbae3aeb04419483ce7c972222585de80e7a6e",
+    "source": "src/game/three/trading-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-trading-assets.cjs"
+  },
+  "trade-sample-display": {
+    "file": "trade-sample-display-v1.glb",
+    "bytes": 543396,
+    "triangles": 4968,
+    "meshes": 8,
+    "bounds": {
+      "min": [-0.9900000095367432, 0.009999999776482582, -0.44999998807907104],
+      "max": [0.9900000095367432, 1.0824999809265137, 0.47099998593330383]
+    },
+    "sha256": "d26739acdb7b00ffa9bf534147b03af0416d036ac6ada1d17bf797c39737d89c",
+    "source": "src/game/three/trading-assets.ts",
+    "license": "Project-authored; same license as DeskRPG repository",
+    "textures": "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
+    "generator": "scripts/assets/build-trading-assets.cjs"
+  }
+}

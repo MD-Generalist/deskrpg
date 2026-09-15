@@ -42,9 +42,7 @@ test("legacy executive names resolve through the versioned catalog", () => {
 
 test("legacy furniture attachments share cached sources and own separate clones", async () => {
   let loadCalls = 0;
-  const source = new T.Group().add(
-    new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()),
-  );
+  const source = new T.Group().add(new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()));
   const load = async () => {
     loadCalls += 1;
     return source;

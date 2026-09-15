@@ -190,8 +190,8 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     const boundary =
       id === "tech" ? TECH_STARTUP_BOUNDARIES.server.frontRow : room!.z + room!.depth;
     const door = id === "tech" ? TECH_STARTUP_BOUNDARIES.server.doorCols[0] : room!.door;
-    const origin = { x: door, y: boundary };
-    const goal = { x: door, y: boundary + 2 };
+    const origin = id === "trading" ? { x: 7, y: 15 } : { x: door, y: boundary };
+    const goal = id === "trading" ? { x: 10, y: 15 } : { x: door, y: boundary + 2 };
     const policy = new AmbientExitPolicy(zones, origin);
     const traffic = new TrafficCoordinator();
     let position = { ...origin };
@@ -228,7 +228,9 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
         [{ id: "worker", ...position }],
       );
       assert.ok(
-        position.y > boundary + 0.5 + ACTOR_RADIUS,
+        id === "trading"
+          ? position.x > 7.5 + ACTOR_RADIUS
+          : position.y > boundary + 0.5 + ACTOR_RADIUS,
         "cannot reverse into the excluded room after leaving",
       );
     }

@@ -45,7 +45,7 @@ for (const environment of OFFICE_ENVIRONMENTS) {
         ? 42
         : environment.id === "executive"
           ? 18
-          : environment.id === "tech"
+          : environment.id === "tech" || environment.id === "trading"
             ? 44
             : 30,
     );
@@ -57,7 +57,9 @@ for (const environment of OFFICE_ENVIRONMENTS) {
           ? 18
           : environment.id === "tech"
             ? 20
-            : 22,
+            : environment.id === "trading"
+              ? 30
+              : 22,
     );
     assert.equal(map.tilewidth, 32);
     assert.equal(map.tileheight, 32);
@@ -111,7 +113,13 @@ for (const environment of OFFICE_ENVIRONMENTS) {
     const entranceColumns =
       environment.id === "agency"
         ? [21, 22, 23, 24, 25]
-        : [Math.floor(map.width / 2) - 1, Math.floor(map.width / 2), Math.floor(map.width / 2) + 1];
+        : environment.id === "trading"
+          ? [36, 37, 38]
+          : [
+              Math.floor(map.width / 2) - 1,
+              Math.floor(map.width / 2),
+              Math.floor(map.width / 2) + 1,
+            ];
     for (const column of entranceColumns) assert.ok(reached.has(`${column},${map.height - 1}`));
     const occupied = new Set<string>();
     for (const object of objects) {

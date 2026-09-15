@@ -1,3 +1,11 @@
+import { officeFootprintLayers } from "./office-layout-modules";
+import {
+  TRADING_SIZE,
+  TRADING_ENTRANCE,
+  TRADING_ZONES,
+  tradingFloorCell,
+  furnishTrading,
+} from "./trading-layout";
 import {
   TECH_STARTUP_ENTRANCE,
   TECH_STARTUP_SIZE,
@@ -157,7 +165,9 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
         ? 18
         : id === "tech"
           ? TECH_STARTUP_SIZE.cols
-          : 30;
+          : id === "trading"
+            ? TRADING_SIZE.cols
+            : 30;
   const rows =
     id === "agency"
       ? CREATIVE_STUDIO_SIZE.rows
@@ -165,13 +175,17 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
         ? 18
         : id === "tech"
           ? TECH_STARTUP_SIZE.rows
-          : 22;
+          : id === "trading"
+            ? TRADING_SIZE.rows
+            : 22;
   const entrance =
     id === "agency"
       ? CREATIVE_STUDIO_ENTRANCE.spawnCol
       : id === "tech"
         ? TECH_STARTUP_ENTRANCE.spawnCol
-        : Math.floor(cols / 2);
+        : id === "trading"
+          ? TRADING_ENTRANCE.spawnCol
+          : Math.floor(cols / 2);
   const map = createOfficeBaseMap(environment.nameEn, cols, rows, 32);
   const layer = map.layers.find((entry) => entry.name === "Objects")!;
   const objects: TiledObject[] = [];
@@ -201,23 +215,38 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
     });
   };
   for (let x = 0; x < cols; x++) {
-    add("cubicle_wall", x, 0);
+    add("cubicle_wall", x, 0, id === "trading" ? { variant: "trading-perimeter" } : {});
     const atEntrance =
       id === "agency"
         ? x >= CREATIVE_STUDIO_ENTRANCE.fromCol && x <= CREATIVE_STUDIO_ENTRANCE.toCol
         : id === "tech"
           ? x >= TECH_STARTUP_ENTRANCE.fromCol && x <= TECH_STARTUP_ENTRANCE.toCol
-          : Math.abs(x - entrance) <= 1;
-    if (!atEntrance) add("cubicle_wall", x, rows - 1);
+          : id === "trading"
+            ? x >= TRADING_ENTRANCE.fromCol && x <= TRADING_ENTRANCE.toCol
+            : Math.abs(x - entrance) <= 1;
+    if (!atEntrance && (id !== "trading" || tradingFloorCell(x, rows - 1)))
+      add("cubicle_wall", x, rows - 1, id === "trading" ? { variant: "trading-perimeter" } : {});
   }
   for (let y = 1; y < rows - 1; y++) {
-    add("cubicle_wall", 0, y);
-    add("cubicle_wall", cols - 1, y);
+    add("cubicle_wall", 0, y, id === "trading" ? { variant: "trading-perimeter" } : {});
+    add("cubicle_wall", cols - 1, y, id === "trading" ? { variant: "trading-perimeter" } : {});
   }
-  if (id === "agency") furnishCreativeStudio(add);
+  if (id === "trading") {
+    const floor = map.layers.find((l) => l.name === "Floor")!;
+    const collision = map.layers.find((l) => l.name === "Collision")!;
+    const footprint = officeFootprintLayers(cols, rows, tradingFloorCell);
+    floor.data = footprint.floor;
+    collision.data = footprint.collision;
+    for (let y = 19; y < rows - 1; y++) {
+      add("cubicle_wall", 17, y, { variant: "trading-perimeter" });
+      add("cubicle_wall", 26, y, { variant: "trading-perimeter" });
+    }
+    for (let x = 18; x < 26; x++) add("cubicle_wall", x, 18, { variant: "trading-perimeter" });
+    furnishTrading(add);
+  } else if (id === "agency") furnishCreativeStudio(add);
   else if (id === "tech") furnishTechStartup(add);
   else furnishOfficeRooms(id, (type, x, y, direction) => add(type, x, y, { direction }));
-  if (id !== "agency" && id !== "tech")
+  if (id !== "agency" && id !== "tech" && id !== "trading")
     for (const x of [1, cols - 2])
       for (const y of [1, rows - 2]) {
         if (!objects.some((object) => object.x === x * 32 && object.y === y * 32))
@@ -240,7 +269,9 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
       ? CREATIVE_STUDIO_ENTRANCE.spawnRow
       : id === "tech"
         ? TECH_STARTUP_ENTRANCE.spawnRow
-        : rows - 3,
+        : id === "trading"
+          ? TRADING_ENTRANCE.spawnRow
+          : rows - 3,
   );
   layer.objects = objects;
   return tagEnvironment(map, id);
@@ -260,21 +291,24 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
             ? CREATIVE_STUDIO_ZONES
             : id === "tech"
               ? TECH_STARTUP_ZONES
-              : OFFICE_ROOMS[id].map((room) => ({
-                  id: room.id,
-                  x: room.x,
-                  y: room.z,
-                  width: room.width,
-                  height: room.depth + 1,
-                  roaming: room.id !== "ceo",
-                })),
+              : id === "trading"
+                ? TRADING_ZONES
+                : OFFICE_ROOMS[id].map((room) => ({
+                    id: room.id,
+                    x: room.x,
+                    y: room.z,
+                    width: room.width,
+                    height: room.depth + 1,
+                    roaming: room.id !== "ceo",
+                  })),
         ),
       },
     ],
     {
       name: "officeEnvironmentVersion",
       type: "int",
-      value: id === "agency" ? 5 : id === "executive" ? 5 : id === "tech" ? 3 : 2,
+      value:
+        id === "agency" ? 5 : id === "executive" ? 5 : id === "tech" || id === "trading" ? 3 : 2,
     },
   ];
   return map;

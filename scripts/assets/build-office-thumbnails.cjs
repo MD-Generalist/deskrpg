@@ -9,8 +9,13 @@ const sharp = require("sharp");
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "office-thumbnails-"));
   const output = "public/assets/environments/thumbnails";
   await fs.mkdir(output, { recursive: true });
-  const manifest = {};
-  for (const id of ["trading", "agency", "tech", "executive", "publishing"]) {
+  const manifest = JSON.parse(
+    await fs.readFile("src/game/three/office-environment-thumbnails.json", "utf8"),
+  );
+  const requested = process.argv.slice(2);
+  for (const id of requested)
+    if (!Object.hasOwn(manifest, id)) throw new Error(`Unknown environment: ${id}`);
+  for (const id of requested.length ? requested : Object.keys(manifest)) {
     const capture = path.join(temporary, id);
     execFileSync(process.execPath, ["scripts/assets/verify-office-scene.cjs", capture, id], {
       stdio: "inherit",

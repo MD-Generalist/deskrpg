@@ -32,16 +32,16 @@ test("reuses exact snapshot, accepts SQLite JSON, and never overwrites edited te
     if (url === "/api/map-templates")
       return reply({
         templates: [
-          { id: "edited", tags: "deskrpg-office-v2:trading" },
-          { id: "intact", tags: "deskrpg-office-v2:trading" },
+          { id: "edited", tags: "deskrpg-office-v3:trading" },
+          { id: "intact", tags: "deskrpg-office-v3:trading" },
         ],
       });
     return reply({
       template: {
-        cols: 30,
-        rows: 22,
-        spawnCol: 15,
-        spawnRow: 19,
+        cols: buildOfficeEnvironment("trading").width,
+        rows: buildOfficeEnvironment("trading").height,
+        spawnCol: effectiveMapSpawn(buildOfficeEnvironment("trading"))!.col,
+        spawnRow: effectiveMapSpawn(buildOfficeEnvironment("trading"))!.row,
         tiledJson:
           url === "/api/map-templates/edited"
             ? "{}"
@@ -159,7 +159,7 @@ test("room rollout creates v2 separately and never reads or updates legacy v1 te
       assert.equal(options.method, "POST");
       assert.equal(
         JSON.parse(String(options.body)).tags,
-        `deskrpg-office-v${id === "agency" ? 5 : id === "tech" ? 3 : 2}:${id}`,
+        `deskrpg-office-v${id === "agency" ? 5 : id === "tech" || id === "trading" ? 3 : 2}:${id}`,
       );
       return reply({ template: { id: "new-room-template" } }, 201);
     };
@@ -200,7 +200,7 @@ test("tech keeps the v2 template intact and registers the v3 reference layout", 
 });
 
 test("wide official layouts do not relax size bounds for edited or forged maps", () => {
-  for (const id of ["agency", "tech"] as const) {
+  for (const id of ["agency", "tech", "trading"] as const) {
     const map = buildOfficeEnvironment(id);
     const body = {
       name: id,
@@ -217,4 +217,20 @@ test("wide official layouts do not relax size bounds for edited or forged maps",
     assert.equal(validateMapTemplate({ ...body, tiledJson: {} }), "cols must be 10-40");
     assert.equal(validateMapTemplate({ ...body, cols: 200 }), "cols must be 10-40");
   }
+});
+
+test("trading keeps the v2 template intact and registers the v3 reference layout", async () => {
+  const calls: string[] = [];
+  const request: typeof fetch = async (url, options) => {
+    calls.push(`${options?.method ?? "GET"} ${url}`);
+    if (!options)
+      return reply({ templates: [{ id: "legacy-trading", tags: "deskrpg-office-v2:trading" }] });
+    const body = JSON.parse(String(options.body));
+    assert.equal(body.tags, "deskrpg-office-v3:trading");
+    assert.deepEqual(body.tiledJson, buildOfficeEnvironment("trading"));
+    assert.equal(validateMapTemplate(body), null);
+    return reply({ template: { id: "trading-v3" } });
+  };
+  assert.equal(await ensureOfficeEnvironmentTemplate("trading", request), "trading-v3");
+  assert.deepEqual(calls, ["GET /api/map-templates", "POST /api/map-templates"]);
 });

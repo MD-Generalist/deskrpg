@@ -37,8 +37,7 @@ const LEGACY_ASSET_IDS = {
   coffee: "executive-coffee-table",
 } as const satisfies Record<ExecutiveAsset | SharedSceneAsset, SceneAssetId>;
 
-export const executiveAssetUrl = (name: ExecutiveAsset) =>
-  sceneAsset(LEGACY_ASSET_IDS[name]).url;
+export const executiveAssetUrl = (name: ExecutiveAsset) => sceneAsset(LEGACY_ASSET_IDS[name]).url;
 
 /** Compatibility adapter; new consumers should call the typed catalog loader. */
 export function attachFurnitureAsset(

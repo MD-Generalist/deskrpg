@@ -4,13 +4,13 @@ const esbuild = require("esbuild");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
-(async () => {
-  const output = path.resolve("public/assets/shared/tech");
+async function buildAuthoredAssets(config) {
+  const output = path.resolve(config.output);
   await fs.mkdir(output, { recursive: true });
   const source = `
 import * as T from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildTechStartupAsset, TECH_STARTUP_ASSETS } from './src/game/three/tech-startup-assets';
+import { ${config.builder} as buildTechStartupAsset, ${config.definitions} as TECH_STARTUP_ASSETS } from '${config.module}';
 import { detailSurfaces } from './src/game/three/surface-detail';
 import { batchStaticFurniture } from './src/game/three/static-batching';
 window.buildTech = async () => {
@@ -74,10 +74,10 @@ window.buildTech = async () => {
         meshes: asset.meshes,
         bounds: asset.bounds,
         sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
-        source: "src/game/three/tech-startup-assets.ts",
+        source: config.module.replace(/^\.\//, "") + ".ts",
         license: "Project-authored; same license as DeskRPG repository",
         textures: "Project-authored deterministic wood/fabric/metal albedo, normal, roughness",
-        generator: "scripts/assets/build-tech-startup.cjs",
+        generator: config.generator,
       };
     }
     await fs.writeFile(
@@ -88,7 +88,16 @@ window.buildTech = async () => {
   } finally {
     await browser.close();
   }
-})().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+}
+module.exports = { buildAuthoredAssets };
+if (require.main === module)
+  buildAuthoredAssets({
+    output: "public/assets/shared/tech",
+    module: "./src/game/three/tech-startup-assets",
+    builder: "buildTechStartupAsset",
+    definitions: "TECH_STARTUP_ASSETS",
+    generator: "scripts/assets/build-tech-startup.cjs",
+  }).catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

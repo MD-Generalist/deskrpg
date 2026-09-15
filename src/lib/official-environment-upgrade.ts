@@ -1,6 +1,7 @@
 import agencyV2 from "./fixtures/official-agency-v2.json";
 import agencyV3 from "./fixtures/official-agency-v3.json";
 import agencyV4 from "./fixtures/official-agency-v4.json";
+import tradingV2 from "./fixtures/official-trading-v2.json";
 import techV2 from "./fixtures/official-tech-v2.json";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
 import { parseDbJson } from "./db-json";
@@ -13,6 +14,9 @@ export function upgradeOfficialEnvironmentMap(map: unknown): {
   fromVersion?: number;
 } {
   const parsed = parseDbJson(map);
+  if (sameJsonSnapshot(parsed, tradingV2)) {
+    return { map: buildOfficeEnvironment("trading"), upgraded: true, fromVersion: 2 };
+  }
   if (sameJsonSnapshot(parsed, techV2)) {
     return { map: buildOfficeEnvironment("tech"), upgraded: true, fromVersion: 2 };
   }

@@ -24,8 +24,18 @@ export function addOfficePerimeter(
   wall: string,
   wood: string,
 ) {
+  addOfficeFrameRuns(root, officePerimeterRuns(cols, rows), wall, wood);
+}
+
+/** Reusable glazed frame finish for arbitrary axis-aligned office contours. */
+export function addOfficeFrameRuns(
+  root: T.Group,
+  runs: readonly FrameRun[],
+  wall: string,
+  wood: string,
+) {
   const metal = "#35434b";
-  for (const run of officePerimeterRuns(cols, rows)) {
+  for (const run of runs) {
     const vertical = run.x1 === run.x2;
     const length = Math.hypot(run.x2 - run.x1, run.z2 - run.z1);
     const g = new T.Group();

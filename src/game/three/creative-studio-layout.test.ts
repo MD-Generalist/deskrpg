@@ -106,7 +106,9 @@ test("creative studio fills its open plan with working clusters, dividers, and s
   const workstationBands = new Set(
     objects
       .filter((object) => object.type === "desk")
-      .map((object) => (object.col < 16 ? "rear-west" : object.col < 24 ? "rear-centre" : "rear-east")),
+      .map((object) =>
+        object.col < 16 ? "rear-west" : object.col < 24 ? "rear-centre" : "rear-east",
+      ),
   );
   assert.deepEqual(
     [...workstationBands].sort(),

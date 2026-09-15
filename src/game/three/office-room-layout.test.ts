@@ -23,6 +23,16 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
       assert.ok(!snapshot.objects.some((object) => object.type.startsWith("room_wall")));
       return;
     }
+    if (id === "trading") {
+      assert.equal(zones.length, 9);
+      assert.equal(furnitureSeats(snapshot.objects).length, 55);
+      assert.equal(ambientTileAllowed(zones, 4, 13), false);
+      assert.equal(ambientTileAllowed(zones, 12, 12), true);
+      const world = new T.Group();
+      addOfficeRoomSurfaces(world, id, { environmentVersion: snapshot.environmentVersion });
+      assert.equal(world.children.length, 0);
+      return;
+    }
     if (id === "tech") {
       assert.equal(map.width, 44);
       assert.equal(map.height, 20);
@@ -123,7 +133,13 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
     for (const seat of seats) {
       const x = (seat.anchorX ?? seat.x) - 0.5,
         y = (seat.anchorZ ?? seat.z) - 0.5;
-      const route = findPath(Math.floor(snapshot.cols / 2), snapshot.rows - 3, x, y, walkable);
+      const route = findPath(
+        id === "trading" ? 37 : Math.floor(snapshot.cols / 2),
+        snapshot.rows - 3,
+        x,
+        y,
+        walkable,
+      );
       assert.ok(route, `unreachable seat ${x},${y}`);
       for (let i = 1; i < route.length; i++) {
         assert.ok(clearSegment(route[i - 1], route[i], walkable));

@@ -65,7 +65,11 @@ export function officeRoomsForSurface(
   environment: string,
   context: OfficeRoomSurfaceContext = {},
 ): readonly OfficeRoom[] | undefined {
-  if (environment === "tech" && (context.environmentVersion ?? 2) >= 3) return undefined;
+  if (
+    (environment === "tech" || environment === "trading") &&
+    (context.environmentVersion ?? 2) >= 3
+  )
+    return undefined;
   if (environment !== "agency") return OFFICE_ROOMS[environment];
   if (context.hasLegacyPartitions !== true) return undefined;
   return context.environmentVersion === 2 || context.environmentVersion === undefined

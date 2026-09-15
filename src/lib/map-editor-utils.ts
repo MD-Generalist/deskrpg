@@ -38,7 +38,7 @@ export function validateMapTemplate(data: {
   const wideOfficialMap =
     typeof data.cols === "number" &&
     data.cols > MAP_SIZE_MAX_COLS &&
-    (["agency", "tech"] as const).some((id) => {
+    (["agency", "tech", "trading"] as const).some((id) => {
       const map = buildOfficeEnvironment(id);
       return (
         data.cols === map.width && data.rows === map.height && sameJsonSnapshot(data.tiledJson, map)

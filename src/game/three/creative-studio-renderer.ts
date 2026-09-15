@@ -92,14 +92,14 @@ export function renderCreativeStudioObject(
     directorFurniture =
       (object.variant === "studio-director" &&
         [
-        "executive_desk",
-        "chair",
-        "bookshelf",
-        "low_cabinet",
-        "office_sofa",
-        "office_armchair",
-        "meeting_table",
-        "floor_lamp",
+          "executive_desk",
+          "chair",
+          "bookshelf",
+          "low_cabinet",
+          "office_sofa",
+          "office_armchair",
+          "meeting_table",
+          "floor_lamp",
         ].includes(object.type)) ||
       (object.type === "computer" && object.variant === "director-monitor"),
     roomFurniture = [

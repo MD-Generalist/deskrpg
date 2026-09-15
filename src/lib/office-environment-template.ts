@@ -12,7 +12,7 @@ export async function ensureOfficeEnvironmentTemplate(
   if (!environment) throw new Error("Unknown office environment");
   const map = buildOfficeEnvironment(environment.id);
   const { col: spawnCol, row: spawnRow } = effectiveMapSpawn(map)!;
-  const tag = `deskrpg-office-v${id === "agency" ? 5 : id === "tech" ? 3 : 2}:${id}`;
+  const tag = `deskrpg-office-v${id === "agency" ? 5 : id === "tech" || id === "trading" ? 3 : 2}:${id}`;
   const listResponse = await request("/api/map-templates");
   if (!listResponse.ok) throw new Error("Unable to load office environments");
   const list = await listResponse.json();

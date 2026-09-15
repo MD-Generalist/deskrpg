@@ -9,10 +9,7 @@ export function isCreativeStudioMap(mapData: unknown): boolean {
     (layer) =>
       layer.properties?.some((p) => p.name === "officeEnvironment" && p.value === "agency") &&
       layer.properties?.some(
-        (p) =>
-          p.name === "officeEnvironmentVersion" &&
-          typeof p.value === "number" &&
-          p.value >= 3,
+        (p) => p.name === "officeEnvironmentVersion" && typeof p.value === "number" && p.value >= 3,
       ),
   );
 }

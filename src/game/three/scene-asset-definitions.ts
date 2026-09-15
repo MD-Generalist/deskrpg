@@ -16,7 +16,8 @@ export type SceneAssetFallback =
   | "architecture-glass"
   | "studio-furniture"
   | "creative-studio-kit"
-  | "tech-furniture";
+  | "tech-furniture"
+  | "trading-furniture";
 
 export type SceneMaterialSlot =
   | "upholstery"
@@ -196,6 +197,7 @@ const architecture = (
 export const STUDIO_UPHOLSTERY_VARIANTS = {
   "off-white": { upholstery: "#e7dfd1" },
   blue: { upholstery: "#527ea3" },
+  navy: { upholstery: "#263e59" },
   mint: { upholstery: "#9dbca8" },
   graphite: { upholstery: "#30383d" },
   teal: { upholstery: "#377f7b" },
@@ -269,6 +271,196 @@ const studioKit = (
 });
 
 export const SCENE_ASSETS = {
+  "trade-round-table": {
+    url: "/assets/shared/trading/trade-round-table-v1.glb",
+    category: "furniture",
+    tags: ["shared", "trading", "trade-round-table"],
+    destinationTags: [],
+    footprint: [2, 2],
+    bounds: {
+      units: "meters",
+      min: [-0.8500000238418579, 1.0728836485895954e-8, -0.8500000238418579],
+      max: [0.8500000238418579, 0.8700000017881394, 0.8500000238418579],
+    },
+    maxHeight: 0.8700000017881394,
+    fallback: "trading-furniture",
+    shadows: {
+      cast: true,
+      receive: true,
+    },
+    batch: "static",
+    lod: "standard",
+    budget: {
+      maxTriangles: 20000,
+      maxBytes: 2000000,
+    },
+    source: "scripts/assets/build-trading-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "trade-square-table": {
+    url: "/assets/shared/trading/trade-square-table-v1.glb",
+    category: "furniture",
+    tags: ["shared", "trading", "trade-square-table"],
+    destinationTags: [],
+    footprint: [2, 2],
+    bounds: {
+      units: "meters",
+      min: [-0.8600000143051147, 1.0728836485895954e-8, -0.8600000143051147],
+      max: [0.8600000143051147, 0.8700000017881394, 0.8600000143051147],
+    },
+    maxHeight: 0.8700000017881394,
+    fallback: "trading-furniture",
+    shadows: {
+      cast: true,
+      receive: true,
+    },
+    batch: "static",
+    lod: "standard",
+    budget: {
+      maxTriangles: 20000,
+      maxBytes: 2000000,
+    },
+    source: "scripts/assets/build-trading-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "trade-coffee-table": {
+    url: "/assets/shared/trading/trade-coffee-table-v1.glb",
+    category: "furniture",
+    tags: ["shared", "trading", "trade-coffee-table"],
+    destinationTags: [],
+    footprint: [2, 2],
+    bounds: {
+      units: "meters",
+      min: [-0.8500000238418579, 2.38418573772492e-9, -0.8500000238418579],
+      max: [0.8500000238418579, 0.5400000017881393, 0.8500000238418579],
+    },
+    maxHeight: 0.5400000017881393,
+    fallback: "trading-furniture",
+    shadows: {
+      cast: true,
+      receive: true,
+    },
+    batch: "static",
+    lod: "standard",
+    budget: {
+      maxTriangles: 20000,
+      maxBytes: 2000000,
+    },
+    source: "scripts/assets/build-trading-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+
+  "trade-display-cabinet": {
+    url: "/assets/shared/trading/trade-display-cabinet-v1.glb",
+    category: "furniture",
+    tags: ["shared", "trading", "trade-display-cabinet"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9900000095367432, 0.009999999776482582, -0.44999998807907104],
+      max: [0.9900000095367432, 1.5549999475479126, 0.47099998593330383],
+    },
+    maxHeight: 1.5549999475479126,
+    fallback: "trading-furniture",
+    shadows: {
+      cast: true,
+      receive: true,
+    },
+    batch: "static",
+    lod: "standard",
+    budget: {
+      maxTriangles: 20000,
+      maxBytes: 2000000,
+    },
+    source: "scripts/assets/build-trading-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "trade-air-display": {
+    url: "/assets/shared/trading/trade-air-display-v1.glb",
+    category: "furniture",
+    tags: ["shared", "trading", "trade-air-display"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9900000095367432, 0.009999999776482582, -0.44999998807907104],
+      max: [0.9900000095367432, 1.3899999856948853, 0.47099998593330383],
+    },
+    maxHeight: 1.3899999856948853,
+    fallback: "trading-furniture",
+    shadows: {
+      cast: true,
+      receive: true,
+    },
+    batch: "static",
+    lod: "standard",
+    budget: {
+      maxTriangles: 20000,
+      maxBytes: 2000000,
+    },
+    source: "scripts/assets/build-trading-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "trade-packing-bench": {
+    url: "/assets/shared/trading/trade-packing-bench-v1.glb",
+    category: "furniture",
+    tags: ["shared", "trading", "trade-packing-bench"],
+    destinationTags: [],
+    footprint: [4, 1],
+    bounds: {
+      units: "meters",
+      min: [-1.9700000286102295, 3.5762786065873797e-9, -0.4699999988079071],
+      max: [1.9700000286102295, 1.2610000371932983, 0.4699999988079071],
+    },
+    maxHeight: 1.2610000371932983,
+    fallback: "trading-furniture",
+    shadows: {
+      cast: true,
+      receive: true,
+    },
+    batch: "static",
+    lod: "standard",
+    budget: {
+      maxTriangles: 20000,
+      maxBytes: 2000000,
+    },
+    source: "scripts/assets/build-trading-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
+  "trade-sample-display": {
+    url: "/assets/shared/trading/trade-sample-display-v1.glb",
+    category: "furniture",
+    tags: ["shared", "trading", "trade-sample-display"],
+    destinationTags: [],
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9900000095367432, 0.009999999776482582, -0.44999998807907104],
+      max: [0.9900000095367432, 1.0824999809265137, 0.47099998593330383],
+    },
+    maxHeight: 1.0824999809265137,
+    fallback: "trading-furniture",
+    shadows: {
+      cast: true,
+      receive: true,
+    },
+    batch: "static",
+    lod: "standard",
+    budget: {
+      maxTriangles: 20000,
+      maxBytes: 2000000,
+    },
+    source: "scripts/assets/build-trading-assets.cjs",
+    license: "repository-original",
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+  } as SceneAssetDefinition,
   "tech-workstation": {
     url: "/assets/shared/tech/tech-workstation-v1.glb",
     category: "furniture",
@@ -720,6 +912,7 @@ export function studioFurnitureAsset(object: {
     variant && Object.hasOwn(STUDIO_UPHOLSTERY_VARIANTS, variant) ? variant : "off-white";
   if (type === "desk" && variant === "studio-oak") return { id: "shared-workstation" };
   if (type === "chair") {
+    if (variant === "navy-office") return { id: "shared-office-chair", variant: "navy" };
     if (variant === "graphite") return { id: "shared-office-chair", variant: "graphite" };
     if (variant === "office-neutral") return { id: "shared-office-chair", variant: "neutral" };
     if (

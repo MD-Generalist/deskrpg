@@ -16,3 +16,6 @@ drizzle/meta/
 # 런타임 자산
 public/assets/tilesets/
 public/assets/spritesheets/
+
+# 과거 릴리스의 바이트 해시를 고정한 원본 스냅샷
+src/lib/fixtures/official-*.json
