@@ -8,6 +8,8 @@ English README: [README.md](README.md)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
+VPS가 아직 없다면 [여기서 받으세요](https://hostinger.com/DANTE-HERMES) (제휴 링크입니다 — 추가 비용 없이 이 프로젝트를 후원하게 됩니다). 받은 뒤 위 버튼을 누르면 됩니다.
+
 DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 오피스**입니다. 이미 쓰고 있는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 프로필이 그대로 직원이 됩니다. 자리에 앉아 있다가 지명하면 답하고, 회의실에서 발언권을 주고받고, 칸반 카드를 처리합니다. **NPC를 곁으로 부르고 사무실 채팅에서 완료 보고를 확인하세요.** 여러 사람이 같은 오피스에 동시에 들어올 수 있습니다.
 
 DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 돌리고 있는 Hermes 게이트웨이에 붙기만 하므로, 기존 Hermes 사용자는 옮길 것 없이 프로필 그대로 올라탑니다.
