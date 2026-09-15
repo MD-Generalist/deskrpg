@@ -19,14 +19,7 @@ export type SceneAssetFallback =
   | "coffee";
 
 export type SceneMaterialSlot =
-  | "upholstery"
-  | "painted-metal"
-  | "oak"
-  | "walnut"
-  | "leather"
-  | "glass"
-  | "foliage"
-  | "planter";
+  "upholstery" | "painted-metal" | "oak" | "walnut" | "leather" | "glass" | "foliage" | "planter";
 
 export type SceneAssetBounds = {
   units: "meters";
@@ -91,9 +84,7 @@ export type SceneAssetDefinition = {
   maxHeight: number;
   fallback: SceneAssetFallback;
   materialSlots?: Readonly<Partial<Record<SceneMaterialSlot, string>>>;
-  variants?: Readonly<
-    Record<string, Readonly<Partial<Record<SceneMaterialSlot, `#${string}`>>>>
-  >;
+  variants?: Readonly<Record<string, Readonly<Partial<Record<SceneMaterialSlot, `#${string}`>>>>>;
   seats?: readonly {
     anchor: readonly [number, number];
     visual: readonly [number, number, number];
@@ -109,21 +100,10 @@ export type SceneAssetDefinition = {
 
 type AssetRegistration = Omit<
   SceneAssetDefinition,
-  | "url"
-  | "category"
-  | "source"
-  | "license"
-  | "bounds"
-  | "destinationTags"
-  | "localCoordinates"
+  "url" | "category" | "source" | "license" | "bounds" | "destinationTags" | "localCoordinates"
 >;
 
-function worldBounds(
-  width: number,
-  height: number,
-  depth: number,
-  minY = 0,
-): SceneAssetBounds {
+function worldBounds(width: number, height: number, depth: number, minY = 0): SceneAssetBounds {
   return {
     units: "meters",
     min: [-width / 2, minY, -depth / 2],
@@ -332,16 +312,10 @@ export const SCENE_ASSETS = {
 
 export type SceneAssetId = keyof typeof SCENE_ASSETS;
 
-export function validateSceneAssetCatalog(
-  assets: Readonly<Record<string, SceneAssetDefinition>>,
-) {
+export function validateSceneAssetCatalog(assets: Readonly<Record<string, SceneAssetDefinition>>) {
   for (const [id, asset] of Object.entries(assets)) {
     if (!/-v\d+\.glb$/.test(asset.url)) throw new Error(`Versioned URL required for ${id}`);
-    if (
-      asset.footprint.some(
-        (dimension) => !Number.isInteger(dimension) || dimension <= 0,
-      )
-    ) {
+    if (asset.footprint.some((dimension) => !Number.isInteger(dimension) || dimension <= 0)) {
       throw new Error(`Invalid footprint for ${id}`);
     }
     if (
@@ -431,11 +405,10 @@ function cachedSource(load: SceneAssetLoader, url: string) {
   } catch (error) {
     loaded = Promise.reject(error);
   }
-  const pending = loaded
-    .catch((error) => {
-      if (cache?.get(url) === pending) cache.delete(url);
-      throw error;
-    });
+  const pending = loaded.catch((error) => {
+    if (cache?.get(url) === pending) cache.delete(url);
+    throw error;
+  });
   cache.set(url, pending);
   return pending;
 }
