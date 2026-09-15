@@ -20,7 +20,7 @@ npx playwright test e2e/meeting-spatial.spec.ts
 재시작하지 않는다. 설치된 Chrome의 headless 모드만 사용하고 브라우저를 내려받지 않는다.
 서로 다른 browser context는 같은 localhost에서도 쿠키가 분리된다.
 
-검증 범위: 실제 `player:move` 이후 단 한 번의 `meeting:join`, 원래
+검증 범위: 실제 `player:move` 이후 `meeting:join`과 서버의 단일 참가자 승인, 원래
 canvas 유지, 입장만으로 AI가 시작되지 않음, 두 사용자에게 같은 서버 좌석 상태, 서로 다른
 실제 좌석, 개인 카메라 수동 회전/자동 복귀, 모바일 퇴장 버튼, 개인 퇴장/재입장,
 준비 화면의 사람끼리 채팅과 참가 전·퇴장 후 사용자에게 회의 채팅이 전달되지 않음.

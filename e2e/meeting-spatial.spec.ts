@@ -108,13 +108,14 @@ test("isolated humans walk, share seats and leave independently on the original 
         .slice(0, joinIndex)
         .some((f) => f.direction === "sent" && f.event === "player:move"),
     ).toBeTruthy();
-    expect(
-      frames[0].filter((f) => f.direction === "sent" && f.event === "meeting:join"),
-    ).toHaveLength(1);
-    expect(
-      (frames[0].find((f) => f.event === "meeting:state")?.data as { discussion: unknown })
-        .discussion,
-    ).toBeNull();
+    // React development effect replay may send join/leave/join. Assert one admitted
+    // participant rather than treating the transport attempt count as admission count.
+    const admission = frames[0].filter((f) => f.event === "meeting:state").at(-1)?.data as {
+      discussion: unknown;
+      participants: Array<{ id: string }>;
+    };
+    expect(admission.discussion).toBeNull();
+    expect(admission.participants).toHaveLength(1);
     await expect(a.locator("[data-meeting-start]")).toBeDisabled();
     await a
       .locator('[data-meeting-workspace] textarea[maxlength="200"]')
