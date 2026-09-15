@@ -6,7 +6,7 @@ import test from "node:test";
 
 import startupCheck from "./startup-check.js";
 
-const { checkDatabaseReachable, inspectEnvironment } = startupCheck;
+const { checkDatabaseReachable, inspectEnvironment, hostSetupHint } = startupCheck;
 
 /** 이 테스트가 보려는 변수 외에는 전부 채워 둔다 — 무관한 경고가 섞이지 않게. */
 function baseEnv(overrides = {}) {
@@ -137,4 +137,48 @@ test("Hermes 가 이미 있으면 조용하다", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-hint-"));
   fs.mkdirSync(path.join(home, ".hermes", "hermes-agent"), { recursive: true });
   assert.equal(startupCheck.hostSetupHint({}, home), null);
+});
+
+test("HERMES_HOME 이 있는 결합 이미지에서는 Hermes 설치 안내를 내지 않는다", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-home-"));
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "user-home-"));
+  try {
+    assert.equal(hostSetupHint({ HERMES_HOME: dir, PATH: "" }, emptyHome), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(emptyHome, { recursive: true, force: true });
+  }
+});
+
+test("PATH 에 hermes 가 있으면 설치 안내를 내지 않는다", () => {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-bin-"));
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "user-home-"));
+  fs.writeFileSync(path.join(binDir, "hermes"), "#!/bin/sh\n");
+  try {
+    assert.equal(hostSetupHint({ PATH: binDir }, emptyHome), null);
+  } finally {
+    fs.rmSync(binDir, { recursive: true, force: true });
+    fs.rmSync(emptyHome, { recursive: true, force: true });
+  }
+});
+
+test("Hermes 가 어디에도 없으면 설치 안내를 낸다", () => {
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "user-home-"));
+  const missing = path.join(emptyHome, "nope");
+  try {
+    const hint = hostSetupHint({ HERMES_HOME: missing, PATH: missing }, emptyHome);
+    assert.match(String(hint), /host-setup on --with-install/);
+  } finally {
+    fs.rmSync(emptyHome, { recursive: true, force: true });
+  }
+});
+
+test("자리표시자 JWT_SECRET 은 프로덕션에서 기동을 막는다", () => {
+  const result = inspectEnvironment(
+    baseEnv({ NODE_ENV: "production", JWT_SECRET: "change-me-to-a-random-64-char-string" }),
+  );
+  assert.ok(
+    result.errors.some((line) => line.includes("자리표시자")),
+    `errors: ${JSON.stringify(result.errors)}`,
+  );
 });

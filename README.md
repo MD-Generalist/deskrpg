@@ -16,7 +16,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.9.20` — The npm package now starts when installed globally. The gateway setup wizard installs Hermes, registers the service, suggests a free port, checks the model login, shows install progress and resumes a failed run.
+- Version: `v2026.9.21` — The npm package now starts when installed globally. The gateway setup wizard installs Hermes, registers the service, suggests a free port, checks the model login, shows install progress and resumes a failed run.
 
 ## What You Can Do
 

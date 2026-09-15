@@ -8,6 +8,14 @@ PORT="${DESKRPG_PORT:-3000}"
 # 게이트웨이 주소는 이 컨테이너 안이다. 사용자가 굳이 다른 곳을 가리키면 그 값을 존중한다.
 export DESKRPG_HOME="$HOME_DIR"
 
+# 빈 환경변수는 "값 없음"이지 "빈 값으로 덮어써라"가 아니다. compose 가 모든 변수에 기본값을
+# 두어야 하는 탓에 JWT_SECRET 은 빈 문자열로 들어오는데, 그대로 두면 런타임 파일에 있는 진짜
+# 비밀을 가려 서버가 기동을 거부한다(실측: 컨테이너가 부팅 직후 종료).
+for key in JWT_SECRET INTERNAL_RPC_SECRET; do
+    eval "value=\${$key-}"
+    [ -n "$value" ] || unset "$key"
+done
+
 cd "$HOME_DIR" 2>/dev/null || cd /
 
 # deskrpg start 는 포그라운드로 돈다 — s6 가 그대로 감독한다.

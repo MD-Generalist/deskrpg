@@ -35,11 +35,20 @@ function hostSetupHint(env = process.env, homeDir = require("node:os").homedir()
   if (on("DESKRPG_HOST_SETUP_ENABLED")) return null;
   try {
     if (fs.existsSync(path.join(homeDir, ".hermes", "hermes-agent"))) return null;
+    // 결합 이미지(deskrpg-office)는 Hermes 를 같은 컨테이너에 담고 HERMES_HOME 으로 가리킨다.
+    // 홈 밑의 `.hermes` 만 보면 그 환경에서 "Hermes 가 없다"고 잘못 알린다(실측: 컨테이너 부팅 로그).
+    const hermesHome = (env.HERMES_HOME ?? "").trim();
+    if (hermesHome && fs.existsSync(hermesHome)) return null;
+    // 그 밖에도 PATH 에 hermes 가 있으면 이미 깔려 있는 것이다.
+    const pathDirs = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
+    if (pathDirs.some((dir) => fs.existsSync(path.join(dir, "hermes")))) return null;
   } catch {
     return null;
   }
   return "이 컴퓨터에 Hermes 가 없습니다 — 연결 마법사로 함께 설치하려면 `deskrpg host-setup on --with-install` 을 실행한 뒤 다시 시작하세요.";
 }
+
+const { isPlaceholderSecret } = require("./runtime-paths.js");
 
 function inspectEnvironment(env = process.env) {
   const errors = [];
@@ -56,14 +65,20 @@ function inspectEnvironment(env = process.env) {
   const effectiveDbType = dbTypeRaw || (databaseUrl ? "postgresql" : "sqlite");
   const dbTarget = POSTGRES_DB_TYPES.has(effectiveDbType) ? "postgresql" : "sqlite";
 
-  if (!jwtSecret) {
+  // `.env.example` 에서 그대로 옮겨 온 안내 문구는 비밀이 아니다. 공개된 값으로 세션 토큰을
+  // 서명하면 누구나 남의 세션을 위조할 수 있으므로, 비어 있는 것과 똑같이 막는다.
+  const jwtIsPlaceholder = Boolean(jwtSecret) && isPlaceholderSecret(jwtSecret);
+  if (!jwtSecret || jwtIsPlaceholder) {
+    const what = jwtIsPlaceholder
+      ? "JWT_SECRET 이 `.env.example` 의 자리표시자 그대로입니다"
+      : "JWT_SECRET 이 비어 있습니다";
     if (isProduction) {
       errors.push(
-        "JWT_SECRET 이 비어 있어 프로덕션에서 로그인 토큰을 서명할 수 없습니다 — .env.local 에 충분히 긴 임의 문자열로 JWT_SECRET 을 설정한 뒤 다시 기동하세요.",
+        `${what} — 프로덕션에서 로그인 토큰을 서명할 수 없습니다. .env.local 에 충분히 긴 임의 문자열로 JWT_SECRET 을 설정한 뒤 다시 기동하세요(\`openssl rand -hex 32\`).`,
       );
     } else {
       warnings.push(
-        "JWT_SECRET 이 비어 있어 개발 모드에서만 넘어갑니다 — 배포 전에 .env.local 에 JWT_SECRET 을 설정하세요.",
+        `${what} — 개발 모드에서만 넘어갑니다. 배포 전에 .env.local 에 JWT_SECRET 을 설정하세요.`,
       );
     }
   }

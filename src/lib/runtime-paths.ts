@@ -48,6 +48,16 @@ export function getDeskRpgTemplateUploadDir(templateId: string, options: DeskRpg
   return path.join(getDeskRpgUploadsDir(options), templateId);
 }
 
+/**
+ * 사람이 채우라고 적어 둔 자리표시자인가. `.env.example` 의 안내 문구와, 그 문구를 조금 고쳤을
+ * 뿐인 값들을 잡는다. 진짜 비밀로 쓰기에 너무 짧은 값도 자리표시자로 본다.
+ */
+export function isPlaceholderSecret(value: string): boolean {
+  const normalized = value.trim().replace(/^["']|["']$/g, "");
+  if (normalized.length < 24) return true;
+  return /^(change|replace|set|your|my|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(normalized);
+}
+
 export function ensureDeskRpgHome(options: DeskRpgHomeOptions = {}) {
   const homeDir = getDeskRpgHomeDir(options);
   const envPath = getDeskRpgEnvPath(options);
@@ -73,8 +83,12 @@ export function ensureDeskRpgHome(options: DeskRpgHomeOptions = {}) {
   envText = upsertEnvLine(envText, "DB_TYPE", "sqlite");
   envText = upsertEnvLine(envText, "SQLITE_PATH", sqlitePath);
 
-  const hasJwtSecret = /^#?\s*JWT_SECRET=.*$/m.test(envText);
-  if (!hasJwtSecret || /^#?\s*JWT_SECRET=\s*$/m.test(envText)) {
+  // `.env.example` 를 복사해 온 런타임은 JWT_SECRET 자리에 안내 문구가 들어 있다. 값이 비어
+  // 있는지만 보면 그 안내 문구를 진짜 비밀로 착각해, 모든 설치가 공개된 같은 키로 세션 토큰을
+  // 서명하고 게이트웨이 토큰을 암호화한다. 자리표시자는 값이 없는 것과 똑같이 취급한다.
+  const jwtLine = envText.match(/^#?\s*JWT_SECRET=(.*)$/m);
+  const jwtValue = jwtLine ? jwtLine[1].trim() : "";
+  if (!jwtValue || isPlaceholderSecret(jwtValue)) {
     envText = upsertEnvLine(envText, "JWT_SECRET", crypto.randomBytes(24).toString("hex"));
   }
 
