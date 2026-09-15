@@ -55,7 +55,9 @@ export function getDeskRpgTemplateUploadDir(templateId: string, options: DeskRpg
 export function isPlaceholderSecret(value: string): boolean {
   const normalized = value.trim().replace(/^["']|["']$/g, "");
   if (normalized.length < 24) return true;
-  return /^(change|replace|set|your|my|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(normalized);
+  return /^(change|replace|set|your|my|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(
+    normalized,
+  );
 }
 
 export function ensureDeskRpgHome(options: DeskRpgHomeOptions = {}) {
