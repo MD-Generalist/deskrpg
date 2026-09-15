@@ -152,15 +152,46 @@ export function sofaSeats(object: MapObject): Seat[] {
     };
   });
 }
-export function furnitureSeats(objects: MapObject[]) {
-  return objects.flatMap((object) =>
+/**
+ * 좌석 계산은 한 맵당 한 번만 한다.
+ *
+ * `furnitureSeats` 는 의자마다 `resolveSeat` 를 부르고, 그 안에서 `adjacentTable` 이 모든
+ * 오브젝트를 훑은 뒤 같은 테이블의 이웃 의자를 찾느라 `adjacentTable` 을 또 의자 수만큼 부른다.
+ * 결과는 맵이 바뀌기 전까지 변하지 않는데, `isSeatAnchor` 가 타일 하나를 물어볼 때마다 이 전부를
+ * 다시 계산했다. 캐릭터가 걷는 동안 그 질문이 매 프레임 나가면서(GameScene 의 도착 판정)
+ * 실측 CPU 의 약 66% 를 여기서 썼고 프레임 중앙값이 8.7ms → 41.6ms 가 됐다.
+ *
+ * 캐시 키는 배열의 정체성과 길이다. 이 코드베이스에서 맵 오브젝트 배열은 통째로 교체되거나
+ * `push`/`splice` 로 바뀌므로 둘 중 하나는 반드시 달라진다. 배열이 사라지면 항목도 함께 사라진다.
+ */
+const seatCache = new WeakMap<
+  MapObject[],
+  { length: number; seats: Seat[]; anchors: Set<string> }
+>();
+
+function anchorKey(col: number, row: number) {
+  return `${col}:${row}`;
+}
+
+function seatIndex(objects: MapObject[]) {
+  const cached = seatCache.get(objects);
+  if (cached && cached.length === objects.length) return cached;
+  const seats = objects.flatMap((object) =>
     object.type === "chair" ? [resolveSeat(object, objects)] : sofaSeats(object),
   );
+  const anchors = new Set(
+    seats.map((seat) => anchorKey((seat.anchorX ?? seat.x) - 0.5, (seat.anchorZ ?? seat.z) - 0.5)),
+  );
+  const entry = { length: objects.length, seats, anchors };
+  seatCache.set(objects, entry);
+  return entry;
+}
+
+export function furnitureSeats(objects: MapObject[]) {
+  return seatIndex(objects).seats;
 }
 export function isSeatAnchor(objects: MapObject[], col: number, row: number) {
-  return furnitureSeats(objects).some(
-    (seat) => seat.anchorX === col + 0.5 && seat.anchorZ === row + 0.5,
-  );
+  return seatIndex(objects).anchors.has(anchorKey(col, row));
 }
 
 /** Shared tables and lounge furniture, excluding individual desk chairs. */
