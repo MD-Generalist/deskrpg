@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ensureOfficeEnvironmentTemplate } from "./office-environment-template";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
+import { effectiveMapSpawn } from "./effective-map-spawn";
 import { validateMapTemplate } from "./map-editor-utils";
 
 const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
@@ -84,22 +85,23 @@ function reorderObjectKeys(value: unknown): unknown {
 }
 
 test("reuses PostgreSQL JSONB snapshots despite recursively reordered object keys", async () => {
-  const snapshot = reorderObjectKeys(buildOfficeEnvironment("tech"));
+  const map = buildOfficeEnvironment("tech");
+  const snapshot = reorderObjectKeys(map);
   const before = JSON.stringify(snapshot);
   const request: typeof fetch = async (url, options) => {
     assert.equal(options, undefined, "Equivalent JSONB must not register a duplicate");
     if (url === "/api/map-templates") {
-      return reply({ templates: [{ id: "jsonb", tags: "deskrpg-office-v2:tech" }] });
+      return reply({ templates: [{ id: "jsonb", tags: "deskrpg-office-v3:tech" }] });
     }
     // Return the original object so the assertion below also detects mutation.
     return {
       ok: true,
       json: async () => ({
         template: {
-          cols: 30,
-          rows: 22,
-          spawnCol: 15,
-          spawnRow: 19,
+          cols: map.width,
+          rows: map.height,
+          spawnCol: effectiveMapSpawn(map)!.col,
+          spawnRow: effectiveMapSpawn(map)!.row,
           tiledJson: snapshot,
         },
       }),
@@ -128,14 +130,14 @@ for (const change of ["nested value", "array order"] as const) {
         return reply({ template: { id: "fresh" } });
       }
       if (url === "/api/map-templates") {
-        return reply({ templates: [{ id: "edited", tags: "deskrpg-office-v2:tech" }] });
+        return reply({ templates: [{ id: "edited", tags: "deskrpg-office-v3:tech" }] });
       }
       return reply({
         template: {
-          cols: 30,
-          rows: 22,
-          spawnCol: 15,
-          spawnRow: 19,
+          cols: map.width,
+          rows: map.height,
+          spawnCol: effectiveMapSpawn(map)!.col,
+          spawnRow: effectiveMapSpawn(map)!.row,
           tiledJson: snapshot,
         },
       });
@@ -157,7 +159,7 @@ test("room rollout creates v2 separately and never reads or updates legacy v1 te
       assert.equal(options.method, "POST");
       assert.equal(
         JSON.parse(String(options.body)).tags,
-        `deskrpg-office-v${id === "agency" ? 5 : 2}:${id}`,
+        `deskrpg-office-v${id === "agency" ? 5 : id === "tech" ? 3 : 2}:${id}`,
       );
       return reply({ template: { id: "new-room-template" } }, 201);
     };
@@ -179,4 +181,40 @@ test("agency skips old evidence and registers v5 with the actual Tiled entrance 
     return reply({ template: { id: "v5" } });
   };
   assert.equal(await ensureOfficeEnvironmentTemplate("agency", request), "v5");
+});
+
+test("tech keeps the v2 template intact and registers the v3 reference layout", async () => {
+  const calls: string[] = [];
+  const request: typeof fetch = async (url, options) => {
+    calls.push(`${options?.method ?? "GET"} ${url}`);
+    if (!options)
+      return reply({ templates: [{ id: "legacy-tech", tags: "deskrpg-office-v2:tech" }] });
+    const body = JSON.parse(String(options.body));
+    assert.equal(body.tags, "deskrpg-office-v3:tech");
+    assert.deepEqual(body.tiledJson, buildOfficeEnvironment("tech"));
+    assert.equal(validateMapTemplate(body), null);
+    return reply({ template: { id: "tech-v3" } });
+  };
+  assert.equal(await ensureOfficeEnvironmentTemplate("tech", request), "tech-v3");
+  assert.deepEqual(calls, ["GET /api/map-templates", "POST /api/map-templates"]);
+});
+
+test("wide official layouts do not relax size bounds for edited or forged maps", () => {
+  for (const id of ["agency", "tech"] as const) {
+    const map = buildOfficeEnvironment(id);
+    const body = {
+      name: id,
+      cols: map.width,
+      rows: map.height,
+      spawnCol: effectiveMapSpawn(map)!.col,
+      spawnRow: effectiveMapSpawn(map)!.row,
+      tiledJson: map,
+    };
+    assert.equal(validateMapTemplate(body), null);
+    const edited = structuredClone(map);
+    edited.layers.reverse();
+    assert.equal(validateMapTemplate({ ...body, tiledJson: edited }), "cols must be 10-40");
+    assert.equal(validateMapTemplate({ ...body, tiledJson: {} }), "cols must be 10-40");
+    assert.equal(validateMapTemplate({ ...body, cols: 200 }), "cols must be 10-40");
+  }
 });

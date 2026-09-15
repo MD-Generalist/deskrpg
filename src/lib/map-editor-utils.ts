@@ -1,4 +1,6 @@
 // src/lib/map-editor-utils.ts — Map editor helper functions
+import { buildOfficeEnvironment } from "../game/three/office-environments";
+import { sameJsonSnapshot } from "./same-json-snapshot";
 
 /** Tile constants matching GameScene T and BootScene tileset */
 export const TILES = {
@@ -31,10 +33,21 @@ export function validateMapTemplate(data: {
   if (!data.name || data.name.length < 1 || data.name.length > 200) {
     return "name is required (1-200 chars)";
   }
+  // Wide reference layouts are allowed only by full snapshot identity. A label
+  // or forged metadata never expands the public editor's normal dimensions.
+  const wideOfficialMap =
+    typeof data.cols === "number" &&
+    data.cols > MAP_SIZE_MAX_COLS &&
+    (["agency", "tech"] as const).some((id) => {
+      const map = buildOfficeEnvironment(id);
+      return (
+        data.cols === map.width && data.rows === map.height && sameJsonSnapshot(data.tiledJson, map)
+      );
+    });
   if (
     typeof data.cols !== "number" ||
     data.cols < MAP_SIZE_MIN_COLS ||
-    data.cols > MAP_SIZE_MAX_COLS
+    (data.cols > MAP_SIZE_MAX_COLS && !wideOfficialMap)
   ) {
     return `cols must be ${MAP_SIZE_MIN_COLS}-${MAP_SIZE_MAX_COLS}`;
   }

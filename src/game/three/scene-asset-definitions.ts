@@ -15,7 +15,8 @@ export type SceneAssetFallback =
   | "architecture-panel"
   | "architecture-glass"
   | "studio-furniture"
-  | "creative-studio-kit";
+  | "creative-studio-kit"
+  | "tech-furniture";
 
 export type SceneMaterialSlot =
   | "upholstery"
@@ -194,6 +195,9 @@ const architecture = (
 
 export const STUDIO_UPHOLSTERY_VARIANTS = {
   "off-white": { upholstery: "#e7dfd1" },
+  blue: { upholstery: "#527ea3" },
+  mint: { upholstery: "#9dbca8" },
+  graphite: { upholstery: "#30383d" },
   teal: { upholstery: "#377f7b" },
   coral: { upholstery: "#c96f5d" },
   mustard: { upholstery: "#c49542" },
@@ -265,6 +269,111 @@ const studioKit = (
 });
 
 export const SCENE_ASSETS = {
+  "tech-workstation": {
+    url: "/assets/shared/tech/tech-workstation-v1.glb",
+    category: "furniture",
+    tags: ["shared", "tech", "tech-workstation"],
+    destinationTags: [],
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+    footprint: [2, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.9900000095367432, -1.0728836485895954e-8, -0.47999998927116394],
+      max: [0.9900000095367432, 1.1600000005960465, 0.47999998927116394],
+    },
+    maxHeight: 1.1600000005960465,
+    fallback: "tech-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-tech-startup.cjs",
+    license: "repository-original",
+  } as SceneAssetDefinition,
+  "tech-server-rack": {
+    url: "/assets/shared/tech/tech-server-rack-v1.glb",
+    category: "furniture",
+    tags: ["shared", "tech", "tech-server-rack"],
+    destinationTags: [],
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+    footprint: [1, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.41499999165534973, 1.490116086078075e-10, -0.4300000071525574],
+      max: [0.41499999165534973, 2.0850000381469727, 0.4975000023841858],
+    },
+    maxHeight: 2.0850000381469727,
+    fallback: "tech-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-tech-startup.cjs",
+    license: "repository-original",
+  } as SceneAssetDefinition,
+  "tech-phone-booth": {
+    url: "/assets/shared/tech/tech-phone-booth-v1.glb",
+    category: "furniture",
+    tags: ["shared", "tech", "tech-phone-booth"],
+    destinationTags: [],
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+    footprint: [1, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.4749999940395355, 5.9604643443123e-10, -0.4749999940395355],
+      max: [0.4749999940395355, 2.25, 0.4749999940395355],
+    },
+    maxHeight: 2.25,
+    fallback: "tech-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-tech-startup.cjs",
+    license: "repository-original",
+  } as SceneAssetDefinition,
+  "tech-hardware-bench": {
+    url: "/assets/shared/tech/tech-hardware-bench-v1.glb",
+    category: "furniture",
+    tags: ["shared", "tech", "tech-hardware-bench"],
+    destinationTags: [],
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+    footprint: [1, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.49000000953674316, -5.9604645663569045e-9, -0.3675000000745058],
+      max: [0.49000000953674316, 1.7100000047683717, 0.43500001072883604],
+    },
+    maxHeight: 1.7100000047683717,
+    fallback: "tech-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-tech-startup.cjs",
+    license: "repository-original",
+  } as SceneAssetDefinition,
+  "tech-beanbag": {
+    url: "/assets/shared/tech/tech-beanbag-v1.glb",
+    category: "furniture",
+    tags: ["shared", "tech", "tech-beanbag"],
+    destinationTags: [],
+    localCoordinates: SCENE_ASSET_LOCAL_COORDINATES,
+    footprint: [1, 1],
+    bounds: {
+      units: "meters",
+      min: [-0.47624582052230835, 0.009999999776482582, -0.46000000834465027],
+      max: [0.47624582052230835, 0.8399999737739563, 0.4699999988079071],
+    },
+    maxHeight: 0.8399999737739563,
+    fallback: "tech-furniture",
+    shadows: { cast: true, receive: true },
+    batch: "static",
+    lod: "standard",
+    budget: { maxTriangles: 12000, maxBytes: 2000000 },
+    source: "scripts/assets/build-tech-startup.cjs",
+    license: "repository-original",
+  } as SceneAssetDefinition,
   "photo-cyclorama": studioKit("photo-cyclorama", "photo", 6.8, 2.92, 2.9, [7, 3], {
     coral: "coral-sweep",
     oak: "oak",
@@ -413,6 +522,7 @@ export const SCENE_ASSETS = {
     destinationTags: ["lounge"],
   }),
   "shared-stool": studioFurniture("stool", 0.61, 0.73, 0.61, [1, 1], {
+    variants: { blue: { oak: "#527ea3" }, mint: { oak: "#9dbca8" }, graphite: { oak: "#30383d" } },
     seats: [{ anchor: [0, 0], visual: [0, 0.72, 0], actorElevation: 0.24, direction: "down" }],
     destinationTags: ["pantry", "stool"],
   }),
@@ -610,6 +720,7 @@ export function studioFurnitureAsset(object: {
     variant && Object.hasOwn(STUDIO_UPHOLSTERY_VARIANTS, variant) ? variant : "off-white";
   if (type === "desk" && variant === "studio-oak") return { id: "shared-workstation" };
   if (type === "chair") {
+    if (variant === "graphite") return { id: "shared-office-chair", variant: "graphite" };
     if (variant === "office-neutral") return { id: "shared-office-chair", variant: "neutral" };
     if (
       variant &&
@@ -629,7 +740,11 @@ export function studioFurnitureAsset(object: {
     };
   if (type === "office_armchair" && variant && Object.hasOwn(STUDIO_UPHOLSTERY_VARIANTS, variant))
     return { id: "shared-armchair", variant: fabric };
-  if (type === "studio_stool") return { id: "shared-stool" };
+  if (type === "studio_stool")
+    return {
+      id: "shared-stool",
+      variant: variant && ["blue", "mint", "graphite"].includes(variant) ? variant : undefined,
+    };
   if (type === "studio_round_table") return { id: "shared-round-table" };
   if (type === "studio_worktable") return { id: "shared-production-table" };
   if (type === "studio_counter") return { id: "shared-counter" };

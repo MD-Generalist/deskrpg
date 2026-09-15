@@ -1,3 +1,9 @@
+import {
+  TECH_STARTUP_ENTRANCE,
+  TECH_STARTUP_SIZE,
+  TECH_STARTUP_ZONES,
+  furnishTechStartup,
+} from "./tech-startup-layout";
 import { furnishOfficeRooms, OFFICE_ROOMS } from "./office-room-layout";
 import {
   CREATIVE_STUDIO_SIZE,
@@ -144,9 +150,28 @@ export const CREATIVE_STUDIO_ENTRANCE = Object.freeze({
 export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
   const environment = OFFICE_ENVIRONMENTS.find((entry) => entry.id === id);
   if (!environment) throw new Error(`Unknown office environment: ${id}`);
-  const cols = id === "agency" ? CREATIVE_STUDIO_SIZE.cols : id === "executive" ? 18 : 30;
-  const rows = id === "agency" ? CREATIVE_STUDIO_SIZE.rows : id === "executive" ? 18 : 22;
-  const entrance = id === "agency" ? CREATIVE_STUDIO_ENTRANCE.spawnCol : Math.floor(cols / 2);
+  const cols =
+    id === "agency"
+      ? CREATIVE_STUDIO_SIZE.cols
+      : id === "executive"
+        ? 18
+        : id === "tech"
+          ? TECH_STARTUP_SIZE.cols
+          : 30;
+  const rows =
+    id === "agency"
+      ? CREATIVE_STUDIO_SIZE.rows
+      : id === "executive"
+        ? 18
+        : id === "tech"
+          ? TECH_STARTUP_SIZE.rows
+          : 22;
+  const entrance =
+    id === "agency"
+      ? CREATIVE_STUDIO_ENTRANCE.spawnCol
+      : id === "tech"
+        ? TECH_STARTUP_ENTRANCE.spawnCol
+        : Math.floor(cols / 2);
   const map = createOfficeBaseMap(environment.nameEn, cols, rows, 32);
   const layer = map.layers.find((entry) => entry.name === "Objects")!;
   const objects: TiledObject[] = [];
@@ -180,7 +205,9 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
     const atEntrance =
       id === "agency"
         ? x >= CREATIVE_STUDIO_ENTRANCE.fromCol && x <= CREATIVE_STUDIO_ENTRANCE.toCol
-        : Math.abs(x - entrance) <= 1;
+        : id === "tech"
+          ? x >= TECH_STARTUP_ENTRANCE.fromCol && x <= TECH_STARTUP_ENTRANCE.toCol
+          : Math.abs(x - entrance) <= 1;
     if (!atEntrance) add("cubicle_wall", x, rows - 1);
   }
   for (let y = 1; y < rows - 1; y++) {
@@ -188,8 +215,9 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
     add("cubicle_wall", cols - 1, y);
   }
   if (id === "agency") furnishCreativeStudio(add);
+  else if (id === "tech") furnishTechStartup(add);
   else furnishOfficeRooms(id, (type, x, y, direction) => add(type, x, y, { direction }));
-  if (id !== "agency")
+  if (id !== "agency" && id !== "tech")
     for (const x of [1, cols - 2])
       for (const y of [1, rows - 2]) {
         if (!objects.some((object) => object.x === x * 32 && object.y === y * 32))
@@ -205,7 +233,15 @@ export function buildOfficeEnvironment(id: OfficeEnvironmentId): TiledMap {
       }
     }
   }
-  add("spawn", entrance, id === "agency" ? CREATIVE_STUDIO_ENTRANCE.spawnRow : rows - 3);
+  add(
+    "spawn",
+    entrance,
+    id === "agency"
+      ? CREATIVE_STUDIO_ENTRANCE.spawnRow
+      : id === "tech"
+        ? TECH_STARTUP_ENTRANCE.spawnRow
+        : rows - 3,
+  );
   layer.objects = objects;
   return tagEnvironment(map, id);
 }
@@ -222,21 +258,23 @@ function tagEnvironment(map: TiledMap, id: OfficeEnvironmentId): TiledMap {
         value: JSON.stringify(
           id === "agency"
             ? CREATIVE_STUDIO_ZONES
-            : OFFICE_ROOMS[id].map((room) => ({
-                id: room.id,
-                x: room.x,
-                y: room.z,
-                width: room.width,
-                height: room.depth + 1,
-                roaming: room.id !== "ceo",
-              })),
+            : id === "tech"
+              ? TECH_STARTUP_ZONES
+              : OFFICE_ROOMS[id].map((room) => ({
+                  id: room.id,
+                  x: room.x,
+                  y: room.z,
+                  width: room.width,
+                  height: room.depth + 1,
+                  roaming: room.id !== "ceo",
+                })),
         ),
       },
     ],
     {
       name: "officeEnvironmentVersion",
       type: "int",
-      value: id === "agency" ? 5 : id === "executive" ? 5 : 2,
+      value: id === "agency" ? 5 : id === "executive" ? 5 : id === "tech" ? 3 : 2,
     },
   ];
   return map;

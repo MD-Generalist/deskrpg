@@ -16,7 +16,7 @@ for (const entry of OFFICE_ENVIRONMENTS) {
     assert.equal(tiledSnapshot(map).environment, entry.id);
     assert.equal(
       tiledSnapshot(map).environmentVersion,
-      entry.id === "agency" ? 5 : entry.id === "executive" ? 5 : 2,
+      entry.id === "agency" ? 5 : entry.id === "executive" ? 5 : entry.id === "tech" ? 3 : 2,
     );
     assert.ok(isOfficeEnvironmentId(entry.id));
   });

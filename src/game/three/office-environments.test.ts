@@ -41,11 +41,23 @@ for (const environment of OFFICE_ENVIRONMENTS) {
     const map = buildOfficeEnvironment(environment.id);
     assert.equal(
       map.width,
-      environment.id === "agency" ? 42 : environment.id === "executive" ? 18 : 30,
+      environment.id === "agency"
+        ? 42
+        : environment.id === "executive"
+          ? 18
+          : environment.id === "tech"
+            ? 44
+            : 30,
     );
     assert.equal(
       map.height,
-      environment.id === "agency" ? 26 : environment.id === "executive" ? 18 : 22,
+      environment.id === "agency"
+        ? 26
+        : environment.id === "executive"
+          ? 18
+          : environment.id === "tech"
+            ? 20
+            : 22,
     );
     assert.equal(map.tilewidth, 32);
     assert.equal(map.tileheight, 32);
@@ -126,21 +138,18 @@ for (const environment of OFFICE_ENVIRONMENTS) {
       if (object.type === "chair") assert.ok(reached.has(`${x},${y}`), "Seat is walkable");
       if (object.type === "computer")
         assert.ok(
-          objects.some(
-            (desk) => {
-              if (!["desk", "reception_desk", "executive_desk"].includes(desk.type)) return false;
-              const deskDirection = desk.properties?.find(
-                (property) => property.name === "direction",
-              )?.value as "up" | "down" | "left" | "right" | undefined;
-              const deskSize = getObjectDimensions(desk.type, deskDirection);
-              return (
-                object.x >= desk.x &&
-                object.y >= desk.y &&
-                object.x < desk.x + deskSize.width * 32 &&
-                object.y < desk.y + deskSize.height * 32
-              );
-            },
-          ),
+          objects.some((desk) => {
+            if (!["desk", "reception_desk", "executive_desk"].includes(desk.type)) return false;
+            const deskDirection = desk.properties?.find((property) => property.name === "direction")
+              ?.value as "up" | "down" | "left" | "right" | undefined;
+            const deskSize = getObjectDimensions(desk.type, deskDirection);
+            return (
+              object.x >= desk.x &&
+              object.y >= desk.y &&
+              object.x < desk.x + deskSize.width * 32 &&
+              object.y < desk.y + deskSize.height * 32
+            );
+          }),
           "Computer rests on a desk",
         );
       if (!def.collision) continue;

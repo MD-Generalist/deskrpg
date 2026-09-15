@@ -8,6 +8,7 @@ import { furnitureSeats } from "./seating";
 import { getObjectDimensions } from "../../lib/object-types";
 import { readAmbientZones, ambientTileAllowed } from "../ambient-zones";
 import { findPath, clearSegment } from "../navigation";
+import { TECH_STARTUP_BOUNDARIES } from "./tech-startup-layout";
 import { addOfficeRoomSurfaces } from "./room-architecture";
 
 for (const { id } of OFFICE_ENVIRONMENTS) {
@@ -20,6 +21,33 @@ for (const { id } of OFFICE_ENVIRONMENTS) {
       assert.equal(zones.length, 9);
       assert.equal(OFFICE_ROOMS.agency, undefined);
       assert.ok(!snapshot.objects.some((object) => object.type.startsWith("room_wall")));
+      return;
+    }
+    if (id === "tech") {
+      assert.equal(map.width, 44);
+      assert.equal(map.height, 20);
+      assert.equal(zones.length, 8);
+      assert.equal(furnitureSeats(snapshot.objects).length, 40);
+      assert.equal(ambientTileAllowed(zones, 3, 3), false);
+      assert.equal(ambientTileAllowed(zones, 35, 8), true);
+      assert.ok(!snapshot.objects.some((object) => object.type.startsWith("room_wall")));
+      for (const room of Object.values(TECH_STARTUP_BOUNDARIES)) {
+        for (let x = room.westCol + 1; x <= room.eastCol; x++)
+          assert.equal(
+            blocked.has(`${x},${room.frontRow}`),
+            !(room.doorCols as readonly number[]).includes(x),
+          );
+        for (const x of room.doorCols)
+          for (const y of [room.frontRow - 1, room.frontRow, room.frontRow + 1])
+            assert.equal(blocked.has(`${x},${y}`), false, `tech doorway approach ${x},${y}`);
+      }
+      const world = new T.Group();
+      addOfficeRoomSurfaces(world, id, { environmentVersion: snapshot.environmentVersion });
+      assert.equal(
+        world.children.length,
+        0,
+        "reference map does not receive retired CEO-suite floors",
+      );
       return;
     }
     assert.equal(zones.length, 3);
@@ -192,5 +220,21 @@ test("old and edited legacy agency snapshots keep v2 room surfaces", () => {
     const world = new T.Group();
     addOfficeRoomSurfaces(world, "agency", options);
     assert.equal(world.children.length, 0, "current studio never receives retired room surfaces");
+  }
+});
+
+test("legacy tech v2 and unversioned snapshots retain their original room surfaces", () => {
+  for (const environmentVersion of [2, undefined]) {
+    const world = new T.Group();
+    addOfficeRoomSurfaces(world, "tech", { environmentVersion, hasLegacyPartitions: true });
+    const floors = world.children.filter(
+      (object): object is T.Mesh =>
+        object instanceof T.Mesh && object.geometry instanceof T.PlaneGeometry,
+    );
+    assert.equal(floors.length, OFFICE_ROOMS.tech.length);
+    for (let i = 0; i < floors.length; i++) {
+      assert.equal(floors[i].position.x, OFFICE_ROOMS.tech[i].x + OFFICE_ROOMS.tech[i].width / 2);
+      assert.equal(floors[i].position.z, OFFICE_ROOMS.tech[i].z + OFFICE_ROOMS.tech[i].depth / 2);
+    }
   }
 });

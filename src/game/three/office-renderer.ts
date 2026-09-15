@@ -1,4 +1,8 @@
+import { attachSceneAsset as attachCatalogAsset, type SceneAssetId } from "./scene-asset-catalog";
 import { studioLabelOccluded, captureStudioReflection } from "./studio-visibility";
+import { addTechStartupSurfaces, isTechStartupMap, techPartitionSpan } from "./tech-startup-scene";
+import { renderTechStartupObject } from "./tech-startup-assets";
+import { finalizeStudioScene, renderCreativeStudioObject } from "./creative-studio-renderer";
 import { addCreativeStudioScene } from "./creative-studio-renderer";
 import { isCreativeStudioMap, creativeStudioOverview } from "./creative-studio-architecture";
 import { furnitureOffset } from "./executive-lounge-layout";
@@ -200,7 +204,7 @@ export class OfficeRenderer {
       }),
     );
     this.cursor.rotation.x = -Math.PI / 2;
-    this.cursor.position.y = 0.025;
+    this.cursor.position.y = 0.06;
     this.cursor.visible = false;
     this.scene.add(this.cursor);
     this.renderer.domElement.addEventListener("pointerdown", this.pointerDown);
@@ -309,7 +313,9 @@ export class OfficeRenderer {
   }
   overview(cols: number, rows: number) {
     this.following = false;
-    const studio = this.bridge && isCreativeStudioMap(this.bridge.map());
+    const studio =
+      this.bridge &&
+      (isCreativeStudioMap(this.bridge.map()) || isTechStartupMap(this.bridge.map()));
     this.controls.target.set(cols / 2, studio ? 1.2 : 0, rows / 2);
     this.overviewDimensions = { cols, rows };
     const aspect = this.host.clientWidth / Math.max(1, this.host.clientHeight);
@@ -451,7 +457,7 @@ export class OfficeRenderer {
     if (!target) return;
     const col = Math.floor(target.x),
       row = Math.floor(target.z);
-    this.cursor.position.set(col + 0.5, 0.025, row + 0.5);
+    this.cursor.position.set(col + 0.5, 0.06, row + 0.5);
     const edit = this.bridge.editor();
     this.cursor.visible = actorId === "seat-target" || edit.placement || edit.spawn || edit.enabled;
     (this.cursor.material as T.MeshBasicMaterial).color.set(
@@ -481,11 +487,14 @@ export class OfficeRenderer {
   private buildMap(map: MapSnapshot) {
     disposeTree(this.world);
     const studio = isCreativeStudioMap(map);
-    const p = studio
-      ? { floor: "#dfcdb0", wall: "#e5dfd2", wood: "#c9ae86", outside: "#f4f0e7" }
-      : isOfficeEnvironmentId(map.environment)
-        ? environmentPalettes[map.environment]
-        : palettes[this.theme];
+    const tech = isTechStartupMap(map);
+    const p = tech
+      ? { floor: "#c6c8c7", wall: "#edf0ed", wood: "#c4ac89", outside: "#edf0e6" }
+      : studio
+        ? { floor: "#dfcdb0", wall: "#e5dfd2", wood: "#c9ae86", outside: "#f4f0e7" }
+        : isOfficeEnvironmentId(map.environment)
+          ? environmentPalettes[map.environment]
+          : palettes[this.theme];
     const lighting = officeLighting(
       isOfficeEnvironmentId(map.environment) ? map.environment : undefined,
       studio ? 3 : undefined,
@@ -526,7 +535,8 @@ export class OfficeRenderer {
       -0.2,
       map.rows / 2,
     );
-    const floorGrain = isOfficeEnvironmentId(map.environment) ? surfaceTexture("wood") : null;
+    const floorGrain =
+      isOfficeEnvironmentId(map.environment) && !tech ? surfaceTexture("wood") : null;
     if (floorGrain) floorGrain.repeat.set(map.cols / 3, map.rows / 2);
     const floor = new T.Mesh(
       new T.PlaneGeometry(map.cols, map.rows),
@@ -589,7 +599,12 @@ export class OfficeRenderer {
       tiles.receiveShadow = true;
       this.world.add(tiles);
     }
-    if (isOfficeEnvironmentId(map.environment) && map.environment !== "executive" && !studio) {
+    if (
+      isOfficeEnvironmentId(map.environment) &&
+      map.environment !== "executive" &&
+      !studio &&
+      !tech
+    ) {
       const finish = officeFinish(map.environment);
       const floorMap = surfaceTexture(finish.floor, "color");
       const floorBump = surfaceTexture(finish.floor);
@@ -718,7 +733,7 @@ export class OfficeRenderer {
         );
     const furniture = [...tileObjects, ...map.objects];
     const finishedPerimeter =
-      !!map.environment && furniture.some((object) => object.type === "room_wall_h");
+      tech || (!!map.environment && furniture.some((object) => object.type === "room_wall_h"));
     const executive = map.environment === "executive";
     let remainingFurniture = furniture;
     if (studio) {
@@ -729,10 +744,11 @@ export class OfficeRenderer {
       });
       remainingFurniture = composition.userData.unhandledObjects;
     }
+    if (tech) addTechStartupSurfaces(this.world, map);
     if (executive) addExecutiveArchitecture(this.world, map.cols, map.rows);
     if (finishedPerimeter && !executive && !studio)
       addOfficePerimeter(this.world, map.cols, map.rows, p.wall, p.wood);
-    if (finishedPerimeter && map.environment && !executive && !studio)
+    if (finishedPerimeter && map.environment && !executive && !studio && !tech)
       addOfficeRoomSurfaces(this.world, map.environment, {
         environmentVersion: map.environmentVersion,
         hasLegacyPartitions: finishedPerimeter,
@@ -766,6 +782,13 @@ export class OfficeRenderer {
       group.userData.mapObjectId = object.id;
       this.world.add(group);
       const type = object.type;
+      if (tech && type === "glass_partition") {
+        const span = techPartitionSpan(object);
+        group.position.set(span.x, 0, span.z);
+        group.rotation.y = 0;
+        addRoomPartition(group, span.vertical, span.length);
+        continue;
+      }
       if (type === "room_wall_h" || type === "room_wall_v") {
         const junction =
           type === "room_wall_v" &&
@@ -790,6 +813,11 @@ export class OfficeRenderer {
         group.userData.seat = seat;
         group.position.set(seat.x, 0, seat.z);
       }
+      if (tech && renderTechStartupObject(group, object, furniture)) {
+        void attachCatalogAsset(group, object.variant as SceneAssetId);
+        continue;
+      }
+      if (tech && renderCreativeStudioObject(group, object, furniture)) continue;
       const roomFurniture = buildRoomFurniture(type, executive);
       if (roomFurniture) {
         const seats = sofaSeats(object);
@@ -918,6 +946,24 @@ export class OfficeRenderer {
           0.4,
           0,
         );
+    }
+    if (tech) {
+      const marker = new T.Group();
+      marker.name = "tech-scene-ready";
+      marker.userData.assetStatus = "loading";
+      this.world.add(marker);
+      const loads: Promise<boolean>[] = [];
+      this.world.traverse((node) => {
+        if (node.userData.assetReady) loads.push(node.userData.assetReady);
+      });
+      marker.userData.assetReady = Promise.all(loads).then((results) => {
+        if (this.disposed || marker.parent !== this.world) return false;
+        // Shared finalizer deduplicates textures and keeps exact seat pick proxies.
+        finalizeStudioScene(this.world);
+        marker.userData.assetStatus = results.every(Boolean) ? "ready" : "failed";
+        return results.every(Boolean);
+      });
+      return;
     }
     if (studio) {
       // Batch only generic additions; the asynchronous studio owns its own resources.

@@ -175,25 +175,28 @@ test("tagged action resolves a body-clear route from circulation into a purpose-
 import { AmbientExitPolicy } from "./ambient-zones";
 import { OFFICE_ENVIRONMENTS } from "./three/office-environments";
 import { OFFICE_ROOMS } from "./three/office-room-layout";
+import { TECH_STARTUP_BOUNDARIES } from "./three/tech-startup-layout";
 import { tiledSnapshot } from "./three/tiled-preview";
 import { TrafficCoordinator } from "./traffic";
 import { ACTOR_RADIUS, clearSegment } from "./navigation";
 
 for (const { id } of OFFICE_ENVIRONMENTS) {
   if (id === "agency") continue;
-  test(`${id}: an inside worker fully exits CEO through incremental traffic and cannot reenter`, () => {
+  test(`${id}: an inside worker fully exits ${id === "tech" ? "server room" : "CEO"} through incremental traffic and cannot reenter`, () => {
     const map = buildOfficeEnvironment(id);
     const zones = readAmbientZones(map as unknown as Record<string, unknown>);
     const blocked = new Set(tiledSnapshot(map).blocked);
-    const room = OFFICE_ROOMS[id].find((room) => room.id === "ceo")!;
-    const boundary = room.z + room.depth;
-    const origin = { x: room.door, y: boundary };
-    const goal = { x: room.door, y: boundary + 2 };
+    const room = id === "tech" ? undefined : OFFICE_ROOMS[id].find((room) => room.id === "ceo")!;
+    const boundary =
+      id === "tech" ? TECH_STARTUP_BOUNDARIES.server.frontRow : room!.z + room!.depth;
+    const door = id === "tech" ? TECH_STARTUP_BOUNDARIES.server.doorCols[0] : room!.door;
+    const origin = { x: door, y: boundary };
+    const goal = { x: door, y: boundary + 2 };
     const policy = new AmbientExitPolicy(zones, origin);
     const traffic = new TrafficCoordinator();
     let position = { ...origin };
     const floor = (x: number, y: number) =>
-      x > 0 && x < 29 && y > 0 && y < 21 && !blocked.has(`${x},${y}`);
+      x > 0 && x < map.width - 1 && y > 0 && y < map.height - 1 && !blocked.has(`${x},${y}`);
     for (let frame = 0; frame < 100; frame++) {
       const allowed = policy.at(position);
       const walkable = (x: number, y: number) => floor(x, y) && allowed(x, y);
