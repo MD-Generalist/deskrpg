@@ -6,8 +6,9 @@ type Frame = { direction: "sent" | "received"; event: string; data: unknown; at:
 function observe(page: Page): Frame[] {
   const frames: Frame[] = [];
   page.on("websocket", (socket) => {
-    for (const direction of ["sent", "received"] as const) {
-      socket.on(direction === "sent" ? "framesent" : "framereceived", ({ payload }) => {
+    const capture =
+      (direction: Frame["direction"]) =>
+      ({ payload }: { payload: string | Buffer }) => {
         const text = payload.toString();
         if (!text.startsWith("42")) return;
         try {
@@ -16,8 +17,9 @@ function observe(page: Page): Frame[] {
         } catch {
           /* Engine.IO control frames are not application events. */
         }
-      });
-    }
+      };
+    socket.on("framesent", capture("sent"));
+    socket.on("framereceived", capture("received"));
   });
   return frames;
 }
