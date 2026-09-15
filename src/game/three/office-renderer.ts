@@ -265,6 +265,15 @@ export class OfficeRenderer {
       mapKey: this.lastMap,
     };
   }
+  /** Read-only pointer evidence for browser QA; no renderer internals are exposed globally. */
+  readPointerIndicator() {
+    return {
+      visible: this.cursor.visible,
+      x: this.cursor.position.x,
+      z: this.cursor.position.z,
+      cursor: this.renderer.domElement.style.cursor,
+    };
+  }
   startBenchmark(complete: (report: BenchmarkReport) => void) {
     if (this.benchmark) throw new Error("A benchmark is already running");
     if (document.hidden || !this.readMetrics().assetsReady)
@@ -404,7 +413,7 @@ export class OfficeRenderer {
         }
       }
     }
-    if (!actorId && kind === "down" && e.button === 0) {
+    if (!actorId && (kind === "move" || (kind === "down" && e.button === 0))) {
       const picked = pickFurnitureSeat(this.ray, this.world.children);
       const furnitureHit = picked?.hit;
       const furniture = picked?.owner;
@@ -430,9 +439,10 @@ export class OfficeRenderer {
           (a, b) =>
             Math.hypot(a.x - point.x, a.z - point.z) - Math.hypot(b.x - point.x, b.z - point.z),
         )[0];
-        if (!seat) return;
-        target = new T.Vector3(seat.anchorX ?? seat.x, 0, seat.anchorZ ?? seat.z);
-        actorId = "seat-target"; // Avoid legacy nearby-NPC selection when clicking an adjacent cushion.
+        if (seat) {
+          target = new T.Vector3(seat.anchorX ?? seat.x, 0, seat.anchorZ ?? seat.z);
+          actorId = "seat-target"; // Avoid legacy nearby-NPC selection when clicking an adjacent cushion.
+        } else if (kind === "down") return;
       }
     }
     this.hoveredActorId = actorId;
@@ -443,7 +453,7 @@ export class OfficeRenderer {
       row = Math.floor(target.z);
     this.cursor.position.set(col + 0.5, 0.025, row + 0.5);
     const edit = this.bridge.editor();
-    this.cursor.visible = edit.placement || edit.spawn || edit.enabled;
+    this.cursor.visible = actorId === "seat-target" || edit.placement || edit.spawn || edit.enabled;
     (this.cursor.material as T.MeshBasicMaterial).color.set(
       this.bridge.walkable(col, row) ? "#578467" : "#bd6756",
     );

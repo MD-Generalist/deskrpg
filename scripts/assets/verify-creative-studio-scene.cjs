@@ -262,6 +262,21 @@ const entry =
       }, {}),
     );
     assert.deepEqual(report.actorKinds, { npc: 10, player: 2 });
+    await page.evaluate(() => {
+      const seat = window.reviewSeats[34];
+      window.reviewRenderer.showRoom(seat.x, seat.z, 8);
+    });
+    await page.waitForTimeout(300);
+    const hoverPoint = await page.evaluate(() => {
+      const seat = window.reviewSeats[34];
+      return window.reviewProject(seat.x, 0.55, seat.z);
+    });
+    await page.mouse.move(hoverPoint.x, hoverPoint.y);
+    await page.waitForTimeout(100);
+    report.seatHover = await page.evaluate(() => window.reviewRenderer.readPointerIndicator());
+    assert.equal(report.seatHover.visible, true, "seat hover must display its floor highlight");
+    assert.equal(report.seatHover.cursor, "pointer", "seat hover must advertise clickability");
+    await page.evaluate(() => window.reviewRenderer.showOverview());
     if (process.argv.includes("--smoke")) {
       assert.deepEqual(errors, []);
       await fs.writeFile(path.join(out, "report.json"), JSON.stringify(report, null, 2));
