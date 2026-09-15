@@ -55,9 +55,18 @@ if [ -n "${JWT_SECRET:-}" ]; then
 fi
 
 # ── 3. Hermes API 서버 ───────────────────────────────────────────────
-hermes config set API_SERVER_ENABLED true >/dev/null 2>&1 || true
-# 같은 컨테이너 안에서만 부른다 — 이 포트를 밖으로 열지 않는다.
-hermes config set API_SERVER_HOST 127.0.0.1 >/dev/null 2>&1 || true
+# api_server 는 Hermes 의 메시징 플랫폼 중 하나이고, 설정을 config.yaml 이 아니라
+# $HERMES_HOME/.env 의 환경변수로 읽는다(hermes_cli/web_server_messaging.py 의 platform
+# 카탈로그). `hermes config set API_SERVER_*` 은 config.yaml 최상위에 쓰이기만 하고 아무도
+# 읽지 않아, 게이트웨이가 8642 를 열지 않았다(실측).
+#
+# 같은 컨테이너 안에서만 부르므로 127.0.0.1 에 묶는다 — 이 포트를 밖으로 열지 않는다.
+set_hermes_env() {
+    grep -q "^$1=" "$HERMES_HOME/.env" 2>/dev/null || printf '%s=%s\n' "$1" "$2" >> "$HERMES_HOME/.env"
+}
+set_hermes_env API_SERVER_ENABLED true
+set_hermes_env API_SERVER_HOST 127.0.0.1
+set_hermes_env API_SERVER_PORT 8642
 if ! grep -q "^API_SERVER_KEY=..*" "$HERMES_HOME/.env" 2>/dev/null; then
     KEY="${HERMES_API_KEY:-$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
     printf '\nAPI_SERVER_KEY=%s\n' "$KEY" >> "$HERMES_HOME/.env"

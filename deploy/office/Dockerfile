@@ -40,4 +40,13 @@ EXPOSE 3000 3001 9119
 
 ENV DESKRPG_HOME=/opt/data/deskrpg \
     DESKRPG_AUTO_UPDATE=true \
-    HERMES_DASHBOARD=true
+    HERMES_DASHBOARD=true \
+    INTERNAL_HOSTNAME=0.0.0.0 \
+    HOSTNAME=0.0.0.0
+
+# 컨테이너의 main program 은 Hermes TUI(`hermes`)다. TTY 가 없으면 곧바로 끝나고, s6 는 main
+# 이 끝나면 컨테이너 전체를 내린다 — 사무실도 게이트웨이도 같이 죽는다(실측: Exited (0)).
+# TUI 는 `docker exec -it <컨테이너> hermes` 로 들어가는 것이 이 이미지의 사용법이므로,
+# main 은 잠들어 있게 두고 s6 가 서비스들을 감독하게 한다. main-wrapper 는 첫 인자가 실행
+# 파일이면 그대로 exec 한다.
+CMD ["sleep", "infinity"]
