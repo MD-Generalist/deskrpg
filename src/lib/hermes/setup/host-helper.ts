@@ -41,11 +41,28 @@ os.environ['HERMES_HOME'] = str(ROOT)
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 NAME = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
 RESERVED = {'hermes','test','tmp','root','sudo'}
-PIN = '9e200eb1d2418d47c3b65a754ca111e13c5aafb4'
+PIN = '1be18d79bf1b8d40890b95517a8131cb2ae48c6f'
+PLUGIN_VERSION = '0.6.0'
+HERMES_MIN = '0.21.1'
 SOURCE = 'https://github.com/dandacompany/deskrpg-hermes-plugin'
+TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
 LOCK = None
 class Failure(Exception): pass
 def fail(code): raise Failure(code)
+def version_parts(value):
+    parts = []
+    for chunk in str(value or '').split('.'):
+        match = re.match(r'^\d+', chunk)
+        if not match: break
+        parts.append(int(match.group(0)))
+    return parts
+def version_below(value, minimum):
+    # Unreadable, absent or non-numeric versions never block; only a confidently lower number does.
+    if not isinstance(value, str) or not value or value == 'unknown': return False
+    left, right = version_parts(value), version_parts(minimum)
+    if not left: return False
+    size = max(len(left), len(right))
+    return tuple(left + [0] * (size - len(left))) < tuple(right + [0] * (size - len(right)))
 def read(path):
     if path.is_symlink(): fail('unsafe_host_path')
     if path.exists() and path.stat().st_size > 1048576: fail('invalid_host_config')
@@ -180,6 +197,7 @@ def identity(name, home):
 
 def plugin(home, cfg):
     manifests = []
+    versions = {}
     directory = home / 'plugins'
     if directory.is_symlink(): fail('unsafe_host_path')
     if directory.exists():
@@ -188,22 +206,28 @@ def plugin(home, cfg):
             manifest = child / 'plugin.yaml'
             if manifest.is_file():
                 data = yaml.safe_load(read(manifest)) or {}
-                if isinstance(data, dict) and data.get('name') == 'deskrpg': manifests.append(child.name)
+                if isinstance(data, dict) and data.get('name') == 'deskrpg':
+                    manifests.append(child.name)
+                    installed_version = data.get('version')
+                    versions[child.name] = installed_version if isinstance(installed_version, str) else None
     if len(manifests) > 1: fail('plugin_identity_ambiguous')
     plugins = mapping(cfg.get('plugins'))
     names = {'deskrpg', *manifests}
     enabled = plugins.get('enabled') or []
     disabled = plugins.get('disabled') or []
     if not isinstance(enabled, list) or not isinstance(disabled, list): fail('invalid_host_config')
-    return bool(manifests), bool(names.intersection(enabled)) and not bool(names.intersection(disabled)), manifests[0] if manifests else 'deskrpg'
+    return bool(manifests), bool(names.intersection(enabled)) and not bool(names.intersection(disabled)), manifests[0] if manifests else 'deskrpg', versions.get(manifests[0]) if manifests else None
 
 def candidate(name, home):
     cfg, env, token, port, external = settings(home)
     owner = identity(name, home)
-    installed, enabled, plugin_name = plugin(home, cfg)
+    installed, enabled, plugin_name, plugin_version = plugin(home, cfg)
     match = re.search(r'^version\s*=\s*"([^"]+)"', read(INSTALL / 'pyproject.toml'), re.M)
-    public = {'id': owner['id'], 'label': 'Hermes ' + name, 'version': match.group(1) if match else 'unknown', 'service': owner['service'], 'pluginInstalled': installed, 'pluginEnabled': enabled, 'hasToken': bool(token), 'port': port}
-    warning = owner['warning'] or ('external_secret_provider' if external else None)
+    zone = cfg.get('timezone')
+    zone = zone.strip() if isinstance(zone, str) else ''
+    public = {'id': owner['id'], 'label': 'Hermes ' + name, 'version': match.group(1) if match else 'unknown', 'service': owner['service'], 'pluginInstalled': installed, 'pluginEnabled': enabled, 'pluginVersion': plugin_version, 'hasToken': bool(token), 'port': port, 'timezone': zone or None}
+    # A version we cannot read warns but never blocks; a version we can read and that is too low does block.
+    warning = owner['warning'] or ('external_secret_provider' if external else None) or ('hermes_version_unknown' if public['version'] == 'unknown' else None)
     if warning: public['warning'] = warning
     return public, owner, cfg, token, plugin_name
 
@@ -274,6 +298,7 @@ def profile_names(cfg):
 
 def preflight(name, home, item):
     public, owner, cfg, token, plugin_name = item
+    if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
     if not owner['command']: fail(owner['warning'] or 'managed_service_required')
     if settings(home)[4]:
         listening = assert_port_owned(public,owner)
@@ -311,10 +336,24 @@ def atomic(path, content):
     finally:
         if os.path.exists(tmp): os.unlink(tmp)
 
-def main(action, candidate_id=None):
+def bounded(argv, env):
+    # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
+    child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
+    try:
+        output = child.stdout.read(262145)
+        if len(output) > 262144:
+            child.kill()
+            child.wait()
+            fail('output_limit')
+        code = child.wait()
+    finally:
+        child.stdout.close()
+    return code, output
+
+def main(action, candidate_id=None, option=None):
     global LOCK
     if ROOT.is_symlink(): fail('unsafe_host_path')
-    if action in ('install','configure','restart'):
+    if action in ('install','configure','restart','install-service','set-timezone'):
         # A host-wide advisory lock also protects against a retry from a restarted DeskRPG server.
         # Keep it inherited by the installer until the entire bounded action exits.
         import fcntl
@@ -341,10 +380,13 @@ def main(action, candidate_id=None):
                 if warning: public['warning'] = warning
         except Failure as error: public['warning'] = str(error)
         changes = []
+        if owner['service'] == 'manual': changes.append('installing_service')
         if not public['pluginInstalled']: changes.append('installing_plugin')
+        elif version_below(public['pluginVersion'], PLUGIN_VERSION): changes.append('updating_plugin')
         elif not public['pluginEnabled']: changes.append('enabling_plugin')
         gateway = mapping(cfg.get('gateway'))
-        if status != 'plugin_ready' or (name == 'default' and not cfg.get('multiplex_profiles',gateway.get('multiplex_profiles',False))):
+        # A replaced plugin or a freshly registered unit only takes effect after the gateway restarts.
+        if status != 'plugin_ready' or (name == 'default' and not cfg.get('multiplex_profiles',gateway.get('multiplex_profiles',False))) or 'updating_plugin' in changes or 'installing_service' in changes:
             changes.extend(['configuring_api','restarting_gateway','verifying_gateway'])
         available = profile_names(cfg) if name == 'default' else [(name,home)]
         profiles = []
@@ -355,33 +397,58 @@ def main(action, candidate_id=None):
                 metadata['canProvision'] = True
             profiles.append(metadata)
         return {'candidate': public, 'pluginStatus': status, 'changes': changes, 'profiles':profiles}
+    if action == 'install-service':
+        # A host without a unit can never pass preflight's managed-service gate, so the rescue runs
+        # before it. Hermes writes the unit itself — DeskRPG never authors one, because only a
+        # Hermes-authored unit can pass the identity check that authorizes a restart later.
+        if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
+        if owner['service'] != 'manual': return {'ok': True}
+        assert_port_owned(public, owner)
+        env = {**os.environ, 'HERMES_HOME': str(home)}
+        if bounded([sys.executable, '-m', 'hermes_cli.main', '--profile', name, 'gateway', 'install'], env)[0]:
+            fail('service_install_failed')
+        if identity(name, home)['service'] == 'manual': fail('service_install_failed')
+        return {'ok': True}
     preflight(name,home,item)
     if action == 'install':
         env = {**os.environ, 'HERMES_HOME': str(home)}
         argv = [sys.executable, '-m', 'hermes_cli.main', '--profile', name, 'plugins']
+        updating = False
         if not public['pluginInstalled']: argv += ['install', SOURCE, '--ref', PIN, '--enable']
+        elif version_below(public['pluginVersion'], PLUGIN_VERSION):
+            # --force removes the stale copy and reinstalls the pinned ref. It is not a scan bypass:
+            # a blocked security scan still fails with plugin_security_review_required below.
+            updating = True
+            argv += ['install', SOURCE, '--ref', PIN, '--force', '--enable']
         elif not public['pluginEnabled']: argv += ['enable', plugin_name]
         else: return {'ok': True}
-        # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
-        child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
-        try:
-            output = child.stdout.read(262145)
-            if len(output) > 262144:
-                child.kill()
-                child.wait()
-                fail('output_limit')
-            code = child.wait()
-        finally:
-            child.stdout.close()
+        code, output = bounded(argv, env)
+        failure_code = 'plugin_update_failed' if updating else 'plugin_install_failed'
         if code:
             diagnostic = output.decode('utf-8', errors='replace').lower()
             if 'blocked' in diagnostic and ('security' in diagnostic or 'scan' in diagnostic):
                 fail('plugin_security_review_required')
             if 'repository not found' in diagnostic or 'could not resolve host' in diagnostic:
                 fail('plugin_source_unavailable')
-            fail('plugin_install_failed')
-        installed, enabled, unused = plugin(home,config(home))
-        if not installed or not enabled: fail('plugin_install_failed')
+            fail(failure_code)
+        installed, enabled, unused, installed_version = plugin(home,config(home))
+        if not installed or not enabled: fail(failure_code)
+        if updating and version_below(installed_version, PLUGIN_VERSION): fail('plugin_update_failed')
+    elif action == 'set-timezone':
+        value = option if isinstance(option, str) else ''
+        if not value or len(value) > 64 or not TIMEZONE.fullmatch(value): fail('timezone_invalid')
+        # 모양만 보면 'Asia/../Seoul' 이 통과한다 — zoneinfo 가 거부할 값을 설정에 남기지 않는다.
+        if any(part in ('.','..') for part in value.split('/')): fail('timezone_invalid')
+        fresh = config(home)
+        existing = fresh.get('timezone')
+        # Only ever fill an empty slot. An operator's own timezone is never overwritten.
+        if isinstance(existing, str) and existing.strip(): return {'ok': True}
+        if existing is not None and not isinstance(existing, str): fail('invalid_host_config')
+        fresh['timezone'] = value
+        try: atomic(home / 'config.yaml', yaml.safe_dump(fresh, sort_keys=False, allow_unicode=True))
+        except Failure: raise
+        except Exception: fail('timezone_write_failed')
+        if config(home).get('timezone') != value: fail('timezone_write_failed')
     elif action == 'configure':
         # Preserve existing config shapes while setting the effective merged API block.
         cfg.setdefault('gateway', {})
@@ -422,8 +489,8 @@ def main(action, candidate_id=None):
     else: fail('invalid_host_operation')
     return {'ok':True}
 
-def entry(action, candidate_id):
-    try: print(json.dumps(main(action,candidate_id)))
+def entry(action, candidate_id, option=None):
+    try: print(json.dumps(main(action,candidate_id,option)))
     except Failure as error: print(json.dumps({'error':str(error)}))
     except Exception: print(json.dumps({'error':'host_operation_failed'}))
 `;

@@ -222,6 +222,25 @@ const en: Record<string, string> = {
   "hermes.wizard.step.identity": "② Identity",
   "hermes.wizard.step.config": "③ Config",
   "hermes.wizard.step.placement": "④ Placement",
+  "hermes.wizard.step.installingService": "Register the gateway service",
+  "hermes.wizard.step.updatingPlugin": "Update the DeskRPG plugin",
+  "hermes.wizard.step.settingTimezone": "Set the gateway time zone",
+  "hermes.wizard.error.hermesVersionUnsupported":
+    "Hermes 0.21.1 or newer is required. Run hermes update on the server, then check again.",
+  "hermes.wizard.error.pluginUpdateFailed":
+    "The DeskRPG plugin could not be updated to the new version. Ask the administrator to check host network access and write permission on the plugin directory, then check again.",
+  "hermes.wizard.error.serviceInstallFailed":
+    "The gateway could not be registered as a service. Ask the administrator to run hermes gateway install on the host and read its output, then check again.",
+  "hermes.wizard.error.timezoneInvalid":
+    "That time zone is not an IANA name. Use a valid name such as Asia/Seoul, or turn the time zone step off and continue.",
+  "hermes.wizard.error.timezoneWriteFailed":
+    "The time zone could not be written to the gateway configuration. Ask the administrator to check write permission on config.yaml, then check again. The rest of the setup can proceed without it.",
+  "hermes.wizard.review.serviceInstall":
+    "Register the gateway as a service so it keeps running after a reboot.",
+  "hermes.wizard.review.pluginUpdate": "Update the DeskRPG plugin to {version}.",
+  "hermes.wizard.review.timezone": "Set the gateway time zone to {timezone}.",
+  "hermes.wizard.review.timezoneToggle": "Send this browser's time zone to the gateway",
+  "hermes.wizard.review.pluginVersion": "Plugin version",
   "hermes.wizard.profile.namePlaceholder": "New profile name (e.g. noah)",
   "hermes.wizard.profile.resumeHint":
     "Or pick a profile you already registered to edit its persona and settings.",
@@ -1582,9 +1601,12 @@ const en: Record<string, string> = {
   "npc.noAgent": "This NPC has no AI agent connected",
   "npc.gatewayNotConnected": "Gateway not connected",
   "npc.gatewayError": "AI Gateway error",
-  "npc.gatewayUnreachable": "Cannot reach the AI gateway. Check that it is running and that the address is correct.",
-  "npc.gatewayAuthFailed": "The gateway rejected the key. Check the gateway key in the channel settings.",
-  "npc.gatewayTimeout": "The gateway did not respond in time. Try sending the message again in a moment.",
+  "npc.gatewayUnreachable":
+    "Cannot reach the AI gateway. Check that it is running and that the address is correct.",
+  "npc.gatewayAuthFailed":
+    "The gateway rejected the key. Check the gateway key in the channel settings.",
+  "npc.gatewayTimeout":
+    "The gateway did not respond in time. Try sending the message again in a moment.",
   "npc.gatewayUnknownError": "The AI gateway call failed. Check the server logs for the cause.",
   "npc.unsupportedAdapter": "This NPC uses an unsupported adapter.",
   "npc.unbound": "This NPC is not yet linked to a Hermes profile.",
@@ -1752,16 +1774,22 @@ const en: Record<string, string> = {
   "gateways.empty": "No gateways have been registered yet.",
   "gateways.emptyHint": "Follow the guide above to start Hermes Agent first.",
   "gateways.onboarding.title": "No gateway yet — start here",
-  "gateways.onboarding.intro": "DeskRPG does not ship an AI agent runtime. The brain behind every NPC is a Hermes Agent you host yourself; DeskRPG only connects to its gateway.",
+  "gateways.onboarding.intro":
+    "DeskRPG does not ship an AI agent runtime. The brain behind every NPC is a Hermes Agent you host yourself; DeskRPG only connects to its gateway.",
   "gateways.onboarding.step1Title": "1. Install Hermes Agent and start its API server",
-  "gateways.onboarding.step1Body": "Follow the official repository, sign in to a model provider, then run the API server. Skip this and there is no gateway to register.",
+  "gateways.onboarding.step1Body":
+    "Follow the official repository, sign in to a model provider, then run the API server. Skip this and there is no gateway to register.",
   "gateways.onboarding.step2Title": "2. Get the gateway address and the listener owner key",
-  "gateways.onboarding.step2Body": "The form below needs the API server address (for example {example}) and an auth key.",
-  "gateways.onboarding.step2OwnerKeyWarning": "Use the listener owner key (API_SERVER_KEY). A profile-only key blocks Kanban, cron and the event stream.",
+  "gateways.onboarding.step2Body":
+    "The form below needs the API server address (for example {example}) and an auth key.",
+  "gateways.onboarding.step2OwnerKeyWarning":
+    "Use the listener owner key (API_SERVER_KEY). A profile-only key blocks Kanban, cron and the event stream.",
   "gateways.onboarding.step3Title": "3. Install the DeskRPG plugin for Kanban and cron",
-  "gateways.onboarding.step3Body": "Run the command below on the gateway host, then restart the Hermes API server.",
+  "gateways.onboarding.step3Body":
+    "Run the command below on the gateway host, then restart the Hermes API server.",
   "gateways.onboarding.step4Title": "4. The gateway can wait",
-  "gateways.onboarding.step4Body": "If Hermes is not running yet, you can still create a character and a channel first, and register the gateway here once it is ready.",
+  "gateways.onboarding.step4Body":
+    "If Hermes is not running yet, you can still create a character and a channel first, and register the gateway here once it is ready.",
   "gateways.onboarding.step4CharacterLink": "Create a character",
   "gateways.onboarding.step4ChannelLink": "Create a channel",
   "gateways.owner": "Owner",

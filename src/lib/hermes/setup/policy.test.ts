@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hostSetupAllowed, sameOriginMutation, validateGatewayUrl, safeSetupError } from "./policy";
+import {
+  hostSetupAllowed,
+  sameOriginMutation,
+  validateGatewayUrl,
+  safeSetupError,
+  validateTimezone,
+} from "./policy";
 
 test("host execution requires operator opt-in AND system administrator", () => {
   assert.equal(hostSetupAllowed({}, "system_admin"), false);
@@ -45,4 +51,13 @@ test("unexpected subprocess/DB messages never leave server", () => {
 test("security scan and source failures are safe structured errors", () => {
   for (const code of ["plugin_security_review_required", "plugin_source_unavailable"])
     assert.equal(safeSetupError(new Error(code)), code);
+});
+
+test("점 구간이 든 시간대는 모양이 맞아도 거부한다", () => {
+  // `Asia/../Seoul` 은 정규식을 통과하지만 zoneinfo 가 해석하지 못한다 —
+  // 운영자의 config.yaml 에 쓸 수 없는 값을 남기지 않는다.
+  for (const bad of ["Asia/../Seoul", "Asia/./Seoul", "../Seoul"]) {
+    assert.throws(() => validateTimezone(bad), /timezone_invalid/);
+  }
+  assert.equal(validateTimezone("Asia/Seoul"), "Asia/Seoul");
 });

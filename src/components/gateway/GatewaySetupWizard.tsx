@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Globe, Monitor, Server, Terminal } from "lucide-react";
-import { useLocale } from "../../lib/i18n";
+import { useLocale, useT } from "../../lib/i18n";
 import type {
   SetupCapabilities,
   SetupCandidate,
@@ -18,6 +18,10 @@ import {
 } from "./setup-copy";
 
 const API = "/api/gateways/setup";
+// Mirrors host-helper.ts: the wizard only ever installs this pinned revision, and that revision
+// carries this plugin.yaml version. Shown so an operator can match what the host reports.
+const PINNED_PLUGIN_COMMIT = "1be18d79bf1b";
+const PINNED_PLUGIN_VERSION = "0.6.0";
 const button =
   "rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50";
 const secondary =
@@ -32,6 +36,7 @@ export default function GatewaySetupWizard({
   onConnected: (gatewayId: string) => void;
 }) {
   const { locale } = useLocale();
+  const t = useT();
   const c = setupCopy[locale];
   const errorMessage = (code: unknown) => setupHostError(locale, code) ?? setupError(c, code);
   const [cap, setCap] = useState<SetupCapabilities | null>(null);
@@ -49,6 +54,15 @@ export default function GatewaySetupWizard({
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [displayName, setDisplayName] = useState("");
+  // Read once: the browser's own zone is the only time-zone source the wizard has.
+  const [browserTimezone] = useState(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch {
+      return "";
+    }
+  });
+  const [sendTimezone, setSendTimezone] = useState(true);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
 
@@ -197,6 +211,19 @@ export default function GatewaySetupWizard({
     </button>
   );
   const blockingWarning = inspection && isSetupWarningBlocking(inspection.candidate.warning);
+  // Offer a zone only when the host has none and the browser actually knows one; never overwrite.
+  const timezoneOffer =
+    inspection && !inspection.candidate.timezone && browserTimezone ? browserTimezone : null;
+  const changeText = (change: string) =>
+    change === "installing_service"
+      ? t("hermes.wizard.review.serviceInstall")
+      : change === "updating_plugin"
+        ? t("hermes.wizard.review.pluginUpdate", { version: PINNED_PLUGIN_VERSION })
+        : change === "setting_timezone" && (inspection?.candidate.timezone || browserTimezone)
+          ? t("hermes.wizard.review.timezone", {
+              timezone: inspection?.candidate.timezone || browserTimezone,
+            })
+          : setupStep(c, change);
   const pluginLabel =
     inspection &&
     (inspection.pluginStatus === "plugin_unauthorized"
@@ -305,6 +332,9 @@ export default function GatewaySetupWizard({
                   <h3 className="font-semibold">{candidate.label}</h3>
                   <p className="mt-1 text-sm text-text-muted">
                     Hermes {candidate.version} · {c.service}: {candidate.service} · {candidate.port}
+                    {candidate.pluginVersion
+                      ? ` · ${c.pluginVersion} ${candidate.pluginVersion}`
+                      : ""}
                   </p>
                   <button
                     className={`${button} mt-3`}
@@ -329,7 +359,14 @@ export default function GatewaySetupWizard({
           <p className="text-sm">
             {c.service}: <strong>{inspection.candidate.service}</strong>
           </p>
-          <p className="text-xs text-text-muted">{c.pluginRevision}: 9e200eb1d241</p>
+          {inspection.candidate.pluginVersion && (
+            <p className="text-xs text-text-muted">
+              {c.pluginVersion}: {inspection.candidate.pluginVersion}
+            </p>
+          )}
+          <p className="text-xs text-text-muted">
+            {c.pluginRevision}: {PINNED_PLUGIN_COMMIT} ({PINNED_PLUGIN_VERSION})
+          </p>
           <p role="status" className="rounded-lg bg-bg p-3 text-sm">
             {pluginLabel}
           </p>
@@ -373,11 +410,28 @@ export default function GatewaySetupWizard({
             )}
           </fieldset>
           <h4 className="font-semibold">{c.changes}</h4>
-          {inspection.changes.length ? (
+          {inspection.changes.length || timezoneOffer ? (
             <ul className="list-inside list-disc text-sm">
-              {inspection.changes.map((change, index) => (
-                <li key={index}>{setupStep(c, change)}</li>
-              ))}
+              {inspection.changes
+                .filter((change) => !(change === "setting_timezone" && timezoneOffer))
+                .map((change, index) => (
+                  <li key={index}>{changeText(change)}</li>
+                ))}
+              {timezoneOffer && (
+                <li>
+                  {t("hermes.wizard.review.timezone", { timezone: timezoneOffer })}
+                  <label className="mt-1 flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-primary"
+                      disabled={busy}
+                      checked={sendTimezone}
+                      onChange={(event) => setSendTimezone(event.target.checked)}
+                    />
+                    <span>{c.reviewTimezoneToggle}</span>
+                  </label>
+                </li>
+              )}
             </ul>
           ) : (
             <p className="text-sm">{c.noChanges}</p>
@@ -396,6 +450,7 @@ export default function GatewaySetupWizard({
                       ...target,
                       candidateId: inspection.candidate.id,
                       profiles: selectedProfiles,
+                      ...(timezoneOffer && sendTimezone ? { timezone: timezoneOffer } : {}),
                     },
                     "",
                     signal,
@@ -407,7 +462,7 @@ export default function GatewaySetupWizard({
               )
             }
           >
-            {busy ? c.loading : inspection.changes.length ? c.prepare : c.verify}
+            {busy ? c.loading : inspection.changes.length || timezoneOffer ? c.prepare : c.verify}
           </button>
           <button
             className={`${secondary} ml-2`}

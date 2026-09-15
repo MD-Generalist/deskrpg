@@ -217,6 +217,24 @@ const zh: Record<string, string> = {
   "hermes.wizard.step.identity": "② 人格",
   "hermes.wizard.step.config": "③ 设置",
   "hermes.wizard.step.placement": "④ 放置",
+  "hermes.wizard.step.installingService": "注册网关服务",
+  "hermes.wizard.step.updatingPlugin": "更新DeskRPG插件",
+  "hermes.wizard.step.settingTimezone": "设置网关时区",
+  "hermes.wizard.error.hermesVersionUnsupported":
+    "需要Hermes 0.21.1或更高版本。请在服务器上执行hermes update，然后重新检查。",
+  "hermes.wizard.error.pluginUpdateFailed":
+    "未能将DeskRPG插件更新到新版本。请管理员检查主机网络和插件目录的写入权限，然后重新检查。",
+  "hermes.wizard.error.serviceInstallFailed":
+    "未能将网关注册为服务。请管理员在主机上执行hermes gateway install并查看输出，然后重新检查。",
+  "hermes.wizard.error.timezoneInvalid":
+    "时区名称不符合IANA格式。请使用Asia/Shanghai这样的正确名称，或关闭时区设置后继续。",
+  "hermes.wizard.error.timezoneWriteFailed":
+    "未能将时区写入网关配置文件。请管理员检查config.yaml的写入权限，然后重新检查。其余设置在没有时区的情况下也可继续。",
+  "hermes.wizard.review.serviceInstall": "将网关注册为服务，使其在重启后继续运行。",
+  "hermes.wizard.review.pluginUpdate": "将DeskRPG插件更新到{version}。",
+  "hermes.wizard.review.timezone": "将网关时区设置为{timezone}。",
+  "hermes.wizard.review.timezoneToggle": "将此浏览器的时区设置到网关",
+  "hermes.wizard.review.pluginVersion": "插件版本",
   "hermes.wizard.profile.namePlaceholder": "新配置文件名称（例如 noah）",
   "hermes.wizard.profile.resumeHint": "或选择已注册的配置文件，继续编辑其人格与设置。",
   "hermes.wizard.profile.nameHint":
@@ -1723,16 +1741,20 @@ const zh: Record<string, string> = {
   "gateways.empty": "还没有已注册的网关。",
   "gateways.emptyHint": "请先按上面的指引启动 Hermes Agent。",
   "gateways.onboarding.title": "还没有网关 — 从这里开始",
-  "gateways.onboarding.intro": "DeskRPG 不内置 AI 智能体运行时。驱动 NPC 的大脑是你自己部署的 Hermes Agent，DeskRPG 只负责连接它的网关。",
+  "gateways.onboarding.intro":
+    "DeskRPG 不内置 AI 智能体运行时。驱动 NPC 的大脑是你自己部署的 Hermes Agent，DeskRPG 只负责连接它的网关。",
   "gateways.onboarding.step1Title": "1. 安装 Hermes Agent 并启动 API 服务器",
-  "gateways.onboarding.step1Body": "按官方仓库的说明安装，登录模型提供商，然后运行 API 服务器。跳过这一步就没有可注册的网关。",
+  "gateways.onboarding.step1Body":
+    "按官方仓库的说明安装，登录模型提供商，然后运行 API 服务器。跳过这一步就没有可注册的网关。",
   "gateways.onboarding.step2Title": "2. 准备网关地址和监听器所有者密钥",
   "gateways.onboarding.step2Body": "下面的表单需要 API 服务器地址（例如 {example}）和认证密钥。",
-  "gateways.onboarding.step2OwnerKeyWarning": "请务必填写监听器所有者密钥（API_SERVER_KEY）。仅有配置文件密钥会导致看板、定时任务和事件流不可用。",
+  "gateways.onboarding.step2OwnerKeyWarning":
+    "请务必填写监听器所有者密钥（API_SERVER_KEY）。仅有配置文件密钥会导致看板、定时任务和事件流不可用。",
   "gateways.onboarding.step3Title": "3. 要使用看板和定时任务，需安装 DeskRPG 插件",
   "gateways.onboarding.step3Body": "在网关主机上执行下面的命令，然后重启 Hermes API 服务器。",
   "gateways.onboarding.step4Title": "4. 网关可以稍后再连",
-  "gateways.onboarding.step4Body": "如果还没启动 Hermes，可以先创建角色和频道，准备好之后再回到本页面注册网关。",
+  "gateways.onboarding.step4Body":
+    "如果还没启动 Hermes，可以先创建角色和频道，准备好之后再回到本页面注册网关。",
   "gateways.onboarding.step4CharacterLink": "创建角色",
   "gateways.onboarding.step4ChannelLink": "创建频道",
   "gateways.owner": "所有者",

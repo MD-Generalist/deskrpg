@@ -76,3 +76,32 @@ test("job progress and cancellation cannot be accessed by another user", async (
   assert.equal((await POST(req(stranger, { action: "cancel", jobId: job.id }))).status, 404);
   assert.equal(jobs.cancelled(owner, job.id), false);
 });
+test("잘못된 시간대는 호스트를 건드리기 전에 400 으로 거부된다", async () => {
+  const { POST } = await import("./setup/route");
+  const admin = await user("system_admin");
+  const result = await POST(
+    req(admin, {
+      action: "prepare",
+      mode: "local",
+      candidateId: "a".repeat(64),
+      profiles: [],
+      timezone: "Asia Seoul",
+    }),
+  );
+  assert.equal(result.status, 400);
+  assert.equal((await result.json()).errorCode, "timezone_invalid");
+});
+test("시간대를 보내지 않아도 준비 요청은 그대로 진행된다", async () => {
+  const { POST } = await import("./setup/route");
+  const admin = await user("system_admin");
+  // 호스트 설정 스위치가 꺼져 있으므로 timezone 검증을 통과한 뒤 권한 게이트에서 멈춘다.
+  const result = await POST(
+    req(admin, {
+      action: "prepare",
+      mode: "local",
+      candidateId: "a".repeat(64),
+      profiles: [],
+    }),
+  );
+  assert.equal((await result.json()).errorCode, "setup_forbidden");
+});

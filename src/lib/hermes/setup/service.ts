@@ -22,9 +22,12 @@ const controllers = (stores.__deskrpgSetupControllers ??= new Map());
 const store = () => new SetupJobStore();
 const STEPS = new Set([
   "inspecting",
+  "installing_service",
   "installing_plugin",
   "enabling_plugin",
+  "updating_plugin",
   "configuring_api",
+  "setting_timezone",
   "restarting_gateway",
   "verifying_gateway",
   "importing_profiles",
@@ -115,6 +118,7 @@ export async function startSetup(
   target: HostTarget,
   candidateId: string,
   selectedProfiles: string[],
+  timezone?: string,
 ) {
   const executor = await requireHost(userId, target);
   const jobs = store();
@@ -147,7 +151,13 @@ export async function startSetup(
       // watchdog; killing the launcher cannot prove every descendant stopped.
       const boundedExecutor: typeof executor = (command, args, options) =>
         executor(command, args, { ...options, signal: undefined });
-      const prepared = await prepareHost(boundedExecutor, candidateId, step, controller.signal);
+      const prepared = await prepareHost(
+        boundedExecutor,
+        candidateId,
+        step,
+        controller.signal,
+        timezone,
+      );
       const remotePort = assertPrepared(prepared);
       const selected = new Set(selectedProfiles);
       if (

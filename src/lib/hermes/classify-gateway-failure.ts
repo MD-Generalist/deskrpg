@@ -46,15 +46,30 @@ function errorMessage(err: unknown): string {
   return "";
 }
 
-const TIMEOUT_CAUSE_CODES = new Set(["ETIMEDOUT", "ESOCKETTIMEDOUT", "UND_ERR_HEADERS_TIMEOUT",
-  "UND_ERR_BODY_TIMEOUT", "UND_ERR_CONNECT_TIMEOUT"]);
+const TIMEOUT_CAUSE_CODES = new Set([
+  "ETIMEDOUT",
+  "ESOCKETTIMEDOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
 
-const UNREACHABLE_CAUSE_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ECONNRESET",
-  "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "UND_ERR_SOCKET"]);
+const UNREACHABLE_CAUSE_CODES = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EPIPE",
+  "UND_ERR_SOCKET",
+]);
 
 const TIMEOUT_MESSAGE_RE = /\b(timed? ?out|timeout|aborted|abort)\b/i;
-const AUTH_MESSAGE_RE = /\b(unauthorized|forbidden|invalid[ _-]?(api[ _-]?)?key|auth(entication|orization)?[ _-]?(failed|error))\b/i;
-const UNREACHABLE_MESSAGE_RE = /\b(fetch failed|econnrefused|enotfound|network|unreachable|connection refused)\b/i;
+const AUTH_MESSAGE_RE =
+  /\b(unauthorized|forbidden|invalid[ _-]?(api[ _-]?)?key|auth(entication|orization)?[ _-]?(failed|error))\b/i;
+const UNREACHABLE_MESSAGE_RE =
+  /\b(fetch failed|econnrefused|enotfound|network|unreachable|connection refused)\b/i;
 
 export function classifyGatewayFailure(err: unknown): GatewayFailureKind {
   const cause = causeCode(err);
@@ -72,7 +87,8 @@ export function classifyGatewayFailure(err: unknown): GatewayFailureKind {
     if (TIMEOUT_MESSAGE_RE.test(message)) return "timeout";
     return "unreachable";
   }
-  if (code === "unknown_profile" || code === "http_error" || code === "run_failed") return "unknown";
+  if (code === "unknown_profile" || code === "http_error" || code === "run_failed")
+    return "unknown";
 
   // 3. 휴리스틱 — HermesError 가 아닌 예외 경로.
   if (UNREACHABLE_CAUSE_CODES.has(cause)) return "unreachable";
@@ -91,8 +107,7 @@ export const GATEWAY_FAILURE_MESSAGE_CODE = {
   unknown: "gateway_unknown_error",
 } as const;
 
-export type GatewayFailureMessageCode =
-  (typeof GATEWAY_FAILURE_MESSAGE_CODE)[GatewayFailureKind];
+export type GatewayFailureMessageCode = (typeof GATEWAY_FAILURE_MESSAGE_CODE)[GatewayFailureKind];
 
 export function gatewayFailureMessageCode(err: unknown): GatewayFailureMessageCode {
   return GATEWAY_FAILURE_MESSAGE_CODE[classifyGatewayFailure(err)];

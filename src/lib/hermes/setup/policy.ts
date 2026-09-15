@@ -68,6 +68,10 @@ const SAFE_CODES = new Set([
   "hermes_not_found",
   "hermes_version_unsupported",
   "plugin_install_failed",
+  "plugin_update_failed",
+  "service_install_failed",
+  "timezone_invalid",
+  "timezone_write_failed",
   "plugin_security_review_required",
   "plugin_source_unavailable",
   "plugin_enable_failed",
@@ -110,6 +114,19 @@ const SAFE_CODES = new Set([
   "invalid_host_operation",
   "host_busy",
 ]);
+const TIMEZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+\-.]+)*$/;
+/** IANA 이름 모양만 통과시킨다. 실제 존재 여부는 호스트가 판정한다. */
+export function validateTimezone(value: unknown): string {
+  if (typeof value !== "string") throw new Error("timezone_invalid");
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 64 || !TIMEZONE.test(trimmed))
+    throw new Error("timezone_invalid");
+  // 모양 검사만으로는 `Asia/../Seoul` 이 통과한다. Python 의 zoneinfo 는 그런 이름을 거부하므로
+  // 위험하진 않지만, 운영자의 config.yaml 에 해석 불가능한 값을 남기게 된다 — 여기서 자른다.
+  if (trimmed.split("/").some((segment) => segment === "." || segment === ".."))
+    throw new Error("timezone_invalid");
+  return trimmed;
+}
 export function safeSetupError(error: unknown): string {
   const code = error instanceof Error ? error.message : "";
   return SAFE_CODES.has(code) ? code : "setup_failed";

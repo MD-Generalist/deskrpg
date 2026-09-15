@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  classifyGatewayFailure,
-  gatewayFailureMessageCode,
-} from "./classify-gateway-failure";
+import { classifyGatewayFailure, gatewayFailureMessageCode } from "./classify-gateway-failure";
 import { HermesError } from "./hermes-client";
 
 test("게이트웨이가 꺼져 있으면 도달 불가로 분류한다", () => {
@@ -13,7 +10,10 @@ test("게이트웨이가 꺼져 있으면 도달 불가로 분류한다", () => 
 });
 
 test("키가 거부되면 인증 실패로 분류한다", () => {
-  assert.equal(classifyGatewayFailure(new HermesError("unauthorized", "Unauthorized", 401)), "auth");
+  assert.equal(
+    classifyGatewayFailure(new HermesError("unauthorized", "Unauthorized", 401)),
+    "auth",
+  );
   assert.equal(classifyGatewayFailure(new HermesError("unauthorized", "Forbidden", 403)), "auth");
 });
 
@@ -44,7 +44,10 @@ test("연결 거부 cause 코드는 도달 불가로 분류한다", () => {
 
 test("그 밖의 Hermes 오류 코드는 알 수 없는 오류로 접는다", () => {
   assert.equal(classifyGatewayFailure(new HermesError("http_error", "HTTP 500", 500)), "unknown");
-  assert.equal(classifyGatewayFailure(new HermesError("run_failed", "model error", 200)), "unknown");
+  assert.equal(
+    classifyGatewayFailure(new HermesError("run_failed", "model error", 200)),
+    "unknown",
+  );
   assert.equal(
     classifyGatewayFailure(new HermesError("unknown_profile", "Unknown profile", 404)),
     "unknown",

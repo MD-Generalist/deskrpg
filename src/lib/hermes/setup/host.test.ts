@@ -10,6 +10,8 @@ const candidate: SetupCandidate = {
   port: 8642,
   pluginInstalled: false,
   pluginEnabled: false,
+  pluginVersion: null,
+  timezone: null,
   hasToken: false,
 };
 function fake(responses: unknown[]) {
@@ -102,13 +104,25 @@ import { HOST_BOOTSTRAP, HOST_HELPER } from "./host-helper";
 const installedPython = ["venv", ".venv"]
   .map((name) => join(homedir(), ".hermes/hermes-agent", name, "bin/python"))
   .find(existsSync);
-function fixture(script: string, initial: { config?: object; env?: string } = {}) {
+function fixture(
+  script: string,
+  initial: { config?: object; env?: string; hermesVersion?: string | null; plugin?: object } = {},
+) {
   const temp = mkdtempSync(join(tmpdir(), "deskrpg-host-test-"));
   const root = join(temp, ".hermes");
   mkdirSync(join(root, "hermes-agent"), { recursive: true });
   writeFileSync(join(root, "config.yaml"), JSON.stringify(initial.config ?? {}));
   writeFileSync(join(root, ".env"), initial.env ?? "");
-  writeFileSync(join(root, "hermes-agent/pyproject.toml"), 'version = "0.21.1"\n');
+  writeFileSync(
+    join(root, "hermes-agent/pyproject.toml"),
+    initial.hermesVersion === null
+      ? "[project]\n"
+      : `version = "${initial.hermesVersion ?? "0.21.1"}"\n`,
+  );
+  if (initial.plugin) {
+    mkdirSync(join(root, "plugins/deskrpg"), { recursive: true });
+    writeFileSync(join(root, "plugins/deskrpg/plugin.yaml"), JSON.stringify(initial.plugin));
+  }
   // The portable branch supplies only YAML/env parsing; no Hermes installation or service is needed in CI.
   const portable = installedPython
     ? ""
@@ -133,9 +147,9 @@ def fixture_identity(name,home):
 identity = fixture_identity
 assert_port_owned = lambda public, owner: False
 original_main = main
-def main(action,candidate_id=None):
+def main(action,candidate_id=None,option=None):
     global LOCK
-    try: return original_main(action,candidate_id)
+    try: return original_main(action,candidate_id,option)
     finally:
         if LOCK is not None: LOCK.close(); LOCK = None
 `;
@@ -608,4 +622,322 @@ entry('install',id)
     { config: { gateway: { multiplex_profiles: true } } },
   );
   assert.deepEqual(result.body, { error: "output_limit" });
+});
+
+test("Hermes 버전이 하한보다 낮으면 준비 단계에서 거부한다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+entry('configure',id)
+`,
+    { config: { gateway: { multiplex_profiles: true } }, hermesVersion: "0.21.0" },
+  );
+  assert.equal(result.body.error, "hermes_version_unsupported");
+  assert.equal(result.env, "");
+});
+test("Hermes 버전의 숫자가 아닌 꼬리는 비교에서 무시한다", () => {
+  const result = fixture(
+    String.raw`
+print(json.dumps({'candidate': main('discover')['candidates'][0], 'configure': main('configure',main('discover')['candidates'][0]['id'])}))
+`,
+    { config: { gateway: { multiplex_profiles: true } }, hermesVersion: "0.21.1rc1" },
+  );
+  assert.deepEqual(result.body.configure, { ok: true });
+  assert.equal(result.body.candidate.warning, undefined);
+});
+test("Hermes 버전을 읽지 못하면 막지 않고 경고만 남긴다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps({'candidate': main('discover')['candidates'][0], 'configure': main('configure',id)}))
+`,
+    { config: { gateway: { multiplex_profiles: true } }, hermesVersion: null },
+  );
+  assert.equal(result.body.candidate.version, "unknown");
+  assert.equal(result.body.candidate.warning, "hermes_version_unknown");
+  assert.deepEqual(result.body.configure, { ok: true });
+});
+test("플러그인이 구버전이면 updating_plugin 이 changes 에 들어간다", () => {
+  const result = fixture(
+    String.raw`
+print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
+`,
+    {
+      config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
+      plugin: { name: "deskrpg", version: "0.5.0" },
+    },
+  );
+  assert.equal(result.body.candidate.pluginVersion, "0.5.0");
+  assert.ok(result.body.changes.includes("updating_plugin"));
+  assert.ok(!result.body.changes.includes("installing_plugin"));
+  assert.ok(result.body.changes.includes("restarting_gateway"));
+});
+test("플러그인 버전이 같거나 높으면 갱신 단계가 들어가지 않는다", () => {
+  for (const version of ["0.6.0", "0.7.1"]) {
+    const result = fixture(
+      String.raw`
+print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
+`,
+      {
+        config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
+        plugin: { name: "deskrpg", version },
+      },
+    );
+    assert.equal(result.body.candidate.pluginVersion, version);
+    assert.ok(!result.body.changes.includes("updating_plugin"));
+    assert.ok(!result.body.changes.includes("installing_plugin"));
+  }
+});
+test("구버전 갱신은 고정 커밋을 --force 로 다시 설치하고 버전을 되읽어 확인한다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+calls = []
+def fake_install(argv, **kwargs):
+    calls.append(argv)
+    assert kwargs['env']['HERMES_HOME'] == str(ROOT)
+    (ROOT / 'plugins' / 'deskrpg' / 'plugin.yaml').write_text(json.dumps({'name':'deskrpg','version':PLUGIN_VERSION}))
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = fake_install
+result = main('install',id)
+print(json.dumps({'result':result,'argv':calls[0][-6:]}))
+`,
+    {
+      config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
+      plugin: { name: "deskrpg", version: "0.5.0" },
+    },
+  );
+  assert.deepEqual(result.body.result, { ok: true });
+  assert.deepEqual(result.body.argv, [
+    "install",
+    "https://github.com/dandacompany/deskrpg-hermes-plugin",
+    "--ref",
+    "1be18d79bf1b8d40890b95517a8131cb2ae48c6f",
+    "--force",
+    "--enable",
+  ]);
+});
+test("갱신이 실패하면 plugin_update_failed 로만 알리고 --force 가 보안 스캔을 우회하지 않는다", () => {
+  for (const [diagnostic, expected] of [
+    ["unexpected secret=private", "plugin_update_failed"],
+    ["Security scan: BLOCKED. secret=private", "plugin_security_review_required"],
+  ] as const) {
+    const result = fixture(
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+def fake_install(argv, **kwargs):
+    assert '--force' in argv
+    return type('Result',(),{'stdout':io.BytesIO(DIAGNOSTIC.encode()), 'wait':lambda self:1})()
+subprocess.Popen = fake_install
+entry('install',id)
+`.replace("DIAGNOSTIC", JSON.stringify(diagnostic)),
+      {
+        config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
+        plugin: { name: "deskrpg", version: "0.5.0" },
+      },
+    );
+    assert.deepEqual(result.body, { error: expected });
+  }
+});
+test("갱신 명령이 성공해도 버전이 그대로면 갱신 실패로 처리한다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+subprocess.Popen = lambda argv, **kwargs: type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+entry('install',id)
+`,
+    {
+      config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
+      plugin: { name: "deskrpg", version: "0.5.0" },
+    },
+  );
+  assert.deepEqual(result.body, { error: "plugin_update_failed" });
+});
+const MANUAL = String.raw`
+state = {'installed': False}
+def manual_identity(name,home):
+    result = fixture_identity(name,home)
+    if not state['installed']:
+        result['service'] = 'manual'
+        result['command'] = None
+        result['warning'] = 'managed_service_required'
+    return result
+identity = manual_identity
+`;
+test("서비스 유닛이 없으면 installing_service 가 changes 에 들어간다", () => {
+  const result = fixture(
+    MANUAL +
+      String.raw`
+print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body.changes.slice(0, 2), ["installing_service", "installing_plugin"]);
+  assert.ok(result.body.changes.includes("restarting_gateway"));
+});
+test("서비스 설치는 Hermes CLI 만 부르고 유닛 파일을 직접 쓰지 않는다", () => {
+  const result = fixture(
+    MANUAL +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+calls = []
+def fake(argv, **kwargs):
+    calls.append(argv)
+    state['installed'] = True
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = fake
+result = main('install-service',id)
+written = sorted(str(p.relative_to(pathlib.Path.home())) for p in pathlib.Path.home().rglob('*') if p.is_file())
+print(json.dumps({'result':result,'argv':calls[0][1:],'written':written}))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body.result, { ok: true });
+  assert.deepEqual(result.body.argv, [
+    "-m",
+    "hermes_cli.main",
+    "--profile",
+    "default",
+    "gateway",
+    "install",
+  ]);
+  assert.ok(!result.body.written.some((p: string) => /LaunchAgents|systemd/.test(p)));
+});
+test("서비스 설치 뒤에도 유닛이 없으면 service_install_failed 로 멈춘다", () => {
+  const result = fixture(
+    MANUAL +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+subprocess.Popen = lambda argv, **kwargs: type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+entry('install-service',id)
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "service_install_failed" });
+});
+test("시간대가 이미 있으면 덮어쓰지 않는다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps({'candidate': main('discover')['candidates'][0], 'result': main('set-timezone',id,'Asia/Seoul')}))
+`,
+    { config: { gateway: { multiplex_profiles: true }, timezone: "Europe/Paris" } },
+  );
+  assert.equal(result.body.candidate.timezone, "Europe/Paris");
+  assert.deepEqual(result.body.result, { ok: true });
+  assert.match(result.config, /Europe\/Paris/);
+  assert.ok(!result.config.includes("Asia/Seoul"));
+});
+test("시간대가 비어 있으면 요청한 IANA 이름을 넣는다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps({'candidate': main('discover')['candidates'][0], 'result': main('set-timezone',id,'Asia/Seoul'), 'stored': config(ROOT).get('timezone')}))
+`,
+    { config: { gateway: { multiplex_profiles: true }, model: { default: "keep-me" } } },
+  );
+  assert.equal(result.body.candidate.timezone, null);
+  assert.deepEqual(result.body.result, { ok: true });
+  assert.equal(result.body.stored, "Asia/Seoul");
+  assert.match(result.config, /keep-me/);
+});
+test("호스트도 잘못된 시간대를 timezone_invalid 로 거부한다", () => {
+  for (const value of ["Asia Seoul", "/Asia/Seoul", "", "9Asia/Seoul", "A" + "b".repeat(70)]) {
+    const result = fixture(
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+entry('set-timezone',id,${JSON.stringify(value)})
+`,
+      { config: { gateway: { multiplex_profiles: true } } },
+    );
+    assert.deepEqual(result.body, { error: "timezone_invalid" });
+    assert.ok(!result.config.includes("timezone"));
+  }
+});
+test("갱신·서비스 설치·시간대 단계는 계약 순서대로 실행된다", async () => {
+  const stale = {
+    ...candidate,
+    pluginInstalled: true,
+    pluginEnabled: true,
+    pluginVersion: "0.5.0",
+    hasToken: true,
+  };
+  const f = fake([
+    {
+      candidate: stale,
+      pluginStatus: "plugin_ready",
+      changes: ["installing_service", "updating_plugin", "configuring_api"],
+    },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s), undefined, "Asia/Seoul");
+  assert.deepEqual(steps, [
+    "inspecting",
+    "installing_service",
+    "updating_plugin",
+    "configuring_api",
+    "setting_timezone",
+    "restarting_gateway",
+    "verifying_gateway",
+  ]);
+  const actions = f.calls.map((c) => JSON.parse(c.input!).action);
+  assert.deepEqual(actions, [
+    "inspect",
+    "install-service",
+    "install",
+    "configure",
+    "set-timezone",
+    "restart",
+    "verify",
+  ]);
+  assert.ok(f.calls[4].input!.includes("Asia/Seoul"));
+});
+test("후보에 시간대가 이미 있으면 설정 단계를 건너뛴다", async () => {
+  const f = fake([
+    {
+      candidate: {
+        ...candidate,
+        pluginInstalled: true,
+        pluginEnabled: true,
+        pluginVersion: "0.6.0",
+        hasToken: true,
+        timezone: "Europe/Paris",
+      },
+      pluginStatus: "plugin_ready",
+      changes: [],
+    },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s), undefined, "Asia/Seoul");
+  assert.deepEqual(steps, ["inspecting", "verifying_gateway"]);
+});
+test("잘못된 시간대는 호스트를 실행하기 전에 거부한다", async () => {
+  const f = fake([
+    {
+      candidate: { ...candidate, pluginInstalled: true, pluginEnabled: true, hasToken: true },
+      pluginStatus: "plugin_ready",
+      changes: [],
+    },
+  ]);
+  await assert.rejects(
+    prepareHost(f.execute, candidate.id, () => {}, undefined, "Asia Seoul"),
+    /^Error: timezone_invalid$/,
+  );
+  assert.equal(f.calls.length, 1);
 });

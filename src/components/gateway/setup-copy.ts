@@ -1,4 +1,10 @@
 import type { Locale } from "../../lib/i18n/context";
+// The wizard's newer copy lives in the shared locale maps so the four languages stay in one
+// place; older entries below predate that and are kept as-is.
+import enText from "../../lib/i18n/locales/en";
+import jaText from "../../lib/i18n/locales/ja";
+import koText from "../../lib/i18n/locales/ko";
+import zhText from "../../lib/i18n/locales/zh";
 
 const ko = {
   title: "Hermes 게이트웨이 연결",
@@ -72,6 +78,11 @@ const ko = {
   saving_gateway: "게이트웨이 저장",
   step: "설정 단계 진행",
   pluginRevision: "플러그인 고정 버전",
+  installing_service: koText["hermes.wizard.step.installingService"],
+  updating_plugin: koText["hermes.wizard.step.updatingPlugin"],
+  setting_timezone: koText["hermes.wizard.step.settingTimezone"],
+  pluginVersion: koText["hermes.wizard.review.pluginVersion"],
+  reviewTimezoneToggle: koText["hermes.wizard.review.timezoneToggle"],
 };
 type Copy = typeof ko;
 const en: Copy = {
@@ -148,6 +159,11 @@ const en: Copy = {
   saving_gateway: "Save gateway",
   step: "Setup step in progress",
   pluginRevision: "Pinned plugin revision",
+  installing_service: enText["hermes.wizard.step.installingService"],
+  updating_plugin: enText["hermes.wizard.step.updatingPlugin"],
+  setting_timezone: enText["hermes.wizard.step.settingTimezone"],
+  pluginVersion: enText["hermes.wizard.review.pluginVersion"],
+  reviewTimezoneToggle: enText["hermes.wizard.review.timezoneToggle"],
 };
 const ja: Copy = {
   ...en,
@@ -240,6 +256,11 @@ Object.assign(ja, {
   saving_gateway: "ゲートウェイを保存",
   step: "設定処理を実行中",
   pluginRevision: "固定プラグインリビジョン",
+  installing_service: jaText["hermes.wizard.step.installingService"],
+  updating_plugin: jaText["hermes.wizard.step.updatingPlugin"],
+  setting_timezone: jaText["hermes.wizard.step.settingTimezone"],
+  pluginVersion: jaText["hermes.wizard.review.pluginVersion"],
+  reviewTimezoneToggle: jaText["hermes.wizard.review.timezoneToggle"],
 });
 Object.assign(zh, {
   selectProfiles: "要导入的现有配置文件",
@@ -296,6 +317,11 @@ Object.assign(zh, {
   saving_gateway: "保存网关",
   step: "设置步骤进行中",
   pluginRevision: "固定插件版本",
+  installing_service: zhText["hermes.wizard.step.installingService"],
+  updating_plugin: zhText["hermes.wizard.step.updatingPlugin"],
+  setting_timezone: zhText["hermes.wizard.step.settingTimezone"],
+  pluginVersion: zhText["hermes.wizard.review.pluginVersion"],
+  reviewTimezoneToggle: zhText["hermes.wizard.review.timezoneToggle"],
 });
 export const setupCopy: Record<Locale, Copy> = { ko, en, ja, zh };
 export function setupError(copy: Copy, code: unknown): string {
@@ -350,6 +376,11 @@ const hostErrorGroups: Record<string, string> = {
   hermes_not_found: "missing",
   ssh_unknown_host: "ssh",
   ssh_connection_failed: "ssh",
+  hermes_version_unsupported: "hermesVersion",
+  plugin_update_failed: "pluginUpdate",
+  service_install_failed: "serviceInstall",
+  timezone_invalid: "timezoneInvalid",
+  timezone_write_failed: "timezoneWrite",
   command_timeout: "timeout",
   output_limit: "host",
 };
@@ -388,6 +419,11 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     ssh: "허용된 SSH 호스트에 연결할 수 없습니다. 관리자가 호스트 별칭·네트워크·키 인증을 확인한 뒤 다시 시도하세요.",
     timeout:
       "호스트 작업 시간이 초과되었습니다. 관리자가 호스트와 네트워크 상태를 확인한 뒤 다시 시도하세요.",
+    hermesVersion: koText["hermes.wizard.error.hermesVersionUnsupported"],
+    pluginUpdate: koText["hermes.wizard.error.pluginUpdateFailed"],
+    serviceInstall: koText["hermes.wizard.error.serviceInstallFailed"],
+    timezoneInvalid: koText["hermes.wizard.error.timezoneInvalid"],
+    timezoneWrite: koText["hermes.wizard.error.timezoneWriteFailed"],
   },
   en: {
     securityReview:
@@ -423,6 +459,11 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     ssh: "Cannot connect to the approved SSH host. Ask the administrator to check the alias, network and key authentication, then retry.",
     timeout:
       "The host operation timed out. Ask the administrator to check the host and network, then retry.",
+    hermesVersion: enText["hermes.wizard.error.hermesVersionUnsupported"],
+    pluginUpdate: enText["hermes.wizard.error.pluginUpdateFailed"],
+    serviceInstall: enText["hermes.wizard.error.serviceInstallFailed"],
+    timezoneInvalid: enText["hermes.wizard.error.timezoneInvalid"],
+    timezoneWrite: enText["hermes.wizard.error.timezoneWriteFailed"],
   },
   ja: {
     securityReview:
@@ -458,6 +499,11 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     ssh: "許可されたSSHホストに接続できません。管理者がホスト別名、ネットワーク、鍵認証を確認してから再試行してください。",
     timeout:
       "ホスト処理がタイムアウトしました。管理者がホストとネットワークを確認してから再試行してください。",
+    hermesVersion: jaText["hermes.wizard.error.hermesVersionUnsupported"],
+    pluginUpdate: jaText["hermes.wizard.error.pluginUpdateFailed"],
+    serviceInstall: jaText["hermes.wizard.error.serviceInstallFailed"],
+    timezoneInvalid: jaText["hermes.wizard.error.timezoneInvalid"],
+    timezoneWrite: jaText["hermes.wizard.error.timezoneWriteFailed"],
   },
   zh: {
     securityReview:
@@ -483,6 +529,11 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     missing: "未找到Hermes可执行文件。请管理员检查主机上的Hermes安装和执行路径，然后重新搜索。",
     ssh: "无法连接已批准的SSH主机。请管理员检查别名、网络和密钥身份验证，然后重试。",
     timeout: "主机操作超时。请管理员检查主机和网络，然后重试。",
+    hermesVersion: zhText["hermes.wizard.error.hermesVersionUnsupported"],
+    pluginUpdate: zhText["hermes.wizard.error.pluginUpdateFailed"],
+    serviceInstall: zhText["hermes.wizard.error.serviceInstallFailed"],
+    timezoneInvalid: zhText["hermes.wizard.error.timezoneInvalid"],
+    timezoneWrite: zhText["hermes.wizard.error.timezoneWriteFailed"],
   },
 };
 export function setupHostError(locale: Locale, code: unknown): string | undefined {

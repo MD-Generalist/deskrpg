@@ -6,8 +6,12 @@ export type SetupCandidate = {
   service: string;
   pluginInstalled: boolean;
   pluginEnabled: boolean;
+  /** plugin.yaml 의 version. 설치돼 있지 않거나 매니페스트가 버전을 적지 않으면 null. */
+  pluginVersion: string | null;
   port: number;
   hasToken: boolean;
+  /** config.yaml 의 최상위 timezone. 비어 있으면 null — 그때만 마법사가 채워 준다. */
+  timezone: string | null;
   warning?: string;
 };
 export type SetupInspection = {

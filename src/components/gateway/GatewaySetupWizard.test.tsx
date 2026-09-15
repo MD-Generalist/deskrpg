@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { I18nProvider } from "../../lib/i18n/context";
 import GatewaySetupWizard from "./GatewaySetupWizard";
+import type { SetupCandidate } from "../../lib/hermes/setup/types";
 
 const capabilities = {
   local: true,
@@ -12,15 +13,18 @@ const capabilities = {
   hostLabel: "server",
   sshHosts: [{ id: "approved", label: "Approved server" }],
 };
-const candidate = {
+const candidate: SetupCandidate = {
   id: "candidate",
   label: "Hermes test",
   version: "1",
   service: "hermes-gateway",
   pluginInstalled: false,
   pluginEnabled: false,
+  pluginVersion: null as string | null,
   port: 8642,
   hasToken: false,
+  // 시간대가 이미 있는 호스트가 기본값이다 — 시간대 제안은 비어 있을 때만 나온다.
+  timezone: "Asia/Seoul" as string | null,
 };
 async function fixture(handler: typeof fetch) {
   const original = globalThis.fetch;
@@ -472,3 +476,205 @@ test("fresh owner eligible for credential provisioning is selected and posted", 
     await f.cleanup();
   }
 });
+
+const freshHost: SetupCandidate = { ...candidate, timezone: null };
+async function reachReview(
+  inspection: Record<string, unknown>,
+  capture?: (body: Record<string, unknown>) => void,
+  target = freshHost,
+) {
+  const f = await fixture(async (_url, init) => {
+    if (!init?.body) return response(capabilities);
+    const body = JSON.parse(String(init.body));
+    if (body.action === "discover") return response({ candidates: [target] });
+    if (body.action === "inspect") return response({ candidate: target, ...inspection });
+    capture?.(body);
+    return response({ job: { id: "j", status: "running", steps: [] } });
+  });
+  await act(async () =>
+    Array.from(f.host.querySelectorAll("button"))
+      .find((b) => b.textContent?.includes("로컬 연결"))!
+      .click(),
+  );
+  await f.click("연결하기");
+  return f;
+}
+
+test("시간대가 비어 있는 호스트에만 브라우저 시간대를 제안하고 동의하면 prepare 에 싣는다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
+    (body) => {
+      prepared = body;
+    },
+  );
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    assert.match(f.host.textContent!, new RegExp(`게이트웨이 시간대를 ${zone} 으로 설정합니다`));
+    assert.match(f.host.textContent!, /이 브라우저의 시간대를 게이트웨이에 넣기/);
+    await f.click("설치 및 연결");
+    assert.equal(prepared?.timezone, zone);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("시간대 동의를 끄면 prepare 본문에 timezone 을 넣지 않는다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    { pluginStatus: "plugin_absent", changes: [], profiles: [] },
+    (body) => {
+      prepared = body;
+    },
+  );
+  try {
+    const boxes = Array.from(f.host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    assert.equal(boxes.length, 1);
+    assert.equal(boxes[0].checked, true, "기본은 켬이다");
+    await act(async () => boxes[0].click());
+    await f.click("설치 및 연결");
+    assert.equal("timezone" in (prepared ?? {}), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("이미 시간대가 있는 호스트에는 시간대 항목을 보여주지 않는다", async () => {
+  const f = await reachReview(
+    { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
+    undefined,
+    candidate,
+  );
+  try {
+    assert.doesNotMatch(f.host.textContent!, /이 브라우저의 시간대를 게이트웨이에 넣기/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("브라우저가 시간대를 알려주지 못하면 시간대 항목 자체가 없다", async () => {
+  const original = Intl.DateTimeFormat;
+  // 일부 브라우저·잠긴 환경은 빈 시간대를 돌려준다 — 그때는 제안하지 않는다.
+  Object.defineProperty(Intl, "DateTimeFormat", {
+    configurable: true,
+    writable: true,
+    value: Object.assign(() => ({ resolvedOptions: () => ({ timeZone: "" }) }), original),
+  });
+  try {
+    const f = await reachReview({ pluginStatus: "plugin_absent", changes: ["installing_plugin"] });
+    try {
+      assert.doesNotMatch(f.host.textContent!, /이 브라우저의 시간대를 게이트웨이에 넣기/);
+      assert.doesNotMatch(f.host.textContent!, /시간대를 .* 으로 설정합니다/);
+    } finally {
+      await f.cleanup();
+    }
+  } finally {
+    Object.defineProperty(Intl, "DateTimeFormat", {
+      configurable: true,
+      writable: true,
+      value: original,
+    });
+  }
+});
+
+test("서비스 등록과 플러그인 갱신 변경을 결과가 보이는 한국어로 설명한다", async () => {
+  const f = await reachReview({
+    pluginStatus: "plugin_ready",
+    changes: ["installing_service", "updating_plugin"],
+  });
+  try {
+    assert.match(f.host.textContent!, /재부팅 후에도 계속 살아 있게 합니다/);
+    assert.match(f.host.textContent!, /DeskRPG 플러그인을 0\.6\.0 으로 올립니다/);
+    assert.doesNotMatch(f.host.textContent!, /installing_service|updating_plugin/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("플러그인 버전이 있으면 후보 목록과 검토 화면이 커밋과 함께 보여준다", async () => {
+  const f = await reachReview({ pluginStatus: "plugin_ready", changes: [] }, undefined, {
+    ...candidate,
+    pluginInstalled: true,
+    pluginVersion: "0.5.2",
+  });
+  try {
+    assert.match(f.host.textContent!, /플러그인 버전: 0\.5\.2/);
+    assert.match(f.host.textContent!, /플러그인 고정 버전: 1be18d79bf1b \(0\.6\.0\)/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("새 잡 단계는 한국어 라벨로 나오고 원시 코드가 새지 않는다", async () => {
+  const f = await fixture(async (url, init) => {
+    if (String(url).includes("?job="))
+      return response({
+        job: {
+          id: "j",
+          status: "running",
+          steps: ["installing_service", "updating_plugin", "setting_timezone"],
+        },
+      });
+    if (!init?.body) return response(capabilities);
+    const { action } = JSON.parse(String(init.body));
+    if (action === "discover") return response({ candidates: [candidate] });
+    if (action === "inspect")
+      return response({ candidate, pluginStatus: "plugin_absent", changes: ["installing_plugin"] });
+    return response({ job: { id: "j", status: "running", steps: [] } });
+  });
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("로컬 연결"))!
+        .click(),
+    );
+    await f.click("연결하기");
+    await f.click("설치 및 연결");
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
+    assert.match(f.host.textContent!, /게이트웨이 서비스 등록/);
+    assert.match(f.host.textContent!, /DeskRPG 플러그인 갱신/);
+    assert.match(f.host.textContent!, /게이트웨이 시간대 설정/);
+    assert.doesNotMatch(f.host.textContent!, /setting_timezone/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+for (const [code, expected] of [
+  ["hermes_version_unsupported", /0\.21\.1 이상이 필요합니다[\s\S]*hermes update/],
+  ["plugin_update_failed", /갱신하지 못했습니다[\s\S]*권한을 확인/],
+  ["service_install_failed", /서비스로 등록하지 못했습니다[\s\S]*hermes gateway install/],
+  ["timezone_invalid", /IANA 형식이 아닙니다[\s\S]*Asia\/Seoul/],
+  ["timezone_write_failed", /시간대를 쓰지 못했습니다[\s\S]*쓰기 권한/],
+] as const) {
+  test(`실패한 잡의 ${code} 는 원인과 다음 행동을 담은 안내로 바뀐다`, async () => {
+    const f = await fixture(async (_url, init) => {
+      if (!init?.body) return response(capabilities);
+      const { action } = JSON.parse(String(init.body));
+      if (action === "discover") return response({ candidates: [candidate] });
+      if (action === "inspect")
+        return response({
+          candidate,
+          pluginStatus: "plugin_absent",
+          changes: ["installing_plugin"],
+        });
+      return response({ job: { id: "j", status: "failed", steps: [], error: code } });
+    });
+    try {
+      await act(async () =>
+        Array.from(f.host.querySelectorAll("button"))
+          .find((b) => b.textContent?.includes("로컬 연결"))!
+          .click(),
+      );
+      await f.click("연결하기");
+      await f.click("설치 및 연결");
+      const alerts = Array.from(f.host.querySelectorAll('[role="alert"]'))
+        .map((node) => node.textContent ?? "")
+        .join("\n");
+      assert.match(alerts, expected);
+      assert.doesNotMatch(alerts, new RegExp(code));
+    } finally {
+      await f.cleanup();
+    }
+  });
+}

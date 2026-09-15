@@ -27,8 +27,13 @@ export const HOST_ERROR_CODES = new Set([
   "listener_ownership_unverified",
   "plugin_identity_ambiguous",
   "plugin_install_failed",
+  "plugin_update_failed",
   "plugin_security_review_required",
   "plugin_source_unavailable",
+  "hermes_version_unsupported",
+  "service_install_failed",
+  "timezone_invalid",
+  "timezone_write_failed",
   "gateway_restart_failed",
   "gateway_verification_failed",
   "profile_verification_failed",
@@ -43,11 +48,15 @@ const WARNING_CODES = new Set([
   "plugin_disabled",
   "plugin_absent",
   "gateway_identity_unverified",
+  "hermes_version_unknown",
 ]);
 const STEP_CODES = new Set([
+  "installing_service",
   "installing_plugin",
   "enabling_plugin",
+  "updating_plugin",
   "configuring_api",
+  "setting_timezone",
   "restarting_gateway",
   "verifying_gateway",
 ]);
@@ -84,6 +93,9 @@ function publicCandidate(value: unknown): SetupCandidate {
     port: Number(item.port),
     pluginInstalled: item.pluginInstalled as boolean,
     pluginEnabled: item.pluginEnabled as boolean,
+    // An unreadable version reaches the UI as null, never as a guess.
+    pluginVersion: typeof item.pluginVersion === "string" ? string(item.pluginVersion, 64) : null,
+    timezone: typeof item.timezone === "string" ? string(item.timezone, 64) : null,
     hasToken: item.hasToken as boolean,
     ...(typeof item.warning === "string" && WARNING_CODES.has(item.warning)
       ? { warning: item.warning }
@@ -98,10 +110,18 @@ async function invoke(
   action: string,
   candidateId?: string,
   signal?: AbortSignal,
+  option?: string,
 ): Promise<RecordValue> {
   checkAbort(signal);
   if (candidateId !== undefined && !ID.test(candidateId)) throw new Error("invalid_candidate");
-  const timeout = action === "install" ? 170 : action === "verify" ? 110 : 45;
+  // The helper re-validates `option`; it is JSON-encoded into the script, never shell-interpolated.
+  if (
+    option !== undefined &&
+    (option.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-.]+)*$/.test(option))
+  )
+    throw new Error("timezone_invalid");
+  const timeout =
+    action === "install" || action === "install-service" ? 170 : action === "verify" ? 110 : 45;
   try {
     const result = await execute("python3", ["-c", HOST_BOOTSTRAP], {
       input: JSON.stringify({
@@ -113,6 +133,8 @@ async function invoke(
           JSON.stringify(action) +
           ", " +
           (candidateId ? JSON.stringify(candidateId) : "None") +
+          ", " +
+          (option === undefined ? "None" : JSON.stringify(option)) +
           ")\n",
       }),
       timeoutMs: (timeout + 5) * 1000,
@@ -131,6 +153,7 @@ async function invoke(
     return body;
   } catch (error) {
     if (signal?.aborted) throw new Error("setup_cancelled");
+    if (error instanceof Error && error.message === "timezone_invalid") throw error;
     if (error instanceof Error && HOST_ERROR_CODES.has(error.message)) throw error;
     // SSH/execution layers may include stderr in an exception. Never propagate it.
     throw new Error("host_operation_failed");
@@ -185,23 +208,31 @@ export async function prepareHost(
   candidateId: string,
   onStep: (step: string) => void,
   signal?: AbortSignal,
+  timezone?: string,
 ): Promise<PreparedHost> {
-  const stage = async (step: string, action: string) => {
+  const stage = async (step: string, action: string, option?: string) => {
     checkAbort(signal);
     onStep(step);
     checkAbort(signal);
-    return invoke(execute, action, candidateId, signal);
+    return invoke(execute, action, candidateId, signal, option);
   };
   const state = inspection(await stage("inspecting", "inspect"));
-  if (!state.candidate.pluginInstalled || !state.candidate.pluginEnabled)
+  // A unit must exist before anything tries to restart the gateway through it.
+  if (state.changes.includes("installing_service"))
+    await stage("installing_service", "install-service");
+  if (state.changes.includes("updating_plugin")) await stage("updating_plugin", "install");
+  else if (!state.candidate.pluginInstalled || !state.candidate.pluginEnabled)
     await stage(
       state.candidate.pluginInstalled ? "enabling_plugin" : "installing_plugin",
       "install",
     );
-  if (state.pluginStatus !== "plugin_ready" || state.changes.includes("configuring_api")) {
-    await stage("configuring_api", "configure");
-    await stage("restarting_gateway", "restart");
-  }
+  const configuring =
+    state.pluginStatus !== "plugin_ready" || state.changes.includes("configuring_api");
+  // Never overwrite a timezone the operator already set.
+  const settingTimezone = Boolean(timezone) && !state.candidate.timezone;
+  if (configuring) await stage("configuring_api", "configure");
+  if (settingTimezone) await stage("setting_timezone", "set-timezone", timezone);
+  if (configuring || settingTimezone) await stage("restarting_gateway", "restart");
   const body = record((await stage("verifying_gateway", "verify")).prepared);
   const baseUrl = string(body.baseUrl);
   if (

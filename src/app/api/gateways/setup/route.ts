@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserId } from "@/lib/internal-rpc";
-import { sameOriginMutation, safeSetupError } from "@/lib/hermes/setup/policy";
+import { sameOriginMutation, safeSetupError, validateTimezone } from "@/lib/hermes/setup/policy";
 import {
   setupCapabilities,
   discoverSetupHost,
@@ -94,11 +94,20 @@ export async function POST(req: NextRequest) {
         body.profiles.some((name: unknown) => typeof name !== "string" || !isValidProfileName(name))
       )
         throw new Error("setup_invalid_request");
+      // 후보에 이미 시간대가 있으면 호스트가 무시한다. 여기서는 모양만 본다.
+      const timezone =
+        body.timezone === undefined || body.timezone === null
+          ? undefined
+          : validateTimezone(body.timezone);
       return response(
         {
-          job: await startSetup(userId, target, body.candidateId, [
-            ...new Set<string>(body.profiles),
-          ]),
+          job: await startSetup(
+            userId,
+            target,
+            body.candidateId,
+            [...new Set<string>(body.profiles)],
+            timezone,
+          ),
         },
         202,
       );

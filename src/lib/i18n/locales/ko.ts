@@ -219,6 +219,25 @@ const ko: Record<string, string> = {
   "hermes.wizard.step.identity": "② 인격",
   "hermes.wizard.step.config": "③ 설정",
   "hermes.wizard.step.placement": "④ 배치",
+  "hermes.wizard.step.installingService": "게이트웨이 서비스 등록",
+  "hermes.wizard.step.updatingPlugin": "DeskRPG 플러그인 갱신",
+  "hermes.wizard.step.settingTimezone": "게이트웨이 시간대 설정",
+  "hermes.wizard.error.hermesVersionUnsupported":
+    "Hermes 0.21.1 이상이 필요합니다. 서버에서 hermes update 를 실행해 올린 뒤 다시 확인하세요.",
+  "hermes.wizard.error.pluginUpdateFailed":
+    "DeskRPG 플러그인을 새 버전으로 갱신하지 못했습니다. 관리자가 호스트의 네트워크와 플러그인 디렉터리 쓰기 권한을 확인한 뒤 다시 확인하세요.",
+  "hermes.wizard.error.serviceInstallFailed":
+    "게이트웨이를 서비스로 등록하지 못했습니다. 관리자가 호스트에서 hermes gateway install 을 직접 실행해 결과를 확인한 뒤 다시 확인하세요.",
+  "hermes.wizard.error.timezoneInvalid":
+    "시간대 이름이 IANA 형식이 아닙니다. Asia/Seoul 처럼 올바른 이름을 쓰거나 시간대 설정을 끄고 진행하세요.",
+  "hermes.wizard.error.timezoneWriteFailed":
+    "게이트웨이 설정 파일에 시간대를 쓰지 못했습니다. 관리자가 config.yaml 의 쓰기 권한을 확인한 뒤 다시 확인하세요. 나머지 설정은 시간대 없이도 진행할 수 있습니다.",
+  "hermes.wizard.review.serviceInstall":
+    "게이트웨이를 서비스로 등록해 재부팅 후에도 계속 살아 있게 합니다.",
+  "hermes.wizard.review.pluginUpdate": "DeskRPG 플러그인을 {version} 으로 올립니다.",
+  "hermes.wizard.review.timezone": "게이트웨이 시간대를 {timezone} 으로 설정합니다.",
+  "hermes.wizard.review.timezoneToggle": "이 브라우저의 시간대를 게이트웨이에 넣기",
+  "hermes.wizard.review.pluginVersion": "플러그인 버전",
   "hermes.wizard.profile.namePlaceholder": "새 프로필 이름 (예: noah)",
   "hermes.wizard.profile.resumeHint":
     "또는 이미 등록된 프로필을 골라 인격·설정을 이어서 편집합니다.",
@@ -1577,10 +1596,14 @@ const ko: Record<string, string> = {
   "npc.noAgent": "이 NPC에 AI 에이전트가 연결되어 있지 않습니다",
   "npc.gatewayNotConnected": "게이트웨이 미연결",
   "npc.gatewayError": "AI 게이트웨이 오류",
-  "npc.gatewayUnreachable": "AI 게이트웨이에 연결할 수 없습니다. 게이트웨이가 실행 중인지, 주소가 맞는지 확인하세요.",
-  "npc.gatewayAuthFailed": "게이트웨이 키가 거부되었습니다. 채널 설정에서 게이트웨이 키를 확인하세요.",
-  "npc.gatewayTimeout": "게이트웨이가 제한 시간 안에 응답하지 않았습니다. 잠시 후 다시 보내 보세요.",
-  "npc.gatewayUnknownError": "AI 게이트웨이 호출이 실패했습니다. 자세한 원인은 서버 로그를 확인하세요.",
+  "npc.gatewayUnreachable":
+    "AI 게이트웨이에 연결할 수 없습니다. 게이트웨이가 실행 중인지, 주소가 맞는지 확인하세요.",
+  "npc.gatewayAuthFailed":
+    "게이트웨이 키가 거부되었습니다. 채널 설정에서 게이트웨이 키를 확인하세요.",
+  "npc.gatewayTimeout":
+    "게이트웨이가 제한 시간 안에 응답하지 않았습니다. 잠시 후 다시 보내 보세요.",
+  "npc.gatewayUnknownError":
+    "AI 게이트웨이 호출이 실패했습니다. 자세한 원인은 서버 로그를 확인하세요.",
   "npc.unsupportedAdapter": "이 NPC는 지원하지 않는 어댑터를 사용합니다.",
   "npc.unbound": "이 NPC는 아직 Hermes 프로필에 연결되지 않았습니다.",
   "npc.hermesImageUnsupported": "이 NPC는 아직 이미지를 받을 수 없습니다.",
@@ -1747,16 +1770,22 @@ const ko: Record<string, string> = {
   "gateways.empty": "등록된 게이트웨이가 없습니다.",
   "gateways.emptyHint": "위 안내를 따라 Hermes Agent 를 먼저 띄우세요.",
   "gateways.onboarding.title": "아직 게이트웨이가 없습니다 — 여기서 시작하세요",
-  "gateways.onboarding.intro": "DeskRPG 는 AI 에이전트 런타임을 내장하지 않습니다. NPC 를 움직이는 두뇌는 여러분이 직접 띄우는 Hermes Agent 이고, DeskRPG 는 그 게이트웨이에 접속할 뿐입니다.",
+  "gateways.onboarding.intro":
+    "DeskRPG 는 AI 에이전트 런타임을 내장하지 않습니다. NPC 를 움직이는 두뇌는 여러분이 직접 띄우는 Hermes Agent 이고, DeskRPG 는 그 게이트웨이에 접속할 뿐입니다.",
   "gateways.onboarding.step1Title": "1. Hermes Agent 를 설치하고 API 서버를 띄웁니다",
-  "gateways.onboarding.step1Body": "공식 저장소의 안내대로 설치한 뒤, 모델 제공자에 로그인하고 API 서버를 실행하세요. 이 단계를 건너뛰면 등록할 게이트웨이가 없습니다.",
+  "gateways.onboarding.step1Body":
+    "공식 저장소의 안내대로 설치한 뒤, 모델 제공자에 로그인하고 API 서버를 실행하세요. 이 단계를 건너뛰면 등록할 게이트웨이가 없습니다.",
   "gateways.onboarding.step2Title": "2. 게이트웨이 주소와 리스너 소유자 키를 준비합니다",
-  "gateways.onboarding.step2Body": "아래 폼에는 API 서버 주소(예: {example})와 인증 키가 필요합니다.",
-  "gateways.onboarding.step2OwnerKeyWarning": "반드시 리스너 소유자 키(API_SERVER_KEY)를 넣으세요. 프로필 키만으로는 칸반·크론·사건 스트림이 막힙니다.",
+  "gateways.onboarding.step2Body":
+    "아래 폼에는 API 서버 주소(예: {example})와 인증 키가 필요합니다.",
+  "gateways.onboarding.step2OwnerKeyWarning":
+    "반드시 리스너 소유자 키(API_SERVER_KEY)를 넣으세요. 프로필 키만으로는 칸반·크론·사건 스트림이 막힙니다.",
   "gateways.onboarding.step3Title": "3. 칸반·크론을 쓰려면 DeskRPG 플러그인을 설치합니다",
-  "gateways.onboarding.step3Body": "게이트웨이 호스트에서 아래 명령을 실행한 뒤 Hermes API 서버를 다시 시작하세요.",
+  "gateways.onboarding.step3Body":
+    "게이트웨이 호스트에서 아래 명령을 실행한 뒤 Hermes API 서버를 다시 시작하세요.",
   "gateways.onboarding.step4Title": "4. 게이트웨이는 나중에 연결해도 됩니다",
-  "gateways.onboarding.step4Body": "아직 Hermes 를 띄우지 못했다면 캐릭터와 채널을 먼저 만들어 두어도 됩니다. 게이트웨이는 준비된 뒤에 이 화면에서 등록하면 됩니다.",
+  "gateways.onboarding.step4Body":
+    "아직 Hermes 를 띄우지 못했다면 캐릭터와 채널을 먼저 만들어 두어도 됩니다. 게이트웨이는 준비된 뒤에 이 화면에서 등록하면 됩니다.",
   "gateways.onboarding.step4CharacterLink": "캐릭터 만들기",
   "gateways.onboarding.step4ChannelLink": "채널 만들기",
   "gateways.owner": "소유",

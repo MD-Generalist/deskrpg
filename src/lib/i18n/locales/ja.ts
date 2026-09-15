@@ -226,6 +226,25 @@ const ja: Record<string, string> = {
   "hermes.wizard.step.identity": "②人格",
   "hermes.wizard.step.config": "③設定",
   "hermes.wizard.step.placement": "④配置",
+  "hermes.wizard.step.installingService": "ゲートウェイをサービスとして登録",
+  "hermes.wizard.step.updatingPlugin": "DeskRPGプラグインを更新",
+  "hermes.wizard.step.settingTimezone": "ゲートウェイのタイムゾーンを設定",
+  "hermes.wizard.error.hermesVersionUnsupported":
+    "Hermes 0.21.1以上が必要です。サーバーでhermes updateを実行してから再確認してください。",
+  "hermes.wizard.error.pluginUpdateFailed":
+    "DeskRPGプラグインを新しいバージョンに更新できませんでした。管理者がホストのネットワークとプラグインディレクトリの書き込み権限を確認してから再確認してください。",
+  "hermes.wizard.error.serviceInstallFailed":
+    "ゲートウェイをサービスとして登録できませんでした。管理者がホストでhermes gateway installを実行し、結果を確認してから再確認してください。",
+  "hermes.wizard.error.timezoneInvalid":
+    "タイムゾーン名がIANA形式ではありません。Asia/Tokyoのような正しい名前を使うか、タイムゾーン設定をオフにして進めてください。",
+  "hermes.wizard.error.timezoneWriteFailed":
+    "ゲートウェイの設定ファイルにタイムゾーンを書き込めませんでした。管理者がconfig.yamlの書き込み権限を確認してから再確認してください。残りの設定はタイムゾーンなしでも進められます。",
+  "hermes.wizard.review.serviceInstall":
+    "ゲートウェイをサービスとして登録し、再起動後も動き続けるようにします。",
+  "hermes.wizard.review.pluginUpdate": "DeskRPGプラグインを{version}に更新します。",
+  "hermes.wizard.review.timezone": "ゲートウェイのタイムゾーンを{timezone}に設定します。",
+  "hermes.wizard.review.timezoneToggle": "このブラウザーのタイムゾーンをゲートウェイに設定する",
+  "hermes.wizard.review.pluginVersion": "プラグインバージョン",
   "hermes.wizard.profile.namePlaceholder": "新しいプロフィール名（例: noah）",
   "hermes.wizard.profile.resumeHint":
     "または、すでに登録済みのプロフィールを選んで人格・設定を続けて編集します。",
@@ -1589,10 +1608,14 @@ const ja: Record<string, string> = {
   "npc.noAgent": "このNPCにはAIエージェントが接続されていません",
   "npc.gatewayNotConnected": "ゲートウェイ未接続",
   "npc.gatewayError": "AIゲートウェイエラー",
-  "npc.gatewayUnreachable": "AIゲートウェイに接続できません。ゲートウェイが起動しているか、アドレスが正しいか確認してください。",
-  "npc.gatewayAuthFailed": "ゲートウェイキーが拒否されました。チャンネル設定でキーを確認してください。",
-  "npc.gatewayTimeout": "ゲートウェイが時間内に応答しませんでした。しばらくしてからもう一度送信してください。",
-  "npc.gatewayUnknownError": "AIゲートウェイの呼び出しに失敗しました。詳細はサーバーログを確認してください。",
+  "npc.gatewayUnreachable":
+    "AIゲートウェイに接続できません。ゲートウェイが起動しているか、アドレスが正しいか確認してください。",
+  "npc.gatewayAuthFailed":
+    "ゲートウェイキーが拒否されました。チャンネル設定でキーを確認してください。",
+  "npc.gatewayTimeout":
+    "ゲートウェイが時間内に応答しませんでした。しばらくしてからもう一度送信してください。",
+  "npc.gatewayUnknownError":
+    "AIゲートウェイの呼び出しに失敗しました。詳細はサーバーログを確認してください。",
   "npc.unsupportedAdapter": "このNPCはサポートされていないアダプターを使用しています。",
   "npc.unbound": "このNPCはまだHermesプロファイルに接続されていません。",
   "npc.hermesImageUnsupported": "このNPCはまだ画像を受け取れません。",
@@ -1757,16 +1780,22 @@ const ja: Record<string, string> = {
   "gateways.empty": "登録済みのゲートウェイがありません。",
   "gateways.emptyHint": "上の案内に従って、まず Hermes Agent を起動してください。",
   "gateways.onboarding.title": "ゲートウェイがまだありません — ここから始めます",
-  "gateways.onboarding.intro": "DeskRPG は AI エージェントのランタイムを内蔵していません。NPC を動かす頭脳は自分で起動する Hermes Agent であり、DeskRPG はそのゲートウェイに接続するだけです。",
+  "gateways.onboarding.intro":
+    "DeskRPG は AI エージェントのランタイムを内蔵していません。NPC を動かす頭脳は自分で起動する Hermes Agent であり、DeskRPG はそのゲートウェイに接続するだけです。",
   "gateways.onboarding.step1Title": "1. Hermes Agent をインストールして API サーバーを起動します",
-  "gateways.onboarding.step1Body": "公式リポジトリの手順でインストールし、モデルプロバイダーにログインしてから API サーバーを実行してください。これを省くと登録できるゲートウェイがありません。",
+  "gateways.onboarding.step1Body":
+    "公式リポジトリの手順でインストールし、モデルプロバイダーにログインしてから API サーバーを実行してください。これを省くと登録できるゲートウェイがありません。",
   "gateways.onboarding.step2Title": "2. ゲートウェイのアドレスとリスナー所有者キーを用意します",
-  "gateways.onboarding.step2Body": "下のフォームには API サーバーのアドレス（例: {example}）と認証キーが必要です。",
-  "gateways.onboarding.step2OwnerKeyWarning": "必ずリスナー所有者キー（API_SERVER_KEY）を入力してください。プロフィールキーだけではカンバン・cron・イベントストリームが使えません。",
+  "gateways.onboarding.step2Body":
+    "下のフォームには API サーバーのアドレス（例: {example}）と認証キーが必要です。",
+  "gateways.onboarding.step2OwnerKeyWarning":
+    "必ずリスナー所有者キー（API_SERVER_KEY）を入力してください。プロフィールキーだけではカンバン・cron・イベントストリームが使えません。",
   "gateways.onboarding.step3Title": "3. カンバンと cron を使うには DeskRPG プラグインを入れます",
-  "gateways.onboarding.step3Body": "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
+  "gateways.onboarding.step3Body":
+    "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
   "gateways.onboarding.step4Title": "4. ゲートウェイは後回しでも構いません",
-  "gateways.onboarding.step4Body": "Hermes をまだ起動できていなければ、先にキャラクターとチャンネルを作っても構いません。準備ができたらこの画面で登録できます。",
+  "gateways.onboarding.step4Body":
+    "Hermes をまだ起動できていなければ、先にキャラクターとチャンネルを作っても構いません。準備ができたらこの画面で登録できます。",
   "gateways.onboarding.step4CharacterLink": "キャラクターを作成",
   "gateways.onboarding.step4ChannelLink": "チャンネルを作成",
   "gateways.owner": "所有",
