@@ -7,6 +7,20 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.9.19] - 2026-09-15
+
+### Added
+
+- Enter meetings by walking into the meeting space in each office map; legacy maps receive an attached meeting area.
+- Keep meetings on the original map and characters, with wall fading, speaker camera motion and manual camera rotation.
+- Improve Hermes gateway setup diagnostics and first-account guidance.
+
+### Fixed
+
+- Keep board and seat interactions distinct while walking into meetings.
+- Return channel owners from gateway setup to the kanban board.
+- Avoid a synchronous effect update when checking clipboard availability.
+
 ## [2026.9.17] - 2026-09-14
 
 ### Fixed
@@ -27,7 +41,7 @@ GitHub Releases will be written later at actual release time.
 - Homepage metadata and translations now describe the Hermes 3D office.
 - Pin Next.js build and output tracing to the project root to avoid parent-workspace dependency resolution errors.
 
-## [%s] - 2026-09-15
+## [2026.9.15] - 2026-09-15
 
 ### Added
 

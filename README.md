@@ -4,7 +4,7 @@
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG home screen" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.18/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.19/deploy/hostinger/docker-compose.yml)
 
 Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
 
@@ -14,7 +14,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.9.18` — Detailed morning traffic, foliage and distance-matched walking (the 2D pixel-art client remains available on tags up to `2026.9.9`)
+- Version: `v2026.9.19` — Meetings now take place inside each office map, with walk-in entry and a rotating speaker camera. Hermes gateway setup and kanban navigation are improved.
 
 ## What You Can Do
 
@@ -23,7 +23,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 - Register a Hermes gateway by address, or let the setup wizard discover a local / SSH-reachable Hermes install, check the plugin, and register its profiles.
 - Hire AI NPCs bound to Hermes profiles, edit their `SOUL.md` from the web, and choose model, provider, toolsets and reasoning effort per NPC.
 - Talk in the office room (mention to address one employee), open group rooms with invited NPCs, and watch a six-stage response receipt (queued → thinking → streaming → done) plus what tool the agent is using right now.
-- Run meetings in a dedicated meeting room with floor control, hand raising and exportable minutes.
+- Walk into the meeting space on each office map. Meeting mode keeps the original room and characters, fades walls that block the camera, and follows the current speaker; floor control, hand raising and exportable minutes remain available.
 - Track Hermes-owned kanban cards from planning through execution and review to completion. Call NPCs over and receive card completion or blocked-work notices in office chat.
 - Share the office with other people (multiplayer, groups and role-based access), in Korean, English, Japanese or Chinese.
 

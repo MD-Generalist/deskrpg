@@ -4,7 +4,7 @@ English README: [README.md](README.md)
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG 홈 화면" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.18/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/tags/2026.9.19/deploy/hostinger/docker-compose.yml)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
@@ -14,7 +14,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.9.18` — 아침 출근길의 차량·나무·재질과 보폭에 맞춘 이동을 개선했습니다 (2D 픽셀아트 클라이언트는 `2026.9.9` 이하 태그에서 받을 수 있습니다)
+- 버전: `v2026.9.19` — 각 오피스 맵의 회의실로 걸어 들어가 회의하고 발언자를 따라가는 카메라를 사용할 수 있습니다. Hermes 연결 설정과 칸반 이동 흐름도 개선했습니다.
 
 ## 무엇을 할 수 있나요
 
@@ -23,7 +23,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 - Hermes 게이트웨이를 주소로 등록하거나, 설정 마법사로 로컬·SSH로 닿는 Hermes 설치를 찾아 플러그인을 점검하고 프로필을 등록합니다.
 - Hermes 프로필에 묶인 AI NPC를 고용하고, `SOUL.md`를 웹에서 편집하고, NPC마다 모델·프로바이더·툴셋·추론 강도를 정합니다.
 - 오피스 방에서 지명해 대화하고, NPC를 초대한 그룹 방을 열고, 6단계 응답 리시트(대기 → 생각 중 → 스트리밍 → 완료)와 에이전트가 지금 쓰는 도구를 봅니다.
-- 전용 회의실에서 발언권 제어·거수·회의록 내보내기가 있는 회의를 엽니다.
+- 각 오피스 맵의 회의 공간으로 걸어 들어가 회의를 엽니다. 원래 맵과 캐릭터를 유지하면서 카메라를 가리는 벽을 투명화하고 발언자를 따라갑니다. 발언권 제어·거수·회의록 내보내기도 사용할 수 있습니다.
 - Hermes가 관리하는 칸반 카드의 계획·실행·검토·완료를 확인합니다. NPC를 곁으로 부르고 사무실 채팅에서 카드 완료와 작업 차단 알림을 받습니다.
 - 다른 사람과 오피스를 공유합니다(멀티플레이어, 그룹, 역할 기반 권한). 한국어·영어·일본어·중국어를 지원합니다.
 
