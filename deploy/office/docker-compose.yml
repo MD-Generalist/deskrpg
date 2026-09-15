@@ -4,16 +4,22 @@
 # 값은 전부 기본값이 있으므로 환경변수 칸을 비워도 뜬다 — 다만 비밀 둘은 반드시 바꾼다.
 services:
   deskrpg-office:
-    image: ${OFFICE_IMAGE:-dandacompany/deskrpg-office:latest}
+    image: ${OFFICE_IMAGE:-ghcr.io/dandacompany/deskrpg-office:latest}
     container_name: deskrpg-office
     restart: unless-stopped
     environment:
-      # ── 반드시 바꿀 것 ────────────────────────────────────────────
-      # 세션 토큰과 게이트웨이 토큰 암호화에 함께 쓰인다. 비우면 로그인만 실패한다.
-      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret}
-      # 대시보드는 공개 주소로 열리므로 비밀번호가 없으면 Hermes 가 스스로 막는다.
+      # ── 비밀 ──────────────────────────────────────────────────────
+      # 기본값을 일부러 비워 둔다. 공개 compose 에 적힌 기본 비밀은 비밀이 아니다 —
+      # 아무도 바꾸지 않으면 이 파일을 읽은 사람 누구나 그 값을 안다.
+      #
+      # JWT_SECRET: 비우면 컨테이너가 처음 뜰 때 임의로 만들어 볼륨에 저장한다
+      # (src/lib/runtime-paths.js). 배포마다 다른 값이 되므로 비워 두는 편이 안전하다.
+      # 여러 대에서 세션을 공유해야 할 때만 직접 지정한다.
+      JWT_SECRET: ${JWT_SECRET:-}
+      # 대시보드는 Traefik 이 공개 주소로 연다. 비밀번호가 없으면 Hermes 가 스스로
+      # 공개 바인딩을 거부한다(fail-closed) — 값을 넣어야 대시보드가 열린다.
       HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${DASHBOARD_USER:-admin}
-      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${DASHBOARD_PASSWORD:-change-this-dashboard-password}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${DASHBOARD_PASSWORD:-}
 
       # ── 모델 제공자 (하나만 채우면 된다) ──────────────────────────
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}

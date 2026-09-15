@@ -38,8 +38,16 @@ jobs:
         with:
           persist-credentials: false
       - id: meta
+        # 입력값은 쉘 코드가 아니라 환경변수로 넣는다(스크립트 주입 방지).
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          V="${{ inputs.version }}"
+          V="$INPUT_VERSION"
+          case "$V" in
+            "" ) ;;
+            20[0-9][0-9].[0-9]*.[0-9]* ) ;;
+            * ) echo "version 은 날짜 태그 형식이어야 합니다: $V" >&2; exit 1 ;;
+          esac
           if [ -z "$V" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then V="${GITHUB_REF_NAME}"; fi
           TAGS="$IMAGE:latest"
           [ -n "$V" ] && TAGS="$TAGS,$IMAGE:$V"
@@ -60,9 +68,11 @@ jobs:
           provenance: false
       # 익명으로 당길 수 있어야 Compose 기본값으로 쓸 수 있다.
       - name: Verify anonymous pull
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
           TOK="$(curl -sf "https://ghcr.io/token?scope=repository:dandacompany/deskrpg-office:pull&service=ghcr.io" | jq -r .token)"
-          for ref in latest ${{ steps.meta.outputs.version }}; do
+          for ref in latest $VERSION; do
             code="$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOK" \
               -H 'Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
               "https://ghcr.io/v2/dandacompany/deskrpg-office/manifests/$ref")"

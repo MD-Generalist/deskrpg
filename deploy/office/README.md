@@ -21,13 +21,18 @@ Hostinger VPS 의 Docker Manager → **Compose from URL** 에 이 파일 주소�
 https://raw.githubusercontent.com/dandacompany/deskrpg/master/deploy/office/docker-compose.yml
 ```
 
-배포 전에 환경변수 칸에 최소 셋을 채웁니다.
+배포 전에 환경변수 칸을 채웁니다.
 
 ```
-JWT_SECRET=<긴 임의 문자열>
 DASHBOARD_PASSWORD=<대시보드 비밀번호>
 OPENROUTER_API_KEY=<모델 제공자 키 — OPENAI_API_KEY 나 ANTHROPIC_API_KEY 도 됩니다>
+JWT_SECRET=<긴 임의 문자열 — 비워 두면 컨테이너가 스스로 만듭니다>
 ```
+
+compose 의 비밀 기본값은 **전부 비어 있습니다.** 공개된 파일에 적힌 기본 비밀은 비밀이 아니기
+때문입니다 — 아무도 바꾸지 않으면 이 파일을 읽은 사람 누구나 그 값을 압니다. 그래서
+`JWT_SECRET` 은 비워 두면 첫 기동에 임의로 만들어 볼륨에 저장하고(배포마다 다른 값),
+`DASHBOARD_PASSWORD` 는 비어 있으면 대시보드가 아예 열리지 않습니다.
 
 비밀은 `openssl rand -hex 32` 로 만듭니다. HTTPS 는 Hostinger 의 Traefik 프로젝트를 한 번
 배포해 두면 이 compose 가 알아서 붙습니다.
@@ -50,6 +55,12 @@ OPENROUTER_API_KEY=<모델 제공자 키 — OPENAI_API_KEY 나 ANTHROPIC_API_KE
 끄려면 `DESKRPG_AUTO_UPDATE=false` 를 넣습니다. 갱신이 멈춰도 기동을 붙잡지 않도록
 10분에서 끊습니다(`DESKRPG_UPDATE_TIMEOUT` 으로 조정).
 
+이건 맞바꿈입니다. 켜 두면 재시작할 때마다 npm 과 Hermes 업스트림에서 **그 시점의 최신**을
+받습니다 — 손대지 않아도 보안 수정이 따라오는 대신, 공급망을 그 두 출처에 맡기는 것입니다.
+검토한 버전만 돌려야 하는 환경이라면 `DESKRPG_AUTO_UPDATE=false` 로 끄고
+`OFFICE_IMAGE` 를 버전 태그(`ghcr.io/dandacompany/deskrpg-office:2026.9.20`)로 고정하세요.
+그러면 이미지에 담긴 버전만 돕니다.
+
 ## 알아 둘 것
 
 - **대시보드는 비밀번호가 없으면 열리지 않습니다.** Hermes 가 2026-06 이후 공개 바인드에
@@ -63,5 +74,9 @@ OPENROUTER_API_KEY=<모델 제공자 키 — OPENAI_API_KEY 나 ANTHROPIC_API_KE
 ## 이미지 직접 빌드
 
 ```bash
-docker buildx build --platform linux/amd64 -t dandacompany/deskrpg-office:latest --push deploy/office
+docker buildx build --platform linux/amd64 -t ghcr.io/dandacompany/deskrpg-office:latest --push deploy/office
 ```
+
+평소에는 손으로 빌드할 일이 없습니다. `.github/workflows/office-image.yml` 이 날짜 태그를 밀 때와
+수동 실행(`gh workflow run office-image.yml -f version=<버전>`)에 GHCR 로 굽고, 익명 pull 까지
+확인합니다. 공식 Hermes 이미지가 올라갔을 때 릴리스 없이 다시 구우려면 수동 실행을 씁니다.
