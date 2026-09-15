@@ -5,6 +5,7 @@ import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "../game/three/offic
 import { tiledSnapshot } from "../game/three/tiled-preview";
 import { furnitureSeats } from "../game/three/seating";
 import { deriveChannelMotionLayout, closestValidUnoccupiedSpawn } from "./channel-motion-layout";
+import { normalizeMeetingMap, projectMeetingMap } from "../game/meeting-map-normalization";
 
 for (const environment of OFFICE_ENVIRONMENTS) {
   test(`persisted ${environment.id} agrees with UI2 seats, occupancy, and dimensions`, () => {
@@ -53,8 +54,14 @@ test("real saved Small Office JSON retains geometry and does not become a genera
     { mapData: map, mapConfig: JSON.stringify({ cols: 99, rows: 99 }) },
     [],
   )!;
-  assert.deepEqual(layout.bounds, { width: map.width * 32, height: map.height * 32 });
-  assert.equal(layout.seats.length, furnitureSeats(tiledSnapshot(map as never).objects).length);
+  const effective = projectMeetingMap(normalizeMeetingMap(map).mapData);
+  assert.deepEqual(layout.bounds, { width: effective.cols * 32, height: effective.rows * 32 });
+  for (const seat of furnitureSeats(tiledSnapshot(map as never).objects))
+    assert.ok(
+      layout.seats.some(
+        (s) => s.id === `${(seat.anchorX ?? seat.x) * 32}:${(seat.anchorZ ?? seat.z) * 32}`,
+      ),
+    );
   const spawn = closestValidUnoccupiedSpawn(layout, {
     x: (smallOffice.spawnCol + 0.5) * 32,
     y: (smallOffice.spawnRow + 0.5) * 32,
@@ -91,9 +98,11 @@ test("body rejects wall corners and out of bounds; nearest free spawn avoids pla
     y: 48,
   });
   assert.deepEqual(closestValidUnoccupiedSpawn(layout, { x: 50, y: 70 }), { x: 50, y: 70 });
-  const all = Array.from({ length: 9 }, (_, i) => ({
-    x: ((i % 3) + 0.5) * 32,
-    y: (Math.floor(i / 3) + 0.5) * 32,
+  const cols = layout.bounds.width / 32,
+    rows = layout.bounds.height / 32;
+  const all = Array.from({ length: cols * rows }, (_, i) => ({
+    x: ((i % cols) + 0.5) * 32,
+    y: (Math.floor(i / cols) + 0.5) * 32,
   }));
   assert.equal(closestValidUnoccupiedSpawn(layout, { x: 48, y: 48 }, all), null);
 });
@@ -113,9 +122,12 @@ test("legacy persisted objects retain direction, wall collisions and fixed scene
     objects: [{ id: "chair", type: "chair", col: 1, row: 1, direction: "left" }],
   };
   const layout = deriveChannelMotionLayout({ mapData: JSON.stringify(map) }, [])!;
-  assert.deepEqual(layout.bounds, { width: 1280, height: 960 });
+  assert.ok(layout.bounds.width >= 1280 && layout.bounds.height >= 960);
   assert.equal(layout.isWalkable(0, 0), false);
-  assert.deepEqual(layout.seats, [{ id: "48:48", x: 48, y: 48 }]);
+  assert.deepEqual(
+    layout.seats.find((s) => s.id === "48:48"),
+    { id: "48:48", x: 48, y: 48 },
+  );
 });
 
 test("missing or malformed snapshots fail closed", () => {

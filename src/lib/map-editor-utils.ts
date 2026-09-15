@@ -11,9 +11,9 @@ export const TILES = {
 
 /** Validation constraints */
 export const MAP_SIZE_MIN_COLS = 10;
-export const MAP_SIZE_MAX_COLS = 40;
+export const MAP_SIZE_MAX_COLS = 64;
 export const MAP_SIZE_MIN_ROWS = 8;
-export const MAP_SIZE_MAX_ROWS = 30;
+export const MAP_SIZE_MAX_ROWS = 64;
 
 /**
  * Validate map template data for API create/update.
