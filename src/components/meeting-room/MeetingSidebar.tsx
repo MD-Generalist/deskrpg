@@ -27,7 +27,7 @@ export default function MeetingSidebar({
 }: MeetingSidebarProps) {
   return (
     <div
-      className="relative flex flex-col border-t sm:border-t-0 sm:border-l border-border bg-bg/95 flex-1 min-h-0 w-full sm:w-[var(--meeting-sidebar-width)] sm:flex-none sm:shrink-0 sm:h-full overflow-hidden"
+      className="meeting-sidebar relative flex flex-col border-t sm:border-t-0 sm:border-l border-border bg-bg/95 flex-1 min-h-0 w-full sm:w-[var(--meeting-sidebar-width)] sm:flex-none sm:shrink-0 sm:h-full overflow-hidden"
       style={{ "--meeting-sidebar-width": `${width}px` } as CSSProperties}
     >
       <div

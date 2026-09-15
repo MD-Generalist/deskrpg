@@ -1,0 +1,75 @@
+[data-game-meeting="true"] .workspace-navigator,
+[data-game-meeting="true"] .workspace-conversation,
+[data-game-meeting="true"] .workspace-conversation-collapse,
+[data-game-meeting="true"] .workspace-drawer-toggle,
+[data-game-meeting="true"] .workspace-drawer-backdrop {
+  display: none !important;
+}
+[data-game-meeting="true"] .conversation-workspace {
+  grid-template-columns: 1fr;
+}
+.office-camera-tools [data-meeting-auto-camera] {
+  width: auto;
+  min-height: 44px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.office-presentation[data-meeting="true"] .office-camera-tools button:disabled {
+  display: none;
+}
+.office-presentation[data-meeting="true"] .office-camera-tools button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.office-presentation [data-meeting-entry="inside"] {
+  top: 16px;
+  bottom: auto;
+  z-index: 3;
+}
+[data-game-meeting="true"] .office-presentation {
+  left: 0;
+  right: min(420px, 48vw);
+}
+.meeting-map-panel {
+  position: fixed;
+  top: var(--game-header-height, 48px);
+  right: 0;
+  bottom: 0;
+  width: min(420px, 48vw);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg, #171b22);
+}
+.meeting-map-panel[data-meeting-panel-collapsed="true"] {
+  bottom: auto;
+}
+[data-game-meeting="true"]:has([data-meeting-panel-collapsed="true"]) .office-presentation {
+  right: 0;
+}
+.meeting-map-panel .meeting-sidebar {
+  width: 100%;
+  flex: 1;
+}
+.meeting-map-panel .meeting-sidebar > [role="separator"] {
+  display: none;
+}
+@media (max-width: 767px) {
+  .meeting-map-panel {
+    top: auto;
+    width: 100%;
+    height: 52dvh;
+  }
+  .meeting-map-panel[data-meeting-panel-collapsed="true"] {
+    bottom: 0;
+    height: auto;
+  }
+  [data-game-meeting="true"] .office-presentation {
+    left: 0;
+    right: 0;
+    bottom: 52dvh;
+  }
+  [data-game-meeting="true"]:has([data-meeting-panel-collapsed="true"]) .office-presentation {
+    bottom: 40px;
+  }
+}

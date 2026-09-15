@@ -48,6 +48,8 @@ import ChatPanel from "@/components/ChatPanel";
 import ConversationPane from "@/components/conversation/ConversationPane";
 import ConversationWorkspace from "@/components/conversation/ConversationWorkspace";
 import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
+import { useMeetingEntry } from "@/components/meeting-room/use-meeting-entry";
+import "@/components/meeting-room/meeting-mode.css";
 import WorkspaceNavigator, {
   type NavigatorNpc,
   type NpcNavigatorAction,
@@ -204,7 +206,8 @@ function GamePageInner() {
   const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
   // 맵의 "작업 중"(R27). 소켓의 `npc:working` 만 담는다 — 낙관적 갱신 없음(R26).
   const [npcWorking, setNpcWorking] = useState<NpcWorkingMap>(EMPTY_NPC_WORKING);
-  const [mode, setMode] = useState<"office" | "meeting">("office");
+  const meetingEntry = useMeetingEntry(socket, channelId);
+  const mode = ["joining", "joined"].includes(meetingEntry.state.status) ? "meeting" : "office";
   // Map rendering needs only placed NPC identity and appearance.
   const [channelNpcs, setChannelNpcs] = useState<
     {
@@ -2131,10 +2134,12 @@ function GamePageInner() {
   );
 
   return (
-    <div className="theme-game ui2-game h-screen w-screen overflow-hidden bg-bg text-text">
+    <div
+      data-game-meeting={mode === "meeting"}
+      className="theme-game ui2-game h-screen w-screen overflow-hidden bg-bg text-text"
+    >
       <ConversationWorkspace
         conversationWidth={conversationPanelWidth}
-        inactive={mode !== "office"}
         navigator={
           <WorkspaceNavigator
             workspaceName={channel?.name || "DeskRPG"}
@@ -2173,12 +2178,7 @@ function GamePageInner() {
         conversation={conversationPanel}
       >
         {/* Game canvas remains mounted while the meeting workspace is visible. */}
-        <div
-          style={{
-            visibility: mode === "office" ? "visible" : "hidden",
-            pointerEvents: mode === "office" ? "auto" : "none",
-          }}
-        >
+        <div>
           {spritesheetDataUrl && character && gameChannelData && (
             <ThreeGame
               spritesheetDataUrl={spritesheetDataUrl}
@@ -2380,7 +2380,8 @@ function GamePageInner() {
 
           {/* Mode toggle */}
           <button
-            onClick={() => setMode(mode === "office" ? "meeting" : "office")}
+            data-meeting-entry="navbar"
+            onClick={() => (mode === "meeting" ? meetingEntry.cancel() : meetingEntry.request())}
             title={mode === "office" ? t("game.meetingRoom") : t("common.back")}
             aria-label={mode === "office" ? t("game.meetingRoom") : t("common.back")}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-caption font-semibold ${
@@ -2983,6 +2984,33 @@ function GamePageInner() {
           );
         })()}
 
+      {(meetingEntry.state.status === "walking" || meetingEntry.state.status === "failed") && (
+        <div
+          data-meeting-entry-status={meetingEntry.state.status}
+          role="status"
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 rounded bg-surface p-3 text-text shadow-lg"
+        >
+          <p>
+            {meetingEntry.state.status === "walking"
+              ? t("meeting.entryWalking")
+              : t("meeting.entryFailed", {
+                  reason:
+                    t(`meeting.reason.${meetingEntry.state.reasonCode ?? "unknown"}`) ===
+                    `meeting.reason.${meetingEntry.state.reasonCode ?? "unknown"}`
+                      ? (meetingEntry.state.reasonCode ?? t("common.unknown"))
+                      : t(`meeting.reason.${meetingEntry.state.reasonCode}`),
+                })}
+          </p>
+          {meetingEntry.state.status === "failed" && (
+            <button type="button" onClick={meetingEntry.request}>
+              {t("common.retry")}
+            </button>
+          )}
+          <button type="button" onClick={meetingEntry.cancel}>
+            {t("common.cancel")}
+          </button>
+        </div>
+      )}
       {mode === "meeting" && character && (
         <MeetingWorkspace
           channelId={channelId!}
@@ -2993,7 +3021,7 @@ function GamePageInner() {
           }}
           socket={socket}
           npcs={channelNpcs}
-          onLeave={() => setMode("office")}
+          onLeave={meetingEntry.cancel}
         />
       )}
     </div>
