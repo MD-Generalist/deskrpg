@@ -1,3 +1,4 @@
+import type { SetupModelState } from "./types";
 export function hostSetupAllowed(env: Record<string, string | undefined>, role?: string) {
   return (
     ["1", "true", "yes"].includes(env.DESKRPG_HOST_SETUP_ENABLED ?? "") && role === "system_admin"
@@ -139,6 +140,7 @@ const SAFE_CODES = new Set([
   "hermes_install_forbidden",
   "hermes_install_failed",
   "hermes_installer_unavailable",
+  "resume_unavailable",
 ]);
 /** 실패가 아닌 알림. 잡의 `warnings` 로만 나가고 오류 경로에는 절대 오르지 않는다. */
 export const SETUP_WARNING_CODES = new Set(["profile_not_served", "model_provider_required"]);
@@ -180,9 +182,17 @@ export function validateTimezone(value: unknown): string {
  * 판정하려 했는데, 제공자가 하나도 없어도 `/v1/models` 가 200 과 모델 하나를 돌려준다(실측:
  * MiniPC 신규 계정). 그래서 "설치를 했다" 는 사실 자체를 신호로 쓴다.
  */
-export function collectSetupWarnings(hostWarnings: string[] | undefined, installedHermes: boolean) {
+export function collectSetupWarnings(
+  hostWarnings: string[] | undefined,
+  installedHermes: boolean,
+  modelState?: SetupModelState,
+) {
   const warnings = [...new Set(hostWarnings ?? [])];
-  if (installedHermes && !warnings.includes("model_provider_required"))
+  // 확인이 가능하면 확인이 이긴다. `ready` 는 "방금 설치했다" 는 추정을 덮는다.
+  if (modelState === "ready")
+    return warnings.filter((warning) => warning !== "model_provider_required");
+  const required = modelState === "missing" || installedHermes;
+  if (required && !warnings.includes("model_provider_required"))
     warnings.push("model_provider_required");
   return warnings;
 }

@@ -4,6 +4,7 @@ import type {
   PreparedHost,
   SetupCandidate,
   SetupInspection,
+  SetupModelState,
   SetupProvisionRequest,
 } from "./types";
 
@@ -56,6 +57,11 @@ export const HOST_ERROR_CODES = new Set([
 /** 실패가 아닌 알림만 담는다. 오류 경로에는 절대 오르지 않는다. */
 const HOST_WARNING_CODES = new Set(["profile_not_served", "model_provider_required"]);
 const DIGEST = /^[a-f0-9]{64}$/;
+/**
+ * 설치 진행 이정표. 호스트가 무엇을 올리든 이 목록 밖의 값은 버린다 —
+ * 줄 내용이 코드를 가장해 잡에 실리는 경로를 아예 없앤다.
+ */
+export const INSTALL_MILESTONES = ["deps", "clone", "venv", "node_modules", "skills", "done"];
 const WARNING_CODES = new Set([
   ...HOST_ERROR_CODES,
   "gateway_unreachable",
@@ -142,7 +148,14 @@ async function invoke(
       throw new Error("setup_invalid_request");
   }
   const timeout =
-    action === "install" || action === "install-service" ? 170 : action === "verify" ? 110 : 45;
+    action === "install" || action === "install-service"
+      ? 170
+      : action === "verify"
+        ? 110
+        : // 호스트가 CLI 를 45초까지 기다린다 — 바깥 상한이 그보다 좁으면 판정이 늘 timeout 이 된다.
+          action === "check-model"
+          ? 60
+          : 45;
   try {
     const result = await execute("python3", ["-c", HOST_BOOTSTRAP], {
       input: JSON.stringify({
@@ -191,7 +204,7 @@ async function invoke(
 export async function installHermesHost(
   execute: HostExecutor,
   signal?: AbortSignal,
-): Promise<{ installerDigest: string }> {
+): Promise<{ installerDigest: string; milestones: string[] }> {
   checkAbort(signal);
   try {
     const result = await execute("python3", ["-c", HOST_INSTALLER], {
@@ -209,12 +222,38 @@ export async function installHermesHost(
       );
     const digest = string(body.installerDigest, 64);
     if (!DIGEST.test(digest)) throw new Error("hermes_install_failed");
-    return { installerDigest: digest };
+    // 관측 순서는 지키되 목록 밖의 값과 중복은 버린다. 설치 출력의 원문은 여기에 오를 수 없다.
+    const observed = Array.isArray(body.milestones) ? body.milestones : [];
+    const milestones = [
+      ...new Set(
+        observed.filter(
+          (value): value is string =>
+            typeof value === "string" && INSTALL_MILESTONES.includes(value),
+        ),
+      ),
+    ].slice(0, INSTALL_MILESTONES.length);
+    return { installerDigest: digest, milestones };
   } catch (error) {
     if (signal?.aborted) throw new Error("setup_cancelled");
     if (error instanceof Error && HOST_ERROR_CODES.has(error.message)) throw error;
     // 설치 로그·stderr 가 예외에 실려 있을 수 있다. 절대 그대로 흘리지 않는다.
     throw new Error("hermes_install_failed");
+  }
+}
+/**
+ * 모델 자격 증명 확인. **절대 던지지 않는다** — 판정할 수 없으면 `unknown` 이고,
+ * 호출자는 이 결과로 설정을 중단하지 않는다.
+ */
+export async function checkModelHost(
+  execute: HostExecutor,
+  candidateId: string,
+  signal?: AbortSignal,
+): Promise<SetupModelState> {
+  try {
+    const body = await invoke(execute, "check-model", candidateId, signal);
+    return body.model === "ready" || body.model === "missing" ? body.model : "unknown";
+  } catch {
+    return "unknown";
   }
 }
 export async function discoverHost(execute: HostExecutor): Promise<SetupCandidate[]> {
@@ -285,7 +324,10 @@ export async function prepareHost(
   signal?: AbortSignal,
   timezone?: string,
   provision?: SetupProvisionRequest,
+  /** 재개에서 이미 성공한 단계. 되돌리지 않고 다시 하지도 않는다. `inspecting` 은 언제나 다시 돈다. */
+  skipStep?: (step: string) => boolean,
 ): Promise<PreparedHost> {
+  const skip = (step: string) => skipStep?.(step) === true;
   // 서비스를 등록하면 유닛 정의가 생기고 후보 id(정의의 해시)가 바뀐다. 이후 단계는 새 id 를 써야 한다.
   let candidateId = initialCandidateId;
   const stage = async (step: string, action: string, option?: string) => {
@@ -299,7 +341,11 @@ export async function prepareHost(
   const state = inspection(await stage("inspecting", "inspect"));
   // 새 프로필은 플러그인·API 작업보다 앞에 만들어야 재시작 한 번으로 서빙된다.
   const provisionKeys = [...requestedKeys];
-  if (provision?.createProfile) {
+  if (provision?.createProfile && skip("creating_profile")) {
+    // 이미 만들어진 프로필이다. 다시 만들면 `profile_exists` 로 죽는다 — 키 발급 대상에만 넣는다.
+    if (!provisionKeys.includes(provision.createProfile.name))
+      provisionKeys.push(provision.createProfile.name);
+  } else if (provision?.createProfile) {
     const created = record(
       await stage(
         "creating_profile",
@@ -320,7 +366,7 @@ export async function prepareHost(
       provisionKeys.push(provision.createProfile.name);
   }
   const provisioned: string[] = [];
-  if (provisionKeys.length) {
+  if (provisionKeys.length && !skip("provisioning_keys")) {
     // 여러 프로필을 한 단계에서 처리한다 — 진행 기록에 프로필 이름은 남기지 않는다.
     checkAbort(signal);
     onStep("provisioning_keys");
@@ -331,24 +377,29 @@ export async function prepareHost(
     }
   }
   // A unit must exist before anything tries to restart the gateway through it.
-  if (state.changes.includes("installing_service")) {
+  if (state.changes.includes("installing_service") && !skip("installing_service")) {
     const installed = record(await stage("installing_service", "install-service"));
     if (typeof installed.candidateId === "string" && installed.candidateId.length === 64)
       candidateId = installed.candidateId;
   }
-  if (state.changes.includes("updating_plugin")) await stage("updating_plugin", "install");
-  else if (!state.candidate.pluginInstalled || !state.candidate.pluginEnabled)
-    await stage(
-      state.candidate.pluginInstalled ? "enabling_plugin" : "installing_plugin",
-      "install",
-    );
+  const pluginStep = state.changes.includes("updating_plugin")
+    ? "updating_plugin"
+    : !state.candidate.pluginInstalled || !state.candidate.pluginEnabled
+      ? state.candidate.pluginInstalled
+        ? "enabling_plugin"
+        : "installing_plugin"
+      : null;
+  if (pluginStep && !skip(pluginStep)) await stage(pluginStep, "install");
   const configuring =
-    state.pluginStatus !== "plugin_ready" || state.changes.includes("configuring_api");
+    (state.pluginStatus !== "plugin_ready" || state.changes.includes("configuring_api")) &&
+    !skip("configuring_api");
   // Never overwrite a timezone the operator already set.
-  const settingTimezone = Boolean(timezone) && !state.candidate.timezone;
+  const settingTimezone =
+    Boolean(timezone) && !state.candidate.timezone && !skip("setting_timezone");
   if (configuring) await stage("configuring_api", "configure");
   if (settingTimezone) await stage("setting_timezone", "set-timezone", timezone);
-  if (configuring || settingTimezone) await stage("restarting_gateway", "restart");
+  if ((configuring || settingTimezone) && !skip("restarting_gateway"))
+    await stage("restarting_gateway", "restart");
   const verified = await stage("verifying_gateway", "verify");
   for (const warning of Array.isArray(verified.warnings) ? verified.warnings : [])
     if (

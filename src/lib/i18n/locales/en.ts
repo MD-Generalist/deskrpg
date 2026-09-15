@@ -244,6 +244,24 @@ const en: Record<string, string> = {
   "hermes.wizard.step.installingHermes": "Install Hermes",
   "hermes.wizard.step.creatingProfile": "Create the new profile",
   "hermes.wizard.step.provisioningKeys": "Provision profile API credentials",
+  "hermes.wizard.step.checkingModel": "Check model sign-in",
+  "hermes.wizard.progress.deps": "Installing required tools",
+  "hermes.wizard.progress.clone": "Downloading the Hermes source",
+  "hermes.wizard.progress.venv": "Creating the Python virtual environment",
+  "hermes.wizard.progress.node_modules": "Installing Node packages",
+  "hermes.wizard.progress.skills": "Installing the default skills",
+  "hermes.wizard.progress.done": "Finishing the installation",
+  "hermes.wizard.progress.elapsed": "{seconds}s elapsed",
+  "hermes.wizard.model.recheck": "Check the model again",
+  "hermes.wizard.model.checking": "Checking model sign-in…",
+  "hermes.wizard.model.ready": "Model sign-in verified. NPCs can reply.",
+  "hermes.wizard.model.unknown":
+    "Model sign-in could not be determined. Setup itself finished. Check it on the server with hermes model.",
+  "hermes.wizard.resume.button": "Resume",
+  "hermes.wizard.resume.title": "Completed so far",
+  "hermes.wizard.resume.skipped": "Skipped",
+  "hermes.wizard.error.resumeUnavailable":
+    "This run cannot be resumed. The failed job expired or the target changed. Start again from finding installations.",
   "hermes.wizard.error.profileNameInvalid":
     "The profile name or description breaks the rules. Names use lowercase letters, digits, hyphens and underscores and stay under 64 characters; descriptions are a single line of at most 200 characters.",
   "hermes.wizard.error.profileExists":

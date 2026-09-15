@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
+import { checkModelHost, discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
 import type { HostExecutor, SetupCandidate } from "./types";
 const candidate: SetupCandidate = {
   id: "a".repeat(64),
@@ -1451,7 +1451,7 @@ fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 test("설치 결과의 지문은 소문자 16진수 64자만 통과한다", async () => {
   const digest = "b".repeat(64);
   const good = await installHermesHost(fake([{ ok: true, installerDigest: digest }]).execute);
-  assert.deepEqual(good, { installerDigest: digest });
+  assert.deepEqual(good, { installerDigest: digest, milestones: [] });
   for (const bad of [{ ok: true }, { ok: true, installerDigest: "NOT-HEX" }])
     await assert.rejects(
       installHermesHost(fake([bad]).execute),
@@ -1529,4 +1529,196 @@ print(json.dumps(main('configure', id)))
     { config: { gateway: null } },
   );
   assert.deepEqual(result.body, { ok: true });
+});
+
+const AUTH_STUB = String.raw`
+original_run = run
+def run(argv, timeout=8, env=None):
+    if 'auth' not in argv: return original_run(argv, timeout=timeout, env=env)
+    OUTCOME
+`;
+/** `hermes auth status <provider>` 만 가로채는 스텁. 나머지 호출은 원래 경로를 그대로 탄다. */
+function authStub(outcome: string) {
+  return AUTH_STUB.replace("OUTCOME", outcome);
+}
+const CHECK_MODEL = String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps(main('check-model', id)))
+`;
+test("모델 제공자가 설정에 없으면 확인 결과는 unknown 이다", () => {
+  // 판정할 근거가 없으면 판정하지 않는다. 명령을 아예 부르지 않는다.
+  const result = fixture(authStub("raise AssertionError('must not run')") + CHECK_MODEL, {
+    config: { gateway: {} },
+  });
+  assert.deepEqual(result.body, { ok: true, model: "unknown" });
+});
+test("출력에 logged in 이 있고 종료 코드가 0 이면 ready 다", () => {
+  // 실측 출력은 한 줄이다: 'openai-codex: logged in'.
+  const result = fixture(
+    authStub(
+      "return type('R',(),{'returncode':0,'stdout':'openai-codex: logged in','stderr':''})()",
+    ) + CHECK_MODEL,
+    { config: { model: { provider: "openai-codex" } } },
+  );
+  assert.deepEqual(result.body, { ok: true, model: "ready" });
+});
+test("그 밖의 출력은 missing 이다", () => {
+  const result = fixture(
+    authStub(
+      "return type('R',(),{'returncode':1,'stdout':'openai-codex: not logged in','stderr':''})()",
+    ) + CHECK_MODEL,
+    { config: { provider: "openai-codex" } },
+  );
+  assert.deepEqual(result.body, { ok: true, model: "missing" });
+});
+test("확인 명령이 죽어도 설정을 실패시키지 않고 unknown 을 돌려준다", () => {
+  const result = fixture(authStub("raise OSError('boom')") + CHECK_MODEL, {
+    config: { model: { provider: "openai-codex" } },
+  });
+  assert.deepEqual(result.body, { ok: true, model: "unknown" });
+});
+test("확인 결과에는 명령 출력의 원문이 실리지 않는다", () => {
+  const result = fixture(
+    authStub(
+      "return type('R',(),{'returncode':0,'stdout':'openai-codex: logged in as sk-secret-token','stderr':''})()",
+    ) + CHECK_MODEL,
+    { config: { model: { provider: "openai-codex" } } },
+  );
+  assert.deepEqual(result.body, { ok: true, model: "ready" });
+  assert.ok(!JSON.stringify(result.body).includes("sk-secret-token"));
+});
+test("호스트가 판정하지 못해도 모델 확인은 던지지 않는다", async () => {
+  assert.equal(
+    await checkModelHost(fake([{ ok: true, model: "ready" }]).execute, candidate.id),
+    "ready",
+  );
+  assert.equal(
+    await checkModelHost(fake([{ ok: true, model: "missing" }]).execute, candidate.id),
+    "missing",
+  );
+  for (const reply of [
+    { error: "hermes_not_found" },
+    { ok: true, model: "logged in" },
+    { ok: true },
+  ])
+    assert.equal(await checkModelHost(fake([reply]).execute, candidate.id), "unknown");
+  // 후보 id 가 어긋나도 오류가 아니라 판정 불가다 — 설정을 멈추게 할 수 없다.
+  assert.equal(await checkModelHost(fake([]).execute, "../profile"), "unknown");
+});
+test("설치 이정표는 정해진 코드만 순서대로 올라온다", async () => {
+  const digest = "c".repeat(64);
+  const result = await installHermesHost(
+    fake([
+      {
+        ok: true,
+        installerDigest: digest,
+        milestones: ["deps", "deps", "venv", "rm -rf /home/dante", "done"],
+      },
+    ]).execute,
+  );
+  // 목록 밖의 값은 버린다 — 줄 내용이 코드를 가장해 잡에 실릴 수 없다.
+  assert.deepEqual(result, { installerDigest: digest, milestones: ["deps", "venv", "done"] });
+});
+test("설치 출력의 줄은 이정표 코드로만 접히고 원문은 결과에 없다", () => {
+  const output = [
+    "Installing dependencies...",
+    "Creating virtual environment with Python 3.11...",
+    "Running npm install for the dashboard",
+    "Syncing bundled skills to ~/.hermes/skills/ ...",
+    "TOKEN=sk-do-not-leak",
+    "Installation Complete!",
+  ].join("\n");
+  const result = installer(stubs({ output }));
+  assert.deepEqual(result.body.milestones, ["deps", "venv", "node_modules", "skills", "done"]);
+  assert.ok(!JSON.stringify(result.body).includes("sk-do-not-leak"));
+  assert.ok(!JSON.stringify(result.body).includes("Installing dependencies"));
+});
+test("실제 설치 스크립트가 찍는 문장으로 여섯 이정표가 모두 걸린다", () => {
+  // 문장은 install.sh 의 log_info 원문에서 골랐다. 처음 표는 'clone' 을 literal 로 봤는데
+  // git 은 "Cloning into ..." 을 찍어 그 이정표가 한 번도 걸리지 않았다(실측).
+  const output = [
+    "Installing managed uv into /home/x/.hermes/bin ...",
+    "Cloning into '/home/x/.hermes/hermes-agent'...",
+    "Creating virtual environment with Python 3.11...",
+    "Installing Node.js dependencies (browser tools)...",
+    "Syncing bundled skills to ~/.hermes/skills/ ...",
+    "✓ Installation Complete!",
+  ].join("\n");
+  const result = installer(stubs({ output }));
+  assert.deepEqual(result.body.milestones, [
+    "deps",
+    "clone",
+    "venv",
+    "node_modules",
+    "skills",
+    "done",
+  ]);
+});
+test("재개는 끝난 단계를 건너뛰고 verify 는 언제나 다시 돈다", async () => {
+  const f = fake([
+    {
+      candidate: { ...candidate, pluginInstalled: true, pluginEnabled: true },
+      pluginStatus: "plugin_ready",
+      changes: [],
+    },
+    { ok: true, provisioned: false },
+    {
+      prepared: {
+        baseUrl: "http://127.0.0.1:8642",
+        token: "existing-private-token",
+        profiles: [
+          { name: "default", token: "existing-private-token" },
+          { name: "oliver", token: "oliver-private-token" },
+        ],
+      },
+    },
+  ]);
+  const steps: string[] = [];
+  const completed = new Set(["inspecting", "creating_profile", "verifying_gateway"]);
+  const result = await prepareHost(
+    f.execute,
+    candidate.id,
+    (s) => steps.push(s),
+    undefined,
+    undefined,
+    { createProfile: { name: "oliver" } },
+    (step) => completed.has(step) && step !== "inspecting" && step !== "verifying_gateway",
+  );
+  // 이미 만든 프로필을 다시 만들지 않는다(다시 만들면 profile_exists 다). 키 발급은 그대로 돈다.
+  assert.deepEqual(steps, ["inspecting", "provisioning_keys", "verifying_gateway"]);
+  assert.ok(
+    !f.calls.some((call) => JSON.parse(String(call.input)).action === "create-profile"),
+    "이미 만든 프로필을 다시 만들면 안 된다",
+  );
+  assert.equal(result.profiles.length, 2);
+});
+test("건너뛰기를 주지 않으면 모든 단계가 그대로 돈다", async () => {
+  const f = fake([
+    {
+      candidate,
+      pluginStatus: "plugin_absent",
+      changes: ["installing_service", "installing_plugin"],
+    },
+    { ok: true, candidateId: "d".repeat(64) },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: {
+        baseUrl: "http://127.0.0.1:8642",
+        token: "existing-private-token",
+        profiles: [{ name: "default", token: "existing-private-token" }],
+      },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
+  assert.deepEqual(steps, [
+    "inspecting",
+    "installing_service",
+    "installing_plugin",
+    "configuring_api",
+    "restarting_gateway",
+    "verifying_gateway",
+  ]);
 });

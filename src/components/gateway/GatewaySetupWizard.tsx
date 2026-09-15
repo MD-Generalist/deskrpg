@@ -15,6 +15,7 @@ import {
   setupStep,
   setupHostError,
   setupWarning,
+  setupProgress,
   isSetupWarningBlocking,
 } from "./setup-copy";
 import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
@@ -31,7 +32,16 @@ const input =
   "w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary";
 type Screen = "choice" | "remote" | "ssh" | "discover" | "review" | "job" | "url" | "success";
 // 계약 2 가 더한 필드들. types.ts 는 호스트 담당이 소유하므로 여기서는 넓혀서만 읽는다.
-type WizardJob = SetupJob & { warnings?: string[]; installerDigest?: string };
+// 계약 3 이 더한 progress/completed 도 같은 이유로 여기서 넓혀 읽는다.
+type WizardJob = SetupJob & {
+  warnings?: string[];
+  installerDigest?: string;
+  progress?: string;
+  completed?: string[];
+};
+// 재개해도 상태가 바뀔 수 있어 언제나 다시 도는 단계다 — "건너뜀" 으로 그리지 않는다.
+const ALWAYS_RERUN = new Set(["verifying_gateway", "checking_model"]);
+type ModelState = "ready" | "missing" | "unknown";
 type WizardCapabilities = SetupCapabilities & { canInstallHermes?: boolean };
 // 계약: ^[a-z0-9][a-z0-9_-]{0,63}$ — 서버가 다시 검증하지만 화면에서 먼저 안내한다.
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -67,6 +77,15 @@ export default function GatewaySetupWizard({
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [errorCode, setErrorCode] = useState<unknown>(null);
+  // 명시적으로 확인한 모델 상태. null 이면 아직 확인하지 않았다는 뜻이라 기존 경고 규칙을 따른다.
+  const [modelState, setModelState] = useState<ModelState | null>(null);
+  const [modelChecking, setModelChecking] = useState(false);
+  // 마지막으로 연결을 시도한 후보와 prepare 본문 — 다시 확인과 이어서 실행이 쓴다.
+  const [lastCandidateId, setLastCandidateId] = useState<string | null>(null);
+  const [lastPrepare, setLastPrepare] = useState<Record<string, unknown> | null>(null);
+  // 이어서 실행할 때 건너뛰기로 한 단계들(요청 시점의 completed).
+  const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
+  const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<{ gatewayId: string; pluginStatus: string } | null>(null);
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
@@ -149,6 +168,8 @@ export default function GatewaySetupWizard({
     setNewProfileName("");
     setNewProfileDescription("");
     setProvisionKeys([]);
+    setModelState(null);
+    setSkippedSteps([]);
     void run(
       (signal) =>
         request<{ candidates: SetupCandidate[] }>(
@@ -166,6 +187,7 @@ export default function GatewaySetupWizard({
         request<SetupInspection>({ action: "inspect", ...target, candidateId }, "", signal),
       (data) => {
         setInspection(data);
+        setLastCandidateId(candidateId);
         setProvisionKeys([]);
         setSelectedProfiles(
           (data.profiles ?? [])
@@ -221,6 +243,63 @@ export default function GatewaySetupWizard({
     };
   }, [screen, job?.id, job?.status]);
 
+  // 설치는 3~6분 걸린다. 초를 세어 주지 않으면 화면이 멈춘 것처럼 보인다.
+  const installingHermes =
+    screen === "job" && job?.status === "running" && job.steps.at(-1) === "installing_hermes";
+  useEffect(() => {
+    if (!installingHermes) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    setElapsed(0);
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    // 단계가 끝나거나 화면을 떠나면 반드시 멈춘다 — 남으면 매초 리렌더가 샌다.
+    return () => clearInterval(timer);
+  }, [installingHermes]);
+
+  // 잡을 만들지 않는 즉시 응답이다. 폴링하지 않고 판정만 받아 경고를 갱신한다.
+  function checkModel(candidateId: string) {
+    const epoch = generation.current;
+    const abort = new AbortController();
+    setModelChecking(true);
+    void request<{ model?: string }>({ action: "check-model", ...target, candidateId }, "", abort.signal)
+      .then((data) => {
+        if (epoch !== generation.current || abort.signal.aborted) return;
+        const next = data.model;
+        setModelState(
+          next === "ready" || next === "missing" || next === "unknown" ? next : "unknown",
+        );
+      })
+      .catch((error) => {
+        if (epoch !== generation.current || abort.signal.aborted) return;
+        setErrorCode((error as { errorCode?: string })?.errorCode ?? "setup_failed");
+      })
+      .finally(() => {
+        if (epoch === generation.current) setModelChecking(false);
+      });
+  }
+
+  // prepare 본문을 들고 있어야 실패한 뒤 같은 요청에 resumeFrom 만 얹어 이어 갈 수 있다.
+  function submitPrepare(body: Record<string, unknown>, resumeFrom?: string) {
+    if (!resumeFrom) {
+      setLastPrepare(body);
+      setSkippedSteps([]);
+    }
+    void run(
+      (signal) =>
+        request<{ job: WizardJob }>(
+          resumeFrom ? { ...body, resumeFrom } : body,
+          "",
+          signal,
+        ),
+      ({ job: next }) => {
+        setScreen("job");
+        acceptJob(next);
+      },
+    );
+  }
+
   const card = (
     label: string,
     help: string,
@@ -258,9 +337,39 @@ export default function GatewaySetupWizard({
   const canInstallHermes = cap?.canInstallHermes === true;
   const trimmedProfileName = newProfileName.trim();
   const profileNameValid = !trimmedProfileName || PROFILE_NAME.test(trimmedProfileName);
-  const warningBanner = warnings.length ? (
+  // 확인이 경고를 이긴다: ready 면 지우고, missing 이면 (없더라도) 붙인다. unknown 은 기존 규칙 그대로.
+  const effectiveWarnings =
+    modelState === "ready"
+      ? warnings.filter((code) => code !== "model_provider_required")
+      : modelState === "missing" && !warnings.includes("model_provider_required")
+        ? [...warnings, "model_provider_required"]
+        : warnings;
+  const modelNote =
+    modelState === "unknown"
+      ? t("hermes.wizard.model.unknown")
+      : modelState === "ready"
+        ? t("hermes.wizard.model.ready")
+        : null;
+  const modelRecheck = lastCandidateId ? (
     <div className="space-y-2">
-      {warnings.map((code) => {
+      {modelNote && (
+        <p role="status" className="rounded-lg border border-border bg-bg p-3 text-sm text-text-muted">
+          {modelNote}
+        </p>
+      )}
+      <button
+        type="button"
+        className={secondary}
+        disabled={modelChecking}
+        onClick={() => checkModel(lastCandidateId)}
+      >
+        {modelChecking ? t("hermes.wizard.model.checking") : t("hermes.wizard.model.recheck")}
+      </button>
+    </div>
+  ) : null;
+  const warningBanner = effectiveWarnings.length ? (
+    <div className="space-y-2">
+      {effectiveWarnings.map((code) => {
         const message = setupWarning(locale, code);
         return message ? (
           <p
@@ -611,35 +720,24 @@ export default function GatewaySetupWizard({
               inspection.pluginStatus === "plugin_unauthorized"
             }
             onClick={() =>
-              void run(
-                (signal) =>
-                  request<{ job: WizardJob }>(
-                    {
-                      action: "prepare",
-                      ...target,
-                      candidateId: inspection.candidate.id,
-                      profiles: selectedProfiles,
-                      ...(timezoneOffer && sendTimezone ? { timezone: timezoneOffer } : {}),
-                      ...(trimmedProfileName
-                        ? {
-                            createProfile: {
-                              name: trimmedProfileName,
-                              ...(newProfileDescription.trim()
-                                ? { description: newProfileDescription.trim() }
-                                : {}),
-                            },
-                          }
-                        : {}),
-                      ...(provisionKeys.length ? { provisionKeys } : {}),
-                    },
-                    "",
-                    signal,
-                  ),
-                ({ job: next }) => {
-                  setScreen("job");
-                  acceptJob(next);
-                },
-              )
+              submitPrepare({
+                action: "prepare",
+                ...target,
+                candidateId: inspection.candidate.id,
+                profiles: selectedProfiles,
+                ...(timezoneOffer && sendTimezone ? { timezone: timezoneOffer } : {}),
+                ...(trimmedProfileName
+                  ? {
+                      createProfile: {
+                        name: trimmedProfileName,
+                        ...(newProfileDescription.trim()
+                          ? { description: newProfileDescription.trim() }
+                          : {}),
+                      },
+                    }
+                  : {}),
+                ...(provisionKeys.length ? { provisionKeys } : {}),
+              })
             }
           >
             {busy ? c.loading : inspection.changes.length || timezoneOffer ? c.prepare : c.verify}
@@ -666,9 +764,35 @@ export default function GatewaySetupWizard({
           </h3>
           <ol className="list-inside list-decimal space-y-2 text-sm" aria-live="polite">
             {job.steps.map((step, index) => (
-              <li key={index}>{setupStep(c, step)}</li>
+              <li key={index}>
+                {setupStep(c, step)}
+                {skippedSteps.includes(step) && !ALWAYS_RERUN.has(step)
+                  ? ` (${t("hermes.wizard.resume.skipped")})`
+                  : ""}
+              </li>
             ))}
           </ol>
+          {/* 모르는 이정표 코드는 undefined 로 와서 아무것도 그리지 않는다. */}
+          {setupProgress(locale, job.progress) && (
+            <p className="text-sm text-text-muted" aria-live="polite">
+              {setupProgress(locale, job.progress)}
+            </p>
+          )}
+          {installingHermes && (
+            <p className="text-sm text-text-muted" aria-live="polite">
+              {t("hermes.wizard.progress.elapsed", { seconds: String(elapsed) })}
+            </p>
+          )}
+          {job.status === "failed" && strings(job.completed).length > 0 && (
+            <div className="rounded-lg border border-border bg-bg p-3">
+              <h4 className="text-sm font-semibold">{t("hermes.wizard.resume.title")}</h4>
+              <ul className="mt-1 list-inside list-disc text-sm text-text-muted">
+                {strings(job.completed).map((step, index) => (
+                  <li key={index}>{setupStep(c, step)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {warningBanner}
           {digestLine}
           {job.error && (
@@ -706,9 +830,26 @@ export default function GatewaySetupWizard({
               </button>
             </>
           ) : (
-            <button className={button} onClick={() => discover()}>
-              {c.retry}
-            </button>
+            <div className="space-y-3">
+              <div>
+                {job.status === "failed" && lastPrepare && (
+                  <button
+                    className={`${button} mr-2`}
+                    disabled={busy}
+                    onClick={() => {
+                      setSkippedSteps(strings(job.completed));
+                      submitPrepare(lastPrepare, job.id);
+                    }}
+                  >
+                    {t("hermes.wizard.resume.button")}
+                  </button>
+                )}
+                <button className={button} onClick={() => discover()}>
+                  {c.retry}
+                </button>
+              </div>
+              {modelRecheck}
+            </div>
           )}
         </div>
       )}
@@ -765,6 +906,7 @@ export default function GatewaySetupWizard({
       {screen === "success" && result && (
         <div className="mt-4 space-y-4">
           {warningBanner}
+          {modelRecheck}
           {digestLine}
           {result.pluginStatus === "plugin_ready" ? (
             <>

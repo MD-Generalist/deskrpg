@@ -21,7 +21,7 @@ SSH 연결을 허용하려면 `DESKRPG_SETUP_SSH_HOSTS=dev-hermes,another-host`�
 3. 설치 및 연결을 실행하면 서비스 등록(필요할 때), 플러그인 설치/갱신/활성화, API 설정, 시간대 설정(비어 있을 때만), 선택한 서비스 시작/재시작을 수행한다. 기존 키는 재사용하고 선택한 소유 프로필의 키가 없는 경우에만 생성한다.
 4. 실제 API와 플러그인을 검증한 뒤 게이트웨이와 선택한 프로필만 등록한다. 프로필 화면에서 NPC 외형과 배치를 이어간다.
 
-진행 단계는 `installing_hermes → inspecting → creating_profile → provisioning_keys → installing_service → installing_plugin | enabling_plugin | updating_plugin → configuring_api → setting_timezone → restarting_gateway → verifying_gateway → saving_gateway → importing_profiles` 순서다. 필요 없는 단계는 건너뛴다.
+진행 단계는 `installing_hermes → inspecting → creating_profile → provisioning_keys → installing_service → installing_plugin | enabling_plugin | updating_plugin → configuring_api → setting_timezone → restarting_gateway → verifying_gateway → checking_model → saving_gateway → importing_profiles` 순서다. 필요 없는 단계는 건너뛴다.
 
 개별 프로필 게이트웨이는 자체 프로필만 연결한다. 기본 게이트웨이에 여러 프로필을 묶는 경우 이미 실행 중인 개별 봇과 충돌할 수 있으므로 사전 검사에서 중단한다. 다른 프로필을 자동 종료하지 않는다.
 
@@ -44,6 +44,28 @@ Hermes가 설치돼 있지 않은 호스트에서, 위의 게이트 셋이 모�
 제한 시간은 600초다(내부 감시는 580초). 회선이 느리거나 소스 빌드가 필요해 그보다 오래 걸리는 호스트는 마법사로 설치하지 말고, 호스트에서 직접 `curl -fsSL https://hermes-agent.nousresearch.com/install.sh -o install.sh` 후 내용을 검토하고 `bash install.sh`로 설치한 다음 마법사의 검색부터 다시 시작한다.
 
 **설치는 모델 자격 증명을 만들지 않는다.** 검증에서 `/v1/models`가 200이지만 목록이 비어 있으면 실패가 아니라 경고 `model_provider_required`로 알린다. 호스트에서 `hermes model`을 실행해 제공자를 설정해야 NPC가 실제로 응답한다.
+
+설치 진행 상황은 잡의 `progress`에 **마지막으로 관측한 이정표 코드 하나**로만 남는다. 값은 `deps`·`clone`·`venv`·`node_modules`·`skills`·`done` 중 하나이며, 이 목록 밖의 값은 서버가 버린다. 설치 출력의 줄 내용은 이정표를 판정하는 데만 쓰이고 저장도 반환도 되지 않는다. 실시간 갱신은 아직 없다 — 설치가 끝난 뒤 한 번에 실린다(화면은 그동안 경과 시간을 센다).
+
+### 모델 확인
+
+`verifying_gateway` 다음, 게이트웨이를 저장하기 전에 `checking_model` 단계가 돈다. 후보의 `config.yaml`에서 `model.provider`(없으면 최상위 `provider`)를 읽어 호스트의 Hermes CLI로 `auth status <제공자>`를 45초 상한으로 실행하고, 종료 코드 0이면서 출력에 `logged in`이 있으면 `ready`, 아니면 `missing`이다. 제공자를 읽지 못하거나 명령이 죽거나 시간이 초과되면 `unknown`이다. **어떤 결과도 설정을 실패시키지 않는다** — 판정이 애매하면 언제나 `unknown`이고 설정은 그대로 끝난다. 명령 출력의 원문은 저장도 반환도 하지 않는다.
+
+경고 `model_provider_required`는 이 판정이 이긴다: `ready`면 설치 직후라도 붙이지 않고, `missing`이면 설치하지 않았어도 붙인다. `unknown`이면 "방금 설치했으면 붙인다"는 기존 규칙 그대로다.
+
+화면의 "모델 다시 확인"은 `POST /api/gateways/setup`에 `action: "check-model"` + `candidateId`를 보내고 `{ model: "ready" | "missing" | "unknown" }`을 즉시 받는다. 잡을 만들지 않으며, 기존 호스트 게이트(`DESKRPG_HOST_SETUP_ENABLED` + `system_admin`)를 그대로 통과해야 한다.
+
+### 실패한 설정 이어서 실행
+
+잡에는 성공한 단계가 `completed`로 남는다(`steps`는 "시도한 것"이라 성공 여부를 모른다). 실패한 잡을 이어서 실행하려면 prepare 요청에 `resumeFrom: <잡 id>`를 넣는다. 서버는 **같은 사용자·같은 대상·상태 `failed`**인 잡만 받고, 하나라도 어긋나면 `setup_not_found`다(남의 잡의 존재 여부를 알려 주지 않기 위해서다).
+
+- 재개 잡은 앞선 잡의 `completed`를 그대로 물려받고 시작한다. 그 단계들은 다시 하지 않는다 — 특히 `creating_profile`은 다시 하면 `profile_exists`로 죽는다.
+- `inspecting`·`verifying_gateway`·`checking_model`은 **언제나 다시 돈다.** 앞의 둘은 이어지는 모든 판단의 근거이고, 셋 다 읽기 전용 확인이라 다시 해도 잃는 것이 없다.
+- `installing_hermes`가 completed면 설치를 건너뛰고 후보만 다시 찾는다.
+- `saving_gateway`·`importing_profiles`는 멱등한 upsert라 재개에서도 그대로 다시 돈다.
+- **재개는 롤백이 아니다.** 이미 한 일을 되돌리지 않는다.
+
+화면이 보는 "건너뜀"은 **`completed`에 있으면서 `steps`에 없는 단계**다 — 건너뛴 단계는 `steps`에 오르지 않는다. 별도의 필드를 두지 않는다.
 
 ### 프로필 생성과 키 발급
 
@@ -94,6 +116,8 @@ API 주소와 기존 키로 Hermes 정체성, 인증, 플러그인을 순서대�
 SSH 게이트웨이는 영구 대상 ID를 저장하고 요청 시 서버 소유의 루프백 터널로 해석한다. 앱 재시작 후 터널을 다시 만들 수 있다. 호스트 설치 스위치를 끄더라도 이미 등록된 SSH 연결은 유지된다. SSH 별칭을 허용 목록에서 제거하면 이후 연결을 거부한다.
 
 ## 검증 범위
+
+2026-09-15: 모델 확인(`check-model`), 설치 이정표, 실패 재개는 임시 HOME·가짜 CLI·가짜 프로세스 실행기를 이용한 테스트로만 검증했다. **실제 호스트에서 `hermes auth status`의 출력 형태를 다시 확인하지 않았다** — 판정 근거는 실측 한 줄(`openai-codex: logged in`)뿐이고, 형태가 달라지면 조용히 `missing`으로 떨어진다(설정은 실패하지 않는다).
 
 2026-09-15: 프로필 생성·키 발급과 로컬 Hermes 설치는 임시 HOME, 가짜 설치 스크립트, 가짜 프로세스 실행기를 이용한 테스트로만 검증했다. **실제 호스트에서의 종단 설치는 아직 수행하지 않았다** — 배포 전에 깨끗한 리눅스 호스트에서 설치→검색→플러그인→검증 전 구간을 한 번 돌려야 한다.
 

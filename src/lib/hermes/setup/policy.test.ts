@@ -144,3 +144,24 @@ test("호스트가 준 경고는 보존하고 중복은 접는다", () => {
     "model_provider_required",
   ]);
 });
+
+test("모델 확인이 ready 면 설치 직후라도 경고가 사라진다", () => {
+  // 확인이 가능하면 확인이 이긴다 — "설치했으니 경고" 는 추정일 뿐이다.
+  assert.deepEqual(collectSetupWarnings([], true, "ready"), []);
+  assert.deepEqual(collectSetupWarnings(["model_provider_required"], false, "ready"), []);
+  assert.deepEqual(collectSetupWarnings(["profile_not_served"], true, "ready"), [
+    "profile_not_served",
+  ]);
+});
+test("모델 확인이 missing 이면 설치하지 않았어도 경고를 붙인다", () => {
+  assert.deepEqual(collectSetupWarnings([], false, "missing"), ["model_provider_required"]);
+  assert.deepEqual(collectSetupWarnings([], true, "missing"), ["model_provider_required"]);
+});
+test("판정이 unknown 이거나 없으면 기존 규칙 그대로다", () => {
+  assert.deepEqual(collectSetupWarnings([], true, "unknown"), ["model_provider_required"]);
+  assert.deepEqual(collectSetupWarnings([], false, "unknown"), []);
+  assert.deepEqual(collectSetupWarnings([], false, undefined), []);
+});
+test("계약 3의 새 오류 코드도 화이트리스트를 통과한다", () => {
+  assert.equal(safeSetupError(new Error("resume_unavailable")), "resume_unavailable");
+});

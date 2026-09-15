@@ -41,6 +41,27 @@ INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.sh'
 MAX_INSTALLER_BYTES = 1048576
 INSTALL_TIMEOUT = 580
 TAIL = 8192
+MAX_LINE = 4096
+# 표에 적힌 표시만 본다. 순서가 곧 우선순위이고, 한 줄은 첫 일치 하나로만 접힌다.
+# 표시 문자열은 설치 스크립트의 실제 출력에서 골랐다(install.sh 의 log_info 원문 대조).
+# 처음엔 'clone' 을 literal 로 봤는데 git 은 'Cloning into ...' 을 찍어 한 번도 걸리지 않았다.
+MILESTONE_RULES = (
+    ('deps', lambda text: 'installing managed uv' in text or 'installing dependencies' in text or 'installing git' in text),
+    ('clone', lambda text: 'clon' in text or 'fetching repository' in text),
+    ('venv', lambda text: 'creating virtual environment' in text or 'virtual environment' in text),
+    ('node_modules', lambda text: 'node.js dependencies' in text or 'npm install' in text or 'desktop workspace dependencies' in text),
+    ('skills', lambda text: 'bundled skills' in text or 'skills to' in text),
+    ('done', lambda text: 'installation complete' in text),
+)
+milestones = []
+def note(line):
+    # 줄 내용은 어디에도 남기지 않는다 — 미리 정한 코드로만 접어 올린다.
+    if not line: return
+    text = line.decode('utf-8', errors='replace').lower()
+    for code, matches in MILESTONE_RULES:
+        if matches(text):
+            if code not in milestones: milestones.append(code)
+            return
 def out(value):
     sys.stdout.write(json.dumps(value))
     raise SystemExit(0)
@@ -77,12 +98,18 @@ try:
         watchdog = threading.Timer(INSTALL_TIMEOUT, child.kill)
         watchdog.start()
         tail = b''
+        buffered = b''
         try:
             while True:
                 chunk = child.stdout.read(65536)
                 if not chunk: break
                 # 읽고 버린다. 정상 설치의 출력은 256KiB 를 넘기므로 상한을 두지 않고 꼬리만 남긴다.
                 tail = (tail + chunk)[-TAIL:]
+                pieces = (buffered + chunk).split(b'\n')
+                # 개행이 없는 출력이 메모리를 밀어내지 않도록 남는 조각도 잘라 둔다.
+                buffered = pieces.pop()[-MAX_LINE:]
+                for piece in pieces: note(piece[-MAX_LINE:])
+            note(buffered)
             code = child.wait()
         finally:
             watchdog.cancel()
@@ -99,7 +126,7 @@ try:
     if python is None: out({'error': 'hermes_install_failed'})
     probe = subprocess.run([str(python), '-m', 'hermes_cli.main', '--version'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
     if probe.returncode: out({'error': 'hermes_install_failed'})
-    out({'ok': True, 'installerDigest': digest})
+    out({'ok': True, 'installerDigest': digest, 'milestones': milestones})
 except SystemExit:
     raise
 except Exception:
@@ -117,6 +144,8 @@ sys.path.insert(0, str(INSTALL))
 os.environ['HERMES_HOME'] = str(ROOT)
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 NAME = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
+# 모델 제공자 이름의 모양만 본다(실측 값: 'openai-codex'). 모양이 아니면 판정하지 않고 unknown 이다.
+PROVIDER = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
 RESERVED = {'hermes','test','tmp','root','sudo'}
 # 마법사가 새로 만들거나 키를 발급할 수 있는 이름에서 제외한다. 'default' 는 configure 가 다룬다.
 RESERVED_PROFILE = RESERVED | {'default'}
@@ -456,6 +485,22 @@ def main(action, candidate_id=None, option=None):
         return {'candidates': [candidate(name,home)[0] for name,home in homes()]}
     name, home, item = select(candidate_id)
     public, owner, cfg, token, plugin_name = item
+    if action == 'check-model':
+        # 자격 증명이 있는지만 본다. 어떤 결과도 설정을 실패시키지 않는다 — 애매하면 unknown 이다.
+        block = cfg.get('model')
+        provider = block.get('provider') if isinstance(block, dict) else None
+        if not isinstance(provider, str) or not provider.strip(): provider = cfg.get('provider')
+        provider = provider.strip() if isinstance(provider, str) else ''
+        if not provider or not PROVIDER.fullmatch(provider): return {'ok': True, 'model': 'unknown'}
+        try:
+            auth = run([sys.executable, '-m', 'hermes_cli.main', 'auth', 'status', provider], timeout=45, env={**os.environ, 'HERMES_HOME': str(home)})
+        except Exception:
+            return {'ok': True, 'model': 'unknown'}
+        # 실측 출력은 한 줄이다: 'openai-codex: logged in'. 원문은 저장도 반환도 하지 않는다.
+        # 이름을 probe 로 두면 모듈 함수 probe() 가 main 안에서 지역 변수로 가려진다(실측: 테스트 6건 실패).
+        if auth.returncode == 0 and 'logged in' in (auth.stdout or '').lower():
+            return {'ok': True, 'model': 'ready'}
+        return {'ok': True, 'model': 'missing'}
     if action == 'inspect':
         listening = assert_port_owned(public, owner)
         status, warning = probe(public,token) if listening else ('unknown','gateway_unreachable')

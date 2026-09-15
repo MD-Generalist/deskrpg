@@ -238,6 +238,24 @@ const zh: Record<string, string> = {
   "hermes.wizard.step.installingHermes": "安装Hermes",
   "hermes.wizard.step.creatingProfile": "创建新配置文件",
   "hermes.wizard.step.provisioningKeys": "发放配置文件API凭据",
+  "hermes.wizard.step.checkingModel": "检查模型登录",
+  "hermes.wizard.progress.deps": "正在安装所需工具",
+  "hermes.wizard.progress.clone": "正在下载Hermes源码",
+  "hermes.wizard.progress.venv": "正在创建Python虚拟环境",
+  "hermes.wizard.progress.node_modules": "正在安装Node软件包",
+  "hermes.wizard.progress.skills": "正在安装默认技能",
+  "hermes.wizard.progress.done": "正在完成安装",
+  "hermes.wizard.progress.elapsed": "已用{seconds}秒",
+  "hermes.wizard.model.recheck": "重新检查模型",
+  "hermes.wizard.model.checking": "正在检查模型登录…",
+  "hermes.wizard.model.ready": "模型登录已确认。NPC可以回复了。",
+  "hermes.wizard.model.unknown":
+    "无法确定模型登录状态。设置本身已完成。请在服务器上执行hermes model进行确认。",
+  "hermes.wizard.resume.button": "继续执行",
+  "hermes.wizard.resume.title": "已完成到此",
+  "hermes.wizard.resume.skipped": "已跳过",
+  "hermes.wizard.error.resumeUnavailable":
+    "无法继续执行。失败的作业已过期或目标已更改。请从查找安装重新开始。",
   "hermes.wizard.error.profileNameInvalid":
     "配置文件名称或说明不符合规则。名称只能使用小写字母、数字、连字符和下划线且不超过64个字符；说明为单行且不超过200个字符。",
   "hermes.wizard.error.profileExists":

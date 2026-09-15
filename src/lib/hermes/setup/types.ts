@@ -30,7 +30,20 @@ export type SetupJob = {
   warnings?: string[];
   /** install-hermes 가 실행한 설치 스크립트의 sha256(소문자 hex 64자). 비밀이 아니라 감사 기록이다. */
   installerDigest?: string;
+  /**
+   * 마지막으로 관측한 설치 이정표 코드(`deps`·`clone`·`venv`·`node_modules`·`skills`·`done`).
+   * 설치 출력의 원문이 아니라 미리 정한 코드 하나다.
+   */
+  progress?: string;
+  /**
+   * 성공한 단계 이름. `steps` 는 "시도한 것" 이라 성공 여부를 모른다 — 재개가 이 목록을 읽는다.
+   * 재개 잡은 앞선 잡의 목록을 그대로 물려받고 시작한다.
+   * 화면이 보는 "건너뜀" 은 `completed` 에 있으면서 `steps` 에 없는 단계다.
+   */
+  completed?: string[];
 };
+/** 모델 자격 증명 확인 결과. 판정이 애매하면 언제나 `unknown` 이고 설정을 실패시키지 않는다. */
+export type SetupModelState = "ready" | "missing" | "unknown";
 export type SetupCapabilities = {
   local: boolean;
   ssh: boolean;

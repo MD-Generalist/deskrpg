@@ -6,7 +6,7 @@ import { db, users, gatewayResources, nowForDb } from "@/db";
 import { upsertOwnedGatewayResource } from "@/lib/gateway-resources";
 import { registerHermesProfile } from "@/lib/hermes-profiles";
 import { isValidProfileName } from "../profile-name";
-import { discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
+import { checkModelHost, discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
 import { localExecutor, sshExecutor, getSshHosts } from "./executor";
 import { ensureSshTunnel, registerSshTransport, transportFetch } from "./transport";
 import {
@@ -19,7 +19,13 @@ import {
 import { SetupJobStore } from "./store";
 import { buildPluginInfoCacheUpdate } from "../plugin-cache-update";
 import { verifySetupGateway } from "./verify";
-import type { HostTarget, PreparedHost, SetupCapabilities, SetupProvisionRequest } from "./types";
+import type {
+  HostTarget,
+  PreparedHost,
+  SetupCapabilities,
+  SetupModelState,
+  SetupProvisionRequest,
+} from "./types";
 
 const stores = globalThis as typeof globalThis & {
   __deskrpgSetupControllers?: Map<string, AbortController>;
@@ -39,9 +45,16 @@ const STEPS = new Set([
   "setting_timezone",
   "restarting_gateway",
   "verifying_gateway",
+  "checking_model",
   "importing_profiles",
   "saving_gateway",
 ]);
+/**
+ * 재개에서도 언제나 다시 도는 단계. 앞선 잡 이후 호스트 상태가 바뀌었을 수 있고,
+ * 둘 다 읽기 전용 확인이라 다시 해도 잃는 것이 없다.
+ * `inspecting` 도 같은 이유로 건너뛰지 않는다 — 이어지는 모든 판단이 그 결과 위에 선다.
+ */
+const ALWAYS_RERUN = new Set(["inspecting", "verifying_gateway", "checking_model"]);
 
 async function role(userId: string) {
   const [user] = await db
@@ -90,6 +103,17 @@ export async function discoverSetupHost(userId: string, target: HostTarget) {
 export async function inspectSetupHost(userId: string, target: HostTarget, candidateId: string) {
   return inspectHost(await requireHost(userId, target), candidateId);
 }
+/**
+ * 모델 자격 증명만 확인한다. 잡을 만들지 않고 즉시 답한다.
+ * 기존 호스트 게이트는 그대로 통과해야 하지만, 확인 자체는 어떤 이유로도 실패가 되지 않는다.
+ */
+export async function checkSetupModel(
+  userId: string,
+  target: HostTarget,
+  candidateId: string,
+): Promise<SetupModelState> {
+  return checkModelHost(await requireHost(userId, target), candidateId);
+}
 
 function assertPrepared(value: PreparedHost) {
   let parsed: URL;
@@ -134,17 +158,24 @@ export async function startSetup(
   timezone?: string,
   provision?: SetupProvisionRequest,
   installHermes?: boolean,
+  resumeFrom?: string,
 ) {
   const executor = await requireHost(userId, target);
   // 게이트 셋(호스트 설정 + DESKRPG_HERMES_INSTALL_ENABLED + local)을 모두 통과해야 한다.
   if (installHermes && !hermesInstallAllowed(process.env, await role(userId), target.mode))
     throw new Error("hermes_install_forbidden");
   const jobs = store();
+  const targetKey = JSON.stringify(target);
+  // 같은 사용자·같은 대상·실패한 잡만 이어받는다. 잠금을 잡기 전에 판정해 남의 잡으로 호스트를 묶지 않는다.
+  const inherited = resumeFrom
+    ? (jobs.resumable(userId, resumeFrom, targetKey).completed ?? [])
+    : [];
+  const done = (name: string) => inherited.includes(name) && !ALWAYS_RERUN.has(name);
   // Host-wide lock: default and named candidates may share config/plugin installation.
-  const release = jobs.lock(JSON.stringify(target));
+  const release = jobs.lock(targetKey);
   let job;
   try {
-    job = jobs.create(userId);
+    job = jobs.create(userId, targetKey, { completed: inherited });
   } catch (error) {
     release();
     throw error;
@@ -155,9 +186,22 @@ export async function startSetup(
     if (jobs.cancelled(userId, job.id) || controller.signal.aborted)
       throw new Error("setup_cancelled");
   };
+  // 다음 단계가 시작됐다는 것은 앞 단계가 던지지 않고 끝났다는 뜻이다 — 그때 `completed` 에 올린다.
+  let pending: string | null = null;
+  const complete = (name: string) => {
+    const prior = jobs.get(userId, job.id);
+    const completed = prior.completed ?? [];
+    if (!completed.includes(name)) jobs.update(userId, job.id, { completed: [...completed, name] });
+  };
+  const settle = () => {
+    if (pending) complete(pending);
+    pending = null;
+  };
   const step = (name: string) => {
     checkCancelled();
     if (!STEPS.has(name)) return;
+    if (pending && pending !== name) complete(pending);
+    pending = name;
     const prior = jobs.get(userId, job.id);
     if (prior.steps.at(-1) !== name) jobs.update(userId, job.id, { steps: [...prior.steps, name] });
   };
@@ -166,10 +210,20 @@ export async function startSetup(
     try {
       let selectedCandidateId = candidateId;
       if (installHermes) {
-        step("installing_hermes");
-        const { installerDigest } = await installHermesHost(executor, controller.signal);
-        jobs.update(userId, job.id, { installerDigest });
-        checkCancelled();
+        // 이미 설치를 끝낸 재개는 다시 깔지 않는다. 설치를 되돌리지도 않는다 — 후보만 다시 찾는다.
+        if (!done("installing_hermes")) {
+          step("installing_hermes");
+          const { installerDigest, milestones } = await installHermesHost(
+            executor,
+            controller.signal,
+          );
+          jobs.update(userId, job.id, {
+            installerDigest,
+            // 마지막 이정표 하나만 남긴다. 코드이지 줄 내용이 아니다.
+            ...(milestones.length ? { progress: milestones[milestones.length - 1] } : {}),
+          });
+          checkCancelled();
+        }
         // 설치 뒤에는 후보가 새로 생긴다 — 클라이언트가 알 수 없으므로 서버가 다시 찾는다.
         const candidates = await discoverHost(executor);
         const fresh = candidates.find((item) => item.label === "Hermes default");
@@ -188,6 +242,7 @@ export async function startSetup(
         controller.signal,
         timezone,
         provision,
+        done,
       );
       const collected = collectSetupWarnings(prepared.warnings, Boolean(installHermes));
       if (collected.length) jobs.update(userId, job.id, { warnings: collected });
@@ -210,6 +265,17 @@ export async function startSetup(
             ? "plugin_unauthorized"
             : "plugin_verify_failed",
         );
+      checkCancelled();
+      // 확인은 게이트웨이를 저장하기 전에, 그리고 어떤 결과여도 설정을 멈추지 않고 한다.
+      step("checking_model");
+      const modelState = await checkModelHost(
+        boundedExecutor,
+        selectedCandidateId,
+        controller.signal,
+      );
+      jobs.update(userId, job.id, {
+        warnings: collectSetupWarnings(prepared.warnings, Boolean(installHermes), modelState),
+      });
       checkCancelled();
       const baseUrl =
         target.mode === "ssh"
@@ -249,6 +315,7 @@ export async function startSetup(
         if ("error" in result) throw new Error("profile_import_failed");
       }
       checkCancelled();
+      settle();
       jobs.update(userId, job.id, { status: "succeeded" });
     } catch (error) {
       const code =

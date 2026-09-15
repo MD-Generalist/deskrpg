@@ -86,6 +86,7 @@ const ko = {
   installing_hermes: koText["hermes.wizard.step.installingHermes"],
   creating_profile: koText["hermes.wizard.step.creatingProfile"],
   provisioning_keys: koText["hermes.wizard.step.provisioningKeys"],
+  checking_model: koText["hermes.wizard.step.checkingModel"],
 };
 type Copy = typeof ko;
 const en: Copy = {
@@ -170,6 +171,7 @@ const en: Copy = {
   installing_hermes: enText["hermes.wizard.step.installingHermes"],
   creating_profile: enText["hermes.wizard.step.creatingProfile"],
   provisioning_keys: enText["hermes.wizard.step.provisioningKeys"],
+  checking_model: enText["hermes.wizard.step.checkingModel"],
 };
 const ja: Copy = {
   ...en,
@@ -270,6 +272,7 @@ Object.assign(ja, {
   installing_hermes: jaText["hermes.wizard.step.installingHermes"],
   creating_profile: jaText["hermes.wizard.step.creatingProfile"],
   provisioning_keys: jaText["hermes.wizard.step.provisioningKeys"],
+  checking_model: jaText["hermes.wizard.step.checkingModel"],
 });
 Object.assign(zh, {
   selectProfiles: "要导入的现有配置文件",
@@ -334,6 +337,7 @@ Object.assign(zh, {
   installing_hermes: zhText["hermes.wizard.step.installingHermes"],
   creating_profile: zhText["hermes.wizard.step.creatingProfile"],
   provisioning_keys: zhText["hermes.wizard.step.provisioningKeys"],
+  checking_model: zhText["hermes.wizard.step.checkingModel"],
 });
 export const setupCopy: Record<Locale, Copy> = { ko, en, ja, zh };
 export function setupError(copy: Copy, code: unknown): string {
@@ -405,6 +409,7 @@ const hostErrorGroups: Record<string, string> = {
   hermes_install_forbidden: "hermesInstallForbidden",
   hermes_install_failed: "hermesInstallFailed",
   hermes_installer_unavailable: "hermesInstaller",
+  resume_unavailable: "resumeUnavailable",
 };
 const hostRemediation: Record<Locale, Record<string, string>> = {
   ko: {
@@ -456,6 +461,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     hermesInstallForbidden: koText["hermes.wizard.error.hermesInstallForbidden"],
     hermesInstallFailed: koText["hermes.wizard.error.hermesInstallFailed"],
     hermesInstaller: koText["hermes.wizard.error.hermesInstallerUnavailable"],
+    resumeUnavailable: koText["hermes.wizard.error.resumeUnavailable"],
   },
   en: {
     securityReview:
@@ -506,6 +512,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     hermesInstallForbidden: enText["hermes.wizard.error.hermesInstallForbidden"],
     hermesInstallFailed: enText["hermes.wizard.error.hermesInstallFailed"],
     hermesInstaller: enText["hermes.wizard.error.hermesInstallerUnavailable"],
+    resumeUnavailable: enText["hermes.wizard.error.resumeUnavailable"],
   },
   ja: {
     securityReview:
@@ -556,6 +563,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     hermesInstallForbidden: jaText["hermes.wizard.error.hermesInstallForbidden"],
     hermesInstallFailed: jaText["hermes.wizard.error.hermesInstallFailed"],
     hermesInstaller: jaText["hermes.wizard.error.hermesInstallerUnavailable"],
+    resumeUnavailable: jaText["hermes.wizard.error.resumeUnavailable"],
   },
   zh: {
     securityReview:
@@ -596,6 +604,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     hermesInstallForbidden: zhText["hermes.wizard.error.hermesInstallForbidden"],
     hermesInstallFailed: zhText["hermes.wizard.error.hermesInstallFailed"],
     hermesInstaller: zhText["hermes.wizard.error.hermesInstallerUnavailable"],
+    resumeUnavailable: zhText["hermes.wizard.error.resumeUnavailable"],
   },
 };
 export function setupHostError(locale: Locale, code: unknown): string | undefined {
@@ -612,6 +621,26 @@ const warningKeys: Record<string, string> = {
 export function setupWarning(locale: Locale, code: unknown): string | undefined {
   if (typeof code !== "string") return undefined;
   const key = warningKeys[code];
+  if (!key) return undefined;
+  const text = { ko: koText, en: enText, ja: jaText, zh: zhText }[locale];
+  return text[key as keyof typeof text] ?? enText[key as keyof typeof enText];
+}
+
+/**
+ * 설치 이정표 코드 → 문구. 호스트가 미리 정한 코드만 올린다는 계약이므로,
+ * 모르는 코드는 undefined 로 돌려 화면에 아무것도 그리지 않는다(원시 출력 유출 방지).
+ */
+const progressKeys: Record<string, string> = {
+  deps: "hermes.wizard.progress.deps",
+  clone: "hermes.wizard.progress.clone",
+  venv: "hermes.wizard.progress.venv",
+  node_modules: "hermes.wizard.progress.node_modules",
+  skills: "hermes.wizard.progress.skills",
+  done: "hermes.wizard.progress.done",
+};
+export function setupProgress(locale: Locale, code: unknown): string | undefined {
+  if (typeof code !== "string") return undefined;
+  const key = progressKeys[code];
   if (!key) return undefined;
   const text = { ko: koText, en: enText, ja: jaText, zh: zhText }[locale];
   return text[key as keyof typeof text] ?? enText[key as keyof typeof enText];

@@ -248,6 +248,24 @@ const ja: Record<string, string> = {
   "hermes.wizard.step.installingHermes": "Hermesをインストール",
   "hermes.wizard.step.creatingProfile": "新しいプロファイルを作成",
   "hermes.wizard.step.provisioningKeys": "プロファイルのAPI認証キーを発行",
+  "hermes.wizard.step.checkingModel": "モデルのログインを確認",
+  "hermes.wizard.progress.deps": "必要なツールをインストール中",
+  "hermes.wizard.progress.clone": "Hermesのソースを取得中",
+  "hermes.wizard.progress.venv": "Python仮想環境を作成中",
+  "hermes.wizard.progress.node_modules": "Nodeパッケージをインストール中",
+  "hermes.wizard.progress.skills": "標準スキルをインストール中",
+  "hermes.wizard.progress.done": "インストールを仕上げ中",
+  "hermes.wizard.progress.elapsed": "{seconds}秒経過",
+  "hermes.wizard.model.recheck": "モデルを再確認",
+  "hermes.wizard.model.checking": "モデルのログインを確認中…",
+  "hermes.wizard.model.ready": "モデルのログインを確認しました。NPCが応答できます。",
+  "hermes.wizard.model.unknown":
+    "モデルのログイン状態を確認できませんでした。設定自体は完了しています。サーバーでhermes modelを実行して確認してください。",
+  "hermes.wizard.resume.button": "続きから実行",
+  "hermes.wizard.resume.title": "ここまで完了しました",
+  "hermes.wizard.resume.skipped": "スキップ",
+  "hermes.wizard.error.resumeUnavailable":
+    "続きから実行できません。失敗した処理が期限切れになったか、対象が変わりました。インストールの検索からやり直してください。",
   "hermes.wizard.error.profileNameInvalid":
     "プロファイル名または説明が規則に合いません。名前は小文字・数字・ハイフン・アンダースコアのみで64文字以下、説明は1行200文字以下にしてください。",
   "hermes.wizard.error.profileExists":

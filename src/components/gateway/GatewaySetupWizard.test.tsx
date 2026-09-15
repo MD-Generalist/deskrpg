@@ -1057,3 +1057,240 @@ test("설치만 끝난 잡은 실패로 그리지 않고 다시 찾기로 이어
     await f.cleanup();
   }
 });
+
+/** 후보 검색 → 검토 → "설치 및 연결" 까지 한 번에 가는 공통 경로. */
+async function prepareFlow(
+  handler: (action: string, body: Record<string, unknown>) => Response | undefined,
+) {
+  const f = await fixture(async (url, init) => {
+    if (String(url).includes("?job=")) return response({ job: { id: "j", status: "running", steps: [] } });
+    if (!init?.body) return response(capabilities);
+    const body = JSON.parse(String(init.body));
+    if (body.action === "discover") return response({ candidates: [candidate] });
+    if (body.action === "inspect")
+      return response({
+        candidate,
+        pluginStatus: "plugin_absent",
+        changes: ["installing_plugin"],
+      });
+    const handled = handler(body.action, body);
+    assert.ok(handled, `unhandled ${body.action}`);
+    return handled;
+  });
+  await act(async () =>
+    Array.from(f.host.querySelectorAll("button"))
+      .find((b) => b.textContent?.includes("로컬 연결"))!
+      .click(),
+  );
+  await f.click("연결하기");
+  await f.click("설치 및 연결");
+  return f;
+}
+
+test("모델 다시 확인이 ready 면 모델 경고를 지운다", async () => {
+  const f = await prepareFlow((action) => {
+    if (action === "prepare")
+      return response({
+        job: {
+          id: "j",
+          status: "succeeded",
+          steps: ["installing_plugin"],
+          gatewayId: "g",
+          warnings: ["model_provider_required"],
+        },
+      });
+    if (action === "check-model") return response({ model: "ready" });
+    return undefined;
+  });
+  try {
+    assert.match(f.host.textContent!, /모델 제공자가 아직 없습니다/);
+    await f.click("모델 다시 확인");
+    assert.doesNotMatch(f.host.textContent!, /모델 제공자가 아직 없습니다/);
+    assert.match(f.host.textContent!, /모델 로그인이 확인되었습니다/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("모델 다시 확인이 missing 이면 모델 경고를 유지한다", async () => {
+  const f = await prepareFlow((action) => {
+    if (action === "prepare")
+      return response({
+        job: { id: "j", status: "succeeded", steps: ["installing_plugin"], gatewayId: "g" },
+      });
+    if (action === "check-model") return response({ model: "missing" });
+    return undefined;
+  });
+  try {
+    assert.doesNotMatch(f.host.textContent!, /모델 제공자가 아직 없습니다/);
+    await f.click("모델 다시 확인");
+    assert.match(f.host.textContent!, /모델 제공자가 아직 없습니다/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("모델 확인 unknown 은 실패로 그리지 않고 중립적으로 알린다", async () => {
+  const f = await prepareFlow((action) => {
+    if (action === "prepare")
+      return response({
+        job: { id: "j", status: "succeeded", steps: ["installing_plugin"], gatewayId: "g" },
+      });
+    if (action === "check-model") return response({ model: "unknown" });
+    return undefined;
+  });
+  try {
+    await f.click("모델 다시 확인");
+    assert.match(f.host.textContent!, /확인하지 못했습니다/);
+    assert.equal(f.host.querySelectorAll('[role="alert"]').length, 0);
+    assert.doesNotMatch(f.host.textContent!, /연결을 완료하지 못했습니다/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("모르는 설치 진행 코드는 아무것도 그리지 않고 아는 코드만 문구로 그린다", async () => {
+  const f = await prepareFlow((action) => {
+    if (action === "prepare")
+      return response({
+        job: {
+          id: "j",
+          status: "failed",
+          steps: ["installing_plugin"],
+          error: "hermes_install_failed",
+          progress: "totally_unknown_code",
+        },
+      });
+    return undefined;
+  });
+  try {
+    assert.doesNotMatch(f.host.textContent!, /totally_unknown_code/);
+  } finally {
+    await f.cleanup();
+  }
+  const g = await prepareFlow((action) => {
+    if (action === "prepare")
+      return response({
+        job: {
+          id: "j",
+          status: "failed",
+          steps: ["installing_plugin"],
+          error: "hermes_install_failed",
+          progress: "venv",
+        },
+      });
+    return undefined;
+  });
+  try {
+    assert.match(g.host.textContent!, /파이썬 가상 환경/);
+  } finally {
+    await g.cleanup();
+  }
+});
+
+test("설치가 도는 동안 경과 시간이 올라간다", async () => {
+  const running = { id: "j", status: "running", steps: ["installing_hermes"] };
+  const f = await fixture(async (url, init) => {
+    if (String(url).includes("?job=")) return response({ job: running });
+    if (!init?.body) return response({ ...capabilities, canInstallHermes: true });
+    const { action } = JSON.parse(String(init.body));
+    if (action === "discover") return response({ candidates: [] });
+    return response({ job: running });
+  });
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("로컬 연결"))!
+        .click(),
+    );
+    await act(async () =>
+      f.host.querySelector<HTMLInputElement>('input[name="install-consent"]')!.click(),
+    );
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent === "Hermes 설치 시작")!
+        .click(),
+    );
+    assert.match(f.host.textContent!, /0초 경과/);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 1200)));
+    assert.match(f.host.textContent!, /1초 경과/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("실패한 잡에 이어서 실행 버튼이 뜨고 resumeFrom 이 실려 나간다", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const f = await prepareFlow((action, body) => {
+    if (action !== "prepare") return undefined;
+    bodies.push(body);
+    return response(
+      bodies.length === 1
+        ? {
+            job: {
+              id: "failed-job",
+              status: "failed",
+              steps: ["installing_plugin", "restarting_gateway"],
+              error: "gateway_restart_failed",
+              completed: ["installing_plugin"],
+            },
+          }
+        : {
+            job: {
+              id: "resumed",
+              status: "running",
+              steps: ["installing_plugin", "restarting_gateway"],
+            },
+          },
+    );
+  });
+  try {
+    assert.match(f.host.textContent!, /여기까지 끝났습니다/);
+    await f.click("이어서 실행");
+    assert.equal(bodies.length, 2);
+    assert.equal(bodies[1].resumeFrom, "failed-job");
+    assert.equal(bodies[1].candidateId, bodies[0].candidateId);
+    // 이미 끝난 단계는 다시 돌지 않았다는 사실을 화면에 남긴다.
+    assert.match(f.host.textContent!, /DeskRPG 플러그인 설치 \(건너뜀\)/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("성공한 잡에는 이어서 실행 버튼이 뜨지 않는다", async () => {
+  const f = await prepareFlow((action) =>
+    action === "prepare"
+      ? response({
+          job: {
+            id: "j",
+            status: "succeeded",
+            steps: ["installing_plugin"],
+            completed: ["installing_plugin"],
+          },
+        })
+      : undefined,
+  );
+  try {
+    assert.doesNotMatch(f.host.textContent!, /이어서 실행/);
+    assert.doesNotMatch(f.host.textContent!, /여기까지 끝났습니다/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("resume_unavailable 은 다시 시작 경로를 알려 주는 안내로 바뀐다", async () => {
+  const f = await prepareFlow((action) =>
+    action === "prepare"
+      ? response({ job: { id: "j", status: "failed", steps: [], error: "resume_unavailable" } })
+      : undefined,
+  );
+  try {
+    const alerts = Array.from(f.host.querySelectorAll('[role="alert"]'))
+      .map((node) => node.textContent ?? "")
+      .join("\n");
+    assert.match(alerts, /설치 찾기부터 다시 시작/);
+    assert.doesNotMatch(alerts, /resume_unavailable/);
+  } finally {
+    await f.cleanup();
+  }
+});

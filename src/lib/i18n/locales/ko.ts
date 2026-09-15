@@ -241,6 +241,24 @@ const ko: Record<string, string> = {
   "hermes.wizard.step.installingHermes": "Hermes 설치",
   "hermes.wizard.step.creatingProfile": "새 프로필 만들기",
   "hermes.wizard.step.provisioningKeys": "프로필 인증 키 발급",
+  "hermes.wizard.step.checkingModel": "모델 로그인 확인",
+  "hermes.wizard.progress.deps": "필요한 도구를 설치하는 중",
+  "hermes.wizard.progress.clone": "Hermes 소스를 내려받는 중",
+  "hermes.wizard.progress.venv": "파이썬 가상 환경을 만드는 중",
+  "hermes.wizard.progress.node_modules": "Node 패키지를 설치하는 중",
+  "hermes.wizard.progress.skills": "기본 스킬을 설치하는 중",
+  "hermes.wizard.progress.done": "설치를 마무리하는 중",
+  "hermes.wizard.progress.elapsed": "{seconds}초 경과",
+  "hermes.wizard.model.recheck": "모델 다시 확인",
+  "hermes.wizard.model.checking": "모델 로그인을 확인하는 중…",
+  "hermes.wizard.model.ready": "모델 로그인이 확인되었습니다. NPC 가 대답할 수 있습니다.",
+  "hermes.wizard.model.unknown":
+    "모델 로그인 상태를 확인하지 못했습니다. 설정 자체는 끝났습니다. 서버에서 hermes model 로 직접 확인하세요.",
+  "hermes.wizard.resume.button": "이어서 실행",
+  "hermes.wizard.resume.title": "여기까지 끝났습니다",
+  "hermes.wizard.resume.skipped": "건너뜀",
+  "hermes.wizard.error.resumeUnavailable":
+    "이어서 실행할 수 없습니다. 실패한 작업이 만료되었거나 연결 대상이 달라졌습니다. 설치 찾기부터 다시 시작하세요.",
   "hermes.wizard.error.profileNameInvalid":
     "프로필 이름이나 설명이 규칙에 맞지 않습니다. 이름은 소문자·숫자·하이픈·밑줄만 쓰고 64자 이하여야 하며, 설명은 한 줄로 200자 이하여야 합니다.",
   "hermes.wizard.error.profileExists":

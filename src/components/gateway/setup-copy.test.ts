@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isSetupWarningBlocking, setupHostError } from "./setup-copy";
+import {
+  isSetupWarningBlocking,
+  setupCopy,
+  setupHostError,
+  setupProgress,
+  setupStep,
+} from "./setup-copy";
 
 test("host remediation is present in all four locales without raw error codes", () => {
   for (const code of [
@@ -143,5 +149,24 @@ test("계약 2 의 새 진행 단계는 네 언어 모두 고유한 라벨을 �
     );
     for (const label of labels) assert.notEqual(label, copy.step, `${locale}: 일반 폴백 금지`);
     assert.equal(new Set(labels).size, 3, `${locale}: 세 단계가 서로 달라야 한다`);
+  }
+});
+
+test("설치 이정표는 네 로케일 모두에 있고 모르는 코드는 아무것도 돌려주지 않는다", () => {
+  for (const code of ["deps", "clone", "venv", "node_modules", "skills", "done"]) {
+    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+      const message = setupProgress(locale, code);
+      assert.ok(message && message.length > 2, `${locale}: ${code}`);
+    }
+  }
+  for (const code of [undefined, null, 42, "", "raw output line", "installing python 3.12"])
+    assert.equal(setupProgress("ko", code), undefined);
+});
+test("모델 확인 단계는 네 로케일 모두에서 원시 코드가 아닌 문구로 나온다", () => {
+  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    const label = setupStep(setupCopy[locale], "checking_model");
+    assert.ok(label && label.length > 2, locale);
+    assert.ok(!label.includes("checking_model"));
+    assert.notEqual(label, setupCopy[locale].step);
   }
 });

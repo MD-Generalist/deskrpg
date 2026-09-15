@@ -11,6 +11,7 @@ import {
   setupCapabilities,
   discoverSetupHost,
   inspectSetupHost,
+  checkSetupModel,
   startSetup,
   getSetupJob,
   cancelSetupJob,
@@ -51,7 +52,7 @@ function failure(error: unknown) {
       ? 403
       : code === "setup_not_found"
         ? 404
-        : code === "setup_busy" || code === "profile_exists"
+        : code === "setup_busy" || code === "profile_exists" || code === "resume_unavailable"
           ? 409
           : 400;
   return response({ error: code, errorCode: code }, status);
@@ -123,6 +124,9 @@ export async function POST(req: NextRequest) {
       throw new Error("setup_invalid_request");
     if (body.action === "inspect")
       return response(await inspectSetupHost(userId, target, body.candidateId));
+    // 잡을 만들지 않는 즉시 응답이다. 결과는 판정 하나뿐이고 명령 출력은 실리지 않는다.
+    if (body.action === "check-model")
+      return response({ model: await checkSetupModel(userId, target, body.candidateId) });
     if (body.action === "prepare") {
       if (
         !Array.isArray(body.profiles) ||
@@ -135,6 +139,14 @@ export async function POST(req: NextRequest) {
         body.timezone === undefined || body.timezone === null
           ? undefined
           : validateTimezone(body.timezone);
+      // 재개 대상. 같은 사용자·같은 대상·실패한 잡인지는 서비스 계층이 판정한다.
+      if (
+        body.resumeFrom !== undefined &&
+        body.resumeFrom !== null &&
+        (typeof body.resumeFrom !== "string" || !body.resumeFrom || body.resumeFrom.length > 64)
+      )
+        throw new Error("setup_invalid_request");
+      const resumeFrom = typeof body.resumeFrom === "string" ? body.resumeFrom : undefined;
       return response(
         {
           job: await startSetup(
@@ -145,6 +157,7 @@ export async function POST(req: NextRequest) {
             timezone,
             readProvision(body),
             installHermes,
+            resumeFrom,
           ),
         },
         202,
