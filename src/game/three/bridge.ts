@@ -64,6 +64,8 @@ export interface OfficeBridge {
     actorId?: string,
   ): void;
   walkable(col: number, row: number): boolean;
+  /** Includes authoritative reservations that may not have reached the chair yet. */
+  seatAvailable?(x: number, z: number): boolean;
   setPresentation(active: boolean): void;
 }
 export function pixelToWorld(x: number, y: number) {

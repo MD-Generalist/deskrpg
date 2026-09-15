@@ -19,10 +19,16 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
   const { locale } = useLocale();
   const ko = locale === "ko";
   useLayoutEffect(() => {
+    renderer.current?.setSeatActionLabel(ko ? "자리 앉기" : "Sit here");
+  }, [ko]);
+  useLayoutEffect(() => {
     if (!host.current || !labels.current) return;
     let view: OfficeRenderer;
     try {
       view = new OfficeRenderer(host.current, labels.current);
+      view.setSeatActionLabel(
+        document.documentElement.lang.startsWith("ko") ? "자리 앉기" : "Sit here",
+      );
       renderer.current = view;
     } catch (err) {
       console.error("Three.js initialization failed", err);
