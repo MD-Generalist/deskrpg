@@ -6,6 +6,7 @@ import type { KanbanTask } from "@/lib/hermes/deskrpg-plugin-types";
 import {
   activeAssigneeOptions,
   assigneeLabel,
+  BLACKBOARD_PREFIX,
   classifyBoardFailure,
   elapsedSeconds,
   EMPTY_TASK_FORM,
@@ -17,10 +18,12 @@ import {
   parseSkills,
   PLUGIN_INSTALL_COMMAND,
   progressLabel,
+  splitBlackboardComments,
   taskFormToBody,
   warningBadge,
   type BoardNpc,
 } from "./kanban-view-model";
+import type { KanbanComment } from "@/lib/hermes/deskrpg-plugin-types";
 
 const task = (id: string, status: KanbanTask["status"], extra: Partial<KanbanTask> = {}) =>
   ({ id, title: id, status, ...extra }) satisfies KanbanTask;
@@ -183,4 +186,58 @@ test("R8: form → body sends only filled fields, assignee as npcId, skills spli
     false,
   );
   assert.deepEqual(parseSkills(" , x ,, y\n"), ["x", "y"]);
+});
+
+const bb = (key: string, value: unknown, author = "swarm-orchestrator") => ({
+  id: `${key}-c`,
+  author,
+  body: `[swarm:blackboard] ${JSON.stringify({ key, value })}`,
+  created_at: "2026-09-16T00:00:00Z",
+});
+
+test("블랙보드 코멘트는 스레드에서 빠지고 표로 병합된다", () => {
+  const out = splitBlackboardComments([
+    { id: "c1", author: "nova", body: "사람 코멘트", created_at: "2026-09-16T00:00:00Z" },
+    bb("topology", { goal: "g" }),
+    bb("progress", { done: 1 }),
+  ] as KanbanComment[]);
+  assert.deepEqual(
+    out.comments.map((c) => c.id),
+    ["c1"],
+  );
+  assert.deepEqual(out.blackboard, { topology: { goal: "g" }, progress: { done: 1 } });
+  assert.equal(out.authors.topology, "swarm-orchestrator");
+});
+
+test("같은 key 는 나중 값이 이긴다", () => {
+  const out = splitBlackboardComments([
+    bb("progress", { done: 1 }, "nova"),
+    bb("progress", { done: 2 }, "luna"),
+  ] as KanbanComment[]);
+  assert.deepEqual(out.blackboard, { progress: { done: 2 } });
+  assert.equal(out.authors.progress, "luna");
+});
+
+test("깨진 JSON 은 조용히 무시하되 스레드에도 안 남긴다", () => {
+  // Hermes `latest_blackboard` 와 같은 동작. 접두사가 붙은 이상 사람에게 보일 것은 아니다.
+  const out = splitBlackboardComments([
+    { id: "bad", author: "nova", body: "[swarm:blackboard] {깨짐", created_at: "x" },
+  ] as KanbanComment[]);
+  assert.deepEqual(out.comments, []);
+  assert.deepEqual(out.blackboard, {});
+});
+
+test("key 가 문자열이 아니면 병합하지 않는다", () => {
+  const out = splitBlackboardComments([
+    { id: "n", author: "nova", body: '[swarm:blackboard] {"key": 1, "value": 2}', created_at: "x" },
+  ] as KanbanComment[]);
+  assert.deepEqual(out.blackboard, {});
+});
+
+test("블랙보드가 없으면 빈 객체다", () => {
+  const out = splitBlackboardComments([
+    { id: "c1", author: "nova", body: "보통 코멘트", created_at: "x" },
+  ] as KanbanComment[]);
+  assert.deepEqual(out.blackboard, {});
+  assert.equal(out.comments.length, 1);
 });

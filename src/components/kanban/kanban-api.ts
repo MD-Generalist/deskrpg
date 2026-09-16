@@ -17,6 +17,7 @@ import type {
   KanbanTaskAction,
   KanbanTaskDetail,
   OrchestrationSettings,
+  SwarmCreated,
   WorkerLog,
 } from "@/lib/hermes/deskrpg-plugin-types";
 
@@ -185,7 +186,22 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike) {
         `${root}/links`,
         json("DELETE", { parent_id: parentId, child_id: childId }),
       ),
-    dispatch: () => request<DispatchResult>(f, `${root}/dispatch`, { method: "POST" }),
+    dispatch: (opts?: { max?: number; dryRun?: boolean }) => {
+      const qs = new URLSearchParams();
+      if (typeof opts?.max === "number") qs.set("max", String(opts.max));
+      if (opts?.dryRun) qs.set("dry_run", "true");
+      const suffix = qs.size > 0 ? `?${qs}` : "";
+      return request<DispatchResult>(f, `${root}/dispatch${suffix}`, { method: "POST" });
+    },
+    createSwarm: (body: {
+      goal: string;
+      workers: Array<{ npcId: string; title: string; body?: string; skills?: string[] }>;
+      verifierNpcId: string;
+      synthesizerNpcId: string;
+      idempotencyKey: string;
+    }) => request<SwarmCreated>(f, `${root}/swarm`, json("POST", body)),
+    blackboard: (taskId: string) =>
+      request<{ blackboard: Record<string, unknown> }>(f, `${task(taskId)}/blackboard`),
     settings: () => request<BoardSettings>(f, `${root}/settings`),
     patchSettings: (body: {
       board?: { default_workdir: string };

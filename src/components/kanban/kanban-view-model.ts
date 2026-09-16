@@ -10,6 +10,7 @@ import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/h
 import {
   KANBAN_TASK_STATUSES,
   type KanbanBoard,
+  type KanbanComment,
   type KanbanTask,
   type KanbanTaskStatus,
 } from "@/lib/hermes/deskrpg-plugin-types";
@@ -265,4 +266,50 @@ export function taskFormToBody(values: TaskFormValues): Record<string, unknown> 
     }
   }
   return body;
+}
+
+// ---------------------------------------------------------------------------
+// 블랙보드 필터 (스웜)
+// ---------------------------------------------------------------------------
+
+/** Hermes `kanban_swarm.BLACKBOARD_PREFIX` 와 **같은 문자열이어야 한다.** */
+export const BLACKBOARD_PREFIX = "[swarm:blackboard] ";
+
+/**
+ * 블랙보드 코멘트를 스레드에서 걸러내고 key 별 최신값으로 병합한다.
+ *
+ * `create_swarm` 이 루트 카드에 `topology` 코멘트를 스스로 남기므로, 이 처리가 없으면
+ * **모든** 스웜 루트 카드에서 사용자가 날 JSON 을 보게 된다(`TaskDrawer` 는 본문을
+ * `whitespace-pre-wrap` 평문으로 그린다).
+ *
+ * 병합 규칙은 Hermes `latest_blackboard` 를 따른다 — 나중 코멘트가 같은 key 를 덮고,
+ * 깨진 JSON 과 문자열 아닌 key 는 건너뛴다.
+ */
+export function splitBlackboardComments(comments: KanbanComment[]): {
+  comments: KanbanComment[];
+  blackboard: Record<string, unknown>;
+  authors: Record<string, string>;
+} {
+  const rest: KanbanComment[] = [];
+  const blackboard: Record<string, unknown> = {};
+  const authors: Record<string, string> = {};
+  for (const comment of comments) {
+    const body = comment.body ?? "";
+    if (!body.startsWith(BLACKBOARD_PREFIX)) {
+      rest.push(comment);
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body.slice(BLACKBOARD_PREFIX.length));
+    } catch {
+      continue; // 깨진 것도 스레드로 되돌리지 않는다 — 사람에게 보일 내용이 아니다.
+    }
+    if (typeof parsed !== "object" || parsed === null) continue;
+    const { key, value } = parsed as { key?: unknown; value?: unknown };
+    if (typeof key !== "string" || !key) continue;
+    blackboard[key] = value;
+    authors[key] = comment.author;
+  }
+  return { comments: rest, blackboard, authors };
 }
