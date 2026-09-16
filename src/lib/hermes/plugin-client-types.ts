@@ -58,6 +58,7 @@ export type PluginClient = {
 
 import type {
   AutomationBlueprint,
+  Blackboard,
   BoardMeta,
   CreateBoardBody,
   CreateCronJobBody,
@@ -77,6 +78,8 @@ import type {
   KanbanTaskDetail,
   OrchestrationSettings,
   PluginInfo,
+  SwarmCreated,
+  SwarmRequest,
   UpdateBoardBody,
   UpdateCronJobBody,
   UpdateOrchestrationBody,
@@ -147,6 +150,10 @@ export type KanbanApi = {
   ): Promise<PluginResponse<{ ok: true }>>;
 
   dispatch(board: string, opts?: { max?: number }): Promise<PluginResponse<DispatchResult>>;
+
+  createSwarm(board: string, body: SwarmRequest): Promise<PluginResponse<SwarmCreated>>;
+  getBlackboard(board: string, taskId: string): Promise<PluginResponse<{ blackboard: Blackboard }>>;
+
   getTaskLog(
     board: string,
     id: string,

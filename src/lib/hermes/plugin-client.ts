@@ -269,6 +269,14 @@ export function createOwnerPluginClient(
         method: "POST",
         body: {},
       }),
+
+    createSwarm: (board, body) =>
+      call(`/deskrpg/kanban/swarm?board=${encodeURIComponent(board)}`, token, {
+        method: "POST",
+        body,
+      }),
+    getBlackboard: (board, id) => call(task(board, id, "/blackboard"), token),
+
     getTaskLog: (board, id, opts) =>
       call(`/deskrpg/kanban/tasks/${seg(id)}/log${query({ board, tail: opts?.tail })}`, token),
 

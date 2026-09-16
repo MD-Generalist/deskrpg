@@ -820,7 +820,7 @@ test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중
   const body = await res.json();
   assert.equal(body.pluginStatus, "plugin_ready");
   assert.equal(body.pluginVersion, "0.6.0");
-  assert.deepEqual(body.capabilities, ["kanban", "cron", "events"]);
+  assert.deepEqual(body.capabilities, ["kanban", "cron", "events", "swarm"]);
   assert.equal(body.timezone, "Asia/Seoul");
   assert.equal(body.boardSlug, seed.boardSlug);
   assert.equal(body.dispatcherPresent, true);

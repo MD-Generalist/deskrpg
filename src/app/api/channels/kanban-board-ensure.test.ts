@@ -212,6 +212,7 @@ test("플러그인 0.6.0 미만이면 확보를 시도하지 않고 plugin_upgra
     "kanban",
     "cron",
     "events",
+    "swarm",
   ]);
 });
 

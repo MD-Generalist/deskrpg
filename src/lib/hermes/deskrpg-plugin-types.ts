@@ -436,3 +436,29 @@ export type InstantiateBlueprintBody = {
   blueprint: string;
   values: Record<string, string>;
 };
+
+// ---------------------------------------------------------------------------
+// 스웜(v0.7.0+) — /deskrpg/kanban/swarm, /deskrpg/kanban/tasks/{id}/blackboard
+// ---------------------------------------------------------------------------
+
+/** `POST /deskrpg/kanban/swarm` 의 본문. 프로필 이름은 **서버가** NPC id 에서 푼 값이다. */
+export type SwarmRequest = {
+  goal: string;
+  workers: Array<{ profile: string; title: string; body?: string; skills?: string[] }>;
+  verifier: string;
+  synthesizer: string;
+  tenant?: string | null;
+  priority?: number;
+  idempotency_key?: string;
+};
+
+/** Hermes `SwarmCreated.as_dict()` 그대로. 키 이름을 바꾸지 않는다. */
+export type SwarmCreated = {
+  root_id: string;
+  worker_ids: string[];
+  verifier_id: string;
+  synthesizer_id: string;
+};
+
+/** 루트 카드의 블랙보드. key 별 최신값 + `_authors`. 값의 모양은 Hermes 가 정한다. */
+export type Blackboard = Record<string, unknown>;

@@ -134,7 +134,7 @@ export async function startFakePluginServer(
   let info: PluginInfo = {
     plugin: "deskrpg",
     version: "0.6.0",
-    capabilities: ["kanban", "cron", "events"],
+    capabilities: ["kanban", "cron", "events", "swarm"],
     timezone: "Asia/Seoul",
     kanban: { dispatcher_present: true, attachments: true },
     ...options.info,
@@ -390,6 +390,88 @@ export async function startFakePluginServer(
       payload: { title, status: task.status, assignee: task.assignee ?? null },
     });
     return { status: 201, body: { task: summaryOf(task) } };
+  }
+
+  // ---- 스웜(v0.7.0+) --------------------------------------------------------
+  //
+  // 실제 그래프 오케스트레이션은 흉내내지 않는다. 기존 `createTask`/`addComment`
+  // 로 루트·워커·검증·합성 카드 4장을 만들고 링크를 걸어, 클라이언트가 "경로·본문·
+  // 응답 모양" 을 왕복 검증하게 하는 것이 이 서버의 유일한 목적이다.
+
+  function newTaskId(board: BoardRecord, body: Record<string, unknown>): string {
+    const reply = createTask(board, body);
+    return (reply.body as { task: { id: string } }).task.id;
+  }
+
+  function createSwarm(board: BoardRecord, body: Record<string, unknown>): Reply {
+    const goal = typeof body.goal === "string" ? body.goal.trim() : "";
+    if (!goal) throw badRequest("invalid_field", "goal");
+    const rawWorkers = Array.isArray(body.workers) ? body.workers : [];
+    if (rawWorkers.length === 0) throw badRequest("workers_required");
+
+    const rootId = newTaskId(board, { title: goal });
+    const workerIds = rawWorkers.map((raw) => {
+      const w = raw as { profile?: unknown; title?: unknown };
+      return newTaskId(board, { title: String(w.title ?? ""), assignee: w.profile });
+    });
+    const verifierId = newTaskId(board, {
+      title: "Verify swarm outputs",
+      assignee: body.verifier,
+      parents: workerIds,
+    });
+    const synthesizerId = newTaskId(board, {
+      title: "Synthesize swarm outputs",
+      assignee: body.synthesizer,
+      parents: [verifierId],
+    });
+
+    // 진짜 `create_swarm` 도 이 코멘트를 남긴다 — 없으면 블랙보드 필터 테스트가 무의미해진다.
+    addComment(board, rootId, {
+      author: "swarm-orchestrator",
+      body:
+        "[swarm:blackboard] " +
+        JSON.stringify({
+          key: "topology",
+          value: {
+            goal,
+            root_id: rootId,
+            worker_ids: workerIds,
+            verifier_id: verifierId,
+            synthesizer_id: synthesizerId,
+          },
+        }),
+    });
+
+    return {
+      status: 200,
+      body: {
+        root_id: rootId,
+        worker_ids: workerIds,
+        verifier_id: verifierId,
+        synthesizer_id: synthesizerId,
+      },
+    };
+  }
+
+  function blackboardOf(board: BoardRecord, taskId: string): Reply {
+    const record = board.tasks.get(taskId);
+    if (!record) throw notFound("task_not_found");
+    const merged: Record<string, unknown> = {};
+    const authors: Record<string, string> = {};
+    for (const comment of record.comments) {
+      if (!comment.body.startsWith("[swarm:blackboard] ")) continue;
+      try {
+        const parsed = JSON.parse(comment.body.slice("[swarm:blackboard] ".length));
+        if (typeof parsed.key === "string" && parsed.key) {
+          merged[parsed.key] = parsed.value;
+          authors[parsed.key] = comment.author;
+        }
+      } catch {
+        // 깨진 JSON 은 건너뛴다 — Hermes `latest_blackboard` 와 같은 동작.
+      }
+    }
+    if (Object.keys(authors).length > 0) merged._authors = authors;
+    return { status: 200, body: { blackboard: merged } };
   }
 
   function updateTask(board: BoardRecord, id: string, body: Record<string, unknown>): Reply {
@@ -839,6 +921,13 @@ export async function startFakePluginServer(
       if (method === "POST") return mutateLink(boardOf(params), body, true);
       if (method === "DELETE") return mutateLink(boardOf(params), body, false);
       throw notFound();
+    }
+    if (pathname === "/deskrpg/kanban/swarm" && method === "POST") {
+      return createSwarm(boardOf(params), body);
+    }
+    m = /^\/deskrpg\/kanban\/tasks\/([^/]+)\/blackboard$/.exec(pathname);
+    if (m && method === "GET") {
+      return blackboardOf(boardOf(params), decodeURIComponent(m[1]));
     }
     m = /^\/deskrpg\/kanban\/attachments\/([^/]+)$/.exec(pathname);
     if (m) {

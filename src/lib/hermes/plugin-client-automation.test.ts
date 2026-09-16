@@ -51,7 +51,7 @@ describe("owner client — info", () => {
     const info = unwrap(await owner().info());
     assert.equal(info.plugin, "deskrpg");
     assert.equal(info.version, "0.6.0");
-    assert.deepEqual(info.capabilities, ["kanban", "cron", "events"]);
+    assert.deepEqual(info.capabilities, ["kanban", "cron", "events", "swarm"]);
     assert.equal(info.timezone, "Asia/Seoul");
     assert.deepEqual(info.kanban, { dispatcher_present: true, attachments: true });
     assert.equal(server.lastRequest()?.auth, `Bearer ${OWNER}`);
@@ -299,6 +299,79 @@ describe("kanban — 카드", () => {
 
     unwrap(await api.deleteAttachment("dev", uploaded.attachment.id));
     assert.equal(unwrap(await api.listAttachments("dev", task.id)).attachments.length, 0);
+  });
+});
+
+describe("kanban — 스웜", () => {
+  function swarmBody() {
+    return {
+      goal: "목표",
+      workers: [{ profile: "nova", title: "조사" }],
+      verifier: "sophie",
+      synthesizer: "dante",
+    };
+  }
+
+  it("본문을 그대로 스웜 엔드포인트로 보내고 루트·워커·검증·합성 카드를 만든다", async () => {
+    const api = owner().kanban;
+    unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
+
+    const created = unwrap(await api.createSwarm("dev", swarmBody()));
+    assert.equal(server.lastRequest()?.method, "POST");
+    assert.equal(server.lastRequest()?.path, "/deskrpg/kanban/swarm?board=dev");
+    assert.ok(created.root_id);
+    assert.equal(created.worker_ids.length, 1);
+    assert.ok(created.verifier_id);
+    assert.ok(created.synthesizer_id);
+
+    const board = unwrap(await api.getBoard("dev"));
+    assert.equal(
+      board.columns.reduce((n, c) => n + c.tasks.length, 0),
+      4,
+    );
+  });
+
+  it("goal 이 비면 400 invalid_field 다", async () => {
+    const api = owner().kanban;
+    unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
+    const res = await api.createSwarm("dev", { ...swarmBody(), goal: "" });
+    assert.equal(res.ok, false);
+    if (res.ok) return;
+    assert.equal(res.status, 400);
+  });
+
+  it("워커가 0명이면 400 이다", async () => {
+    const api = owner().kanban;
+    unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
+    const res = await api.createSwarm("dev", { ...swarmBody(), workers: [] });
+    assert.equal(res.ok, false);
+    if (res.ok) return;
+    assert.equal(res.status, 400);
+  });
+
+  it("getBlackboard 는 스웜이 남긴 topology 를 돌려준다", async () => {
+    const api = owner().kanban;
+    unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
+    const created = unwrap(await api.createSwarm("dev", swarmBody()));
+
+    const bb = unwrap(await api.getBlackboard("dev", created.root_id));
+    assert.equal(
+      server.lastRequest()?.path,
+      `/deskrpg/kanban/tasks/${created.root_id}/blackboard?board=dev`,
+    );
+    const topology = bb.blackboard.topology as { goal: string; root_id: string };
+    assert.equal(topology.goal, "목표");
+    assert.equal(topology.root_id, created.root_id);
+  });
+
+  it("모르는 카드의 블랙보드는 404 task_not_found 다", async () => {
+    const api = owner().kanban;
+    unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
+    const res = await api.getBlackboard("dev", "no-such-task");
+    assert.equal(res.ok, false);
+    if (res.ok) return;
+    assert.equal(res.status, 404);
+    assert.equal(res.failure.code, "task_not_found");
   });
 });
 
