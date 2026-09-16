@@ -2,6 +2,18 @@
 
 Production deployment and public release are separate operations. A `master` push makes an **amd64 production candidate**, not an npm or public-version release. A date tag makes the npmjs.org, multi-platform GHCR, and GitHub Release artifacts. Docker Hub is legacy; no new build is pushed there.
 
+## Before you push: the local gate
+
+```bash
+git config core.hooksPath .githooks   # once per clone or worktree
+```
+
+`.githooks/pre-push` runs `format:check`, `typecheck` and `lint` (about 30 s) and
+refuses the push when any of them fails. `git push --no-verify` skips it when you
+mean to. Tests and `build` are deliberately left out — together they take four to
+five minutes, and a gate that slow turns `--no-verify` into a habit, which is the
+same as having no gate. CI still runs everything.
+
 ## Production: fast commit-SHA path
 
 CI (`.github/workflows/ci.yml`) builds on a native x64 GitHub runner and pushes `ghcr.io/dandacompany/deskrpg:sha-<full-master-commit-sha>` in parallel with tests, typecheck, lint, Next build, and formatting. PRs build without pushing. Publishing an image does **not** change `deskrpg.com`.
