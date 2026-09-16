@@ -90,6 +90,7 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "three": "^0.180.0",
+    "three-mesh-bvh": "^0.9.15",
     "tsx": "^4.21.0",
     "ws": "^8.21.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

@@ -26,7 +26,11 @@ export function disposeTree(root: T.Object3D) {
         if (value instanceof T.Texture) textures.add(value);
     }
   });
-  geometries.forEach((g) => g.dispose());
+  geometries.forEach((g) => {
+    // BVH 를 세운 지오메트리는 트리도 함께 버린다(three-mesh-bvh 가 붙여 준 메서드).
+    (g as T.BufferGeometry & { disposeBoundsTree?: () => void }).disposeBoundsTree?.();
+    g.dispose();
+  });
   materials.forEach((m) => m.dispose());
   textures.forEach((t) => t.dispose());
   root.clear();

@@ -39,6 +39,7 @@ import { officeLighting, shadowExtent, applyOfficeShadowFilter } from "./office-
 import { detailSurfaces, surfaceTexture } from "./surface-detail";
 import { resolveSeat, seatAt, sofaSeats, furnitureSeats, type Seat } from "./seating";
 import { PointerGesture } from "./pointer-gesture";
+import { buildBoundsTrees } from "./raycast-acceleration";
 import { pickFurnitureSeat } from "./seat-picking";
 import {
   resolveSeatAction,
@@ -1348,6 +1349,8 @@ export class OfficeRenderer {
         if (this.disposed || marker.parent !== this.world) return false;
         // Shared finalizer deduplicates textures and keeps exact seat pick proxies.
         finalizeStudioScene(this.world);
+        // 자산이 들어오며 새 지오메트리가 붙는다 — 그것들도 트리를 갖게 한다.
+        buildBoundsTrees(this.world);
         if (this.meetingCamera.active) this.meetingWalls.enter(this.meetingWallObjects);
         marker.userData.assetStatus = results.every(Boolean) ? "ready" : "failed";
         return results.every(Boolean);
@@ -1447,6 +1450,8 @@ export class OfficeRenderer {
         const fingerprint = this.bridge.mapKey();
         if (fingerprint !== this.lastMap) {
           this.buildMap(this.bridge.map());
+          // buildMap 은 맵 종류마다 다른 갈래로 빠져나간다 — 어느 갈래든 세워지도록 여기서 부른다.
+          buildBoundsTrees(this.world);
           this.lastMap = fingerprint;
         }
         this.mapTimer = time + 1500;
