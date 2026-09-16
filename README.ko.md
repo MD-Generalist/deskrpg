@@ -4,7 +4,7 @@ English README: [README.md](README.md)
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG 홈 화면" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/vps/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 

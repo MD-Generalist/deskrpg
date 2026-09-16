@@ -4,7 +4,7 @@ One VPS, two containers: **DeskRPG** (the virtual office) and **Hermes Agent** (
 
 ## 1. One-click
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/deploy/hostinger/docker-compose.yml)
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/vps/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml)
 
 No VPS yet? [Get one here first](https://hostinger.com/DANTE-HERMES) — a referral link that supports this project at no extra cost to you. It lands on Hostinger's offer page, not on Docker Manager, so buy there and then press the button above.
 
@@ -13,7 +13,7 @@ The button opens Docker Hosting. Pick **KVM 2** (2 vCPU / 8 GB — Hostinger's o
 Already have a VPS? hPanel → VPS → **Docker Manager** → **Compose** → **Compose from URL** → paste:
 
 ```
-https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/deploy/hostinger/docker-compose.yml
+https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml
 ```
 
 Project name: `deskrpg` (3–64 chars, letters/digits/`-`/`_`).
@@ -81,9 +81,24 @@ Set `timezone:` in Hermes' `config.yaml` if you schedule anything — cron times
 
 Docker Manager → project → **Options**: Restart / Update (edit YAML, re-create) / View logs / Delete. **Access → Terminal** opens a shell in the container. Data lives in the named volumes `deskrpg-data` (SQLite + uploads) and `hermes-data` (`~/.hermes`) and survives Update.
 
+## How Docker Manager reads this repo (measured 2026-09-16)
+
+- **It always takes the repo-root `docker-compose.yml`.** A raw URL for a file in a
+  subdirectory is resolved back to the root — a URL for
+  `deploy/hostinger/docker-compose.yml` deployed the root file instead. That is why the
+  compose lives at the repo root and must stay there.
+- **It pre-fills the Environment box from the repo-root `.env.example`, verbatim.** That box
+  has no comment syntax, so a line starting with `#` becomes a variable named `# FOO` and is
+  rejected as an invalid name. `.env.example` is therefore kept comment-free; the prose lives
+  in [`ENVIRONMENT.md`](../../ENVIRONMENT.md).
+- The API takes the compose as a URL, a GitHub repository URL, or raw YAML, and `environment`
+  as one `KEY=value` string capped at **8 192 characters**. That cap is on the environment
+  string, not on the compose file.
+- `build:` is used by Hostinger's own template repo, so it is presumably supported. This
+  compose does not use it — a published image is faster to deploy and easier to pin.
+
 ## Constraints baked into the compose
 
-- Docker Manager ingests **one file**: no `build:`, no `env_file:`, no sibling `.env`, ≤ 8 192 characters.
 - Every `${VAR}` has a default so an empty environment box still boots.
 - App ports are not published; Traefik routes `/socket.io` to the internal Socket.IO port (3001) and everything else to Next.js (3000), same-origin.
 - SQLite mode; switch to Postgres by adapting `docker/docker-compose.external.yml` if you need multi-instance.
