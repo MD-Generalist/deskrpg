@@ -75,7 +75,12 @@ export function buildPublishingAsset(id: keyof typeof PUBLISHING_ASSETS) {
   const stack = (x: number, y: number, z: number, count: number, width = 0.28, depth = 0.23) => {
     for (let i = 0; i < count; i++) {
       const offset = ((i % 3) - 1) * 0.011;
-      box(width, 0.043, depth, x + offset, y + 0.024 + i * 0.05, z, covers[i % covers.length]);
+      const centerY = y + 0.024 + i * 0.05;
+      const cover = covers[i % covers.length];
+      // 표지는 위·아래 판과 책등으로 분리해 속지와 동일한 앞면을 만들지 않는다.
+      for (const side of [-1, 1])
+        box(width, 0.009, depth, x + offset, centerY + side * 0.017, z, cover);
+      box(width, 0.025, 0.008, x + offset, centerY, z - depth / 2 + 0.004, cover);
       box(width * 0.94, 0.025, depth * 0.96, x + offset, y + 0.024 + i * 0.05, z + 0.004, paper);
     }
   };

@@ -22,7 +22,18 @@ export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
     g.add(host);
     round(host, w, h, d, plaster, x, h / 2, z, 0.025);
     round(host, w + 0.05, 0.09, d + 0.06, cap, x, h + 0.025, z, 0.012);
-    round(host, w, 0.14, d + 0.045, "#c9bba3", x, 0.09, z, 0.009);
+    // 수직·수평 벽 모두 얇은 축 방향으로 돌출시켜 벽과 걸레받이의 공면을 없앤다.
+    round(
+      host,
+      w + (w < d ? 0.045 : 0),
+      0.14,
+      d + (w < d ? 0 : 0.045),
+      "#c9bba3",
+      x,
+      0.09,
+      z,
+      0.009,
+    );
   };
   wall(map.cols, 3.05, 0.24, map.cols / 2, 0.5);
   wall(0.24, 2.1, map.rows - 1, 0.5, map.rows / 2);
