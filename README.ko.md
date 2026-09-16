@@ -8,6 +8,8 @@ English README: [README.md](README.md)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
+> ⚠️ **Hostinger의 Traefik 프로젝트를 먼저 배포하세요.** 도커 매니저 화면의 _"Traefik으로 Docker 프로젝트를 위한 HTTPS 활성화"_ 배너에 버튼이 있습니다. 이 compose는 Traefik이 만드는 `traefik-proxy` 네트워크에 붙기 때문에, 없으면 배포가 `created` 에서 멈추고 로그에는 _"Docker project not found"_ 만 남습니다.
+
 VPS가 아직 없다면 [여기서 받으세요](https://hostinger.com/DANTE-HERMES) (제휴 링크입니다 — 추가 비용 없이 이 프로젝트를 후원하게 됩니다). 받은 뒤 위 버튼을 누르면 됩니다.
 
 DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 오피스**입니다. 이미 쓰고 있는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 프로필이 그대로 직원이 됩니다. 자리에 앉아 있다가 지명하면 답하고, 회의실에서 발언권을 주고받고, 칸반 카드를 처리합니다. **NPC를 곁으로 부르고 사무실 채팅에서 완료 보고를 확인하세요.** 여러 사람이 같은 오피스에 동시에 들어올 수 있습니다.

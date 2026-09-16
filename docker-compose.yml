@@ -11,6 +11,19 @@
 # variable named `# FOO` and is rejected as invalid. Keep `.env.example` free of
 # comments; the prose lives in `ENVIRONMENT.md`.
 #
+# DEPLOY TRAEFIK FIRST. The `traefik-proxy` network below is `external: true`,
+# so `docker compose up` fails outright when that network does not exist yet —
+# and Hostinger reports it only as a project stuck at `created` whose logs say
+# "Docker project not found", which names neither Traefik nor the network.
+# Measured 2026-09-16. hPanel offers the Traefik project right on the Docker
+# Manager page ("Enable HTTPS for Docker projects"); deploy that once, then this.
+#
+# `external: true` is deliberate — Hostinger's catalog Traefik owns that network
+# and we are a guest on it. Dropping `external` so this file creates the network
+# breaks the opposite case: Compose refuses to adopt a network it did not create
+# ("incorrect label com.docker.compose.network"), so every user who installed
+# Traefik first would fail instead. There is no single setting that serves both.
+#
 # Deploy: hPanel → VPS → Docker Manager → Compose → "Compose from URL", or the
 # "Deploy on Hostinger" button in README.md.
 #

@@ -2,7 +2,15 @@
 
 One VPS, two containers: **DeskRPG** (the virtual office) and **Hermes Agent** (the employees' brain). Everything runs 24/7 on the server, so your agents keep working and reporting after you close the laptop.
 
-## 1. One-click
+## 1. Deploy Traefik first — not optional
+
+hPanel → VPS → **Docker Manager** shows a banner, _"Enable HTTPS for Docker projects"_, with a **Deploy Traefik** button. Press it once and enter your e-mail.
+
+> ⚠️ **Do this before DeskRPG.** This compose joins the `traefik-proxy` network as `external: true`, so `docker compose up` fails outright when Traefik has not created that network yet. Hostinger reports the failure only as a project stuck at `created` whose logs read **"Docker project not found"** — a message that names neither Traefik nor the network. Measured 2026-09-16.
+>
+> `external: true` is the right setting even so: the catalog Traefik owns that network and we are a guest on it. Dropping it would break the opposite case — Compose refuses to adopt a network it did not create, so everyone who installed Traefik first would fail instead.
+
+## 2. One-click
 
 [![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/vps/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml)
 
@@ -18,7 +26,7 @@ https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-
 
 Project name: `deskrpg` (3–64 chars, letters/digits/`-`/`_`).
 
-## 2. Before you press Deploy
+## 2-1. Before you press Deploy
 
 Fill the **Environment variables** box (one `KEY=value` per line):
 
@@ -30,9 +38,9 @@ OPENROUTER_API_KEY=<your provider key>   # or OPENAI_API_KEY / ANTHROPIC_API_KEY
 
 Generate secrets on any machine with `openssl rand -hex 32`. Everything else has a safe default. If you leave `JWT_SECRET` at its default the app still boots, but do not invite other users until you change it (changing it logs everyone out).
 
-## 3. HTTPS (Traefik)
+## 3. Your HTTPS URL
 
-Deploy Hostinger's **Traefik** project from the catalog once (enter your e-mail). DeskRPG's compose already joins the `traefik-proxy` network and carries the labels, so after Deploy you get:
+After Traefik (step 1) and Deploy (step 2), the office is reachable at:
 
 ```
 https://deskrpg.<srvNNNNNN.hstgr.cloud>
