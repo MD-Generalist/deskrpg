@@ -35,6 +35,7 @@ import type {
   WorkerLog,
 } from "./deskrpg-plugin-types";
 import { KANBAN_TASK_STATUSES } from "./deskrpg-plugin-types";
+import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
 
 // ---------------------------------------------------------------------------
 // 공개 표면
@@ -412,7 +413,10 @@ export async function startFakePluginServer(
     const rootId = newTaskId(board, { title: goal });
     const workerIds = rawWorkers.map((raw) => {
       const w = raw as { profile?: unknown; title?: unknown };
-      return newTaskId(board, { title: String(w.title ?? ""), assignee: w.profile });
+      // 실제 플러그인은 `require_str` 로 빈 title 을 400 `invalid_field` 거절한다.
+      const title = typeof w.title === "string" ? w.title.trim() : "";
+      if (!title) throw badRequest("invalid_field", "title");
+      return newTaskId(board, { title, assignee: w.profile });
     });
     const verifierId = newTaskId(board, {
       title: "Verify swarm outputs",
@@ -429,7 +433,7 @@ export async function startFakePluginServer(
     addComment(board, rootId, {
       author: "swarm-orchestrator",
       body:
-        "[swarm:blackboard] " +
+        BLACKBOARD_PREFIX +
         JSON.stringify({
           key: "topology",
           value: {
@@ -459,9 +463,9 @@ export async function startFakePluginServer(
     const merged: Record<string, unknown> = {};
     const authors: Record<string, string> = {};
     for (const comment of record.comments) {
-      if (!comment.body.startsWith("[swarm:blackboard] ")) continue;
+      if (!comment.body.startsWith(BLACKBOARD_PREFIX)) continue;
       try {
-        const parsed = JSON.parse(comment.body.slice("[swarm:blackboard] ".length));
+        const parsed = JSON.parse(comment.body.slice(BLACKBOARD_PREFIX.length));
         if (typeof parsed.key === "string" && parsed.key) {
           merged[parsed.key] = parsed.value;
           authors[parsed.key] = comment.author;

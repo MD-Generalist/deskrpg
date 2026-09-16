@@ -186,10 +186,9 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike) {
         `${root}/links`,
         json("DELETE", { parent_id: parentId, child_id: childId }),
       ),
-    dispatch: (opts?: { max?: number; dryRun?: boolean }) => {
+    dispatch: (opts?: { max?: number }) => {
       const qs = new URLSearchParams();
       if (typeof opts?.max === "number") qs.set("max", String(opts.max));
-      if (opts?.dryRun) qs.set("dry_run", "true");
       const suffix = qs.size > 0 ? `?${qs}` : "";
       return request<DispatchResult>(f, `${root}/dispatch${suffix}`, { method: "POST" });
     },

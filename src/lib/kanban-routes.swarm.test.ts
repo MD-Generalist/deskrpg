@@ -203,6 +203,23 @@ test("워커가 없으면 400", async () => {
   assert.equal(res.status, 400);
 });
 
+test("플러그인이 스웜을 못 하면 getBlackboard 도 428 을 낸다", async () => {
+  // createSwarm 과 같은 게이트다. 플러그인 계약 판정은 게이트웨이당 1시간 캐시되므로(R5·
+  // automation-gate.ts), 능력이 있는 채널에서 먼저 만든 taskId 를 나중에 캐시만 바꿔 재조회하면
+  // 캐시가 여전히 "swarm 있음" 을 돌려줘 이 게이트를 못 때린다. 그래서 createSwarm 428 테스트와
+  // 같은 방식으로 **처음부터** swarm 없는 채널을 만들고, 게이트가 NPC 해석보다 먼저 걸리는지만
+  // 본다(taskId 는 존재할 필요가 없다 — 게이트가 그 전에 막는다).
+  const { getBlackboard } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"], {
+    capabilities: ["kanban", "cron", "events"],
+  });
+  const res = await getBlackboard(getRequest(ctx, "any-task-id"), ctx.channelId, "any-task-id");
+  assert.equal(res.status, 428);
+  const body = await res.json();
+  assert.equal(body.code, "plugin_upgrade_required");
+  assert.deepEqual(body.missing, ["swarm"]);
+});
+
 test("블랙보드를 그대로 돌려준다", async () => {
   const { createSwarm, getBlackboard } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"]);

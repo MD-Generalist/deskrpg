@@ -28,28 +28,42 @@ interface SwarmDialogProps {
   /** 출근 중(active)인 NPC 만 — 호출부가 `activeAssigneeOptions(npcs)` 로 걸러 넘긴다. */
   npcs: readonly BoardNpc[];
   submitting: boolean;
+  /** 서버 제출 실패(호출부가 채운다) — `SwarmDialog` 는 `fixed inset-0` 로 보드 배너를 덮으므로
+   * 실패 메시지는 반드시 이 안에서 보여야 한다. */
+  error?: string | null;
   onSubmit: (values: SwarmSubmit) => void;
   onClose: () => void;
 }
 
 /** 스웜 시작 다이얼로그. 워커는 채널 NPC 중에서만 고른다(서버가 잠든 NPC 를 400 으로 거절한다). */
-export default function SwarmDialog({ npcs, submitting, onSubmit, onClose }: SwarmDialogProps) {
+export default function SwarmDialog({
+  npcs,
+  submitting,
+  error: submitError,
+  onSubmit,
+  onClose,
+}: SwarmDialogProps) {
   const t = useT();
   const first = npcs[0]?.npcId ?? "";
   const [goal, setGoal] = useState("");
   const [rows, setRows] = useState<WorkerRow[]>(() => [newRow(first)]);
   const [verifier, setVerifier] = useState(npcs[1]?.npcId ?? first);
   const [synthesizer, setSynthesizer] = useState(npcs[2]?.npcId ?? first);
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // 제출마다 새로 만들면 재시도가 새 스웜을 만든다. 다이얼로그 수명 동안 하나를 쓴다.
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 
+  // 클라이언트 검증 오류가 서버 실패보다 먼저 보인다 — 새 제출을 시작하면 둘 다 지운다(호출부가
+  // submitError 를 지우고, 여기서는 validationError 를 지운다).
+  const error = validationError ?? submitError ?? null;
+
   const submit = () => {
-    if (!goal.trim()) return setError(t("kanban.swarm.error.goal"));
-    if (rows.length === 0) return setError(t("kanban.swarm.error.workers"));
-    if (rows.some((r) => !r.title.trim())) return setError(t("kanban.swarm.error.workerTitle"));
-    setError(null);
+    if (!goal.trim()) return setValidationError(t("kanban.swarm.error.goal"));
+    if (rows.length === 0) return setValidationError(t("kanban.swarm.error.workers"));
+    if (rows.some((r) => !r.title.trim()))
+      return setValidationError(t("kanban.swarm.error.workerTitle"));
+    setValidationError(null);
     onSubmit({
       goal: goal.trim(),
       workers: rows.map((r) => ({ npcId: r.npcId, title: r.title.trim() })),

@@ -425,7 +425,12 @@ export async function dispatchBoard(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
   const ctx = resolved.ctx;
-  const res = await ctx.client.kanban.dispatch(ctx.boardSlug);
+  const rawMax = Number(req.nextUrl.searchParams.get("max"));
+  const max = Number.isInteger(rawMax) && rawMax > 0 ? rawMax : undefined;
+  const res = await ctx.client.kanban.dispatch(
+    ctx.boardSlug,
+    max !== undefined ? { max } : undefined,
+  );
   if (!res.ok) return pluginFailureResponse(res);
   schedulePollNow(ctx.channelId);
   return NextResponse.json(res.data);
@@ -519,7 +524,16 @@ export async function createSwarm(req: NextRequest, channelId: string) {
 export async function getBlackboard(req: NextRequest, channelId: string, taskId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
-  const res = await resolved.ctx.client.kanban.getBlackboard(resolved.ctx.boardSlug, taskId);
+  const ctx = resolved.ctx;
+
+  // createSwarm 과 같은 게이트 — 블랙보드도 스웜 기능이므로 같은 428 을 낸다.
+  const gate = swarmGate(ctx.info);
+  if (!gate.ok) {
+    const failure = pluginUpgradeRequired(gate);
+    return cronError(428, failure.code, failure.message, failure.details);
+  }
+
+  const res = await ctx.client.kanban.getBlackboard(ctx.boardSlug, taskId);
   if (!res.ok) return pluginFailureResponse(res);
   return NextResponse.json(res.data);
 }

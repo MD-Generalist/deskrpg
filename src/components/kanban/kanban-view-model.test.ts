@@ -191,7 +191,7 @@ test("R8: form → body sends only filled fields, assignee as npcId, skills spli
 const bb = (key: string, value: unknown, author = "swarm-orchestrator") => ({
   id: `${key}-c`,
   author,
-  body: `[swarm:blackboard] ${JSON.stringify({ key, value })}`,
+  body: `${BLACKBOARD_PREFIX}${JSON.stringify({ key, value })}`,
   created_at: "2026-09-16T00:00:00Z",
 });
 
@@ -221,7 +221,7 @@ test("같은 key 는 나중 값이 이긴다", () => {
 test("깨진 JSON 은 조용히 무시하되 스레드에도 안 남긴다", () => {
   // Hermes `latest_blackboard` 와 같은 동작. 접두사가 붙은 이상 사람에게 보일 것은 아니다.
   const out = splitBlackboardComments([
-    { id: "bad", author: "nova", body: "[swarm:blackboard] {깨짐", created_at: "x" },
+    { id: "bad", author: "nova", body: `${BLACKBOARD_PREFIX}{깨짐`, created_at: "x" },
   ] as KanbanComment[]);
   assert.deepEqual(out.comments, []);
   assert.deepEqual(out.blackboard, {});
@@ -229,7 +229,12 @@ test("깨진 JSON 은 조용히 무시하되 스레드에도 안 남긴다", () 
 
 test("key 가 문자열이 아니면 병합하지 않는다", () => {
   const out = splitBlackboardComments([
-    { id: "n", author: "nova", body: '[swarm:blackboard] {"key": 1, "value": 2}', created_at: "x" },
+    {
+      id: "n",
+      author: "nova",
+      body: `${BLACKBOARD_PREFIX}{"key": 1, "value": 2}`,
+      created_at: "x",
+    },
   ] as KanbanComment[]);
   assert.deepEqual(out.blackboard, {});
 });
@@ -240,4 +245,10 @@ test("블랙보드가 없으면 빈 객체다", () => {
   ] as KanbanComment[]);
   assert.deepEqual(out.blackboard, {});
   assert.equal(out.comments.length, 1);
+});
+
+test("BLACKBOARD_PREFIX 는 Hermes kanban_swarm.BLACKBOARD_PREFIX 와 같아야 한다", () => {
+  // 하드코딩한 기대값과 비교한다(이 파일을 읽지 않는다) — 누가 상수를 바꾸면 이 테스트 하나만
+  // 실패해서 의도적 변경인지 드러낸다.
+  assert.equal(BLACKBOARD_PREFIX, "[swarm:blackboard] ");
 });

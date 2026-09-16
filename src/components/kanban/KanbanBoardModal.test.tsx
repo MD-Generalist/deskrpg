@@ -428,7 +428,15 @@ test("스웜: 다이얼로그가 제출하는 idempotencyKey 는 두 번 제출�
     });
 
     // 첫 시도는 503 으로 실패했으니 다이얼로그가 여전히 열려 있다.
-    assert.ok(f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]'));
+    const dialogAfterFailure = f.host.querySelector<HTMLElement>(
+      '[aria-labelledby="swarm-dialog-title"]',
+    );
+    assert.ok(dialogAfterFailure);
+    // 실패 메시지는 다이얼로그 안에서 보여야 한다 — boardWarning 배너는 이 오버레이 밑에 깔려
+    // 사용자에게 보이지 않는다.
+    const alert = dialogAfterFailure.querySelector<HTMLElement>('[role="alert"]');
+    assert.ok(alert, "다이얼로그 안에 오류 배너가 있다");
+    assert.ok(alert.textContent?.includes("잠깐 실패"), "서버 실패 메시지가 그대로 보인다");
 
     await act(async () => submitButton()?.click());
     await act(async () => {
@@ -437,6 +445,53 @@ test("스웜: 다이얼로그가 제출하는 idempotencyKey 는 두 번 제출�
 
     assert.equal(swarmBodies.length, 2);
     assert.equal(swarmBodies[0].idempotencyKey, swarmBodies[1].idempotencyKey);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("스웜: 428 plugin_upgrade_required 는 다이얼로그 안에 kanban.swarm.unsupported 로 보인다", async () => {
+  // capability 캐시가 낡아 버튼은 보이지만, 서버는 428 을 낸다 — 이 경로가 죽은 i18n 키
+  // kanban.swarm.unsupported 의 제자리다.
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status({ capabilities: ["swarm"] }));
+    if (url.includes("/kanban/board")) return json(board());
+    if (url.endsWith("/swarm") && init?.method === "POST") {
+      return json(
+        { code: "plugin_upgrade_required", message: "too old", minVersion: "0.9.0" },
+        { status: 428 },
+      );
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await f.click("스웜");
+    const dialog = f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]');
+    assert.ok(dialog);
+
+    const setValue = (el: HTMLInputElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const goalInput = f.host.querySelector<HTMLInputElement>("#swarm-goal");
+    assert.ok(goalInput);
+    await act(async () => setValue(goalInput, "테스트 목표"));
+    const workerInput = f.host.querySelector<HTMLInputElement>('input[aria-label="맡길 일"]');
+    assert.ok(workerInput);
+    await act(async () => setValue(workerInput, "워커 작업"));
+
+    const submitButton = () => findButton(f.host, "스웜 시작");
+    await act(async () => submitButton()?.click());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const stillOpen = f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]');
+    assert.ok(stillOpen, "실패해도 다이얼로그는 열린 채로 남는다");
+    const alert = stillOpen.querySelector<HTMLElement>('[role="alert"]');
+    assert.ok(alert);
+    assert.equal(alert.textContent, "이 게이트웨이의 플러그인은 스웜을 지원하지 않습니다.");
   } finally {
     await f.cleanup();
   }

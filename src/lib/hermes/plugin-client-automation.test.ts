@@ -349,6 +349,19 @@ describe("kanban — 스웜", () => {
     assert.equal(res.status, 400);
   });
 
+  it("워커 title 이 비면 400 invalid_field 다 — kanban-routes.ts 검증을 우회해도 플러그인이 거절한다", async () => {
+    const api = owner().kanban;
+    unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
+    const res = await api.createSwarm("dev", {
+      ...swarmBody(),
+      workers: [{ profile: "nova", title: "" }],
+    });
+    assert.equal(res.ok, false);
+    if (res.ok) return;
+    assert.equal(res.status, 400);
+    assert.equal(res.failure.code, "invalid_field");
+  });
+
   it("getBlackboard 는 스웜이 남긴 topology 를 돌려준다", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));

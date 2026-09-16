@@ -99,6 +99,7 @@ export default function KanbanBoardModal({
   const [dispatching, setDispatching] = useState(false);
   const [showSwarm, setShowSwarm] = useState(false);
   const [swarmSubmitting, setSwarmSubmitting] = useState(false);
+  const [swarmError, setSwarmError] = useState<string | null>(null);
   const [boardWarning, setBoardWarning] = useState<string | null>(null);
   const [creationWarnings, setCreationWarnings] = useState<Record<string, string>>({});
   const [detailTick, setDetailTick] = useState(0);
@@ -223,13 +224,22 @@ export default function KanbanBoardModal({
 
   const handleSwarm = async (values: SwarmSubmit) => {
     setSwarmSubmitting(true);
+    setSwarmError(null); // 새 제출은 이전 오류를 지운다.
     try {
       const created = await api.createSwarm(values);
       setShowSwarm(false);
       await reload();
       setSelectedTaskId(created.root_id); // 루트 카드를 연다 — 블랙보드가 거기 있다.
     } catch (err) {
-      setBoardWarning(failureLine(toFailure(err)));
+      const failure = toFailure(err);
+      // `SwarmDialog` 는 `fixed inset-0` 로 보드 배너 위를 덮으므로, 오류는 다이얼로그
+      // 안에서 보여야 사용자가 본다(boardWarning 만으로는 안 보인다).
+      const line =
+        failure.code === "plugin_upgrade_required"
+          ? t("kanban.swarm.unsupported")
+          : failureLine(failure);
+      setSwarmError(line);
+      setBoardWarning(line);
     } finally {
       setSwarmSubmitting(false);
     }
@@ -291,7 +301,10 @@ export default function KanbanBoardModal({
             {swarmSupported ? (
               <button
                 type="button"
-                onClick={() => setShowSwarm(true)}
+                onClick={() => {
+                  setSwarmError(null);
+                  setShowSwarm(true);
+                }}
                 disabled={!board || npcOptions.length === 0}
                 className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
               >
@@ -440,6 +453,7 @@ export default function KanbanBoardModal({
         <SwarmDialog
           npcs={npcOptions}
           submitting={swarmSubmitting}
+          error={swarmError}
           onSubmit={(values) => void handleSwarm(values)}
           onClose={() => setShowSwarm(false)}
         />

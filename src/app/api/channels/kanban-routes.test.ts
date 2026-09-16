@@ -546,6 +546,45 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   assert.ok(polled.every((id) => id === seed.channelId));
 });
 
+test("dispatch — max 쿼리를 넘기면 플러그인 호출에 실린다, 무인자면 안 실린다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const member = await seedUser("member");
+  await addMember(seed.channelId, member.id);
+
+  const before = server.requests().length;
+  const withMax = await routes.dispatch.POST(
+    req(member.id, "POST", `${base(seed.channelId)}/dispatch?max=3`),
+    ctx(seed.channelId),
+  );
+  assert.equal(withMax.status, 200);
+  const maxCalls = dispatchCalls(before);
+  assert.equal(maxCalls.length, 1);
+  assert.match(maxCalls[0].path, /[?&]max=3(&|$)/);
+
+  const before2 = server.requests().length;
+  const noMax = await routes.dispatch.POST(
+    req(member.id, "POST", `${base(seed.channelId)}/dispatch`),
+    ctx(seed.channelId),
+  );
+  assert.equal(noMax.status, 200);
+  const noMaxCalls = dispatchCalls(before2);
+  assert.equal(noMaxCalls.length, 1);
+  assert.doesNotMatch(noMaxCalls[0].path, /[?&]max=/);
+
+  // 음수·비정수는 무시한다 — max 없이 호출한다.
+  const before3 = server.requests().length;
+  const badMax = await routes.dispatch.POST(
+    req(member.id, "POST", `${base(seed.channelId)}/dispatch?max=-1`),
+    ctx(seed.channelId),
+  );
+  assert.equal(badMax.status, 200);
+  const badMaxCalls = dispatchCalls(before3);
+  assert.equal(badMaxCalls.length, 1);
+  assert.doesNotMatch(badMaxCalls[0].path, /[?&]max=/);
+});
+
 test("카드 액션 — approve/request-changes/unblock/reassign/reclaim/terminate/archive/specify", async () => {
   server.reset();
   const routes = await loadRoutes();
