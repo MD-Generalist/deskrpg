@@ -18,7 +18,15 @@ This is a manual production promotion convention, not a GitHub Actions SSH auto-
 
 ## Public release: date-tag path
 
-Release only from a verified, clean `master`. Use a fresh date version `YYYY.M.D` (no `v` prefix); published npm versions are immutable. `2026.9.19` remains broken for npm installs and **must not be reused**. The npm `node_modules` alias fix (`56794fb9`) is included in the next tag.
+Release only from a verified, clean `master`. Use a fresh date version (no `v` prefix); published npm versions are immutable.
+
+### Version bump rule
+
+- One release on a given day: `YYYY.M.D` (e.g. `2026.9.22`).
+- **A second release on the same day does not borrow a future date.** It bumps a sequence number instead: `YYYY.MMDD.N` — major = year, minor = zero-padded `MMDD`, patch = the day's sequence starting at `1`. The second release on 2026-09-22 is `2026.922.1`, the third `2026.922.2`.
+- Why not `2026.9.22.1`: npm versions are semver, which has exactly three numeric components. `npm version 2026.9.22.1` is rejected, so a fourth segment cannot ship.
+- Ordering holds across the switch and forever after: `2026.9.22` < `2026.922.1` < `2026.923.1` < `2027.101.1`, because the minor grows with `MMDD` through the year and the major with the year.
+- The tag glob in `.github/workflows/release.yml` (`20[0-9][0-9].[0-9]*.[0-9]*`) already matches both shapes; no workflow change is needed. `2026.9.19` remains broken for npm installs and **must not be reused**. The npm `node_modules` alias fix (`56794fb9`) is included in the next tag.
 
 1. Update `package.json` and `package-lock.json`, the version lines in `README.md`/`README.ko.md`, and `APP_VERSION` in `src/app/game/GamePageClient.tsx`. Remove the temporary npm `2026.9.18`/`2026.9.19` warning from both READMEs after validating the fixed tarball. The tag must equal the package version.
 2. In a clean checkout of the release commit, run `npm ci` and `npm run format:check` before the more expensive `npm run test`, `npm run typecheck`, `npm run lint`, `npm run build`, and `npm pack --dry-run`. Confirm the npm tarball contains the runtime assets and `src/lib/path-alias.js`. If Prettier reports files, format only those files, commit the result, and rerun the gates on the new SHA. Never tag or publish while that SHA's `master` CI is red.
