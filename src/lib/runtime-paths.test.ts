@@ -47,8 +47,15 @@ test("자리표시자 판정은 안내 문구와 너무 짧은 값을 잡는다"
     "change-me-to-a-random-64-char-string",
     "CHANGE_THIS_SECRET_PLEASE_NOW_OK",
     "your-secret-goes-right-here-ok",
+    // 우리 자신의 compose 기본값. `deskrpg-` 로 시작해 접두사 검사를 빠져나가고 48자라
+    // 길이 검사도 통과했다 — 손대지 않은 Hostinger 배포가 전부 이 공개 키로 세션 토큰을
+    // 서명하고 있었다(2026-09-16 실측). 접두사가 아니라 어디에 있든 잡는다.
+    "deskrpg-change-this-secret-before-inviting-anyone",
+    "prod-CHANGE-ME-later-abcdefghijklmnop",
   ]) {
     assert.equal(isPlaceholderSecret(placeholder), true, placeholder);
   }
   assert.equal(isPlaceholderSecret("a".repeat(48)), false);
+  // 진짜 난수는 통과해야 한다 — 사용자가 직접 넣은 값을 런타임이 덮어쓰면 안 된다.
+  assert.equal(isPlaceholderSecret("a3f9c1e07b2d48a6f5c1e9d720b4a8c6"), false);
 });

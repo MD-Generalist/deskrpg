@@ -53,6 +53,9 @@ function getDeskRpgTemplateUploadDir(templateId, options = {}) {
 function isPlaceholderSecret(value) {
   const normalized = value.trim().replace(/^["']|["']$/g, "");
   if (normalized.length < 24) return true;
+  // 접두사만 보면 `deskrpg-change-this-secret-…` 같은 우리 자신의 기본값을 놓친다.
+  // 48자라 길이 검사도 통과해, 손대지 않은 설치가 공개된 키로 조용히 뜬다(2026-09-16 실측).
+  if (/change[-_ ]?(me|this)/i.test(normalized)) return true;
   return /^(change|replace|set|your|my|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(
     normalized,
   );

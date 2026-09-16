@@ -55,7 +55,10 @@ services:
     environment:
       DB_TYPE: sqlite
       SQLITE_PATH: /app/data/deskrpg.db
-      JWT_SECRET: ${JWT_SECRET:-deskrpg-change-this-secret-before-inviting-anyone}
+      # 기본값을 두지 않는다. 값을 박아 두면 손대지 않은 설치가 전부 같은 공개 키로
+      # 세션 토큰을 서명한다. 비어 있으면 진입점이 unset 하고 런타임이 키를 만들어
+      # 데이터 볼륨에 보관한다(docker-entrypoint.sh).
+      JWT_SECRET: ${JWT_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       INTERNAL_HOSTNAME: 0.0.0.0
       # Only the DeskRPG server host may run the gateway setup wizard; keep it off on a VPS
