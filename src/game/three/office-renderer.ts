@@ -198,6 +198,10 @@ export class OfficeRenderer {
     private labels: HTMLDivElement,
   ) {
     this.renderer = new T.WebGLRenderer({ antialias: true, alpha: false });
+    // 셰이더 오류 검사는 링크 직후 `getShaderParameter`/`getProgramInfoLog` 를 불러 드라이버가
+    // 컴파일을 끝낼 때까지 메인 스레드를 세운다. 맵 진입의 긴 프레임에서 이 호출이 상위에
+    // 올라온다(실측). 개발 중에는 셰이더 오류를 봐야 하므로 프로덕션에서만 끈다.
+    this.renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
