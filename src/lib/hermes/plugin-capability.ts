@@ -160,6 +160,37 @@ export function meetsAutomationContract(info: PluginInfo | null): AutomationCont
   return { ok: true, minVersion };
 }
 
+// ---------------------------------------------------------------------------
+// 스웜 기능 게이트
+// ---------------------------------------------------------------------------
+
+/** 스웜이 들어간 플러그인 버전. `AUTOMATION_MIN_VERSION` 과 **따로** 둔다. */
+export const SWARM_MIN_VERSION = "0.7.0";
+
+/**
+ * 이 게이트웨이에서 스웜을 쓸 수 있는가.
+ *
+ * `meetsAutomationContract` 와 달리 **버전을 보지 않는다.** 플러그인은 Hermes 빌드에
+ * `kanban_swarm` 이 없으면 capability 에서 `"swarm"` 을 빼고 라우트도 등록하지 않는다.
+ * 그래서 capability 하나가 가용성의 정본이다 — 버전으로 판단하면 "0.7.0 인데 404" 라는
+ * 진단 불가능한 상태가 생긴다. `minVersion` 은 화면이 안내 문구를 만들 때만 쓴다.
+ */
+export function supportsSwarm(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("swarm"));
+}
+
+export function swarmGate(
+  info: PluginInfo | null,
+): { ok: true } | { ok: false; minVersion: string; reason: string; missing: string[] } {
+  if (supportsSwarm(info)) return { ok: true };
+  return {
+    ok: false,
+    minVersion: SWARM_MIN_VERSION,
+    reason: info ? "missing_capability" : "no_info",
+    missing: ["swarm"],
+  };
+}
+
 /** 캐시된 판정을 다시 확인할 주기. 플러그인은 나중에 설치될 수 있으므로 영구 캐시는 틀린다. */
 const REPROBE_AFTER_MS = 60 * 60 * 1000;
 

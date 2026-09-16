@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { mapPluginFailure, pluginUpgradeRequired } from "./plugin-errors";
+import { supportsSwarm, swarmGate } from "./plugin-capability";
+import type { PluginInfo } from "./deskrpg-plugin-types";
 
 describe("mapPluginFailure", () => {
   it("2xx 는 실패가 아니다", () => {
@@ -339,5 +341,52 @@ describe("자동화 계약 실패 코드", () => {
       reason: "missing_capability",
       missing: ["events"],
     });
+  });
+});
+
+// 스웜 기능 가용성 판정 (Task 5)
+describe("스웜 capability 게이트", () => {
+  it("capabilities 에 swarm 이 있으면 통과한다", () => {
+    const info = {
+      version: "0.7.0",
+      capabilities: ["kanban", "cron", "events", "swarm"],
+    } as PluginInfo;
+    assert.equal(supportsSwarm(info), true);
+    assert.equal(swarmGate(info).ok, true);
+  });
+
+  it("버전이 높아도 capability 가 없으면 거절한다", () => {
+    // 심볼이 없는 Hermes 빌드. 버전만 보면 "새 플러그인인데 404" 가 된다.
+    const info = { version: "0.9.0", capabilities: ["kanban", "cron", "events"] } as PluginInfo;
+    assert.equal(supportsSwarm(info), false);
+    const gate = swarmGate(info);
+    assert.equal(gate.ok, false);
+    assert.equal(gate.ok === false && gate.reason, "missing_capability");
+    assert.deepEqual(gate.ok === false && gate.missing, ["swarm"]);
+  });
+
+  it("info 가 없으면 거절한다", () => {
+    assert.equal(supportsSwarm(null), false);
+    assert.equal(swarmGate(null).ok, false);
+  });
+
+  it("스웜 게이트 거절은 기존 업그레이드 실패 모양으로 옮겨진다", () => {
+    const gate = swarmGate({ version: "0.6.0", capabilities: ["kanban"] } as PluginInfo);
+    assert.equal(gate.ok, false);
+    const failure = pluginUpgradeRequired(gate as Exclude<typeof gate, { ok: true }>);
+    assert.equal(failure.code, "plugin_upgrade_required");
+    assert.equal(failure.details.minVersion, "0.7.0");
+  });
+
+  it("버전이 낮아도 capability 가 있으면 통과한다", () => {
+    // 게이트는 버전을 보지 않는다. 플러그인이 Hermes 빌드에 스웜이 없으면 capability 에서
+    // 빼기 때문에, capability 하나가 가용성의 정본이다. 테스트용 가짜 서버가 실제로
+    // 0.6.0 을 보고하면서 swarm capability 를 싣는다 — 이 조합이 통과해야 한다.
+    const info = {
+      version: "0.6.0",
+      capabilities: ["kanban", "cron", "events", "swarm"],
+    } as PluginInfo;
+    assert.equal(supportsSwarm(info), true);
+    assert.equal(swarmGate(info).ok, true);
   });
 });
