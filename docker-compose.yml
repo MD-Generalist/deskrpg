@@ -55,6 +55,10 @@ services:
     environment:
       DB_TYPE: sqlite
       SQLITE_PATH: /app/data/deskrpg.db
+      # 런타임 홈을 데이터 볼륨 안에 둔다. 기본값(`~/.deskrpg`)은 컨테이너 파일시스템이라
+      # Update 로 컨테이너를 재생성할 때마다 자동 생성된 JWT_SECRET 이 사라진다 — 그러면
+      # 접속자 전원이 로그아웃되고 저장된 게이트웨이 토큰을 복호화하지 못한다.
+      DESKRPG_HOME: /app/data/home
       # 기본값을 두지 않는다. 값을 박아 두면 손대지 않은 설치가 전부 같은 공개 키로
       # 세션 토큰을 서명한다. 비어 있으면 진입점이 unset 하고 런타임이 키를 만들어
       # 데이터 볼륨에 보관한다(docker-entrypoint.sh).

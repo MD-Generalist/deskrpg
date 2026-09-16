@@ -8,6 +8,7 @@ const {
   getInternalSocketHostname,
   isInternalRequestAuthorized,
 } = require("./src/lib/internal-transport.js");
+const { bootstrapRuntimeEnv } = require("./src/lib/runtime-env-bootstrap.js");
 const {
   checkDatabaseReachable,
   hostSetupHint,
@@ -41,6 +42,9 @@ require("next");
 const { startServer } = require("next/dist/server/lib/start-server");
 
 async function main() {
+  // 런타임 홈의 값을 환경에 올린다 — 설정된 값은 덮지 않는다.
+  bootstrapRuntimeEnv({ packageRoot: dir });
+
   // 기동 직전 환경 검증 — errors 는 즉시 중단, warnings 는 찍고 계속.
   // DATABASE_URL 없이 SQLite 로 돌던 사용자는 경고만 보고 그대로 뜬다.
   const inspection = inspectEnvironment(process.env);
