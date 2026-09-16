@@ -54,7 +54,9 @@ next-env.d.ts
 .agents/
 .gemini/
 /.dryforge/
+# Local development tools only (including scripts/local/backlog/); not product code.
 scripts/local/
+# Local tool data, including dev-backlog.sqlite and its WAL/SHM sidecars.
 data/
 db.sqlite
 :memory-file-not-used:*
