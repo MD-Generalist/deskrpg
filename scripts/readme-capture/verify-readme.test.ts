@@ -30,7 +30,7 @@ const koreanImages = GIFS.map(
 const validEnglish = `<img src="public/readme/${POSTER}" alt="DeskRPG home screen" width="100%" />
 ${englishImages}
 Morning Commute
-Walk Over and Report
+Call Them Over to Report
 Live Small Talk
 Agent Meeting
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
@@ -41,7 +41,7 @@ The browser map editor is being prepared for a later release. It is not part of 
 const validKorean = `<img src="public/readme/${POSTER}" alt="DeskRPG 홈 화면" width="100%" />
 ${koreanImages}
 아침 출근길
-걸어와서 보고하기
+호출하면 걸어와서 보고
 실시간 스몰토크
 에이전트 회의
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)

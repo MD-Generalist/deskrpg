@@ -14,11 +14,16 @@ const RETIRED_GIF_PATHS = [
 ];
 const ENGLISH_CAPTIONS = [
   "Morning Commute",
-  "Walk Over and Report",
+  "Call Them Over to Report",
   "Live Small Talk",
   "Agent Meeting",
 ];
-const KOREAN_CAPTIONS = ["아침 출근길", "걸어와서 보고하기", "실시간 스몰토크", "에이전트 회의"];
+const KOREAN_CAPTIONS = [
+  "아침 출근길",
+  "호출하면 걸어와서 보고",
+  "실시간 스몰토크",
+  "에이전트 회의",
+];
 const CURRENT_MAP_EDITOR_CLAIMS = [
   /Build or upload your own office maps(?: with the browser-based map editor)?/i,
   /브라우저 맵 에디터로 오피스 맵을 직접 만들거나 올립니다/,

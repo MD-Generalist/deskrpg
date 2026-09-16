@@ -34,7 +34,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 <table width="100%">
   <tr>
     <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-home-commute.gif" alt="DeskRPG 3D office morning commute" width="100%" /><br /><strong>Morning Commute</strong></td>
-    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-walk-report.gif" alt="DeskRPG agent walking over to report" width="100%" /><br /><strong>Walk Over and Report</strong></td>
+    <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-walk-report.gif" alt="DeskRPG agent called over, walking to the player to report" width="100%" /><br /><strong>Call Them Over to Report</strong></td>
   </tr>
   <tr>
     <td width="50%" valign="top" align="center"><img src="public/readme/deskrpg-small-talk.gif" alt="DeskRPG live office small talk" width="100%" /><br /><strong>Live Small Talk</strong></td>
@@ -111,7 +111,7 @@ Before the first run, open `.env.docker` and set:
 
 DeskRPG will open on `http://localhost:3102`.
 
-Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.20` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
+Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.22` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
 
 If you prefer the explicit file path version, you can run:
 
@@ -129,7 +129,7 @@ JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
 
 DeskRPG will open on `http://localhost:3102`.
 
-To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.20` before the command.
+To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.22` before the command.
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
 
