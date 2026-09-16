@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { ChevronDown, ChevronRight, Pencil, X } from "lucide-react";
 
 import { useLocale, useT } from "@/lib/i18n";
@@ -18,6 +18,7 @@ import {
   assigneeLabel,
   failureLine,
   npcIdForAssignee,
+  splitBlackboardComments,
   taskTitleById,
   type BoardNpc,
 } from "./kanban-view-model";
@@ -84,6 +85,13 @@ export default function TaskDrawer({
   const [log, setLog] = useState<WorkerLog | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+
+  const {
+    comments: threadComments,
+    blackboard,
+    authors,
+  } = useMemo(() => splitBlackboardComments(detail?.comments ?? []), [detail?.comments]);
+  const blackboardKeys = Object.keys(blackboard).filter((key) => key !== "_authors");
 
   const load = useCallback(async () => {
     try {
@@ -551,12 +559,32 @@ export default function TaskDrawer({
               </div>
             </Section>
 
-            <Section title={`${t("kanban.detail.comments")} (${detail.comments.length})`}>
-              {detail.comments.length === 0 ? (
+            {blackboardKeys.length > 0 ? (
+              <Section title={t("kanban.blackboard")}>
+                <dl className="space-y-1">
+                  {blackboardKeys.map((key) => (
+                    <div key={key} className="rounded-md bg-surface-raised px-2 py-1.5">
+                      <dt className="flex items-baseline justify-between text-[10px] text-text-dim">
+                        <span className="font-semibold text-text-secondary">{key}</span>
+                        {authors[key] ? <span>{authors[key]}</span> : null}
+                      </dt>
+                      <dd className="mt-0.5 whitespace-pre-wrap break-words font-mono text-[11px] text-text">
+                        {typeof blackboard[key] === "string"
+                          ? (blackboard[key] as string)
+                          : JSON.stringify(blackboard[key], null, 2)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Section>
+            ) : null}
+
+            <Section title={`${t("kanban.detail.comments")} (${threadComments.length})`}>
+              {threadComments.length === 0 ? (
                 <Empty>{t("kanban.detail.noComments")}</Empty>
               ) : (
                 <ul className="space-y-1.5">
-                  {detail.comments.map((entry) => (
+                  {threadComments.map((entry) => (
                     <li key={entry.id} className="rounded-md bg-surface p-2">
                       <div className="flex items-center justify-between text-[10px] text-text-dim">
                         <span className="font-semibold text-text-secondary">{entry.author}</span>

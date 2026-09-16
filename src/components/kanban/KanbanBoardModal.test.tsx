@@ -60,7 +60,12 @@ const json = (data: unknown, init?: ResponseInit) =>
 
 async function mount(
   handler: Handler,
-  props: { refreshTick?: number; debounceMs?: number; onConnectGateway?: () => void } = {},
+  props: {
+    refreshTick?: number;
+    debounceMs?: number;
+    onConnectGateway?: () => void;
+    initialTaskId?: string | null;
+  } = {},
 ) {
   const original = globalThis.fetch;
   const calls: string[] = [];
@@ -432,6 +437,42 @@ test("스웜: 다이얼로그가 제출하는 idempotencyKey 는 두 번 제출�
 
     assert.equal(swarmBodies.length, 2);
     assert.equal(swarmBodies[0].idempotencyKey, swarmBodies[1].idempotencyKey);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("스웜 루트 카드에서 블랙보드 JSON 이 코멘트로 보이지 않는다", async () => {
+  const f = await mount(
+    (url) => {
+      if (url.includes("/automation/status")) return json(status());
+      if (url.endsWith("/kanban/board")) return json(board());
+      if (url.endsWith("/kanban/tasks/t-root")) {
+        return json({
+          task: { id: "t-root", title: "스웜 루트", status: "done" },
+          comments: [
+            {
+              id: "bb",
+              author: "swarm-orchestrator",
+              body: '[swarm:blackboard] {"key":"topology","value":{"goal":"목표"}}',
+              created_at: "2026-09-16T00:00:00Z",
+            },
+            { id: "c1", author: "nova", body: "시작합니다", created_at: "2026-09-16T00:01:00Z" },
+          ],
+          events: [],
+          attachments: [],
+          links: { parents: [], children: [] },
+          runs: [],
+        });
+      }
+      return json({ code: "not_found", message: "no route" }, { status: 404 });
+    },
+    { initialTaskId: "t-root" },
+  );
+  try {
+    assert.equal(f.host.textContent?.includes("[swarm:blackboard]"), false);
+    assert.equal(f.host.textContent?.includes("시작합니다"), true);
+    assert.equal(f.host.textContent?.includes("topology"), true); // 표에는 있다
   } finally {
     await f.cleanup();
   }
