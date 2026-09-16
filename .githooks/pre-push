@@ -28,12 +28,17 @@ fi
 cd "$repo"
 printf '\n\033[1m[pre-push] format:check · typecheck · lint (약 30초). 건너뛰려면 --no-verify.\033[0m\n'
 
+# 로그는 mktemp 로 잡는다. /tmp 에 고정 이름을 쓰면 남이 미리 심볼릭 링크를 걸어
+# 엉뚱한 파일을 덮어쓰게 만들 수 있다(공유 머신에서 실제 위험).
+log="$(mktemp -t deskrpg-prepush)"
+trap 'rm -f "$log"' EXIT
+
 # 셸에 DATABASE_URL 이 있으면 테스트·도구가 그 DB 를 잡는다 — 레포 규약대로 벗긴다.
 for step in format:check typecheck lint; do
   printf '  → %s\n' "$step"
-  if ! env -u DATABASE_URL npm run -s "$step" >/tmp/deskrpg-prepush.log 2>&1; then
+  if ! env -u DATABASE_URL npm run -s "$step" >"$log" 2>&1; then
     printf '\n\033[1;31m[pre-push] %s 실패 — 푸시를 막는다.\033[0m\n' "$step"
-    tail -30 /tmp/deskrpg-prepush.log
+    tail -30 "$log"
     printf '\n고치고 다시 푸시하거나, 의도적이면 `git push --no-verify`.\n\n'
     exit 1
   fi
