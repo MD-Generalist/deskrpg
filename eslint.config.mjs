@@ -63,6 +63,9 @@ const eslintConfig = defineConfig([
     ".superpowers/**",
     ".dryforge/**",
     ".artifacts/**",
+    // 로컬 전용 개발 도구(.gitignore:58). 위와 같은 이유로 제외한다 —
+    // 추적되지 않아 CI 는 못 보는데 로컬 lint 만 실패하면 게이트가 신뢰를 잃는다.
+    "scripts/local/**",
   ]),
 ]);
 
