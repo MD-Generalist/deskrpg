@@ -234,30 +234,73 @@ export function studioDecorations(
   return out;
 }
 /** After all loads settle, resource ownership moves from independent hosts to the whole scene. */
+/** 바이트 배열을 한 번 훑어 32비트로 접는다. 같은 바이트면 같은 값이다. */
+function fnv1a(bytes: ArrayLike<number>) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
+}
+
 export function finalizeStudioScene(root: T.Group) {
+  /**
+   * 같은 그림인지 픽셀을 구워서 비교하지 않는다.
+   *
+   * 예전에는 이미지를 캔버스에 그려 `toDataURL()` 로 base64 PNG 를 만들어 키로 썼고, 텍스처
+   * 신호도 `Texture.toJSON()` 으로 만들어 three 가 이미지를 한 번 더 인코딩했다. 2048×1024 한
+   * 장이 20~30ms 다. 픽셀 배열을 가진 텍스처는 바이트를 접어서 그대로 비교하고(정확도 유지),
+   * 이미지 객체는 URL 이나 `Source` uuid 로 가른다 — 같은 GLB 를 복제한 텍스처는 source 를
+   * 공유하므로 중복 제거가 성립한다.
+   */
   const imageKeys = new WeakMap<object, string>();
   const imageKey = (texture: T.Texture) => {
-    const source = texture.image;
+    const source = texture.image as
+      | {
+          data?: ArrayLike<number>;
+          width?: number;
+          height?: number;
+          src?: string;
+          currentSrc?: string;
+        }
+      | undefined;
     if (!source || typeof source !== "object") return texture.source.uuid;
     const cached = imageKeys.get(source);
     if (cached) return cached;
-    let key: string;
-    if (source.data) key = `${source.width}x${source.height}:${Array.from(source.data).join(",")}`;
-    else if (typeof document !== "undefined" && source.width && source.height) {
-      const canvas = document.createElement("canvas");
-      canvas.width = source.width;
-      canvas.height = source.height;
-      const context = canvas.getContext("2d");
-      try {
-        context!.drawImage(source, 0, 0);
-        key = canvas.toDataURL();
-      } catch {
-        key = texture.source.uuid;
-      }
-    } else key = texture.source.uuid;
+    const key =
+      source.data !== undefined
+        ? `${source.width}x${source.height}:${source.data.length}:${fnv1a(source.data)}`
+        : source.src || source.currentSrc || texture.source.uuid;
     imageKeys.set(source, key);
     return key;
   };
+  /** 공유 판정에 실제로 쓰이는 샘플링 설정만 모은다. 픽셀은 보지 않는다. */
+  const textureSignature = (texture: T.Texture) =>
+    JSON.stringify([
+      texture.mapping,
+      texture.wrapS,
+      texture.wrapT,
+      texture.magFilter,
+      texture.minFilter,
+      texture.anisotropy,
+      texture.format,
+      texture.internalFormat,
+      texture.type,
+      texture.colorSpace,
+      texture.flipY,
+      texture.premultiplyAlpha,
+      texture.unpackAlignment,
+      texture.generateMipmaps,
+      texture.offset.x,
+      texture.offset.y,
+      texture.repeat.x,
+      texture.repeat.y,
+      texture.rotation,
+      texture.center.x,
+      texture.center.y,
+      texture.channel,
+    ]);
   const textures = new Map<string, T.Texture>(),
     retired = new Set<T.Texture>();
   root.traverse((o) => {
@@ -273,12 +316,7 @@ export function finalizeStudioScene(root: T.Group) {
     for (const m of Array.isArray(o.material) ? o.material : [o.material])
       for (const [key, value] of Object.entries(m)) {
         if (!(value instanceof T.Texture)) continue;
-        const data = { ...value.toJSON() };
-        delete (data as { uuid?: string }).uuid;
-        delete (data as { metadata?: unknown }).metadata;
-        delete (data as { image?: unknown }).image;
-        delete (data as { images?: unknown }).images;
-        const signature = JSON.stringify(data) + imageKey(value),
+        const signature = textureSignature(value) + imageKey(value),
           shared = textures.get(signature);
         if (shared && shared !== value) {
           (m as unknown as Record<string, unknown>)[key] = shared;

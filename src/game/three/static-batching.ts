@@ -26,6 +26,26 @@ function eligibleTransform(object: T.Mesh, root: T.Group, inverse: T.Matrix4) {
     !(object instanceof T.SkinnedMesh)
   );
 }
+/**
+ * 배칭 키를 만들 때 텍스처 픽셀까지 PNG 로 굽지 않는다.
+ *
+ * `Material.toJSON` 은 참조하는 텍스처를 함께 직렬화하고, three 의 `Source.toJSON` 은 이미지가
+ * 메타에 없으면 `getDataURL` → `canvas.toDataURL()` 로 base64 PNG 를 통째로 인코딩한다.
+ * 배칭 키에 필요한 것은 "같은 텍스처를 쓰는가" 뿐이고 그건 uuid 로 충분하다.
+ *
+ * three 는 이미지 항목을 **Source** 의 uuid 로 찾는다 — 이미지 객체의 uuid 로 넣으면 아무것도
+ * 막지 못한다(실측으로 한 번 헛짚었다). 둘 다 빈 껍데기로 등록해 인코딩을 건너뛰게 한다.
+ */
+function stubTextureImages(material: T.Material, resources: T.JSONMeta) {
+  for (const value of Object.values(material as unknown as Record<string, unknown>)) {
+    if (!(value instanceof T.Texture)) continue;
+    for (const uuid of [value.source?.uuid, (value.image as { uuid?: string } | undefined)?.uuid]) {
+      if (typeof uuid !== "string") continue;
+      resources.images[uuid] ??= { uuid, url: "" };
+    }
+  }
+}
+
 function materialSignatures() {
   const resources: T.JSONMeta = {
     textures: {},
@@ -47,6 +67,7 @@ function materialSignatures() {
     if (!entries.has(colorize)) {
       // Three's material serializer includes normal/alpha/env maps and physical coating settings.
       // Shared resource metadata avoids serializing the same texture repeatedly.
+      stubTextureImages(material, resources);
       const data: Record<string, unknown> = { ...material.toJSON(resources) };
       for (const key of ["uuid", "name", "metadata", "userData"]) delete data[key];
       if (colorize) delete data.color;
