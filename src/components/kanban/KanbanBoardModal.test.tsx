@@ -356,3 +356,83 @@ test("unbound gateway offers connection to owners and guidance to members", asyn
     await f.cleanup();
   }
 });
+
+const findButton = (host: HTMLElement, label: string) =>
+  Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.trim() === label);
+
+test("스웜: capabilities 에 swarm 이 없으면 버튼이 렌더되지 않는다", async () => {
+  const f = await mount((url) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) return json(board());
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    assert.equal(findButton(f.host, "스웜"), undefined, "swarm capability 없이는 버튼 없음");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("스웜: 다이얼로그가 제출하는 idempotencyKey 는 두 번 제출해도 같다", async () => {
+  const swarmBodies: Array<{ idempotencyKey: string }> = [];
+  let swarmAttempts = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status({ capabilities: ["swarm"] }));
+    if (url.includes("/kanban/board")) return json(board());
+    if (url.endsWith("/swarm") && init?.method === "POST") {
+      swarmAttempts += 1;
+      const body = JSON.parse(String(init.body)) as { idempotencyKey: string };
+      swarmBodies.push(body);
+      // 첫 시도는 실패시켜 다이얼로그를 열린 채로 두고, 재시도가 같은 키를 쓰는지 본다.
+      if (swarmAttempts === 1) {
+        return json({ code: "unavailable", message: "잠깐 실패" }, { status: 503 });
+      }
+      return json({
+        root_id: "t-root",
+        worker_ids: ["t-w1"],
+        verifier_id: "t-v",
+        synthesizer_id: "t-s",
+      });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await f.click("스웜");
+    const dialog = f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]');
+    assert.ok(dialog, "스웜 다이얼로그가 열린다");
+
+    const setValue = (el: HTMLInputElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    const goalInput = f.host.querySelector<HTMLInputElement>("#swarm-goal");
+    assert.ok(goalInput);
+    await act(async () => setValue(goalInput, "테스트 목표"));
+
+    const workerInput = f.host.querySelector<HTMLInputElement>('input[aria-label="맡길 일"]');
+    assert.ok(workerInput);
+    await act(async () => setValue(workerInput, "워커 작업"));
+
+    const submitButton = () => findButton(f.host, "스웜 시작");
+    assert.ok(submitButton());
+    await act(async () => submitButton()?.click());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // 첫 시도는 503 으로 실패했으니 다이얼로그가 여전히 열려 있다.
+    assert.ok(f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]'));
+
+    await act(async () => submitButton()?.click());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    assert.equal(swarmBodies.length, 2);
+    assert.equal(swarmBodies[0].idempotencyKey, swarmBodies[1].idempotencyKey);
+  } finally {
+    await f.cleanup();
+  }
+});

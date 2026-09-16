@@ -7,6 +7,7 @@ import type { KanbanTask } from "@/lib/hermes/deskrpg-plugin-types";
 
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
+import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
 import {
@@ -16,6 +17,7 @@ import {
   type BoardResponse,
 } from "./kanban-api";
 import {
+  activeAssigneeOptions,
   classifyBoardFailure,
   EMPTY_TASK_FORM,
   failureLine,
@@ -95,6 +97,8 @@ export default function KanbanBoardModal({
   const [submitting, setSubmitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+  const [showSwarm, setShowSwarm] = useState(false);
+  const [swarmSubmitting, setSwarmSubmitting] = useState(false);
   const [boardWarning, setBoardWarning] = useState<string | null>(null);
   const [creationWarnings, setCreationWarnings] = useState<Record<string, string>>({});
   const [detailTick, setDetailTick] = useState(0);
@@ -153,6 +157,10 @@ export default function KanbanBoardModal({
   );
   const allTasks = useMemo(() => flattenTasks(columns), [columns]);
   const npcs = useMemo(() => board?.npcs ?? [], [board]);
+  // 스웜 워커는 출근 중인 NPC 중에서만 고른다 — 서버가 잠든 NPC 를 400 으로 거절한다.
+  const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
+  // 플러그인이 스웜을 못 하면 버튼을 아예 숨긴다 — 눌렀다가 428 을 보는 것보다 낫다.
+  const swarmSupported = status?.capabilities?.includes("swarm") ?? false;
   const anyRunning = allTasks.some(isRunning);
 
   // 실행 중 카드가 있을 때만 1초 시계를 돌린다(경과 시간 표시).
@@ -213,6 +221,20 @@ export default function KanbanBoardModal({
     }
   };
 
+  const handleSwarm = async (values: SwarmSubmit) => {
+    setSwarmSubmitting(true);
+    try {
+      const created = await api.createSwarm(values);
+      setShowSwarm(false);
+      await reload();
+      setSelectedTaskId(created.root_id); // 루트 카드를 연다 — 블랙보드가 거기 있다.
+    } catch (err) {
+      setBoardWarning(failureLine(toFailure(err)));
+    } finally {
+      setSwarmSubmitting(false);
+    }
+  };
+
   const banners: Array<{ key: string; text: string; tone: "warn" | "error" }> = [];
   if (status && status.dispatcherPresent === false) {
     banners.push({ key: "dispatcher", text: t("kanban.warning.noDispatcher"), tone: "warn" });
@@ -266,6 +288,16 @@ export default function KanbanBoardModal({
               <Archive className="w-3.5 h-3.5" />
               {t("kanban.includeArchived")}
             </label>
+            {swarmSupported ? (
+              <button
+                type="button"
+                onClick={() => setShowSwarm(true)}
+                disabled={!board || npcOptions.length === 0}
+                className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
+              >
+                {t("kanban.swarm")}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void handleDispatch()}
@@ -403,6 +435,15 @@ export default function KanbanBoardModal({
       )}
 
       {showSettings && <BoardSettingsPanel api={api} onClose={() => setShowSettings(false)} />}
+
+      {showSwarm ? (
+        <SwarmDialog
+          npcs={npcOptions}
+          submitting={swarmSubmitting}
+          onSubmit={(values) => void handleSwarm(values)}
+          onClose={() => setShowSwarm(false)}
+        />
+      ) : null}
     </div>
   );
 }
