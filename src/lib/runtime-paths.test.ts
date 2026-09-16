@@ -58,4 +58,7 @@ test("자리표시자 판정은 안내 문구와 너무 짧은 값을 잡는다"
   assert.equal(isPlaceholderSecret("a".repeat(48)), false);
   // 진짜 난수는 통과해야 한다 — 사용자가 직접 넣은 값을 런타임이 덮어쓰면 안 된다.
   assert.equal(isPlaceholderSecret("a3f9c1e07b2d48a6f5c1e9d720b4a8c6"), false);
+  // `my` 로 시작하는 진짜 키도 통과해야 한다. 접두사 목록에 `my` 가 있던 동안에는
+  // 사용자가 직접 넣은 값을 런타임이 자리표시자로 보고 덮어썼다.
+  assert.equal(isPlaceholderSecret("my-production-key-9f3a2b7c1d4e6f8a"), false);
 });

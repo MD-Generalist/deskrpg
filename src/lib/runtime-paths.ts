@@ -58,9 +58,10 @@ export function isPlaceholderSecret(value: string): boolean {
   // 접두사만 보면 `deskrpg-change-this-secret-…` 같은 우리 자신의 기본값을 놓친다.
   // 48자라 길이 검사도 통과해, 손대지 않은 설치가 공개된 키로 조용히 뜬다(2026-09-16 실측).
   if (/change[-_ ]?(me|this)/i.test(normalized)) return true;
-  return /^(change|replace|set|your|my|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(
-    normalized,
-  );
+  // `my` 는 뺐다. `my-production-key-…` 같은 **진짜** 사용자 키를 자리표시자로 판정해
+  // 런타임이 덮어써 버린다 — 사용자가 직접 넣은 값이 이기는 것이 이 함수의 전제다.
+  // 우리 안내 문구 중 `my` 로 시작하는 것은 없다.
+  return /^(change|replace|set|your|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(normalized);
 }
 
 export function ensureDeskRpgHome(options: DeskRpgHomeOptions = {}) {
