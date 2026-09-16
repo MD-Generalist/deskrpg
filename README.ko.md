@@ -18,7 +18,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.9.22` — npm 전역 설치본이 정상적으로 기동합니다. 연결 마법사가 Hermes 설치·서비스 등록·빈 포트 제안·모델 로그인 확인·설치 진행 표시·실패 재개까지 맡습니다.
+- 버전: `v2026.916.1` — Hostinger 원클릭이 안내하던 구성을 실제로 배포하고, 공개된 JWT_SECRET 으로 뜨는 경로를 없앴습니다.
 
 ## 무엇을 할 수 있나요
 
@@ -114,7 +114,7 @@ docker compose --env-file .env.docker up -d
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
-공개 이미지는 GHCR `ghcr.io/dandacompany/deskrpg`에 있습니다. Compose 기본값은 `ghcr.io/dandacompany/deskrpg:latest`이며, 특정 릴리스로 고정하려면 `.env.docker`에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.22`을 설정하세요. 옛 Docker Hub `dandacompany/deskrpg` 이미지는 `2026.9.19`에서 멈춘 레거시이며 새 릴리스가 올라가지 않습니다.
+공개 이미지는 GHCR `ghcr.io/dandacompany/deskrpg`에 있습니다. Compose 기본값은 `ghcr.io/dandacompany/deskrpg:latest`이며, 특정 릴리스로 고정하려면 `.env.docker`에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.916.1`을 설정하세요. 옛 Docker Hub `dandacompany/deskrpg` 이미지는 `2026.9.19`에서 멈춘 레거시이며 새 릴리스가 올라가지 않습니다.
 
 명시적으로 파일 경로를 지정하고 싶다면 아래 명령을 사용해도 됩니다.
 
@@ -133,7 +133,7 @@ docker compose --env-file .env.lite -f docker/docker-compose.lite.yml up -d
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
-특정 릴리스로 고정하려면 명령 앞에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.22`을 붙이면 됩니다.
+특정 릴리스로 고정하려면 명령 앞에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.916.1`을 붙이면 됩니다.
 
 빠르게 시작하려면 SQLite, 오래 운영하려면 PostgreSQL을 선택하면 됩니다.
 

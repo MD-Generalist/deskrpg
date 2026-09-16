@@ -59,9 +59,7 @@ function isPlaceholderSecret(value) {
   // `my` 는 뺐다. `my-production-key-…` 같은 **진짜** 사용자 키를 자리표시자로 판정해
   // 런타임이 덮어써 버린다 — 사용자가 직접 넣은 값이 이기는 것이 이 함수의 전제다.
   // 우리 안내 문구 중 `my` 로 시작하는 것은 없다.
-  return /^(change|replace|set|your|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(
-    normalized,
-  );
+  return /^(change|replace|set|your|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(normalized);
 }
 
 function ensureDeskRpgHome(options = {}) {

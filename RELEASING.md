@@ -37,6 +37,11 @@ Release only from a verified, clean `master`. Use a fresh date version (no `v` p
 - One release on a given day: `YYYY.M.D` (e.g. `2026.9.22`).
 - **A second release on the same day does not borrow a future date.** It bumps a sequence number instead: `YYYY.MMDD.N` — major = year, minor = zero-padded `MMDD`, patch = the day's sequence starting at `1`. The second release on 2026-09-22 is `2026.922.1`, the third `2026.922.2`.
 - Why not `2026.9.22.1`: npm versions are semver, which has exactly three numeric components. `npm version 2026.9.22.1` is rejected, so a fourth segment cannot ship.
+- The same shape also rescues a version line that ran ahead of the calendar. On 2026-09-16 the
+  published version was already `2026.9.22` because four releases on 2026-09-15 each borrowed a
+  future date; `2026.9.16` would have sorted _below_ what was live. `2026.916.1` sorts above it and
+  puts the date back in step with reality, so use it whenever today's plain `YYYY.M.D` would be
+  lower than what is already published.
 - Ordering holds across the switch and forever after: `2026.9.22` < `2026.922.1` < `2026.923.1` < `2027.101.1`, because the minor grows with `MMDD` through the year and the major with the year.
 - The tag glob in `.github/workflows/release.yml` (`20[0-9][0-9].[0-9]*.[0-9]*`) already matches both shapes; no workflow change is needed. `2026.9.19` remains broken for npm installs and **must not be reused**. The npm `node_modules` alias fix (`56794fb9`) is included in the next tag.
 

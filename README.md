@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.9.22` — The npm package now starts when installed globally. The gateway setup wizard installs Hermes, registers the service, suggests a free port, checks the model login, shows install progress and resumes a failed run.
+- Version: `v2026.916.1` — The Hostinger one-click deploy now ships the compose it advertises, and no install can fall back to a publicly known JWT_SECRET.
 
 ## What You Can Do
 
@@ -114,7 +114,7 @@ Before the first run, open `.env.docker` and set:
 
 DeskRPG will open on `http://localhost:3102`.
 
-Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.22` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
+Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.916.1` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
 
 If you prefer the explicit file path version, you can run:
 
@@ -133,7 +133,7 @@ docker compose --env-file .env.lite -f docker/docker-compose.lite.yml up -d
 
 DeskRPG will open on `http://localhost:3102`.
 
-To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.9.22` before the command.
+To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.916.1` before the command.
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
 
