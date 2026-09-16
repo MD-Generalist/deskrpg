@@ -21,12 +21,14 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(!isComingSoon);
   const [hasUsers, setHasUsers] = useState(true);
   const router = useRouter();
   const t = useT();
 
   useEffect(() => {
+    if (isComingSoon) return;
+
     Promise.all([
       fetch("/api/characters", { redirect: "manual" }),
       fetch("/api/auth/status")
@@ -46,7 +48,7 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
       .catch(() => {
         setChecking(false);
       });
-  }, [router]);
+  }, [router, isComingSoon]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
