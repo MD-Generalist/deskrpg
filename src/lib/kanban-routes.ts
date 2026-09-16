@@ -32,7 +32,9 @@ import type {
   WorkspaceKind,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
+import { swarmGate } from "@/lib/hermes/plugin-capability";
 import type { KanbanTaskActionInput } from "@/lib/hermes/plugin-client-types";
+import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
 import { getUserId } from "@/lib/internal-rpc";
 import {
   AUTOMATION_MIN_PLUGIN_VERSION,
@@ -426,6 +428,99 @@ export async function dispatchBoard(req: NextRequest, channelId: string) {
   const res = await ctx.client.kanban.dispatch(ctx.boardSlug);
   if (!res.ok) return pluginFailureResponse(res);
   schedulePollNow(ctx.channelId);
+  return NextResponse.json(res.data);
+}
+
+// ---------------------------------------------------------------------------
+// 스웜 — Hermes `create_swarm` 으로 가는 경로. 토폴로지는 Hermes 가 만든다.
+// ---------------------------------------------------------------------------
+
+type SwarmWorkerInput = { npcId: string; title: string; body?: string; skills?: string[] };
+
+function parseSwarmWorkers(raw: unknown): SwarmWorkerInput[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: SwarmWorkerInput[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.npcId !== "string" || !record.npcId) return null;
+    if (typeof record.title !== "string" || !record.title.trim()) return null;
+    out.push({
+      npcId: record.npcId,
+      title: record.title.trim(),
+      body: typeof record.body === "string" ? record.body : undefined,
+      skills: stringList(record.skills),
+    });
+  }
+  return out;
+}
+
+export async function createSwarm(req: NextRequest, channelId: string) {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const ctx = resolved.ctx;
+
+  // 능력 판정이 먼저다. NPC 를 다 풀어 놓고 404 를 받으면 사용자가 원인을 못 본다.
+  const gate = swarmGate(ctx.info);
+  if (!gate.ok) {
+    const failure = pluginUpgradeRequired(gate);
+    return cronError(428, failure.code, failure.message, failure.details);
+  }
+
+  const body = await readJsonBody(req);
+  if (!body) return invalidBody("body must be a JSON object");
+
+  const goal = typeof body.goal === "string" ? body.goal.trim() : "";
+  if (!goal) return invalidBody("goal is required");
+
+  const workers = parseSwarmWorkers(body.workers);
+  if (!workers) return invalidBody("workers must be a non-empty array of {npcId, title}");
+
+  if (typeof body.verifierNpcId !== "string" || !body.verifierNpcId) {
+    return invalidBody("verifierNpcId must be an npcId");
+  }
+  if (typeof body.synthesizerNpcId !== "string" || !body.synthesizerNpcId) {
+    return invalidBody("synthesizerNpcId must be an npcId");
+  }
+
+  // 전부 풀고 나서 보낸다. 하나라도 실패하면 아무것도 만들지 않는다 — 부분 생성은
+  // 반쯤 연결된 그래프를 남기고, 그걸 디스패처가 본다.
+  const workerProfiles: string[] = [];
+  for (const worker of workers) {
+    const r = await resolveAssignee(ctx, worker.npcId);
+    if (!r.ok) return r.response;
+    workerProfiles.push(r.profileName);
+  }
+  const verifier = await resolveAssignee(ctx, body.verifierNpcId);
+  if (!verifier.ok) return verifier.response;
+  const synthesizer = await resolveAssignee(ctx, body.synthesizerNpcId);
+  if (!synthesizer.ok) return synthesizer.response;
+
+  const res = await ctx.client.kanban.createSwarm(ctx.boardSlug, {
+    goal,
+    workers: workers.map((worker, index) => ({
+      profile: workerProfiles[index],
+      title: worker.title,
+      ...(worker.body ? { body: worker.body } : {}),
+      ...(worker.skills ? { skills: worker.skills } : {}),
+    })),
+    verifier: verifier.profileName,
+    synthesizer: synthesizer.profileName,
+    ...(typeof body.idempotencyKey === "string" ? { idempotency_key: body.idempotencyKey } : {}),
+  });
+  if (!res.ok) return pluginFailureResponse(res);
+
+  // R9 와 같다 — 만들자마자 한 틱 돌려 워커가 60초를 기다리지 않게 한다.
+  await dispatchOnce(ctx);
+  schedulePollNow(ctx.channelId);
+  return NextResponse.json(res.data);
+}
+
+export async function getBlackboard(req: NextRequest, channelId: string, taskId: string) {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const res = await resolved.ctx.client.kanban.getBlackboard(resolved.ctx.boardSlug, taskId);
+  if (!res.ok) return pluginFailureResponse(res);
   return NextResponse.json(res.data);
 }
 
