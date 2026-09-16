@@ -24,9 +24,10 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 - Walk a live 3D office rendered with three.js, in five curated environments (trading company, agency, tech startup, executive suite, publisher). The original Phaser simulation still drives movement, seating and collisions; three.js only draws.
 - Register a Hermes gateway by address, or let the setup wizard discover a local / SSH-reachable Hermes install, check the plugin, and register its profiles.
 - Hire AI NPCs bound to Hermes profiles, edit their `SOUL.md` from the web, and choose model, provider, toolsets and reasoning effort per NPC.
-- Talk in the office room (mention to address one employee), open group rooms with invited NPCs, and watch a six-stage response receipt (queued → thinking → streaming → done) plus what tool the agent is using right now.
+- Talk in the office room (mention to address one employee), open group rooms with invited NPCs, and watch the full response lifecycle (queued → thinking → streaming → complete, failed or cancelled) plus what tool the agent is using right now.
 - Walk into the meeting space on each office map. Meeting mode keeps the original room and characters, fades walls that block the camera, and follows the current speaker; floor control, hand raising and exportable minutes remain available.
 - Track Hermes-owned kanban cards from planning through execution and review to completion. Call NPCs over and receive card completion or blocked-work notices in office chat.
+- Manage each NPC's Hermes cron jobs: create schedules from blueprints, pause or resume them, run them immediately, inspect run history and receive results in office chat.
 - Share the office with other people (multiplayer, groups and role-based access), in Korean, English, Japanese or Chinese.
 
 ## Screenshots
@@ -124,7 +125,8 @@ docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -
 Recommended if you want the simplest single-machine setup.
 
 ```bash
-JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
+printf 'JWT_SECRET=%s\n' "$(openssl rand -hex 32)" > .env.lite
+docker compose --env-file .env.lite -f docker/docker-compose.lite.yml up -d
 ```
 
 DeskRPG will open on `http://localhost:3102`.
@@ -235,9 +237,16 @@ later without firing it.
 
 ### 5. Meetings
 
-- DeskRPG includes a dedicated meeting room.
+- Every office map includes a meeting space. Meeting mode enlarges and fixes that part of the live map instead of loading a separate room design.
+- Walls between the camera and participants fade away, the camera follows the active speaker automatically, and manual rotation remains available.
 - AI meetings are channel-scoped and orchestrated through the channel's Hermes gateway.
 - Meeting notes are stored and visible from the header.
+
+### 6. Schedules
+
+- Create and manage Hermes cron jobs for each NPC without copying schedules into DeskRPG.
+- Pause, resume or run jobs immediately, inspect recent runs, and create common schedules from blueprints.
+- Completed runs post structured results to the office room that originated the schedule.
 
 ### Map Editor — Coming Later
 
@@ -247,7 +256,7 @@ The browser map editor is being prepared for a later release. It is not part of 
 
 - Login is required even if you have an invite code.
 - Invite codes are channel access helpers, not anonymous access tokens.
-- The current default in-app office tiles and object textures are generated in code at runtime.
+- Office layouts are assembled in code, while the live three.js renderer uses versioned GLB furniture, architecture and character models plus authored PBR surface textures.
 - Legacy 2D LPC avatar sprite assets are bundled separately and have their own credits and license notes.
 
 ## Licenses And Credits
