@@ -2,11 +2,14 @@
 
 One VPS, two containers: **DeskRPG** (the virtual office) and **Hermes Agent** (the employees' brain). Everything runs 24/7 on the server, so your agents keep working and reporting after you close the laptop.
 
-## 1. Deploy Traefik
+## 1. Traefik comes after DeskRPG
 
-hPanel → VPS → **Docker Manager** shows a banner, _"Enable HTTPS for Docker projects"_, with a **Deploy Traefik** button. Press it once and enter your e-mail. Traefik gives the office its HTTPS address.
+Traefik gives the office its HTTPS address, but hPanel shows the _"Enable HTTPS for Docker projects"_ banner with its **Deploy Traefik** button only **once a project exists** (seen 2026-09-17). So deploy DeskRPG first (step 2), then:
 
-Deploying it before DeskRPG is simplest. If you do it after, press **Update** on the DeskRPG project once.
+1. Press **Deploy Traefik** on the banner under the project list.
+2. Press **Update** on the DeskRPG project once, so `traefik-connect` runs again against the new Traefik.
+
+After the DeskRPG deploy the project shows three containers: `deskrpg` and `hermes` running, and `traefik-connect` **exited** — that one-shot is supposed to be stopped. A VPS that already has Traefik shows no banner; just press Update.
 
 ### Both Traefik shapes work (measured 2026-09-17)
 

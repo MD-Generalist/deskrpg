@@ -8,7 +8,7 @@
 
 Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](deploy/hostinger/README.md).
 
-> ⚠️ **Deploy Hostinger's Traefik project too** (Docker Manager shows a _"Enable HTTPS for Docker projects"_ banner with the button) — it is what gives the office its HTTPS address. Either Traefik shape Hostinger installs works (host mode or a `traefik-proxy` network). Installed Traefik after DeskRPG? Press **Update** on the DeskRPG project once.
+> ⚠️ **Then deploy Traefik** — it gives the office its HTTPS address. After this deploy, Docker Manager shows an _"Enable HTTPS for Docker projects"_ banner: press **Deploy Traefik**, then **Update** on the DeskRPG project once. Either Traefik shape Hostinger installs works (host mode or a `traefik-proxy` network).
 
 No VPS yet? [Get one here](https://hostinger.com/DANTE-HERMES) (referral link — it supports this project at no extra cost to you), then come back and press the button above.
 
