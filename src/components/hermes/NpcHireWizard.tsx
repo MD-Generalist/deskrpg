@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useT, useLocale } from "@/lib/i18n";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
+import { profileLoginUrl } from "@/lib/hermes/dashboard-link";
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 import type { CatalogPayload } from "@/lib/hermes/plugin-client-types";
 
@@ -79,6 +80,11 @@ interface NpcHireWizardProps {
    * (스테이징에서 사용자가 실제로 "인격을 수정할 방법이 없어 보인다" 고 했다).
    */
   initialProfile?: string | null;
+  /**
+   * 게이트웨이의 Hermes 대시보드 공개 주소(플러그인 `dashboard_url`, 소유자에게만 온다).
+   * ③ 설정에서 "이 직원으로 로그인" 링크를 만든다. 없으면 안내 문구만 보인다.
+   */
+  dashboardUrl?: string | null;
   onDone: () => void;
 }
 
@@ -127,6 +133,7 @@ export default function NpcHireWizard({
   localDiscovery,
   existingProfiles,
   initialProfile = null,
+  dashboardUrl = null,
   onDone,
 }: NpcHireWizardProps) {
   const t = useT();
@@ -935,6 +942,37 @@ export default function NpcHireWizard({
             <>
               {configError && !configLocked && <p className="text-sm text-danger">{configError}</p>}
               {catalogError && <p className="text-xs text-text-muted">{catalogError}</p>}
+              {created && (
+                // Hermes 는 NPC(프로필)마다 로그인한다 — default 로 로그인한 구독을 새 직원이
+                // 물려받지 않는다(업스트림 #111724). 목록의 "인증 안 됨" 만으로는 어디서
+                // 로그인해야 하는지 알 수 없어, 그 직원 프로필의 로그인 화면으로 바로 보낸다.
+                <div className="space-y-2 rounded border border-border bg-surface-raised/40 p-3 text-xs text-text-muted">
+                  <p>{t("hermes.wizard.config.loginHint", { name: created.name })}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {profileLoginUrl(dashboardUrl, created.name) ? (
+                      <a
+                        href={profileLoginUrl(dashboardUrl, created.name) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded bg-primary px-3 py-1.5 font-semibold text-white hover:bg-primary-hover"
+                      >
+                        {t("hermes.wizard.config.loginOpen", { name: created.name })}
+                      </a>
+                    ) : (
+                      <span>
+                        {t("hermes.wizard.config.loginNoDashboard", { name: created.name })}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void loadCatalog()}
+                      className="rounded bg-surface-raised px-3 py-1.5 font-semibold text-text hover:bg-surface-raised/80"
+                    >
+                      {t("hermes.wizard.config.loginRecheck")}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="grid gap-2 sm:grid-cols-2">
                 {/* 프로바이더를 먼저 고른다 — 모델 목록이 거기서 나온다. 인증되지 않은
                     것도 목록에 남기되(지우면 "왜 내 모델이 없지" 를 알 수 없다) 고를 수

@@ -399,6 +399,12 @@ const ko: Record<string, string> = {
   "hermes.wizard.config.toolsets": "툴셋",
   "hermes.wizard.config.toolsetsHint": "쉼표로 구분해 입력하세요",
   "hermes.wizard.config.notAuthenticated": "인증 안 됨",
+  "hermes.wizard.config.loginHint":
+    'Hermes는 직원마다 따로 로그인합니다. ChatGPT·Codex 같은 구독 모델을 쓰려면 Hermes 대시보드에서 {name} 프로필로 로그인한 뒤 "로그인 확인"을 누르세요. API 키 모델(OpenRouter 등)은 로그인 없이 쓸 수 있습니다.',
+  "hermes.wizard.config.loginOpen": "대시보드에서 {name} 로그인 ↗",
+  "hermes.wizard.config.loginNoDashboard":
+    "Hermes 대시보드 Keys 화면에서 상단 프로필을 {name}(으)로 바꿔 로그인하세요.",
+  "hermes.wizard.config.loginRecheck": "로그인 확인",
   "hermes.wizard.config.effort": "추론 강도(미지정)",
   "hermes.wizard.config.locked": "설정 파일을 읽을 수 없어 폼을 잠급니다.",
   "hermes.wizard.config.save": "저장",

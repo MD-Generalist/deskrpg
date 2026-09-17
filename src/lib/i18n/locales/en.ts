@@ -404,6 +404,12 @@ const en: Record<string, string> = {
   "hermes.wizard.config.toolsets": "Toolsets",
   "hermes.wizard.config.toolsetsHint": "Comma-separated",
   "hermes.wizard.config.notAuthenticated": "not authenticated",
+  "hermes.wizard.config.loginHint":
+    'Hermes signs in each employee separately. To use a subscription model such as ChatGPT or Codex, sign in as the {name} profile in the Hermes dashboard, then press "Check sign-in". API-key models (OpenRouter, etc.) need no sign-in.',
+  "hermes.wizard.config.loginOpen": "Sign in {name} on dashboard ↗",
+  "hermes.wizard.config.loginNoDashboard":
+    "In the Hermes dashboard Keys page, switch the top profile to {name} and sign in.",
+  "hermes.wizard.config.loginRecheck": "Check sign-in",
   "hermes.wizard.config.effort": "Reasoning effort (unset)",
   "hermes.wizard.config.locked": "The config file can't be read, so this form is locked.",
   "hermes.wizard.config.save": "Save",

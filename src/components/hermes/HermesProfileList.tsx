@@ -102,6 +102,8 @@ export default function HermesProfileList({
   // 쓰고, 오래됐거나 없으면 그때만 `/test` 를 쏜다(원격 왕복 2회, 최대 10초) — 예전엔
   // 이 화면을 열 때마다(마법사를 열지 않아도) 무조건 다시 찔렀다.
   const [pluginStatus, setPluginStatus] = useState<PluginStatus>("unknown");
+  // 고용 마법사 ③ 이 "이 직원으로 로그인" 링크를 만드는 데 쓴다. 소유자에게만 값이 온다.
+  const [dashboardUrl, setDashboardUrl] = useState<string | null>(null);
   // `?new=1` 은 "지금 새 인격을 만들러 왔다" 는 뜻이다 — 소유자가 아니면 마법사
   // 자체가 없으므로 열지 않는다.
   const [wizardOpen, setWizardOpen] = useState(autoOpenCreate && canRegister);
@@ -127,9 +129,17 @@ export default function HermesProfileList({
           ? (data as { gateways: unknown[] }).gateways
           : [];
         const mine = rows.find(
-          (g): g is { pluginStatus: string | null; pluginCheckedAt: string | Date | null } =>
-            !!g && typeof g === "object" && (g as { id?: unknown }).id === gatewayId,
+          (
+            g,
+          ): g is {
+            pluginStatus: string | null;
+            pluginCheckedAt: string | Date | null;
+            dashboardUrl?: string | null;
+          } => !!g && typeof g === "object" && (g as { id?: unknown }).id === gatewayId,
         );
+        if (!cancelled) {
+          setDashboardUrl(typeof mine?.dashboardUrl === "string" ? mine.dashboardUrl : null);
+        }
         const cached = resolvePluginStatusFromCache({
           pluginStatus: mine?.pluginStatus ?? null,
           pluginCheckedAt: mine?.pluginCheckedAt ?? null,
@@ -371,6 +381,7 @@ export default function HermesProfileList({
             pluginStatus={pluginStatus}
             existingProfiles={profiles.map((p) => p.profileName)}
             initialProfile={wizardProfile}
+            dashboardUrl={dashboardUrl}
             localDiscovery={!!discovery?.available && !!discovery?.optedIn}
             onDone={() => {
               setWizardOpen(false);

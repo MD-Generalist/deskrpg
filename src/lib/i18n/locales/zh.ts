@@ -389,6 +389,12 @@ const zh: Record<string, string> = {
   "hermes.wizard.config.toolsets": "工具集",
   "hermes.wizard.config.toolsetsHint": "请用逗号分隔",
   "hermes.wizard.config.notAuthenticated": "未认证",
+  "hermes.wizard.config.loginHint":
+    'Hermes 为每位员工单独登录。要使用 ChatGPT、Codex 等订阅模型,请在 Hermes 仪表板中以 {name} 配置文件登录,然后点击"检查登录"。API 密钥模型(如 OpenRouter)无需登录。',
+  "hermes.wizard.config.loginOpen": "在仪表板登录 {name} ↗",
+  "hermes.wizard.config.loginNoDashboard":
+    "请在 Hermes 仪表板的 Keys 页面将顶部配置文件切换为 {name} 后登录。",
+  "hermes.wizard.config.loginRecheck": "检查登录",
   "hermes.wizard.config.effort": "推理强度（未指定）",
   "hermes.wizard.config.locked": "无法读取设置文件，此表单已锁定。",
   "hermes.wizard.config.save": "保存",

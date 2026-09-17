@@ -407,6 +407,12 @@ const ja: Record<string, string> = {
   "hermes.wizard.config.toolsets": "ツールセット",
   "hermes.wizard.config.toolsetsHint": "カンマ区切りで入力してください",
   "hermes.wizard.config.notAuthenticated": "未認証",
+  "hermes.wizard.config.loginHint":
+    "Hermes は社員ごとに個別にログインします。ChatGPT・Codex などのサブスクリプションモデルを使うには、Hermes ダッシュボードで {name} プロフィールとしてログインしてから「ログイン確認」を押してください。API キーのモデル(OpenRouter など)はログイン不要です。",
+  "hermes.wizard.config.loginOpen": "ダッシュボードで {name} にログイン ↗",
+  "hermes.wizard.config.loginNoDashboard":
+    "Hermes ダッシュボードの Keys 画面で上部のプロフィールを {name} に切り替えてログインしてください。",
+  "hermes.wizard.config.loginRecheck": "ログイン確認",
   "hermes.wizard.config.effort": "推論強度（未指定）",
   "hermes.wizard.config.locked": "設定ファイルを読み込めないため、フォームをロックします。",
   "hermes.wizard.config.save": "保存",
