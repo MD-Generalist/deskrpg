@@ -6,8 +6,10 @@ import { eq } from "drizzle-orm";
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { deleteHermesProfile, profileUsage, updateHermesProfile } from "@/lib/hermes-profiles";
 import { getUserId } from "@/lib/internal-rpc";
-import { validateAppearance } from "@/lib/lpc-registry";
-import type { CharacterAppearance } from "@/lib/lpc-registry";
+import {
+  normalizeOfficeAppearance,
+  validateOfficeAppearance,
+} from "@/game/three/office-appearance";
 
 /**
  * 프로필 조회·수정·삭제.
@@ -68,7 +70,7 @@ export async function PATCH(
   // 좌우한다 — 모양이 깨진 값이 들어오면 그 인격 전부가 동시에 망가진다.
   // 캐릭터 라우트(api/characters)와 같은 검증·같은 에러코드를 쓴다.
   if (Object.hasOwn(body, "appearance")) {
-    const validationError = validateAppearance(body.appearance as CharacterAppearance);
+    const validationError = validateOfficeAppearance(body.appearance);
     if (validationError) {
       return NextResponse.json(
         { errorCode: "character_appearance_invalid", error: validationError },
@@ -82,7 +84,9 @@ export async function PATCH(
     token: typeof body.token === "string" ? body.token : undefined,
     displayName: typeof body.displayName === "string" ? body.displayName : undefined,
     // 외형도 보낼 때만 바뀐다. 소유자만 쓸 수 있다(updateHermesProfile 이 판정한다).
-    appearance: Object.hasOwn(body, "appearance") ? body.appearance : undefined,
+    appearance: Object.hasOwn(body, "appearance")
+      ? normalizeOfficeAppearance(body.appearance)
+      : undefined,
   });
 
   if (!result.ok) {

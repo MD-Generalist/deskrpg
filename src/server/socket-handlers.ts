@@ -73,6 +73,7 @@ import {
 } from "./meeting-socket";
 import { registerMeetingDiscussionHandlers } from "./meeting-discussion";
 import { registerRoomHandlers } from "./room-socket";
+import { normalizeOfficeAppearance } from "@/game/three/office-appearance";
 import { AUTOMATION_SOCKET_EVENTS, getWorkingSnapshot } from "./automation-events";
 import { setChannelActive, startAutomationPollers } from "./automation-poller";
 import {
@@ -1260,7 +1261,8 @@ export function setupSocketHandlers(io: Server) {
           userId: user.userId,
           characterId: data.characterId,
           characterName: data.characterName,
-          appearance: data.appearance,
+          // 클라이언트가 보낸 외형은 거절하지 않고 정규화해서 중계한다.
+          appearance: normalizeOfficeAppearance(data.appearance),
           mapId: data.mapId,
           x: spawn.x,
           y: spawn.y,

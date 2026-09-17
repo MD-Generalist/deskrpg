@@ -1,6 +1,5 @@
 "use client";
 
-import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import RosterAvatar from "../RosterAvatar";
 
 export default function ParticipantRow({
@@ -14,7 +13,7 @@ export default function ParticipantRow({
 }: {
   name: string;
   detail: string;
-  appearance?: CharacterAppearance | LegacyCharacterAppearance | null;
+  appearance?: unknown;
   selected?: boolean;
   onSelect: () => void;
   menuLabel?: string;

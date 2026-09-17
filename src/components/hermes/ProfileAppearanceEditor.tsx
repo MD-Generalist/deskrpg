@@ -6,7 +6,7 @@ import CharacterPreview from "@/components/CharacterPreview";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT, useLocale } from "@/lib/i18n";
-import type { CharacterAppearance } from "@/lib/lpc-registry";
+import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 interface ProfileAppearanceEditorProps {
   gatewayId: string;

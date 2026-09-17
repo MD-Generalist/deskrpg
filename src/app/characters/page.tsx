@@ -4,11 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
-import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { useT } from "@/lib/i18n";
 import LogoutButton from "@/components/LogoutButton";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
-import { compositeCharacter } from "@/lib/sprite-compositor";
 import { resolveOfficeLook } from "@/game/three/office-looks";
 import CharacterModelView from "@/components/CharacterModelView";
 
@@ -17,7 +15,7 @@ const MAX_CHARACTERS = 5;
 interface Character {
   id: string;
   name: string;
-  appearance: CharacterAppearance | LegacyCharacterAppearance;
+  appearance: unknown;
   createdAt: string;
 }
 
@@ -34,24 +32,7 @@ function CharacterCard({
 }) {
   const t = useT();
   const look = resolveOfficeLook(character.appearance);
-  const [source, setSource] = useState<HTMLCanvasElement | null>(null);
   const [unavailable, setUnavailable] = useState(false);
-
-  useEffect(() => {
-    if (look) return;
-    let cancelled = false;
-    const canvas = document.createElement("canvas");
-    compositeCharacter(canvas, character.appearance)
-      .then(() => {
-        if (!cancelled) setSource(canvas);
-      })
-      .catch(() => {
-        if (!cancelled) setUnavailable(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [character.appearance, look]);
 
   return (
     <div className="bg-surface p-4 rounded-lg flex flex-col items-center">
@@ -64,11 +45,12 @@ function CharacterCard({
           className="mb-2 mx-auto flex h-48 items-center justify-center overflow-hidden pointer-events-none"
           aria-hidden="true"
         >
-          {unavailable ? (
+          {!look ? (
+            <span className="text-4xl font-bold text-text-secondary">?</span>
+          ) : unavailable ? (
             <span className="text-sm text-text-muted">3D — {character.name}</span>
           ) : (
             <CharacterModelView
-              source={look ? null : source}
               look={look}
               size={192}
               direction="down"

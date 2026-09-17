@@ -10,11 +10,12 @@ import {
   quickStartGamePath,
   quickStartSeatTiles,
 } from "./quick-start";
-import { validateAppearance } from "./lpc-registry";
+import { validateOfficeAppearance } from "../game/three/office-appearance";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
 
-test("기본 외형은 캐릭터 라우트의 검증을 통과한다", () => {
-  assert.equal(validateAppearance(QUICK_START_APPEARANCE), null);
+test("기본 외형은 캐릭터 라우트의 검증을 통과하는 첫 번째 남성 룩이다", () => {
+  assert.equal(validateOfficeAppearance(QUICK_START_APPEARANCE), null);
+  assert.deepEqual(QUICK_START_APPEARANCE, { officeLookId: "office-jun", bodyType: "male" });
 });
 
 test("이름은 닉네임에서 나오고 길이 한도를 넘지 않는다", () => {

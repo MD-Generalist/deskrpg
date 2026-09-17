@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import ChatInput from "./ChatInput";
-import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import MinutesModal from "./MinutesModal";
 import { useLocale, useT } from "@/lib/i18n";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
@@ -39,7 +38,7 @@ interface Participant {
   id: string;
   userId?: string;
   name: string;
-  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
+  appearance: unknown;
   type: "user" | "npc";
 }
 
@@ -63,7 +62,7 @@ interface MeetingRoomProps {
   character: {
     id: string;
     name: string;
-    appearance: CharacterAppearance | LegacyCharacterAppearance;
+    appearance: unknown;
   };
   socket: Socket | null;
   npcs: { id: string; name: string; appearance: unknown }[];
@@ -284,7 +283,7 @@ export default function MeetingRoom({
   const npcParticipants: Participant[] = displayedNpcs.map((npc) => ({
     id: `npc-${npc.id}`,
     name: npc.name,
-    appearance: npc.appearance as CharacterAppearance | LegacyCharacterAppearance | null,
+    appearance: npc.appearance,
     type: "npc" as const,
   }));
 
@@ -371,7 +370,7 @@ export default function MeetingRoom({
       setParticipants(
         data.participants.map((p) => ({
           ...p,
-          appearance: p.appearance as CharacterAppearance | LegacyCharacterAppearance | null,
+          appearance: p.appearance,
           type: "user" as const,
         })),
       );
@@ -405,7 +404,7 @@ export default function MeetingRoom({
             id: data.id,
             userId: data.userId,
             name: data.name,
-            appearance: data.appearance as CharacterAppearance | LegacyCharacterAppearance | null,
+            appearance: data.appearance,
             type: "user" as const,
           },
         ];
