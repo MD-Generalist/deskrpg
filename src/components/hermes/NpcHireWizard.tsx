@@ -41,6 +41,12 @@ import { getWizardErrorMessage } from "./wizard-error-codes";
 
 type ProvisionedProfile = {
   name: string;
+  /**
+   * 이 프로필이 **실제로 출근한 채널 수**. 출근은 그 게이트웨이가 이미 붙어 있는 채널에만
+   * 일어나므로, 0 이면 ④ 배치에서 "출근했습니다" 라고 말하면 안 된다. 이어서 편집하는
+   * 기존 프로필(`resumed`)은 알 수 없으므로 `undefined` 다.
+   */
+  attendedChannels?: number;
   keyIssued: boolean;
   keyError?: string;
   keyStored: boolean;
@@ -85,6 +91,8 @@ interface NpcHireWizardProps {
    * ③ 설정에서 "이 직원으로 로그인" 링크를 만든다. 없으면 안내 문구만 보인다.
    */
   dashboardUrl?: string | null;
+  /** ①에서 프로필이 실제로 만들어진 직후. 바깥 프로필 목록이 이것으로 곧바로 다시 읽는다. */
+  onProfileCreated?: (profileName: string) => void;
   onDone: () => void;
 }
 
@@ -134,6 +142,7 @@ export default function NpcHireWizard({
   existingProfiles,
   initialProfile = null,
   dashboardUrl = null,
+  onProfileCreated,
   onDone,
 }: NpcHireWizardProps) {
   const t = useT();
@@ -250,6 +259,9 @@ export default function NpcHireWizard({
       }
       const profile = data as ProvisionedProfile;
       setCreated(profile);
+      // 바깥 목록은 마법사가 닫힐 때만 다시 읽었다 — 그동안 방금 만든 직원이 목록에서
+      // 빠져 있어 "등록된 프로필이 없습니다" 가 그대로 남았다(실측 2026-09-17).
+      onProfileCreated?.(profile.name);
 
       // keyStored 가 false 면 어느 쪽이든 프로필 토큰이 DeskRPG 에 없다 —
       // 인격·설정 단계는 그 토큰이 있어야 부를 수 있으므로 서빙 확인을 건너뛴다.
@@ -289,7 +301,7 @@ export default function NpcHireWizard({
     } finally {
       setCreating(false);
     }
-  }, [gatewayId, nameTrimmed, nameValid, t]);
+  }, [gatewayId, nameTrimmed, nameValid, onProfileCreated, t]);
 
   const handleDeleteCreated = useCallback(async () => {
     if (!created) return;
@@ -1090,7 +1102,15 @@ export default function NpcHireWizard({
               {t("hermes.wizard.placement.alreadyRegistered", { name: created.name })}
             </p>
           )}
-          <p className="text-sm text-text-muted">{t("hermes.wizard.placement.guide")}</p>
+          <p className="text-sm text-text-muted">
+            {created?.attendedChannels === 0
+              ? t("hermes.wizard.placement.guideNoChannel")
+              : typeof created?.attendedChannels === "number"
+                ? t("hermes.wizard.placement.guideAttended", {
+                    count: String(created.attendedChannels),
+                  })
+                : t("hermes.wizard.placement.guide")}
+          </p>
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/profiles?gateway=${encodeURIComponent(gatewayId)}${created ? `&profile=${encodeURIComponent(created.name)}` : ""}`}

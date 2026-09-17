@@ -416,7 +416,11 @@ const ko: Record<string, string> = {
     "프로필 '{name}' 은(는) 이미 등록돼 있습니다 — 다시 만들 필요 없습니다.",
   "hermes.wizard.placement.goToChannels": "채널로 이동",
   "hermes.wizard.placement.guide":
-    "프로필은 이미 채널에 자동 출근했습니다. 채널의 출근부에서 '자리 미정' 을 눌러 의자를 선택해 고정 자리를 저장하세요.",
+    "채널에 이 게이트웨이가 붙어 있으면 이 직원은 이미 출근해 있습니다. 채널의 출근부에서 '자리 미정' 을 눌러 의자를 선택해 고정 자리를 저장하세요.",
+  "hermes.wizard.placement.guideAttended":
+    "이 직원이 채널 {count}곳에 자동 출근했습니다. 채널의 출근부에서 '자리 미정' 을 눌러 의자를 선택해 고정 자리를 저장하세요.",
+  "hermes.wizard.placement.guideNoChannel":
+    "아직 이 게이트웨이를 쓰는 채널이 없어 출근한 곳이 없습니다. 채널을 만들고 설정 → AI 연결에서 이 게이트웨이를 붙이면 이 직원이 자동으로 출근합니다.",
   "hermes.wizard.placement.done": "마법사 닫기",
   "hermes.wizard.closeConfirmTitle": "지금 닫으면 어떻게 되나요",
   "hermes.wizard.closeConfirmBody": "①에서 만든 프로필 '{name}' 이(가) 남습니다. 지울까요?",

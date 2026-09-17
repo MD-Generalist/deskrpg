@@ -405,7 +405,11 @@ const zh: Record<string, string> = {
   "hermes.wizard.placement.alreadyRegistered": "配置文件“{name}”已注册 — 无需再次创建。",
   "hermes.wizard.placement.goToChannels": "前往频道",
   "hermes.wizard.placement.guide":
-    "该配置文件已自动在频道上班。请在频道的出勤表中点击“未定座位”来安排座位。",
+    "如果频道已连接此网关,该员工已经出勤。在频道的出勤表中点击「未定座位」,选择椅子以保存固定座位。",
+  "hermes.wizard.placement.guideAttended":
+    "该员工已自动出勤 {count} 个频道。在频道的出勤表中点击「未定座位」,选择椅子以保存固定座位。",
+  "hermes.wizard.placement.guideNoChannel":
+    "目前还没有频道使用此网关,因此没有出勤的地方。创建频道并在设置 → AI 连接中接入此网关,该员工便会自动出勤。",
   "hermes.wizard.placement.done": "关闭向导",
   "hermes.wizard.closeConfirmTitle": "现在关闭会怎样",
   "hermes.wizard.closeConfirmBody": "步骤①中创建的配置文件“{name}”将会保留。要删除吗？",

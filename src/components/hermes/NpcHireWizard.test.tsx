@@ -286,3 +286,136 @@ test("대시보드 주소가 없으면 링크 대신 프로필을 바꿔 로그�
     globalThis.fetch = originalFetch;
   }
 });
+
+async function createAndOpenPlacement(el: HTMLElement) {
+  const nameInput = [...el.querySelectorAll("input")].find((i) =>
+    i.placeholder?.includes("새 프로필 이름"),
+  );
+  assert.ok(nameInput, "프로필 이름 입력칸을 찾지 못했다");
+  await act(async () => {
+    setInputValue(nameInput, "mia");
+  });
+  await act(async () => {
+    buttonByText(el, "프로필 만들기").click();
+  });
+  const placementTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("④"));
+  assert.ok(placementTab, "④ 배치 탭을 찾지 못했다");
+  await act(async () => {
+    placementTab.click();
+  });
+}
+
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function wizardWith(
+  routes: Record<string, unknown>,
+  calls: FetchCall[],
+  onProfileCreated?: (n: string) => void,
+) {
+  globalThis.fetch = stubFetch(calls, routes) as typeof fetch;
+  return (
+    <I18nProvider initialLocale="ko">
+      <NpcHireWizard
+        gatewayId="gw-1"
+        pluginStatus="plugin_ready"
+        localDiscovery={false}
+        existingProfiles={[]}
+        onProfileCreated={onProfileCreated}
+        onDone={() => {}}
+      />
+    </I18nProvider>
+  );
+}
+
+test("붙은 채널이 없으면 배치 단계가 '출근했다'고 말하지 않는다", async () => {
+  // 채널이 없는데 "이미 채널에 자동 출근했습니다" 를 띄우면, 사용자는 있지도 않은
+  // 출근부에서 자리를 찾다 막힌다(Hostinger VPS 실측 2026-09-17).
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(
+      wizardWith(
+        {
+          "/plugin/profiles": {
+            name: "mia",
+            keyIssued: true,
+            keyStored: true,
+            attendedChannels: 0,
+          },
+          "/identity": { isDefaultTemplate: true, soul: "" },
+        },
+        calls,
+      ),
+    );
+    await createAndOpenPlacement(el);
+    const text = el.textContent ?? "";
+    assert.equal(/자동 출근했습니다/.test(text), false, "출근하지 않았는데 출근했다고 말한다");
+    assert.match(text, /채널/, "다음에 무엇을 해야 하는지 안내가 없다");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("붙은 채널이 있으면 출근 안내를 그대로 보여준다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(
+      wizardWith(
+        {
+          "/plugin/profiles": {
+            name: "mia",
+            keyIssued: true,
+            keyStored: true,
+            attendedChannels: 2,
+          },
+          "/identity": { isDefaultTemplate: true, soul: "" },
+        },
+        calls,
+      ),
+    );
+    await createAndOpenPlacement(el);
+    assert.match(el.textContent ?? "", /출근/, "출근했다는 사실을 알리지 않는다");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("프로필을 만들면 곧바로 바깥 목록에 알린다", async () => {
+  // 알리지 않으면 마법사를 닫기 전까지 아래 프로필 목록이 "등록된 프로필이 없습니다"
+  // 로 남아, 방금 만든 직원이 없어진 것처럼 보인다.
+  const calls: FetchCall[] = [];
+  const created: string[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(
+      wizardWith(
+        {
+          "/plugin/profiles": {
+            name: "mia",
+            keyIssued: true,
+            keyStored: true,
+            attendedChannels: 0,
+          },
+          "/identity": { isDefaultTemplate: true, soul: "" },
+        },
+        calls,
+        (name) => created.push(name),
+      ),
+    );
+    await createAndOpenPlacement(el);
+    assert.deepEqual(created, ["mia"]);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

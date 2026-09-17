@@ -421,7 +421,11 @@ const en: Record<string, string> = {
     "Profile '{name}' is already registered — no need to create it again.",
   "hermes.wizard.placement.goToChannels": "Go to channels",
   "hermes.wizard.placement.guide":
-    'This profile has already clocked in to the channel. Open the channel\'s roster and click "Unplaced" to give it a seat.',
+    'If a channel already uses this gateway, this employee is on duty there. Open the channel roster, click "no seat yet" and pick a chair to save a fixed seat.',
+  "hermes.wizard.placement.guideAttended":
+    'This employee reported to {count} channel(s). Open the channel roster, click "no seat yet" and pick a chair to save a fixed seat.',
+  "hermes.wizard.placement.guideNoChannel":
+    "No channel uses this gateway yet, so nobody reported for duty. Create a channel and attach this gateway under Settings → AI Connection; the employee then reports automatically.",
   "hermes.wizard.placement.done": "Close wizard",
   "hermes.wizard.closeConfirmTitle": "What happens if you close now",
   "hermes.wizard.closeConfirmBody":

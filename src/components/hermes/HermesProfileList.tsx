@@ -382,6 +382,11 @@ export default function HermesProfileList({
             existingProfiles={profiles.map((p) => p.profileName)}
             initialProfile={wizardProfile}
             dashboardUrl={dashboardUrl}
+            onProfileCreated={() => {
+              // 마법사가 열려 있는 동안에도 목록을 맞춘다 — 닫을 때까지 기다리면
+              // 방금 만든 직원이 목록에서 빠져 "등록된 프로필이 없습니다" 가 남는다.
+              void loadProfiles().then(() => onCreated?.());
+            }}
             localDiscovery={!!discovery?.available && !!discovery?.optedIn}
             onDone={() => {
               setWizardOpen(false);

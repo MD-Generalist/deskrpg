@@ -424,7 +424,11 @@ const ja: Record<string, string> = {
     "プロフィール「{name}」はすでに登録されています — 再度作成する必要はありません。",
   "hermes.wizard.placement.goToChannels": "チャンネルへ移動",
   "hermes.wizard.placement.guide":
-    "プロフィールはすでにチャンネルへ自動出勤しています。チャンネルの出勤簿で「席未定」を押して席を決めてください。",
+    "チャンネルにこのゲートウェイが接続されていれば、この社員はすでに出社しています。チャンネルの出席リストで「席未定」を押し、椅子を選んで固定席を保存してください。",
+  "hermes.wizard.placement.guideAttended":
+    "この社員が {count} 件のチャンネルに自動出社しました。チャンネルの出席リストで「席未定」を押し、椅子を選んで固定席を保存してください。",
+  "hermes.wizard.placement.guideNoChannel":
+    "このゲートウェイを使うチャンネルがまだないため、出社先がありません。チャンネルを作り、設定 → AI 接続でこのゲートウェイを接続すると自動で出社します。",
   "hermes.wizard.placement.done": "ウィザードを閉じる",
   "hermes.wizard.closeConfirmTitle": "今閉じるとどうなるか",
   "hermes.wizard.closeConfirmBody": "①で作成したプロフィール「{name}」が残ります。削除しますか？",
