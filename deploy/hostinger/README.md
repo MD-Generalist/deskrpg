@@ -2,13 +2,26 @@
 
 One VPS, two containers: **DeskRPG** (the virtual office) and **Hermes Agent** (the employees' brain). Everything runs 24/7 on the server, so your agents keep working and reporting after you close the laptop.
 
-## 1. Deploy Traefik first — not optional
+## 1. Deploy Traefik
 
-hPanel → VPS → **Docker Manager** shows a banner, _"Enable HTTPS for Docker projects"_, with a **Deploy Traefik** button. Press it once and enter your e-mail.
+hPanel → VPS → **Docker Manager** shows a banner, _"Enable HTTPS for Docker projects"_, with a **Deploy Traefik** button. Press it once and enter your e-mail. Traefik gives the office its HTTPS address.
 
-> ⚠️ **Do this before DeskRPG.** This compose joins the `traefik-proxy` network as `external: true`, so `docker compose up` fails outright when Traefik has not created that network yet. Hostinger reports the failure only as a project stuck at `created` whose logs read **"Docker project not found"** — a message that names neither Traefik nor the network. Measured 2026-09-16.
->
-> `external: true` is the right setting even so: the catalog Traefik owns that network and we are a guest on it. Dropping it would break the opposite case — Compose refuses to adopt a network it did not create, so everyone who installed Traefik first would fail instead.
+Deploying it before DeskRPG is simplest. If you do it after, press **Update** on the DeskRPG project once.
+
+### Both Traefik shapes work (measured 2026-09-17)
+
+Two Traefik shapes show up on Hostinger VPSes, and each one breaks a naive compose:
+
+| Traefik shape                                                                             | How it reaches DeskRPG          | What breaks it                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **host mode** — `network_mode: host`, no networks (what hPanel installed on a user's VPS) | the container's bridge IP       | declaring `traefik-proxy` as `external: true` — `network traefik-proxy declared as external, but could not be found`, shown by Hostinger only as a project stuck at `created` whose logs read "Docker project not found" |
+| **bridge mode** — Traefik on a `traefik-proxy` network                                    | only containers on that network | letting this compose create `traefik-proxy` (Compose refuses to adopt a network it did not create), or joining it without the `traefik.docker.network` label (Traefik dials the wrong IP)                                |
+
+So the compose declares no Traefik network. Instead the one-shot `traefik-connect` service joins `deskrpg` to `traefik-proxy` **only when that network exists**, and the `traefik.docker.network=traefik-proxy` label tells bridge-mode Traefik which IP to use; host mode ignores a label naming a missing network.
+
+Measured with both shapes: first deploy, full recreate, a new image recreating only `deskrpg`, container restart, and Hostinger's own **Update** all routed 10/10 — Update re-runs the exited connector. One gap: `docker compose up -d deskrpg` **with a service name** does not run the connector, so bridge-mode Traefik loses the route. Run `docker compose up -d` without a service name, or press Update.
+
+`traefik-connect` mounts the Docker socket **read-write** (`docker network connect` writes), which is host-root equivalent. It runs only the fixed script in the compose and exits within seconds.
 
 ## 2. One-click
 
@@ -28,15 +41,14 @@ Project name: `deskrpg` (3–64 chars, letters/digits/`-`/`_`).
 
 ## 2-1. Before you press Deploy
 
-Fill the **Environment variables** box (one `KEY=value` per line):
+The **Environment** box is pre-filled from `.env.example`. Set one value:
 
 ```
-JWT_SECRET=<long random string>
-HERMES_API_KEY=<long random string>
-OPENROUTER_API_KEY=<your provider key>   # or OPENAI_API_KEY / ANTHROPIC_API_KEY
+HERMES_API_KEY=<output of: openssl rand -hex 32>
 ```
 
-Generate secrets on any machine with `openssl rand -hex 32`. Everything else has a safe default. If you leave `JWT_SECRET` at its default the app still boots, but do not invite other users until you change it (changing it logs everyone out).
+- `JWT_SECRET` — leave the placeholder. The app generates a real key into the `deskrpg-data` volume and reuses it across restarts and Update. A value you set always wins.
+- `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — optional; see step 4-1 for which one to fill, or leave all empty to log in with ChatGPT.
 
 ## 3. Your HTTPS URL
 
@@ -53,6 +65,43 @@ Custom domain: point an `A` record at the VPS IP and change the `Host(...)` rule
 ## 4. Firewall
 
 hPanel → VPS → Security → Firewall: allow **22, 80, 443** only. Do **not** open 3000, 3001, 8642 or 9119 — Traefik is the only public door, and Hermes' API server is reachable from DeskRPG on the private Docker network.
+
+## 4-1. Give Hermes a model
+
+Hermes boots without any provider, and then answers every message with `Provider authentication failed`. Pick **one** route (all measured 2026-09-17). Terminal commands run over SSH from the project folder:
+
+```bash
+ssh root@<VPS IP>
+cd /docker/deskrpg          # Docker Manager keeps each project in /docker/<project name>
+```
+
+**A. ChatGPT login (Codex OAuth)** — no API key.
+
+```bash
+docker compose exec hermes hermes auth add openai-codex --type oauth --no-browser
+# open the printed URL on any device, enter the code, approve
+docker compose exec hermes hermes config set model.provider openai-codex
+docker compose exec hermes hermes config set model.default gpt-5.5
+```
+
+Skipping the two `config set` lines leaves Hermes on its default model (`anthropic/claude-opus-4.6`): Codex rejects it with `model is not supported when using Codex`, and if an OpenRouter key is also set Hermes keeps using OpenRouter. No restart needed; the login lives in `hermes-data` and survived Update in the test.
+
+**B. API key** (filled in the Environment box before Deploy):
+
+| Key                  | Extra steps                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY` | none                                                                               |
+| `ANTHROPIC_API_KEY`  | none; set `model.provider anthropic` and `model.default` to avoid the Opus default |
+| `OPENAI_API_KEY`     | **required** — the key alone is ignored and requests still go to OpenRouter        |
+
+```bash
+# OpenAI key only
+docker compose exec hermes hermes config set model.provider openai-api
+docker compose exec hermes hermes config set model.default gpt-5.5
+docker compose exec hermes hermes config unset model.base_url   # otherwise the key is not sent
+```
+
+`docker compose exec` as root is fine: the image's `hermes` wrapper drops to the `hermes` user, so file ownership stays correct.
 
 ## 5. Connect the office to Hermes
 
@@ -100,8 +149,10 @@ Docker Manager → project → **Options**: Restart / Update (edit YAML, re-crea
   rejected as an invalid name. `.env.example` is therefore kept comment-free; the prose lives
   in [`ENVIRONMENT.md`](../../ENVIRONMENT.md).
 - The API takes the compose as a URL, a GitHub repository URL, or raw YAML, and `environment`
-  as one `KEY=value` string capped at **8 192 characters**. That cap is on the environment
-  string, not on the compose file.
+  as one `KEY=value` string. **Both** `environment` and raw-YAML `content` are capped at
+  **8 192 characters** — a 8 654-character compose was rejected with `The content field must
+not be greater than 8192 characters` (2026-09-17). Keep long explanations here, not in the
+  compose; `src/lib/hostinger-compose.test.js` enforces the cap.
 - `build:` is used by Hostinger's own template repo, so it is presumably supported. This
   compose does not use it — a published image is faster to deploy and easier to pin.
 

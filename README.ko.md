@@ -8,7 +8,7 @@ English README: [README.md](README.md)
 
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
-> ⚠️ **Hostinger의 Traefik 프로젝트를 먼저 배포하세요.** 도커 매니저 화면의 _"Traefik으로 Docker 프로젝트를 위한 HTTPS 활성화"_ 배너에 버튼이 있습니다. 이 compose는 Traefik이 만드는 `traefik-proxy` 네트워크에 붙기 때문에, 없으면 배포가 `created` 에서 멈추고 로그에는 _"Docker project not found"_ 만 남습니다.
+> ⚠️ **Hostinger의 Traefik 프로젝트도 배포하세요.** 도커 매니저 화면의 _"Traefik으로 Docker 프로젝트를 위한 HTTPS 활성화"_ 배너에 버튼이 있고, 오피스의 HTTPS 주소는 Traefik이 만들어 줍니다. Hostinger에서 볼 수 있는 Traefik 두 가지 형태(호스트 모드, `traefik-proxy` 네트워크 방식) 모두 동작합니다. DeskRPG를 먼저 깔았다면 Traefik 설치 후 DeskRPG 프로젝트에서 **Update** 를 한 번 누르세요.
 
 VPS가 아직 없다면 [여기서 받으세요](https://hostinger.com/DANTE-HERMES) (제휴 링크입니다 — 추가 비용 없이 이 프로젝트를 후원하게 됩니다). 받은 뒤 위 버튼을 누르면 됩니다.
 
