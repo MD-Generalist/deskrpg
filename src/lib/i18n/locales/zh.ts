@@ -1882,6 +1882,7 @@ const zh: Record<string, string> = {
   "gateways.statusUnknown": "需要检查",
   "gateways.statusUntested": "尚未测试",
   "gateways.createTitle": "注册网关",
+  "gateways.openDashboard": "打开 Hermes 仪表板",
   "gateways.editTitle": "编辑网关",
   "gateways.createHelp": "注册一个由你拥有的 Hermes 网关，然后添加要使用的配置文件。",
   "gateways.editHelp": "更新网关信息，或再次确认连接状态。",

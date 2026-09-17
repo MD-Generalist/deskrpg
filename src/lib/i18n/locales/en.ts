@@ -1920,6 +1920,7 @@ const en: Record<string, string> = {
   "gateways.statusUnknown": "Needs review",
   "gateways.statusUntested": "Not tested yet",
   "gateways.createTitle": "Register gateway",
+  "gateways.openDashboard": "Open Hermes dashboard",
   "gateways.editTitle": "Edit gateway",
   "gateways.createHelp":
     "Register a Hermes gateway that you own, then add the profiles you want to use.",

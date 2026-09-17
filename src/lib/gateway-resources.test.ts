@@ -109,3 +109,65 @@ describe("listAccessibleGatewayResources — 플러그인 캐시 컬럼 (최종 
     assert.equal(rows[0].isOwner, false);
   });
 });
+
+describe("listAccessibleGatewayResources — Hermes 대시보드 주소", () => {
+  const info = (dashboardUrl: string | null) =>
+    JSON.stringify({
+      plugin: "deskrpg",
+      version: "0.7.1",
+      capabilities: ["kanban", "cron", "events"],
+      timezone: "Asia/Seoul",
+      kanban: { dispatcher_present: true, attachments: true },
+      dashboard_url: dashboardUrl,
+    });
+
+  test("소유자에게는 캐시된 플러그인 정보의 대시보드 주소를 내려준다", async () => {
+    const owner = await seedUser("dash-owner");
+    const { db, gatewayResources } = await loadDb();
+    await db.insert(gatewayResources).values({
+      ownerUserId: owner.id,
+      displayName: "Dashboard Gateway",
+      baseUrl: "http://hermes:8642",
+      tokenEncrypted: encryptGatewayToken("gateway-key-dash-000001"),
+      pluginStatus: "plugin_ready",
+      pluginInfoJson: info("https://deskrpg-hermes.srv1.hstgr.cloud"),
+    });
+    const rows = await listAccessibleGatewayResources(owner.id);
+    assert.equal(rows[0].dashboardUrl, "https://deskrpg-hermes.srv1.hstgr.cloud");
+  });
+
+  test("캐시가 없거나 주소가 없으면 null", async () => {
+    const owner = await seedUser("dash-none");
+    const { db, gatewayResources } = await loadDb();
+    await db.insert(gatewayResources).values({
+      ownerUserId: owner.id,
+      displayName: "No Dashboard",
+      baseUrl: "http://gw-nodash.test",
+      tokenEncrypted: encryptGatewayToken("gateway-key-dash-000002"),
+    });
+    const rows = await listAccessibleGatewayResources(owner.id);
+    assert.equal(rows[0].dashboardUrl, null);
+  });
+
+  test("공유받은 사용자에게는 대시보드 주소를 내려주지 않는다 — Hermes 전체를 다루는 관리 화면이다", async () => {
+    const owner = await seedUser("dash-owner2");
+    const sharedUser = await seedUser("dash-shared");
+    const { db, gatewayResources, gatewayShares } = await loadDb();
+    const [gateway] = await db
+      .insert(gatewayResources)
+      .values({
+        ownerUserId: owner.id,
+        displayName: "Shared Dashboard Gateway",
+        baseUrl: "http://gw-shared-dash.test",
+        tokenEncrypted: encryptGatewayToken("gateway-key-dash-000003"),
+        pluginStatus: "plugin_ready",
+        pluginInfoJson: info("https://deskrpg-hermes.srv2.hstgr.cloud"),
+      })
+      .returning();
+    await db
+      .insert(gatewayShares)
+      .values({ gatewayId: gateway.id, userId: sharedUser.id, role: "use" });
+    const rows = await listAccessibleGatewayResources(sharedUser.id);
+    assert.equal(rows[0].dashboardUrl, null);
+  });
+});

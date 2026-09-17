@@ -228,6 +228,7 @@ describe("parsePluginInfo", () => {
       capabilities: ["kanban", "cron", "events"],
       timezone: "Asia/Seoul",
       kanban: { dispatcher_present: true, attachments: false },
+      dashboard_url: null,
     });
   });
 
@@ -237,6 +238,26 @@ describe("parsePluginInfo", () => {
     assert.deepEqual(got.capabilities, []);
     assert.equal(got.timezone, null);
     assert.deepEqual(got.kanban, { dispatcher_present: false, attachments: false });
+  });
+
+  it("0.7.1 dashboard_url 은 http(s) 주소만 받는다 — 화면에서 링크로 쓰이므로 javascript: 같은 값은 버린다", () => {
+    const base = { plugin: "deskrpg", version: "0.7.1" };
+    assert.equal(
+      parsePluginInfo({ ...base, dashboard_url: "https://deskrpg-hermes.srv1.hstgr.cloud" })
+        ?.dashboard_url,
+      "https://deskrpg-hermes.srv1.hstgr.cloud",
+    );
+    assert.equal(
+      parsePluginInfo({ ...base, dashboard_url: "http://10.0.0.5:9119" })?.dashboard_url,
+      "http://10.0.0.5:9119",
+    );
+    assert.equal(
+      parsePluginInfo({ ...base, dashboard_url: "javascript:alert(1)" })?.dashboard_url,
+      null,
+    );
+    assert.equal(parsePluginInfo({ ...base, dashboard_url: "not a url" })?.dashboard_url, null);
+    assert.equal(parsePluginInfo({ ...base, dashboard_url: null })?.dashboard_url, null);
+    assert.equal(parsePluginInfo(base)?.dashboard_url, null);
   });
 
   it("우리 플러그인이 아니거나 version 이 없으면 null", () => {

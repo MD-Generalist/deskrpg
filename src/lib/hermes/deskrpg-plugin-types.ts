@@ -27,6 +27,11 @@ export type PluginInfo = {
   capabilities: string[];
   timezone: string | null;
   kanban: { dispatcher_present: boolean; attachments: boolean };
+  /**
+   * 0.7.1 — Hermes 대시보드 공개 주소. 대시보드가 꺼졌거나 주소가 없으면 null.
+   * 파서가 http(s) 만 남긴다. 구버전 플러그인·기존 캐시에는 키가 없어 선택으로 둔다.
+   */
+  dashboard_url?: string | null;
 };
 
 // ---------------------------------------------------------------------------

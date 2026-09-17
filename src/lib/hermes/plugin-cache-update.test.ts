@@ -82,10 +82,12 @@ describe("plugin_info_json 직렬화", () => {
     const { buildPluginInfoCacheUpdate, restorePluginInfo } = await import("./plugin-cache-update");
     const info = {
       plugin: "deskrpg" as const,
-      version: "0.6.0",
+      version: "0.7.1",
       capabilities: ["kanban", "cron", "events"],
       timezone: "Asia/Seoul",
       kanban: { dispatcher_present: true, attachments: false },
+      // 게이트웨이 목록이 이 캐시에서 대시보드 주소를 꺼낸다 — 왕복에서 빠지면 버튼이 사라진다.
+      dashboard_url: "https://deskrpg-hermes.srv1.hstgr.cloud",
     };
     const payload = buildPluginInfoCacheUpdate(info);
     assert.equal(typeof payload.pluginInfoJson, "string");

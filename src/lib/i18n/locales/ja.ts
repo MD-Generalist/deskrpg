@@ -1927,6 +1927,7 @@ const ja: Record<string, string> = {
   "gateways.statusUnknown": "確認が必要",
   "gateways.statusUntested": "未テスト",
   "gateways.createTitle": "ゲートウェイ登録",
+  "gateways.openDashboard": "Hermes ダッシュボードを開く",
   "gateways.editTitle": "ゲートウェイ編集",
   "gateways.createHelp":
     "自分の Hermes ゲートウェイを登録します。登録後、使用するプロファイルを追加してください。",

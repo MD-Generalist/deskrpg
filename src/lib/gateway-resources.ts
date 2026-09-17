@@ -18,6 +18,7 @@ import {
   invalidateGatewayRuntimeState,
   setGatewayRuntimeState,
 } from "@/lib/gateway-runtime-cache";
+import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
 
 type GatewayShareRow = typeof gatewayShares.$inferSelect;
 
@@ -220,6 +221,8 @@ export async function listAccessibleGatewayResources(userId: string) {
       pluginStatus: resource.pluginStatus,
       pluginVersion: resource.pluginVersion,
       pluginCheckedAt: resource.pluginCheckedAt,
+      // Hermes 대시보드는 게이트웨이 전체를 다루는 관리 화면이라 소유자에게만 알린다.
+      dashboardUrl: restorePluginInfo(resource.pluginInfoJson)?.dashboard_url ?? null,
       canEditCredentials: true,
       shareRole: null as string | null,
       isOwner: true,
@@ -237,6 +240,7 @@ export async function listAccessibleGatewayResources(userId: string) {
         pluginStatus: resource.pluginStatus,
         pluginVersion: resource.pluginVersion,
         pluginCheckedAt: resource.pluginCheckedAt,
+        dashboardUrl: null as string | null,
         canEditCredentials: false,
         shareRole: share?.role ?? null,
         isOwner: false,

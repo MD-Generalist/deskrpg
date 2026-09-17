@@ -138,6 +138,7 @@ export async function startFakePluginServer(
     capabilities: ["kanban", "cron", "events", "swarm"],
     timezone: "Asia/Seoul",
     kanban: { dispatcher_present: true, attachments: true },
+    dashboard_url: null,
     ...options.info,
   };
 

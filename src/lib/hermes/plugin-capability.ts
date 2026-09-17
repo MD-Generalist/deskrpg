@@ -102,7 +102,19 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
       dispatcher_present: kanbanRecord.dispatcher_present === true,
       attachments: kanbanRecord.attachments === true,
     },
+    dashboard_url: httpUrlOrNull(record.dashboard_url),
   };
+}
+
+/** 링크(href)로 쓰이는 값이다 — `javascript:` 같은 스킴이 화면에 닿지 않게 http(s) 만 통과시킨다. */
+function httpUrlOrNull(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

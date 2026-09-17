@@ -29,6 +29,8 @@ type GatewayRow = {
   lastValidatedAt?: string | null;
   lastValidationStatus?: string | null;
   lastValidationError?: string | null;
+  /** Hermes 대시보드 공개 주소 — 플러그인 0.7.1 이 알려 주고, 소유자에게만 내려온다. */
+  dashboardUrl?: string | null;
 };
 
 type GatewayShare = {
@@ -595,16 +597,28 @@ function GatewayManagementPageInner() {
                     </p>
                   </div>
                   {selectedGateway && (
-                    <button
-                      type="button"
-                      onClick={() => void handleTest(selectedGateway.id)}
-                      disabled={testingGatewayId === selectedGateway.id}
-                      className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80 disabled:opacity-60"
-                    >
-                      {testingGatewayId === selectedGateway.id
-                        ? t("gateway.testing")
-                        : t("gateway.testConnection")}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedGateway.isOwner && selectedGateway.dashboardUrl && (
+                        <a
+                          href={selectedGateway.dashboardUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+                        >
+                          {t("gateways.openDashboard")} ↗
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleTest(selectedGateway.id)}
+                        disabled={testingGatewayId === selectedGateway.id}
+                        className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80 disabled:opacity-60"
+                      >
+                        {testingGatewayId === selectedGateway.id
+                          ? t("gateway.testing")
+                          : t("gateway.testConnection")}
+                      </button>
+                    </div>
                   )}
                 </div>
 

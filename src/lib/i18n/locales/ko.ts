@@ -1915,6 +1915,7 @@ const ko: Record<string, string> = {
   "gateways.statusUnknown": "상태 확인 필요",
   "gateways.statusUntested": "아직 테스트하지 않음",
   "gateways.createTitle": "게이트웨이 등록",
+  "gateways.openDashboard": "Hermes 대시보드 열기",
   "gateways.editTitle": "게이트웨이 수정",
   "gateways.createHelp":
     "나만의 Hermes 게이트웨이를 등록합니다. 등록한 뒤 사용할 프로필을 추가하세요.",
