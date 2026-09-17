@@ -1,90 +1,37 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { runInNewContext } from "node:vm";
-import ts from "typescript";
-import { clearSegment, type NavigationPoint, type Walkable } from "./navigation";
+import { clearSegment, type NavigationPoint } from "./navigation";
 import { findTrafficPath, TrafficCoordinator, clearActors } from "./traffic";
-import { findTaggedDestinationPath, readAmbientZones } from "./ambient-zones";
+import { readAmbientZones } from "./ambient-zones";
 import { buildOfficeEnvironment } from "./three/office-environments";
 import { tiledSnapshot } from "./three/tiled-preview";
+import { NpcController } from "./simulation/npc-controller";
+import { OfficeSimulation } from "./simulation/office-simulation";
 
-type NpcPathfinder = (
-  sx: number,
-  sy: number,
-  ex: number,
-  ey: number,
-  valid: Walkable,
-) => NavigationPoint[] | null;
-
-// Execute the real controller without starting a WebGL/Phaser scene in node.
-const source = readFileSync(new URL("./scenes/GameScene.ts", import.meta.url), "utf8");
-const controller = source.slice(
-  source.indexOf("class NpcSprite {"),
-  source.indexOf("// GameScene\n"),
-);
-const code = ts.transpileModule(`${controller}\nglobalThis.Controller = NpcSprite;`, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022 },
-}).outputText;
-type RuntimeNpc = {
-  pixelX: number;
-  pixelY: number;
-  moveState: string;
-  actuallyWalking: boolean;
-  currentPath: NavigationPoint[] | null;
-  destinationTag: string | null;
-  destinationTarget: NavigationPoint | null;
-  purposeAccessOrigin: NavigationPoint | null;
-  updateMovement(
-    delta: number,
-    playerX: number,
-    playerY: number,
-    plan: NpcPathfinder,
-    valid: Walkable,
-    step?: (p: NavigationPoint, goal: NavigationPoint, amount: number) => NavigationPoint,
-  ): string;
-};
-const scope: Record<string, unknown> = {
-  Phaser: { GameObjects: { Sprite: class {} } },
-  TILE_SIZE: 32,
-  clearSegment,
-  clearActors,
-  findTrafficPath,
-  findTaggedDestinationPath,
-  DIR_LEFT: 1,
-  DIR_RIGHT: 2,
-  DIR_UP: 3,
-  DIR_DOWN: 0,
-};
-runInNewContext(code, scope);
-function actor(state: string) {
-  const npc = Object.create(
-    (scope.Controller as { prototype: RuntimeNpc }).prototype,
-  ) as RuntimeNpc;
+// 실제 컨트롤러를 그대로 돌린다 — 화면이 없으므로 node 에서 바로 import 된다.
+function actor(state: NpcController["moveState"]) {
+  const npc = new NpcController({
+    id: "npc",
+    name: "NPC",
+    positionX: 7,
+    positionY: 2,
+    direction: "down",
+  });
   Object.assign(npc, {
     pixelX: 48,
     pixelY: 80,
-    homeCol: 7,
-    homeRow: 2,
     currentPath: [
       { x: 3, y: 2 },
       { x: 7, y: 2 },
     ],
     pathIndex: 0,
     moveState: state,
-    trafficBlockedMs: 0,
-    pathRecalcTimer: 0,
-    stuckFrames: 0,
-    lastDist: Infinity,
     actuallyWalking: true,
-    moveSpeed: 150,
-    sprite: { setPosition() {} },
-    nameLabel: { setPosition() {} },
   });
   return npc;
 }
 const walkable = (x: number, y: number) => x >= 0 && x <= 8 && y >= 0 && y <= 4;
-for (const state of ["strolling", "returning", "moving-to-player"]) {
+for (const state of ["strolling", "returning", "moving-to-player"] as const) {
   test(`${state}: stationary obstruction replans to the same goal and stops walking while waiting`, () => {
     const npc = actor(state);
     let replans = 0;
@@ -154,15 +101,19 @@ test("stroll really passes a stationary player and reaches the original destinat
   assert.ok(Math.hypot(npc.pixelX / 32 - 0.5 - 7, npc.pixelY / 32 - 0.5 - 2) < 0.1);
 });
 
-const pathfinderSource = source.slice(
-  source.indexOf("  private npcPathfinder("),
-  source.indexOf("  private createNpcWalkValidator("),
-);
-const pathfinderCode = ts.transpileModule(
-  `class PathController { ${pathfinderSource} }\nglobalThis.PathController = PathController;`,
-  { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
-).outputText;
-runInNewContext(pathfinderCode, scope);
+test("local movement keeps the presented position in step with the collision position", () => {
+  const npc = actor("strolling");
+  const before = npc.pixelX;
+  npc.updateMovement(
+    50,
+    1000,
+    1000,
+    (sx, sy, ex, ey, valid) => findTrafficPath(sx, sy, ex, ey, valid, []),
+    walkable,
+  );
+  assert.notEqual(npc.pixelX, before, "the stroll advances");
+  assert.deepEqual([npc.viewX, npc.viewY], [npc.pixelX, npc.pixelY]);
+});
 
 test("tagged retry starts at the current tile and keeps the fixed purpose destination", () => {
   const map = buildOfficeEnvironment("agency");
@@ -171,14 +122,11 @@ test("tagged retry starts at the current tile and keeps the fixed purpose destin
   const blocked = new Set(snapshot.blocked);
   const walkable = (x: number, y: number) =>
     x >= 1 && x < snapshot.cols - 1 && y >= 1 && y < snapshot.rows && !blocked.has(`${x},${y}`);
-  const runtime = Object.assign(
-    new (
-      scope.PathController as new () => {
-        npcPathfinder(npc: RuntimeNpc): NpcPathfinder;
-      }
-    )(),
-    { ambientZones: zones, trafficActors: () => [] },
-  );
+  // 실제 시뮬레이션의 경로 계획기를 부분 런타임에 묶어 쓴다(교통 액터 없음).
+  const runtime = Object.assign(Object.create(OfficeSimulation.prototype), {
+    ambientZones: zones,
+    trafficActors: () => [],
+  }) as OfficeSimulation;
   const npc = actor("moving-to-player");
   Object.assign(npc, {
     pixelX: (11 + 0.5) * 32,
@@ -189,7 +137,7 @@ test("tagged retry starts at the current tile and keeps the fixed purpose destin
     destinationTarget: { x: 5, y: 8 },
     purposeAccessOrigin: { x: 23, y: 23 },
   });
-  const plan = runtime.npcPathfinder(npc);
+  const plan = runtime["npcPathfinder"](npc);
 
   npc.updateMovement(100, 1000, 1000, plan, walkable);
   assert.deepEqual(JSON.parse(JSON.stringify(npc.currentPath?.[0])), { x: 11, y: 15 });
