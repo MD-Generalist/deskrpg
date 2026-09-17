@@ -3,8 +3,6 @@ import { buildBootstrapActions, resolveBootstrapCompletion } from "@/lib/rbac/bo
 import { hashPassword } from "@/lib/password";
 import { signJWT, isSecureCookie } from "@/lib/jwt";
 import { isAccountPasswordValid } from "@/lib/security-policy";
-import { createStarterProjectForUser } from "@/lib/builtin-projects";
-import { seedBuiltinTemplates } from "@/lib/builtin-templates";
 import { NextRequest, NextResponse } from "next/server";
 import { count, eq, or } from "drizzle-orm";
 
@@ -149,18 +147,6 @@ export async function POST(req: NextRequest) {
         })
         .onConflictDoNothing();
     }
-  }
-
-  try {
-    await seedBuiltinTemplates();
-  } catch (error) {
-    console.warn("Failed to seed builtin templates:", error);
-  }
-
-  try {
-    await createStarterProjectForUser(createdUser.id);
-  } catch (error) {
-    console.warn("Failed to create starter project:", error);
   }
 
   const user = {
