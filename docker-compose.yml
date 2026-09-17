@@ -5,7 +5,7 @@
 # - Stay under 8192 characters: the Docker Manager API rejects longer compose content.
 # - `.env.example` must stay comment-free: Hostinger copies it verbatim into the
 #   Environment box, where `# FOO` is an invalid variable name.
-# - Deploy this, then Traefik from the banner hPanel shows, then Update. Both shapes work: host mode (no network)
+# - Deploy this, then Traefik from the hPanel banner, then set TRAEFIK_HOST. Both shapes work: host mode (no network)
 #   and bridge mode on a `traefik-proxy` network. Do NOT declare `traefik-proxy` as a
 #   network here — `external: true` breaks host mode, a Compose-created one breaks
 #   bridge mode. `traefik-connect` joins it at runtime instead.
@@ -18,7 +18,7 @@
 #   OPENROUTER_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY — optional; Hermes boots without
 #                     them. An OpenAI key alone is ignored until `model.provider=openai-api`.
 #                     ChatGPT login (`hermes auth add openai-codex`) needs none.
-#   TRAEFIK_HOST      srvNNNNNN.hstgr.cloud — the app answers on deskrpg.<TRAEFIK_HOST>
+#   TRAEFIK_HOST      REQUIRED, not injected: srvNNNNNN.hstgr.cloud → deskrpg.<TRAEFIK_HOST>
 #   DESKRPG_IMAGE     override the image tag (default pinned below)
 #
 # Local PostgreSQL stack: docker/docker-compose.dev.yml. Hermes elsewhere? Delete the

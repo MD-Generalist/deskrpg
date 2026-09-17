@@ -35,7 +35,7 @@
 | 변수            | 기본값                      | 설명                                                                                                                                                                      |
 | --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DESKRPG_IMAGE` | 루트 compose 에 고정된 태그 | 이미지 태그 교체. 공개 이미지는 GHCR `ghcr.io/dandacompany/deskrpg` 다. Docker Hub `dandacompany/deskrpg` 는 `2026.9.19` 에서 멈춘 레거시이며 새 릴리스가 올라가지 않는다 |
-| `TRAEFIK_HOST`  | —                           | Hostinger 가 Traefik 프로젝트를 감지하면 자동 주입한다. 주소가 안 열리면 `srvNNNNNN.hstgr.cloud` 를 직접 넣는다                                                           |
+| `TRAEFIK_HOST`  | —                           | **필수(Hostinger).** 자동 주입되지 않는다(2026-09-17 실측: 없으면 규칙이 `deskrpg.localhost` 가 되어 404). hPanel 경로의 `srvNNNNNN.hstgr.cloud` 를 넣는다                |
 | `COOKIE_SECURE` | `true`                      | HTTPS 배포는 `true`, HTTP·localhost 는 `false`                                                                                                                            |
 
 ## 선택 — 가입 제한

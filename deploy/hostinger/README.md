@@ -6,8 +6,8 @@ One VPS, two containers: **DeskRPG** (the virtual office) and **Hermes Agent** (
 
 Traefik gives the office its HTTPS address, but hPanel shows the _"Enable HTTPS for Docker projects"_ banner with its **Deploy Traefik** button only **once a project exists** (seen 2026-09-17). So deploy DeskRPG first (step 2), then:
 
-1. Press **Deploy Traefik** on the banner under the project list.
-2. Press **Update** on the DeskRPG project once, so `traefik-connect` runs again against the new Traefik.
+1. Press **Deploy Traefik** on the banner under the project list (it asks only for `ACME_EMAIL`).
+2. DeskRPG project → **Manage** → Environment → add `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` → **Save and deploy**. This is required; see step 3. The redeploy also re-runs `traefik-connect` against the new Traefik.
 
 After the DeskRPG deploy the project shows three containers: `deskrpg` and `hermes` running, and `traefik-connect` **exited** — that one-shot is supposed to be stopped. A VPS that already has Traefik shows no banner; just press Update.
 
@@ -61,7 +61,7 @@ After Traefik (step 1) and Deploy (step 2), the office is reachable at:
 https://deskrpg.<srvNNNNNN.hstgr.cloud>
 ```
 
-`TRAEFIK_HOST` is injected by Hostinger when the Traefik project exists. If the URL does not resolve, add `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` (from the Traefik project's page) to the environment box and press **Update**.
+**`TRAEFIK_HOST` is not injected — set it yourself.** Measured 2026-09-17: with Traefik running and the variable empty, the routing rule becomes `deskrpg.localhost`, Traefik answers 404 and Docker Manager's **Open** link points at `deskrpg.localhost`. Project → **Manage** → Environment → **+ Environment** → `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` (the name in the hPanel breadcrumb) → **Save and deploy**; Let's Encrypt then issues the certificate.
 
 Custom domain: point an `A` record at the VPS IP and change the `Host(...)` rules to your domain.
 
