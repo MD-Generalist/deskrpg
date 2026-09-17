@@ -158,7 +158,7 @@ export function sofaSeats(object: MapObject): Seat[] {
  * `furnitureSeats` 는 의자마다 `resolveSeat` 를 부르고, 그 안에서 `adjacentTable` 이 모든
  * 오브젝트를 훑은 뒤 같은 테이블의 이웃 의자를 찾느라 `adjacentTable` 을 또 의자 수만큼 부른다.
  * 결과는 맵이 바뀌기 전까지 변하지 않는데, `isSeatAnchor` 가 타일 하나를 물어볼 때마다 이 전부를
- * 다시 계산했다. 캐릭터가 걷는 동안 그 질문이 매 프레임 나가면서(GameScene 의 도착 판정)
+ * 다시 계산했다. 캐릭터가 걷는 동안 그 질문이 매 프레임 나가면서(시뮬레이션의 도착 판정)
  * 실측 CPU 의 약 66% 를 여기서 썼고 프레임 중앙값이 8.7ms → 41.6ms 가 됐다.
  *
  * 캐시 키는 배열의 정체성과 길이다. 이 코드베이스에서 맵 오브젝트 배열은 통째로 교체되거나

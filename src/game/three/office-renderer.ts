@@ -50,7 +50,6 @@ import {
 import { resolveOfficeLook } from "./office-looks";
 import { isOfficeEnvironmentId } from "./office-environment-theme";
 import * as T from "three";
-import { spritePalette } from "./appearance";
 import { addOfficeDetails } from "./office-details";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createActor, round, sphere, cylinder } from "./characters";
@@ -104,7 +103,6 @@ type RenderedActor = {
     nameWidth: number;
     bubbleHeight: number;
   };
-  texture?: CanvasImageSource;
   lookId?: string;
   labelOcclusion?: { time: number; hidden: boolean };
 };
@@ -630,8 +628,7 @@ export class OfficeRenderer {
       ),
       this.camera,
     );
-    const editing = this.bridge.editor();
-    if (this.board && !editing.enabled && !editing.placement && !editing.spawn) {
+    if (this.board && !editor.placement && !editor.spawn) {
       const boardHit = this.ray.intersectObject(this.board, true)[0];
       const blocker = this.ray.intersectObjects(this.world.children, true).find((h) => {
         if (!(h.object instanceof T.Mesh)) return false;
@@ -691,14 +688,13 @@ export class OfficeRenderer {
     if (
       !actorId &&
       (kind === "move" || (kind === "down" && e.button === 0)) &&
-      !editor.enabled &&
       !editor.placement &&
       !editor.spawn
     ) {
       const picked = pickFurnitureSeat(this.ray, this.world.children);
       const furnitureHit = picked?.hit;
       const furniture = picked?.owner;
-      if (!editing.enabled && !editing.placement && !editing.spawn) hoverOwner = furniture ?? null;
+      hoverOwner = furniture ?? null;
       if (furniture?.userData.seat || furniture?.userData.seats) {
         const candidates: Seat[] = furniture.userData.seats ?? [furniture.userData.seat];
         const point = furnitureHit!.point;
@@ -734,8 +730,7 @@ export class OfficeRenderer {
     const col = Math.floor(target.x),
       row = Math.floor(target.z);
     this.cursor.position.set(col + 0.5, 0.06, row + 0.5);
-    const edit = editor;
-    this.cursor.visible = edit.placement || edit.spawn || edit.enabled;
+    this.cursor.visible = editor.placement || editor.spawn;
     (this.cursor.material as T.MeshBasicMaterial).color.set(
       this.bridge.walkable(col, row) ? "#578467" : "#bd6756",
     );
@@ -761,7 +756,7 @@ export class OfficeRenderer {
     return this.renderer.domElement.toDataURL("image/webp", 0.9);
   }
   private buildMap(map: MapSnapshot) {
-    // mapKey에는 늦게 로드된 액터 텍스처 수도 포함된다. 자산 갱신은 지도 변경과 구분한다.
+    // 회의 카메라를 유지할지 판단하려고 지도 구조만 따로 지문으로 만든다.
     const structure = JSON.stringify([
       map.cols,
       map.rows,
@@ -867,27 +862,8 @@ export class OfficeRenderer {
       floor.receiveShadow = true;
       this.world.add(floor);
     }
-    if (map.artwork && !isOfficeEnvironmentId(map.environment)) {
-      const texture = new T.CanvasTexture(map.artwork);
-      texture.colorSpace = T.SRGBColorSpace;
-      texture.minFilter = T.LinearMipmapLinearFilter;
-      texture.magFilter = T.LinearFilter;
-      const art = new T.Mesh(
-        new T.PlaneGeometry(map.cols, map.rows),
-        new T.MeshStandardMaterial({
-          map: texture,
-          bumpMap: floorGrain,
-          bumpScale: 0.018,
-          transparent: true,
-          roughness: 1,
-          depthWrite: false,
-        }),
-      );
-      art.rotation.x = -Math.PI / 2;
-      art.position.set(map.cols / 2, -0.02, map.rows / 2);
-      art.receiveShadow = true;
-      this.world.add(art);
-    } else if (!isOfficeEnvironmentId(map.environment)) {
+    // 환경 프리셋이 아닌 맵은 아트워크 없이 기하(바닥·벽·오브젝트)만으로 그린다.
+    if (!isOfficeEnvironmentId(map.environment)) {
       const tiles = new T.InstancedMesh(
         new T.BoxGeometry(0.98, 0.015, 0.98),
         new T.MeshStandardMaterial({ roughness: 0.9 }),
@@ -992,7 +968,7 @@ export class OfficeRenderer {
       );
     }
     // Known legacy walls become cutaway architectural walls. Custom collision stays semantic,
-    // never guessed to be a wall: authored artwork remains visible on its exact tile.
+    // never guessed to be a wall.
     if (!map.tiled) {
       const architecture = map.floor.map((row, y) =>
         row.map((tile, x) =>
@@ -1391,15 +1367,9 @@ export class OfficeRenderer {
         : ["#b98064", "#7c91ab", "#9b87a2", "#a59963"][
             Array.from(actor.id).reduce((n, c) => n + c.charCodeAt(0), 0) % 4
           ];
-    const palette = spritePalette(actor.texture);
+    // 색은 룩 정의에서만 온다. 룩이 없는 액터는 createActor 의 기본 팔레트를 쓴다.
     const look = resolveOfficeLook(actor.appearance);
-    const model = createActor(
-      actor.id,
-      actor.texture ? palette.shirt : color,
-      this.actors.size % 4,
-      palette,
-      look,
-    );
+    const model = createActor(actor.id, color, this.actors.size % 4, undefined, look);
     const label = document.createElement("button"),
       name = document.createElement("span"),
       bubble = document.createElement("span");
@@ -1431,8 +1401,7 @@ export class OfficeRenderer {
       label,
       name,
       bubble,
-      texture: actor.texture,
-      lookId: resolveOfficeLook(actor.appearance)?.id,
+      lookId: look?.id,
     };
   }
   private tick = (time: number) => {
@@ -1516,11 +1485,7 @@ export class OfficeRenderer {
       const speechWidth = bubbleWidthFor(viewportWidth);
       for (const actor of this.lastActors) {
         let rendered = this.actors.get(actor.id);
-        if (
-          rendered &&
-          (rendered.texture !== actor.texture ||
-            rendered.lookId !== resolveOfficeLook(actor.appearance)?.id)
-        ) {
+        if (rendered && rendered.lookId !== resolveOfficeLook(actor.appearance)?.id) {
           this.scene.remove(rendered.model.root);
           disposeTree(rendered.model.root);
           rendered.label.remove();

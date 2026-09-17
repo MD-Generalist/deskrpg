@@ -24,7 +24,7 @@ export async function enterFirstChannel(page: Page): Promise<void> {
   await page.locator("h3").first().click();
   await page.waitForURL(/\/game\?/);
 
-  // Phaser 캔버스가 붙고 게임 루프가 실제로 도는 것까지 기다린다.
+  // 3D 캔버스가 붙고 시뮬레이션 틱 루프가 실제로 도는 것까지 기다린다.
   await page.locator("canvas").first().waitFor({ state: "visible" });
   await waitForGameLoop(page);
 }
@@ -46,7 +46,7 @@ export async function login(page: Page): Promise<void> {
  * requestAnimationFrame 이 실제로 도는지 확인한다.
  *
  * headed 로 띄우면 창이 가려지는 순간 Chrome 이 rAF 를 초당 1프레임으로 스로틀하고,
- * Phaser 루프가 멈춰 캐릭터가 영영 이동하지 않는다. document.visibilityState 는 그때도
+ * 시뮬레이션 틱 루프가 멈춰 캐릭터가 영영 이동하지 않는다. document.visibilityState 는 그때도
  * "visible" 이라 코드로는 안 보인다 — 그래서 상태 플래그가 아니라 프레임을 직접 센다.
  */
 export async function waitForGameLoop(page: Page, minFps = 10): Promise<number> {

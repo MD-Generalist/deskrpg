@@ -7,7 +7,7 @@
  *
  * 씬의 리스너가 `data.npcId` 만 보던 동안 새 모양은 **조용히 무시**됐다. 퇴근시킨
  * NPC 가 다른 사람 화면에 그대로 서 있었고, 아무 오류도 나지 않았다. 그래서 판단을
- * Phaser 밖 순수 함수로 빼 둔다 — 씬은 node 에서 import 할 수 없어 테스트가 붙지 않는다.
+ * 시뮬레이션 밖 순수 함수로 빼 둔다 — 소켓 없이 node 에서 판단만 검사할 수 있다.
  */
 
 export type LegacyNpcUpdatedPayload = {
