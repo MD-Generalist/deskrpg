@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.917.4` — Open the Hermes dashboard straight from **My Gateways** (owners only), and the Hostinger compose now installs the DeskRPG plugin and serves the dashboard over HTTPS on its own.
+- Version: `v2026.917.5` — The hire wizard now sends each new employee to its own Hermes dashboard sign-in (Hermes signs in per profile), and the model list shows only what that employee can actually use.
 
 ## What You Can Do
 

@@ -18,7 +18,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.917.4` — **내 게이트웨이** 에서 Hermes 대시보드를 바로 엽니다(소유자만). Hostinger compose 가 DeskRPG 플러그인 설치와 대시보드 HTTPS 연결을 스스로 합니다.
+- 버전: `v2026.917.5` — 직원 채용 마법사가 **그 직원의** Hermes 대시보드 로그인으로 바로 안내합니다(Hermes 는 직원마다 로그인). 모델 목록도 그 직원이 실제로 쓸 수 있는 것만 인증됨으로 보입니다.
 
 ## 무엇을 할 수 있나요
 
