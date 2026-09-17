@@ -106,20 +106,13 @@ docker compose exec hermes hermes config unset model.base_url   # otherwise the 
 
 `docker compose exec` as root is fine: the image's `hermes` wrapper drops to the `hermes` user, so file ownership stays correct.
 
-## 5. Connect the office to Hermes
+## 4-2. Install the DeskRPG plugin — required
 
-1. Open your DeskRPG URL, create the first account (it becomes admin).
-2. Top-right menu → **My Gateways** → **New gateway** → URL `http://hermes:8642`, token = your `HERMES_API_KEY` → **Test connection**.
-3. Add profiles (each Hermes profile = one employee). With `deskrpg-hermes-plugin` installed in Hermes the list is discovered automatically; otherwise add name + key by hand.
-4. Enter a channel → Settings → **AI Connection** → attach the gateway → hire NPCs.
-
-Already running Hermes elsewhere (your laptop, another VPS)? Delete the `hermes` service from the compose and use your own API server URL in step 2. Hermes profiles you already have show up as employees — nothing to migrate.
-
-## 6. Kanban and cron (optional)
-
-Conversations work out of the box. Kanban boards, the event stream and schedules need
-[`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) inside the Hermes
-container. Docker Manager → **Access → Terminal** on the `hermes` service, or from an SSH shell:
+From the same `/docker/deskrpg` shell. DeskRPG reads the Hermes profile list, kanban, cron and
+events through [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin). Without it
+the gateway connection in step 5 is saved but stops at _"API 연결은 저장되었지만 DeskRPG 플러그인이 없어…"_ with
+no way to reach the profile list — and on a VPS the offered **Install via SSH** button is disabled
+(host setup is off), so you cannot hire employees. Install it before connecting:
 
 ```bash
 docker compose exec hermes hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
@@ -135,7 +128,18 @@ the `hermes-data` volume, so it survives Update. Verify:
 docker compose exec hermes sh -lc 'curl -s -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/deskrpg/info'
 ```
 
-Set `timezone:` in Hermes' `config.yaml` if you schedule anything — cron times are read in that zone.
+## 5. Connect the office to Hermes
+
+1. Open your DeskRPG URL, create the first account (it becomes admin).
+2. Top-right menu → **My Gateways** → **New gateway** → URL `http://hermes:8642`, token = your `HERMES_API_KEY` → **Test connection**.
+3. Open the profile list (each Hermes profile = one employee). The plugin from step 4-2 discovers it automatically.
+4. Enter a channel → Settings → **AI Connection** → attach the gateway → hire NPCs.
+
+Already running Hermes elsewhere (your laptop, another VPS)? Delete the `hermes` service from the compose and use your own API server URL in step 2. Hermes profiles you already have show up as employees — nothing to migrate.
+
+## 6. Kanban and cron
+
+With the plugin from step 4-2 in place, kanban boards, the event stream and schedules work out of the box. Set `timezone:` in Hermes' `config.yaml` if you schedule anything — cron times are read in that zone.
 
 ## 7. Day-2
 
