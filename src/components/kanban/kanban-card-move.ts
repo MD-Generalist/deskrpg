@@ -52,3 +52,13 @@ export function autoScrollKanbanBoard(handle: HTMLElement, clientX: number, edge
   const direction = clientX < bounds.left + edge ? -1 : clientX > bounds.right - edge ? 1 : 0;
   if (direction) scroller.scrollBy({ left: direction * edge, behavior: "auto" });
 }
+
+export function restoreKanbanMoveFocus(
+  handle: HTMLButtonElement | null,
+  fallback: HTMLElement | null,
+) {
+  requestAnimationFrame(() => {
+    if (handle?.isConnected) handle.focus();
+    else if (fallback?.isConnected) fallback.focus();
+  });
+}

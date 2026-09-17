@@ -19,6 +19,7 @@ import {
   autoScrollKanbanBoard,
   columnStatus,
   markMoveTarget,
+  restoreKanbanMoveFocus,
   visibleKanbanColumns,
   type KanbanMoveCancelReason,
   type KanbanMoveInteractionHandler,
@@ -65,6 +66,7 @@ export default function KanbanCard({
   const [announcement, setAnnouncement] = useState("");
   const [isMoving, setIsMoving] = useState(false);
   const pointerRef = useRef<{ id: number; x: number; y: number } | null>(null);
+  const focusFallbackRef = useRef<HTMLElement | null>(null);
 
   const announce = useCallback(
     (key: string, values?: Record<string, string>) => {
@@ -79,7 +81,8 @@ export default function KanbanCard({
     pointerRef.current = null;
     targetRef.current = null;
     clearMoveTargets();
-    if (restoreFocus) requestAnimationFrame(() => handleRef.current?.focus());
+    if (restoreFocus) restoreKanbanMoveFocus(handleRef.current, focusFallbackRef.current);
+    focusFallbackRef.current = null;
   }, []);
 
   const cancel = useCallback(
@@ -95,6 +98,7 @@ export default function KanbanCard({
   const start = useCallback(() => {
     if (moveDisabled || movingRef.current) return;
     movingRef.current = true;
+    focusFallbackRef.current = handleRef.current?.closest<HTMLElement>("[data-column]") ?? null;
     setIsMoving(true);
     targetRef.current = null;
     onMoveInteraction?.({ type: "start", taskId: task.id, source: task.status });

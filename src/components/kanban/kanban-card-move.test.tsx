@@ -8,7 +8,7 @@ import { I18nProvider } from "@/lib/i18n/context";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 
 import KanbanColumn from "./KanbanColumn";
-import type { KanbanMoveEvent } from "./kanban-card-move";
+import { restoreKanbanMoveFocus, type KanbanMoveEvent } from "./kanban-card-move";
 
 const task = { id: "task-1", title: "Write release notes", status: "todo" } as KanbanTask;
 
@@ -287,5 +287,23 @@ test("R2/R5: pointercancel cleans up without submitting", async () => {
   } finally {
     document.elementFromPoint = original;
     await f.cleanup();
+  }
+});
+
+test("R3: focus restoration falls back to the source column when the card disappears", async () => {
+  const column = document.createElement("section");
+  column.tabIndex = -1;
+  const handle = document.createElement("button");
+  column.append(handle);
+  document.body.append(column);
+  try {
+    restoreKanbanMoveFocus(handle, column);
+    handle.remove();
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    assert.equal(document.activeElement, column);
+  } finally {
+    column.remove();
   }
 });

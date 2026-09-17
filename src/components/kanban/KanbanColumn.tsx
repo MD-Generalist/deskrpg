@@ -32,6 +32,7 @@ export default function KanbanColumn({
   return (
     <section
       data-column={name}
+      tabIndex={-1}
       aria-label={t(`kanban.column.${name}`)}
       className="flex w-[220px] flex-shrink-0 flex-col rounded-lg border border-border bg-bg-deep/40"
     >
