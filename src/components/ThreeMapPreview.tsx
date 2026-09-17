@@ -1,17 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { OfficeRenderer } from "@/game/three/office-renderer";
-import { tiledSnapshot, drawTiledArtwork } from "@/game/three/tiled-preview";
-import type { TiledMap, TilesetImageInfo } from "@/lib/tiled-map";
+import { tiledSnapshot } from "@/game/three/tiled-preview";
+import type { TiledMap } from "@/lib/tiled-map";
 import { useLocale } from "@/lib/i18n";
 
-export default function ThreeMapPreview({
-  map,
-  images,
-}: {
-  map: TiledMap;
-  images: Record<number, TilesetImageInfo>;
-}) {
+export default function ThreeMapPreview({ map }: { map: TiledMap }) {
   const host = useRef<HTMLDivElement>(null),
     labels = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -28,33 +22,20 @@ export default function ThreeMapPreview({
       return;
     }
     const snapshot = tiledSnapshot(map);
-    snapshot.artwork = drawTiledArtwork(map, images);
     const blocked = new Set(snapshot.blocked);
     view.attach({
       actors: () => [],
       mapKey: () => "editor-preview",
       map: () => snapshot,
-      editor: () => ({
-        enabled: false,
-        objects: false,
-        tile: 0,
-        layer: 0,
-        objectType: "desk",
-        placement: false,
-        spawn: false,
-        owner: false,
-        tiled: true,
-      }),
+      editor: () => ({ placement: false, spawn: false, owner: false, tiled: true }),
       pointer: () => {},
-      edit: () => {},
-      save: async () => false,
       setPresentation: () => {},
       walkable: (x, y) =>
         x >= 0 && x < map.width && y >= 0 && y < map.height && !blocked.has(`${x},${y}`),
     });
     view.overview(map.width, map.height);
     return () => view.dispose();
-  }, [map, images]);
+  }, [map]);
   return (
     <div className="relative h-full w-full bg-surface-raised">
       <div ref={host} className="absolute inset-0" />

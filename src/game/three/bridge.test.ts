@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { pixelToWorld, worldToPixel, matchesNpcTarget } from "./bridge";
 import { tiledSnapshot } from "./tiled-preview";
-import type { TiledMap } from "../../components/map-editor/hooks/useMapEditor";
+import type { TiledMap } from "../../lib/tiled-map";
 
 test("saved and multiplayer pixel positions round-trip without tile quantization", () => {
   for (const [x, y] of [

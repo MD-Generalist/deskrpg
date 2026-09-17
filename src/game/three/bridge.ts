@@ -33,11 +33,6 @@ export type MapSnapshot = {
   environment?: string;
   /** Optional persisted template version used for backwards-compatible presentation. */
   environmentVersion?: number;
-  /**
-   * @deprecated 게임 화면은 아트워크를 만들지 않고 렌더러도 읽지 않는다(기하만으로 그린다).
-   * 맵 에디터 미리보기(`ThreeMapPreview`)가 아직 채워 넣어서 타입만 남겨 둔다.
-   */
-  artwork?: HTMLCanvasElement;
 };
 /** 게임 화면의 모드. 타일 편집 진입점은 없다 — NPC 배치·시작 위치 지정만 있다. */
 export type EditorSnapshot = {
@@ -46,26 +41,11 @@ export type EditorSnapshot = {
   owner: boolean;
   tiled: boolean;
 };
-/**
- * @deprecated 옛 타일 편집기 필드. 시뮬레이션은 내지 않고 렌더러도 읽지 않는다.
- * 맵 에디터 미리보기(`ThreeMapPreview`)의 브리지 리터럴이 아직 넘겨서 선택 필드로만 남긴다.
- */
-export type LegacyEditorFields = Partial<{
-  enabled: boolean;
-  objects: boolean;
-  tile: number;
-  layer: number;
-  objectType: string;
-}>;
 export interface OfficeBridge {
   actors(): ActorSnapshot[];
   mapKey(): string;
   map(): MapSnapshot;
-  editor(): EditorSnapshot & LegacyEditorFields;
-  /** @deprecated 타일 편집 저장. 게임 화면에는 없다 — `ThreeMapPreview` 호환용 선택 멤버. */
-  save?(): Promise<boolean>;
-  /** @deprecated 타일 편집 모드 전환. 게임 화면에는 없다 — `ThreeMapPreview` 호환용 선택 멤버. */
-  edit?(options: LegacyEditorFields): void;
+  editor(): EditorSnapshot;
   pointer(
     kind: "move" | "down",
     x: number,
