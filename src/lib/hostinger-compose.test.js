@@ -56,6 +56,28 @@ test("연결기는 deskrpg 와 hermes 둘 다 traefik-proxy 에 붙인다", () =
   assert.match(compose, /for service in deskrpg hermes/);
 });
 
+test(".env.example 이 Hostinger 환경 칸에 필요한 항목을 전부 미리 띄운다 — 사용자가 '+ 환경' 으로 추가할 일이 없게", () => {
+  const env = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
+  const keys = env
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.split("=")[0]);
+  // TRAEFIK_HOST 는 Hostinger 가 채워 주지 않는다(2026-09-17 실측) — 칸이 없으면 추가 절차가 생긴다.
+  // 순서는 튜토리얼 2-2 스크린샷과 같다.
+  assert.deepEqual(keys, [
+    "JWT_SECRET",
+    "HERMES_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "TRAEFIK_HOST",
+    "DESKRPG_IMAGE",
+    "HERMES_DASHBOARD_PASSWORD",
+  ]);
+  // 이미지 칸은 compose 기본값과 같은 값으로 채워 둔다 — 비어 있어도 되지만 채워져 있으면 뭘 넣을지 고민하지 않는다.
+  assert.match(env, /^DESKRPG_IMAGE=ghcr\.io\/dandacompany\/deskrpg:latest$/m);
+});
+
 test(".env.example 에 주석 줄이 없다 — Hostinger 가 그대로 복사해 `# FOO` 를 변수 이름으로 읽는다", () => {
   const env = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
   assert.deepEqual(

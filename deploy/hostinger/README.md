@@ -7,7 +7,7 @@ One VPS, two containers: **DeskRPG** (the virtual office) and **Hermes Agent** (
 Traefik gives the office its HTTPS address, but hPanel shows the _"Enable HTTPS for Docker projects"_ banner with its **Deploy Traefik** button only **once a project exists** (seen 2026-09-17). So deploy DeskRPG first (step 2), then:
 
 1. Press **Deploy Traefik** on the banner under the project list (it asks only for `ACME_EMAIL`).
-2. DeskRPG project → **Manage** → Environment → add `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` → **Save and deploy**. This is required; see step 3. The redeploy also re-runs `traefik-connect` against the new Traefik.
+2. Press **Update** on the DeskRPG project once so `traefik-connect` runs against the new Traefik (only bridge-mode Traefik needs it; host mode routes immediately). If `TRAEFIK_HOST` was left empty in step 2-1, fill it in **Manage** → Environment → **Save and deploy** instead — it is required (step 3).
 
 After the DeskRPG deploy the project shows three containers: `deskrpg` and `hermes` running, and `traefik-connect` **exited** — that one-shot is supposed to be stopped. A VPS that already has Traefik shows no banner; just press Update.
 
@@ -44,12 +44,14 @@ Project name: `deskrpg` (3–64 chars, letters/digits/`-`/`_`).
 
 ## 2-1. Before you press Deploy
 
-The **Environment** box is pre-filled from `.env.example`. Set one value:
+The **Environment** box is pre-filled from `.env.example` with every variable this compose reads, so you never need **+ Environment**. Fill two values:
 
 ```
 HERMES_API_KEY=<output of: openssl rand -hex 32>
+TRAEFIK_HOST=srvNNNNNN.hstgr.cloud   # the name in the hPanel breadcrumb: VPS › srvNNNNNN.hstgr.cloud › Docker Manager
 ```
 
+- `DESKRPG_IMAGE` — pre-filled with `ghcr.io/dandacompany/deskrpg:latest`; leave it. Change it only to pin or roll back a release (step 7).
 - `JWT_SECRET` — leave the placeholder. The app generates a real key into the `deskrpg-data` volume and reuses it across restarts and Update. A value you set always wins.
 - `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — optional; see step 4-1 for which one to fill, or leave all empty to log in with ChatGPT.
 - `HERMES_DASHBOARD_PASSWORD` — optional. Set it to open the Hermes dashboard at `https://deskrpg-hermes.<TRAEFIK_HOST>` (user `admin`). Empty keeps the dashboard off: Hermes refuses an unauthenticated public dashboard, so the compose only starts it when a password exists.
@@ -62,7 +64,7 @@ After Traefik (step 1) and Deploy (step 2), the office is reachable at:
 https://deskrpg.<srvNNNNNN.hstgr.cloud>
 ```
 
-**`TRAEFIK_HOST` is not injected — set it yourself.** Measured 2026-09-17: with Traefik running and the variable empty, the routing rule becomes `deskrpg.localhost`, Traefik answers 404 and Docker Manager's **Open** link points at `deskrpg.localhost`. Project → **Manage** → Environment → **+ Environment** → `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` (the name in the hPanel breadcrumb) → **Save and deploy**; Let's Encrypt then issues the certificate.
+**`TRAEFIK_HOST` is not injected — set it yourself.** Measured 2026-09-17: with Traefik running and the variable empty, the routing rule becomes `deskrpg.localhost`, Traefik answers 404 and Docker Manager's **Open** link points at `deskrpg.localhost`. Fill `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` (the name in the hPanel breadcrumb) in the Environment box — before the first deploy, or later via **Manage** → **Save and deploy**; Let's Encrypt then issues the certificate.
 
 Custom domain: point an `A` record at the VPS IP and change the `Host(...)` rules to your domain.
 
@@ -136,12 +138,12 @@ With the plugin from step 4-2 in place, kanban boards, the event stream and sche
 
 The compose uses `ghcr.io/dandacompany/deskrpg:latest` and `nousresearch/hermes-agent:latest`. Docker Manager's **Update** keeps the compose you imported and pulls its images again (its build log shows `Pulling`), so:
 
-| Goal                              | Do this                                                                                               |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Upgrade to the newest release** | project **⋮ → Update**. Only containers whose image changed are recreated                             |
-| **Stay on a release**             | Manage → Environment → `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<release tag>` → Save and deploy   |
-| **Roll back**                     | same as above with the previous tag from [releases](https://github.com/dandacompany/deskrpg/releases) |
-| **Follow latest again**           | delete `DESKRPG_IMAGE` (or set it to `…:latest`) → Save and deploy                                    |
+| Goal                              | Do this                                                                                                         |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Upgrade to the newest release** | project **⋮ → Update**. Only containers whose image changed are recreated                                       |
+| **Stay on a release**             | Manage → Environment → change `DESKRPG_IMAGE` to `ghcr.io/dandacompany/deskrpg:<release tag>` → Save and deploy |
+| **Roll back**                     | same as above with the previous tag from [releases](https://github.com/dandacompany/deskrpg/releases)           |
+| **Follow latest again**           | set `DESKRPG_IMAGE` back to `ghcr.io/dandacompany/deskrpg:latest` → Save and deploy                             |
 
 Data lives in the named volumes `deskrpg-data` (SQLite, uploads, generated `JWT_SECRET`) and `hermes-data` (`~/.hermes`, logins, plugins) and survives Update; database migrations run at startup. Rolling back to a release older than the one that migrated your database is not guaranteed to work — back up first (hPanel → VPS → Backups).
 
