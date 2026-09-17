@@ -18,9 +18,12 @@ import {
   clearMoveTargets,
   autoScrollKanbanBoard,
   columnStatus,
+  directMoveColumns,
+  isKanbanDirectMoveTarget,
   markMoveTarget,
   restoreKanbanMoveFocus,
-  visibleKanbanColumns,
+  tryReleasePointerCapture,
+  trySetPointerCapture,
   type KanbanMoveCancelReason,
   type KanbanMoveInteractionHandler,
 } from "./kanban-card-move";
@@ -121,7 +124,8 @@ export default function KanbanCard({
   const selectTarget = useCallback(
     (column: HTMLElement) => {
       const target = columnStatus(column);
-      if (!target || target === task.status) return;
+      if (!target || target === task.status || !isKanbanDirectMoveTarget(target, task.status))
+        return;
       const root = moveRoot();
       if (!root || !root.contains(column)) return;
       targetRef.current = target;
@@ -159,7 +163,12 @@ export default function KanbanCard({
     const hit = document.elementFromPoint(clientX, clientY);
     const column = hit?.closest<HTMLElement>("[data-column]") ?? null;
     const root = moveRoot();
-    return root && column && root.contains(column) && visibleKanbanColumns(root).includes(column)
+    const target = column ? columnStatus(column) : null;
+    return root &&
+      column &&
+      target &&
+      root.contains(column) &&
+      directMoveColumns(root, task.status).includes(column)
       ? column
       : null;
   };
@@ -167,7 +176,7 @@ export default function KanbanCard({
   const onMovePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (moveDisabled || event.button !== 0) return;
     pointerRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    trySetPointerCapture(event.currentTarget, event.pointerId);
   };
 
   const onMovePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -195,6 +204,7 @@ export default function KanbanCard({
   const onMovePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
     const pointer = pointerRef.current;
     if (!pointer || pointer.id !== event.pointerId) return;
+    tryReleasePointerCapture(event.currentTarget, event.pointerId);
     pointerRef.current = null;
     if (!movingRef.current) return;
     const column = columnAtPoint(event.clientX, event.clientY);
@@ -207,7 +217,8 @@ export default function KanbanCard({
     finish();
   };
 
-  const onMovePointerCancel = () => {
+  const onMovePointerCancel = (event: React.PointerEvent<HTMLButtonElement>) => {
+    tryReleasePointerCapture(event.currentTarget, event.pointerId);
     pointerRef.current = null;
     cancel("pointer-cancel");
   };
@@ -231,7 +242,7 @@ export default function KanbanCard({
       event.preventDefault();
       const root = moveRoot();
       if (!root) return cancel("target-missing");
-      const columns = visibleKanbanColumns(root);
+      const columns = directMoveColumns(root, task.status);
       const currentStatus = targetRef.current ?? task.status;
       const index = columns.findIndex((column) => column.dataset.column === currentStatus);
       const next = columns[index + (event.key === "ArrowRight" ? 1 : -1)];
@@ -251,7 +262,7 @@ export default function KanbanCard({
       if (
         !root ||
         !target ||
-        !visibleKanbanColumns(root).some((column) => column.dataset.column === target)
+        !directMoveColumns(root, task.status).some((column) => column.dataset.column === target)
       ) {
         cancel("target-missing");
         return;

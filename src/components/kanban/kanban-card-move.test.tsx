@@ -37,6 +37,7 @@ async function mount(options: { disabled?: boolean } = {}) {
           {column("todo", [task])}
           {column("ready", [])}
           {column("running", [])}
+          {column("blocked", [])}
           <div hidden>{column("archived", [])}</div>
         </div>
       </I18nProvider>,
@@ -110,6 +111,34 @@ test("R1/R3: arrows select adjacent visible columns, Enter requests a move, and 
       f.host.querySelector('[data-column="ready"]')?.hasAttribute("data-move-target"),
       false,
     );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("Hermes-owned running is skipped by keyboard movement", async () => {
+  const f = await mount();
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="task-1"]')!;
+    await act(async () => {
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    assert.equal(
+      f.host.querySelector('[data-column="running"]')?.hasAttribute("data-move-target"),
+      false,
+    );
+    assert.equal(
+      f.host.querySelector('[data-column="blocked"]')?.getAttribute("data-move-target"),
+      "true",
+    );
+    assert.deepEqual(f.events.at(-1), {
+      type: "target",
+      taskId: "task-1",
+      source: "todo",
+      target: "blocked",
+    });
   } finally {
     await f.cleanup();
   }
@@ -251,6 +280,51 @@ test("R2: pointer movement activates after the threshold and drops on an empty v
     );
     assert.equal(f.events.at(-1)?.type, "submit");
     assert.equal(f.opened(), 0);
+  } finally {
+    document.elementFromPoint = original;
+    await f.cleanup();
+  }
+});
+
+test("Hermes-owned running is never selected or submitted as a pointer drop target", async () => {
+  const f = await mount();
+  const original = document.elementFromPoint;
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="task-1"]')!;
+    const running = f.host.querySelector<HTMLElement>('[data-column="running"]')!;
+    document.elementFromPoint = () => running;
+    await act(async () => {
+      handle.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 }));
+      handle.dispatchEvent(pointerEvent("pointermove", { clientX: 20, clientY: 10 }));
+      handle.dispatchEvent(pointerEvent("pointerup", { clientX: 20, clientY: 10 }));
+    });
+    assert.equal(running.hasAttribute("data-move-target"), false);
+    assert.equal(
+      f.events.some((event) => event.type === "submit"),
+      false,
+    );
+  } finally {
+    document.elementFromPoint = original;
+    await f.cleanup();
+  }
+});
+
+test("pointer capture failure does not abort a valid touch-style move", async () => {
+  const f = await mount();
+  const original = document.elementFromPoint;
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="task-1"]')!;
+    const ready = f.host.querySelector<HTMLElement>('[data-column="ready"]')!;
+    handle.setPointerCapture = () => {
+      throw new DOMException("No active pointer", "NotFoundError");
+    };
+    document.elementFromPoint = () => ready;
+    await act(async () => {
+      handle.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 }));
+      handle.dispatchEvent(pointerEvent("pointermove", { clientX: 20, clientY: 10 }));
+      handle.dispatchEvent(pointerEvent("pointerup", { clientX: 20, clientY: 10 }));
+    });
+    assert.equal(f.events.at(-1)?.type, "submit");
   } finally {
     document.elementFromPoint = original;
     await f.cleanup();

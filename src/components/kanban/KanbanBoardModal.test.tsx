@@ -825,6 +825,55 @@ test("R26: a kanban:event tick refetches the board after the debounce", async ()
   }
 });
 
+test("R26: two open clients independently refetch after the same kanban:event tick", async () => {
+  const original = globalThis.fetch;
+  let boardFetches = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) {
+      boardFetches++;
+      return json(board());
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  }) as typeof fetch;
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const render = (refreshTick: number) =>
+    act(async () =>
+      root.render(
+        <I18nProvider initialLocale="ko">
+          <KanbanBoardModal
+            channelId={CHANNEL}
+            onClose={() => undefined}
+            refreshTick={refreshTick}
+            debounceMs={50}
+          />
+          <KanbanBoardModal
+            channelId={CHANNEL}
+            onClose={() => undefined}
+            refreshTick={refreshTick}
+            debounceMs={50}
+          />
+        </I18nProvider>,
+      ),
+    );
+  try {
+    await render(0);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const before = boardFetches;
+    await render(1);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+    assert.equal(boardFetches, before + 2, "each client performs its own authoritative refetch");
+    assert.equal(host.querySelectorAll('[data-task-id="t-todo"]').length, 2);
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+    globalThis.fetch = original;
+  }
+});
+
 test("unbound gateway offers connection to owners and guidance to members", async () => {
   let connects = 0;
   const f = await mount(() => json({ code: "gateway_not_bound" }, { status: 409 }), {

@@ -30,6 +30,42 @@ export function columnStatus(column: HTMLElement): KanbanTaskStatus | null {
   return value ? (value as KanbanTaskStatus) : null;
 }
 
+/** `running` is owned by the Hermes dispatcher and cannot be selected directly. */
+export function isKanbanDirectMoveTarget(
+  target: KanbanTaskStatus,
+  source?: KanbanTaskStatus,
+): boolean {
+  return target !== "running" || target === source;
+}
+
+export function directMoveColumns(root: ParentNode, source: KanbanTaskStatus): HTMLElement[] {
+  return visibleKanbanColumns(root).filter((column) => {
+    const status = columnStatus(column);
+    return status !== null && isKanbanDirectMoveTarget(status, source);
+  });
+}
+
+/** Pointer capture is progressive enhancement; synthetic and cancelled pointers may reject it. */
+export function trySetPointerCapture(element: HTMLElement, pointerId: number): boolean {
+  try {
+    element.setPointerCapture?.(pointerId);
+    return true;
+  } catch (error) {
+    if (error instanceof DOMException) return false;
+    throw error;
+  }
+}
+
+export function tryReleasePointerCapture(element: HTMLElement, pointerId: number): boolean {
+  try {
+    if (element.hasPointerCapture?.(pointerId)) element.releasePointerCapture?.(pointerId);
+    return true;
+  } catch (error) {
+    if (error instanceof DOMException) return false;
+    throw error;
+  }
+}
+
 export function clearMoveTargets(root: ParentNode = document) {
   for (const column of root.querySelectorAll<HTMLElement>('[data-move-target="true"]')) {
     column.removeAttribute("data-move-target");
