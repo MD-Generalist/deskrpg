@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.917.2` — The Hostinger one-click compose now routes through either Traefik shape Hostinger installs (host mode or a `traefik-proxy` network) instead of stopping at `created` on host-mode VPSes.
+- Version: `v2026.917.3` — A gateway saved by address now shows up in the gateway list right away, even before the DeskRPG plugin is installed.
 
 ## What You Can Do
 
@@ -114,7 +114,7 @@ Before the first run, open `.env.docker` and set:
 
 DeskRPG will open on `http://localhost:3102`.
 
-Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.917.2` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
+Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.917.3` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
 
 If you prefer the explicit file path version, you can run:
 
@@ -133,7 +133,7 @@ docker compose --env-file .env.lite -f docker/docker-compose.lite.yml up -d
 
 DeskRPG will open on `http://localhost:3102`.
 
-To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.917.2` before the command.
+To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.917.3` before the command.
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
 
