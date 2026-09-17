@@ -2436,6 +2436,11 @@ const ko: Record<string, string> = {
   "diagnostics.gateways": "게이트웨이",
   "diagnostics.none": "문제 없음",
   "diagnostics.failed": "진단을 불러오지 못했습니다",
+  "webgl.unavailableTitle": "3D 오피스를 시작할 수 없습니다",
+  "webgl.unavailableDescription":
+    "이 브라우저에서 WebGL을 쓸 수 없습니다. 브라우저 설정에서 하드웨어 가속을 켜거나 그래픽 드라이버를 갱신한 뒤 다시 시도하세요.",
+  "webgl.retry": "다시 시도",
+  "webgl.backToChannels": "채널 목록으로",
 };
 
 export default ko;

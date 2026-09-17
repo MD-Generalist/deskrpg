@@ -2448,6 +2448,11 @@ const en: Record<string, string> = {
   "diagnostics.gateways": "Gateways",
   "diagnostics.none": "No problems",
   "diagnostics.failed": "Could not load diagnostics",
+  "webgl.unavailableTitle": "Cannot start the 3D office",
+  "webgl.unavailableDescription":
+    "WebGL is unavailable in this browser. Turn on hardware acceleration in your browser settings or update your graphics driver, then try again.",
+  "webgl.retry": "Try again",
+  "webgl.backToChannels": "Back to channels",
 };
 
 export default en;

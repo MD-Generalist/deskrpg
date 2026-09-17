@@ -2454,6 +2454,11 @@ const ja: Record<string, string> = {
   "diagnostics.gateways": "ゲートウェイ",
   "diagnostics.none": "問題なし",
   "diagnostics.failed": "診断を読み込めませんでした",
+  "webgl.unavailableTitle": "3Dオフィスを起動できません",
+  "webgl.unavailableDescription":
+    "このブラウザでは WebGL を利用できません。ブラウザ設定でハードウェアアクセラレーションを有効にするか、グラフィックドライバーを更新してから再試行してください。",
+  "webgl.retry": "再試行",
+  "webgl.backToChannels": "チャンネル一覧へ",
 };
 
 export default ja;
