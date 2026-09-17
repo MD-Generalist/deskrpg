@@ -54,6 +54,8 @@ type MoveState =
   | { phase: "success"; taskId: string; title: string; status?: KanbanTaskStatus }
   | { phase: "unconfirmed"; taskId: string; title: string; target: KanbanTaskStatus }
   | { phase: "error"; taskId: string; title: string; target: KanbanTaskStatus; message: string };
+type ReloadResult =
+  { kind: "applied"; board: BoardResponse } | { kind: "superseded" } | { kind: "failed" };
 
 function formFromTask(task: KanbanTask & Record<string, unknown>, npcs: BoardResponse["npcs"]) {
   const str = (key: string) => (typeof task[key] === "string" ? (task[key] as string) : "");
@@ -116,6 +118,7 @@ export default function KanbanBoardModal({
   const [move, setMove] = useState<MoveState>({ phase: "idle" });
   const mounted = useRef(true);
   const reloadSequence = useRef(0);
+  const latestReloadRef = useRef<Promise<ReloadResult> | null>(null);
   const moveRequestPending = useRef(false);
   const currentApi = useRef(api);
   const selectedTaskIdRef = useRef(selectedTaskId);
@@ -140,41 +143,55 @@ export default function KanbanBoardModal({
     };
   }, [channelId]);
 
-  const reload = useCallback(async (): Promise<BoardResponse | null> => {
+  const reload = useCallback((): Promise<ReloadResult> => {
     const sequence = ++reloadSequence.current;
     const current = () => mounted.current && sequence === reloadSequence.current;
-    let nextStatus: AutomationStatus | null = null;
-    try {
-      nextStatus = await api.status();
-      if (current()) setStatus(nextStatus);
-    } catch (err) {
-      const failure = toFailure(err);
-      if (failure.code === "gateway_not_bound") {
-        if (current()) {
+    const operation = (async (): Promise<ReloadResult> => {
+      let nextStatus: AutomationStatus | null = null;
+      try {
+        nextStatus = await api.status();
+        if (current()) setStatus(nextStatus);
+      } catch (err) {
+        const failure = toFailure(err);
+        if (failure.code === "gateway_not_bound") {
+          if (!current()) return { kind: "superseded" };
           setBlocker({ kind: "gateway_not_bound" });
           setBoard(null);
           setBoardChannelId(null);
           setLoading(false);
+          return { kind: "failed" };
         }
-        return null;
+        // 상태 요약이 없어도 보드는 열 수 있다 — 경고 배지만 비운다.
+        if (current()) setStatus(null);
       }
-      // 상태 요약이 없어도 보드는 열 수 있다 — 경고 배지만 비운다.
-      if (current()) setStatus(null);
-    }
-    try {
-      const data = await api.board(includeArchived);
-      if (!current()) return null;
-      setBoard(data);
-      setBoardChannelId(channelId);
-      setBlocker(null);
-      return data;
-    } catch (err) {
-      if (current()) setBlocker(classifyBoardFailure(toFailure(err), nextStatus?.minVersion));
-      return null;
-    } finally {
-      if (current()) setLoading(false);
-    }
+      try {
+        const data = await api.board(includeArchived);
+        if (!current()) return { kind: "superseded" };
+        setBoard(data);
+        setBoardChannelId(channelId);
+        setBlocker(null);
+        return { kind: "applied", board: data };
+      } catch (err) {
+        if (!current()) return { kind: "superseded" };
+        setBlocker(classifyBoardFailure(toFailure(err), nextStatus?.minVersion));
+        return { kind: "failed" };
+      } finally {
+        if (current()) setLoading(false);
+      }
+    })();
+    latestReloadRef.current = operation;
+    return operation;
   }, [api, channelId, includeArchived]);
+
+  const reconcileReload = useCallback(
+    async (result: ReloadResult): Promise<ReloadResult> => {
+      if (result.kind !== "superseded") return result;
+      const latest = latestReloadRef.current;
+      const next = latest ? await latest : result;
+      return next.kind === "superseded" ? reload() : next;
+    },
+    [reload],
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -293,14 +310,15 @@ export default function KanbanBoardModal({
           return;
         }
         if (!mounted.current || currentApi.current !== api) return;
-        const authoritativeBoard = await reload();
+        const reloadResult = await reconcileReload(await reload());
         moveRequestPending.current = false;
         if (!mounted.current || currentApi.current !== api) return;
         if (selectedTaskIdRef.current === task.id) setDetailTick((value) => value + 1);
-        if (!authoritativeBoard) {
+        if (reloadResult.kind !== "applied") {
           setMove({ phase: "unconfirmed", ...request });
           return;
         }
+        const authoritativeBoard = reloadResult.board;
         const authoritativeTask = flattenTasks(
           orderColumns(authoritativeBoard.columns, includeArchived),
         ).find((candidate) => candidate.id === task.id);
@@ -313,15 +331,16 @@ export default function KanbanBoardModal({
         restoreKanbanMoveResultFocus(boardRootRef.current, task.id);
       })();
     },
-    [allTasks, api, includeArchived, moveBlocked, reload],
+    [allTasks, api, includeArchived, moveBlocked, reconcileReload, reload],
   );
 
   const retryMoveRead = useCallback(async () => {
     if (move.phase !== "unconfirmed") return;
     const request = move;
-    const authoritativeBoard = await reload();
+    const reloadResult = await reconcileReload(await reload());
     if (!mounted.current) return;
-    if (authoritativeBoard) {
+    if (reloadResult.kind === "applied") {
+      const authoritativeBoard = reloadResult.board;
       if (selectedTaskIdRef.current === request.taskId) setDetailTick((value) => value + 1);
       const authoritativeTask = flattenTasks(
         orderColumns(authoritativeBoard.columns, includeArchived),
@@ -332,8 +351,9 @@ export default function KanbanBoardModal({
         title: request.title,
         status: authoritativeTask?.status,
       });
+      restoreKanbanMoveResultFocus(boardRootRef.current, request.taskId);
     }
-  }, [includeArchived, move, reload]);
+  }, [includeArchived, move, reconcileReload, reload]);
 
   // 실행 중 카드가 있을 때만 1초 시계를 돌린다(경과 시간 표시).
   useEffect(() => {

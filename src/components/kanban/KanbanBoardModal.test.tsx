@@ -336,6 +336,82 @@ test("R4/R5: duplicate submit is ignored and PATCH success plus GET failure retr
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     assert.equal(patchCount, 1, "read retry must not repeat PATCH");
     assert.equal(boardReads, 3);
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    assert.equal(document.activeElement, f.host.querySelector('[data-card-move-handle="t-todo"]'));
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R4: a superseded post-PATCH reload reconciles with the newer applied server truth", async () => {
+  let releaseOldRead!: (response: Response) => void;
+  const oldRead = new Promise<Response>((resolve) => (releaseOldRead = resolve));
+  let oldReadStarted!: () => void;
+  const started = new Promise<void>((resolve) => (oldReadStarted = resolve));
+  let boardReads = 0;
+  let patches = 0;
+  const movedBoard = board({
+    columns: [
+      { name: "todo", tasks: [] },
+      { name: "scheduled", tasks: [{ id: "t-todo", title: "할 카드", status: "scheduled" }] },
+    ],
+  });
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) {
+      boardReads += 1;
+      if (boardReads === 2) {
+        oldReadStarted();
+        return oldRead;
+      }
+      return json(boardReads === 1 ? board() : movedBoard);
+    }
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+      patches += 1;
+      return json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    await started;
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('button[aria-label="새로고침"]')?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.ok(f.host.querySelector('[data-column="scheduled"]')?.textContent?.includes("할 카드"));
+    await act(async () => releaseOldRead(json(board())));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(patches, 1);
+    assert.equal(f.host.querySelector('[data-move-status="unconfirmed"]'), null);
+    assert.match(f.host.querySelector('[data-move-status="success"]')?.textContent ?? "", /예약됨/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R5: successful read retry focuses the board fallback when the moved card disappeared", async () => {
+  let boardReads = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) {
+      boardReads += 1;
+      if (boardReads === 2)
+        return json({ code: "upstream", message: "read failed" }, { status: 503 });
+      return json(boardReads === 1 ? board() : board({ columns: [{ name: "todo", tasks: [] }] }));
+    }
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+      return json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.ok(f.host.querySelector('[data-move-status="unconfirmed"]'));
+    await f.click("다시 확인");
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    assert.equal(document.activeElement, f.host.querySelector("[data-kanban-board-root]"));
   } finally {
     await f.cleanup();
   }
