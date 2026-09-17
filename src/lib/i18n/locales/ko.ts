@@ -2604,6 +2604,13 @@ const ko: Record<string, string> = {
   "kanban.card.progress": "진행 {value}",
   "kanban.card.warnings": "경고 {count}",
   "kanban.card.running": "실행 중 {elapsed}",
+  "kanban.move.handle": "{title} 이동",
+  "kanban.move.instructions":
+    "스페이스로 잡고, 왼쪽 또는 오른쪽 화살표로 열을 선택한 뒤 Enter로 이동하거나 Escape로 취소하세요.",
+  "kanban.move.started": "{title} 이동을 시작했습니다.",
+  "kanban.move.target": "대상 열: {column}.",
+  "kanban.move.requested": "{column}(으)로 이동을 요청했습니다.",
+  "kanban.move.cancelled": "이동을 취소했습니다.",
   "kanban.form.createTitle": "카드 만들기",
   "kanban.form.editTitle": "카드 수정",
   "kanban.form.title": "제목",

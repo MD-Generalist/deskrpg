@@ -3,6 +3,7 @@ import { useT } from "@/lib/i18n";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 
 import KanbanCard from "./KanbanCard";
+import type { KanbanMoveInteractionHandler } from "./kanban-card-move";
 import type { BoardNpc } from "./kanban-view-model";
 
 interface KanbanColumnProps {
@@ -12,6 +13,8 @@ interface KanbanColumnProps {
   now: number;
   selectedTaskId: string | null;
   onOpen: (taskId: string) => void;
+  moveDisabled?: boolean;
+  onMoveInteraction?: KanbanMoveInteractionHandler;
 }
 
 /** 열 하나. 이름은 서버 상태 그대로이고 라벨만 번역한다(R6). */
@@ -22,6 +25,8 @@ export default function KanbanColumn({
   now,
   selectedTaskId,
   onOpen,
+  moveDisabled = false,
+  onMoveInteraction,
 }: KanbanColumnProps) {
   const t = useT();
   return (
@@ -48,6 +53,8 @@ export default function KanbanColumn({
               now={now}
               selected={task.id === selectedTaskId}
               onOpen={onOpen}
+              moveDisabled={moveDisabled}
+              onMoveInteraction={onMoveInteraction}
             />
           ))
         )}

@@ -2622,6 +2622,13 @@ const ja: Record<string, string> = {
   "kanban.card.progress": "進捗 {value}",
   "kanban.card.warnings": "警告 {count}",
   "kanban.card.running": "実行中 {elapsed}",
+  "kanban.move.handle": "{title} を移動",
+  "kanban.move.instructions":
+    "スペースでつかみ、左右矢印で列を選択し、Enterで移動、Escapeでキャンセルします。",
+  "kanban.move.started": "{title} の移動を開始しました。",
+  "kanban.move.target": "移動先の列: {column}。",
+  "kanban.move.requested": "{column} への移動をリクエストしました。",
+  "kanban.move.cancelled": "移動をキャンセルしました。",
   "kanban.form.createTitle": "カードを作成",
   "kanban.form.editTitle": "カードを編集",
   "kanban.form.title": "タイトル",

@@ -2615,6 +2615,13 @@ const en: Record<string, string> = {
   "kanban.card.progress": "Progress {value}",
   "kanban.card.warnings": "{count} warnings",
   "kanban.card.running": "Running {elapsed}",
+  "kanban.move.handle": "Move {title}",
+  "kanban.move.instructions":
+    "Press Space to grab, Left or Right to choose a column, Enter to move, and Escape to cancel.",
+  "kanban.move.started": "Moving {title}.",
+  "kanban.move.target": "Target column: {column}.",
+  "kanban.move.requested": "Move requested to {column}.",
+  "kanban.move.cancelled": "Move cancelled.",
   "kanban.form.createTitle": "Create card",
   "kanban.form.editTitle": "Edit card",
   "kanban.form.title": "Title",
