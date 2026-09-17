@@ -26,7 +26,7 @@
 
 services:
   deskrpg:
-    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:2026.917.1}
+    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:2026.917.2}
     restart: unless-stopped
     depends_on:
       - hermes
