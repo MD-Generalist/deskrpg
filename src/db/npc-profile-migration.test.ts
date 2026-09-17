@@ -64,9 +64,9 @@ test("0008 은 외형을 프로필로 옮기고 미연결 NPC 를 백업 후 지
     `INSERT INTO channels(id, name, owner_id) VALUES ('44444444-4444-4444-4444-444444444444','c','11111111-1111-1111-1111-111111111111')`,
   );
   await pool.query(`INSERT INTO npcs(id, channel_id, name, position_x, position_y, appearance, hermes_profile_id, updated_at)
-    VALUES ('55555555-5555-5555-5555-555555555551','44444444-4444-4444-4444-444444444444','old',1,1,'{"v":"old"}','33333333-3333-3333-3333-333333333333', now() - interval '1 day'),
-           ('55555555-5555-5555-5555-555555555552','44444444-4444-4444-4444-444444444444','new',2,2,'{"v":"new"}','33333333-3333-3333-3333-333333333333', now()),
-           ('55555555-5555-5555-5555-555555555553','44444444-4444-4444-4444-444444444444','orphan',3,3,'{"v":"orphan"}',NULL, now())`);
+    VALUES ('55555555-5555-5555-5555-555555555551','44444444-4444-4444-4444-444444444444','old',1,1,'{"officeLookId":"office-jun","bodyType":"male"}','33333333-3333-3333-3333-333333333333', now() - interval '1 day'),
+           ('55555555-5555-5555-5555-555555555552','44444444-4444-4444-4444-444444444444','new',2,2,'{"officeLookId":"office-seo","bodyType":"female"}','33333333-3333-3333-3333-333333333333', now()),
+           ('55555555-5555-5555-5555-555555555553','44444444-4444-4444-4444-444444444444','orphan',3,3,'{"officeLookId":"office-tae","bodyType":"male"}',NULL, now())`);
 
   // 자식 행: 미연결 NPC 와 중복 NPC 에 대화 이력을 하나씩 매단다.
   // 이것들이 CASCADE 로 함께 지워지므로 백업이 없으면 영구 소실이다.
@@ -90,7 +90,13 @@ test("0008 은 외형을 프로필로 옮기고 미연결 NPC 를 백업 후 지
   } = await pool.query(
     `SELECT appearance FROM hermes_profiles WHERE id='33333333-3333-3333-3333-333333333333'`,
   );
-  assert.deepEqual(profile.appearance, { v: "new" }, "가장 최근 NPC 의 외형이 프로필로 가야 한다");
+  // 씨앗 외형은 이미 유효한 오피스 룩이다 — 0013 의 외형 변환이 건드리지 않아야
+  // 0008 이 "무엇을 옮겼는지" 를 여기서 그대로 읽을 수 있다.
+  assert.deepEqual(
+    profile.appearance,
+    { officeLookId: "office-seo", bodyType: "female" },
+    "가장 최근 NPC 의 외형이 프로필로 가야 한다",
+  );
 
   const {
     rows: [{ count: orphanCount }],
