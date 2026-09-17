@@ -117,6 +117,193 @@ const happy: Handler = (url) => {
   return json({ code: "not_found", message: "no route" }, { status: 404 });
 };
 
+function key(el: Element, value: string) {
+  el.dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }));
+}
+
+async function submitKeyboardMove(host: HTMLElement, taskId = "t-todo") {
+  const handle = host.querySelector<HTMLButtonElement>(`[data-card-move-handle="${taskId}"]`);
+  assert.ok(handle, `move handle for ${taskId}`);
+  await act(async () => {
+    handle.focus();
+    key(handle, " ");
+    key(handle, "ArrowRight");
+    key(handle, "Enter");
+  });
+  return handle;
+}
+
+test("R4: move PATCHes status once, keeps counts unchanged while pending, then reloads server truth", async () => {
+  let patchResolve!: (response: Response) => void;
+  const patch = new Promise<Response>((resolve) => (patchResolve = resolve));
+  let boardReads = 0;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const f = await mount((url, init) => {
+    requests.push({ url, init });
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) {
+      boardReads += 1;
+      return json(
+        boardReads === 1
+          ? board()
+          : board({
+              columns: [
+                { name: "done", tasks: [] },
+                { name: "todo", tasks: [] },
+                {
+                  name: "scheduled",
+                  tasks: [{ id: "t-todo", title: "할 카드", status: "scheduled" }],
+                },
+              ],
+            }),
+      );
+    }
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") return patch;
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    assert.equal(requests.filter((request) => request.init?.method === "PATCH").length, 1);
+    const write = requests.find((request) => request.init?.method === "PATCH");
+    assert.equal(write?.url, "/api/channels/ch-1/kanban/tasks/t-todo");
+    assert.deepEqual(JSON.parse(String(write?.init?.body)), { status: "scheduled" });
+    assert.match(
+      f.host.querySelector('[data-move-status="pending"]')?.textContent ?? "",
+      /할 카드/,
+    );
+    assert.match(f.host.querySelector('[data-move-status="pending"]')?.textContent ?? "", /예약됨/);
+    assert.ok(f.host.querySelector('[data-column="todo"]')?.textContent?.includes("할 카드"));
+    assert.equal(
+      f.host.querySelector('[data-column="scheduled"]')?.textContent?.includes("할 카드"),
+      false,
+    );
+
+    await act(async () =>
+      patchResolve(json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } })),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(boardReads, 2);
+    assert.ok(f.host.querySelector('[data-column="scheduled"]')?.textContent?.includes("할 카드"));
+    assert.equal(
+      f.host.querySelector('[data-move-status="success"]')?.getAttribute("role"),
+      "status",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R4/R5: duplicate submit is ignored and PATCH success plus GET failure retries only the read", async () => {
+  let patchResolve!: (response: Response) => void;
+  const patch = new Promise<Response>((resolve) => (patchResolve = resolve));
+  let boardReads = 0;
+  let patchCount = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) {
+      boardReads += 1;
+      if (boardReads === 2)
+        return json({ code: "upstream", message: "read failed" }, { status: 503 });
+      return json(board());
+    }
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+      patchCount += 1;
+      return patch;
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    await submitKeyboardMove(f.host);
+    assert.equal(patchCount, 1);
+    assert.equal(
+      f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="t-todo"]')?.disabled,
+      true,
+    );
+    await act(async () =>
+      patchResolve(json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } })),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.match(
+      f.host.querySelector('[data-move-status="unconfirmed"]')?.textContent ?? "",
+      /저장.*최신 상태.*확인하지 못/,
+    );
+    await f.click("다시 확인");
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(patchCount, 1, "read retry must not repeat PATCH");
+    assert.equal(boardReads, 3);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R1/R5: stale source and server failure cancel/fail without false success", async () => {
+  let current = board();
+  let patchCount = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) return json(current);
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+      patchCount += 1;
+      return json({ code: "forbidden", message: "권한 없음" }, { status: 403 });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="t-todo"]');
+    assert.ok(handle);
+    await act(async () => {
+      key(handle, " ");
+      key(handle, "ArrowRight");
+    });
+    current = board({
+      columns: [
+        { name: "done", tasks: [] },
+        { name: "scheduled", tasks: [{ id: "t-todo", title: "할 카드", status: "scheduled" }] },
+      ],
+    });
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('button[aria-label="새로고침"]')?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await act(async () => key(handle, "Enter"));
+    assert.equal(patchCount, 0, "changed source cancels before write");
+
+    current = board();
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('button[aria-label="새로고침"]')?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await submitKeyboardMove(f.host);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(patchCount, 1);
+    assert.match(
+      f.host.querySelector('[data-move-status="error"]')?.textContent ?? "",
+      /권한 없음/,
+    );
+    assert.equal(f.host.querySelector('[data-move-status="success"]'), null);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R3/R5: Escape while the swarm dialog is open does not close the board modal", async () => {
+  const f = await mount((url) => {
+    if (url.includes("/automation/status"))
+      return json(status({ capabilities: ["kanban", "swarm"] }));
+    if (url.includes("/kanban/board")) return json(board());
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await f.click("스웜");
+    assert.ok(f.host.querySelector('[aria-labelledby="swarm-dialog-title"]'));
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    assert.equal(f.isClosed(), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("R6: columns render in the fixed order and archived only after the toggle", async () => {
   const f = await mount(happy);
   try {
