@@ -51,7 +51,7 @@ type MoveState =
   | { phase: "idle" }
   | { phase: "active"; taskId: string; source: KanbanTaskStatus; target?: KanbanTaskStatus }
   | { phase: "pending"; taskId: string; title: string; target: KanbanTaskStatus }
-  | { phase: "success"; taskId: string; title: string; target: KanbanTaskStatus }
+  | { phase: "success"; taskId: string; title: string; status?: KanbanTaskStatus }
   | { phase: "unconfirmed"; taskId: string; title: string; target: KanbanTaskStatus }
   | { phase: "error"; taskId: string; title: string; target: KanbanTaskStatus; message: string };
 
@@ -117,7 +117,9 @@ export default function KanbanBoardModal({
   const reloadSequence = useRef(0);
   const moveRequestPending = useRef(false);
   const currentApi = useRef(api);
+  const selectedTaskIdRef = useRef(selectedTaskId);
   currentApi.current = api;
+  selectedTaskIdRef.current = selectedTaskId;
 
   useEffect(() => {
     mounted.current = true;
@@ -129,7 +131,7 @@ export default function KanbanBoardModal({
     };
   }, [channelId]);
 
-  const reload = useCallback(async (): Promise<boolean> => {
+  const reload = useCallback(async (): Promise<BoardResponse | null> => {
     const sequence = ++reloadSequence.current;
     const current = () => mounted.current && sequence === reloadSequence.current;
     let nextStatus: AutomationStatus | null = null;
@@ -144,20 +146,20 @@ export default function KanbanBoardModal({
           setBoard(null);
           setLoading(false);
         }
-        return false;
+        return null;
       }
       // 상태 요약이 없어도 보드는 열 수 있다 — 경고 배지만 비운다.
       if (current()) setStatus(null);
     }
     try {
       const data = await api.board(includeArchived);
-      if (!current()) return false;
+      if (!current()) return null;
       setBoard(data);
       setBlocker(null);
-      return true;
+      return data;
     } catch (err) {
       if (current()) setBlocker(classifyBoardFailure(toFailure(err), nextStatus?.minVersion));
-      return false;
+      return null;
     } finally {
       if (current()) setLoading(false);
     }
@@ -255,31 +257,46 @@ export default function KanbanBoardModal({
           return;
         }
         if (!mounted.current || currentApi.current !== api) return;
-        const confirmed = await reload();
+        const authoritativeBoard = await reload();
         moveRequestPending.current = false;
         if (!mounted.current || currentApi.current !== api) return;
-        if (selectedTaskId === task.id) setDetailTick((value) => value + 1);
-        setMove({ phase: confirmed ? "success" : "unconfirmed", ...request });
+        if (selectedTaskIdRef.current === task.id) setDetailTick((value) => value + 1);
+        if (!authoritativeBoard) {
+          setMove({ phase: "unconfirmed", ...request });
+          return;
+        }
+        const authoritativeTask = flattenTasks(
+          orderColumns(authoritativeBoard.columns, includeArchived),
+        ).find((candidate) => candidate.id === task.id);
+        setMove({
+          phase: "success",
+          taskId: request.taskId,
+          title: request.title,
+          status: authoritativeTask?.status,
+        });
       })();
     },
-    [allTasks, api, moveBlocked, reload, selectedTaskId],
+    [allTasks, api, includeArchived, moveBlocked, reload],
   );
 
   const retryMoveRead = useCallback(async () => {
     if (move.phase !== "unconfirmed") return;
     const request = move;
-    const confirmed = await reload();
+    const authoritativeBoard = await reload();
     if (!mounted.current) return;
-    if (confirmed) {
-      if (selectedTaskId === request.taskId) setDetailTick((value) => value + 1);
+    if (authoritativeBoard) {
+      if (selectedTaskIdRef.current === request.taskId) setDetailTick((value) => value + 1);
+      const authoritativeTask = flattenTasks(
+        orderColumns(authoritativeBoard.columns, includeArchived),
+      ).find((candidate) => candidate.id === request.taskId);
       setMove({
         phase: "success",
         taskId: request.taskId,
         title: request.title,
-        target: request.target,
+        status: authoritativeTask?.status,
       });
     }
-  }, [move, reload, selectedTaskId]);
+  }, [includeArchived, move, reload]);
 
   // 실행 중 카드가 있을 때만 1초 시계를 돌린다(경과 시간 표시).
   useEffect(() => {
@@ -512,14 +529,16 @@ export default function KanbanBoardModal({
                   title: move.title,
                   column: t(`kanban.column.${move.target}`),
                 })
-              : move.phase === "success"
+              : move.phase === "success" && move.status
                 ? t("kanban.move.success", {
                     title: move.title,
-                    column: t(`kanban.column.${move.target}`),
+                    column: t(`kanban.column.${move.status}`),
                   })
-                : move.phase === "unconfirmed"
-                  ? t("kanban.move.unconfirmed", { title: move.title })
-                  : t("kanban.move.failed", { title: move.title, error: move.message })}
+                : move.phase === "success"
+                  ? t("kanban.move.reconciled", { title: move.title })
+                  : move.phase === "unconfirmed"
+                    ? t("kanban.move.unconfirmed", { title: move.title })
+                    : t("kanban.move.failed", { title: move.title, error: move.message })}
             {move.phase === "unconfirmed" ? (
               <button type="button" className="ml-2 underline" onClick={() => void retryMoveRead()}>
                 {t("kanban.move.retryRead")}

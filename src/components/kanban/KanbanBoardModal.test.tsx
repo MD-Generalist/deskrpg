@@ -133,6 +133,15 @@ async function submitKeyboardMove(host: HTMLElement, taskId = "t-todo") {
   return handle;
 }
 
+const detail = (task: Record<string, unknown>) => ({
+  task,
+  comments: [],
+  events: [],
+  attachments: [],
+  links: { parents: [], children: [] },
+  runs: [],
+});
+
 test("R4: move PATCHes status once, keeps counts unchanged while pending, then reloads server truth", async () => {
   let patchResolve!: (response: Response) => void;
   const patch = new Promise<Response>((resolve) => (patchResolve = resolve));
@@ -301,6 +310,121 @@ test("R3/R5: Escape while the swarm dialog is open does not close the board moda
     assert.equal(f.isClosed(), false);
   } finally {
     await f.cleanup();
+  }
+});
+
+test("R4: completion refreshes detail only when the moved card is currently selected", async () => {
+  let patchResolve!: (response: Response) => void;
+  const patch = new Promise<Response>((resolve) => (patchResolve = resolve));
+  let boardReads = 0;
+  const detailReads = new Map<string, number>();
+  const f = await mount(
+    (url, init) => {
+      if (url.includes("/automation/status")) return json(status());
+      if (url.includes("/kanban/board")) {
+        boardReads += 1;
+        return json(board());
+      }
+      if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") return patch;
+      const taskId = url.match(/\/kanban\/tasks\/(t-[^/?]+)$/)?.[1];
+      if (taskId) {
+        detailReads.set(taskId, (detailReads.get(taskId) ?? 0) + 1);
+        return json(
+          detail({
+            id: taskId,
+            title: taskId === "t-todo" ? "할 카드" : "끝난 카드",
+            status: taskId === "t-todo" ? "todo" : "done",
+          }),
+        );
+      }
+      return json({ code: "not_found", message: "no route" }, { status: 404 });
+    },
+    { initialTaskId: "t-todo" },
+  );
+  try {
+    await submitKeyboardMove(f.host);
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('[data-card-detail="t-done"]')?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(detailReads.get("t-done"), 1);
+
+    await act(async () =>
+      patchResolve(json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } })),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(boardReads, 2);
+    assert.equal(detailReads.get("t-done"), 1, "unrelated current drawer is not refreshed");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R4: a moved card selected while pending receives the completion detail refresh", async () => {
+  let patchResolve!: (response: Response) => void;
+  const patch = new Promise<Response>((resolve) => (patchResolve = resolve));
+  let detailReads = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) return json(board());
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") return patch;
+    if (url.endsWith("/kanban/tasks/t-todo")) {
+      detailReads += 1;
+      return json(detail({ id: "t-todo", title: "할 카드", status: "todo" }));
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('[data-card-detail="t-todo"]')?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(detailReads, 1);
+    await act(async () =>
+      patchResolve(json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } })),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(detailReads, 2);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R4: success reports authoritative status and does not claim target when the card disappeared", async () => {
+  for (const authoritative of ["ready", "missing"] as const) {
+    let boardReads = 0;
+    const f = await mount((url, init) => {
+      if (url.includes("/automation/status")) return json(status());
+      if (url.includes("/kanban/board")) {
+        boardReads += 1;
+        if (boardReads === 1) return json(board());
+        return json(
+          board({
+            columns:
+              authoritative === "ready"
+                ? [{ name: "ready", tasks: [{ id: "t-todo", title: "할 카드", status: "ready" }] }]
+                : [{ name: "todo", tasks: [] }],
+          }),
+        );
+      }
+      if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+        return json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } });
+      }
+      return json({ code: "not_found", message: "no route" }, { status: 404 });
+    });
+    try {
+      await submitKeyboardMove(f.host);
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const message = f.host.querySelector('[data-move-status="success"]')?.textContent ?? "";
+      if (authoritative === "ready") assert.match(message, /준비됨/);
+      else {
+        assert.match(message, /최신 보드/);
+        assert.doesNotMatch(message, /예약됨/);
+      }
+    } finally {
+      await f.cleanup();
+    }
   }
 });
 
