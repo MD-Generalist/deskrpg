@@ -6,7 +6,15 @@ import type { MotionSnapshot } from "@/game/motion-snapshot";
 
 import { MapChatWalkers } from "./map-chat-walkers";
 import { MapChatParticipants } from "./map-chat-participants";
-import { Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -32,8 +40,6 @@ import {
   AlarmClock,
 } from "lucide-react";
 import type { Socket } from "socket.io-client";
-import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
-import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
@@ -86,8 +92,6 @@ const BUG_REPORT_BASE_URL = "https://github.com/dandacompany/deskrpg/issues/new"
 const SOURCE_CODE_URL = "https://github.com/dandacompany/deskrpg";
 const LICENSE_URL = `${SOURCE_CODE_URL}/blob/main/LICENSE.md`;
 const THIRD_PARTY_LICENSES_URL = "/third-party-licenses.html";
-const AVATAR_ASSET_CREDITS_URL = "/assets/spritesheets/CREDITS.md";
-const AVATAR_ASSET_LICENSE_URL = "/assets/spritesheets/LICENSE-assets.md";
 const INSTANCE_ID_STORAGE_KEY = "deskrpg.instanceId";
 
 function GameEngineLoading() {
@@ -106,10 +110,16 @@ const ThreeGame = dynamic(() => import("@/components/ThreeGame"), {
   loading: () => <GameEngineLoading />,
 });
 
+/**
+ * 외형 원본은 DB 의 JSON 이다. 맵(ThreeGame)은 `officeLookId` 만 읽고, 회의·목록 컴포넌트가
+ * 나머지를 해석한다 — 그 컴포넌트들의 prop 타입을 그대로 빌려 이 파일은 외형 포맷을 모른다.
+ */
+type CharacterAppearanceData = ComponentProps<typeof MeetingWorkspace>["character"]["appearance"];
+
 interface Character {
   id: string;
   name: string;
-  appearance: CharacterAppearance | LegacyCharacterAppearance;
+  appearance: CharacterAppearanceData;
 }
 
 interface GameNotification {
@@ -142,7 +152,7 @@ interface ChannelPlayerSummary {
   id: string;
   userId?: string;
   name: string;
-  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
+  appearance: CharacterAppearanceData | null;
 }
 
 function getSocketServerUrl(): string | undefined {
@@ -185,14 +195,12 @@ function GamePageInner() {
 
   const [character, setCharacter] = useState<Character | null>(null);
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
-  const [spritesheetDataUrl, setSpritesheetDataUrl] = useState<string | null>(null);
   const [gameChannelData, setGameChannelData] = useState<PendingChannelData>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // playerCount is derived from channelPlayers array length
   const [socket, setSocket] = useState<Socket | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -293,9 +301,7 @@ function GamePageInner() {
   const [notifications, setNotifications] = useState<GameNotification[]>([]);
   const [notificationsExpanded, setNotificationsExpanded] = useState(false);
   const characterNameRef = useRef<string>("");
-  const characterAppearanceRef = useRef<CharacterAppearance | LegacyCharacterAppearance | null>(
-    null,
-  );
+  const characterAppearanceRef = useRef<CharacterAppearanceData | null>(null);
 
   // NPC greeting messages (stored until dialog opens)
   const npcGreetings = useRef<Map<string, string>>(new Map());
@@ -584,7 +590,7 @@ function GamePageInner() {
               id: string;
               userId?: string;
               characterName: string;
-              appearance?: CharacterAppearance | LegacyCharacterAppearance | null;
+              appearance?: CharacterAppearanceData | null;
             }[]
           ).map((player) => ({
             id: player.id,
@@ -600,7 +606,7 @@ function GamePageInner() {
           id: string;
           userId?: string;
           characterName: string;
-          appearance?: CharacterAppearance | LegacyCharacterAppearance | null;
+          appearance?: CharacterAppearanceData | null;
         }) => {
           setChannelPlayers((prev) => {
             if (prev.some((existing) => existing.id === player.id)) return prev;
@@ -1105,7 +1111,7 @@ function GamePageInner() {
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
       }
-      // Phaser 씬은 로케일을 모른다 — 키만 넘기고 번역은 여기서 한다.
+      // 시뮬레이션은 로케일을 모른다 — 키만 넘기고 번역은 여기서 한다.
       // (예전에는 씬이 영어 문장을 만들어 넘겨서 한국어 사용자도 영어를 봤다.)
       setToastMessage(data.messageKey ? t(data.messageKey, data.params) : (data.message ?? ""));
     };
@@ -1610,7 +1616,7 @@ function GamePageInner() {
           setChannel(nextChannel);
           if (nextChannel?.isOwner) setIsOwner(true);
 
-          // Set pending channel data for GameScene to read during create()
+          // 시뮬레이션이 시작할 때 읽을 채널 데이터
           // Parse mapData if it's a JSON string (SQLite stores as text)
           let rawMapData = channelData.channel.mapData;
           if (typeof rawMapData === "string") {
@@ -1640,19 +1646,6 @@ function GamePageInner() {
           };
           setPendingChannelData(nextPendingChannelData);
           setGameChannelData(nextPendingChannelData);
-
-          // Composite character sprite
-          const canvas = document.createElement("canvas");
-          canvasRef.current = canvas;
-
-          try {
-            await compositeCharacter(canvas, found.appearance);
-            const dataUrl = canvas.toDataURL("image/png");
-            setSpritesheetDataUrl(dataUrl);
-          } catch (err) {
-            console.error("Failed to composite character:", err);
-            setError(t("errors.failedToLoadCharacterSprite"));
-          }
 
           setLoading(false);
         })
@@ -2197,9 +2190,8 @@ function GamePageInner() {
       >
         {/* Game canvas remains mounted while the meeting workspace is visible. */}
         <div>
-          {spritesheetDataUrl && character && gameChannelData && (
+          {character && gameChannelData && (
             <ThreeGame
-              spritesheetDataUrl={spritesheetDataUrl}
               socket={socket}
               characterId={character.id}
               characterName={character.name}
@@ -2577,7 +2569,7 @@ function GamePageInner() {
                         "channelId",
                       );
                       if (channelId && socketRef.current) {
-                        // Request position from Phaser via EventBus
+                        // EventBus 로 시뮬레이션에 위치를 묻는다
                         const pos = await new Promise<{ x: number; y: number } | null>(
                           (resolve) => {
                             let resolved = false;
@@ -2729,22 +2721,6 @@ function GamePageInner() {
                     className="block text-primary-light hover:text-primary underline underline-offset-2"
                   >
                     {t("about.viewThirdPartyLicenses")}
-                  </a>
-                  <a
-                    href={AVATAR_ASSET_CREDITS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-primary-light hover:text-primary underline underline-offset-2"
-                  >
-                    {t("about.viewAvatarAssetCredits")}
-                  </a>
-                  <a
-                    href={AVATAR_ASSET_LICENSE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-primary-light hover:text-primary underline underline-offset-2"
-                  >
-                    {t("about.viewAvatarAssetLicenseNotes")}
                   </a>
                 </div>
 

@@ -1,5 +1,4 @@
-// Simple EventEmitter that works in both browser and SSR
-// Avoids importing Phaser (which requires `window`) at module level
+// 브라우저와 SSR 양쪽에서 도는 단순 EventEmitter. 모듈 수준에서 `window` 를 만지지 않는다.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listener = (...args: any[]) => void;
@@ -71,7 +70,7 @@ function writePendingChannelData(data: PendingChannelData) {
   ] = data;
 }
 
-// Pending channel data — set before GameScene creates, read during create()
+// 대기 중인 채널 데이터 — 시뮬레이션이 시작하기 전에 두고, start() 가 읽어 소비한다
 export let pendingChannelData: PendingChannelData = readPendingChannelData();
 
 export function setPendingChannelData(data: PendingChannelData) {

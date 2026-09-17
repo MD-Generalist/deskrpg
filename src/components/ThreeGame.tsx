@@ -1,23 +1,38 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Focus, Minus, Plus, Maximize, RotateCcw, RotateCw, Box, LayoutGrid } from "lucide-react";
-import PhaserGame from "./PhaserGame";
-import { EventBus } from "@/game/EventBus";
+import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { OfficeRenderer } from "@/game/three/office-renderer";
 import type { OfficeBridge } from "@/game/three/bridge";
+import type { OfficeSimulation } from "@/game/simulation/office-simulation";
 import { useLocale, useT } from "@/lib/i18n";
 import { insideMeetingSpace } from "@/game/meeting-space";
 import type { MeetingSpeaker } from "@/game/three/meeting-camera";
+import type { Socket } from "socket.io-client";
 import "@/game/three/office.css";
 
-/** Phaser remains the migration-stage simulation host; only Three.js draws the office. */
-export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
+export interface ThreeGameProps {
+  socket: Socket | null;
+  characterId: string;
+  characterName: string;
+  /** 외형 원본(JSON). 맵은 `officeLookId` 만 읽고 서버에 그대로 넘긴다. */
+  appearance: unknown;
+  channelInitData: Exclude<PendingChannelData, null>;
+  /** 3D 렌더러를 만들 수 없거나 WebGL 컨텍스트를 잃었다. 그 뒤 화면은 상위가 정한다. */
+  onFatal?: (error: unknown) => void;
+}
+
+/**
+ * 화면 없는 시뮬레이션(`OfficeSimulation`)을 띄우고, three.js 렌더러가 `OfficeBridge` 로
+ * 그것을 그린다. 렌더러가 없으면 아무것도 그리지 않는다 — 2D 폴백은 없다.
+ */
+export default function ThreeGame(props: ThreeGameProps) {
   const host = useRef<HTMLDivElement>(null),
     labels = useRef<HTMLDivElement>(null);
   const renderer = useRef<OfficeRenderer | null>(null),
     bridge = useRef<OfficeBridge | null>(null);
-  const [error, setError] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [meetingCamera, setMeetingCamera] = useState({ active: false, automatic: true });
   const [insideMeeting, setInsideMeeting] = useState(false);
   const [availability, setAvailability] = useState<{ channelId: string; active: boolean } | null>(
@@ -27,6 +42,16 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
   const t = useT();
   const { locale } = useLocale();
   const ko = locale === "ko";
+  const { socket, characterId, characterName, appearance, channelInitData, onFatal } = props;
+  const socketRef = useRef(socket);
+  const characterRef = useRef({ characterId, characterName, appearance });
+  const channelInitDataRef = useRef(channelInitData);
+  const onFatalRef = useRef(onFatal);
+  socketRef.current = socket;
+  characterRef.current = { characterId, characterName, appearance };
+  channelInitDataRef.current = channelInitData;
+  onFatalRef.current = onFatal;
+
   useEffect(() => {
     if (!insideMeeting || meetingCamera.active || !props.socket) return;
     const socket = props.socket;
@@ -67,6 +92,8 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
       socket.off("channel:access-denied", denied);
     };
   }, [insideMeeting, meetingCamera.active, props.socket, props.channelInitData.channelId]);
+
+  // 렌더러. 시뮬레이션보다 먼저 마운트해 `three:bridge-ready` 를 놓치지 않는다.
   useLayoutEffect(() => {
     if (!host.current || !labels.current) return;
     let view: OfficeRenderer;
@@ -77,10 +104,17 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
     } catch (err) {
       console.error("Three.js initialization failed", err);
       // WebGL capability failure is external state discovered only during allocation.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError(true);
+      setFailed(true);
+      onFatalRef.current?.(err);
       return;
     }
+    const canvas = host.current.querySelector("canvas");
+    const contextLost = (event: Event) => {
+      event.preventDefault();
+      setFailed(true);
+      onFatalRef.current?.(new Error("WebGL context lost"));
+    };
+    canvas?.addEventListener("webglcontextlost", contextLost);
     const ready = (next: OfficeBridge) => {
       bridge.current = next;
       view.attach(next);
@@ -127,6 +161,7 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
     // Mount ordering: the simulation starts asynchronously, but this also handles a later renderer mount.
     if (bridge.current) view.attach(bridge.current);
     return () => {
+      canvas?.removeEventListener("webglcontextlost", contextLost);
       EventBus.off("three:bridge-ready", ready);
       EventBus.off("chat:bubble", speech);
       EventBus.off("meeting:presentation-enter", enterMeeting);
@@ -140,15 +175,60 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
       bridge.current = null;
     };
   }, []);
+
+  // 시뮬레이션. 소켓은 `player-spawned`/`request-socket` 때마다 다시 건넨다.
+  useLayoutEffect(() => {
+    setPendingChannelData(channelInitDataRef.current);
+    let cancelled = false;
+    let simulation: OfficeSimulation | null = null;
+    const emitSocketIfReady = () => {
+      if (!socketRef.current) return;
+      const c = characterRef.current;
+      EventBus.emit("socket-ready", {
+        socket: socketRef.current,
+        characterId: c.characterId,
+        characterName: c.characterName,
+        appearance: c.appearance,
+      });
+    };
+    EventBus.on("player-spawned", emitSocketIfReady);
+    EventBus.on("request-socket", emitSocketIfReady);
+    // 동적 import 로 마운트 효과들이 모두 등록된 뒤에 `scene-ready` 가 나가게 한다.
+    import("@/game/simulation/office-simulation").then(({ OfficeSimulation }) => {
+      if (cancelled) return;
+      simulation = new OfficeSimulation();
+      simulation.start();
+    });
+    return () => {
+      cancelled = true;
+      simulation?.dispose();
+      simulation = null;
+      // 이 컴포넌트가 건 리스너만 뗀다. EventBus.removeAllListeners() 는 페이지 리스너까지 지운다.
+      EventBus.off("player-spawned", emitSocketIfReady);
+      EventBus.off("request-socket", emitSocketIfReady);
+    };
+  }, []);
+
+  useEffect(() => {
+    setPendingChannelData(channelInitData);
+    EventBus.emit("channel-data-ready", channelInitData);
+  }, [channelInitData]);
+
+  // 소켓이 시뮬레이션 뒤에 준비되면 그때 건넨다
+  useEffect(() => {
+    if (!socket) return;
+    const c = characterRef.current;
+    EventBus.emit("socket-ready", {
+      socket,
+      characterId: c.characterId,
+      characterName: c.characterName,
+      appearance: c.appearance,
+    });
+  }, [socket]);
+
   return (
-    <div
-      data-meeting={meetingCamera.active}
-      className={`office-presentation ${error ? "office-presentation-fallback" : ""}`}
-    >
-      <div className="office-simulation" aria-hidden={!error}>
-        <PhaserGame {...props} />
-      </div>
-      {!error && (
+    <div data-meeting={meetingCamera.active} className="office-presentation">
+      {!failed && (
         <>
           <div ref={host} className="office-three-canvas" />
           <div ref={labels} className="office-actor-labels" />
@@ -268,13 +348,6 @@ export default function ThreeGame(props: ComponentProps<typeof PhaserGame>) {
             </button>
           )}
         </>
-      )}
-      {error && (
-        <p className="office-render-error" role="alert">
-          {ko
-            ? "3D 화면을 시작할 수 없어 기본 화면으로 열었습니다. WebGL 설정을 확인해 주세요."
-            : "3D could not start. The standard map is available; check WebGL settings."}
-        </p>
       )}
     </div>
   );
