@@ -1,29 +1,20 @@
-# docker-compose.yml — DeskRPG + Hermes, one VPS, one file.
-# Why each rule below exists (all measured on Hostinger): deploy/hostinger/README.md
+# DeskRPG + Hermes on one VPS. Every rule here was measured on Hostinger — the why,
+# and update/pin/rollback steps, live in deploy/hostinger/README.md.
 #
-# - Stay at the REPO ROOT: Docker Manager deploys the root file whatever URL path you give.
-# - Stay under 8192 characters: the Docker Manager API rejects longer compose content.
-# - `.env.example` must stay comment-free: Hostinger copies it verbatim into the
-#   Environment box, where `# FOO` is an invalid variable name.
-# - Deploy this, then Traefik from the hPanel banner, then set TRAEFIK_HOST. Both shapes work: host mode (no network)
-#   and bridge mode on a `traefik-proxy` network. Do NOT declare `traefik-proxy` as a
-#   network here — `external: true` breaks host mode, a Compose-created one breaks
-#   bridge mode. `traefik-connect` joins it at runtime instead.
-# - After changing anything, run `docker compose up -d` with no service name so the
-#   connector runs again; `up -d deskrpg` alone leaves bridge-mode Traefik unroutable.
+# - Keep at REPO ROOT and under 8192 chars (Docker Manager limits); keep .env.example
+#   comment-free (copied verbatim into the Environment box).
+# - Deploy this, then Traefik from the hPanel banner, then set TRAEFIK_HOST.
+# - Never declare a `traefik-proxy` network: `traefik-connect` joins it at runtime so both
+#   Traefik shapes (host mode / bridge network) work. After edits run `docker compose up -d`
+#   with no service name so it runs again.
 #
-# Environment (every variable has a default, an empty box boots):
-#   HERMES_API_KEY    bearer key for the bundled Hermes API server (set this one)
-#   JWT_SECRET        leave as-is: the app generates one into `deskrpg-data`; yours wins
-#   OPENROUTER_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY — optional; Hermes boots without
-#                     them. An OpenAI key alone is ignored until `model.provider=openai-api`.
-#                     ChatGPT login (`hermes auth add openai-codex`) needs none.
-#   TRAEFIK_HOST      REQUIRED, not injected: srvNNNNNN.hstgr.cloud → deskrpg.<TRAEFIK_HOST>
-#   DESKRPG_IMAGE     default :latest, so Docker Manager's Update upgrades. Pin or roll back
-#                     with ghcr.io/dandacompany/deskrpg:<release tag>
-#
-# Local PostgreSQL stack: docker/docker-compose.dev.yml. Hermes elsewhere? Delete the
-# `hermes` service and add your own gateway in DeskRPG → My Gateways.
+# Environment (all optional unless noted):
+#   HERMES_API_KEY    REQUIRED — Hermes API server key; DeskRPG's gateway token
+#   TRAEFIK_HOST      REQUIRED, not injected — srvNNNNNN.hstgr.cloud
+#   HERMES_DASHBOARD_PASSWORD  opens https://deskrpg-hermes.<TRAEFIK_HOST> (user admin)
+#   JWT_SECRET        leave as-is; generated into deskrpg-data. A value you set wins
+#   OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY — or ChatGPT login instead
+#   DESKRPG_IMAGE     default :latest so Update upgrades; pin with :<release tag>
 
 services:
   deskrpg:
@@ -34,15 +25,13 @@ services:
     environment:
       DB_TYPE: sqlite
       SQLITE_PATH: /app/data/deskrpg.db
-      # 홈을 볼륨에 둔다. 컨테이너 안이면 Update 때마다 생성된 JWT_SECRET 이 사라져
-      # 전원 로그아웃되고 저장된 게이트웨이 토큰을 복호화하지 못한다.
+      # 볼륨 안이라야 Update 뒤에도 생성된 JWT_SECRET 이 남는다.
       DESKRPG_HOME: /app/data/home
-      # 기본값 금지: 박아 두면 모든 설치가 같은 공개 키로 서명한다. 비면 런타임이 만든다.
+      # 기본값 금지 — 모든 설치가 같은 공개 키로 서명하게 된다.
       JWT_SECRET: ${JWT_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       INTERNAL_HOSTNAME: 0.0.0.0
-      # Only the DeskRPG server host may run the gateway setup wizard; keep it off on a VPS
-      # unless you explicitly intend to authorize host-level setup operations.
+      # Host-level setup from the web UI stays off on a VPS.
       DESKRPG_HOST_SETUP_ENABLED: ${DESKRPG_HOST_SETUP_ENABLED:-0}
     volumes:
       - deskrpg-data:/app/data
@@ -50,8 +39,7 @@ services:
       - traefik.enable=true
       # Bridge-mode Traefik must dial the `traefik-proxy` IP, not the project network one.
       - traefik.docker.network=traefik-proxy
-      # Socket.IO lives on an internal second port (3001). Route only /socket.io there;
-      # everything else goes to Next.js on 3000. Same-origin, so the browser needs no config.
+      # /socket.io → 3001, everything else → Next.js 3000 (same origin).
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.rule=Host(`${COMPOSE_PROJECT_NAME:-deskrpg}.${TRAEFIK_HOST:-localhost}`) && PathPrefix(`/socket.io`)
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.entrypoints=websecure
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.tls.certresolver=letsencrypt
@@ -65,10 +53,8 @@ services:
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.service=${COMPOSE_PROJECT_NAME:-deskrpg}
       - traefik.http.services.${COMPOSE_PROJECT_NAME:-deskrpg}.loadbalancer.server.port=3000
 
-  # One-shot: join `deskrpg` to `traefik-proxy` when a bridge-mode Traefik made it.
-  # The socket is read-write (`network connect` writes) — host-root equivalent, so it
-  # runs only this fixed script and exits. Reads its own project label, so any
-  # project name works.
+  # One-shot: join deskrpg + hermes to `traefik-proxy` if a bridge-mode Traefik made it.
+  # Read-write socket (host-root equivalent): runs only this script, then exits.
   traefik-connect:
     image: docker:29-cli
     restart: "no"
@@ -83,18 +69,48 @@ services:
         docker network inspect traefik-proxy >/dev/null 2>&1 || { echo "traefik-proxy not found (host-mode Traefik or none): nothing to do"; exit 0; }
         project=$$(docker inspect "$$HOSTNAME" --format '{{ index .Config.Labels "com.docker.compose.project" }}')
         [ -n "$$project" ] || { echo "cannot read own compose project label"; exit 1; }
-        for id in $$(docker ps -q --filter "label=com.docker.compose.project=$$project" --filter label=com.docker.compose.service=deskrpg); do
-          if docker network connect traefik-proxy "$$id" 2>/tmp/err; then echo "joined traefik-proxy: $$id"
-          elif grep -qi "already exists" /tmp/err; then echo "already on traefik-proxy: $$id"
-          else cat /tmp/err; exit 1; fi
+        for service in deskrpg hermes; do
+          for id in $$(docker ps -q --filter "label=com.docker.compose.project=$$project" --filter "label=com.docker.compose.service=$$service"); do
+            if docker network connect traefik-proxy "$$id" 2>/tmp/err; then echo "joined traefik-proxy: $$service"
+            elif grep -qi "already exists" /tmp/err; then echo "already on traefik-proxy: $$service"
+            else cat /tmp/err; exit 1; fi
+          done
         done
 
-  # Bundled Hermes Agent gateway + OpenAI-compatible API server (what DeskRPG talks to).
-  # Reachable from DeskRPG at http://hermes:8642 — never published to the internet.
+  # One-shot before Hermes: install or update, then enable deskrpg-hermes-plugin — without
+  # it DeskRPG cannot list profiles. Re-`install` exits 1, hence the update branch.
+  hermes-plugins:
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+    restart: "no"
+    # Same key/UID as hermes: without API_SERVER_KEY the image writes a random key to
+    # the volume's .env, which then overrides HERMES_API_KEY (DeskRPG gets 401).
+    environment:
+      HERMES_UID: ${HERMES_UID:-10000}
+      HERMES_GID: ${HERMES_GID:-10000}
+      API_SERVER_KEY: ${HERMES_API_KEY:-change-this-hermes-api-key}
+    volumes:
+      - hermes-data:/opt/data
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        if hermes plugins list --plain --no-bundled | grep -q ' deskrpg$$'; then
+          hermes plugins update deskrpg || echo "plugin update failed; keeping installed version"
+        else
+          hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+        fi
+        hermes plugins enable deskrpg
+
+  # API server at http://hermes:8642 (internal). Dashboard only with a password: without
+  # auth Hermes refuses a public bind and s6 restart-loops it.
   hermes:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
     restart: unless-stopped
     command: ["gateway", "run"]
+    depends_on:
+      hermes-plugins:
+        condition: service_completed_successfully
     environment:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
@@ -102,14 +118,23 @@ services:
       API_SERVER_HOST: 0.0.0.0
       API_SERVER_PORT: "8642"
       API_SERVER_KEY: ${HERMES_API_KEY:-change-this-hermes-api-key}
-      # Pick ONE provider and set its key in Docker Manager. Empty values are ignored by Hermes.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HERMES_DASHBOARD: ${HERMES_DASHBOARD_PASSWORD:+true}
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_USER:-admin}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_PASSWORD:-}
+      HERMES_DASHBOARD_PUBLIC_URL: https://${COMPOSE_PROJECT_NAME:-deskrpg}-hermes.${TRAEFIK_HOST:-localhost}
     volumes:
       - hermes-data:/opt/data
-    networks:
-      - default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-proxy
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-hermes.rule=Host(`${COMPOSE_PROJECT_NAME:-deskrpg}-hermes.${TRAEFIK_HOST:-localhost}`)
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-hermes.entrypoints=websecure
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-hermes.tls.certresolver=letsencrypt
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-hermes.service=${COMPOSE_PROJECT_NAME:-deskrpg}-hermes
+      - traefik.http.services.${COMPOSE_PROJECT_NAME:-deskrpg}-hermes.loadbalancer.server.port=9119
 
 volumes:
   deskrpg-data:

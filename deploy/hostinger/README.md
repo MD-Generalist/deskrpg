@@ -52,6 +52,7 @@ HERMES_API_KEY=<output of: openssl rand -hex 32>
 
 - `JWT_SECRET` — leave the placeholder. The app generates a real key into the `deskrpg-data` volume and reuses it across restarts and Update. A value you set always wins.
 - `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — optional; see step 4-1 for which one to fill, or leave all empty to log in with ChatGPT.
+- `HERMES_DASHBOARD_PASSWORD` — optional. Set it to open the Hermes dashboard at `https://deskrpg-hermes.<TRAEFIK_HOST>` (user `admin`). Empty keeps the dashboard off: Hermes refuses an unauthenticated public dashboard, so the compose only starts it when a password exists.
 
 ## 3. Your HTTPS URL
 
@@ -106,33 +107,23 @@ docker compose exec hermes hermes config unset model.base_url   # otherwise the 
 
 `docker compose exec` as root is fine: the image's `hermes` wrapper drops to the `hermes` user, so file ownership stays correct.
 
-## 4-2. Install the DeskRPG plugin — required
+## 4-2. The DeskRPG plugin installs itself
 
-From the same `/docker/deskrpg` shell. DeskRPG reads the Hermes profile list, kanban, cron and
-events through [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin). Without it
-the gateway connection in step 5 is saved but stops at _"API 연결은 저장되었지만 DeskRPG 플러그인이 없어…"_ with
-no way to reach the profile list — and on a VPS the offered **Install via SSH** button is disabled
-(host setup is off), so you cannot hire employees. Install it before connecting:
+DeskRPG reads the Hermes profile list, kanban, cron and events through [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin). Without it a gateway connection is saved but never reaches the profile list, and on a VPS the offered **Install via SSH** button is disabled. So the compose runs a one-shot `hermes-plugins` service before Hermes starts: it installs the plugin (or updates it when already installed — a second `install` exits 1), enables it, and exits. Nothing to type.
 
-```bash
-docker compose exec hermes hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
-docker compose exec hermes hermes plugins enable deskrpg
-docker compose restart hermes
-```
-
-`enable` is not optional — without it every plugin route answers 404 even though the install
-succeeded, and DeskRPG's board screen keeps telling you the plugin is missing. The plugin lives in
-the `hermes-data` volume, so it survives Update. Verify:
+`hermes-plugins` gets the same `API_SERVER_KEY` as `hermes`. Without it the image generates a random key into the volume's `.env`, which then overrides `HERMES_API_KEY` and DeskRPG gets 401 — found while testing this service (2026-09-17). Verify from the project folder:
 
 ```bash
 docker compose exec hermes sh -lc 'curl -s -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/deskrpg/info'
 ```
 
+`capabilities` lists `kanban`, `cron`, `events`, `swarm`.
+
 ## 5. Connect the office to Hermes
 
 1. Open your DeskRPG URL, create the first account (it becomes admin).
 2. Top-right menu → **My Gateways** → **New gateway** → URL `http://hermes:8642`, token = your `HERMES_API_KEY` → **Test connection**.
-3. Open the profile list (each Hermes profile = one employee). The plugin from step 4-2 discovers it automatically.
+3. Open the profile list (each Hermes profile = one employee). The plugin installed in step 4-2 discovers it automatically.
 4. Enter a channel → Settings → **AI Connection** → attach the gateway → hire NPCs.
 
 Already running Hermes elsewhere (your laptop, another VPS)? Delete the `hermes` service from the compose and use your own API server URL in step 2. Hermes profiles you already have show up as employees — nothing to migrate.
@@ -154,7 +145,7 @@ The compose uses `ghcr.io/dandacompany/deskrpg:latest` and `nousresearch/hermes-
 
 Data lives in the named volumes `deskrpg-data` (SQLite, uploads, generated `JWT_SECRET`) and `hermes-data` (`~/.hermes`, logins, plugins) and survives Update; database migrations run at startup. Rolling back to a release older than the one that migrated your database is not guaranteed to work — back up first (hPanel → VPS → Backups).
 
-**Installed before `:latest` became the default?** Your saved compose still pins an old tag, so Update re-pulls that same version. Set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:latest` once → Save and deploy; afterwards Update is enough.
+**Installed before 2026-09-17?** Update never re-reads the compose, so your saved file lacks `:latest`, the plugin service and the dashboard route. Project → **Manage** → **.yaml editor** → replace the contents with the current [`docker-compose.yml`](https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml) → **Save and deploy**. Volumes and the environment box are kept. Do not delete the project to re-import it — deleting removes its volumes.
 
 Other options on the project: Restart / View logs / Delete, and **Terminal** for a shell in a container.
 
