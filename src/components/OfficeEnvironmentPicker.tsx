@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { useLocale } from "@/lib/i18n";
 import { OFFICE_ENVIRONMENTS, buildOfficeEnvironment } from "@/game/three/office-environments";
 
-const Preview = dynamic(() => import("./map-editor/ThreeMapPreview"), { ssr: false });
+const Preview = dynamic(() => import("./ThreeMapPreview"), { ssr: false });
 const images = {};
 
 export default function OfficeEnvironmentPicker({

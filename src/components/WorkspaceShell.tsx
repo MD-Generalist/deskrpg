@@ -27,7 +27,7 @@ export default function WorkspaceShell({ children }: { children: ReactNode }) {
       event.preventDefault();
     }
   }
-  const editing = pathname.startsWith("/map-editor/") || pathname === "/characters/create";
+  const editing = pathname === "/characters/create";
   return (
     <div className={`workspace-shell${editing ? " workspace-shell--editing" : ""}`}>
       <aside className="workspace-sidebar">

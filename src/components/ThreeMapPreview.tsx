@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { OfficeRenderer } from "@/game/three/office-renderer";
 import { tiledSnapshot, drawTiledArtwork } from "@/game/three/tiled-preview";
-import type { TiledMap, TilesetImageInfo } from "./hooks/useMapEditor";
+import type { TiledMap, TilesetImageInfo } from "@/lib/tiled-map";
 import { useLocale } from "@/lib/i18n";
 
 export default function ThreeMapPreview({
