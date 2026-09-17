@@ -170,7 +170,15 @@ function getSocketServerUrl(): string | undefined {
   return `${protocol}//${hostname}:${currentPort + 1}`;
 }
 
-export default function GamePage() {
+type GamePageClientProps = {
+  /**
+   * 3D 를 더 이상 띄울 수 없을 때(렌더러 초기화 실패·WebGL 컨텍스트 소실) 부른다.
+   * 부르기 전에 소켓을 끊어 반쯤 살아 있는 채널 화면을 남기지 않는다.
+   */
+  onFatal?: () => void;
+};
+
+export default function GamePage({ onFatal }: GamePageClientProps = {}) {
   const t = useT();
   return (
     <Suspense
@@ -180,12 +188,12 @@ export default function GamePage() {
         </div>
       }
     >
-      <GamePageInner />
+      <GamePageInner onFatal={onFatal} />
     </Suspense>
   );
 }
 
-function GamePageInner() {
+function GamePageInner({ onFatal }: GamePageClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const t = useT();
@@ -363,6 +371,17 @@ function GamePageInner() {
   const playerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const [instanceId, setInstanceId] = useState("");
   const [debugCopied, setDebugCopied] = useState(false);
+
+  // 3D 가 죽으면 채널 화면을 더 유지할 이유가 없다 — 소켓부터 끊고 관문에 알린다.
+  const handleGameFatal = useCallback(() => {
+    const socketInstance = socketRef.current;
+    if (socketInstance) {
+      socketInstance.removeAllListeners();
+      socketInstance.disconnect();
+      socketRef.current = null;
+    }
+    onFatal?.();
+  }, [onFatal]);
 
   const openChannelSettings = useCallback(
     (initialTab: "settings" | "members" | "gateway" = "settings") => {
@@ -2197,6 +2216,7 @@ function GamePageInner() {
               characterName={character.name}
               appearance={character.appearance}
               channelInitData={gameChannelData}
+              onFatal={handleGameFatal}
             />
           )}
         </div>

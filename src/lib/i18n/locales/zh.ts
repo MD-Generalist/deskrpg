@@ -2392,6 +2392,11 @@ const zh: Record<string, string> = {
   "diagnostics.gateways": "网关",
   "diagnostics.none": "没有问题",
   "diagnostics.failed": "无法加载诊断信息",
+  "webgl.unavailableTitle": "无法启动 3D 办公室",
+  "webgl.unavailableDescription":
+    "此浏览器无法使用 WebGL。请在浏览器设置中启用硬件加速，或更新显卡驱动后重试。",
+  "webgl.retry": "重试",
+  "webgl.backToChannels": "返回频道列表",
 };
 
 export default zh;
