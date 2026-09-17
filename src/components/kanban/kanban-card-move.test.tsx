@@ -153,6 +153,69 @@ test("R5: disabled movement cannot start", async () => {
   }
 });
 
+test("R3: Enter while idle does not grab the card", async () => {
+  const f = await mount();
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="task-1"]')!;
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    assert.deepEqual(f.events, []);
+    assert.equal(handle.getAttribute("aria-pressed"), "false");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R3/R5: returning to the source column clears the target and Enter does not submit", async () => {
+  const f = await mount();
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="task-1"]')!;
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })),
+    );
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })),
+    );
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })),
+    );
+    assert.equal(f.host.querySelector('[data-move-target="true"]'), null);
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    assert.equal(
+      f.events.some((event) => event.type === "submit"),
+      false,
+    );
+    assert.equal(f.events.at(-1)?.type, "cancel");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R2/R5: moving focus to another control cancels without stealing its focus back", async () => {
+  const f = await mount();
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="task-1"]')!;
+    const body = f.host.querySelector<HTMLButtonElement>('[data-card-detail="task-1"]')!;
+    handle.focus();
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })),
+    );
+    await act(async () => body.focus());
+    assert.deepEqual(f.events.at(-1), {
+      type: "cancel",
+      taskId: "task-1",
+      source: "todo",
+      reason: "focus-loss",
+    });
+    assert.equal(document.activeElement, body);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 function pointerEvent(type: string, values: Record<string, number>) {
   const event = new MouseEvent(type, {
     bubbles: true,

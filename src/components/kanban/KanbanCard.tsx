@@ -73,13 +73,13 @@ export default function KanbanCard({
     [t],
   );
 
-  const finish = useCallback(() => {
+  const finish = useCallback((restoreFocus = true) => {
     movingRef.current = false;
     setIsMoving(false);
     pointerRef.current = null;
     targetRef.current = null;
     clearMoveTargets();
-    requestAnimationFrame(() => handleRef.current?.focus());
+    if (restoreFocus) requestAnimationFrame(() => handleRef.current?.focus());
   }, []);
 
   const cancel = useCallback(
@@ -87,7 +87,7 @@ export default function KanbanCard({
       if (!movingRef.current) return;
       onMoveInteraction?.({ type: "cancel", taskId: task.id, source: task.status, reason });
       announce("kanban.move.cancelled");
-      finish();
+      finish(reason !== "focus-loss");
     },
     [announce, finish, onMoveInteraction, task.id, task.status],
   );
@@ -190,7 +190,7 @@ export default function KanbanCard({
   const onMoveKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (moveDisabled) return;
     if (!movingRef.current) {
-      if (event.key === " " || event.key === "Enter") {
+      if (event.key === " ") {
         event.preventDefault();
         start();
       }
@@ -208,7 +208,13 @@ export default function KanbanCard({
       const currentStatus = targetRef.current ?? task.status;
       const index = columns.findIndex((column) => column.dataset.column === currentStatus);
       const next = columns[index + (event.key === "ArrowRight" ? 1 : -1)];
-      if (next) selectTarget(next);
+      if (next?.dataset.column === task.status) {
+        targetRef.current = null;
+        markMoveTarget(null);
+        announce("kanban.move.target", { column: t(`kanban.column.${task.status}`) });
+      } else if (next) {
+        selectTarget(next);
+      }
       return;
     }
     if (event.key === "Enter") {
@@ -293,6 +299,10 @@ export default function KanbanCard({
         aria-pressed={isMoving}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={onMoveKeyDown}
+        onBlur={(event) => {
+          if (movingRef.current && event.relatedTarget !== event.currentTarget)
+            cancel("focus-loss");
+        }}
         onPointerDown={onMovePointerDown}
         onPointerMove={onMovePointerMove}
         onPointerUp={onMovePointerUp}
