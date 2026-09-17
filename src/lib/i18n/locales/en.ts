@@ -2622,6 +2622,13 @@ const en: Record<string, string> = {
   "kanban.move.target": "Target column: {column}.",
   "kanban.move.requested": "Move requested to {column}.",
   "kanban.move.cancelled": "Move cancelled.",
+  "kanban.move.pending": "Moving {title} to {column}.",
+  "kanban.move.success": "Server state moved {title} to {column}.",
+  "kanban.move.reconciled": "The move for {title} was saved and reconciled with the latest board.",
+  "kanban.move.failed": "Could not move {title}: {error}",
+  "kanban.move.unconfirmed":
+    "The move for {title} was saved, but the latest state could not be confirmed.",
+  "kanban.move.retryRead": "Check again",
   "kanban.form.createTitle": "Create card",
   "kanban.form.editTitle": "Edit card",
   "kanban.form.title": "Title",
