@@ -3,13 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Archive, KanbanSquare, Plus, RefreshCw, Settings, X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
-import type { KanbanTask } from "@/lib/hermes/deskrpg-plugin-types";
+import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
+import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
 import {
   createKanbanApi,
   toFailure,
@@ -46,6 +47,15 @@ interface KanbanBoardModalProps {
 export const KANBAN_EVENT_DEBOUNCE_MS = 400;
 
 type Editor = { mode: "create" } | { mode: "edit"; task: KanbanTask };
+type MoveState =
+  | { phase: "idle" }
+  | { phase: "active"; taskId: string; source: KanbanTaskStatus; target?: KanbanTaskStatus }
+  | { phase: "pending"; taskId: string; title: string; target: KanbanTaskStatus }
+  | { phase: "success"; taskId: string; title: string; status?: KanbanTaskStatus }
+  | { phase: "unconfirmed"; taskId: string; title: string; target: KanbanTaskStatus }
+  | { phase: "error"; taskId: string; title: string; target: KanbanTaskStatus; message: string };
+type ReloadResult =
+  { kind: "applied"; board: BoardResponse } | { kind: "superseded" } | { kind: "failed" };
 
 function formFromTask(task: KanbanTask & Record<string, unknown>, npcs: BoardResponse["npcs"]) {
   const str = (key: string) => (typeof task[key] === "string" ? (task[key] as string) : "");
@@ -88,6 +98,7 @@ export default function KanbanBoardModal({
   const api = useMemo(() => createKanbanApi(channelId), [channelId]);
   const [status, setStatus] = useState<AutomationStatus | null>(null);
   const [board, setBoard] = useState<BoardResponse | null>(null);
+  const [boardChannelId, setBoardChannelId] = useState<string | null>(null);
   const [blocker, setBlocker] = useState<BoardBlocker | null>(null);
   const [loading, setLoading] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -104,33 +115,83 @@ export default function KanbanBoardModal({
   const [creationWarnings, setCreationWarnings] = useState<Record<string, string>>({});
   const [detailTick, setDetailTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  const [move, setMove] = useState<MoveState>({ phase: "idle" });
+  const mounted = useRef(true);
+  const reloadSequence = useRef(0);
+  const latestReloadRef = useRef<Promise<ReloadResult> | null>(null);
+  const moveRequestPending = useRef(false);
+  const currentApi = useRef(api);
+  const selectedTaskIdRef = useRef(selectedTaskId);
+  const boardRootRef = useRef<HTMLDivElement>(null);
+  const activeMoveRef = useRef<{
+    taskId: string;
+    source: KanbanTaskStatus;
+    target?: KanbanTaskStatus;
+  } | null>(null);
+  currentApi.current = api;
+  selectedTaskIdRef.current = selectedTaskId;
+  const getBoardRoot = useCallback(() => boardRootRef.current, []);
 
-  const reload = useCallback(async () => {
-    let nextStatus: AutomationStatus | null = null;
-    try {
-      nextStatus = await api.status();
-      setStatus(nextStatus);
-    } catch (err) {
-      const failure = toFailure(err);
-      if (failure.code === "gateway_not_bound") {
-        setBlocker({ kind: "gateway_not_bound" });
-        setBoard(null);
-        setLoading(false);
-        return;
+  useEffect(() => {
+    mounted.current = true;
+    setMove({ phase: "idle" });
+    activeMoveRef.current = null;
+    return () => {
+      mounted.current = false;
+      moveRequestPending.current = false;
+      reloadSequence.current += 1;
+    };
+  }, [channelId]);
+
+  const reload = useCallback((): Promise<ReloadResult> => {
+    const sequence = ++reloadSequence.current;
+    const current = () => mounted.current && sequence === reloadSequence.current;
+    const operation = (async (): Promise<ReloadResult> => {
+      let nextStatus: AutomationStatus | null = null;
+      try {
+        nextStatus = await api.status();
+        if (current()) setStatus(nextStatus);
+      } catch (err) {
+        const failure = toFailure(err);
+        if (failure.code === "gateway_not_bound") {
+          if (!current()) return { kind: "superseded" };
+          setBlocker({ kind: "gateway_not_bound" });
+          setBoard(null);
+          setBoardChannelId(null);
+          setLoading(false);
+          return { kind: "failed" };
+        }
+        // 상태 요약이 없어도 보드는 열 수 있다 — 경고 배지만 비운다.
+        if (current()) setStatus(null);
       }
-      // 상태 요약이 없어도 보드는 열 수 있다 — 경고 배지만 비운다.
-      setStatus(null);
-    }
-    try {
-      const data = await api.board(includeArchived);
-      setBoard(data);
-      setBlocker(null);
-    } catch (err) {
-      setBlocker(classifyBoardFailure(toFailure(err), nextStatus?.minVersion));
-    } finally {
-      setLoading(false);
-    }
-  }, [api, includeArchived]);
+      try {
+        const data = await api.board(includeArchived);
+        if (!current()) return { kind: "superseded" };
+        setBoard(data);
+        setBoardChannelId(channelId);
+        setBlocker(null);
+        return { kind: "applied", board: data };
+      } catch (err) {
+        if (!current()) return { kind: "superseded" };
+        setBlocker(classifyBoardFailure(toFailure(err), nextStatus?.minVersion));
+        return { kind: "failed" };
+      } finally {
+        if (current()) setLoading(false);
+      }
+    })();
+    latestReloadRef.current = operation;
+    return operation;
+  }, [api, channelId, includeArchived]);
+
+  const reconcileReload = useCallback(
+    async (result: ReloadResult): Promise<ReloadResult> => {
+      if (result.kind !== "superseded") return result;
+      const latest = latestReloadRef.current;
+      const next = latest ? await latest : result;
+      return next.kind === "superseded" ? reload() : next;
+    },
+    [reload],
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -152,17 +213,147 @@ export default function KanbanBoardModal({
     };
   }, [refreshTick, debounceMs, reload]);
 
+  const currentBoard = boardChannelId === channelId ? board : null;
   const columns = useMemo(
-    () => orderColumns(board?.columns, includeArchived),
-    [board, includeArchived],
+    () => orderColumns(currentBoard?.columns, includeArchived),
+    [currentBoard, includeArchived],
   );
   const allTasks = useMemo(() => flattenTasks(columns), [columns]);
-  const npcs = useMemo(() => board?.npcs ?? [], [board]);
+  const npcs = useMemo(() => currentBoard?.npcs ?? [], [currentBoard]);
   // 스웜 워커는 출근 중인 NPC 중에서만 고른다 — 서버가 잠든 NPC 를 400 으로 거절한다.
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
   // 플러그인이 스웜을 못 하면 버튼을 아예 숨긴다 — 눌렀다가 428 을 보는 것보다 낫다.
   const swarmSupported = status?.capabilities?.includes("swarm") ?? false;
   const anyRunning = allTasks.some(isRunning);
+  const movePending = move.phase === "pending";
+  const moveBlocked =
+    movePending ||
+    loading ||
+    Boolean(editor) ||
+    showSettings ||
+    showSwarm ||
+    Boolean(blocker) ||
+    !currentBoard;
+
+  const handleMoveInteraction = useCallback(
+    (event: KanbanMoveEvent) => {
+      if (event.type === "start") {
+        const task = allTasks.find((candidate) => candidate.id === event.taskId);
+        if (moveBlocked || activeMoveRef.current || !task || task.status !== event.source) return;
+        activeMoveRef.current = { taskId: event.taskId, source: event.source };
+        setMove({ phase: "active", taskId: event.taskId, source: event.source });
+        return;
+      }
+      if (event.type === "target") {
+        const active = activeMoveRef.current;
+        if (!active || active.taskId !== event.taskId || active.source !== event.source) return;
+        active.target = event.target;
+        setMove((current) =>
+          current.phase === "active" && current.taskId === event.taskId
+            ? { ...current, target: event.target }
+            : current,
+        );
+        return;
+      }
+      if (event.type === "cancel") {
+        const active = activeMoveRef.current;
+        if (!active || active.taskId !== event.taskId || active.source !== event.source) return;
+        activeMoveRef.current = null;
+        setMove((current) =>
+          current.phase === "active" && current.taskId === event.taskId
+            ? { phase: "idle" }
+            : current,
+        );
+        return;
+      }
+      if (moveBlocked || moveRequestPending.current) return;
+      const active = activeMoveRef.current;
+      if (
+        !active ||
+        active.taskId !== event.taskId ||
+        active.source !== event.source ||
+        active.target !== event.target
+      )
+        return;
+      const task = allTasks.find((candidate) => candidate.id === event.taskId);
+      const targetVisible = Array.from(
+        boardRootRef.current?.querySelectorAll<HTMLElement>("[data-column]") ?? [],
+      ).some(
+        (column) =>
+          column.dataset.column === event.target &&
+          !column.closest("[hidden]") &&
+          column.getAttribute("aria-hidden") !== "true",
+      );
+      if (
+        !task ||
+        task.status !== event.source ||
+        event.source === event.target ||
+        !targetVisible
+      ) {
+        setMove({ phase: "idle" });
+        activeMoveRef.current = null;
+        return;
+      }
+
+      const request = { taskId: task.id, title: task.title, target: event.target };
+      activeMoveRef.current = null;
+      moveRequestPending.current = true;
+      setMove({ phase: "pending", ...request });
+      void (async () => {
+        try {
+          await api.updateTask(task.id, { status: event.target });
+        } catch (err) {
+          moveRequestPending.current = false;
+          if (!mounted.current || currentApi.current !== api) return;
+          setMove({ phase: "error", ...request, message: failureLine(toFailure(err)) });
+          await reload();
+          return;
+        }
+        if (!mounted.current || currentApi.current !== api) return;
+        const reloadResult = await reconcileReload(await reload());
+        moveRequestPending.current = false;
+        if (!mounted.current || currentApi.current !== api) return;
+        if (selectedTaskIdRef.current === task.id) setDetailTick((value) => value + 1);
+        if (reloadResult.kind !== "applied") {
+          setMove({ phase: "unconfirmed", ...request });
+          return;
+        }
+        const authoritativeBoard = reloadResult.board;
+        const authoritativeTask = flattenTasks(
+          orderColumns(authoritativeBoard.columns, includeArchived),
+        ).find((candidate) => candidate.id === task.id);
+        setMove({
+          phase: "success",
+          taskId: request.taskId,
+          title: request.title,
+          status: authoritativeTask?.status,
+        });
+        restoreKanbanMoveResultFocus(boardRootRef.current, task.id);
+      })();
+    },
+    [allTasks, api, includeArchived, moveBlocked, reconcileReload, reload],
+  );
+
+  const retryMoveRead = useCallback(async () => {
+    if (move.phase !== "unconfirmed") return;
+    const request = move;
+    const reloadResult = await reconcileReload(await reload());
+    if (!mounted.current) return;
+    if (reloadResult.kind === "applied") {
+      const authoritativeBoard = reloadResult.board;
+      if (selectedTaskIdRef.current === request.taskId) setDetailTick((value) => value + 1);
+      const authoritativeTask = flattenTasks(
+        orderColumns(authoritativeBoard.columns, includeArchived),
+      ).find((candidate) => candidate.id === request.taskId);
+      setMove({
+        phase: "success",
+        taskId: request.taskId,
+        title: request.title,
+        status: authoritativeTask?.status,
+      });
+      restoreKanbanMoveResultFocus(boardRootRef.current, request.taskId);
+    }
+  }, [includeArchived, move, reconcileReload, reload]);
 
   // 실행 중 카드가 있을 때만 1초 시계를 돌린다(경과 시간 표시).
   useEffect(() => {
@@ -173,11 +364,11 @@ export default function KanbanBoardModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !editor && !showSettings) onClose();
+      if (e.key === "Escape" && !editor && !showSettings && !showSwarm) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, editor, showSettings]);
+  }, [onClose, editor, showSettings, showSwarm]);
 
   const openEditor = (next: Editor) => {
     setEditorError(null);
@@ -283,7 +474,7 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => openEditor({ mode: "create" })}
-              disabled={!board}
+              disabled={!currentBoard}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary hover:bg-primary-hover text-white font-semibold disabled:opacity-50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -305,7 +496,7 @@ export default function KanbanBoardModal({
                   setSwarmError(null);
                   setShowSwarm(true);
                 }}
-                disabled={!board || npcOptions.length === 0}
+                disabled={!currentBoard || npcOptions.length === 0}
                 className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
               >
                 {t("kanban.swarm")}
@@ -314,7 +505,7 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => void handleDispatch()}
-              disabled={!board || dispatching}
+              disabled={!currentBoard || dispatching}
               className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
             >
               {t("kanban.dispatch")}
@@ -331,7 +522,7 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => setShowSettings(true)}
-              disabled={!board}
+              disabled={!currentBoard}
               aria-label={t("kanban.settings.title")}
               title={t("kanban.settings.title")}
               className="p-1.5 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
@@ -380,9 +571,46 @@ export default function KanbanBoardModal({
         )}
 
         {/* Body */}
+        {move.phase === "pending" ||
+        move.phase === "success" ||
+        move.phase === "unconfirmed" ||
+        move.phase === "error" ? (
+          <div
+            data-move-status={move.phase}
+            role={move.phase === "error" ? "alert" : "status"}
+            aria-live={move.phase === "error" ? "assertive" : "polite"}
+            className="border-b border-border px-5 py-2 text-xs text-text-secondary"
+          >
+            {move.phase === "pending"
+              ? t("kanban.move.pending", {
+                  title: move.title,
+                  column: t(`kanban.column.${move.target}`),
+                })
+              : move.phase === "success" && move.status
+                ? t("kanban.move.success", {
+                    title: move.title,
+                    column: t(`kanban.column.${move.status}`),
+                  })
+                : move.phase === "success"
+                  ? t("kanban.move.reconciled", { title: move.title })
+                  : move.phase === "unconfirmed"
+                    ? t("kanban.move.unconfirmed", { title: move.title })
+                    : t("kanban.move.failed", { title: move.title, error: move.message })}
+            {move.phase === "unconfirmed" ? (
+              <button type="button" className="ml-2 underline" onClick={() => void retryMoveRead()}>
+                {t("kanban.move.retryRead")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
-            {loading && !board && !blocker ? (
+          <div
+            ref={boardRootRef}
+            data-kanban-board-root
+            tabIndex={-1}
+            className="flex-1 overflow-x-auto overflow-y-hidden p-4"
+          >
+            {loading && !currentBoard && !blocker ? (
               <div className="text-xs text-text-dim">{t("common.loading")}</div>
             ) : blocker ? (
               <Blocker
@@ -401,13 +629,17 @@ export default function KanbanBoardModal({
                     now={now}
                     selectedTaskId={selectedTaskId}
                     onOpen={setSelectedTaskId}
+                    moveDisabled={moveBlocked}
+                    activeMoveTaskId={move.phase === "active" ? move.taskId : null}
+                    getMoveRoot={getBoardRoot}
+                    onMoveInteraction={handleMoveInteraction}
                   />
                 ))}
               </div>
             )}
           </div>
 
-          {selectedTaskId && board && !blocker && (
+          {selectedTaskId && currentBoard && !blocker && (
             <TaskDrawer
               key={selectedTaskId}
               api={api}
