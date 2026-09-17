@@ -31,6 +31,31 @@ test("DeskRPG 이미지 기본값은 :latest 다 — 도커 매니저의 업데�
   assert.match(compose, /image: \$\{DESKRPG_IMAGE:-ghcr\.io\/dandacompany\/deskrpg:latest\}/);
 });
 
+test("DeskRPG 플러그인을 hermes 보다 먼저 설치·활성화한다 — 없으면 게이트웨이 연결이 프로필 목록으로 못 넘어간다", () => {
+  assert.match(compose, /^ {2}hermes-plugins:/m);
+  assert.match(compose, /hermes plugins install/);
+  assert.match(compose, /hermes plugins enable deskrpg/);
+  // 이미 설치된 플러그인에 install 을 다시 부르면 exit 1 이다 — 설치 여부를 보고 update 로 갈라야 한다.
+  assert.match(compose, /hermes plugins update deskrpg/);
+  assert.match(compose, /hermes-plugins:\s*\n\s*condition: service_completed_successfully/);
+});
+
+test("플러그인 설치 서비스도 hermes 와 같은 API_SERVER_KEY 를 받는다 — 없으면 이미지가 키를 만들어 볼륨 .env 에 적고, 그 키가 사용자 키를 덮어 DeskRPG 가 401 을 받는다", () => {
+  const block = compose.slice(compose.indexOf("  hermes-plugins:"), compose.indexOf("\n  hermes:"));
+  assert.match(block, /API_SERVER_KEY: \$\{HERMES_API_KEY:-change-this-hermes-api-key\}/);
+  assert.match(block, /HERMES_UID: \$\{HERMES_UID:-10000\}/);
+});
+
+test("Hermes 대시보드는 비밀번호가 있을 때만 켠다 — 비어 있으면 인증 게이트가 막아 s6 가 재시작을 반복한다", () => {
+  assert.match(compose, /HERMES_DASHBOARD: \$\{HERMES_DASHBOARD_PASSWORD:\+true\}/);
+  assert.match(compose, /HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: \$\{HERMES_DASHBOARD_PASSWORD:-\}/);
+  assert.match(compose, /loadbalancer\.server\.port=9119/);
+});
+
+test("연결기는 deskrpg 와 hermes 둘 다 traefik-proxy 에 붙인다", () => {
+  assert.match(compose, /for service in deskrpg hermes/);
+});
+
 test(".env.example 에 주석 줄이 없다 — Hostinger 가 그대로 복사해 `# FOO` 를 변수 이름으로 읽는다", () => {
   const env = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
   assert.deepEqual(
