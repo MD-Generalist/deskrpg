@@ -114,7 +114,7 @@ docker compose --env-file .env.docker up -d
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
-공개 이미지는 GHCR `ghcr.io/dandacompany/deskrpg`에 있습니다. Compose 기본값은 `ghcr.io/dandacompany/deskrpg:latest`이며, 특정 릴리스로 고정하려면 `.env.docker`에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.917.3`을 설정하세요. 옛 Docker Hub `dandacompany/deskrpg` 이미지는 `2026.9.19`에서 멈춘 레거시이며 새 릴리스가 올라가지 않습니다.
+공개 이미지는 GHCR `ghcr.io/dandacompany/deskrpg`에 있습니다. Compose 기본값은 `ghcr.io/dandacompany/deskrpg:latest`이며, 특정 릴리스로 고정하려면 `.env.docker`에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<릴리스 태그>`를 설정하세요. 옛 Docker Hub `dandacompany/deskrpg` 이미지는 `2026.9.19`에서 멈춘 레거시이며 새 릴리스가 올라가지 않습니다.
 
 명시적으로 파일 경로를 지정하고 싶다면 아래 명령을 사용해도 됩니다.
 
@@ -133,7 +133,7 @@ docker compose --env-file .env.lite -f docker/docker-compose.lite.yml up -d
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
-특정 릴리스로 고정하려면 명령 앞에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:2026.917.3`을 붙이면 됩니다.
+특정 릴리스로 고정하려면 명령 앞에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<릴리스 태그>`를 붙이면 됩니다([릴리스 태그 목록](https://github.com/dandacompany/deskrpg/releases)).
 
 빠르게 시작하려면 SQLite, 오래 운영하려면 PostgreSQL을 선택하면 됩니다.
 

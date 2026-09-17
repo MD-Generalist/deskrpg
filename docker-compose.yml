@@ -19,14 +19,15 @@
 #                     them. An OpenAI key alone is ignored until `model.provider=openai-api`.
 #                     ChatGPT login (`hermes auth add openai-codex`) needs none.
 #   TRAEFIK_HOST      REQUIRED, not injected: srvNNNNNN.hstgr.cloud → deskrpg.<TRAEFIK_HOST>
-#   DESKRPG_IMAGE     override the image tag (default pinned below)
+#   DESKRPG_IMAGE     default :latest, so Docker Manager's Update upgrades. Pin or roll back
+#                     with ghcr.io/dandacompany/deskrpg:<release tag>
 #
 # Local PostgreSQL stack: docker/docker-compose.dev.yml. Hermes elsewhere? Delete the
 # `hermes` service and add your own gateway in DeskRPG → My Gateways.
 
 services:
   deskrpg:
-    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:2026.917.3}
+    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
     restart: unless-stopped
     depends_on:
       - hermes

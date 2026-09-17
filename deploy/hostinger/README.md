@@ -141,9 +141,22 @@ Already running Hermes elsewhere (your laptop, another VPS)? Delete the `hermes`
 
 With the plugin from step 4-2 in place, kanban boards, the event stream and schedules work out of the box. Set `timezone:` in Hermes' `config.yaml` if you schedule anything — cron times are read in that zone.
 
-## 7. Day-2
+## 7. Day-2: updating
 
-Docker Manager → project → **Options**: Restart / Update (edit YAML, re-create) / View logs / Delete. **Access → Terminal** opens a shell in the container. Data lives in the named volumes `deskrpg-data` (SQLite + uploads) and `hermes-data` (`~/.hermes`) and survives Update.
+The compose uses `ghcr.io/dandacompany/deskrpg:latest` and `nousresearch/hermes-agent:latest`. Docker Manager's **Update** keeps the compose you imported and pulls its images again (its build log shows `Pulling`), so:
+
+| Goal                              | Do this                                                                                               |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Upgrade to the newest release** | project **⋮ → Update**. Only containers whose image changed are recreated                             |
+| **Stay on a release**             | Manage → Environment → `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<release tag>` → Save and deploy   |
+| **Roll back**                     | same as above with the previous tag from [releases](https://github.com/dandacompany/deskrpg/releases) |
+| **Follow latest again**           | delete `DESKRPG_IMAGE` (or set it to `…:latest`) → Save and deploy                                    |
+
+Data lives in the named volumes `deskrpg-data` (SQLite, uploads, generated `JWT_SECRET`) and `hermes-data` (`~/.hermes`, logins, plugins) and survives Update; database migrations run at startup. Rolling back to a release older than the one that migrated your database is not guaranteed to work — back up first (hPanel → VPS → Backups).
+
+**Installed before `:latest` became the default?** Your saved compose still pins an old tag, so Update re-pulls that same version. Set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:latest` once → Save and deploy; afterwards Update is enough.
+
+Other options on the project: Restart / View logs / Delete, and **Terminal** for a shell in a container.
 
 ## How Docker Manager reads this repo (measured 2026-09-16)
 

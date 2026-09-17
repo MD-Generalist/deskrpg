@@ -68,7 +68,7 @@ DeskRPG 가 붙을 문(컨테이너 안 8642)이 열리지 않아 직원을 한 
 이건 맞바꿈입니다. 켜 두면 재시작할 때마다 npm 과 Hermes 업스트림에서 **그 시점의 최신**을
 받습니다 — 손대지 않아도 보안 수정이 따라오는 대신, 공급망을 그 두 출처에 맡기는 것입니다.
 검토한 버전만 돌려야 하는 환경이라면 `DESKRPG_AUTO_UPDATE=false` 로 끄고
-`OFFICE_IMAGE` 를 버전 태그(`ghcr.io/dandacompany/deskrpg-office:2026.917.3`)로 고정하세요.
+`OFFICE_IMAGE` 를 버전 태그(`ghcr.io/dandacompany/deskrpg-office:<릴리스 태그>`)로 고정하세요.
 그러면 이미지에 담긴 버전만 돕니다.
 
 ## 알아 둘 것
