@@ -55,8 +55,11 @@ const strings = (value: unknown): string[] =>
 
 export default function GatewaySetupWizard({
   onConnected,
+  onSaved,
 }: {
   onConnected: (gatewayId: string) => void;
+  /** 주소 연결이 저장됐다 — 플러그인이 준비되지 않았어도 게이트웨이는 목록에 있다. */
+  onSaved?: (gatewayId: string) => void;
 }) {
   const { locale } = useLocale();
   const t = useT();
@@ -939,6 +942,7 @@ export default function GatewaySetupWizard({
                 setToken("");
                 setResult(data);
                 setScreen("success");
+                onSaved?.(data.gatewayId);
               },
             );
           }}

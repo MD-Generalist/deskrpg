@@ -26,7 +26,10 @@ const candidate: SetupCandidate = {
   // 시간대가 이미 있는 호스트가 기본값이다 — 시간대 제안은 비어 있을 때만 나온다.
   timezone: "Asia/Seoul" as string | null,
 };
-async function fixture(handler: typeof fetch) {
+async function fixture(
+  handler: typeof fetch,
+  props: { onSaved?: (gatewayId: string) => void } = {},
+) {
   const original = globalThis.fetch;
   globalThis.fetch = handler;
   const host = document.createElement("div");
@@ -35,7 +38,7 @@ async function fixture(handler: typeof fetch) {
   await act(async () =>
     root.render(
       <I18nProvider initialLocale="ko">
-        <GatewaySetupWizard onConnected={() => {}} />
+        <GatewaySetupWizard onConnected={() => {}} onSaved={props.onSaved} />
       </I18nProvider>,
     ),
   );
@@ -177,6 +180,70 @@ test("URL success with absent plugin offers installation and never claims ready"
     assert.match(f.host.textContent!, /SSH로 설치하기/);
     assert.doesNotMatch(f.host.textContent!, /게이트웨이가 연결되었습니다/);
     assert.equal(f.host.querySelector('a[href^="/profiles"]'), null);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("URL 연결이 저장되면 플러그인이 없어도 onSaved 로 알린다 — 목록이 비어 보이면 사용자가 다시 등록한다", async () => {
+  const saved: string[] = [];
+  const f = await fixture(
+    async (_url, init) =>
+      init?.body
+        ? response({ gatewayId: "gw-saved", pluginStatus: "plugin_absent" })
+        : response(capabilities),
+    { onSaved: (gatewayId) => saved.push(gatewayId) },
+  );
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("원격 연결"))!
+        .click(),
+    );
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("게이트웨이 주소로 연결"))!
+        .click(),
+    );
+    await act(async () =>
+      f.host
+        .querySelector("form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+    );
+    assert.deepEqual(saved, ["gw-saved"]);
+    // 안내는 그대로 남는다 — 저장 알림이 화면을 게이트웨이 상세로 넘기지 않는다.
+    assert.match(f.host.textContent!, /API 연결은 저장되었지만/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("URL 인증 실패는 저장되지 않았으므로 onSaved 를 부르지 않는다", async () => {
+  const saved: string[] = [];
+  const f = await fixture(
+    async (_url, init) =>
+      init?.body
+        ? new Response(JSON.stringify({ errorCode: "gateway_unauthorized" }), { status: 401 })
+        : response(capabilities),
+    { onSaved: (gatewayId) => saved.push(gatewayId) },
+  );
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("원격 연결"))!
+        .click(),
+    );
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("게이트웨이 주소로 연결"))!
+        .click(),
+    );
+    await act(async () =>
+      f.host
+        .querySelector("form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+    );
+    assert.deepEqual(saved, []);
   } finally {
     await f.cleanup();
   }

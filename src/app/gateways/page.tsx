@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
 import GatewaySetupWizard from "@/components/gateway/GatewaySetupWizard";
+import { nextSelectedGatewayId } from "./gateway-selection";
 import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
@@ -111,29 +112,27 @@ function GatewayManagementPageInner() {
   const [blockingChannels, setBlockingChannels] = useState<BlockingChannel[]>([]);
   const [unbinding, setUnbinding] = useState("");
 
-  const loadGateways = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/gateways");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw data;
-      }
-      const nextGateways = Array.isArray(data.gateways) ? data.gateways : [];
-      setGateways(nextGateways);
-      setSelectedGatewayId((current) => {
-        if (current && nextGateways.some((gateway: GatewayRow) => gateway.id === current)) {
-          return current;
+  const loadGateways = useCallback(
+    async (options: { autoSelect?: boolean } = {}) => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch("/api/gateways");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw data;
         }
-        return nextGateways[0]?.id ?? "";
-      });
-    } catch (nextError) {
-      setError(getLocalizedErrorMessage(t, nextError, "common.error"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+        const nextGateways = Array.isArray(data.gateways) ? data.gateways : [];
+        setGateways(nextGateways);
+        setSelectedGatewayId((current) => nextSelectedGatewayId(current, nextGateways, options));
+      } catch (nextError) {
+        setError(getLocalizedErrorMessage(t, nextError, "common.error"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     void loadGateways();
@@ -582,6 +581,7 @@ function GatewayManagementPageInner() {
                   setSelectedGatewayId(gatewayId);
                   void loadGateways();
                 }}
+                onSaved={() => void loadGateways({ autoSelect: false })}
               />
             ) : (
               <section className="rounded-xl border border-border bg-surface p-5">
