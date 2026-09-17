@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { UserPlus, Users } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import RosterAvatar from "./RosterAvatar";
 
 /**
@@ -134,12 +133,7 @@ export default function NpcRoster({
                     className="shrink-0"
                   />
                 )}
-                <RosterAvatar
-                  appearance={
-                    (npc.appearance ?? null) as
-                      CharacterAppearance | LegacyCharacterAppearance | null
-                  }
-                />
+                <RosterAvatar appearance={npc.appearance ?? null} />
                 {onOpenMenu ? (
                   <button
                     onClick={(event) => onOpenMenu(event.currentTarget, npc)}

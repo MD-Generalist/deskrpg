@@ -14,7 +14,7 @@ import {
   type DiscoveryRow,
   type ProbeStatus,
 } from "./discovery-rows";
-import type { CharacterAppearance } from "@/lib/lpc-registry";
+import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 import NpcHireWizard from "./NpcHireWizard";
 import ProfileAppearanceEditor from "./ProfileAppearanceEditor";

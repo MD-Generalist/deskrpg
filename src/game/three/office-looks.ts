@@ -1,4 +1,4 @@
-import type { CharacterAppearance } from "../../lib/lpc-registry";
+import type { CharacterAppearance } from "./office-appearance";
 import { EXTENDED_OFFICE_LOOKS } from "./office-looks-extended";
 
 export type OfficeLook = {
@@ -286,17 +286,6 @@ export function resolveOfficeLook(appearance: unknown): OfficeLook | undefined {
 export function officeLookAppearance(id: string): CharacterAppearance {
   const look = OFFICE_LOOKS.find((candidate) => candidate.id === id);
   if (!look) throw new Error(`Unknown office look: ${id}`);
-  // Valid existing assets keep the invisible simulation and older clients compatible.
-  return {
-    officeLookId: look.id,
-    bodyType: look.bodyType,
-    layers: {
-      body: { itemKey: "body", variant: look.skinVariant },
-      eyes: { itemKey: "eye_color", variant: "brown" },
-      hair: { itemKey: "hair_messy1", variant: "chestnut" },
-      torso: { itemKey: "torso_clothes_tshirt", variant: "charcoal" },
-      legs: { itemKey: "legs_pants", variant: "blue" },
-      feet: { itemKey: "feet_boots_basic", variant: "brown" },
-    },
-  };
+  // 정본 형태는 두 키뿐이다 — 레이어 데이터는 더 이상 만들지 않는다.
+  return { officeLookId: look.id, bodyType: look.bodyType };
 }

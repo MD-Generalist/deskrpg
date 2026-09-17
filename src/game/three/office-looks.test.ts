@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "./office-looks";
-import { validateAppearance } from "../../lib/lpc-registry";
+import { validateOfficeAppearance } from "./office-appearance";
 test("all fifty looks survive existing appearance validation and JSON roundtrip", () => {
   assert.equal(OFFICE_LOOKS.length, 50);
   assert.equal(new Set(OFFICE_LOOKS.map((l) => l.id)).size, 50);
   for (const look of OFFICE_LOOKS) {
     const appearance = officeLookAppearance(look.id);
-    assert.equal(validateAppearance(appearance), null, look.id);
+    assert.equal(validateOfficeAppearance(appearance), null, look.id);
     assert.equal(resolveOfficeLook(JSON.stringify(appearance))?.id, look.id);
   }
 });
@@ -19,8 +19,9 @@ test("legacy, malformed and unknown appearances resolve safely", () => {
 test("one saved appearance cannot mutate another character", () => {
   const a = officeLookAppearance(OFFICE_LOOKS[0].id),
     b = officeLookAppearance(OFFICE_LOOKS[0].id);
-  a.layers.body!.variant = "black";
-  assert.equal(b.layers.body!.variant, "light");
+  assert.notEqual(a, b);
+  a.bodyType = "female";
+  assert.equal(b.bodyType, OFFICE_LOOKS[0].bodyType);
 });
 
 import * as T from "three";

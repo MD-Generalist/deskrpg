@@ -1,7 +1,7 @@
 import { furnitureSeats } from "@/game/three/seating";
 import { parseDbJson } from "@/lib/db-json";
 import { projectTiledGeometry, type TiledGeometryMap } from "@/lib/tiled-geometry";
-import type { CharacterAppearance } from "@/lib/lpc-registry";
+import { defaultOfficeAppearance, type CharacterAppearance } from "@/game/three/office-appearance";
 
 /**
  * 빠른 시작의 **순수 로직**. DB 도 `fetch` 도 여기 들어오지 않는다 — 라우트가
@@ -16,22 +16,8 @@ import type { CharacterAppearance } from "@/lib/lpc-registry";
 /** 채널 생성 화면의 기본 선택과 같은 오피스 환경. */
 export const QUICK_START_ENVIRONMENT_ID = "trading";
 
-/**
- * 기본 외형. `validateAppearance` 를 통과하는 최소 구성이고, 캐릭터 편집기의
- * 남성 기본값과 같은 조합이다(편집기는 `"use client"` 모듈이라 서버에서 import
- * 하지 않는다).
- */
-export const QUICK_START_APPEARANCE: CharacterAppearance = {
-  bodyType: "male",
-  layers: {
-    body: { itemKey: "body", variant: "light" },
-    eye_color: { itemKey: "eye_color", variant: "blue" },
-    hair: { itemKey: "hair_bangsshort", variant: "chestnut" },
-    clothes: { itemKey: "torso_clothes_tshirt", variant: "blue" },
-    legs: { itemKey: "legs_pants", variant: "charcoal" },
-    shoes: { itemKey: "feet_boots_basic", variant: "brown" },
-  },
-};
+/** 기본 외형. 첫 번째 남성 룩(`office-jun`) — 캐릭터 생성 초기값과 같다. */
+export const QUICK_START_APPEARANCE: CharacterAppearance = defaultOfficeAppearance();
 
 const MAX_CHARACTER_NAME = 50;
 const MAX_CHANNEL_NAME = 100;

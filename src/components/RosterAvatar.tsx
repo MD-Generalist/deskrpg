@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
+import { useEffect, useState } from "react";
 import { resolveOfficeLook } from "@/game/three/office-looks";
-import { compositeCharacter } from "@/lib/sprite-compositor";
 
 /**
  * 명부(플레이어·NPC)에서 쓰는 작은 원형 아바타. `GamePageClient` 안에 있던 것을
  * `NpcRoster` 와 나눠 쓰기 위해 꺼냈다.
+ *
+ * 룩이 있으면 3D 썸네일, 썸네일이 아직 없으면 룩 이름 첫 글자, 외형이 없으면 "?".
+ * 룩 ID 를 모르는 외형은 서버가 정규화하므로 여기서는 "?" 로만 접는다.
  */
 export default function RosterAvatar({
   appearance,
   size = 28,
 }: {
-  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
+  appearance: unknown;
   size?: number;
 }) {
   const look = resolveOfficeLook(appearance);
@@ -31,31 +32,6 @@ export default function RosterAvatar({
       cancelled = true;
     };
   }, [look]);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current || !appearance || look) return;
-    let cancelled = false;
-
-    const canvas = canvasRef.current;
-    const offscreen = document.createElement("canvas");
-
-    compositeCharacter(offscreen, appearance)
-      .then(() => {
-        if (cancelled) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        canvas.width = size;
-        canvas.height = size;
-        ctx.clearRect(0, 0, size, size);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(offscreen, 0, 128, 64, 64, 0, 0, size, size);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [appearance, size, look]);
 
   if (look) {
     return (
@@ -84,24 +60,12 @@ export default function RosterAvatar({
     );
   }
 
-  if (!appearance) {
-    return (
-      <div
-        className="rounded-full bg-surface-raised flex items-center justify-center text-text-secondary text-micro font-bold shrink-0"
-        style={{ width: size, height: size }}
-      >
-        ?
-      </div>
-    );
-  }
-
   return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      className="rounded-full bg-surface-raised shrink-0"
-      style={{ width: size, height: size, imageRendering: "pixelated" }}
-    />
+    <div
+      className="rounded-full bg-surface-raised flex items-center justify-center text-text-secondary text-micro font-bold shrink-0"
+      style={{ width: size, height: size }}
+    >
+      ?
+    </div>
   );
 }
