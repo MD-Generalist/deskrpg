@@ -13,7 +13,6 @@ import {
   users,
 } from "@/db";
 import { getUserId } from "@/lib/internal-rpc";
-import { ensureOfficeEnvironmentTemplate } from "@/lib/office-environment-template";
 import {
   assignSeats,
   freeSeatTiles,
@@ -68,32 +67,6 @@ async function expectOk(response: Response): Promise<Record<string, unknown>> {
     throw new QuickStartFailure(NextResponse.json(payload, { status: response.status }));
   }
   return payload;
-}
-
-/**
- * `ensureOfficeEnvironmentTemplate` 은 화면에서 쓰라고 `fetch` 를 주입받게 돼 있다.
- * 서버에서는 네트워크를 타는 대신 map-template 라우트 핸들러로 곧장 보낸다 —
- * "같은 환경이면 같은 템플릿을 재사용한다" 는 판단이 한 곳에만 남는다.
- */
-async function inProcessMapTemplateFetch(req: NextRequest): Promise<typeof fetch> {
-  const list = await import("../map-templates/route");
-  const detail = await import("../map-templates/[id]/route");
-
-  return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(String(input), req.nextUrl.origin);
-    const segments = url.pathname.replace(/^\/api\/map-templates\/?/, "");
-
-    if (segments === "") {
-      if ((init?.method ?? "GET").toUpperCase() === "POST") {
-        return list.POST(subRequest(req, url.pathname, JSON.parse(String(init?.body ?? "{}"))));
-      }
-      return list.GET();
-    }
-
-    return detail.GET(subRequest(req, url.pathname, {}, "GET"), {
-      params: Promise.resolve({ id: decodeURIComponent(segments) }),
-    });
-  }) as unknown as typeof fetch;
 }
 
 async function ensureCharacter(req: NextRequest, userId: string, nickname: string | null) {
@@ -177,11 +150,7 @@ async function ensureChannel(req: NextRequest, userId: string, nickname: string 
     );
   }
 
-  const mapTemplateId = await ensureOfficeEnvironmentTemplate(
-    QUICK_START_ENVIRONMENT_ID,
-    await inProcessMapTemplateFetch(req),
-  );
-
+  // 환경 배치는 채널 라우트가 코드에서 직접 만든다 — 템플릿 표를 거치지 않는다.
   const { POST } = await import("../channels/route");
   const payload = await expectOk(
     await POST(
@@ -189,7 +158,7 @@ async function ensureChannel(req: NextRequest, userId: string, nickname: string 
         name: quickStartChannelName(nickname),
         isPublic: true,
         groupId,
-        mapTemplateId,
+        environmentId: QUICK_START_ENVIRONMENT_ID,
       }),
     ),
   );
