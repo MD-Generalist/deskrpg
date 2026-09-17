@@ -1,7 +1,7 @@
 import "../../test-setup/dom";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
 
 import { I18nProvider } from "@/lib/i18n/context";
@@ -305,5 +305,67 @@ test("R3: focus restoration falls back to the source column when the card disapp
     assert.equal(document.activeElement, column);
   } finally {
     column.remove();
+  }
+});
+
+test("R2/R5: two boards isolate keyboard targets and target cleanup", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const firstRoot = createRef<HTMLDivElement>();
+  const secondRoot = createRef<HTMLDivElement>();
+  const events: KanbanMoveEvent[] = [];
+  const renderBoard = (ref: typeof firstRoot, id: string, capture: boolean) => (
+    <div ref={ref} data-board={id}>
+      <KanbanColumn
+        name="todo"
+        tasks={[{ ...task, id: `${id}-task` }]}
+        npcs={[]}
+        now={0}
+        selectedTaskId={null}
+        onOpen={() => undefined}
+        getMoveRoot={() => ref.current}
+        onMoveInteraction={capture ? (event) => events.push(event) : undefined}
+      />
+      <KanbanColumn
+        name="ready"
+        tasks={[]}
+        npcs={[]}
+        now={0}
+        selectedTaskId={null}
+        onOpen={() => undefined}
+        getMoveRoot={() => ref.current}
+      />
+    </div>
+  );
+  try {
+    await act(async () =>
+      root.render(
+        <I18nProvider initialLocale="en">
+          {renderBoard(firstRoot, "first", true)}
+          {renderBoard(secondRoot, "second", false)}
+        </I18nProvider>,
+      ),
+    );
+    const handle = firstRoot.current!.querySelector<HTMLButtonElement>(
+      '[data-card-move-handle="first-task"]',
+    )!;
+    await act(async () => {
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    assert.equal(
+      firstRoot.current!.querySelector<HTMLElement>('[data-column="ready"]')?.dataset.moveTarget,
+      "true",
+    );
+    assert.equal(secondRoot.current!.querySelector('[data-move-target="true"]'), null);
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    assert.equal(firstRoot.current!.querySelector('[data-move-target="true"]'), null);
+    assert.equal(events.at(-1)?.type, "cancel");
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
   }
 });

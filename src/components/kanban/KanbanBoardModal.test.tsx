@@ -61,6 +61,7 @@ const json = (data: unknown, init?: ResponseInit) =>
 async function mount(
   handler: Handler,
   props: {
+    channelId?: string;
     refreshTick?: number;
     debounceMs?: number;
     onConnectGateway?: () => void;
@@ -197,6 +198,100 @@ test("R4: move PATCHes status once, keeps counts unchanged while pending, then r
       f.host.querySelector('[data-move-status="success"]')?.getAttribute("role"),
       "status",
     );
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    assert.equal(
+      document.activeElement,
+      f.host.querySelector('[data-card-move-handle="t-todo"]'),
+      "focus follows the authoritative card into its new column",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R3/R4: authoritative deletion restores focus to the board fallback", async () => {
+  let reads = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) {
+      reads += 1;
+      return json(reads === 1 ? board() : board({ columns: [{ name: "todo", tasks: [] }] }));
+    }
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+      return json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    assert.equal(document.activeElement, f.host.querySelector("[data-kanban-board-root]"));
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R4/R5: channel change hides stale cards and cannot submit until the new board loads", async () => {
+  let releaseStatus!: (response: Response) => void;
+  const delayedStatus = new Promise<Response>((resolve) => (releaseStatus = resolve));
+  let patches = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/channels/ch-2/automation/status")) return delayedStatus;
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) return json(board());
+    if (init?.method === "PATCH") patches += 1;
+    return json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } });
+  });
+  try {
+    const staleHandle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="t-todo"]');
+    assert.ok(staleHandle);
+    await f.render({ channelId: "ch-2" });
+    await act(async () => {
+      key(staleHandle, " ");
+      key(staleHandle, "ArrowRight");
+      key(staleHandle, "Enter");
+    });
+    assert.equal(f.host.querySelector('[data-task-id="t-todo"]'), null);
+    assert.equal(patches, 0);
+    await act(async () => releaseStatus(json(status())));
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R4/R5: only one pre-submit card can be active", async () => {
+  let patches = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board"))
+      return json(
+        board({
+          columns: [
+            {
+              name: "todo",
+              tasks: [
+                { id: "t-todo", title: "첫 카드", status: "todo" },
+                { id: "t-other", title: "둘째 카드", status: "todo" },
+              ],
+            },
+          ],
+        }),
+      );
+    if (init?.method === "PATCH") patches += 1;
+    return json({ task: {} });
+  });
+  try {
+    const first = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="t-todo"]')!;
+    const second = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="t-other"]')!;
+    await act(async () => key(first, " "));
+    assert.equal(first.disabled, false, "active handle remains enabled");
+    assert.equal(second.disabled, true, "other handles are disabled");
+    await act(async () => {
+      key(second, " ");
+      key(second, "ArrowRight");
+      key(second, "Enter");
+    });
+    assert.equal(patches, 0);
   } finally {
     await f.cleanup();
   }

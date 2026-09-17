@@ -23,6 +23,8 @@ type FixtureState = {
   patchBodies: unknown[];
   patchMode: "success" | "error" | "pending";
   releasePatch?: () => void;
+  deleteAfterPatch?: boolean;
+  hidden?: boolean;
 };
 
 const statuses: TaskStatus[] = [
@@ -48,7 +50,7 @@ function board(state: FixtureState, includeArchived: boolean) {
       .map((status) => ({
         name: status,
         tasks:
-          status === state.status
+          status === state.status && !state.hidden
             ? [{ id: TASK_ID, title: "브라우저 이동 카드", status, assignee: "fixture" }]
             : [],
       })),
@@ -148,6 +150,7 @@ async function installFixture(context: BrowserContext, state: FixtureState) {
         await new Promise<void>((resolve) => (state.releasePatch = resolve));
       }
       state.status = body.status;
+      if (state.deleteAfterPatch) state.hidden = true;
       return json(route, {
         task: { id: TASK_ID, title: "브라우저 이동 카드", status: body.status },
       });
@@ -207,8 +210,32 @@ test("mouse drag highlights an empty column and waits for server truth before mo
   state.releasePatch?.();
   await expect(target).toContainText("브라우저 이동 카드");
   await expect(page.locator('[data-move-status="success"]')).toBeVisible();
+  await expect(page.locator(`[data-card-move-handle="${TASK_ID}"]`)).toBeFocused();
   expect(state.boardReads).toBeGreaterThanOrEqual(2);
   expect(point.x).toBeGreaterThan(0);
+});
+
+test("successful move focuses the board fallback when the authoritative card disappeared", async ({
+  context,
+  page,
+}) => {
+  const state: FixtureState = {
+    status: "todo",
+    boardReads: 0,
+    patchBodies: [],
+    patchMode: "success",
+    deleteAfterPatch: true,
+  };
+  await installFixture(context, state);
+  await openBoard(page);
+  const handle = page.locator(`[data-card-move-handle="${TASK_ID}"]`);
+  await handle.focus();
+  await handle.press("Space");
+  await handle.press("ArrowRight");
+  await handle.press("Enter");
+  await expect(page.locator('[data-move-status="success"]')).toBeVisible();
+  await expect(page.locator("[data-kanban-board-root]")).toBeFocused();
+  expect(state.patchBodies).toEqual([{ status: "scheduled" }]);
 });
 
 test("keyboard movement, detail click, Escape, same-column and outside drops stay separate", async ({

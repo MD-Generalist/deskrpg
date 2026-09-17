@@ -10,7 +10,7 @@ import KanbanColumn from "./KanbanColumn";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
-import type { KanbanMoveEvent } from "./kanban-card-move";
+import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
 import {
   createKanbanApi,
   toFailure,
@@ -96,6 +96,7 @@ export default function KanbanBoardModal({
   const api = useMemo(() => createKanbanApi(channelId), [channelId]);
   const [status, setStatus] = useState<AutomationStatus | null>(null);
   const [board, setBoard] = useState<BoardResponse | null>(null);
+  const [boardChannelId, setBoardChannelId] = useState<string | null>(null);
   const [blocker, setBlocker] = useState<BoardBlocker | null>(null);
   const [loading, setLoading] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -118,12 +119,20 @@ export default function KanbanBoardModal({
   const moveRequestPending = useRef(false);
   const currentApi = useRef(api);
   const selectedTaskIdRef = useRef(selectedTaskId);
+  const boardRootRef = useRef<HTMLDivElement>(null);
+  const activeMoveRef = useRef<{
+    taskId: string;
+    source: KanbanTaskStatus;
+    target?: KanbanTaskStatus;
+  } | null>(null);
   currentApi.current = api;
   selectedTaskIdRef.current = selectedTaskId;
+  const getBoardRoot = useCallback(() => boardRootRef.current, []);
 
   useEffect(() => {
     mounted.current = true;
     setMove({ phase: "idle" });
+    activeMoveRef.current = null;
     return () => {
       mounted.current = false;
       moveRequestPending.current = false;
@@ -144,6 +153,7 @@ export default function KanbanBoardModal({
         if (current()) {
           setBlocker({ kind: "gateway_not_bound" });
           setBoard(null);
+          setBoardChannelId(null);
           setLoading(false);
         }
         return null;
@@ -155,6 +165,7 @@ export default function KanbanBoardModal({
       const data = await api.board(includeArchived);
       if (!current()) return null;
       setBoard(data);
+      setBoardChannelId(channelId);
       setBlocker(null);
       return data;
     } catch (err) {
@@ -163,7 +174,7 @@ export default function KanbanBoardModal({
     } finally {
       if (current()) setLoading(false);
     }
-  }, [api, includeArchived]);
+  }, [api, channelId, includeArchived]);
 
   useEffect(() => {
     setLoading(true);
@@ -185,12 +196,13 @@ export default function KanbanBoardModal({
     };
   }, [refreshTick, debounceMs, reload]);
 
+  const currentBoard = boardChannelId === channelId ? board : null;
   const columns = useMemo(
-    () => orderColumns(board?.columns, includeArchived),
-    [board, includeArchived],
+    () => orderColumns(currentBoard?.columns, includeArchived),
+    [currentBoard, includeArchived],
   );
   const allTasks = useMemo(() => flattenTasks(columns), [columns]);
-  const npcs = useMemo(() => board?.npcs ?? [], [board]);
+  const npcs = useMemo(() => currentBoard?.npcs ?? [], [currentBoard]);
   // 스웜 워커는 출근 중인 NPC 중에서만 고른다 — 서버가 잠든 NPC 를 400 으로 거절한다.
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
   // 플러그인이 스웜을 못 하면 버튼을 아예 숨긴다 — 눌렀다가 428 을 보는 것보다 낫다.
@@ -198,16 +210,27 @@ export default function KanbanBoardModal({
   const anyRunning = allTasks.some(isRunning);
   const movePending = move.phase === "pending";
   const moveBlocked =
-    movePending || Boolean(editor) || showSettings || showSwarm || Boolean(blocker) || !board;
+    movePending ||
+    loading ||
+    Boolean(editor) ||
+    showSettings ||
+    showSwarm ||
+    Boolean(blocker) ||
+    !currentBoard;
 
   const handleMoveInteraction = useCallback(
     (event: KanbanMoveEvent) => {
       if (event.type === "start") {
-        if (moveBlocked) return;
+        const task = allTasks.find((candidate) => candidate.id === event.taskId);
+        if (moveBlocked || activeMoveRef.current || !task || task.status !== event.source) return;
+        activeMoveRef.current = { taskId: event.taskId, source: event.source };
         setMove({ phase: "active", taskId: event.taskId, source: event.source });
         return;
       }
       if (event.type === "target") {
+        const active = activeMoveRef.current;
+        if (!active || active.taskId !== event.taskId || active.source !== event.source) return;
+        active.target = event.target;
         setMove((current) =>
           current.phase === "active" && current.taskId === event.taskId
             ? { ...current, target: event.target }
@@ -216,6 +239,9 @@ export default function KanbanBoardModal({
         return;
       }
       if (event.type === "cancel") {
+        const active = activeMoveRef.current;
+        if (!active || active.taskId !== event.taskId || active.source !== event.source) return;
+        activeMoveRef.current = null;
         setMove((current) =>
           current.phase === "active" && current.taskId === event.taskId
             ? { phase: "idle" }
@@ -224,9 +250,17 @@ export default function KanbanBoardModal({
         return;
       }
       if (moveBlocked || moveRequestPending.current) return;
+      const active = activeMoveRef.current;
+      if (
+        !active ||
+        active.taskId !== event.taskId ||
+        active.source !== event.source ||
+        active.target !== event.target
+      )
+        return;
       const task = allTasks.find((candidate) => candidate.id === event.taskId);
       const targetVisible = Array.from(
-        document.querySelectorAll<HTMLElement>("[data-column]"),
+        boardRootRef.current?.querySelectorAll<HTMLElement>("[data-column]") ?? [],
       ).some(
         (column) =>
           column.dataset.column === event.target &&
@@ -240,10 +274,12 @@ export default function KanbanBoardModal({
         !targetVisible
       ) {
         setMove({ phase: "idle" });
+        activeMoveRef.current = null;
         return;
       }
 
       const request = { taskId: task.id, title: task.title, target: event.target };
+      activeMoveRef.current = null;
       moveRequestPending.current = true;
       setMove({ phase: "pending", ...request });
       void (async () => {
@@ -274,6 +310,7 @@ export default function KanbanBoardModal({
           title: request.title,
           status: authoritativeTask?.status,
         });
+        restoreKanbanMoveResultFocus(boardRootRef.current, task.id);
       })();
     },
     [allTasks, api, includeArchived, moveBlocked, reload],
@@ -417,7 +454,7 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => openEditor({ mode: "create" })}
-              disabled={!board}
+              disabled={!currentBoard}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary hover:bg-primary-hover text-white font-semibold disabled:opacity-50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -439,7 +476,7 @@ export default function KanbanBoardModal({
                   setSwarmError(null);
                   setShowSwarm(true);
                 }}
-                disabled={!board || npcOptions.length === 0}
+                disabled={!currentBoard || npcOptions.length === 0}
                 className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
               >
                 {t("kanban.swarm")}
@@ -448,7 +485,7 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => void handleDispatch()}
-              disabled={!board || dispatching}
+              disabled={!currentBoard || dispatching}
               className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
             >
               {t("kanban.dispatch")}
@@ -465,7 +502,7 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => setShowSettings(true)}
-              disabled={!board}
+              disabled={!currentBoard}
               aria-label={t("kanban.settings.title")}
               title={t("kanban.settings.title")}
               className="p-1.5 rounded-md bg-surface-raised text-text-secondary hover:brightness-125 disabled:opacity-50"
@@ -547,8 +584,13 @@ export default function KanbanBoardModal({
           </div>
         ) : null}
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
-            {loading && !board && !blocker ? (
+          <div
+            ref={boardRootRef}
+            data-kanban-board-root
+            tabIndex={-1}
+            className="flex-1 overflow-x-auto overflow-y-hidden p-4"
+          >
+            {loading && !currentBoard && !blocker ? (
               <div className="text-xs text-text-dim">{t("common.loading")}</div>
             ) : blocker ? (
               <Blocker
@@ -568,6 +610,8 @@ export default function KanbanBoardModal({
                     selectedTaskId={selectedTaskId}
                     onOpen={setSelectedTaskId}
                     moveDisabled={moveBlocked}
+                    activeMoveTaskId={move.phase === "active" ? move.taskId : null}
+                    getMoveRoot={getBoardRoot}
                     onMoveInteraction={handleMoveInteraction}
                   />
                 ))}
@@ -575,7 +619,7 @@ export default function KanbanBoardModal({
             )}
           </div>
 
-          {selectedTaskId && board && !blocker && (
+          {selectedTaskId && currentBoard && !blocker && (
             <TaskDrawer
               key={selectedTaskId}
               api={api}

@@ -14,6 +14,8 @@ interface KanbanColumnProps {
   selectedTaskId: string | null;
   onOpen: (taskId: string) => void;
   moveDisabled?: boolean;
+  activeMoveTaskId?: string | null;
+  getMoveRoot?: () => HTMLElement | null;
   onMoveInteraction?: KanbanMoveInteractionHandler;
 }
 
@@ -26,6 +28,8 @@ export default function KanbanColumn({
   selectedTaskId,
   onOpen,
   moveDisabled = false,
+  activeMoveTaskId = null,
+  getMoveRoot,
   onMoveInteraction,
 }: KanbanColumnProps) {
   const t = useT();
@@ -54,7 +58,10 @@ export default function KanbanColumn({
               now={now}
               selected={task.id === selectedTaskId}
               onOpen={onOpen}
-              moveDisabled={moveDisabled}
+              moveDisabled={
+                moveDisabled || (activeMoveTaskId !== null && activeMoveTaskId !== task.id)
+              }
+              getMoveRoot={getMoveRoot}
               onMoveInteraction={onMoveInteraction}
             />
           ))

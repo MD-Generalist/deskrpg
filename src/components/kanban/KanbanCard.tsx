@@ -33,6 +33,7 @@ interface KanbanCardProps {
   selected: boolean;
   onOpen: (taskId: string) => void;
   moveDisabled?: boolean;
+  getMoveRoot?: () => HTMLElement | null;
   onMoveInteraction?: KanbanMoveInteractionHandler;
 }
 
@@ -50,6 +51,7 @@ export default function KanbanCard({
   selected,
   onOpen,
   moveDisabled = false,
+  getMoveRoot,
   onMoveInteraction,
 }: KanbanCardProps) {
   const t = useT();
@@ -67,6 +69,13 @@ export default function KanbanCard({
   const [isMoving, setIsMoving] = useState(false);
   const pointerRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const focusFallbackRef = useRef<HTMLElement | null>(null);
+  const moveRoot = useCallback(
+    () =>
+      getMoveRoot?.() ??
+      handleRef.current?.closest<HTMLElement>("[data-kanban-board-root], .overflow-x-auto") ??
+      null,
+    [getMoveRoot],
+  );
 
   const announce = useCallback(
     (key: string, values?: Record<string, string>) => {
@@ -75,15 +84,19 @@ export default function KanbanCard({
     [t],
   );
 
-  const finish = useCallback((restoreFocus = true) => {
-    movingRef.current = false;
-    setIsMoving(false);
-    pointerRef.current = null;
-    targetRef.current = null;
-    clearMoveTargets();
-    if (restoreFocus) restoreKanbanMoveFocus(handleRef.current, focusFallbackRef.current);
-    focusFallbackRef.current = null;
-  }, []);
+  const finish = useCallback(
+    (restoreFocus = true) => {
+      movingRef.current = false;
+      setIsMoving(false);
+      pointerRef.current = null;
+      targetRef.current = null;
+      const root = moveRoot();
+      if (root) clearMoveTargets(root);
+      if (restoreFocus) restoreKanbanMoveFocus(handleRef.current, focusFallbackRef.current);
+      focusFallbackRef.current = null;
+    },
+    [moveRoot],
+  );
 
   const cancel = useCallback(
     (reason: KanbanMoveCancelReason) => {
@@ -109,12 +122,14 @@ export default function KanbanCard({
     (column: HTMLElement) => {
       const target = columnStatus(column);
       if (!target || target === task.status) return;
+      const root = moveRoot();
+      if (!root || !root.contains(column)) return;
       targetRef.current = target;
-      markMoveTarget(column);
+      markMoveTarget(column, root);
       onMoveInteraction?.({ type: "target", taskId: task.id, source: task.status, target });
       announce("kanban.move.target", { column: t(`kanban.column.${target}`) });
     },
-    [announce, onMoveInteraction, t, task.id, task.status],
+    [announce, moveRoot, onMoveInteraction, t, task.id, task.status],
   );
 
   useEffect(
@@ -126,10 +141,11 @@ export default function KanbanCard({
           source: task.status,
           reason: "teardown",
         });
-        clearMoveTargets();
+        const root = moveRoot();
+        if (root) clearMoveTargets(root);
       }
     },
-    [onMoveInteraction, task.id, task.status],
+    [moveRoot, onMoveInteraction, task.id, task.status],
   );
 
   useEffect(() => {
@@ -142,7 +158,10 @@ export default function KanbanCard({
   const columnAtPoint = (clientX: number, clientY: number) => {
     const hit = document.elementFromPoint(clientX, clientY);
     const column = hit?.closest<HTMLElement>("[data-column]") ?? null;
-    return column && visibleKanbanColumns().includes(column) ? column : null;
+    const root = moveRoot();
+    return root && column && root.contains(column) && visibleKanbanColumns(root).includes(column)
+      ? column
+      : null;
   };
 
   const onMovePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -162,12 +181,14 @@ export default function KanbanCard({
     const column = columnAtPoint(event.clientX, event.clientY);
     if (column?.dataset.column === task.status) {
       targetRef.current = null;
-      markMoveTarget(null);
+      const root = moveRoot();
+      if (root) markMoveTarget(null, root);
     } else if (column) {
       selectTarget(column);
     } else {
       targetRef.current = null;
-      markMoveTarget(null);
+      const root = moveRoot();
+      if (root) markMoveTarget(null, root);
     }
   };
 
@@ -208,13 +229,15 @@ export default function KanbanCard({
     }
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
-      const columns = visibleKanbanColumns();
+      const root = moveRoot();
+      if (!root) return cancel("target-missing");
+      const columns = visibleKanbanColumns(root);
       const currentStatus = targetRef.current ?? task.status;
       const index = columns.findIndex((column) => column.dataset.column === currentStatus);
       const next = columns[index + (event.key === "ArrowRight" ? 1 : -1)];
       if (next?.dataset.column === task.status) {
         targetRef.current = null;
-        markMoveTarget(null);
+        markMoveTarget(null, root);
         announce("kanban.move.target", { column: t(`kanban.column.${task.status}`) });
       } else if (next) {
         selectTarget(next);
@@ -224,7 +247,12 @@ export default function KanbanCard({
     if (event.key === "Enter") {
       event.preventDefault();
       const target = targetRef.current;
-      if (!target || !visibleKanbanColumns().some((column) => column.dataset.column === target)) {
+      const root = moveRoot();
+      if (
+        !root ||
+        !target ||
+        !visibleKanbanColumns(root).some((column) => column.dataset.column === target)
+      ) {
         cancel("target-missing");
         return;
       }

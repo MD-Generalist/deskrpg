@@ -62,3 +62,13 @@ export function restoreKanbanMoveFocus(
     else if (fallback?.isConnected) fallback.focus();
   });
 }
+
+export function restoreKanbanMoveResultFocus(root: HTMLElement | null, taskId: string) {
+  requestAnimationFrame(() => {
+    if (!root?.isConnected) return;
+    const handle = Array.from(
+      root.querySelectorAll<HTMLButtonElement>("[data-card-move-handle]"),
+    ).find((candidate) => candidate.dataset.cardMoveHandle === taskId);
+    (handle ?? root).focus();
+  });
+}
