@@ -18,7 +18,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.917.3` — 주소로 연결한 게이트웨이가 DeskRPG 플러그인 설치 전이라도 게이트웨이 목록에 바로 나타납니다.
+- 버전: `v2026.917.4` — **내 게이트웨이** 에서 Hermes 대시보드를 바로 엽니다(소유자만). Hostinger compose 가 DeskRPG 플러그인 설치와 대시보드 HTTPS 연결을 스스로 합니다.
 
 ## 무엇을 할 수 있나요
 

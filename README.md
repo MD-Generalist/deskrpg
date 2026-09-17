@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.917.3` — A gateway saved by address now shows up in the gateway list right away, even before the DeskRPG plugin is installed.
+- Version: `v2026.917.4` — Open the Hermes dashboard straight from **My Gateways** (owners only), and the Hostinger compose now installs the DeskRPG plugin and serves the dashboard over HTTPS on its own.
 
 ## What You Can Do
 
