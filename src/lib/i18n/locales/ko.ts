@@ -1650,7 +1650,6 @@ const ko: Record<string, string> = {
   "workspace.status.streaming": "응답 중",
   "workspace.status.failed": "응답 실패",
   "workspace.action.call": "호출",
-  "workspace.action.place": "자리 지정",
   "workspace.action.profile": "프로필 설정",
   "workspace.action.invite": "동료 초대",
   "workspace.drawer.navigator": "탐색",

@@ -1662,7 +1662,6 @@ const ja: Record<string, string> = {
   "workspace.status.streaming": "回答中",
   "workspace.status.failed": "回答に失敗しました",
   "workspace.action.call": "呼び出す",
-  "workspace.action.place": "席を設定",
   "workspace.action.profile": "プロフィール設定",
   "workspace.action.invite": "同僚を招待",
   "workspace.drawer.navigator": "一覧",

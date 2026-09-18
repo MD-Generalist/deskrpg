@@ -1626,7 +1626,6 @@ const zh: Record<string, string> = {
   "workspace.status.streaming": "回复中",
   "workspace.status.failed": "回复失败",
   "workspace.action.call": "呼叫",
-  "workspace.action.place": "分配座位",
   "workspace.action.profile": "个人资料设置",
   "workspace.action.invite": "邀请同事",
   "workspace.drawer.navigator": "浏览",

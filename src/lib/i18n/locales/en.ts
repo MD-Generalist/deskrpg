@@ -1655,7 +1655,6 @@ const en: Record<string, string> = {
   "workspace.status.streaming": "Responding",
   "workspace.status.failed": "Response failed",
   "workspace.action.call": "Call over",
-  "workspace.action.place": "Assign seat",
   "workspace.action.profile": "Profile settings",
   "workspace.action.invite": "Invite people",
   "workspace.drawer.navigator": "Browse",
