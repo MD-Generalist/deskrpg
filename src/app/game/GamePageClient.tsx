@@ -76,9 +76,12 @@ import type { TaskDrawerArtifacts } from "@/components/kanban/TaskDrawer";
 import {
   INITIAL_ARTIFACTS_MODAL,
   nextArtifactChips,
+  nextKanbanFocus,
+  planSourceNavigation,
   reduceArtifactsModal,
   type ArtifactChip,
   type ArtifactSocketEvent,
+  type KanbanFocusRequest,
 } from "./artifact-entry";
 import {
   EMPTY_NPC_WORKING,
@@ -237,8 +240,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, []);
   const [kanbanRefreshTick, setKanbanRefreshTick] = useState(0);
-  // 방 알림의 "카드 열기"(R29) — 모달이 마운트될 때 이 카드의 상세를 편다.
-  const [kanbanInitialTaskId, setKanbanInitialTaskId] = useState<string | null>(null);
+  // 방 알림의 "카드 열기"(R29)·결과물의 "출처로 이동" — 이 카드의 상세를 편다. 보드가 이미
+  // 열려 있어도 `seq` 가 올라 선택이 옮겨 간다(`nextKanbanFocus`).
+  const [kanbanFocus, setKanbanFocus] = useState<KanbanFocusRequest | null>(null);
   // 채널 크론 화면(T10, R15). "이력 열기"(R30) 는 그 잡의 실행 이력으로 연다.
   const [showCron, setShowCron] = useState(false);
   const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
@@ -1936,7 +1940,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
 
   // 방 알림 링크(R29·R30) → 해당 모달을 그 항목으로 연다.
   const openNoticeCard = useCallback((cardId: string) => {
-    setKanbanInitialTaskId(cardId);
+    setKanbanFocus((prev) => nextKanbanFocus(prev, cardId));
     setShowKanban(true);
   }, []);
   const openNoticeCronJob = useCallback((jobId: string) => {
@@ -1945,7 +1949,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, []);
   const closeKanban = useCallback(() => {
     setShowKanban(false);
-    setKanbanInitialTaskId(null);
+    setKanbanFocus(null);
   }, []);
   const closeCron = useCallback(() => {
     setShowCron(false);
@@ -1962,41 +1966,44 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     (artifactId: string) => openArtifacts({ artifactId }),
     [openArtifacts],
   );
-  // 결과물 모달이 칸반을 덮고 있으면 칸반은 닫지 않는다 — ESC 는 두 모달의 window 리스너에 다
-  // 가고 칸반 것이 먼저 등록돼 있어서, 이게 없으면 ESC 한 번에 둘 다 닫힌다.
-  const artifactsModalShown = artifactsModal.show;
-  const closeKanbanIfOnTop = useCallback(() => {
-    if (!artifactsModalShown) closeKanban();
-  }, [artifactsModalShown, closeKanban]);
-  // 칸반 카드의 결과물 섹션. 결과물 모달은 칸반 위에 뜬다(칸반을 닫지 않는다). 사건이 오면
-  // 객체가 바뀌어 열린 드로어가 다시 읽는다.
-  const artifactsEventSeq = artifactsModal.eventSeq;
+  // 칸반 카드의 결과물 섹션. 결과물 모달은 칸반 위에 뜬다(칸반을 닫지 않는다 — 덮인 동안
+  // 칸반은 Escape 를 무시한다, `covered`). api 객체는 채널이 바뀔 때만 새로 만들고, 사건은
+  // `artifactsRefreshTick` 으로 따로 넘겨 드로어가 디바운스해 다시 읽는다.
   const kanbanArtifacts = useMemo<TaskDrawerArtifacts | null>(() => {
     if (!channelId) return null;
-    void artifactsEventSeq;
     const api = createArtifactsApi(channelId);
     return {
       list: (taskId) => api.list({ taskId }).then((page) => page.artifacts),
       open: openArtifact,
     };
-  }, [channelId, openArtifact, artifactsEventSeq]);
-  /** "출처로 이동" — 결과물 모달을 닫고 그 카드·대화·크론 작업을 연다. */
+  }, [channelId, openArtifact]);
+  /** "출처로 이동" — 결과물 모달과 도착 화면을 가리는 모달을 닫고 그 카드·대화·크론 작업을 연다. */
   const openArtifactSource = useCallback(
     (target: SourceTarget) => {
-      if (target.type === "chat") {
-        // 채널에 그 프로필의 NPC 가 없으면(해고 등) 갈 곳이 없으니 모달을 그대로 둔다.
-        const npc = rosterNpcs.find((n) => n.profile?.profileName === target.profile);
-        if (!npc) return;
-        closeArtifacts();
-        handleSelectNpc(npc.id, npc.name);
-        return;
-      }
+      const plan = planSourceNavigation(
+        target,
+        rosterNpcs.map((n) => ({ id: n.id, name: n.name, profileName: n.profile?.profileName })),
+      );
+      // 채널에 그 프로필의 NPC 가 없으면(해고 등) 갈 곳이 없으니 모달을 그대로 둔다.
+      if (!plan) return;
       closeArtifacts();
-      if (target.type === "kanban") openNoticeCard(target.taskId);
-      else if (target.jobId) openNoticeCronJob(target.jobId);
+      if (plan.closeKanban) closeKanban();
+      if (plan.closeCron) closeCron();
+      const { open } = plan;
+      if (open.type === "chat") handleSelectNpc(open.npcId, open.npcName);
+      else if (open.type === "kanban") openNoticeCard(open.taskId);
+      else if (open.jobId) openNoticeCronJob(open.jobId);
       else setShowCron(true);
     },
-    [rosterNpcs, closeArtifacts, handleSelectNpc, openNoticeCard, openNoticeCronJob],
+    [
+      rosterNpcs,
+      closeArtifacts,
+      closeKanban,
+      closeCron,
+      handleSelectNpc,
+      openNoticeCard,
+      openNoticeCronJob,
+    ],
   );
 
   // Spawn set mode coordination
@@ -2892,9 +2899,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         <KanbanBoardModal
           channelId={channelId}
           refreshTick={kanbanRefreshTick}
-          initialTaskId={kanbanInitialTaskId}
+          initialTaskId={kanbanFocus?.taskId ?? null}
+          focusRequest={kanbanFocus}
           artifacts={kanbanArtifacts}
-          onClose={closeKanbanIfOnTop}
+          artifactsRefreshTick={artifactsModal.eventSeq}
+          covered={artifactsModal.show}
+          onClose={closeKanban}
           onConnectGateway={
             isOwner
               ? () => {

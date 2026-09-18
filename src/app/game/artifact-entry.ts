@@ -3,6 +3,8 @@
  * GamePageClient 가 소켓 `artifact:event` 를 여기로 접는다. 화면 없는 순수 함수라 따로 고정한다.
  */
 
+import type { SourceTarget } from "@/components/artifacts/artifact-view-model";
+
 export type ArtifactSocketEvent = {
   channelId?: string;
   event?: {
@@ -97,4 +99,50 @@ export function nextArtifactChips(
   if (index === -1) return [...prev, { artifactId: payload.artifact_id, title }];
   if (prev[index].title === title) return prev;
   return prev.map((chip, i) => (i === index ? { ...chip, title } : chip));
+}
+
+/**
+ * 칸반에 "이 카드를 펴라" 는 요청. 보드가 이미 열려 있어도 `seq` 가 오르면 보드가 선택을 바꾼다
+ * — 같은 카드를 다시 요청해도(그 사이 사용자가 다른 카드를 열었어도) 새 요청이 된다.
+ */
+export type KanbanFocusRequest = { taskId: string; seq: number };
+
+export function nextKanbanFocus(
+  prev: KanbanFocusRequest | null,
+  taskId: string,
+): KanbanFocusRequest {
+  return { taskId, seq: (prev?.seq ?? 0) + 1 };
+}
+
+export type SourceNavigation = {
+  closeKanban: boolean;
+  closeCron: boolean;
+  open:
+    | { type: "chat"; npcId: string; npcName: string }
+    | { type: "kanban"; taskId: string }
+    | { type: "cron"; jobId: string | null };
+};
+
+/**
+ * 결과물 뷰어의 "출처로 이동". 결과물 모달은 늘 닫고(null 이면 그대로 둔다), 도착할 화면을
+ * 가리는 다른 모달도 닫는다 — 대화창은 칸반(z-50)·크론 아래에 깔리고, 칸반과 크론이 겹치면
+ * Escape 한 번에 둘 다 닫힌다. 채널에 그 프로필의 NPC 가 없으면(해고 등) 갈 곳이 없어 null.
+ */
+export function planSourceNavigation(
+  target: SourceTarget,
+  npcs: ReadonlyArray<{ id: string; name: string; profileName: string | null | undefined }>,
+): SourceNavigation | null {
+  if (target.type === "chat") {
+    const npc = npcs.find((n) => n.profileName === target.profile);
+    if (!npc) return null;
+    return {
+      closeKanban: true,
+      closeCron: true,
+      open: { type: "chat", npcId: npc.id, npcName: npc.name },
+    };
+  }
+  if (target.type === "kanban") {
+    return { closeKanban: false, closeCron: true, open: { type: "kanban", taskId: target.taskId } };
+  }
+  return { closeKanban: true, closeCron: false, open: { type: "cron", jobId: target.jobId } };
 }

@@ -1,13 +1,15 @@
 import "../../test-setup/dom";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { I18nProvider } from "@/lib/i18n/context";
 import { KANBAN_TASK_STATUSES } from "@/lib/hermes/deskrpg-plugin-types";
 
+import ArtifactsModal from "../artifacts/ArtifactsModal";
 import KanbanBoardModal from "./KanbanBoardModal";
+import type { TaskDrawerArtifacts } from "./TaskDrawer";
 import { PLUGIN_INSTALL_COMMAND } from "./kanban-view-model";
 
 const CHANNEL = "ch-1";
@@ -66,6 +68,10 @@ async function mount(
     debounceMs?: number;
     onConnectGateway?: () => void;
     initialTaskId?: string | null;
+    focusRequest?: { taskId: string; seq: number } | null;
+    covered?: boolean;
+    artifacts?: TaskDrawerArtifacts | null;
+    artifactsRefreshTick?: number;
   } = {},
 ) {
   const original = globalThis.fetch;
@@ -1061,5 +1067,157 @@ test("스웜 루트 카드에서 블랙보드 JSON 이 코멘트로 보이지 �
     assert.equal(f.host.textContent?.includes("topology"), true); // 표에는 있다
   } finally {
     await f.cleanup();
+  }
+});
+
+const detailHandler =
+  (detailReads: Map<string, number>): Handler =>
+  (url) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) return json(board());
+    const taskId = url.match(/\/kanban\/tasks\/(t-[^/?]+)$/)?.[1];
+    if (taskId) {
+      detailReads.set(taskId, (detailReads.get(taskId) ?? 0) + 1);
+      return json(detail({ id: taskId, title: `카드 ${taskId}`, status: "todo" }));
+    }
+    if (url.includes("/artifacts")) return json({ artifacts: [], cursor: null, has_more: false });
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  };
+
+test("출처로 이동: 이미 열린 보드에서도 focusRequest 가 오면 그 카드의 상세로 바꾼다", async () => {
+  const detailReads = new Map<string, number>();
+  const first = { taskId: "t-todo", seq: 1 };
+  const f = await mount(detailHandler(detailReads), {
+    initialTaskId: "t-todo",
+    focusRequest: first,
+  });
+  try {
+    assert.equal(detailReads.get("t-todo"), 1);
+    await f.render({ initialTaskId: "t-done", focusRequest: { taskId: "t-done", seq: 2 } });
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    assert.equal(detailReads.get("t-done"), 1, "새 카드의 상세를 연다");
+
+    // 다른 카드를 직접 연 뒤 같은 카드로 다시 요청해도(seq 가 오름) 그 카드로 돌아온다.
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('[data-card-detail="t-todo"]')?.click(),
+    );
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    assert.equal(detailReads.get("t-todo"), 2);
+    await f.render({ initialTaskId: "t-done", focusRequest: { taskId: "t-done", seq: 3 } });
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    assert.equal(detailReads.get("t-done"), 2);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("결과물: 보드는 artifacts 를 카드 드로어에 그대로 넘긴다", async () => {
+  const listed: string[] = [];
+  const artifacts: TaskDrawerArtifacts = {
+    list: async (taskId) => {
+      listed.push(taskId);
+      return [];
+    },
+    open: () => {},
+  };
+  const f = await mount(detailHandler(new Map()), { initialTaskId: "t-todo", artifacts });
+  try {
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    assert.deepEqual(listed, ["t-todo"]);
+    assert.ok(f.host.textContent?.includes("이 카드에서 만든 결과물이 없습니다"));
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("결과물: 결과물 사건 신호가 연달아 와도 드로어는 디바운스 후 한 번만 다시 읽는다", async () => {
+  let listCalls = 0;
+  const artifacts: TaskDrawerArtifacts = {
+    list: async () => {
+      listCalls += 1;
+      return [];
+    },
+    open: () => {},
+  };
+  const f = await mount(detailHandler(new Map()), {
+    initialTaskId: "t-todo",
+    artifacts,
+    artifactsRefreshTick: 0,
+  });
+  try {
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    assert.equal(listCalls, 1);
+    await f.render({ initialTaskId: "t-todo", artifacts, artifactsRefreshTick: 1 });
+    await f.render({ initialTaskId: "t-todo", artifacts, artifactsRefreshTick: 2 });
+    await f.render({ initialTaskId: "t-todo", artifacts, artifactsRefreshTick: 3 });
+    assert.equal(listCalls, 1, "디바운스 전에는 다시 읽지 않는다");
+    await act(async () => new Promise((r) => setTimeout(r, 350)));
+    assert.equal(listCalls, 2, "연달은 사건은 한 번으로 접힌다");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("결과물 모달이 보드를 덮고 있으면(covered) Escape 로 보드를 닫지 않는다", async () => {
+  const f = await mount(happy, { covered: true });
+  try {
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    assert.equal(f.isClosed(), false);
+    await f.render({ covered: false });
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    assert.equal(f.isClosed(), true);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("보드 위 결과물 모달: Escape 한 번은 결과물 모달만 닫고, 다음 Escape 가 보드를 닫는다", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    return detailHandler(new Map())(url, init);
+  }) as typeof fetch;
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  function Harness() {
+    const [kanban, setKanban] = useState(true);
+    const [artifactsOpen, setArtifactsOpen] = useState(true);
+    return (
+      <I18nProvider initialLocale="ko">
+        {kanban && (
+          <KanbanBoardModal
+            channelId={CHANNEL}
+            covered={artifactsOpen}
+            onClose={() => setKanban(false)}
+          />
+        )}
+        {artifactsOpen && (
+          <ArtifactsModal
+            channelId={CHANNEL}
+            npcs={[]}
+            refreshTick={0}
+            lastEvent={null}
+            onOpenSource={() => {}}
+            onClose={() => setArtifactsOpen(false)}
+          />
+        )}
+      </I18nProvider>
+    );
+  }
+  const shown = (id: string) => host.querySelector(`[aria-labelledby="${id}"]`) !== null;
+  try {
+    await act(async () => root.render(<Harness />));
+    assert.ok(shown("kanban-modal-title") && shown("artifacts-modal-title"));
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    assert.equal(shown("artifacts-modal-title"), false, "결과물 모달이 닫힌다");
+    assert.equal(shown("kanban-modal-title"), true, "보드는 남는다");
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    assert.equal(shown("kanban-modal-title"), false);
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+    globalThis.fetch = original;
   }
 });

@@ -52,7 +52,13 @@ interface TaskDrawerProps {
   onClose: () => void;
   /** 카드의 결과물 — null·미지정이면 섹션을 숨긴다. 플러그인이 0.8.4 미만(428)이어도 숨긴다. */
   artifacts?: TaskDrawerArtifacts | null;
+  /** 채널 `artifact:event` 수 — 오르면 디바운스(`artifactsDebounceMs`) 후 결과물을 다시 읽는다. */
+  artifactsRefreshTick?: number;
+  artifactsDebounceMs?: number;
 }
+
+/** 결과물 사건 연타를 한 번의 재조회로 접는 간격. */
+export const ARTIFACTS_EVENT_DEBOUNCE_MS = 300;
 
 const BTN = "px-2.5 py-1 rounded-md text-[11px] font-semibold disabled:opacity-50";
 const BTN_PRIMARY = `${BTN} bg-primary hover:bg-primary-hover text-white`;
@@ -81,6 +87,8 @@ export default function TaskDrawer({
   onDeleted,
   onClose,
   artifacts = null,
+  artifactsRefreshTick = 0,
+  artifactsDebounceMs = ARTIFACTS_EVENT_DEBOUNCE_MS,
 }: TaskDrawerProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -101,6 +109,7 @@ export default function TaskDrawer({
   // 결과물 섹션 — null 은 읽는 중, "hidden" 은 428(taskId 필터 미지원)이라 섹션을 숨긴다.
   const [cardArtifacts, setCardArtifacts] = useState<ArtifactSummary[] | "hidden" | null>(null);
   const [cardArtifactsError, setCardArtifactsError] = useState(false);
+  const [artifactsReload, setArtifactsReload] = useState(0);
 
   const {
     comments: threadComments,
@@ -150,7 +159,16 @@ export default function TaskDrawer({
     return () => {
       cancelled = true;
     };
-  }, [artifacts, taskId, refreshTick]);
+  }, [artifacts, taskId, refreshTick, artifactsReload]);
+
+  // 결과물 사건 — 마운트 때 값은 이미 읽은 것이니 건너뛰고, 오를 때만 디바운스해 다시 읽는다.
+  const seenArtifactsTick = useRef(artifactsRefreshTick);
+  useEffect(() => {
+    if (artifactsRefreshTick === seenArtifactsTick.current) return;
+    seenArtifactsTick.current = artifactsRefreshTick;
+    const timer = setTimeout(() => setArtifactsReload((n) => n + 1), artifactsDebounceMs);
+    return () => clearTimeout(timer);
+  }, [artifactsRefreshTick, artifactsDebounceMs]);
 
   useEffect(() => {
     if (showLog) void loadLog();
