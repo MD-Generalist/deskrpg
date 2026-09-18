@@ -45,6 +45,7 @@ const characters = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     appearance: text("appearance").notNull(),
+    bio: text("bio"),
     createdAt: text("created_at").$defaultFn(isoNow),
     updatedAt: text("updated_at").$defaultFn(isoNow),
   },

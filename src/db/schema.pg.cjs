@@ -43,6 +43,7 @@ const characters = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 50 }).notNull(),
     appearance: jsonb("appearance").notNull(),
+    bio: text("bio"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

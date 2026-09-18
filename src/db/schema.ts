@@ -35,6 +35,8 @@ export const characters = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 50 }).notNull(),
     appearance: jsonb("appearance").notNull(),
+    /** 자유 텍스트 소개 — 직원에게 가는 모든 대화 앞머리에 붙는다(스펙 2026-09-18). 상한 2,000자는 서버가 지킨다. */
+    bio: text("bio"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

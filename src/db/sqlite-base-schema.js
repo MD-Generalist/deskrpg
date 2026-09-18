@@ -17,6 +17,7 @@ const SQLITE_BASE_SCHEMA = `
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       appearance TEXT NOT NULL,
+      bio TEXT,
       created_at TEXT,
       updated_at TEXT
     );
