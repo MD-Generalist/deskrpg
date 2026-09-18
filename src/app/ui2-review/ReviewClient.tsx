@@ -192,7 +192,7 @@ export default function ReviewClient() {
       mapKey: () => `${runtime.current!.id}:${runtime.current!.generation}`,
       map: () => runtime.current!.fixture.map,
       walkable: (x, y) => runtime.current!.fixture.walkable(x, y),
-      editor: () => ({ placement: false, spawn: false, owner: false, tiled: true }),
+      editor: () => ({ placement: false, spawn: false, owner: false, tiled: true, seatLabels: [] }),
       pointer: (kind, x, y, button, _sx, _sy, actorId) => {
         const r = runtime.current!;
         if (

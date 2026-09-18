@@ -64,17 +64,20 @@ test("브리지는 타일 편집 진입점 없이 배치·시작 위치·소유�
       spawn: false,
       owner: false,
       tiled: false,
+      seatLabels: [],
     });
     assert.equal("edit" in sim.officeBridge, false);
     assert.equal("save" in sim.officeBridge, false);
     EventBus.emit("placement-mode-start", { id: "npc" });
     EventBus.emit("owner-status", { isOwner: true });
-    assert.deepEqual(sim.officeBridge.editor(), {
+    const { seatLabels, ...placing } = sim.officeBridge.editor();
+    assert.deepEqual(placing, {
       placement: true,
       spawn: false,
       owner: true,
       tiled: false,
     });
+    assert.ok(Array.isArray(seatLabels));
     EventBus.emit("placement-mode-end");
     const map = sim.officeBridge.map();
     assert.equal("artwork" in map, false, "the simulation never produces map artwork");

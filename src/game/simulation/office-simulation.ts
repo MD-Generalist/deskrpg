@@ -37,7 +37,7 @@ import {
   AmbientExitPolicy,
   type AmbientZone,
 } from "../ambient-zones";
-import { isSeatAnchor, commonAreaSeats } from "../three/seating";
+import { isSeatAnchor, isDeskSeatAnchor, deskSeatLabels, commonAreaSeats } from "../three/seating";
 import { resolveSeatIntent, seatReservationId } from "../three/seat-action";
 import {
   AmbientDepartures,
@@ -50,7 +50,12 @@ import {
 } from "../npc-ambient";
 import { NpcSmalltalk } from "../npc-smalltalk";
 import { createEventScope } from "../three/event-scope";
-import { matchesNpcTarget, type OfficeBridge, type ActorSnapshot } from "../three/bridge";
+import {
+  matchesNpcTarget,
+  type OfficeBridge,
+  type ActorSnapshot,
+  type EditorSnapshot,
+} from "../three/bridge";
 import { fetchChannelNpcs } from "../npc-prefetch";
 import { shouldAutoReturn, shouldReturnOnRoomChange } from "../npc-auto-return";
 import { decideNpcClick, shouldRememberTarget } from "../npc-click-intent";
@@ -245,6 +250,8 @@ export class OfficeSimulation {
   // 배치 · 시작 위치 지정
   // ---------------------------------------------------------------------------
   private placementMode = false;
+  /** 자리 변경 모드 번호 라벨 캐시 — 모드 진입·NPC 추가/제거 때 비운다. */
+  private seatLabelCache: EditorSnapshot["seatLabels"] | null = null;
   private placementNpcId: string | null = null;
   private isChannelOwner = false;
   private spawnSetMode = false;
@@ -341,6 +348,16 @@ export class OfficeSimulation {
       spawn: this.spawnSetMode,
       owner: this.isChannelOwner,
       tiled: this.tiledMode,
+      seatLabels: this.placementMode
+        ? (this.seatLabelCache ??= deskSeatLabels(
+            this.mapObjects,
+            (col, row) => this.isWalkable(col, row),
+            (col, row) =>
+              this.npcs.some(
+                (n) => n.id !== this.placementNpcId && n.homeCol === col && n.homeRow === row,
+              ),
+          ))
+        : [],
     }),
     pointer: (kind, x, y, button, screenX, screenY, actorId) => {
       this.presentationActorId = actorId;
@@ -522,6 +539,7 @@ export class OfficeSimulation {
     this.eventScope.on("placement-mode-start", (npc: { id: string }) => {
       this.placementNpcId = npc.id;
       this.placementMode = true;
+      this.seatLabelCache = null;
     });
     this.eventScope.on("placement-mode-end", () => {
       this.placementMode = false;
@@ -891,7 +909,7 @@ export class OfficeSimulation {
 
   private canPlaceAt(col: number, row: number): boolean {
     return (
-      isSeatAnchor(this.mapObjects, col, row) &&
+      isDeskSeatAnchor(this.mapObjects, col, row) &&
       this.isWalkable(col, row) &&
       !this.npcs.some((n) => n.id !== this.placementNpcId && n.homeCol === col && n.homeRow === row)
     );
@@ -1053,7 +1071,10 @@ export class OfficeSimulation {
   }
 
   private applyMotionNpc(npc: NpcController, state: MotionNpc, force = false): void {
-    force = adoptNpcMotionHome(npc, state) || force;
+    if (adoptNpcMotionHome(npc, state)) {
+      force = true;
+      this.seatLabelCache = null; // 점유 표시는 자리(home)를 따른다
+    }
     const previousOwner = this.npcOwnership.owner(npc.id);
     if (state.ownerSocketId) this.takeNpcOwnership(npc.id, state.ownerSocketId);
     else this.npcOwnership.clear(npc.id);
@@ -1602,6 +1623,7 @@ export class OfficeSimulation {
     if (this.npcs.some((n) => n.id === data.id)) return;
     const npc = new NpcController(data);
     this.npcs.push(npc);
+    this.seatLabelCache = null;
     this.restoreMotionNpc(npc);
     this.npcTilePositions.add(`${data.positionX},${data.positionY}`);
   }
@@ -1616,6 +1638,7 @@ export class OfficeSimulation {
     const row = Math.floor(npc.pixelY / TILE_SIZE);
     this.npcTilePositions.delete(`${col},${row}`);
     this.npcs.splice(idx, 1);
+    this.seatLabelCache = null;
     // 말풍선은 컨트롤러가 아니라 npcId 로 든 맵에 있다. 여기서 지우지 않으면
     // 퇴근에도, npc:removed 에도 마지막 자리에 영구히 남는다.
     this.clearNpcBubble(npcId);

@@ -212,6 +212,23 @@ export function isDeskSeatAnchor(objects: MapObject[], col: number, row: number)
   return seatIndex(objects).deskAnchors.has(anchorKey(col, row));
 }
 
+/** 자리 변경 모드의 번호 라벨 — 데스크 좌석 타일을 row→col 로 세어 1부터. */
+export function deskSeatLabels(
+  objects: MapObject[],
+  canStand: (col: number, row: number) => boolean,
+  taken: (col: number, row: number) => boolean,
+) {
+  const tiles = new Map<string, { col: number; row: number }>();
+  for (const seat of deskSeats(objects)) {
+    const col = Math.floor(seat.anchorX ?? seat.x),
+      row = Math.floor(seat.anchorZ ?? seat.z);
+    if (canStand(col, row)) tiles.set(anchorKey(col, row), { col, row });
+  }
+  return [...tiles.values()]
+    .sort((a, b) => a.row - b.row || a.col - b.col)
+    .map((tile, index) => ({ ...tile, number: index + 1, taken: taken(tile.col, tile.row) }));
+}
+
 /** Shared tables and lounge furniture, excluding individual desk chairs. */
 export function commonAreaSeats(objects: MapObject[]) {
   return objects.flatMap((object) => {

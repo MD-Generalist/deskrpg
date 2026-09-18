@@ -40,6 +40,8 @@ export type EditorSnapshot = {
   spawn: boolean;
   owner: boolean;
   tiled: boolean;
+  /** 자리 변경 모드에서만 채워진다 — 데스크 좌석 번호와 점유 여부. */
+  seatLabels: Array<{ number: number; col: number; row: number; taken: boolean }>;
 };
 export interface OfficeBridge {
   actors(): ActorSnapshot[];
