@@ -133,10 +133,12 @@ export function createArtifactsApi(channelId: string, fetchImpl?: FetchLike) {
       }
       if (!res.ok) throw await parseFailure(res);
       const text = await res.text();
-      const truncated =
-        res.status === 206 &&
-        (res.headers.get("content-range")?.split("/")[1] || "").localeCompare(String(text.length)) >
-          0;
+      let truncated = false;
+      if (res.status === 206) {
+        const totalRaw = res.headers.get("content-range")?.split("/")[1]?.trim();
+        const total = totalRaw && totalRaw !== "*" ? Number(totalRaw) : NaN;
+        truncated = Number.isFinite(total) ? total > maxBytes : text.length === maxBytes;
+      }
       return { text, truncated };
     },
     fetchBlob: async (id: string, version: number): Promise<Blob> => {
@@ -164,7 +166,8 @@ export function createArtifactsApi(channelId: string, fetchImpl?: FetchLike) {
       );
       return result.version;
     },
-    remove: (id: string) => request<{ ok: true }>(f, artifact(id), { method: "DELETE" }),
+    remove: (id: string): Promise<void> =>
+      request<{ ok: true }>(f, artifact(id), { method: "DELETE" }).then(() => undefined),
   };
 }
 
