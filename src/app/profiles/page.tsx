@@ -9,6 +9,7 @@ import { useLocale, useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { backLinkTarget } from "@/app/gateways/return-target";
 import { employeeDetailHref, hirePageHref } from "./hire-navigation";
+import { showGatewayPicker } from "./gateway-picker-visibility";
 
 type Gateway = {
   id: string;
@@ -200,34 +201,38 @@ function ProfilesPageContent() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
-            <aside className="rounded-2xl border border-border bg-surface p-4 self-start">
-              <h2 className="px-2 pb-3 text-xs font-semibold text-text-muted">
-                {ko ? "연결된 게이트웨이" : "Connected gateways"}
-              </h2>
-              <div
-                className="space-y-2"
-                role="group"
-                aria-label={ko ? "게이트웨이 선택" : "Choose gateway"}
-              >
-                {gateways.map((gateway) => (
-                  <button
-                    type="button"
-                    key={gateway.id}
-                    onClick={() => setSelectedId(gateway.id)}
-                    aria-pressed={gateway.id === selectedId}
-                    className={`w-full rounded-xl border p-3 text-left transition-colors ${gateway.id === selectedId ? "border-primary/30 bg-primary-muted" : "border-transparent hover:bg-bg"}`}
-                  >
-                    <span className="block truncate text-sm font-semibold">
-                      {gateway.displayName}
-                    </span>
-                    <span className="mt-1 block text-xs text-text-muted">
-                      {gateway.isOwner === true ? t("gateways.owner") : t("gateways.shared")}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </aside>
+          <div
+            className={`grid gap-5 ${showGatewayPicker(gateways.length) ? "lg:grid-cols-[260px_minmax(0,1fr)]" : ""}`}
+          >
+            {showGatewayPicker(gateways.length) && (
+              <aside className="rounded-2xl border border-border bg-surface p-4 self-start">
+                <h2 className="px-2 pb-3 text-xs font-semibold text-text-muted">
+                  {ko ? "연결된 게이트웨이" : "Connected gateways"}
+                </h2>
+                <div
+                  className="space-y-2"
+                  role="group"
+                  aria-label={ko ? "게이트웨이 선택" : "Choose gateway"}
+                >
+                  {gateways.map((gateway) => (
+                    <button
+                      type="button"
+                      key={gateway.id}
+                      onClick={() => setSelectedId(gateway.id)}
+                      aria-pressed={gateway.id === selectedId}
+                      className={`w-full rounded-xl border p-3 text-left transition-colors ${gateway.id === selectedId ? "border-primary/30 bg-primary-muted" : "border-transparent hover:bg-bg"}`}
+                    >
+                      <span className="block truncate text-sm font-semibold">
+                        {gateway.displayName}
+                      </span>
+                      <span className="mt-1 block text-xs text-text-muted">
+                        {gateway.isOwner === true ? t("gateways.owner") : t("gateways.shared")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+            )}
             {selected && (
               <section
                 className="min-w-0 rounded-2xl border border-border bg-surface p-5 md:p-6"
