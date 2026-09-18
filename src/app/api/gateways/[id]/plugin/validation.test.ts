@@ -26,4 +26,21 @@ describe("validateCreateOptions", () => {
       errorCode: "bad_request",
     });
   });
+  it("cloneKeys 는 cloneFrom 과 함께일 때 referenced·api_keys 만 받는다", () => {
+    assert.deepEqual(
+      validateCreateOptions({ name: "n", cloneFrom: "default", cloneKeys: "api_keys" }),
+      { ok: true, cloneFrom: "default", cloneKeys: "api_keys" },
+    );
+    assert.deepEqual(
+      validateCreateOptions({ name: "n", cloneFrom: "default", cloneKeys: "referenced" }),
+      { ok: true, cloneFrom: "default", cloneKeys: "referenced" },
+    );
+    for (const bad of [
+      { name: "n", cloneFrom: "default", cloneKeys: "all" },
+      { name: "n", cloneFrom: "default", cloneKeys: ["api_keys"] },
+      { name: "n", cloneKeys: "api_keys" },
+    ]) {
+      assert.deepEqual(validateCreateOptions(bad), { ok: false, errorCode: "bad_request" });
+    }
+  });
 });

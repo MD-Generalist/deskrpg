@@ -232,4 +232,29 @@ describe("plugin client — 직원 설정 피커(0.9.0)", () => {
     assert.deepEqual(JSON.parse(calls[0].body!), { name: "noah" });
     assert.deepEqual(JSON.parse(calls[1].body!), { name: "noah", cloneFrom: "default" });
   });
+
+  it("cloneKeys 는 있을 때만 cloneFrom 과 함께 싣는다", async () => {
+    const { calls, fetchImpl } = recorder([
+      {
+        status: 201,
+        json: {
+          name: "noah",
+          keyIssued: false,
+          cloned: { configKeys: ["model"], envKeys: ["OPENAI_API_KEY"], keyScope: "api_keys" },
+        },
+      },
+    ]);
+    const client = createPluginClient({
+      baseUrl: "http://gw:8642",
+      defaultToken: "default-key-1234567890",
+      fetchImpl,
+    });
+    const res = await client.createProfile("noah", { cloneFrom: "default", cloneKeys: "api_keys" });
+    assert.deepEqual(JSON.parse(calls[0].body!), {
+      name: "noah",
+      cloneFrom: "default",
+      cloneKeys: "api_keys",
+    });
+    assert.equal(res.ok && res.data.cloned?.keyScope, "api_keys");
+  });
 });
