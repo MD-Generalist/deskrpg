@@ -42,7 +42,14 @@ export function validateIdentityPutBody(input: unknown): IdentityPutValidation {
   return { ok: true, body, ifRevision };
 }
 
-const ALLOWED_CONFIG_KEYS = new Set(["model", "provider", "toolsets", "reasoning_effort"]);
+const ALLOWED_CONFIG_KEYS = new Set([
+  "model",
+  "provider",
+  "toolsets",
+  "reasoning_effort",
+  "enabledToolsets",
+  "disabledSkills",
+]);
 
 export type ConfigPutValidation =
   | { ok: true; patch: Record<string, unknown> }
@@ -50,8 +57,8 @@ export type ConfigPutValidation =
   | { ok: false; errorCode: "unsupported_config_key"; unknownKeys: string[] };
 
 /**
- * 플러그인이 허용하는 네 키(`model`/`provider`/`toolsets`/`reasoning_effort`)만
- * 통과시킨다. 화면이
+ * 플러그인이 허용하는 여섯 키(`model`/`provider`/`toolsets`/`reasoning_effort`/
+ * `enabledToolsets`/`disabledSkills`)만 통과시킨다. 화면이
  * 실수로 다른 키를 보내면 원격이 400 을 내는데, 여기서 막으면 왜 막혔는지가
  * 분명해진다.
  */
@@ -65,4 +72,15 @@ export function validateConfigPatch(input: unknown): ConfigPutValidation {
     return { ok: false, errorCode: "unsupported_config_key", unknownKeys };
   }
   return { ok: true, patch };
+}
+
+export type CreateOptionsValidation =
+  { ok: true; cloneFrom?: "default" } | { ok: false; errorCode: "bad_request" };
+
+/** 복제 원본은 지금 `default` 뿐이다 — 플러그인이 400 을 내기 전에 여기서 이유를 분명히 한다. */
+export function validateCreateOptions(input: unknown): CreateOptionsValidation {
+  const raw = (input as { cloneFrom?: unknown } | null)?.cloneFrom;
+  if (raw === undefined || raw === null) return { ok: true };
+  if (raw !== "default") return { ok: false, errorCode: "bad_request" };
+  return { ok: true, cloneFrom: "default" };
 }

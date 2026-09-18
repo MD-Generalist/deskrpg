@@ -47,7 +47,36 @@ export type CreateProfilePayload = {
   apiKey?: string;
   keyIssued: boolean;
   keyError?: string;
+  cloned?: { configKeys: string[]; envKeys: string[] };
+  needsLogin?: string[];
+  cloneError?: string;
 };
+
+// ---------------------------------------------------------------------------
+// 직원 설정 피커(플러그인 0.9.0) — 툴셋·스킬 목록, 프로필 생성 시 복제.
+// ---------------------------------------------------------------------------
+
+export type ToolsetRow = {
+  name: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  configured: boolean | null;
+};
+
+export type ToolsetsPayload = { platform: string; toolsets: ToolsetRow[] };
+
+export type SkillRow = {
+  name: string;
+  category: string;
+  description: string;
+  disabled: boolean;
+  essential: boolean;
+};
+
+export type SkillsPayload = { skills: SkillRow[] };
+
+export type CreateProfileOptions = { cloneFrom?: "default" };
 
 export type DeleteProfilePayload = {
   name: string;
@@ -62,7 +91,10 @@ export type CatalogPayload = {
 
 export type PluginClient = {
   listProfiles(): Promise<PluginResponse<{ profiles: unknown[] }>>;
-  createProfile(name: string): Promise<PluginResponse<CreateProfilePayload>>;
+  createProfile(
+    name: string,
+    options?: CreateProfileOptions,
+  ): Promise<PluginResponse<CreateProfilePayload>>;
   deleteProfile(name: string): Promise<PluginResponse<DeleteProfilePayload>>;
   getIdentity(name: string, profileToken: string): Promise<PluginResponse<IdentityPayload>>;
   putIdentity(
@@ -77,6 +109,9 @@ export type PluginClient = {
     profileToken: string,
     patch: Record<string, unknown>,
   ): Promise<PluginResponse<Record<string, unknown>>>;
+  // 직원 설정 피커(0.9.0). 프로필 스코프 — 스킬 폴더와 키 설정 여부가 프로필마다 다르다.
+  getToolsets(name: string, profileToken: string): Promise<PluginResponse<ToolsetsPayload>>;
+  getSkills(name: string, profileToken: string): Promise<PluginResponse<SkillsPayload>>;
 };
 
 // ---------------------------------------------------------------------------
