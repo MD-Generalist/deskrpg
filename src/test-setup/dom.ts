@@ -5,7 +5,17 @@
  * 러너는 `tsx --test` 라 별도 환경(jsdom 프리셋 같은 것)이 없다. happy-dom 의 창을
  * 여기서 직접 전역에 심는다.
  */
+import Module from "node:module";
 import { Window } from "happy-dom";
+
+// 화면 컴포넌트가 모듈 스코프에서 `import "*.css"` 를 부수효과로 쓴다(예: lookbook.css).
+// `tsx --test` 에는 번들러가 없어 CSS 를 JS 로 파싱하려다 구문 오류로 죽는다 — 테스트에는
+// 스타일이 필요 없으므로 빈 모듈로 취급한다.
+(
+  Module as unknown as { _extensions: Record<string, (m: unknown, filename: string) => void> }
+)._extensions[".css"] = (m) => {
+  (m as { exports: unknown }).exports = {};
+};
 
 const win = new Window({ url: "https://localhost/" });
 
@@ -23,6 +33,7 @@ for (const key of [
   "navigator",
   "HTMLElement",
   "HTMLInputElement",
+  "HTMLTextAreaElement",
   "Element",
   "Node",
   "Event",

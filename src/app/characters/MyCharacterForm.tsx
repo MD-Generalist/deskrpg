@@ -1,0 +1,220 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+import { useT, useLocale } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import CharacterPreview from "@/components/CharacterPreview";
+import OfficeLookGallery from "@/components/OfficeLookGallery";
+import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
+import { normalizeAppearance, type CharacterAppearance } from "@/lib/lpc-registry";
+import "@/game/three/lookbook.css";
+
+const BIO_MAX_LENGTH = 2000;
+
+type MyCharacter = {
+  id: string;
+  name: string;
+  bio: string | null;
+  appearance: CharacterAppearance;
+};
+
+/**
+ * `/characters` 화면 전체 — "내 캐릭터" 는 사용자당 하나다. `GET /api/characters/me` 가
+ * null 을 주면 등록 모드, 캐릭터가 있으면 수정 모드로 같은 폼을 보여준다(스펙 2026-09-18).
+ */
+export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = {}) {
+  const t = useT(),
+    { locale } = useLocale(),
+    ko = locale === "ko";
+  const [character, setCharacter] = useState<MyCharacter | null | undefined>(undefined);
+  const isEditMode = !!character;
+
+  const [name, setName] = useState(""),
+    [bio, setBio] = useState(""),
+    [selectedAppearance, setSelectedAppearance] = useState<CharacterAppearance | null>(null);
+  const [saving, setSaving] = useState(false),
+    [error, setError] = useState(""),
+    [saved, setSaved] = useState(false);
+  const [direction, setDirection] = useState(0),
+    [walking, setWalking] = useState(false);
+  const directions = ["down", "left", "up", "right"];
+  const selected = resolveOfficeLook(selectedAppearance);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/characters/me", { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("load");
+        const data = await res.json();
+        if (controller.signal.aborted) return;
+        const mine = data.character as MyCharacter | null;
+        setCharacter(mine);
+        if (mine) {
+          setName(mine.name);
+          setBio(mine.bio ?? "");
+          setSelectedAppearance(normalizeAppearance(mine.appearance));
+        } else {
+          setSelectedAppearance(officeLookAppearance(OFFICE_LOOKS[0].id));
+        }
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setError(t("errors.failedToLoadCharacter"));
+        setCharacter(null);
+        setSelectedAppearance(officeLookAppearance(OFFICE_LOOKS[0].id));
+      });
+    return () => controller.abort();
+  }, [t]);
+
+  const handleSave = async () => {
+    if (!selectedAppearance || saving) return;
+    if (!name.trim()) {
+      setError(t("errors.characterNameRequired"));
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setSaved(false);
+
+    try {
+      const payload = { name: name.trim(), appearance: selectedAppearance, bio };
+      const res = isEditMode
+        ? await fetch(`/api/characters/${character!.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await fetch("/api/characters", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(
+          getLocalizedErrorMessage(
+            t,
+            data,
+            isEditMode ? "errors.failedToUpdateCharacter" : "errors.failedToCreateCharacter",
+          ),
+        );
+        setSaving(false);
+        return;
+      }
+      const data = await res.json();
+      setCharacter(data.character);
+      setSaving(false);
+      setSaved(true);
+      onSaved?.();
+    } catch {
+      setError(t("common.networkError"));
+      setSaving(false);
+    }
+  };
+
+  if (character === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">{t("common.loading")}</div>
+    );
+  }
+
+  return (
+    <div className="lookbook-page">
+      <OfficeLookGallery
+        selectedId={selected?.id}
+        onSelect={(look) => {
+          setSelectedAppearance(officeLookAppearance(look.id));
+          setError("");
+        }}
+      />
+      <aside className="lookbook-preview" aria-label={ko ? "선택한 캐릭터" : "Selected character"}>
+        <div className="lookbook-eyebrow">
+          {isEditMode ? t("characters.my.editTitle") : t("characters.my.createTitle")}
+        </div>
+        {selectedAppearance && (
+          <CharacterPreview
+            appearance={selectedAppearance}
+            scale={4.5}
+            direction={directions[direction]}
+            walking={walking}
+          />
+        )}
+        <div className="lookbook-preview-controls">
+          <button
+            type="button"
+            aria-label={ko ? "왼쪽으로 회전" : "Rotate left"}
+            onClick={() => setDirection((direction + 1) % 4)}
+          >
+            ↶
+          </button>
+          <button type="button" aria-pressed={walking} onClick={() => setWalking(!walking)}>
+            {ko ? (walking ? "걷는 모습" : "서 있는 모습") : walking ? "Walking" : "Standing"}
+          </button>
+          <button
+            type="button"
+            aria-label={ko ? "오른쪽으로 회전" : "Rotate right"}
+            onClick={() => setDirection((direction + 3) % 4)}
+          >
+            ↷
+          </button>
+        </div>
+        {selected && (
+          <>
+            <h2>{ko ? selected.name : selected.nameEn}</h2>
+            <p className="lookbook-preview-description">
+              {ko ? selected.subtitle : selected.subtitleEn}
+            </p>
+          </>
+        )}
+        <div className="lookbook-name">
+          <label htmlFor="character-name">
+            {ko ? "오피스에서 사용할 이름" : "Your name in the office"}
+          </label>
+          <input
+            id="character-name"
+            type="text"
+            maxLength={50}
+            placeholder={t("characters.namePlaceholderShort")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div className="lookbook-name">
+          <label htmlFor="character-bio">{t("characters.my.bio")}</label>
+          <textarea
+            id="character-bio"
+            maxLength={BIO_MAX_LENGTH}
+            placeholder={t("characters.my.bioPlaceholder")}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            rows={4}
+          />
+          <p className="lookbook-preview-description">{BIO_MAX_LENGTH - bio.length}</p>
+          <p className="lookbook-preview-description">{t("characters.my.bioHint")}</p>
+        </div>
+        {error && (
+          <p className="lookbook-error" role="alert">
+            {error}
+          </p>
+        )}
+        {saved && !error && (
+          <p className="lookbook-preview-description">{t("characters.my.saved")}</p>
+        )}
+        <div className="lookbook-save">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !selectedAppearance || !name.trim()}
+          >
+            {saving
+              ? t("common.loading")
+              : isEditMode
+                ? t("characters.my.save")
+                : t("characters.my.create")}
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
