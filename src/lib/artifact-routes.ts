@@ -10,12 +10,14 @@ import {
   ARTIFACT_SOURCES,
   ARTIFACTS_TASK_FILTER_MIN_VERSION,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
 import { compareSemver } from "@/lib/hermes/plugin-capability";
 import { getUserId } from "@/lib/internal-rpc";
 
 export type ArtifactParams = { params: Promise<{ id: string; artifactId?: string; v?: string }> };
 
 const LIMIT_MAX = 200;
+const MAX_EDIT_CHARS = 5_000_000;
 
 function resolve(req: NextRequest, channelId: string) {
   return resolveArtifactChannelContext({ userId: getUserId(req), channelId });
@@ -72,4 +74,68 @@ export async function getArtifact(
   const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
   if (!loaded.ok) return loaded.response;
   return NextResponse.json(loaded.detail);
+}
+
+export async function getArtifactContent(
+  req: NextRequest,
+  channelId: string,
+  artifactId: string,
+  v: string,
+): Promise<Response> {
+  if (!/^\d{1,9}$/.test(v)) return cronError(400, "invalid_field", "v");
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
+  if (!loaded.ok) return loaded.response;
+  const res = await resolved.ctx.client.artifacts.content(artifactId, Number(v), {
+    download: req.nextUrl.searchParams.get("download") === "1",
+    range: req.headers.get("range"),
+  });
+  if (!res.ok) return rawFailureResponse(res);
+  return streamProxyResponse(res.response);
+}
+
+export async function addArtifactVersion(
+  req: NextRequest,
+  channelId: string,
+  artifactId: string,
+): Promise<Response> {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return cronError(400, "invalid_json", "body must be JSON");
+  }
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (typeof b.content !== "string" || typeof b.filename !== "string" || !b.filename.trim()) {
+    return cronError(400, "missing_field", "content, filename");
+  }
+  if (b.content.length > MAX_EDIT_CHARS)
+    return cronError(413, "artifact_too_large", "content too large");
+  const note = typeof b.note === "string" ? b.note.slice(0, 400) : undefined;
+  const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
+  if (!loaded.ok) return loaded.response;
+  const res = await resolved.ctx.client.artifacts.addVersion(
+    artifactId,
+    { content: b.content, filename: b.filename.trim().slice(0, 200), ...(note ? { note } : {}) },
+    resolved.ctx.userId,
+  );
+  if (!res.ok) return pluginFailureResponse(res);
+  return NextResponse.json(res.data, { status: 201 });
+}
+
+export async function deleteArtifact(
+  req: NextRequest,
+  channelId: string,
+  artifactId: string,
+): Promise<Response> {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
+  if (!loaded.ok) return loaded.response;
+  const res = await resolved.ctx.client.artifacts.remove(artifactId, resolved.ctx.userId);
+  if (!res.ok) return pluginFailureResponse(res);
+  return NextResponse.json({ ok: true });
 }

@@ -25,6 +25,8 @@ let server: FakePluginServer;
 type Routes = {
   list: typeof import("./[id]/artifacts/route");
   item: typeof import("./[id]/artifacts/[artifactId]/route");
+  versions: typeof import("./[id]/artifacts/[artifactId]/versions/route");
+  content: typeof import("./[id]/artifacts/[artifactId]/versions/[v]/content/route");
 };
 
 let routes: Routes;
@@ -38,6 +40,8 @@ before(async () => {
   routes = {
     list: await import("./[id]/artifacts/route"),
     item: await import("./[id]/artifacts/[artifactId]/route"),
+    versions: await import("./[id]/artifacts/[artifactId]/versions/route"),
+    content: await import("./[id]/artifacts/[artifactId]/versions/[v]/content/route"),
   };
 });
 
@@ -45,8 +49,14 @@ after(async () => {
   await server.close();
 });
 
-function req(userId: string, method: string, url: string): NextRequest {
-  return new NextRequest(url, { method, headers: authHeaders(userId) });
+function req(userId: string, method: string, url: string, body?: unknown): NextRequest {
+  const headers = new Headers(authHeaders(userId));
+  if (body !== undefined) headers.set("content-type", "application/json");
+  return new NextRequest(url, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
 }
 
 const base = (channelId: string) => `http://localhost/api/channels/${channelId}/artifacts`;
@@ -148,4 +158,69 @@ test("게이트: 비로그인 401, 비멤버 403/404, artifacts 능력 없음 42
   const r = await routes.list.GET(req(o2.id, "GET", base(c2.id)), ctx(c2.id));
   assert.equal(r.status, 428);
   server.setInfo({ capabilities: ["kanban", "cron", "events", "artifacts"] });
+});
+
+test("내용은 Range 를 넘기고 206 스트림을, 범위 밖은 404 를 준다", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  server.seedArtifact({
+    id: "c1",
+    title: "t",
+    profile: "sophie",
+    body: "0123456789",
+    mime: "text/plain",
+  });
+  const r = new NextRequest(`${base(channel.id)}/c1/versions/1/content`, {
+    headers: { ...authHeaders(owner.id), range: "bytes=2-5" },
+  });
+  const res = await routes.content.GET(r, ctx(channel.id, "c1", "1"));
+  assert.equal(res.status, 206);
+  assert.equal(await res.text(), "2345");
+  assert.equal(res.headers.get("content-security-policy"), "sandbox");
+  server.seedArtifact({ id: "c2", title: "t", profile: "stranger", body: "x" });
+  const out = await routes.content.GET(
+    req(owner.id, "GET", `${base(channel.id)}/c2/versions/1/content`),
+    ctx(channel.id, "c2", "1"),
+  );
+  assert.equal(out.status, 404);
+  const bad = await routes.content.GET(
+    req(owner.id, "GET", `${base(channel.id)}/c1/versions/x/content`),
+    ctx(channel.id, "c1", "x"),
+  );
+  assert.equal(bad.status, 400);
+});
+
+test("새 버전은 사용자 id 를 X-DeskRPG-User 로 붙여 201", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  server.seedArtifact({ id: "e1", title: "t", profile: "sophie", body: "v1" });
+  const res = await routes.versions.POST(
+    req(owner.id, "POST", `${base(channel.id)}/e1/versions`, {
+      content: "v2",
+      filename: "t.md",
+      note: "고침",
+    }),
+    ctx(channel.id, "e1"),
+  );
+  assert.equal(res.status, 201);
+  assert.equal(server.lastRequest()!.headers["x-deskrpg-user"], owner.id);
+  const bad = await routes.versions.POST(
+    req(owner.id, "POST", `${base(channel.id)}/e1/versions`, { content: 1 }),
+    ctx(channel.id, "e1"),
+  );
+  assert.equal(bad.status, 400);
+});
+
+test("삭제는 범위 안이면 ok, 밖이면 404", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  server.seedArtifact({ id: "d1", title: "t", profile: "sophie", body: "x" });
+  const ok = await routes.item.DELETE(
+    req(owner.id, "DELETE", `${base(channel.id)}/d1`),
+    ctx(channel.id, "d1"),
+  );
+  assert.equal(ok.status, 200);
+  server.seedArtifact({ id: "d2", title: "t", profile: "stranger", body: "x" });
+  const out = await routes.item.DELETE(
+    req(owner.id, "DELETE", `${base(channel.id)}/d2`),
+    ctx(channel.id, "d2"),
+  );
+  assert.equal(out.status, 404);
 });
