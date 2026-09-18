@@ -60,3 +60,15 @@ export async function ensureMyCharacter(
 export function isMyCharacter(mine: MyCharacter | null, characterId: string): boolean {
   return !!mine && mine.id === characterId;
 }
+
+/** `bio` 입력 검증 — POST/PATCH 공용. 빈 값은 null 로, 2,000자 초과는 거절한다. */
+export function validateBio(
+  value: unknown,
+):
+  | { ok: true; bio: string | null }
+  | { ok: false; errorCode: "character_bio_too_long" | "character_bio_invalid" } {
+  if (value === undefined || value === null || value === "") return { ok: true, bio: null };
+  if (typeof value !== "string") return { ok: false, errorCode: "character_bio_invalid" };
+  if (value.length > BIO_MAX_LENGTH) return { ok: false, errorCode: "character_bio_too_long" };
+  return { ok: true, bio: value.trim() || null };
+}

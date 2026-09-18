@@ -67,6 +67,9 @@ export type ErrorCode =
   | "character_name_required"
   | "character_name_length_invalid"
   | "max_characters_reached"
+  | "character_already_exists"
+  | "character_bio_too_long"
+  | "character_bio_invalid"
   | "failed_to_update_character"
   | "failed_to_create_character"
   | "character_appearance_invalid"
@@ -230,6 +233,9 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   character_name_required: "errors.characterNameRequired",
   character_name_length_invalid: "errors.characterNameLengthInvalid",
   max_characters_reached: "errors.maxCharactersReached",
+  character_already_exists: "errors.characterAlreadyExists",
+  character_bio_too_long: "errors.characterBioTooLong",
+  character_bio_invalid: "errors.characterBioInvalid",
   failed_to_update_character: "errors.failedToUpdateCharacter",
   failed_to_create_character: "errors.failedToCreateCharacter",
   character_appearance_invalid: "errors.characterAppearanceInvalid",

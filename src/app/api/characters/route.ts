@@ -4,12 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { validateAppearance } from "@/lib/lpc-registry";
 import { parseDbJson } from "@/lib/db-json";
+import { getMyCharacter, validateBio } from "@/lib/my-character";
 
 function getUserId(req: NextRequest): string | null {
   return req.headers.get("x-user-id");
 }
-
-const MAX_CHARACTERS = 5;
 
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
@@ -48,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, appearance } = body;
+    const { name, appearance, bio } = body;
 
     if (!name || !appearance) {
       return NextResponse.json(
@@ -64,15 +63,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const existing = await db.select().from(characters).where(eq(characters.userId, userId));
-
-    if (existing.length >= MAX_CHARACTERS) {
+    if (await getMyCharacter(userId)) {
       return NextResponse.json(
-        {
-          errorCode: "max_characters_reached",
-          error: `maximum ${MAX_CHARACTERS} characters allowed`,
-        },
-        { status: 400 },
+        { errorCode: "character_already_exists", error: "you already have a character" },
+        { status: 409 },
       );
     }
 
@@ -84,9 +78,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const bioResult = validateBio(bio);
+    if (!bioResult.ok) {
+      return NextResponse.json(
+        { errorCode: bioResult.errorCode, error: bioResult.errorCode },
+        { status: 400 },
+      );
+    }
+
     const [character] = await db
       .insert(characters)
-      .values({ userId, name, appearance: jsonForDb(appearance) })
+      .values({ userId, name, appearance: jsonForDb(appearance), bio: bioResult.bio })
       .returning();
 
     return NextResponse.json(

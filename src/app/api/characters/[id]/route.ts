@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { validateAppearance } from "@/lib/lpc-registry";
 import { parseDbJson } from "@/lib/db-json";
+import { validateBio } from "@/lib/my-character";
 
 function getUserId(req: NextRequest): string | null {
   return req.headers.get("x-user-id");
@@ -55,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   try {
     const body = await req.json();
-    const { name, appearance } = body;
+    const { name, appearance, bio } = body;
 
     // Verify ownership
     const [existing] = await db
@@ -94,6 +95,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         );
       }
       updates.appearance = jsonForDb(appearance);
+    }
+
+    if (bio !== undefined) {
+      const bioResult = validateBio(bio);
+      if (!bioResult.ok) {
+        return NextResponse.json(
+          { errorCode: bioResult.errorCode, error: bioResult.errorCode },
+          { status: 400 },
+        );
+      }
+      updates.bio = bioResult.bio;
     }
 
     const [updated] = await db
