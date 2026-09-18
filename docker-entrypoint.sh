@@ -1,6 +1,15 @@
 #!/bin/sh
 set -e
 
+# PostgreSQL 설치는 방언을 환경에 명시한다. 기동 시 런타임 홈 부트스트랩
+# (src/lib/runtime-env-bootstrap.js → ensureDeskRpgHome)이 홈의 .env.local 에 DB_TYPE=sqlite 를
+# 적고, 환경에 DB_TYPE 이 없으면 그 값을 올린다. 그러면 마이그레이션은 PostgreSQL 에 돌고 앱은
+# 컨테이너 안(볼륨이 아닌) SQLite 에 기록해 재생성 때 데이터가 사라진다(2026-09-18 운영 실측).
+# 사용자가 DB_TYPE 을 지정한 경우에는 건드리지 않는다.
+if [ -z "${DB_TYPE:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
+  export DB_TYPE=postgresql
+fi
+
 # Auto-migrate: run Drizzle PostgreSQL migrations before starting the server
 if [ -d "/app/drizzle" ] && [ "$DB_TYPE" != "sqlite" ]; then
   node /app/migrate.js

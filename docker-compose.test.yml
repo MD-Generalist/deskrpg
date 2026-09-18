@@ -23,6 +23,7 @@ services:
       - "${DESKRPG_TEST_APP_PORT:-3104}:3000"
       - "${DESKRPG_TEST_ADMIN_PORT:-3105}:3001"
     environment:
+      DB_TYPE: postgresql
       DATABASE_URL: postgresql://deskrpg:${POSTGRES_PASSWORD:-deskrpg_test_pw}@deskrpg-db:5432/deskrpg
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
