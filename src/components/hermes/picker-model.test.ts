@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { classifyLoad, groupSkills, initialSelection, toggle } from "./picker-model";
+import {
+  classifyLoad,
+  groupSkills,
+  initialSelection,
+  toggle,
+  toggleSkill,
+  toggleToolset,
+} from "./picker-model";
 
 const ts = (name: string, enabled: boolean) => ({
   name,
@@ -66,5 +73,18 @@ describe("picker-model", () => {
     );
     assert.equal(classifyLoad([{ errorCode: "config_unreadable" }, { skills: [] }]), "error");
     assert.equal(classifyLoad([{ toolsets: [] }, { skills: [] }]), "ok");
+  });
+  it("툴셋을 바꿀 때 불러온 목록 밖 이름(MCP·모르는 이름)은 싣지 않는다", () => {
+    const rows = [ts("web", true), ts("tts", false)];
+    assert.deepEqual(toggleToolset(["web", "my-mcp", "ghost"], "tts", true, rows), ["tts", "web"]);
+    assert.deepEqual(toggleToolset(["web", "my-mcp"], "web", false, rows), []);
+  });
+  it("스킬을 바꿀 때 필수·모르는 이름은 끈 목록에 싣지 않는다", () => {
+    const rows = [sk("hermes-agent", "core", false, true), sk("pdf", "docs"), sk("xlsx", "docs")];
+    assert.deepEqual(toggleSkill(["hermes-agent", "ghost", "xlsx"], "pdf", false, rows), [
+      "pdf",
+      "xlsx",
+    ]);
+    assert.deepEqual(toggleSkill(["hermes-agent", "ghost", "xlsx"], "xlsx", true, rows), []);
   });
 });

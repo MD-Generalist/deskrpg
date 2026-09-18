@@ -21,6 +21,35 @@ export function toggle(list: string[], name: string, on: boolean): string[] {
   return [...next].sort();
 }
 
+/**
+ * 툴셋 체크를 바꾼 다음 목록 — **불러온 행 이름 안의 것만** 싣는다.
+ * 부모가 config GET 의 `enabledToolsets`(MCP 서버 이름이 섞일 수 있다)로 시드해도 플러그인 PUT 이
+ * `unknown toolsets` 로 400 을 내지 않게. MCP 항목은 플러그인이 쓸 때 보존하므로 빼도 사라지지 않는다.
+ */
+export function toggleToolset(
+  list: string[],
+  name: string,
+  on: boolean,
+  rows: ToolsetRow[],
+): string[] {
+  const known = new Set(rows.map((r) => r.name));
+  return toggle(list, name, on).filter((n) => known.has(n));
+}
+
+/**
+ * 스킬 체크(`enabled` = 켜짐)를 바꾼 다음 **끈** 목록 — 불러온 스킬 이름 안의 것, 필수 제외.
+ * 플러그인 PUT 은 모르는 스킬·필수 스킬을 400 으로 거절한다.
+ */
+export function toggleSkill(
+  disabled: string[],
+  name: string,
+  enabled: boolean,
+  rows: SkillRow[],
+): string[] {
+  const allowed = new Set(rows.filter((r) => !r.essential).map((r) => r.name));
+  return toggle(disabled, name, !enabled).filter((n) => allowed.has(n));
+}
+
 export function groupSkills(skills: SkillRow[], query: string) {
   const q = query.trim().toLowerCase();
   const hit = (s: SkillRow) => !q || `${s.name} ${s.description}`.toLowerCase().includes(q);
