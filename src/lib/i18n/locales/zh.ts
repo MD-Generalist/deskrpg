@@ -266,6 +266,8 @@ const zh: Record<string, string> = {
   "hermes.wizard.close": "关闭",
   "hermes.wizard.next": "下一步",
   "hermes.wizard.finish": "完成",
+  "hermes.wizard.profile.cloned": "已继承默认配置文件的 AI 模型设置和密钥。",
+  "hermes.wizard.profile.cloneFailed": "未能继承默认配置文件的设置。请在 ③ 中选择 AI 模型。",
   "hermes.wizard.locked.needsProfile": "请先在 ① 中创建配置文件",
   "hermes.wizard.config.advanced": "工具与技能（高级）",
   "hermes.wizard.result.attended": "“{name}”已在 {count} 个频道上岗。",

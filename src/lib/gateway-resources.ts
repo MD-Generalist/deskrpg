@@ -19,6 +19,7 @@ import {
   setGatewayRuntimeState,
 } from "@/lib/gateway-runtime-cache";
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
+import { supportsProfileClone } from "@/lib/hermes/plugin-capability";
 
 type GatewayShareRow = typeof gatewayShares.$inferSelect;
 
@@ -223,6 +224,9 @@ export async function listAccessibleGatewayResources(userId: string) {
       pluginCheckedAt: resource.pluginCheckedAt,
       // Hermes 대시보드는 게이트웨이 전체를 다루는 관리 화면이라 소유자에게만 알린다.
       dashboardUrl: restorePluginInfo(resource.pluginInfoJson)?.dashboard_url ?? null,
+      // 직원 생성은 소유자만 한다. 플러그인이 기본 프로필 복제를 지원할 때만 채용 마법사가
+      // `cloneFrom: "default"` 를 보낸다 — 구버전에 모르는 필드를 보내지 않는다.
+      supportsProfileClone: supportsProfileClone(restorePluginInfo(resource.pluginInfoJson)),
       canEditCredentials: true,
       shareRole: null as string | null,
       isOwner: true,

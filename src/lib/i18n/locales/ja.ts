@@ -275,6 +275,9 @@ const ja: Record<string, string> = {
   "hermes.wizard.close": "閉じる",
   "hermes.wizard.next": "次へ",
   "hermes.wizard.finish": "完了",
+  "hermes.wizard.profile.cloned": "デフォルトプロフィールのAIモデル設定とキーを引き継ぎました。",
+  "hermes.wizard.profile.cloneFailed":
+    "デフォルトプロフィールの設定を引き継げませんでした。③でAIモデルを選んでください。",
   "hermes.wizard.locked.needsProfile": "先に①でプロフィールを作成してください",
   "hermes.wizard.config.advanced": "ツール・スキル（詳細）",
   "hermes.wizard.result.attended": "「{name}」が{count}件のチャンネルに出勤しました。",

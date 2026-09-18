@@ -28,6 +28,7 @@ import {
   type StepAvailability,
   type WizardStep,
 } from "./hire-wizard-steps";
+import ToolsetSkillPicker from "./ToolsetSkillPicker";
 import { getWizardErrorMessage } from "./wizard-error-codes";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +47,10 @@ type ProvisionedProfile = {
   keyError?: string;
   keyStored: boolean;
   keyStoredError?: string;
+  /** 기본 프로필 복제가 실패했다(프로필은 만들어졌다). 복제를 요청했을 때만 온다. */
+  cloneError?: string;
+  /** 복제로 물려받은 설정·키의 **이름**. 값은 오지 않는다. */
+  cloned?: { configKeys?: string[]; envKeys?: string[] };
 };
 
 type IdentityPayload = {
@@ -91,6 +96,11 @@ interface NpcHireWizardProps {
    * 맥락과 어긋나므로 호출부가 바꿔 준다.
    */
   title?: string;
+  /**
+   * 새 프로필을 기본 프로필에서 복제해 모델 설정·프로바이더 키를 물려받는다. 플러그인이
+   * `profile_clone` 을 알릴 때만 켠다 — 구버전에는 모르는 필드를 보내지 않는다.
+   */
+  cloneDefaultProfile?: boolean;
   /** ①에서 프로필이 실제로 만들어진 직후. 바깥 프로필 목록이 이것으로 곧바로 다시 읽는다. */
   onProfileCreated?: (profileName: string) => void;
   /**
@@ -147,6 +157,7 @@ export default function NpcHireWizard({
   initialProfile = null,
   dashboardUrl = null,
   title,
+  cloneDefaultProfile = false,
   onProfileCreated,
   onDone,
 }: NpcHireWizardProps) {
@@ -212,6 +223,12 @@ export default function NpcHireWizard({
   const [model, setModel] = useState("");
   const [provider, setProvider] = useState("");
   const [toolsetsText, setToolsetsText] = useState("");
+  // 툴셋·스킬 체크리스트(플러그인 0.9.0+). null 이면 서버의 현재 상태가 기본값이다.
+  // 사람이 건드렸을 때만 저장에 싣는다 — 안 건드린 채 저장해 현재 상태를 다시 쓰지 않는다.
+  const [enabledToolsets, setEnabledToolsets] = useState<string[] | null>(null);
+  const [disabledSkills, setDisabledSkills] = useState<string[] | null>(null);
+  const [pickerDirty, setPickerDirty] = useState(false);
+  const [pickerUnsupported, setPickerUnsupported] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const [effort, setEffort] = useState("");
@@ -273,7 +290,10 @@ export default function NpcHireWizard({
       const res = await fetch(`/api/gateways/${gatewayId}/plugin/profiles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nameTrimmed }),
+        body: JSON.stringify({
+          name: nameTrimmed,
+          ...(cloneDefaultProfile ? { cloneFrom: "default" } : {}),
+        }),
       });
       const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
@@ -329,7 +349,15 @@ export default function NpcHireWizard({
     } finally {
       setCreating(false);
     }
-  }, [applyIdentityPayload, gatewayId, nameTrimmed, nameValid, onProfileCreated, t]);
+  }, [
+    applyIdentityPayload,
+    cloneDefaultProfile,
+    gatewayId,
+    nameTrimmed,
+    nameValid,
+    onProfileCreated,
+    t,
+  ]);
 
   const handleDeleteCreated = useCallback(async () => {
     if (!created) return;
@@ -550,11 +578,18 @@ export default function NpcHireWizard({
       const patch: Record<string, unknown> = {};
       if (model.trim()) patch.model = model.trim();
       if (provider.trim()) patch.provider = provider.trim();
-      const toolsets = toolsetsText
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (toolsets.length > 0) patch.toolsets = toolsets;
+      if (!pickerUnsupported) {
+        // 체크리스트는 대화에 실제로 반영되는 플랫폼별 툴셋을 쓴다. 최상위 `toolsets` 는
+        // 대화에 반영되지 않으므로 함께 보내지 않는다(플러그인 0.9.0 계약).
+        if (pickerDirty && enabledToolsets) patch.enabledToolsets = enabledToolsets;
+        if (pickerDirty && disabledSkills) patch.disabledSkills = disabledSkills;
+      } else {
+        const toolsets = toolsetsText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (toolsets.length > 0) patch.toolsets = toolsets;
+      }
       // 빈 문자열도 보낸다 — "지정 안 함" 으로 되돌리는 유일한 방법이다.
       // 조건을 걸면 한 번 고른 effort 를 화면에서 해제할 수 없어진다.
       if (catalog) patch.reasoning_effort = effort;
@@ -580,7 +615,19 @@ export default function NpcHireWizard({
     } finally {
       setConfigSaving(false);
     }
-  }, [catalog, effort, model, profileBase, provider, t, toolsetsText]);
+  }, [
+    catalog,
+    disabledSkills,
+    effort,
+    enabledToolsets,
+    model,
+    pickerDirty,
+    pickerUnsupported,
+    profileBase,
+    provider,
+    t,
+    toolsetsText,
+  ]);
 
   // --- Navigation ---
 
@@ -755,6 +802,13 @@ export default function NpcHireWizard({
               <p className="text-sm text-text">
                 {t("hermes.wizard.profile.created", { name: created.name })}
               </p>
+              {created.cloned && !created.cloneError && (
+                <p className="text-xs text-text-muted">{t("hermes.wizard.profile.cloned")}</p>
+              )}
+              {created.cloneError && (
+                // 프로필은 만들어졌다 — 모델을 ③ 에서 직접 고르면 된다. 막지 않고 알린다.
+                <p className="text-xs text-amber-300">{t("hermes.wizard.profile.cloneFailed")}</p>
+              )}
 
               {!created.keyIssued && (
                 <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
@@ -1081,16 +1135,41 @@ export default function NpcHireWizard({
                   {t("hermes.wizard.config.advanced")}
                 </summary>
                 <div className="mt-2 space-y-1">
-                  <input
-                    type="text"
-                    value={toolsetsText}
-                    onChange={(e) => setToolsetsText(e.target.value)}
-                    placeholder={t("hermes.wizard.config.toolsets")}
-                    className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
-                  />
-                  <p className="text-xs text-text-muted">
-                    {t("hermes.wizard.config.toolsetsHint")}
-                  </p>
+                  {profileBase && !pickerUnsupported ? (
+                    <ToolsetSkillPicker
+                      profileBase={profileBase}
+                      enabledToolsets={enabledToolsets}
+                      onEnabledToolsetsChange={(next) => {
+                        setEnabledToolsets(next);
+                        setPickerDirty(true);
+                      }}
+                      disabledSkills={disabledSkills}
+                      onDisabledSkillsChange={(next) => {
+                        setDisabledSkills(next);
+                        setPickerDirty(true);
+                      }}
+                      onLoaded={(initial) => {
+                        setEnabledToolsets(initial.enabledToolsets);
+                        setDisabledSkills(initial.disabledSkills);
+                      }}
+                      onUnsupported={() => setPickerUnsupported(true)}
+                      disabled={configSaving}
+                    />
+                  ) : (
+                    // 구버전 플러그인(< 0.9.0)은 목록을 주지 않는다 — 예전처럼 이름을 적는다.
+                    <>
+                      <input
+                        type="text"
+                        value={toolsetsText}
+                        onChange={(e) => setToolsetsText(e.target.value)}
+                        placeholder={t("hermes.wizard.config.toolsets")}
+                        className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                      />
+                      <p className="text-xs text-text-muted">
+                        {t("hermes.wizard.config.toolsetsHint")}
+                      </p>
+                    </>
+                  )}
                 </div>
               </details>
               {configSaved && (

@@ -48,6 +48,7 @@ function HireEmployeeContent() {
   const [canRegister, setCanRegister] = useState<boolean | null>(null);
   const [existingProfiles, setExistingProfiles] = useState<string[]>([]);
   const [localDiscovery, setLocalDiscovery] = useState(false);
+  const [cloneDefaultProfile, setCloneDefaultProfile] = useState(false);
 
   const reprobePlugin = useCallback(async () => {
     try {
@@ -79,11 +80,13 @@ function HireEmployeeContent() {
             pluginStatus: string | null;
             pluginCheckedAt: string | Date | null;
             dashboardUrl?: string | null;
+            supportsProfileClone?: boolean;
           } => !!row && typeof row === "object" && (row as { id?: unknown }).id === gatewayId,
         );
         if (cancelled) return;
         setCanRegister(mine?.isOwner === true);
         setDashboardUrl(typeof mine?.dashboardUrl === "string" ? mine.dashboardUrl : null);
+        setCloneDefaultProfile(mine?.supportsProfileClone === true);
         const cached = resolvePluginStatusFromCache({
           pluginStatus: mine?.pluginStatus ?? null,
           pluginCheckedAt: mine?.pluginCheckedAt ?? null,
@@ -172,6 +175,7 @@ function HireEmployeeContent() {
             initialProfile={initialProfile}
             dashboardUrl={dashboardUrl}
             localDiscovery={localDiscovery}
+            cloneDefaultProfile={cloneDefaultProfile}
             onDone={(result) =>
               router.push(hireFinishedHref(gatewayId, returnTo, result?.profileName ?? null))
             }

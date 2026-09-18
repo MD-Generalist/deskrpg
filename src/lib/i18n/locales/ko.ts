@@ -268,6 +268,9 @@ const ko: Record<string, string> = {
   "hermes.wizard.close": "닫기",
   "hermes.wizard.next": "다음",
   "hermes.wizard.finish": "완료",
+  "hermes.wizard.profile.cloned": "기본 프로필의 AI 모델 설정과 키를 물려받았습니다.",
+  "hermes.wizard.profile.cloneFailed":
+    "기본 프로필 설정을 물려받지 못했습니다. ③ 에서 AI 모델을 직접 고르세요.",
   "hermes.wizard.locked.needsProfile": "먼저 ① 에서 프로필을 만드세요",
   "hermes.wizard.config.advanced": "도구·스킬 (고급)",
   "hermes.wizard.result.attended": "'{name}' 이(가) 채널 {count}곳에 출근했습니다.",
