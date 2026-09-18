@@ -8,7 +8,7 @@ import {
   type Walkable,
 } from "../game/navigation";
 import { isCreativeStudioMap, effectiveMapSpawn } from "./effective-map-spawn";
-import { furnitureSeats } from "../game/three/seating";
+import { deskSeats, furnitureSeats } from "../game/three/seating";
 
 export const CHANNEL_TILE_SIZE = 32;
 export type ChannelMotionLayout = {
@@ -17,6 +17,8 @@ export type ChannelMotionLayout = {
   sanitizedHomes?: boolean;
   npcs: Array<NavigationPoint & { id: string }>;
   seats: Array<NavigationPoint & { id: string }>;
+  /** 직원 지정자리 후보 — 설 수 있는 데스크 의자 타일, row→col 정렬. */
+  deskSeatTiles: Array<{ col: number; row: number }>;
   bounds: { width: number; height: number };
   /** Logical tile indices, matching the client simulation's navigation. */
   isWalkable: Walkable;
@@ -70,6 +72,16 @@ export function deriveChannelMotionLayout(
         y = (seat.anchorZ ?? seat.z) * 32;
       if (canStandAt({ x, y })) seats.set(`${x}:${y}`, { id: `${x}:${y}`, x, y });
     }
+    const deskTiles = new Map<string, { col: number; row: number }>();
+    for (const seat of deskSeats(objects)) {
+      const ax = seat.anchorX ?? seat.x,
+        az = seat.anchorZ ?? seat.z;
+      if (!canStandAt({ x: ax * 32, y: az * 32 })) continue;
+      const col = Math.floor(ax),
+        row = Math.floor(az);
+      deskTiles.set(`${col},${row}`, { col, row });
+    }
+    const deskSeatTiles = [...deskTiles.values()].sort((a, b) => a.row - b.row || a.col - b.col);
     // Historical profile assignments stay in the DB. Only v3 runtime homes are repaired.
     if (studio) {
       const occupied: NavigationPoint[] = [];
@@ -103,6 +115,7 @@ export function deriveChannelMotionLayout(
               {
                 npcs: [],
                 seats: [],
+                deskSeatTiles: [],
                 bounds: { width: cols * 32, height: rows * 32 },
                 isWalkable,
                 canStandAt,
@@ -122,6 +135,7 @@ export function deriveChannelMotionLayout(
       ...(studio ? { sanitizedHomes: true } : {}),
       npcs,
       seats: [...seats.values()],
+      deskSeatTiles,
       bounds: { width: cols * 32, height: rows * 32 },
       isWalkable,
       canStandAt,

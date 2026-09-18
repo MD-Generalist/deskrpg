@@ -166,12 +166,14 @@ export function sofaSeats(object: MapObject): Seat[] {
  */
 const seatCache = new WeakMap<
   MapObject[],
-  { length: number; seats: Seat[]; anchors: Set<string> }
+  { length: number; seats: Seat[]; anchors: Set<string>; desk: Seat[]; deskAnchors: Set<string> }
 >();
 
 function anchorKey(col: number, row: number) {
   return `${col}:${row}`;
 }
+
+const seatIdentity = (seat: Seat) => `${seat.anchorX ?? seat.x}:${seat.anchorZ ?? seat.z}`;
 
 function seatIndex(objects: MapObject[]) {
   const cached = seatCache.get(objects);
@@ -182,7 +184,15 @@ function seatIndex(objects: MapObject[]) {
   const anchors = new Set(
     seats.map((seat) => anchorKey((seat.anchorX ?? seat.x) - 0.5, (seat.anchorZ ?? seat.z) - 0.5)),
   );
-  const entry = { length: objects.length, seats, anchors };
+  // 데스크 좌석 = 전체에서 공용(회의 테이블·라운지)을 뺀 것. 자리 배정은 이것만 쓴다.
+  const common = new Set(commonAreaSeats(objects).map(seatIdentity));
+  const desk = seats.filter((seat) => !common.has(seatIdentity(seat)));
+  const deskAnchors = new Set(
+    desk.map((seat) =>
+      anchorKey(Math.floor(seat.anchorX ?? seat.x), Math.floor(seat.anchorZ ?? seat.z)),
+    ),
+  );
+  const entry = { length: objects.length, seats, anchors, desk, deskAnchors };
   seatCache.set(objects, entry);
   return entry;
 }
@@ -192,6 +202,14 @@ export function furnitureSeats(objects: MapObject[]) {
 }
 export function isSeatAnchor(objects: MapObject[], col: number, row: number) {
   return seatIndex(objects).anchors.has(anchorKey(col, row));
+}
+
+/** 개인 데스크 의자 — 직원의 지정자리 후보. */
+export function deskSeats(objects: MapObject[]) {
+  return seatIndex(objects).desk;
+}
+export function isDeskSeatAnchor(objects: MapObject[], col: number, row: number) {
+  return seatIndex(objects).deskAnchors.has(anchorKey(col, row));
 }
 
 /** Shared tables and lounge furniture, excluding individual desk chairs. */
