@@ -176,6 +176,7 @@ function HireEmployeeContent() {
             dashboardUrl={dashboardUrl}
             localDiscovery={localDiscovery}
             cloneDefaultProfile={cloneDefaultProfile}
+            canManageProviderAuth={canRegister === true}
             onDone={(result) =>
               router.push(hireFinishedHref(gatewayId, returnTo, result?.profileName ?? null))
             }

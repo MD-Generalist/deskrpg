@@ -258,3 +258,34 @@ describe("plugin client — 직원 설정 피커(0.9.0)", () => {
     assert.equal(res.ok && res.data.cloned?.keyScope, "api_keys");
   });
 });
+
+describe("plugin client — 프로바이더 인증", () => {
+  it("여섯 호출이 프로필 경로·토큰·메서드·본문으로 나간다", async () => {
+    const { calls, fetchImpl } = recorder([{ status: 200, json: {} }]);
+    const client = createPluginClient({
+      baseUrl: "http://gw:8642",
+      defaultToken: "default-key-1234567890",
+      fetchImpl,
+    });
+    const t = "profile-key-1234567890";
+    await client.startOAuth("noah", t, "openai-codex");
+    await client.pollOAuth("noah", t, "openai-codex", "s/1");
+    await client.cancelOAuth("noah", t, "s/1");
+    await client.disconnectOAuth("noah", t, "openai-codex");
+    await client.putProviderKey("noah", t, "openai", "sk-VALUE-123456");
+    await client.deleteProviderKey("noah", t, "openai");
+    assert.deepEqual(
+      calls.map((c) => `${c.method} ${c.url.replace("http://gw:8642", "")}`),
+      [
+        "POST /p/noah/deskrpg/oauth/openai-codex/start",
+        "GET /p/noah/deskrpg/oauth/openai-codex/sessions/s%2F1",
+        "DELETE /p/noah/deskrpg/oauth/sessions/s%2F1",
+        "DELETE /p/noah/deskrpg/oauth/openai-codex",
+        "PUT /p/noah/deskrpg/provider-keys/openai",
+        "DELETE /p/noah/deskrpg/provider-keys/openai",
+      ],
+    );
+    assert.ok(calls.every((c) => c.auth === `Bearer ${t}`));
+    assert.deepEqual(JSON.parse(calls[4].body!), { value: "sk-VALUE-123456" });
+  });
+});

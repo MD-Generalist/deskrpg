@@ -90,9 +90,44 @@ export type DeleteProfilePayload = {
 };
 
 export type CatalogPayload = {
-  providers: Array<{ id: string; name: string; authenticated: boolean }>;
+  providers: Array<{
+    id: string;
+    name: string;
+    authenticated: boolean;
+    authType?: ProviderAuthType;
+    envVars?: string[];
+    cliCommand?: string | null;
+  }>;
   models: Record<string, string[]>;
   reasoningEfforts: string[];
+};
+
+// ---------------------------------------------------------------------------
+// 프로바이더 인증(플러그인 0.9.0) — OAuth 디바이스 로그인 · API 키 입력.
+// ---------------------------------------------------------------------------
+
+export type ProviderAuthType = "api_key" | "oauth_device" | "external";
+
+export type OAuthStartPayload = {
+  sessionId: string;
+  userCode: string;
+  verificationUrl: string;
+  expiresIn: number;
+  pollInterval: number;
+};
+
+export type OAuthPollPayload = {
+  status: "pending" | "approved" | "denied" | "expired" | "error";
+  error: string | null;
+  expiresAt: number | null;
+  retryable: boolean | null;
+  retryAfter: number | null;
+};
+
+export type ProviderKeyPayload = {
+  configured: boolean;
+  envVar?: string;
+  removed?: string[];
 };
 
 export type PluginClient = {
@@ -118,6 +153,39 @@ export type PluginClient = {
   // 직원 설정 피커(0.9.0). 프로필 스코프 — 스킬 폴더와 키 설정 여부가 프로필마다 다르다.
   getToolsets(name: string, profileToken: string): Promise<PluginResponse<ToolsetsPayload>>;
   getSkills(name: string, profileToken: string): Promise<PluginResponse<SkillsPayload>>;
+  // 프로바이더 인증(0.9.0). 전부 프로필 스코프 — 게이트웨이 소유자 권한 체크는 라우트 계층 몫이다.
+  startOAuth(
+    name: string,
+    profileToken: string,
+    provider: string,
+  ): Promise<PluginResponse<OAuthStartPayload>>;
+  pollOAuth(
+    name: string,
+    profileToken: string,
+    provider: string,
+    sessionId: string,
+  ): Promise<PluginResponse<OAuthPollPayload>>;
+  cancelOAuth(
+    name: string,
+    profileToken: string,
+    sessionId: string,
+  ): Promise<PluginResponse<{ ok: boolean }>>;
+  disconnectOAuth(
+    name: string,
+    profileToken: string,
+    provider: string,
+  ): Promise<PluginResponse<{ ok: boolean }>>;
+  putProviderKey(
+    name: string,
+    profileToken: string,
+    provider: string,
+    value: string,
+  ): Promise<PluginResponse<ProviderKeyPayload>>;
+  deleteProviderKey(
+    name: string,
+    profileToken: string,
+    provider: string,
+  ): Promise<PluginResponse<ProviderKeyPayload>>;
 };
 
 // ---------------------------------------------------------------------------

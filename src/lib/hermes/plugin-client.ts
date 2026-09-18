@@ -49,6 +49,10 @@ export type {
   ToolsetsPayload,
   SkillRow,
   SkillsPayload,
+  ProviderAuthType,
+  OAuthStartPayload,
+  OAuthPollPayload,
+  ProviderKeyPayload,
   PluginClient,
   KanbanApi,
   EventsApi,
@@ -258,6 +262,32 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
     // 직원 설정 피커(0.9.0). 프로필 스코프 — 스킬 폴더와 키 설정 여부가 프로필마다 다르다.
     getToolsets: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/toolsets`, profileToken),
     getSkills: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/skills`, profileToken),
+
+    // 프로바이더 인증(0.9.0). 전부 프로필 스코프·프로필 토큰 — 세그먼트는 전부 인코딩한다.
+    startOAuth: (name, profileToken, provider) =>
+      call(`/p/${seg(name)}/deskrpg/oauth/${seg(provider)}/start`, profileToken, {
+        method: "POST",
+      }),
+    pollOAuth: (name, profileToken, provider, sessionId) =>
+      call(
+        `/p/${seg(name)}/deskrpg/oauth/${seg(provider)}/sessions/${seg(sessionId)}`,
+        profileToken,
+      ),
+    cancelOAuth: (name, profileToken, sessionId) =>
+      call(`/p/${seg(name)}/deskrpg/oauth/sessions/${seg(sessionId)}`, profileToken, {
+        method: "DELETE",
+      }),
+    disconnectOAuth: (name, profileToken, provider) =>
+      call(`/p/${seg(name)}/deskrpg/oauth/${seg(provider)}`, profileToken, { method: "DELETE" }),
+    putProviderKey: (name, profileToken, provider, value) =>
+      call(`/p/${seg(name)}/deskrpg/provider-keys/${seg(provider)}`, profileToken, {
+        method: "PUT",
+        body: { value },
+      }),
+    deleteProviderKey: (name, profileToken, provider) =>
+      call(`/p/${seg(name)}/deskrpg/provider-keys/${seg(provider)}`, profileToken, {
+        method: "DELETE",
+      }),
   };
 }
 

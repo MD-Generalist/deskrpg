@@ -219,11 +219,24 @@ export function supportsProfileClone(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("profile_clone"));
 }
 
+// ---------------------------------------------------------------------------
+// 프로바이더 인증 게이트 (플러그인 0.9.0)
+// ---------------------------------------------------------------------------
+
+export function supportsProfileOauth(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("profile_oauth"));
+}
+
+export function supportsProviderKeys(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("profile_provider_keys"));
+}
+
 /** 플러그인이 **자기 코드로** 돌려주는 404. 이 밖의 404 는 그 라우트가 없는 것(구버전 플러그인)이다. */
 const KNOWN_PLUGIN_404_CODES = new Set([
   "profile_not_found",
   "invalid_profile",
   "oauth_session_not_found",
+  "provider_not_found",
 ]);
 
 /**

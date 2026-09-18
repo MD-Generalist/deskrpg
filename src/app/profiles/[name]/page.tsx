@@ -281,6 +281,7 @@ function EmployeeDetailContent() {
                   initialProfile={profile.profileName}
                   dashboardUrl={dashboardUrl}
                   localDiscovery={false}
+                  canManageProviderAuth={canEdit}
                   onDone={() => void loadProfile()}
                 />
               </section>

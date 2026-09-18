@@ -632,3 +632,78 @@ test("복제를 지원하지 않는 게이트웨이에는 키 복사 체크박�
     globalThis.fetch = originalFetch;
   }
 });
+
+const AUTH_CATALOG = {
+  providers: [
+    {
+      id: "openai",
+      name: "OpenAI",
+      authenticated: false,
+      authType: "api_key",
+      envVars: ["OPENAI_API_KEY"],
+    },
+  ],
+  models: {},
+  reasoningEfforts: [],
+};
+
+async function openModelFor(canManageProviderAuth: boolean) {
+  const calls: FetchCall[] = [];
+  globalThis.fetch = stubFetch(calls, {
+    "/config": { model: null, provider: null, toolsets: null, reasoning_effort: null },
+    "/catalog": AUTH_CATALOG,
+    "/identity": { isDefaultTemplate: true, body: "", revision: "r0" },
+  }) as typeof fetch;
+  const mounted = await mount(
+    <I18nProvider initialLocale="ko">
+      <NpcHireWizard
+        gatewayId="gw-1"
+        pluginStatus="plugin_ready"
+        localDiscovery={false}
+        existingProfiles={["oliver"]}
+        initialProfile="oliver"
+        canManageProviderAuth={canManageProviderAuth}
+        onDone={() => {}}
+      />
+    </I18nProvider>,
+  );
+  await act(async () => {
+    tabByNumber(mounted.el, "③")!.click();
+  });
+  const select = mounted.el.querySelector("select")!;
+  return { ...mounted, select };
+}
+
+test("소유자는 인증 안 된 프로바이더를 골라 그 자리에서 키를 넣을 수 있다", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el, select } = await openModelFor(true);
+    const option = [...select.options].find((o) => o.value === "openai");
+    assert.equal(option?.disabled, false, "인증 안 된 프로바이더를 고를 수 없다");
+    await act(async () => {
+      select.value = "openai";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    assert.ok(el.querySelector('input[type="password"]'), "키 입력 패널이 나오지 않았다");
+    // 앱 안에서 인증할 수 있으면 대시보드로 가라는 옛 안내는 겹치므로 숨긴다.
+    assert.equal((el.textContent ?? "").includes("직원마다"), false);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("공유 사용자에게는 키 입력 대신 소유자가 설정해야 한다고 말한다", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el, select } = await openModelFor(false);
+    const option = [...select.options].find((o) => o.value === "openai");
+    assert.equal(option?.disabled, true, "누를 수 없는 인증을 고르게 한다");
+    assert.equal(el.querySelector('input[type="password"]'), null);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
