@@ -8,7 +8,7 @@ import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-t
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
-import TaskDrawer from "./TaskDrawer";
+import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
 import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
 import {
@@ -41,6 +41,8 @@ interface KanbanBoardModalProps {
   debounceMs?: number;
   /** 열자마자 이 카드의 상세를 편다 — 방 알림의 "카드 열기"(R29). 마운트 시에만 읽는다. */
   initialTaskId?: string | null;
+  /** 카드 드로어의 결과물 섹션 — 그대로 `TaskDrawer` 에 넘긴다. 없으면 섹션이 없다. */
+  artifacts?: TaskDrawerArtifacts | null;
 }
 
 /** `kanban:event` 연타를 한 번의 재조회로 접는 간격. */
@@ -93,6 +95,7 @@ export default function KanbanBoardModal({
   refreshTick = 0,
   debounceMs = KANBAN_EVENT_DEBOUNCE_MS,
   initialTaskId = null,
+  artifacts = null,
 }: KanbanBoardModalProps) {
   const t = useT();
   const api = useMemo(() => createKanbanApi(channelId), [channelId]);
@@ -653,6 +656,7 @@ export default function KanbanBoardModal({
               onEdit={(task) => openEditor({ mode: "edit", task })}
               onDeleted={() => setSelectedTaskId(null)}
               onClose={() => setSelectedTaskId(null)}
+              artifacts={artifacts}
             />
           )}
         </div>

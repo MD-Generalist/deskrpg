@@ -128,8 +128,9 @@ export default function ArtifactsModal({
   const gate = error?.status === 409 ? "gateway" : error?.status === 428 ? "upgrade" : null;
 
   return (
+    // 칸반 카드의 결과물 섹션에서 열면 칸반 모달(z-50) 위에 떠야 한다.
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60"
       onClick={onClose}
     >
       <div

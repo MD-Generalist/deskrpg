@@ -10,7 +10,11 @@ import {
   type KanbanTaskDetail,
   type KanbanTaskStatus,
   type WorkerLog,
+  type ArtifactSummary,
 } from "@/lib/hermes/deskrpg-plugin-types";
+
+import { KindIcon } from "../artifacts/ArtifactList";
+import { ArtifactsApiError } from "../artifacts/artifacts-api";
 
 import { toFailure, type KanbanApi } from "./kanban-api";
 import {
@@ -22,6 +26,12 @@ import {
   taskTitleById,
   type BoardNpc,
 } from "./kanban-view-model";
+
+/** 카드의 결과물 섹션이 쓰는 것. 배선(GamePageClient)이 채널 결과물 API 로 채운다. */
+export type TaskDrawerArtifacts = {
+  list(taskId: string): Promise<ArtifactSummary[]>;
+  open(artifactId: string): void;
+};
 
 interface TaskDrawerProps {
   api: KanbanApi;
@@ -40,6 +50,8 @@ interface TaskDrawerProps {
   onEdit: (task: KanbanTask) => void;
   onDeleted: () => void;
   onClose: () => void;
+  /** 카드의 결과물 — null·미지정이면 섹션을 숨긴다. 플러그인이 0.8.4 미만(428)이어도 숨긴다. */
+  artifacts?: TaskDrawerArtifacts | null;
 }
 
 const BTN = "px-2.5 py-1 rounded-md text-[11px] font-semibold disabled:opacity-50";
@@ -68,6 +80,7 @@ export default function TaskDrawer({
   onEdit,
   onDeleted,
   onClose,
+  artifacts = null,
 }: TaskDrawerProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -85,6 +98,9 @@ export default function TaskDrawer({
   const [log, setLog] = useState<WorkerLog | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  // 결과물 섹션 — null 은 읽는 중, "hidden" 은 428(taskId 필터 미지원)이라 섹션을 숨긴다.
+  const [cardArtifacts, setCardArtifacts] = useState<ArtifactSummary[] | "hidden" | null>(null);
+  const [cardArtifactsError, setCardArtifactsError] = useState(false);
 
   const {
     comments: threadComments,
@@ -115,6 +131,26 @@ export default function TaskDrawer({
   useEffect(() => {
     void load();
   }, [load, refreshTick]);
+
+  useEffect(() => {
+    if (!artifacts) return;
+    let cancelled = false;
+    artifacts.list(taskId).then(
+      (items) => {
+        if (cancelled) return;
+        setCardArtifacts(items);
+        setCardArtifactsError(false);
+      },
+      (err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ArtifactsApiError && err.status === 428) setCardArtifacts("hidden");
+        else setCardArtifactsError(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [artifacts, taskId, refreshTick]);
 
   useEffect(() => {
     if (showLog) void loadLog();
@@ -725,6 +761,33 @@ export default function TaskDrawer({
                 >
                   {t("kanban.detail.upload")}
                 </button>
+              </Section>
+            )}
+
+            {artifacts && cardArtifacts !== "hidden" && (
+              <Section title={t("artifacts.card.title")}>
+                {cardArtifactsError && cardArtifacts === null ? (
+                  <div className="text-danger">{t("artifacts.error")}</div>
+                ) : cardArtifacts === null ? (
+                  <Empty>{t("common.loading")}</Empty>
+                ) : cardArtifacts.length === 0 ? (
+                  <Empty>{t("artifacts.card.empty")}</Empty>
+                ) : (
+                  <ul className="space-y-1">
+                    {cardArtifacts.map((artifact) => (
+                      <li key={artifact.id}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md bg-surface px-2 py-1 text-left text-text hover:brightness-125"
+                          onClick={() => artifacts.open(artifact.id)}
+                        >
+                          <KindIcon artifact={artifact} />
+                          <span className="truncate">{artifact.title}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Section>
             )}
 

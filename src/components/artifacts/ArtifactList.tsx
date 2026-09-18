@@ -46,7 +46,8 @@ const KIND_ICONS: Record<Exclude<ArtifactKind, "link">, LucideIcon> = {
   file: File,
 };
 
-function KindIcon({ artifact }: { artifact: ArtifactSummary }) {
+/** 결과물 종류 아이콘 — 목록 행과 칸반 카드의 결과물 섹션이 같이 쓴다. */
+export function KindIcon({ artifact }: { artifact: ArtifactSummary }) {
   if (artifact.kind === "link") {
     // 목록 요약에는 URL 이 없다 — 제목·요약이 URL 이면 그걸로 브랜드를 고르고, 아니면 Link2.
     const url = safeHttpUrl(artifact.summary ?? "") ?? safeHttpUrl(artifact.title);

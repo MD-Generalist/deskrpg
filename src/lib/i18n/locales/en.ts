@@ -2534,6 +2534,9 @@ const en: Record<string, string> = {
   "artifacts.gate.upgrade": "Update the plugin to {minVersion} or later",
   "artifacts.error": "Could not load artifacts",
   "artifacts.renderFailed": "Could not render the preview — download to view",
+  "artifacts.card.title": "Artifacts",
+  "artifacts.card.empty": "No artifacts from this card yet",
+  "artifacts.chip": "Artifact saved: {title}",
 };
 
 export default en;

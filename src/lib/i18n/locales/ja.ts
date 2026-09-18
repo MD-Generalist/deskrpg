@@ -2540,6 +2540,9 @@ const ja: Record<string, string> = {
   "artifacts.gate.upgrade": "プラグインを {minVersion} 以上に更新してください",
   "artifacts.error": "成果物を読み込めませんでした",
   "artifacts.renderFailed": "プレビューを表示できませんでした — ダウンロードして確認してください",
+  "artifacts.card.title": "成果物",
+  "artifacts.card.empty": "このカードの成果物はまだありません",
+  "artifacts.chip": "成果物を保存しました: {title}",
 };
 
 export default ja;

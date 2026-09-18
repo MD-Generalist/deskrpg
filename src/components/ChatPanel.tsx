@@ -77,6 +77,10 @@ interface ChatPanelProps {
   onOpenNoticeCard?: (cardId: string, boardSlug: string) => void;
   /** 방 알림의 "이력 열기"(R30) — 채널 크론 화면을 그 잡으로 연다. 없으면 링크가 없다. */
   onOpenNoticeCronJob?: (jobId: string) => void;
+  /** 이 대화에서 NPC 가 저장한 결과물 — 마지막 답변 아래 칩으로 그린다. */
+  npcArtifactChips?: Array<{ artifactId: string; title: string }>;
+  /** 결과물 칩을 누르면 결과물 모달을 그 결과물로 연다. 없으면 칩이 없다. */
+  onOpenArtifact?: (artifactId: string) => void;
 }
 
 const MIN_WIDTH = 250;
@@ -122,6 +126,8 @@ export default function ChatPanel({
   cron = null,
   onOpenNoticeCard,
   onOpenNoticeCronJob,
+  npcArtifactChips = [],
+  onOpenArtifact,
 }: ChatPanelProps) {
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
   // NPC DM 의 탭 — 어느 NPC 의 선택인지 같이 기억해, 다른 NPC 로 바뀌면 대화 탭으로 돌아간다
@@ -501,6 +507,20 @@ export default function ChatPanel({
                       )}
                     </div>
                   ))}
+                  {onOpenArtifact && npcArtifactChips.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {npcArtifactChips.map((chip) => (
+                        <button
+                          key={chip.artifactId}
+                          type="button"
+                          className="rounded-full bg-surface-raised px-2.5 py-1 text-[11px]"
+                          onClick={() => onOpenArtifact(chip.artifactId)}
+                        >
+                          {t("artifacts.chip", { title: chip.title })}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <ResponseProgress
                     responses={visibleResponseReplies(npcResponses, {
                       responseRequestIds: new Set(

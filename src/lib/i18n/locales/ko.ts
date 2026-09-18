@@ -2521,6 +2521,9 @@ const ko: Record<string, string> = {
   "artifacts.gate.upgrade": "플러그인을 {minVersion} 이상으로 업데이트하세요",
   "artifacts.error": "결과물을 불러오지 못했습니다",
   "artifacts.renderFailed": "미리보기를 그리지 못했습니다 — 다운로드해서 보세요",
+  "artifacts.card.title": "결과물",
+  "artifacts.card.empty": "이 카드에서 만든 결과물이 없습니다",
+  "artifacts.chip": "결과물 저장됨: {title}",
 };
 
 export default ko;

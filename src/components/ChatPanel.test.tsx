@@ -386,3 +386,67 @@ test("방 메시지 — notice 가 있으면 알림 렌더러, 없으면 기존 
   await click(buttonByText(el, "카드 열기"));
   assert.deepEqual(opened, ["card-1"]);
 });
+
+function npcDialog(props: {
+  npcArtifactChips?: Array<{ artifactId: string; title: string }>;
+  onOpenArtifact?: (artifactId: string) => void;
+}) {
+  return (
+    <I18nProvider initialLocale="ko">
+      <ChatPanel
+        dialogNpc={{ npcId: "npc-a", npcName: "소피" }}
+        npcMessages={[
+          { id: "m1", role: "player", content: "대시보드 만들어 줘" },
+          { id: "m2", role: "npc", content: "만들었습니다" },
+        ]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={dmState()}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+        {...props}
+      />
+    </I18nProvider>
+  );
+}
+
+test("대화 중 NPC 의 결과물 칩을 마지막 NPC 답변 아래에 그리고 누르면 onOpenArtifact", async () => {
+  const opened: string[] = [];
+  const el = await mount(
+    npcDialog({
+      npcArtifactChips: [{ artifactId: "a1", title: "대시보드" }],
+      onOpenArtifact: (id) => void opened.push(id),
+    }),
+  );
+  const chip = buttonByText(el, "결과물 저장됨: 대시보드");
+  // 마지막 NPC 답변 뒤에 온다.
+  const answer = Array.from(el.querySelectorAll("*")).find(
+    (node) => node.children.length === 0 && node.textContent === "만들었습니다",
+  );
+  assert.ok(answer);
+  assert.ok(answer.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING);
+  await click(chip);
+  assert.deepEqual(opened, ["a1"]);
+});
+
+test("칩이 없거나 onOpenArtifact 가 없으면 칩을 그리지 않는다", async () => {
+  const el = await mount(
+    npcDialog({ npcArtifactChips: [{ artifactId: "a1", title: "대시보드" }] }),
+  );
+  assert.equal(
+    Array.from(el.querySelectorAll("button")).some((b) =>
+      (b.textContent ?? "").startsWith("결과물 저장됨"),
+    ),
+    false,
+  );
+});

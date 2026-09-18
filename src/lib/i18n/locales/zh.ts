@@ -2473,6 +2473,9 @@ const zh: Record<string, string> = {
   "artifacts.gate.upgrade": "请将插件更新到 {minVersion} 或更高版本",
   "artifacts.error": "无法加载成果",
   "artifacts.renderFailed": "无法渲染预览 — 请下载查看",
+  "artifacts.card.title": "成果",
+  "artifacts.card.empty": "此卡片尚无成果",
+  "artifacts.chip": "成果已保存: {title}",
 };
 
 export default zh;
