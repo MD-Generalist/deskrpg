@@ -13,7 +13,9 @@ import {
   resolvePluginStatusFromCache,
   shouldReprobePlugin,
   supportsProfileClone,
+  supportsProfileOauth,
   supportsProfilePicker,
+  supportsProviderKeys,
 } from "./plugin-capability";
 import type { PluginInfo } from "./deskrpg-plugin-types";
 
@@ -394,5 +396,28 @@ describe("직원 설정 피커 게이트", () => {
       false,
     );
     assert.equal(isMissingPluginRoute({ status: 500, failure: { code: "internal_error" } }), false);
+  });
+});
+
+describe("프로바이더 인증 게이트", () => {
+  const info = (capabilities: string[]) => ({ version: "0.10.0", capabilities }) as unknown as PluginInfo;
+
+  it("supportsProfileOauth 는 profile_oauth 하나로 판정한다", () => {
+    assert.equal(supportsProfileOauth(info(["profile_oauth"])), true);
+    assert.equal(supportsProfileOauth(info([])), false);
+    assert.equal(supportsProfileOauth(null), false);
+  });
+
+  it("supportsProviderKeys 는 profile_provider_keys 하나로 판정한다", () => {
+    assert.equal(supportsProviderKeys(info(["profile_provider_keys"])), true);
+    assert.equal(supportsProviderKeys(info([])), false);
+    assert.equal(supportsProviderKeys(null), false);
+  });
+
+  it("provider_not_found 도 플러그인이 자기 코드로 낸 404 다 — 라우트 부재가 아니다", () => {
+    assert.equal(
+      isMissingPluginRoute({ status: 404, failure: { code: "provider_not_found" } }),
+      false,
+    );
   });
 });
