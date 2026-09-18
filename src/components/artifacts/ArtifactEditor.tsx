@@ -1,11 +1,15 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 
 import { useT } from "@/lib/i18n";
 
 import { safeHttpUrl } from "./artifact-view-model";
 
+/** 편집기를 감싼 화면이 닫기 전에 부른다 — 바뀐 내용이 있으면 편집기 안 배너로 확인한 뒤 `proceed`. */
+export type ArtifactEditorHandle = { requestClose(proceed: () => void): void };
+
 export type ArtifactEditorProps = {
+  ref?: Ref<ArtifactEditorHandle>;
   initial: string;
   filename: string;
   isLink: boolean;
@@ -29,6 +33,7 @@ type MinimalEditorView = {
  * React 로 미러링하지 않고 CodeMirror 문서를 정본으로 삼기 때문).
  */
 export default function ArtifactEditor({
+  ref,
   initial,
   filename,
   isLink,
@@ -45,6 +50,8 @@ export default function ArtifactEditor({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<MinimalEditorView | null>(null);
   const contentRef = useRef(initial);
+  /** 확인 배너의 "확인" 이 이어서 할 일(취소든 모달 닫기든 마지막으로 요청된 것). */
+  const pendingRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (isLink) return;
@@ -105,12 +112,21 @@ export default function ArtifactEditor({
     }
   };
 
-  const requestCancel = () => {
+  const requestClose = (proceed: () => void) => {
     if (isDirty) {
+      pendingRef.current = proceed;
       setConfirmingCancel(true);
       return;
     }
-    onCancel();
+    proceed();
+  };
+  useImperativeHandle(ref, () => ({ requestClose }));
+
+  const confirmDiscard = () => {
+    const proceed = pendingRef.current ?? onCancel;
+    pendingRef.current = null;
+    setConfirmingCancel(false);
+    proceed();
   };
 
   return (
@@ -151,14 +167,17 @@ export default function ArtifactEditor({
           <span className="mr-auto text-text">{t("common.unsavedChangesContinue")}</span>
           <button
             type="button"
-            onClick={onCancel}
+            onClick={confirmDiscard}
             className="px-2.5 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold"
           >
             {t("common.confirm")}
           </button>
           <button
             type="button"
-            onClick={() => setConfirmingCancel(false)}
+            onClick={() => {
+              pendingRef.current = null;
+              setConfirmingCancel(false);
+            }}
             className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary"
           >
             {t("common.back")}
@@ -169,7 +188,7 @@ export default function ArtifactEditor({
         <button
           type="button"
           disabled={saving}
-          onClick={requestCancel}
+          onClick={() => requestClose(onCancel)}
           className="px-2.5 py-1 rounded-md bg-surface-raised text-text-secondary disabled:opacity-50"
         >
           {t("artifacts.edit.cancel")}

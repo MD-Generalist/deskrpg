@@ -6,7 +6,7 @@ import { useT } from "@/lib/i18n";
 import type { ArtifactSummary } from "@/lib/hermes/deskrpg-plugin-types";
 
 import ArtifactList, { type ArtifactFilter, type ArtifactListNpc } from "./ArtifactList";
-import ArtifactViewer from "./ArtifactViewer";
+import ArtifactViewer, { type ArtifactViewerHandle } from "./ArtifactViewer";
 import { ArtifactsApiError, createArtifactsApi } from "./artifacts-api";
 import type { SourceTarget } from "./artifact-view-model";
 
@@ -54,6 +54,14 @@ export default function ArtifactsModal({
   const [selectedId, setSelectedId] = useState<string | null>(initialArtifactId);
   const [viewerReload, setViewerReload] = useState(0);
   const sequence = useRef(0);
+  const viewerRef = useRef<ArtifactViewerHandle | null>(null);
+
+  // 모달을 닫는 모든 길(Escape·배경·X)과 다른 결과물 고르기는 편집 중 바뀐 내용을 먼저 확인한다.
+  const guarded = useCallback((proceed: () => void) => {
+    if (viewerRef.current) viewerRef.current.requestClose(proceed);
+    else proceed();
+  }, []);
+  const requestModalClose = useCallback(() => guarded(onClose), [guarded, onClose]);
 
   useEffect(() => {
     if (initialArtifactId) setSelectedId(initialArtifactId);
@@ -119,11 +127,11 @@ export default function ArtifactsModal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // 목록의 이미지 확대 보기가 먼저 받아 preventDefault 하면 모달은 닫지 않는다.
-      if (e.key === "Escape" && !e.defaultPrevented) onClose();
+      if (e.key === "Escape" && !e.defaultPrevented) requestModalClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [requestModalClose]);
 
   const gate = error?.status === 409 ? "gateway" : error?.status === 428 ? "upgrade" : null;
 
@@ -131,7 +139,7 @@ export default function ArtifactsModal({
     // 칸반 카드의 결과물 섹션에서 열면 칸반 모달(z-50) 위에 떠야 한다.
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60"
-      onClick={onClose}
+      onClick={requestModalClose}
     >
       <div
         role="dialog"
@@ -147,7 +155,7 @@ export default function ArtifactsModal({
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestModalClose}
             aria-label={t("common.close")}
             className="ml-1 text-text-muted hover:text-text"
           >
@@ -194,7 +202,7 @@ export default function ArtifactsModal({
                   onFilter={setFilter}
                   npcs={npcs}
                   selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  onSelect={(id) => guarded(() => setSelectedId(id))}
                   hasMore={hasMore}
                   loading={loading}
                   onLoadMore={() => void load(cursor)}
@@ -204,6 +212,7 @@ export default function ArtifactsModal({
               <div className={`flex-1 min-w-0 min-h-0 ${selectedId ? "block" : "hidden md:block"}`}>
                 {selectedId ? (
                   <ArtifactViewer
+                    ref={viewerRef}
                     key={selectedId}
                     api={api}
                     artifactId={selectedId}

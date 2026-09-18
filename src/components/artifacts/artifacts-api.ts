@@ -28,6 +28,15 @@ export class ArtifactsApiError extends Error {
   }
 }
 
+/**
+ * 상세 응답. 서버가 플러그인 상세에 채널 기준 판정을 덧붙인다 — `modifiable`(이 채널에서 편집·삭제 가능),
+ * `sourceInChannel`(출처 카드가 이 채널 보드에 있다). 권한 자체는 서버가 변경 라우트에서 다시 확인한다.
+ */
+export type ArtifactDetailView = ArtifactDetail & {
+  modifiable?: boolean;
+  sourceInChannel?: boolean;
+};
+
 export type ArtifactListFilter = {
   kind?: ArtifactKind;
   source?: ArtifactSource;
@@ -109,7 +118,7 @@ export function createArtifactsApi(channelId: string, fetchImpl?: FetchLike) {
       const suffix = qs.size > 0 ? `?${qs}` : "";
       return request<ArtifactPage>(f, `${root}${suffix}`);
     },
-    get: (id: string) => request<ArtifactDetail>(f, artifact(id)),
+    get: (id: string) => request<ArtifactDetailView>(f, artifact(id)),
     contentUrl: (id: string, version: number, download?: boolean): string => {
       const suffix = download ? "?download=1" : "";
       return `${artifact(id)}/versions/${version}/content${suffix}`;

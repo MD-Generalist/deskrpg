@@ -2527,6 +2527,11 @@ const en: Record<string, string> = {
   "artifacts.missing": "The file is missing",
   "artifacts.noPreview": "No preview — download to view",
   "artifacts.truncated": "Showing only the first 512 KB — download to view the rest",
+  "artifacts.edit.newerVersion":
+    "A newer version was saved — saving adds your edit as a new version on top of it",
+  "artifacts.edit.truncatedReadOnly": "This preview is truncated, so it cannot be edited",
+  "artifacts.readOnlyOtherChannel": "Created in another channel — read-only",
+  "artifacts.goToSourceUnavailable": "This card is not on this channel's kanban board",
   "artifacts.csvTruncated": "Showing only the first {rows} rows",
   "artifacts.link.open": "Open in new tab",
   "artifacts.link.invalid": "This address cannot be opened",

@@ -2533,6 +2533,11 @@ const ja: Record<string, string> = {
   "artifacts.missing": "ファイルが見つかりません",
   "artifacts.noPreview": "プレビューなし — ダウンロードして確認してください",
   "artifacts.truncated": "最初の 512 KB のみ表示しています — ダウンロードして確認してください",
+  "artifacts.edit.newerVersion":
+    "新しいバージョンが保存されました — 保存するとその上に新しいバージョンとして追加されます",
+  "artifacts.edit.truncatedReadOnly": "プレビューが切り詰められているため編集できません",
+  "artifacts.readOnlyOtherChannel": "別のチャンネルで作成された成果物 — 読み取り専用",
+  "artifacts.goToSourceUnavailable": "このチャンネルのカンバンにないカードです",
   "artifacts.csvTruncated": "最初の {rows} 行のみ表示しています",
   "artifacts.link.open": "新しいタブで開く",
   "artifacts.link.invalid": "開けないアドレスです",

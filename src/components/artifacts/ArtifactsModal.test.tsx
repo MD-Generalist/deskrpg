@@ -54,7 +54,12 @@ function mockFetch(routes: Record<string, Reply>) {
     if (!reply) {
       return new Response(JSON.stringify({ code: "not_found", message: key }), { status: 404 });
     }
-    if (typeof reply.text === "string") return new Response(reply.text, { status: 200 });
+    if (typeof reply.text === "string") {
+      return new Response(reply.text, {
+        status: typeof reply.status === "number" ? reply.status : 200,
+        headers: (reply.headers as Record<string, string> | undefined) ?? {},
+      });
+    }
     if (typeof reply.status === "number" && "json" in reply) {
       return new Response(JSON.stringify(reply.json), { status: reply.status });
     }
@@ -405,4 +410,141 @@ test("편집 → 저장은 addVersion 을 부르고 새 버전으로 넘어간�
     "저장 뒤 편집 모드를 닫는다",
   );
   assert.ok(queryText("새 버전으로 저장했습니다"));
+});
+
+/** 목록 → a1 열기 → 편집 → CodeMirror 본문을 `text` 로 바꾼다. 바꾼 view 를 돌려준다. */
+async function openAndEdit(text: string) {
+  await click(byText("주간 보고"));
+  await click(byText("편집"));
+  const cmHost = container.querySelector<HTMLElement & { cmView?: unknown }>(
+    '[data-testid="artifact-editor"]',
+  );
+  const view = await waitFor(() => {
+    if (!cmHost?.cmView) throw new Error("cmView not attached yet");
+    return cmHost.cmView as {
+      state: { doc: { length: number; toString(): string } };
+      dispatch(tr: unknown): void;
+    };
+  });
+  await act(async () => {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+  });
+  await flush();
+  return view;
+}
+
+function editableRoutes() {
+  const a = summary({ current_version: 1 });
+  return {
+    [LIST]: { artifacts: [a], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": {
+      artifact: a,
+      versions: [version(1)],
+      modifiable: true,
+    },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "# 제목\n본문" },
+  };
+}
+
+test("F1: 512 KB 에서 잘린 미리보기는 편집 버튼이 없다", async () => {
+  const a = summary({ size: 2_000_000 });
+  mockFetch({
+    [LIST]: { artifacts: [a], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": {
+      artifact: a,
+      versions: [version(1)],
+      modifiable: true,
+    },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": {
+      text: "# 앞부분",
+      status: 206,
+      headers: { "content-range": "bytes 0-524287/2000000" },
+    },
+  });
+  await render();
+  await click(byText("주간 보고"));
+  assert.ok(queryText("512 KB 까지만 표시했습니다 — 다운로드해서 보세요"), "잘림 안내");
+  assert.equal(queryText("편집") === undefined, true, "잘린 본문은 편집할 수 없다");
+  assert.ok(queryText("잘린 미리보기라 편집할 수 없습니다"));
+});
+
+test("F3: modifiable 이 false 면 편집·삭제를 숨기고 읽기 전용 안내를 보인다", async () => {
+  const card = summary({ source_kind: "kanban", task_id: "t-9", board: "deskrpg-other" });
+  mockFetch({
+    [LIST]: { artifacts: [card], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": {
+      artifact: card,
+      versions: [version(1)],
+      modifiable: false,
+      sourceInChannel: false,
+    },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "# 제목" },
+  });
+  const seen: unknown[] = [];
+  await render({ onOpenSource: (target) => seen.push(target) });
+  await click(byText("주간 보고"));
+  assert.ok(container.querySelector(".markdown-chat h1"), "읽기는 된다");
+  assert.equal(queryText("편집") === undefined, true);
+  assert.equal(queryText("삭제") === undefined, true);
+  assert.ok(queryText("다른 채널에서 만든 결과물 — 읽기 전용"));
+  const go = byText("출처로 이동").closest("button")!;
+  assert.equal(go.disabled, true, "다른 채널 보드의 카드로는 이동하지 않는다");
+  await click(go);
+  assert.deepEqual(seen, []);
+});
+
+test("F2: 편집 중 같은 결과물의 새 버전 사건이 와도 편집기와 본문을 지키고 안내만 한다", async () => {
+  const calls = mockFetch(editableRoutes());
+  await render();
+  const view = await openAndEdit("# 내가 고친 본문");
+  const detailCalls = () => calls.filter((c) => c === "GET /api/channels/ch-1/artifacts/a1").length;
+  const before = detailCalls();
+  await render({ refreshTick: 1, lastEvent: { kind: "artifact.versioned", artifactId: "a1" } });
+  assert.ok(container.querySelector('[data-testid="artifact-editor"]'), "편집기가 그대로다");
+  assert.equal(view.state.doc.toString(), "# 내가 고친 본문");
+  assert.ok(queryText("새 버전이 저장됐습니다 — 저장하면 그 위에 새 버전이 됩니다"));
+  assert.equal(detailCalls(), before, "편집 중에는 다시 읽지 않는다");
+
+  // 편집을 버리고 닫으면 그때 다시 읽는다.
+  await click(byText("취소"));
+  await click(byText("확인"));
+  assert.equal(container.querySelector('[data-testid="artifact-editor"]') === null, true);
+  assert.ok(detailCalls() > before, "편집이 끝나면 새 버전을 읽는다");
+});
+
+test("F2: 저장 안 한 변경이 있으면 Escape·배경·닫기 버튼이 모달을 닫지 않고 확인을 띄운다", async () => {
+  mockFetch(editableRoutes());
+  let closed = 0;
+  await render({ onClose: () => (closed += 1) });
+  await openAndEdit("# 고친 본문");
+
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  });
+  await flush();
+  assert.equal(closed, 0, "Escape 가 편집을 버리고 닫으면 안 된다");
+  assert.ok(queryText("저장되지 않은 변경 사항이 있습니다. 계속할까요?"));
+  await click(byText("뒤로"));
+
+  const backdrop = container.querySelector<HTMLElement>(".fixed.inset-0")!;
+  await click(backdrop);
+  assert.equal(closed, 0, "배경 클릭도 확인을 거친다");
+  assert.ok(queryText("저장되지 않은 변경 사항이 있습니다. 계속할까요?"));
+  await click(byText("뒤로"));
+
+  // 뷰어의 X(닫기) — 편집 중에도 확인을 거친다.
+  const closeButtons = Array.from(
+    container.querySelectorAll<HTMLButtonElement>('button[aria-label="닫기"]'),
+  );
+  await click(closeButtons[closeButtons.length - 1]);
+  assert.ok(container.querySelector('[data-testid="artifact-editor"]'), "뷰어를 닫지 않는다");
+  assert.ok(queryText("저장되지 않은 변경 사항이 있습니다. 계속할까요?"));
+
+  // 확인하면 그제서야 닫힌다.
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  });
+  await flush();
+  await click(byText("확인"));
+  assert.equal(closed, 1);
 });
