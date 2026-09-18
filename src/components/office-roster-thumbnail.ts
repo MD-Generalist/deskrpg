@@ -1,6 +1,6 @@
 import * as T from "three";
 import type { OfficeLook } from "@/game/three/office-looks";
-import { captureThumbnail } from "@/game/three/office-look-thumbnail";
+import { capturePortrait } from "@/game/three/office-look-thumbnail";
 
 const thumbnails = new Map<string, Promise<string | undefined>>();
 let queue: Promise<unknown> = Promise.resolve();
@@ -13,10 +13,10 @@ export function officeRosterThumbnail(look: OfficeLook): Promise<string | undefi
     let renderer: T.WebGLRenderer | undefined;
     try {
       renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-      renderer.setSize(240, 280);
+      renderer.setSize(128, 128);
       renderer.setPixelRatio(1);
       renderer.outputColorSpace = T.SRGBColorSpace;
-      return (await captureThumbnail(renderer, look, 0, new AbortController().signal)) ?? undefined;
+      return (await capturePortrait(renderer, look, new AbortController().signal)) ?? undefined;
     } catch {
       return undefined;
     } finally {
