@@ -150,7 +150,7 @@ function HireEmployeeContent() {
       <div className="mx-auto max-w-4xl space-y-6">
         <header>
           <p className="mb-2 text-xs font-semibold tracking-widest text-primary">HERMES</p>
-          <h1 className="text-3xl font-bold">{t("hermes.wizard.openButton")}</h1>
+          <h1 className="text-3xl font-bold">{ko ? "새 직원" : "New employee"}</h1>
           <p className="mt-2 text-sm leading-relaxed text-text-secondary">
             {ko
               ? "직원 한 명이 Hermes 프로필 하나입니다. 이름을 정하고, 인격을 적고, 그 직원으로 모델에 로그인합니다."
