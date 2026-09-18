@@ -39,6 +39,10 @@ import type {
 import { isSafeHttpUrl, oauthReducer, pollDelayMs } from "./provider-auth-model";
 import { getWizardErrorMessage, isWizardErrorCode } from "./wizard-error-codes";
 
+/**
+ * `provider.name` 은 그리지 않는다 — 제목·이름은 호출부가 붙인다(이 패널은 인증 조작만).
+ * `profileBase`·`provider.id` 가 바뀌면 패널 상태 전체를 새로 시작한다(아래 기본 export 참조).
+ */
 export type ProviderAuthPanelProps = {
   profileBase: string; // `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(name)}`
   provider: {
@@ -62,6 +66,12 @@ const TERMINAL_STATUSES: ReadonlyArray<OAuthPollPayload["status"]> = [
   "expired",
   "error",
 ];
+/** 프록시가 HTTP 200 + errorCode 로 싣는 일시 오류 — 네트워크 실패처럼 만료 전까지 다시 묻는다. */
+const TRANSIENT_POLL_CODES: ReadonlySet<string> = new Set([
+  "timeout",
+  "unreachable",
+  "upstream_error",
+]);
 /** 네트워크가 끊겨 폴 응답을 못 받는 동안 무한히 돌지 않도록 — 만료 시각 + 여유. */
 const EXPIRY_GRACE_MS = 30_000;
 
@@ -106,7 +116,17 @@ function errorText(t: Translator, code: string, fallbackKey: string): string {
  *  prop 이 바뀌면(다시 불러옴) 덮어쓴 값은 저절로 물러난다. */
 type Override = { base: boolean; value: boolean } | null;
 
+/**
+ * 대상(`profileBase`·`provider.id`)마다 안쪽 패널을 새로 마운트한다. 상태가 이어지면 입력해 둔
+ * 키가 **다른** 프로바이더 엔드포인트로 PUT 되거나, 진행 중 로그인이 옛 세션을 새 경로로
+ * 폴링하거나, "연결됨" 덮어쓰기가 엉뚱한 프로바이더에 남는다. 키를 바꾸면 옛 패널이
+ * 언마운트되며 살아 있는 세션을 한 번 DELETE 하고 입력란도 함께 사라진다.
+ */
 export default function ProviderAuthPanel(props: ProviderAuthPanelProps): JSX.Element | null {
+  return <ProviderAuthPanelInner key={`${props.profileBase}|${props.provider.id}`} {...props} />;
+}
+
+function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | null {
   const t = useT();
   const { profileBase, provider, disabled = false } = props;
   const providerPath = `${profileBase}/oauth/${encodeURIComponent(provider.id)}`;
@@ -191,7 +211,12 @@ export default function ProviderAuthPanel(props: ProviderAuthPanelProps): JSX.El
       }
       if (stopped) return;
 
-      if (!response) {
+      const transient =
+        !response ||
+        (!succeeded(response, body) &&
+          typeof body.errorCode === "string" &&
+          TRANSIENT_POLL_CODES.has(body.errorCode));
+      if (transient) {
         if (Date.now() > waitingExpiresAt + EXPIRY_GRACE_MS) {
           releaseSession();
           dispatch({ type: "poll", status: "expired", error: null });
@@ -200,7 +225,7 @@ export default function ProviderAuthPanel(props: ProviderAuthPanelProps): JSX.El
         schedule(pollDelay.current);
         return;
       }
-      if (!succeeded(response, body)) {
+      if (!response || !succeeded(response, body)) {
         releaseSession();
         dispatch({ type: "fail", errorCode: errorCodeOf(body, "oauth_error") });
         return;

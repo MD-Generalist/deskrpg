@@ -85,24 +85,28 @@ async function mount(provider: Provider, extra: Partial<ProviderAuthPanelProps> 
   document.body.append(host);
   const root = createRoot(host);
   let authenticated = 0;
-  await act(async () =>
+  const render = (p: Provider, e: Partial<ProviderAuthPanelProps>) =>
     root.render(
       <I18nProvider initialLocale="ko">
         <ProviderAuthPanel
           profileBase={BASE}
-          provider={provider}
+          provider={p}
           onAuthenticated={() => {
             authenticated += 1;
           }}
-          {...extra}
+          {...e}
         />
       </I18nProvider>,
-    ),
-  );
+    );
+  await act(async () => render(provider, extra));
   await flush();
   return {
     host,
     authenticated: () => authenticated,
+    rerender: async (p: Provider, e: Partial<ProviderAuthPanelProps> = {}) => {
+      await act(async () => render(p, e));
+      await flush();
+    },
     unmount: () => act(async () => root.unmount()),
   };
 }
@@ -300,7 +304,7 @@ test("oauth_device: 대기 중 언마운트하면 세션 DELETE 1회, 이후 폴
   }
   await flush();
   assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 1);
-  t.mock.timers.tick(60_000);
+  await act(async () => t.mock.timers.tick(60_000));
   await flush();
   assert.equal(f.count("GET", `${BASE}/oauth/openai-codex/sessions/sess-1`), 1);
   f.restore();
@@ -496,6 +500,176 @@ test("disabled 면 모든 버튼이 꺼진다", async () => {
   const view = await mount({ ...CODEX, authenticated: true }, { disabled: true });
   try {
     assert.equal(button(view.host, "연결 끊기").disabled, true);
+  } finally {
+    await view.unmount();
+    f.restore();
+  }
+});
+
+// ── 수정 라운드 1 ────────────────────────────────────────────────────────────
+
+test("프로바이더가 바뀌면 입력하던 키를 버린다 — 새 엔드포인트로 새지 않는다", async () => {
+  const f = stubFetch({});
+  const view = await mount(OPENAI_KEY);
+  try {
+    await typeInto(view.host.querySelector<HTMLInputElement>("input")!, SECRET);
+    await view.rerender({ ...OPENAI_KEY, id: "anthropic", name: "Anthropic" });
+    const input = view.host.querySelector<HTMLInputElement>("input")!;
+    assert.equal(input.value, "");
+    assert.equal(button(view.host, "키 저장").disabled, true);
+    assert.equal(f.calls.length, 0);
+  } finally {
+    await view.unmount();
+    f.restore();
+  }
+});
+
+test("대기 중 프로바이더가 바뀌면 옛 세션을 한 번 지우고 idle 로 돌아가며 옛 경로를 폴링하지 않는다", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = stubFetch({
+    [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
+    [`GET ${BASE}/oauth/openai-codex/sessions/sess-1`]: { body: PENDING },
+    [`DELETE ${BASE}/oauth/sessions/sess-1`]: { body: { ok: true } },
+  });
+  const view = await mount(CODEX);
+  try {
+    await click(button(view.host, "로그인"));
+    assert.ok(view.host.textContent?.includes("ABCD-1234"));
+    await view.rerender({ ...CODEX, id: "nous", name: "Nous" });
+    assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 1);
+    assert.ok(!view.host.textContent?.includes("ABCD-1234"));
+    assert.ok(hasButton(view.host, "로그인"));
+    await act(async () => t.mock.timers.tick(60_000));
+    await flush();
+    assert.equal(f.calls.filter((c) => c.method === "GET").length, 0);
+  } finally {
+    await view.unmount();
+  }
+  assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 1);
+  f.restore();
+});
+
+test("연결됨 표시는 새 프로바이더의 authenticated 만 따른다", async () => {
+  const f = stubFetch({
+    [`PUT ${BASE}/provider-keys/openai`]: { body: { configured: true, envVar: "OPENAI_API_KEY" } },
+  });
+  const view = await mount(OPENAI_KEY);
+  try {
+    await typeInto(view.host.querySelector<HTMLInputElement>("input")!, SECRET);
+    await click(button(view.host, "키 저장"));
+    assert.ok(view.host.textContent?.includes("연결됨"));
+    await view.rerender({ ...OPENAI_KEY, id: "anthropic", name: "Anthropic" });
+    assert.ok(!view.host.textContent?.includes("연결됨"));
+    await view.rerender({ ...OPENAI_KEY, id: "mistral", name: "Mistral", authenticated: true });
+    assert.ok(view.host.textContent?.includes("연결됨"));
+  } finally {
+    await view.unmount();
+    f.restore();
+  }
+});
+
+test("폴링 중 프록시의 일시 오류(timeout·unreachable·upstream_error)는 로그인을 끝내지 않는다", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = stubFetch({
+    [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
+    [`GET ${BASE}/oauth/openai-codex/sessions/sess-1`]: [
+      { body: { errorCode: "timeout", upstreamStatus: null } },
+      { body: { errorCode: "unreachable" } },
+      { body: { errorCode: "upstream_error", upstreamStatus: 502 } },
+      { body: APPROVED },
+    ],
+  });
+  const view = await mount(CODEX);
+  try {
+    await click(button(view.host, "로그인"));
+    for (let i = 0; i < 4; i += 1) {
+      await act(async () => t.mock.timers.tick(2000));
+      await flush();
+    }
+    assert.equal(f.count("GET", `${BASE}/oauth/openai-codex/sessions/sess-1`), 4);
+    assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 0);
+    assert.equal(view.authenticated(), 1);
+  } finally {
+    await view.unmount();
+    f.restore();
+  }
+});
+
+test("폴링 중 다른 errorCode 는 로그인을 끝내고 세션을 지운다", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = stubFetch({
+    [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
+    [`GET ${BASE}/oauth/openai-codex/sessions/sess-1`]: {
+      body: { errorCode: "oauth_session_mismatch" },
+    },
+    [`DELETE ${BASE}/oauth/sessions/sess-1`]: { body: { ok: true } },
+  });
+  const view = await mount(CODEX);
+  try {
+    await click(button(view.host, "로그인"));
+    await act(async () => t.mock.timers.tick(2000));
+    await flush();
+    assert.ok(hasButton(view.host, "다시 시도"));
+    assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 1);
+  } finally {
+    await view.unmount();
+    f.restore();
+  }
+});
+
+test("start 응답이 언마운트 뒤에 와도 그 세션을 한 번 지운다", async () => {
+  const f = stubFetch({ [`DELETE ${BASE}/oauth/sessions/sess-1`]: { body: { ok: true } } });
+  const inner = globalThis.fetch;
+  let release: (() => void) | null = null;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith("/oauth/openai-codex/start")) {
+      await new Promise<void>((r) => {
+        release = r;
+      });
+      return { ok: true, status: 200, json: async () => START } as unknown as Response;
+    }
+    return inner(url, init);
+  }) as typeof fetch;
+  const view = await mount(CODEX);
+  await click(button(view.host, "로그인"));
+  await view.unmount();
+  assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 0);
+  await act(async () => release!());
+  await flush();
+  assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 1);
+  f.restore();
+});
+
+test("네트워크 실패가 이어지면 만료 + 여유 시간 뒤에 폴링을 멈춘다", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
+  const f = stubFetch({
+    [`POST ${BASE}/oauth/openai-codex/start`]: { body: { ...START, expiresIn: 4 } },
+    [`DELETE ${BASE}/oauth/sessions/sess-1`]: { body: { ok: true } },
+  });
+  const inner = globalThis.fetch;
+  let polls = 0;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith("/sessions/sess-1") && (init?.method ?? "GET") === "GET") {
+      polls += 1;
+      throw new TypeError("network down");
+    }
+    return inner(url, init);
+  }) as typeof fetch;
+  const view = await mount(CODEX);
+  try {
+    await click(button(view.host, "로그인"));
+    // 만료 4초 + 여유 30초 = 34초. 넉넉히 60초를 2초씩 당긴다.
+    for (let i = 0; i < 30; i += 1) {
+      await act(async () => t.mock.timers.tick(2000));
+      await flush();
+    }
+    const stoppedAt = polls;
+    assert.ok(stoppedAt >= 16 && stoppedAt <= 18, `polls=${stoppedAt}`);
+    assert.ok(view.host.textContent?.includes("코드가 만료됐습니다. 다시 시도하세요."));
+    assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 1);
+    await act(async () => t.mock.timers.tick(60_000));
+    await flush();
+    assert.equal(polls, stoppedAt);
   } finally {
     await view.unmount();
     f.restore();
