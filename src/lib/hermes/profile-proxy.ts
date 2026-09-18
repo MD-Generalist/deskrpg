@@ -20,7 +20,12 @@ export function proxyFailureBody(res: { status: number; failure: PluginFailure }
     });
     return {
       errorCode: upgrade.code,
-      body: { errorCode: upgrade.code, error: "", upstreamStatus: res.status, details: upgrade.details },
+      body: {
+        errorCode: upgrade.code,
+        error: "",
+        upstreamStatus: res.status,
+        details: upgrade.details,
+      },
     };
   }
   return {

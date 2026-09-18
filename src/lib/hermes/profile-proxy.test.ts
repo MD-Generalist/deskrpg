@@ -4,7 +4,11 @@ import { describe, it } from "node:test";
 import { proxyFailureBody } from "./profile-proxy";
 
 const failure = (code: string, message = "") => ({
-  code, message, blocksEditor: false, showsShellCommand: null, details: {},
+  code,
+  message,
+  blocksEditor: false,
+  showsShellCommand: null,
+  details: {},
 });
 
 describe("프로필 프록시의 실패 본문", () => {
@@ -19,7 +23,14 @@ describe("프로필 프록시의 실패 본문", () => {
     assert.equal(got.body.upstreamStatus, 404);
   });
   it("그 밖의 실패는 코드·문장·상태를 옮긴다", () => {
-    const got = proxyFailureBody({ status: 409, failure: failure("config_unreadable", "bad yaml") });
-    assert.deepEqual(got.body, { errorCode: "config_unreadable", error: "bad yaml", upstreamStatus: 409 });
+    const got = proxyFailureBody({
+      status: 409,
+      failure: failure("config_unreadable", "bad yaml"),
+    });
+    assert.deepEqual(got.body, {
+      errorCode: "config_unreadable",
+      error: "bad yaml",
+      upstreamStatus: 409,
+    });
   });
 });

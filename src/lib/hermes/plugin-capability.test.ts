@@ -371,7 +371,8 @@ describe("compareSemver", () => {
 });
 
 describe("직원 설정 피커 게이트", () => {
-  const info = (capabilities: string[]) => ({ version: "0.9.0", capabilities }) as unknown as PluginInfo;
+  const info = (capabilities: string[]) =>
+    ({ version: "0.9.0", capabilities }) as unknown as PluginInfo;
   it("두 capability 가 모두 있어야 피커를 쓴다", () => {
     assert.equal(supportsProfilePicker(info(["profile_toolsets", "profile_skills"])), true);
     assert.equal(supportsProfilePicker(info(["profile_toolsets"])), false);
@@ -384,8 +385,14 @@ describe("직원 설정 피커 게이트", () => {
   it("404 인데 플러그인의 알려진 코드가 아니면 라우트가 없는 것이다", () => {
     assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "upstream_error" } }), true);
     assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "plugin_error" } }), true);
-    assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "profile_not_found" } }), false);
-    assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "oauth_session_not_found" } }), false);
+    assert.equal(
+      isMissingPluginRoute({ status: 404, failure: { code: "profile_not_found" } }),
+      false,
+    );
+    assert.equal(
+      isMissingPluginRoute({ status: 404, failure: { code: "oauth_session_not_found" } }),
+      false,
+    );
     assert.equal(isMissingPluginRoute({ status: 500, failure: { code: "internal_error" } }), false);
   });
 });

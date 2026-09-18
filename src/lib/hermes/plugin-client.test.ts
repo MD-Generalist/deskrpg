@@ -206,7 +206,11 @@ describe("plugin client — 직원 설정 피커(0.9.0)", () => {
       { status: 200, json: { platform: "api_server", toolsets: [] } },
       { status: 200, json: { skills: [] } },
     ]);
-    const client = createPluginClient({ baseUrl: "http://gw:8642", defaultToken: "default-key-1234567890", fetchImpl });
+    const client = createPluginClient({
+      baseUrl: "http://gw:8642",
+      defaultToken: "default-key-1234567890",
+      fetchImpl,
+    });
     await client.getToolsets("no ah", "profile-key-1234567890");
     await client.getSkills("noah", "profile-key-1234567890");
     assert.equal(calls[0].url, "http://gw:8642/p/no%20ah/deskrpg/toolsets");
@@ -215,8 +219,14 @@ describe("plugin client — 직원 설정 피커(0.9.0)", () => {
   });
 
   it("cloneFrom 은 있을 때만 본문에 싣는다", async () => {
-    const { calls, fetchImpl } = recorder([{ status: 201, json: { name: "noah", keyIssued: false } }]);
-    const client = createPluginClient({ baseUrl: "http://gw:8642", defaultToken: "default-key-1234567890", fetchImpl });
+    const { calls, fetchImpl } = recorder([
+      { status: 201, json: { name: "noah", keyIssued: false } },
+    ]);
+    const client = createPluginClient({
+      baseUrl: "http://gw:8642",
+      defaultToken: "default-key-1234567890",
+      fetchImpl,
+    });
     await client.createProfile("noah");
     await client.createProfile("noah", { cloneFrom: "default" });
     assert.deepEqual(JSON.parse(calls[0].body!), { name: "noah" });

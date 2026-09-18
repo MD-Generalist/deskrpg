@@ -220,7 +220,11 @@ export function supportsProfileClone(info: PluginInfo | null): boolean {
 }
 
 /** 플러그인이 **자기 코드로** 돌려주는 404. 이 밖의 404 는 그 라우트가 없는 것(구버전 플러그인)이다. */
-const KNOWN_PLUGIN_404_CODES = new Set(["profile_not_found", "invalid_profile", "oauth_session_not_found"]);
+const KNOWN_PLUGIN_404_CODES = new Set([
+  "profile_not_found",
+  "invalid_profile",
+  "oauth_session_not_found",
+]);
 
 /**
  * 프록시가 캐시된 plugin info 대신 이것으로 구버전을 판정한다. 캐시는 최대 1시간 낡을 수 있어
