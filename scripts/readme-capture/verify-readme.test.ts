@@ -34,8 +34,6 @@ Call Them Over to Report
 Live Small Talk
 Agent Meeting
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
-### Map Editor — Coming Later
-The browser map editor is being prepared for a later release. It is not part of the current public workflow.
 `;
 
 const validKorean = `<img src="public/readme/${POSTER}" alt="DeskRPG 홈 화면" width="100%" />
@@ -45,8 +43,6 @@ ${koreanImages}
 실시간 스몰토크
 에이전트 회의
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
-### 맵 에디터 — 추후 제공
-브라우저 맵 에디터는 이후 릴리스를 위해 준비 중이며, 현재 공개 워크플로에는 포함되지 않습니다.
 `;
 
 const validProbe: VideoProbe = {
@@ -80,7 +76,7 @@ async function makeReadmeFixture({
   return root;
 }
 
-test("requires the four approved captions and forbids current Map Editor claims", async (t) => {
+test("requires the four approved captions and forbids any Map Editor mention", async (t) => {
   const root = await makeReadmeFixture({
     english: validEnglish,
     korean: validKorean,
@@ -126,20 +122,20 @@ test("requires deskrpg.com to be a clickable live link in both READMEs", async (
   await assert.rejects(() => verifyReadmes(root, validMediaProbe), /clickable live website/i);
 });
 
-test("rejects current Map Editor capability wording", async (t) => {
+test("rejects any Map Editor mention", async (t) => {
   const root = await makeReadmeFixture({
     english: `${validEnglish}\nBuild or upload your own office maps with the browser-based map editor.`,
   });
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  await assert.rejects(() => verifyReadmes(root, validMediaProbe), /Map Editor.*current/i);
+  await assert.rejects(() => verifyReadmes(root, validMediaProbe), /must not mention/i);
 });
 
-test("rejects the Korean current Map Editor claim beside the future-only heading", async (t) => {
+test("rejects the Korean map upload claim", async (t) => {
   const root = await makeReadmeFixture({
     korean: `${validKorean}\n브라우저 맵 에디터로 오피스 맵을 직접 만들거나 올립니다.`,
   });
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  await assert.rejects(() => verifyReadmes(root, validMediaProbe), /Map Editor.*current/i);
+  await assert.rejects(() => verifyReadmes(root, validMediaProbe), /must not mention/i);
 });
 
 test("requires both READMEs to use the approved matching hero poster", async (t) => {
