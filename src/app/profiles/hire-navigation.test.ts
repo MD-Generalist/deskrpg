@@ -37,6 +37,6 @@ test("마법사를 완료하면 방금 만든 직원의 상세로 간다", () =>
 });
 
 test("게임에서 들어왔거나 이름 없이 닫으면 예전 돌아갈 곳으로 간다", () => {
-  assert.equal(hireFinishedHref("gw-1", "/game", "mia"), "/game?assignSeat=1");
+  assert.equal(hireFinishedHref("gw-1", "/game", "mia"), "/game");
   assert.equal(hireFinishedHref("gw-1", null, null), "/profiles?gateway=gw-1");
 });
