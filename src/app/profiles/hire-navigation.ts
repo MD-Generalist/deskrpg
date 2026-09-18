@@ -25,3 +25,12 @@ export function hireDoneHref(gatewayId: string, returnTo?: string | null): strin
   if (returnTo) return `${returnTo}${returnTo.includes("?") ? "&" : "?"}assignSeat=1`;
   return `/profiles?gateway=${encodeURIComponent(gatewayId)}`;
 }
+
+/**
+ * 직원 상세 화면 — 그 직원 하나를 고치는 곳(인격·외형·모델·계정·삭제).
+ *
+ * 프로필 이름은 게이트웨이 안에서 고유하므로 이름을 경로에, 게이트웨이를 쿼리에 싣는다.
+ */
+export function employeeDetailHref(gatewayId: string, profileName: string): string {
+  return `/profiles/${encodeURIComponent(profileName)}?gateway=${encodeURIComponent(gatewayId)}`;
+}

@@ -221,6 +221,7 @@ const en: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "Display name (optional)",
   "gateway.profile.newTokenPlaceholder": "New profile token (16+ chars)",
   "gateway.profile.tokenKeepHint": "Leave the token blank to keep the existing one.",
+  "gateway.profile.manage": "Manage",
   "gateway.profile.appearance": "Appearance",
   "gateway.profile.appearanceSave": "Save appearance",
   "gateway.profile.deleteConfirmWithUsage":

@@ -217,6 +217,7 @@ const zh: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "显示名称（可选）",
   "gateway.profile.newTokenPlaceholder": "新的配置文件令牌（16 位以上）",
   "gateway.profile.tokenKeepHint": "令牌留空则保留现有令牌。",
+  "gateway.profile.manage": "管理",
   "gateway.profile.appearance": "外观",
   "gateway.profile.appearanceSave": "保存外观",
   "gateway.profile.deleteConfirmWithUsage":

@@ -8,7 +8,7 @@ import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { useLocale, useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { backLinkTarget } from "@/app/gateways/return-target";
-import { hirePageHref } from "./hire-navigation";
+import { employeeDetailHref, hirePageHref } from "./hire-navigation";
 
 type Gateway = {
   id: string;
@@ -89,12 +89,21 @@ function ProfilesPageContent() {
   }, [attempt, requestedGateway, t]);
 
   const selected = gateways.find((gateway) => gateway.id === selectedId);
+  // 상세 화면에서 직원을 지우고 돌아오면 몇 자리가 사라졌는지 여기서 알린다.
+  const deletedNpcs = Number(searchParams.get("deletedNpcs") ?? 0);
+  const lostChannels = Number(searchParams.get("channels") ?? 0);
 
   // `?new=1` 은 예전 주소다(게임의 "새 직원" 이 쓰던 형태). 채용은 전용 페이지가 전담하므로
   // 그대로 넘긴다 — 목록 화면에서 마법사를 다시 펼치지 않는다.
   useEffect(() => {
-    if (wantsCreate && selectedId) router.replace(hirePageHref(selectedId, { returnTo }));
-  }, [returnTo, router, selectedId, wantsCreate]);
+    if (wantsCreate && selectedId) {
+      router.replace(hirePageHref(selectedId, { returnTo }));
+      return;
+    }
+    // `?profile=` 은 예전 주소다(외형 편집기를 목록에서 펼치던 시절). 그 직원 상세로 넘긴다.
+    const wanted = searchParams.get("profile");
+    if (wanted && selectedId) router.replace(employeeDetailHref(selectedId, wanted));
+  }, [returnTo, router, searchParams, selectedId, wantsCreate]);
   return (
     <div className="theme-web min-h-screen bg-bg text-text p-6 md:p-8">
       <div className="max-w-6xl mx-auto space-y-7">
@@ -139,6 +148,14 @@ function ProfilesPageContent() {
           ))}
         </ol>
 
+        {deletedNpcs > 0 && (
+          <p role="status" className="text-sm text-text-secondary">
+            {t("gateway.profile.deletedNpcs", {
+              npcs: String(deletedNpcs),
+              channels: String(lostChannels > 0 ? lostChannels : 0),
+            })}
+          </p>
+        )}
         {loading ? (
           <div
             role="status"
@@ -233,7 +250,6 @@ function ProfilesPageContent() {
                 <HermesProfileList
                   key={selected.id}
                   gatewayId={selected.id}
-                  initialAppearanceProfile={searchParams.get("profile")}
                   canRegister={selected.isOwner === true}
                   returnTo={returnTo}
                 />

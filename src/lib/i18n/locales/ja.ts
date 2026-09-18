@@ -222,6 +222,7 @@ const ja: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "表示名（任意）",
   "gateway.profile.newTokenPlaceholder": "新しいプロファイルトークン（16文字以上）",
   "gateway.profile.tokenKeepHint": "トークンを空のままにすると既存のトークンを維持します。",
+  "gateway.profile.manage": "管理",
   "gateway.profile.appearance": "外見",
   "gateway.profile.appearanceSave": "外見を保存",
   "gateway.profile.deleteConfirmWithUsage":

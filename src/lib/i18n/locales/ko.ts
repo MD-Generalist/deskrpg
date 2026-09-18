@@ -218,6 +218,7 @@ const ko: Record<string, string> = {
   "gateway.profile.displayNamePlaceholder": "표시 이름 (선택)",
   "gateway.profile.newTokenPlaceholder": "새 프로필 토큰 (16자 이상)",
   "gateway.profile.tokenKeepHint": "토큰을 비워 두면 기존 토큰을 유지합니다.",
+  "gateway.profile.manage": "관리",
   "gateway.profile.appearance": "외형",
   "gateway.profile.appearanceSave": "외형 저장",
   "gateway.profile.deleteConfirmWithUsage":
