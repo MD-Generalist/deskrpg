@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
@@ -11,12 +11,12 @@ import { nextSelectedGatewayId } from "./gateway-selection";
 import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
-import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { useT, useLocale } from "@/lib/i18n";
 
 import { planGatewayDelete } from "./gateway-delete-plan";
 import { backLinkTarget } from "./return-target";
+import { employeesHref } from "@/components/workspace-navigation";
 
 type GatewayRow = {
   id: string;
@@ -78,7 +78,6 @@ export default function GatewayManagementPage() {
 function GatewayManagementPageInner() {
   const t = useT();
   const { locale } = useLocale();
-  const router = useRouter();
   // 사무실(채널 화면)에서 "인격을 하나 더 만들자"로 넘어온 왕복. `gateway` 는 어느
   // 게이트웨이를 열지, `new=1` 은 만들기 화면을 바로 펼칠지, `returnTo` 는 만든 뒤
   // 어디로 돌아갈지를 말한다. `returnTo` 는 그대로 믿지 않는다 — safeReturnTo 가
@@ -455,13 +454,13 @@ function GatewayManagementPageInner() {
         <section className="mb-6 rounded-xl border border-border bg-surface p-5">
           <p className="text-xs font-semibold tracking-wide text-text-muted">
             {locale === "ko"
-              ? "01 게이트웨이 연결 → 02 프로필 확인 → 03 NPC 외형 설정"
-              : "01 Connect gateway → 02 Find profiles → 03 Set NPC appearance"}
+              ? "01 연결 → 02 직원 등록·로그인 → 03 내 캐릭터 → 04 사무실 만들기"
+              : "01 Connect → 02 Hire and sign in → 03 My character → 04 Create an office"}
           </p>
           <p className="mt-2 text-sm text-text-muted">
             {locale === "ko"
-              ? "Hermes 게이트웨이를 먼저 연결하세요. NPC는 해당 게이트웨이의 에이전트 프로필에 연결되며, 이름과 외형도 프로필별로 관리합니다."
-              : "Connect your Hermes gateway first. Each NPC belongs to an agent profile; manage its name and appearance within that profile."}
+              ? "왼쪽 메뉴 순서가 곧 진행 순서입니다. 여기서 Hermes 게이트웨이를 연결하면, 직원 화면에서 직원을 만들고 그 직원으로 모델에 로그인합니다. Hermes 는 직원마다 따로 로그인합니다."
+              : "The sidebar order is the setup order. Connect your Hermes gateway here, then hire employees and sign each one in — Hermes signs in per employee."}
           </p>
           {selectedGateway && (
             <Link
@@ -721,17 +720,21 @@ function GatewayManagementPageInner() {
             )}
 
             {selectedGateway && (
-              <HermesProfileList
-                gatewayId={selectedGateway.id}
-                canRegister={!!selectedGateway.isOwner}
-                autoOpenCreate={autoOpenCreate}
-                onCreated={
-                  returnTo
-                    ? () =>
-                        router.push(`${returnTo}${returnTo.includes("?") ? "&" : "?"}assignSeat=1`)
-                    : undefined
-                }
-              />
+              // 직원(Hermes 프로필) 관리는 `/profiles` 한 곳에서만 한다 — 이 화면은 "연결" 까지다.
+              // 예전에는 같은 목록이 두 화면에 똑같이 떠서 어디서 관리하는지가 흐려졌다.
+              <section className="rounded-xl border border-border bg-surface p-5">
+                <h2 className="text-lg font-semibold">{t("gateways.employeesTitle")}</h2>
+                <p className="mt-1 text-sm text-text-muted">{t("gateways.employeesHint")}</p>
+                <Link
+                  href={employeesHref(selectedGateway.id, {
+                    create: autoOpenCreate,
+                    returnTo: returnTo ?? undefined,
+                  })}
+                  className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+                >
+                  {t("gateways.employeesOpen")}
+                </Link>
+              </section>
             )}
 
             <section className="rounded-xl border border-border bg-surface p-5">

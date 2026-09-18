@@ -2,11 +2,12 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Network, RefreshCw, UsersRound } from "lucide-react";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { useLocale, useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import { backLinkTarget } from "@/app/gateways/return-target";
 
 type Gateway = {
   id: string;
@@ -32,7 +33,12 @@ export default function ProfilesPage() {
 
 function ProfilesPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const requestedGateway = searchParams.get("gateway");
+  // 게임 화면의 "새 직원"·"프로필 설정" 이 이 화면으로 들어온다. 만들고 나면 왔던 자리로
+  // 돌려보내야 사용자가 다시 채널을 찾아 들어가지 않는다(`assignSeat=1` 로 자리 지정까지 잇는다).
+  const autoOpenCreate = searchParams.get("new") === "1";
+  const returnTo = backLinkTarget(searchParams.get("returnTo"));
   const { locale } = useLocale();
   const t = useT();
   const ko = locale === "ko";
@@ -222,6 +228,15 @@ function ProfilesPageContent() {
                   gatewayId={selected.id}
                   initialAppearanceProfile={searchParams.get("profile")}
                   canRegister={selected.isOwner === true}
+                  autoOpenCreate={autoOpenCreate && selected.isOwner === true}
+                  onCreated={
+                    returnTo
+                      ? () =>
+                          router.push(
+                            `${returnTo}${returnTo.includes("?") ? "&" : "?"}assignSeat=1`,
+                          )
+                      : undefined
+                  }
                 />
               </section>
             )}

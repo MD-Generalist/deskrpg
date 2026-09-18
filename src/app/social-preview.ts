@@ -70,7 +70,6 @@ export function createRobotsPolicy(isPublic: boolean): MetadataRoute.Robots {
         "/gateways",
         "/map-editor",
         "/profiles",
-        "/providers",
         "/ui2-review",
       ],
     },

@@ -10,6 +10,7 @@ import { Suspense, useCallback, useEffect, useReducer, useRef, useState } from "
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { employeesHref } from "@/components/workspace-navigation";
 import { useT, useLocale, LOCALES } from "@/lib/i18n";
 import {
   MessageSquare,
@@ -1264,14 +1265,14 @@ function GamePageInner() {
     const returnTo = `${window.location.pathname}${window.location.search}`;
     setContextMenu(null);
     closeRosterMenus();
-    router.push(`/gateways?gateway=${gatewayId}&returnTo=${encodeURIComponent(returnTo)}`);
+    router.push(employeesHref(gatewayId, { returnTo }));
   }, [closeRosterMenus, gatewayId, router]);
 
   const handleHireNpc = useCallback(() => {
     if (!gatewayId) return;
     const returnTo = `${window.location.pathname}${window.location.search}`;
     closeRosterMenus();
-    router.push(`/gateways?gateway=${gatewayId}&new=1&returnTo=${encodeURIComponent(returnTo)}`);
+    router.push(employeesHref(gatewayId, { create: true, returnTo }));
   }, [closeRosterMenus, gatewayId, router]);
 
   const handleResetNpcChatById = useCallback(

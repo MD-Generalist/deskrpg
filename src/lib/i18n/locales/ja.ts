@@ -1900,6 +1900,14 @@ const ja: Record<string, string> = {
   "settings.gatewaySharedReadOnly":
     "このチャンネルは共有ゲートウェイを使用しています。認証情報を変更できるのは所有者のみです。",
   "gateways.nav": "マイゲートウェイ",
+  "nav.gateways": "接続",
+  "nav.profiles": "社員",
+  "nav.characters": "マイキャラクター",
+  "nav.channels": "オフィス",
+  "gateways.employeesTitle": "このゲートウェイの社員",
+  "gateways.employeesHint":
+    "社員(Hermes プロフィール)の登録・人格・外見・モデルは社員画面で管理します。",
+  "gateways.employeesOpen": "社員管理を開く →",
   "gateways.title": "マイゲートウェイ",
   "gateways.subtitle": "Hermes ゲートウェイを登録、接続テスト、共有できます。",
   "gateways.backToChannels": "チャンネル一覧へ",

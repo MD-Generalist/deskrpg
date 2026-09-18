@@ -39,7 +39,6 @@ test("robots와 sitemap은 공개 사이트 한 페이지만 색인한다", () =
       "/gateways",
       "/map-editor",
       "/profiles",
-      "/providers",
       "/ui2-review",
     ],
   });

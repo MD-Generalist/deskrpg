@@ -3,24 +3,29 @@
 import type { MouseEvent, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Armchair, UsersRound, Network, Cpu, Building2 } from "lucide-react";
+import { Armchair, UsersRound, Network, UserRound, Building2 } from "lucide-react";
 import OfficeBuilding from "./OfficeBuilding";
-import { useT, useLocale } from "@/lib/i18n";
+import { WORKSPACE_NAV } from "./workspace-navigation";
+import { useT } from "@/lib/i18n";
 
 /** Navigation only: route-specific auth, role checks and actions stay with each page. */
 export default function WorkspaceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const t = useT();
-  const { locale } = useLocale();
   if (pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/game")) {
     return children;
   }
-  const links = [
-    { href: "/gateways", label: t("gateways.title"), icon: Network },
-    { href: "/profiles", label: locale === "ko" ? "내 NPC" : "My NPCs", icon: UsersRound },
-    { href: "/channels", label: locale === "ko" ? "사무환경" : "Offices", icon: Building2 },
-    { href: "/providers", label: t("providers.title"), icon: Cpu },
-  ];
+  const icons = {
+    gateways: Network,
+    profiles: UsersRound,
+    characters: UserRound,
+    channels: Building2,
+  } as const;
+  const links = WORKSPACE_NAV.map(({ key, href }) => ({
+    href,
+    label: t(`nav.${key}`),
+    icon: icons[key],
+  }));
   function guardNavigation(event: MouseEvent<HTMLAnchorElement>) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (!window.dispatchEvent(new Event("workspace:before-navigate", { cancelable: true }))) {

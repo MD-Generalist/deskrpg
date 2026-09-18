@@ -1893,6 +1893,14 @@ const en: Record<string, string> = {
   "settings.gatewaySharedReadOnly":
     "This channel is using a shared gateway. Only the owner can change its credentials.",
   "gateways.nav": "My Gateways",
+  "nav.gateways": "Connections",
+  "nav.profiles": "Employees",
+  "nav.characters": "My character",
+  "nav.channels": "Offices",
+  "gateways.employeesTitle": "This gateway's employees",
+  "gateways.employeesHint":
+    "Register employees (Hermes profiles) and manage their persona, look and model on the Employees page.",
+  "gateways.employeesOpen": "Open employees →",
   "gateways.title": "My Gateways",
   "gateways.subtitle": "Register, test, and share your Hermes gateways with other users.",
   "gateways.backToChannels": "Back to channels",

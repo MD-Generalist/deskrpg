@@ -1888,6 +1888,13 @@ const ko: Record<string, string> = {
   "settings.gatewaySharedReadOnly":
     "이 채널은 공유된 게이트웨이를 사용 중입니다. 자격증명은 소유자만 수정할 수 있습니다.",
   "gateways.nav": "내 게이트웨이",
+  "nav.gateways": "연결",
+  "nav.profiles": "직원",
+  "nav.characters": "내 캐릭터",
+  "nav.channels": "사무실",
+  "gateways.employeesTitle": "이 게이트웨이의 직원",
+  "gateways.employeesHint": "직원(Hermes 프로필) 등록·인격·외형·모델은 직원 화면에서 관리합니다.",
+  "gateways.employeesOpen": "직원 관리 열기 →",
   "gateways.title": "내 게이트웨이",
   "gateways.subtitle":
     "Hermes 게이트웨이를 등록하고, 테스트하고, 다른 사용자에게 공유할 수 있습니다.",
