@@ -9,16 +9,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ArrowUpRight, Copy, Download, Trash2, X } from "lucide-react";
+import { ArrowUpRight, Copy, Download, Pencil, Trash2, X } from "lucide-react";
 
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import { useT } from "@/lib/i18n";
 import type { ArtifactDetail } from "@/lib/hermes/deskrpg-plugin-types";
 
+import ArtifactEditor from "./ArtifactEditor";
 import type { ArtifactsApi } from "./artifacts-api";
 import {
   codeLanguageFor,
   hasRenderedMode,
+  isEditable,
   sourceTarget,
   TEXT_PREVIEW_MAX_BYTES,
   viewerFor,
@@ -96,7 +98,19 @@ export default function ArtifactViewer({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editingResetKey, setEditingResetKey] = useState("");
+
+  // 다른 결과물을 열거나(reloadKey) 밖에서 재조회를 시켰으면 편집 중이 아니었던 것으로
+  // 되돌린다(렌더 중 파생 상태 조정 — 저장 성공 뒤 편집 모드를 끄는 것은 saveEdit 이 한다).
+  const resetKey = `${artifactId}:${reloadKey}`;
+  if (editingResetKey !== resetKey) {
+    setEditingResetKey(resetKey);
+    if (editing) setEditing(false);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -165,6 +179,7 @@ export default function ArtifactViewer({
   useEffect(
     () => () => {
       if (copyTimer.current) clearTimeout(copyTimer.current);
+      if (savedTimer.current) clearTimeout(savedTimer.current);
     },
     [],
   );
@@ -187,6 +202,23 @@ export default function ArtifactViewer({
       setDeleting(false);
       setConfirming(false);
     }
+  };
+
+  const saveEdit = async (text: string, note: string) => {
+    if (!shape) return;
+    const saved = await api.addVersion(artifactId, {
+      content: text,
+      filename: shape.filename,
+      note: note.trim() ? note.trim() : undefined,
+    });
+    const next = await api.get(artifactId);
+    setError(null);
+    setDetail(next);
+    setVersion(saved.version);
+    setEditing(false);
+    setJustSaved(true);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setJustSaved(false), 3000);
   };
 
   if (!artifact || version === null || !viewer) {
@@ -272,24 +304,27 @@ export default function ArtifactViewer({
   })();
 
   const copyable = needsText && !!content && viewer !== "link";
+  const editable = !editing && !!content && !!shape && isEditable(shape);
 
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-border text-xs">
         <h3 className="text-sm font-bold text-text mr-auto break-all">{artifact.title}</h3>
-        <select
-          aria-label={t("artifacts.version")}
-          value={version}
-          onChange={(e) => setVersion(Number(e.target.value))}
-          className="px-1.5 py-1 rounded-md bg-surface-raised text-text-secondary"
-        >
-          {detail!.versions.map((v) => (
-            <option key={v.version} value={v.version} disabled={v.pruned_at !== undefined}>
-              {`v${v.version}${v.pruned_at !== undefined ? ` · ${t("artifacts.pruned")}` : ""}`}
-            </option>
-          ))}
-        </select>
-        {showsModeToggle(viewer) && (
+        {!editing && (
+          <select
+            aria-label={t("artifacts.version")}
+            value={version}
+            onChange={(e) => setVersion(Number(e.target.value))}
+            className="px-1.5 py-1 rounded-md bg-surface-raised text-text-secondary"
+          >
+            {detail!.versions.map((v) => (
+              <option key={v.version} value={v.version} disabled={v.pruned_at !== undefined}>
+                {`v${v.version}${v.pruned_at !== undefined ? ` · ${t("artifacts.pruned")}` : ""}`}
+              </option>
+            ))}
+          </select>
+        )}
+        {!editing && showsModeToggle(viewer) && (
           <div className="inline-flex rounded-md overflow-hidden border border-border">
             {(["rendered", "source"] as const).map((m) => (
               <button
@@ -304,21 +339,35 @@ export default function ArtifactViewer({
             ))}
           </div>
         )}
-        {copyable && (
+        {!editing && copyable && (
           <button type="button" className={btn} onClick={() => copy(content.text)}>
             <Copy className="w-3.5 h-3.5" />
             <span>{copied ? t("artifacts.copied") : t("artifacts.copy")}</span>
           </button>
         )}
-        <a href={downloadHref} download className={btn}>
-          <Download className="w-3.5 h-3.5" />
-          <span>{t("artifacts.download")}</span>
-        </a>
-        <button type="button" className={btn} onClick={() => onOpenSource(sourceTarget(artifact))}>
-          <ArrowUpRight className="w-3.5 h-3.5" />
-          <span>{t("artifacts.goToSource")}</span>
-        </button>
-        {!confirming && (
+        {!editing && (
+          <a href={downloadHref} download className={btn}>
+            <Download className="w-3.5 h-3.5" />
+            <span>{t("artifacts.download")}</span>
+          </a>
+        )}
+        {!editing && (
+          <button
+            type="button"
+            className={btn}
+            onClick={() => onOpenSource(sourceTarget(artifact))}
+          >
+            <ArrowUpRight className="w-3.5 h-3.5" />
+            <span>{t("artifacts.goToSource")}</span>
+          </button>
+        )}
+        {editable && (
+          <button type="button" className={btn} onClick={() => setEditing(true)}>
+            <Pencil className="w-3.5 h-3.5" />
+            <span>{t("artifacts.edit")}</span>
+          </button>
+        )}
+        {!editing && !confirming && (
           <button type="button" className={btn} onClick={() => setConfirming(true)}>
             <Trash2 className="w-3.5 h-3.5" />
             <span>{t("artifacts.delete")}</span>
@@ -362,22 +411,37 @@ export default function ArtifactViewer({
           {t("artifacts.error")} — {error}
         </p>
       )}
-      {content?.truncated && (
+      {!editing && content?.truncated && (
         <p className="px-4 py-2 text-xs text-amber-600 border-b border-border">
           {t("artifacts.truncated")}
         </p>
       )}
+      {justSaved && (
+        <p className="px-4 py-2 text-xs text-emerald-600 border-b border-border">
+          {t("artifacts.edit.saved")}
+        </p>
+      )}
       <div className="flex-1 min-h-0 overflow-auto p-4 text-xs">
-        <RenderBoundary
-          key={`${artifactId}:${version}:${mode}`}
-          fallback={
-            <p className="text-text-secondary flex items-center gap-2">
-              {t("artifacts.renderFailed")} {downloadLink}
-            </p>
-          }
-        >
-          {body}
-        </RenderBoundary>
+        {editing && content && shape ? (
+          <ArtifactEditor
+            initial={content.text}
+            filename={shape.filename}
+            isLink={viewer === "link"}
+            onSave={saveEdit}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <RenderBoundary
+            key={`${artifactId}:${version}:${mode}`}
+            fallback={
+              <p className="text-text-secondary flex items-center gap-2">
+                {t("artifacts.renderFailed")} {downloadLink}
+              </p>
+            }
+          >
+            {body}
+          </RenderBoundary>
+        )}
       </div>
     </div>
   );

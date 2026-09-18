@@ -69,8 +69,10 @@
     "capture:readme:verify": "tsx scripts/readme-capture/verify-readme.ts"
   },
   "dependencies": {
+    "@codemirror/language-data": "^6.5.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "12.8.0",
+    "codemirror": "^6.0.2",
     "dompurify": "^3.4.15",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",

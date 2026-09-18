@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { waitFor } from "@testing-library/react";
 
 import { I18nProvider } from "@/lib/i18n/context";
 
@@ -344,4 +345,64 @@ test("출처로 이동은 sourceTarget 을 넘긴다", async () => {
   await click(byText("주간 보고"));
   await click(byText("출처로 이동"));
   assert.deepEqual(seen, [{ type: "kanban", taskId: "t-7" }]);
+});
+
+test("편집 → 저장은 addVersion 을 부르고 새 버전으로 넘어간다", async () => {
+  const a = summary({ current_version: 1 });
+  const calls = mockFetch({
+    [LIST]: { artifacts: [a], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": { artifact: a, versions: [version(1)] },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "# 제목\n본문" },
+    "POST /api/channels/ch-1/artifacts/a1/versions": {
+      version: version(2, { captured_via: "edit", note: "고침" }),
+    },
+  });
+  await render();
+  await click(byText("주간 보고"));
+  await click(byText("편집"));
+  assert.ok(container.querySelector('[data-testid="artifact-editor"]'), "에디터가 떠야 한다");
+
+  // 저장 뒤 재조회 응답을 이 시점에 등록한다 — 새 버전을 골라 그 본문을 다시 부른다.
+  const updated = summary({ current_version: 2 });
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const key = `${init?.method ?? "GET"} ${url}`;
+    calls.push(key);
+    if (key === "GET /api/channels/ch-1/artifacts/a1") {
+      return new Response(
+        JSON.stringify({ artifact: updated, versions: [version(2), version(1)] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (key === "GET /api/channels/ch-1/artifacts/a1/versions/2/content") {
+      return new Response(JSON.stringify({ text: "# 제목 수정\n본문" }), { status: 200 });
+    }
+    if (key === "POST /api/channels/ch-1/artifacts/a1/versions") {
+      return new Response(
+        JSON.stringify({ version: version(2, { captured_via: "edit", note: "고침" }) }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return new Response(JSON.stringify({ code: "not_found", message: key }), { status: 404 });
+  }) as typeof fetch;
+
+  const cmHost = container.querySelector<HTMLElement & { cmView?: unknown }>(
+    '[data-testid="artifact-editor"]',
+  );
+  const view = await waitFor(() => {
+    if (!cmHost?.cmView) throw new Error("cmView not attached yet");
+    return cmHost.cmView as { state: { doc: { length: number } }; dispatch(tr: unknown): void };
+  });
+  await act(async () => {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "# 제목 수정\n본문" } });
+  });
+  await flush();
+
+  await click(byText("새 버전으로 저장"));
+  assert.ok(calls.includes("POST /api/channels/ch-1/artifacts/a1/versions"));
+  assert.ok(
+    container.querySelector('[data-testid="artifact-editor"]') === null,
+    "저장 뒤 편집 모드를 닫는다",
+  );
+  assert.ok(queryText("새 버전으로 저장했습니다"));
 });

@@ -45,6 +45,15 @@ for (const key of [
   "cancelAnimationFrame",
   "localStorage",
   "sessionStorage",
+  // CodeMirror(ArtifactEditor)가 요구한다 — happy-dom 은 만들어 두지만 기본으로
+  // 전역에 심지는 않는다.
+  "MutationObserver",
+  "ResizeObserver",
+  "IntersectionObserver",
+  "Range",
+  "Selection",
+  "DocumentFragment",
+  "Text",
 ]) {
   install(key, (win as unknown as Record<string, unknown>)[key]);
 }
