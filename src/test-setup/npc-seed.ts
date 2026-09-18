@@ -115,9 +115,12 @@ export async function seedHermesProfile(
   return profile;
 }
 
-export async function seedChannel(ownerId: string, name = "Test Channel") {
-  const { db, channels } = await loadDb();
-  const [channel] = await db.insert(channels).values({ name, ownerId }).returning();
+export async function seedChannel(ownerId: string, name = "Test Channel", mapData?: unknown) {
+  const { db, channels, jsonForDb } = await loadDb();
+  const [channel] = await db
+    .insert(channels)
+    .values(mapData !== undefined ? { name, ownerId, mapData: jsonForDb(mapData) } : { name, ownerId })
+    .returning();
   return channel;
 }
 
@@ -167,12 +170,14 @@ export async function seedChannelWithProfiles(opts: {
   staleNpcName?: string;
   /** 첫 프로필의 표시 이름 — 응답의 `name` 은 이것이어야 한다. */
   displayName?: string;
+  /** 채널의 맵 데이터 — 있으면 자리 배정 테스트가 실제 좌석을 계산할 수 있다. */
+  mapData?: unknown;
 }) {
   const { placedActive = 0, unplaced = 0, dormant = 0, profiles = 0 } = opts;
 
   const user = await seedUser("channel-owner");
   const gateway = await seedGateway(user.id, await sharedStubBaseUrl());
-  const channel = await seedChannel(user.id);
+  const channel = await seedChannel(user.id, undefined, opts.mapData);
 
   const { bindGatewayToChannel } = await import("@/lib/gateway-resources");
   await bindGatewayToChannel({
