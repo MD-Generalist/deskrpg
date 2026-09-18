@@ -1,8 +1,39 @@
 /** Pure plugin contracts shared by server clients and browser components. */
 import type { PluginFailure } from "./plugin-errors";
+import type { ArtifactDetail, ArtifactPage, ArtifactVersion } from "./deskrpg-plugin-types";
 
 export type PluginResponse<T> =
   { ok: true; data: T } | { ok: false; failure: PluginFailure; status: number };
+
+export type RawPluginResponse =
+  { ok: true; response: Response } | { ok: false; failure: PluginFailure; status: number };
+
+export type ArtifactListQuery = {
+  profiles: string[];
+  board?: string;
+  kind?: string;
+  source?: string;
+  q?: string;
+  cursor?: string;
+  limit?: number;
+  taskId?: string;
+};
+
+export type ArtifactsApi = {
+  list(query: ArtifactListQuery): Promise<PluginResponse<ArtifactPage>>;
+  get(id: string): Promise<PluginResponse<ArtifactDetail>>;
+  content(
+    id: string,
+    version: number,
+    opts: { download?: boolean; range?: string | null },
+  ): Promise<RawPluginResponse>;
+  addVersion(
+    id: string,
+    body: { content: string; filename: string; note?: string },
+    user: string,
+  ): Promise<PluginResponse<{ version: ArtifactVersion }>>;
+  remove(id: string, user: string): Promise<PluginResponse<{ ok: true }>>;
+};
 
 export type IdentityPayload = {
   body: string | null;
@@ -138,6 +169,11 @@ export type KanbanApi = {
     file: { filename: string; content: Blob | string },
   ): Promise<PluginResponse<{ attachment: KanbanAttachment }>>;
   getAttachment(board: string, attachmentId: string): Promise<PluginResponse<KanbanAttachment>>;
+  attachmentContent(
+    board: string,
+    attachmentId: string,
+    opts: { range?: string | null },
+  ): Promise<RawPluginResponse>;
   deleteAttachment(board: string, attachmentId: string): Promise<PluginResponse<{ ok: true }>>;
 
   addLink(
@@ -176,6 +212,7 @@ export type EventsApi = {
     board?: string;
     cursor?: string;
     limit?: number;
+    include?: string;
   }): Promise<PluginResponse<EventsPage>>;
 };
 
@@ -183,6 +220,7 @@ export type OwnerPluginClient = {
   info(): Promise<PluginResponse<PluginInfo>>;
   kanban: KanbanApi;
   events: EventsApi;
+  artifacts: ArtifactsApi;
 };
 
 export type CronApi = {
