@@ -1,6 +1,6 @@
 {
   "name": "deskrpg",
-  "version": "2026.918.1",
+  "version": "2026.918.2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dandacompany/deskrpg.git"
@@ -69,19 +69,16 @@
     "capture:readme:verify": "tsx scripts/readme-capture/verify-readme.ts"
   },
   "dependencies": {
-    "@imgly/background-removal": "^1.7.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "12.8.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.2",
-    "jszip": "^3.10.1",
     "lucide-react": "^1.7.0",
     "mammoth": "^1.12.3",
     "next": "16.3.5",
     "pdf-parse": "^2.4.5",
     "pg": "^8.20.0",
-    "phaser": "^3.90.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",

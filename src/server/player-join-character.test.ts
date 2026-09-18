@@ -148,7 +148,8 @@ test("player:join 은 클라이언트의 characterId 를 믿지 않고 서버가
     const seen = await joined;
     assert.equal(seen.characterId, a1.id);
     assert.equal(seen.characterName, "Alice");
-    assert.deepEqual(seen.appearance, { bodyType: "female" });
+    // 옛 외형(`{ bodyType }`)도 방송 전에 정본 형태로 접힌다(normalizeOfficeAppearance).
+    assert.deepEqual(seen.appearance, { officeLookId: "office-nari", bodyType: "female" });
 
     // 3) 캐릭터가 아예 없으면 입장시키지 않는다.
     const nobody = await open(userC.id);

@@ -1,8 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { waitForGameLoop } from "./helpers";
 import type { MeetingSpatialState } from "../src/lib/meeting-discussion-state";
-import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "../src/game/three/office-environments";
-import { effectiveMapSpawn } from "../src/lib/effective-map-spawn";
+import { OFFICE_ENVIRONMENTS } from "../src/game/three/office-environments";
 
 type Frame = { direction: "sent" | "received"; event: string; data: unknown; at: number };
 function observe(page: Page): Frame[] {
@@ -43,58 +42,37 @@ async function speak(page: Page, message: string) {
     page.locator("[data-meeting-workspace]").getByText(message, { exact: true }),
   ).toBeVisible();
 }
-async function currentOfficialTemplate(api: APIRequestContext, kind: string) {
-  const environment = OFFICE_ENVIRONMENTS.find((entry) => entry.id === kind);
-  expect(environment, `official environment ${kind}`).toBeTruthy();
-  const map = buildOfficeEnvironment(environment!.id);
-  const spawn = effectiveMapSpawn(map)!;
-  const { template } = await post(api, "/api/map-templates", {
-    name: `meeting-current-${kind}-${Date.now()}`,
-    cols: map.width,
-    rows: map.height,
-    spawnCol: spawn.col,
-    spawnRow: spawn.row,
-    tiledJson: map,
-  });
-  return template;
-}
-async function annexTemplate(api: APIRequestContext, kind: string) {
+/** 맵 템플릿 표가 사라진 뒤, 부속 배치는 채널을 만든 뒤 맵을 직접 덮어써서 만든다. */
+function annexMap(kind: string) {
   const cols = 14,
     rows = 12;
-  const { template } = await post(api, "/api/map-templates", {
-    name: `meeting-annex-${kind}-${Date.now()}`,
-    cols,
-    rows,
-    spawnCol: 1,
-    spawnRow: 1,
-    ...(kind === "tiled"
+  const mapData =
+    kind === "tiled"
       ? {
-          tiledJson: {
-            tiledversion: "1.10.2",
-            orientation: "orthogonal",
-            renderorder: "right-down",
-            width: cols,
-            height: rows,
-            tilewidth: 32,
-            tileheight: 32,
-            tilesets: [],
-            layers: [
-              {
-                id: 1,
-                name: "Floor",
-                type: "tilelayer",
-                width: cols,
-                height: rows,
-                data: Array(cols * rows).fill(0),
-              },
-              {
-                id: 2,
-                name: "Objects",
-                type: "objectgroup",
-                objects: [{ id: 1, type: "desk", x: 96, y: 96 }],
-              },
-            ],
-          },
+          tiledversion: "1.10.2",
+          orientation: "orthogonal",
+          renderorder: "right-down",
+          width: cols,
+          height: rows,
+          tilewidth: 32,
+          tileheight: 32,
+          tilesets: [],
+          layers: [
+            {
+              id: 1,
+              name: "Floor",
+              type: "tilelayer",
+              width: cols,
+              height: rows,
+              data: Array(cols * rows).fill(0),
+            },
+            {
+              id: 2,
+              name: "Objects",
+              type: "objectgroup",
+              objects: [{ id: 1, type: "desk", x: 96, y: 96 }],
+            },
+          ],
         }
       : {
           layers: {
@@ -102,12 +80,37 @@ async function annexTemplate(api: APIRequestContext, kind: string) {
             walls: Array.from({ length: rows }, () => Array(cols).fill(0)),
           },
           objects: [{ id: "kept-desk", type: "desk", col: 3, row: 3 }],
-        }),
-  });
-  return template;
+        };
+  return { mapData, mapConfig: { cols, rows, spawnCol: 1, spawnRow: 1 } };
 }
+
+/**
+ * 채널을 만든다. 공식 사무실 환경은 `environmentId` 로 바로 만들고, 부속 배치(legacy·tiled)는
+ * 아무 환경으로 만든 뒤 맵을 덮어쓴다 — 맵 템플릿 API 는 제거됐다.
+ */
+async function createSpatialChannel(
+  api: APIRequestContext,
+  { name, groupId, kind }: { name: string; groupId: string; kind: string },
+) {
+  const official = OFFICE_ENVIRONMENTS.some((entry) => entry.id === kind);
+  const { channel } = await post(api, "/api/channels", {
+    name,
+    isPublic: true,
+    groupId,
+    environmentId: official ? kind : OFFICE_ENVIRONMENTS[0].id,
+  });
+  if (!official) {
+    const response = await api.put(`/api/channels/${channel.id}`, { data: annexMap(kind) });
+    expect(
+      response.ok(),
+      `PUT /api/channels/${channel.id}: ${response.status()} ${await response.text()}`,
+    ).toBeTruthy();
+  }
+  return channel;
+}
+
 async function waitForOfficeReady(page: Page, frames: Frame[]) {
-  // GameScene.canMovePlayer requires all three server snapshots, even with zero NPCs.
+  // 시뮬레이션은 세 서버 스냅샷이 다 와야 플레이어를 움직인다(NPC 가 0명이어도).
   await expect
     .poll(
       () =>
@@ -151,13 +154,11 @@ test("isolated humans walk, share seats and leave independently on the original 
       password: process.env.DESKRPG_E2E_PASSWORD,
     });
     const { groups } = await (await admin.get("/api/groups")).json();
-    const template = await currentOfficialTemplate(admin, "tech");
     const suffix = Date.now().toString(36);
-    const { channel } = await post(admin, "/api/channels", {
+    const channel = await createSpatialChannel(admin, {
       name: `meeting-e2e-${suffix}`,
-      isPublic: true,
       groupId: groups.find((g: { isDefault: boolean }) => g.isDefault).id,
-      mapTemplateId: template.id,
+      kind: "tech",
     });
     const pages: Page[] = [];
     for (const [index, context] of contexts.entries()) {
@@ -169,7 +170,7 @@ test("isolated humans walk, share seats and leave independently on the original 
       });
       await post(context.request, "/api/characters", {
         name: identity,
-        appearance: { bodyType: "male", layers: { body: { itemKey: "body", variant: "light" } } },
+        appearance: { officeLookId: "office-jun", bodyType: "male" },
       });
       await post(context.request, `/api/channels/${channel.id}/join`, {});
       const page = await context.newPage();
@@ -304,7 +305,7 @@ test("seven map meeting smoke: official environments and legacy/Tiled annex", as
     });
     await post(user, "/api/characters", {
       name: nickname,
-      appearance: { bodyType: "male", layers: { body: { itemKey: "body", variant: "light" } } },
+      appearance: { officeLookId: "office-jun", bodyType: "male" },
     });
     for (const kind of [
       "trading",
@@ -324,15 +325,10 @@ test("seven map meeting smoke: official environments and legacy/Tiled annex", as
       const frames = observe(page);
       try {
         await test.step(kind, async () => {
-          const template = OFFICE_ENVIRONMENTS.some((entry) => entry.id === kind)
-            ? await currentOfficialTemplate(admin, kind)
-            : await annexTemplate(admin, kind);
-          expect(template, `existing ${kind} template required`).toBeTruthy();
-          const { channel } = await post(admin, "/api/channels", {
+          const channel = await createSpatialChannel(admin, {
             name: `meeting-matrix-${kind}-${suffix}`,
-            isPublic: true,
             groupId: groups.find((g: { isDefault: boolean }) => g.isDefault).id,
-            mapTemplateId: template.id,
+            kind,
           });
           await post(user, `/api/channels/${channel.id}/join`, {});
           await page.goto(`/game?channelId=${channel.id}`);

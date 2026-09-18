@@ -9,7 +9,7 @@ import {
   type PlayerDestination,
 } from "./player-resume-state";
 import { setNpcActive } from "../lib/npc-roster";
-import { getMyCharacter, isMyCharacter } from "../lib/my-character";
+import { getMyCharacter, isMyCharacter, type MyCharacter } from "../lib/my-character";
 import { createNpcCoordination } from "./npc-coordination";
 import {
   createMeetingSpatialCoordinator,
@@ -74,6 +74,7 @@ import {
 } from "./meeting-socket";
 import { registerMeetingDiscussionHandlers } from "./meeting-discussion";
 import { registerRoomHandlers } from "./room-socket";
+import { normalizeOfficeAppearance } from "@/game/three/office-appearance";
 import { AUTOMATION_SOCKET_EVENTS, getWorkingSnapshot } from "./automation-events";
 import { setChannelActive, startAutomationPollers } from "./automation-poller";
 import {
@@ -1164,8 +1165,18 @@ export function setupSocketHandlers(io: Server) {
 
         // "나" 는 서버가 정한다 — 클라이언트가 보낸 characterId·이름·외형은 믿지 않는다.
         // 남의 캐릭터 id 로 들어오면 그 캐릭터로 행세하게 되므로(이력·방송) 거절한다.
-        const mine = await getMyCharacter(user.userId);
+        // 거절은 아래 단일 세션 kick 보다 먼저라서 거절된 입장이 같은 사용자의 살아 있는
+        // 세션을 끊지 못한다. 조회 실패도 거절로 접는다 — 던지면 클라이언트가 응답을 못 받고
+        // 입장이 멈춘다.
+        let mine: MyCharacter | null;
+        try {
+          mine = await getMyCharacter(user.userId);
+        } catch (err) {
+          console.error("[player:join] my character lookup failed:", err);
+          mine = null;
+        }
         if (!mine) {
+          console.warn(`[player:join] rejected join without a character from user ${user.userId}`);
           socket.emit("channel:access-denied", {
             channelId: data.mapId,
             action: "player:join",
@@ -1175,6 +1186,7 @@ export function setupSocketHandlers(io: Server) {
           return;
         }
         if (data.characterId && !isMyCharacter(mine, data.characterId)) {
+          console.warn(`[player:join] rejected character claim from user ${user.userId}`);
           socket.emit("channel:access-denied", {
             channelId: data.mapId,
             action: "player:join",
@@ -1303,7 +1315,7 @@ export function setupSocketHandlers(io: Server) {
           userId: user.userId,
           characterId: mine.id,
           characterName: mine.name,
-          appearance: mine.appearance,
+          appearance: normalizeOfficeAppearance(mine.appearance),
           mapId: data.mapId,
           x: spawn.x,
           y: spawn.y,

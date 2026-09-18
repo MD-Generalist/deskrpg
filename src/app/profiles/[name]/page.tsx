@@ -9,7 +9,7 @@ import ProfileAppearanceEditor from "@/components/hermes/ProfileAppearanceEditor
 import { profileStatusLabel } from "@/components/hermes/profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "@/components/hermes/profile-status-style";
 import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
-import type { CharacterAppearance } from "@/lib/lpc-registry";
+import type { CharacterAppearance } from "@/game/three/office-appearance";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useLocale, useT } from "@/lib/i18n";
 import { deleteConfirmParams, deletedNoticeFrom, visibleSections } from "../employee-detail-view";

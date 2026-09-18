@@ -30,6 +30,10 @@ const { ensureKanbanCronBookkeeping } = require("./sqlite-kanban-cron-bookkeepin
 const { dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js") as {
   dropLegacyTaskTables: (sqlite: BetterSqlite3.Database) => void;
 };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { retireMapEditor } = require("./sqlite-map-editor-drop.js") as {
+  retireMapEditor: (sqlite: BetterSqlite3.Database) => void;
+};
 
 const DB_TYPE = (
   process.env.DB_TYPE || (process.env.DATABASE_URL ? "postgresql" : "sqlite")
@@ -81,18 +85,10 @@ export const groupJoinRequests = activeSchema.groupJoinRequests;
 export const groupPermissions = activeSchema.groupPermissions;
 export const userPermissionOverrides = activeSchema.userPermissionOverrides;
 export const channelMembers = activeSchema.channelMembers;
-export const maps = activeSchema.maps;
-export const mapPortals = activeSchema.mapPortals;
 export const npcs = activeSchema.npcs;
 export const npcSessions = activeSchema.npcSessions;
 export const chatMessages = activeSchema.chatMessages;
 export const meetingMinutes = activeSchema.meetingMinutes;
-export const mapTemplates = activeSchema.mapTemplates;
-export const stamps = activeSchema.stamps;
-export const tilesetImages = activeSchema.tilesetImages;
-export const projects = activeSchema.projects;
-export const projectTilesets = activeSchema.projectTilesets;
-export const projectStamps = activeSchema.projectStamps;
 export const chatRooms = activeSchema.chatRooms;
 export const chatRoomMembers = activeSchema.chatRoomMembers;
 export const chatRoomMessages = activeSchema.chatRoomMessages;
@@ -456,6 +452,9 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   ensureKanbanCronBookkeeping(sqlite);
   // 2026-04 태스크 시스템 폐기 — 옛 태스크·보고 테이블은 데이터째 지운다.
   dropLegacyTaskTables(sqlite);
+  // 맵 에디터 폐기 — 옛 외형을 오피스 룩으로 접고 맵 에디터 표 8개를 지운다.
+  // hermes_profiles.appearance ALTER 뒤라야 그 표의 외형까지 변환된다.
+  retireMapEditor(sqlite);
   // 이 함수와 server-db.js 의 동명 함수는 **서로 다른 경로**다 — API 라우트는 이쪽,
   // 소켓 서버는 저쪽을 탄다. 한쪽에만 컬럼을 더하면 그 경로에서만 조용히
   // "no such column" 이 난다(실제로 그렇게 났다). 새 컬럼은 양쪽에 넣을 것.

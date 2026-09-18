@@ -118,7 +118,6 @@ COPY --from=builder /app/src/lib/i18n/error-codes.ts ./src/lib/i18n/error-codes.
 COPY --from=builder /app/src/lib/npc-agent-defaults.ts ./src/lib/npc-agent-defaults.ts
 COPY --from=builder /app/src/lib/npc-persona-presets.ts ./src/lib/npc-persona-presets.ts
 COPY --from=builder /app/src/lib/office-presets.ts ./src/lib/office-presets.ts
-COPY --from=builder /app/src/lib/lpc-registry.ts ./src/lib/lpc-registry.ts
 COPY --from=builder /app/src/lib/i18n/server.ts ./src/lib/i18n/server.ts
 COPY --from=builder /app/src/lib/i18n/locales ./src/lib/i18n/locales
 # Whole-directory copies (not per-file): this project has missed individual files in

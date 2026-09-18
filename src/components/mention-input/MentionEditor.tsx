@@ -194,7 +194,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      e.stopPropagation(); // Phaser 가 키를 먹지 않게
+      e.stopPropagation(); // 시뮬레이션이 키를 먹지 않게
       if (e.nativeEvent.isComposing || composingRef.current) return;
       if (open) {
         const next = reduceDropdown({ open: true, index, count: filtered.length }, e.key);

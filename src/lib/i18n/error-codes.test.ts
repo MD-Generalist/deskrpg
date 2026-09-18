@@ -31,34 +31,6 @@ const REQUIRED_KEYS = [
   "common.unsavedChangesContinue",
   "game.spawnSetMode",
   "game.fireNpcConfirm",
-  "mapEditor.pixel.tolerance",
-  "mapEditor.pixel.magicEraser",
-  "mapEditor.pixel.smooth",
-  "mapEditor.layers.characterNpcDivider",
-  "mapEditor.layers.tileLayerType",
-  "mapEditor.layers.objectLayerType",
-  "mapEditor.layers.roleCollision",
-  "mapEditor.layers.roleFloor",
-  "mapEditor.layers.roleWalls",
-  "mapEditor.layers.roleForeground",
-  "mapEditor.layers.roleObjects",
-  "mapEditor.template.deleteConfirm",
-  "mapEditor.template.openInEditor",
-  "mapEditor.template.addMap",
-  "mapEditor.template.downloadTmj",
-  "mapEditor.template.openFailed",
-  "mapEditor.tilesets.deleteInUseConfirm",
-  "mapEditor.tilesets.deleteConfirm",
-  "mapEditor.tilesets.removeUnusedConfirm",
-  "mapEditor.tilesets.importedTileset",
-  "mapEditor.newMap.defaultName",
-  "mapEditor.project.templateNamePrompt",
-  "mapEditor.project.templateDescriptionPrompt",
-  "mapEditor.project.templateSaved",
-  "mapEditor.project.templateSaveFailed",
-  "mapEditor.layers.layerNamePrompt",
-  "mapEditor.layers.cannotDeleteCoreLayer",
-  "mapEditor.layers.deleteLayerConfirm",
   "npc.aiAgent",
   "npc.gatewayNotConnected",
   "npc.connectGatewayAgent",
@@ -433,8 +405,8 @@ test("every error code a route emits is registered", () => {
 });
 
 // 로케일 간 키가 어긋나면 그 언어 사용자에게는 **키 문자열이 그대로** 보인다. 에러코드
-// 쪽은 위 두 가드가 지키지만 UI 키(gateways.*, mapEditor.* 등)는 아무도 안 봤고,
-// 실제로 mapEditor.toolbar.saveAsTemplate 가 ja·zh 에서 빠진 채 새고 있었다.
+// 쪽은 위 두 가드가 지키지만 UI 키(gateways.* 등)는 아무도 안 봤고, 실제로 옛 맵 에디터의
+// 툴바 키가 ja·zh 에서 빠진 채 새고 있었다.
 test("all locales carry the same keys", () => {
   const base = Object.keys(ko).sort();
   const missing: string[] = [];

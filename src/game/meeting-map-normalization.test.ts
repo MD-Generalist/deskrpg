@@ -9,7 +9,6 @@ import {
 import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "./three/office-environments";
 import { deriveChannelMotionLayout } from "../server/channel-motion-layout";
 import { clearSegment, findPath } from "./navigation";
-import { validateMapTemplate } from "../lib/map-editor-utils";
 import { type TiledGeometryMap } from "../lib/tiled-geometry";
 
 const legacy = () => ({
@@ -205,21 +204,6 @@ test("공식 맵의 회의실은 라운지 대신 기존 공간을 사용한다"
 });
 test("잘못된 맵을 별도 공간으로 대체하지 않는다", () => {
   assert.throws(() => normalizeMeetingMap({ nonsense: true }), /맵/);
-});
-
-test("공식 스튜디오 크기를 템플릿 검증기가 허용한다", () => {
-  const map = buildOfficeEnvironment("agency");
-  assert.equal(
-    validateMapTemplate({
-      name: "Studio",
-      cols: map.width,
-      rows: map.height,
-      spawnCol: map.width - 3,
-      spawnRow: map.height - 3,
-      tiledJson: map,
-    }),
-    null,
-  );
 });
 
 function enclosed() {

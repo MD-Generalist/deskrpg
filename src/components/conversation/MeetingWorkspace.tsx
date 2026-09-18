@@ -2,7 +2,6 @@
 
 import type { Socket } from "socket.io-client";
 import MeetingRoom from "../MeetingRoom";
-import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { useT } from "@/lib/i18n";
 import { useState } from "react";
 
@@ -11,7 +10,7 @@ type Props = {
   character: {
     id: string;
     name: string;
-    appearance: CharacterAppearance | LegacyCharacterAppearance;
+    appearance: unknown;
   };
   socket: Socket | null;
   npcs: { id: string; name: string; appearance: unknown }[];

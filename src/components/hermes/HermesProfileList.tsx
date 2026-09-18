@@ -13,9 +13,10 @@ import {
   type DiscoveryRow,
   type ProbeStatus,
 } from "./discovery-rows";
-import type { CharacterAppearance } from "@/lib/lpc-registry";
+import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 import { employeeDetailHref, hirePageHref } from "@/app/profiles/hire-navigation";
+import RosterAvatar from "../RosterAvatar";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -170,11 +171,14 @@ export default function HermesProfileList({
             return (
               <div key={profile.id} className="rounded-lg bg-bg px-3 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-text">
-                      {profile.displayName || profile.profileName}
-                    </p>
-                    <p className="text-xs text-text-muted">{profile.profileName}</p>
+                  <div className="flex items-center gap-2">
+                    <RosterAvatar appearance={profile.appearance ?? null} />
+                    <div>
+                      <p className="font-medium text-text">
+                        {profile.displayName || profile.profileName}
+                      </p>
+                      <p className="text-xs text-text-muted">{profile.profileName}</p>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span

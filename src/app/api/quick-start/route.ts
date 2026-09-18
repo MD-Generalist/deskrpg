@@ -13,7 +13,6 @@ import {
 } from "@/db";
 import { getUserId } from "@/lib/internal-rpc";
 import { ensureMyCharacter } from "@/lib/my-character";
-import { ensureOfficeEnvironmentTemplate } from "@/lib/office-environment-template";
 import {
   assignSeats,
   freeSeatTiles,
@@ -25,10 +24,10 @@ import {
 /**
  * `POST /api/quick-start` — 가입 직후의 여섯 화면(캐릭터 → 채널 → 배치 → …)을 한 번에 접는다.
  *
- * **아무 도메인 규칙도 새로 만들지 않는다.** 캐릭터는 `/api/characters` 의 `POST`,
+ * **아무 도메인 규칙도 새로 만들지 않는다.** 캐릭터는 `ensureMyCharacter`("나" 규칙의 한 곳),
  * 채널은 `/api/channels` 의 `POST`(그 안에서 `ensureOfficeRoom` 이 채널당 office 방
  * 하나를 보장한다), 자리 배치는 `/api/npcs/:id` 의 `PATCH` 를 **그대로 호출**한다.
- * 여기서 테이블을 직접 쓰는 곳은 한 군데도 없다 — 읽기만 한다.
+ * 캐릭터 외에 여기서 테이블을 직접 쓰는 곳은 없다 — 읽기만 한다.
  *
  * 멱등이다: 이미 캐릭터·채널이 있으면 만들지 않고 그것을 돌려준다.
  * 게이트웨이가 없어도 실패하지 않는다(3단계만 건너뛴다).
@@ -66,32 +65,6 @@ async function expectOk(response: Response): Promise<Record<string, unknown>> {
     throw new QuickStartFailure(NextResponse.json(payload, { status: response.status }));
   }
   return payload;
-}
-
-/**
- * `ensureOfficeEnvironmentTemplate` 은 화면에서 쓰라고 `fetch` 를 주입받게 돼 있다.
- * 서버에서는 네트워크를 타는 대신 map-template 라우트 핸들러로 곧장 보낸다 —
- * "같은 환경이면 같은 템플릿을 재사용한다" 는 판단이 한 곳에만 남는다.
- */
-async function inProcessMapTemplateFetch(req: NextRequest): Promise<typeof fetch> {
-  const list = await import("../map-templates/route");
-  const detail = await import("../map-templates/[id]/route");
-
-  return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(String(input), req.nextUrl.origin);
-    const segments = url.pathname.replace(/^\/api\/map-templates\/?/, "");
-
-    if (segments === "") {
-      if ((init?.method ?? "GET").toUpperCase() === "POST") {
-        return list.POST(subRequest(req, url.pathname, JSON.parse(String(init?.body ?? "{}"))));
-      }
-      return list.GET();
-    }
-
-    return detail.GET(subRequest(req, url.pathname, {}, "GET"), {
-      params: Promise.resolve({ id: decodeURIComponent(segments) }),
-    });
-  }) as unknown as typeof fetch;
 }
 
 /** 채널을 만들 그룹. 사용자의 소속 중 관리 권한이 있는 쪽을 먼저 본다 — 권한 판정 자체는 채널 라우트가 한다. */
@@ -145,11 +118,7 @@ async function ensureChannel(req: NextRequest, userId: string, nickname: string 
     );
   }
 
-  const mapTemplateId = await ensureOfficeEnvironmentTemplate(
-    QUICK_START_ENVIRONMENT_ID,
-    await inProcessMapTemplateFetch(req),
-  );
-
+  // 환경 배치는 채널 라우트가 코드에서 직접 만든다 — 템플릿 표를 거치지 않는다.
   const { POST } = await import("../channels/route");
   const payload = await expectOk(
     await POST(
@@ -157,7 +126,7 @@ async function ensureChannel(req: NextRequest, userId: string, nickname: string 
         name: quickStartChannelName(nickname),
         isPublic: true,
         groupId,
-        mapTemplateId,
+        environmentId: QUICK_START_ENVIRONMENT_ID,
       }),
     ),
   );

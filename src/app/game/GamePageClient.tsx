@@ -6,7 +6,15 @@ import type { MotionSnapshot } from "@/game/motion-snapshot";
 
 import { MapChatWalkers } from "./map-chat-walkers";
 import { MapChatParticipants } from "./map-chat-participants";
-import { Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -33,8 +41,6 @@ import {
   AlarmClock,
 } from "lucide-react";
 import type { Socket } from "socket.io-client";
-import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
-import { compositeCharacter } from "@/lib/sprite-compositor";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
@@ -82,13 +88,11 @@ import {
   upsertLegacyNpcChunk,
 } from "./chat-response-state";
 
-const APP_VERSION = "2026.918.1";
+const APP_VERSION = "2026.918.2";
 const BUG_REPORT_BASE_URL = "https://github.com/dandacompany/deskrpg/issues/new";
 const SOURCE_CODE_URL = "https://github.com/dandacompany/deskrpg";
 const LICENSE_URL = `${SOURCE_CODE_URL}/blob/main/LICENSE.md`;
 const THIRD_PARTY_LICENSES_URL = "/third-party-licenses.html";
-const AVATAR_ASSET_CREDITS_URL = "/assets/spritesheets/CREDITS.md";
-const AVATAR_ASSET_LICENSE_URL = "/assets/spritesheets/LICENSE-assets.md";
 const INSTANCE_ID_STORAGE_KEY = "deskrpg.instanceId";
 
 function GameEngineLoading() {
@@ -107,10 +111,16 @@ const ThreeGame = dynamic(() => import("@/components/ThreeGame"), {
   loading: () => <GameEngineLoading />,
 });
 
+/**
+ * 외형 원본은 DB 의 JSON 이다. 맵(ThreeGame)은 `officeLookId` 만 읽고, 회의·목록 컴포넌트가
+ * 나머지를 해석한다 — 그 컴포넌트들의 prop 타입을 그대로 빌려 이 파일은 외형 포맷을 모른다.
+ */
+type CharacterAppearanceData = ComponentProps<typeof MeetingWorkspace>["character"]["appearance"];
+
 interface Character {
   id: string;
   name: string;
-  appearance: CharacterAppearance | LegacyCharacterAppearance;
+  appearance: CharacterAppearanceData;
 }
 
 interface GameNotification {
@@ -143,7 +153,7 @@ interface ChannelPlayerSummary {
   id: string;
   userId?: string;
   name: string;
-  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
+  appearance: CharacterAppearanceData | null;
 }
 
 function getSocketServerUrl(): string | undefined {
@@ -161,7 +171,15 @@ function getSocketServerUrl(): string | undefined {
   return `${protocol}//${hostname}:${currentPort + 1}`;
 }
 
-export default function GamePage() {
+type GamePageClientProps = {
+  /**
+   * 3D 를 더 이상 띄울 수 없을 때(렌더러 초기화 실패·WebGL 컨텍스트 소실) 부른다.
+   * 부르기 전에 소켓을 끊어 반쯤 살아 있는 채널 화면을 남기지 않는다.
+   */
+  onFatal?: () => void;
+};
+
+export default function GamePage({ onFatal }: GamePageClientProps = {}) {
   const t = useT();
   return (
     <Suspense
@@ -171,12 +189,12 @@ export default function GamePage() {
         </div>
       }
     >
-      <GamePageInner />
+      <GamePageInner onFatal={onFatal} />
     </Suspense>
   );
 }
 
-function GamePageInner() {
+function GamePageInner({ onFatal }: GamePageClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const t = useT();
@@ -187,14 +205,12 @@ function GamePageInner() {
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = character?.id ?? null;
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
-  const [spritesheetDataUrl, setSpritesheetDataUrl] = useState<string | null>(null);
   const [gameChannelData, setGameChannelData] = useState<PendingChannelData>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // playerCount is derived from channelPlayers array length
   const [socket, setSocket] = useState<Socket | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -295,9 +311,7 @@ function GamePageInner() {
   const [notifications, setNotifications] = useState<GameNotification[]>([]);
   const [notificationsExpanded, setNotificationsExpanded] = useState(false);
   const characterNameRef = useRef<string>("");
-  const characterAppearanceRef = useRef<CharacterAppearance | LegacyCharacterAppearance | null>(
-    null,
-  );
+  const characterAppearanceRef = useRef<CharacterAppearanceData | null>(null);
 
   // NPC greeting messages (stored until dialog opens)
   const npcGreetings = useRef<Map<string, string>>(new Map());
@@ -355,10 +369,21 @@ function GamePageInner() {
   // Ref to accumulate streaming text (avoids setState-in-effect issues)
   const streamBufferRef = useRef("");
   const socketRef = useRef<Socket | null>(null);
-  // Current player position — updated from GameScene for beforeunload save
+  // Current player position — updated from the simulation for beforeunload save
   const playerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const [instanceId, setInstanceId] = useState("");
   const [debugCopied, setDebugCopied] = useState(false);
+
+  // 3D 가 죽으면 채널 화면을 더 유지할 이유가 없다 — 소켓부터 끊고 관문에 알린다.
+  const handleGameFatal = useCallback(() => {
+    const socketInstance = socketRef.current;
+    if (socketInstance) {
+      socketInstance.removeAllListeners();
+      socketInstance.disconnect();
+      socketRef.current = null;
+    }
+    onFatal?.();
+  }, [onFatal]);
 
   const openChannelSettings = useCallback(
     (initialTab: "settings" | "members" | "gateway" = "settings") => {
@@ -583,7 +608,7 @@ function GamePageInner() {
               id: string;
               userId?: string;
               characterName: string;
-              appearance?: CharacterAppearance | LegacyCharacterAppearance | null;
+              appearance?: CharacterAppearanceData | null;
             }[]
           ).map((player) => ({
             id: player.id,
@@ -599,7 +624,7 @@ function GamePageInner() {
           id: string;
           userId?: string;
           characterName: string;
-          appearance?: CharacterAppearance | LegacyCharacterAppearance | null;
+          appearance?: CharacterAppearanceData | null;
         }) => {
           setChannelPlayers((prev) => {
             if (prev.some((existing) => existing.id === player.id)) return prev;
@@ -886,7 +911,7 @@ function GamePageInner() {
           ),
         );
       });
-      // NPC movement socket events — relay to GameScene via EventBus
+      // NPC movement socket events — relay to the simulation via EventBus
       socketInstance.on(
         "npc:come-to-player",
         (data: { npcId: string; targetPlayerId: string; reason?: string; roomId?: string }) => {
@@ -913,7 +938,7 @@ function GamePageInner() {
             // 그 자리에서 도착까지 진행하므로, 반드시 emit 앞에서 기록해야 한다.
             // 컨텍스트 메뉴 호출(reason 없음)은 이전 맵 채팅 대기를 무효화한다. 지우지 않으면
             // 그 NPC 가 도착했을 때 사용자가 방금 명시적으로 요청한 1:1 대화창이 삼켜진다 —
-            // GameScene 은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
+            // 시뮬레이션은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
             // 걷기로 일어나고 항목은 그때까지 살아 있다.
             mapChatWalkersRef.current.noteCall(data.npcId, data.reason);
             mapChatParticipantsRef.current.noteCalled(data.roomId, data.npcId, data.reason);
@@ -1039,7 +1064,7 @@ function GamePageInner() {
     npcMessagesRef.current = npcMessages;
   }, [npcMessages]);
 
-  // Listen for NPC interact event from GameScene
+  // Listen for NPC interact event from the simulation
   useEffect(() => {
     const handleNpcInteract = (data: { npcId: string; npcName: string }) => {
       resetDialog();
@@ -1112,7 +1137,7 @@ function GamePageInner() {
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
       }
-      // Phaser 씬은 로케일을 모른다 — 키만 넘기고 번역은 여기서 한다.
+      // 시뮬레이션은 로케일을 모른다 — 키만 넘기고 번역은 여기서 한다.
       // (예전에는 씬이 영어 문장을 만들어 넘겨서 한국어 사용자도 영어를 봤다.)
       setToastMessage(data.messageKey ? t(data.messageKey, data.params) : (data.message ?? ""));
     };
@@ -1608,7 +1633,7 @@ function GamePageInner() {
           setChannel(nextChannel);
           if (nextChannel?.isOwner) setIsOwner(true);
 
-          // Set pending channel data for GameScene to read during create()
+          // 시뮬레이션이 시작할 때 읽을 채널 데이터
           // Parse mapData if it's a JSON string (SQLite stores as text)
           let rawMapData = channelData.channel.mapData;
           if (typeof rawMapData === "string") {
@@ -1638,19 +1663,6 @@ function GamePageInner() {
           };
           setPendingChannelData(nextPendingChannelData);
           setGameChannelData(nextPendingChannelData);
-
-          // Composite character sprite
-          const canvas = document.createElement("canvas");
-          canvasRef.current = canvas;
-
-          try {
-            await compositeCharacter(canvas, found.appearance);
-            const dataUrl = canvas.toDataURL("image/png");
-            setSpritesheetDataUrl(dataUrl);
-          } catch (err) {
-            console.error("Failed to composite character:", err);
-            setError(t("errors.failedToLoadCharacterSprite"));
-          }
 
           setLoading(false);
         })
@@ -2195,14 +2207,14 @@ function GamePageInner() {
       >
         {/* Game canvas remains mounted while the meeting workspace is visible. */}
         <div>
-          {spritesheetDataUrl && character && gameChannelData && (
+          {character && gameChannelData && (
             <ThreeGame
-              spritesheetDataUrl={spritesheetDataUrl}
               socket={socket}
               characterId={character.id}
               characterName={character.name}
               appearance={character.appearance}
               channelInitData={gameChannelData}
+              onFatal={handleGameFatal}
             />
           )}
         </div>
@@ -2575,7 +2587,7 @@ function GamePageInner() {
                         "channelId",
                       );
                       if (channelId && socketRef.current) {
-                        // Request position from Phaser via EventBus
+                        // EventBus 로 시뮬레이션에 위치를 묻는다
                         const pos = await new Promise<{ x: number; y: number } | null>(
                           (resolve) => {
                             let resolved = false;
@@ -2727,22 +2739,6 @@ function GamePageInner() {
                     className="block text-primary-light hover:text-primary underline underline-offset-2"
                   >
                     {t("about.viewThirdPartyLicenses")}
-                  </a>
-                  <a
-                    href={AVATAR_ASSET_CREDITS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-primary-light hover:text-primary underline underline-offset-2"
-                  >
-                    {t("about.viewAvatarAssetCredits")}
-                  </a>
-                  <a
-                    href={AVATAR_ASSET_LICENSE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-primary-light hover:text-primary underline underline-offset-2"
-                  >
-                    {t("about.viewAvatarAssetLicenseNotes")}
                   </a>
                 </div>
 

@@ -405,44 +405,6 @@ const channelMembers = pgTable(
   ],
 );
 
-const maps = pgTable("maps", {
-  id: varchar("id", { length: 100 }).primaryKey(),
-  name: varchar("name", { length: 200 }).notNull(),
-  tilemapPath: varchar("tilemap_path", { length: 500 }).notNull(),
-  config: jsonb("config"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
-
-const mapPortals = pgTable("map_portals", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  fromMapId: varchar("from_map_id", { length: 100 }).references(() => maps.id),
-  toMapId: varchar("to_map_id", { length: 100 }).references(() => maps.id),
-  fromX: integer("from_x").notNull(),
-  fromY: integer("from_y").notNull(),
-  toX: integer("to_x").notNull(),
-  toY: integer("to_y").notNull(),
-});
-
-const mapTemplates = pgTable("map_templates", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: varchar("name", { length: 200 }).notNull(),
-  icon: varchar("icon", { length: 10 }).notNull().default("\u{1F5FA}️"),
-  description: varchar("description", { length: 500 }),
-  cols: integer("cols").notNull(),
-  rows: integer("rows").notNull(),
-  layers: jsonb("layers"),
-  objects: jsonb("objects"),
-  tiledJson: jsonb("tiled_json"),
-  thumbnail: text("thumbnail"),
-  spawnCol: integer("spawn_col").notNull(),
-  spawnRow: integer("spawn_row").notNull(),
-  tags: varchar("tags", { length: 500 }),
-  createdBy: uuid("created_by").references(() => users.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
-
 const npcs = pgTable(
   "npcs",
   {
@@ -600,81 +562,6 @@ const meetingMinutes = pgTable(
   ],
 );
 
-const stamps = pgTable("stamps", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: varchar("name", { length: 200 }).notNull(),
-  cols: integer("cols").notNull(),
-  rows: integer("rows").notNull(),
-  tileWidth: integer("tile_width").notNull().default(32),
-  tileHeight: integer("tile_height").notNull().default(32),
-  layers: jsonb("layers").notNull(),
-  tilesets: jsonb("tilesets").notNull(),
-  thumbnail: text("thumbnail"),
-  createdBy: uuid("created_by").references(() => users.id),
-  builtIn: boolean("built_in").default(false).notNull(),
-  tags: text("tags"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-const tilesetImages = pgTable(
-  "tileset_images",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    name: varchar("name", { length: 200 }).notNull(),
-    tilewidth: integer("tilewidth").notNull().default(32),
-    tileheight: integer("tileheight").notNull().default(32),
-    columns: integer("columns").notNull(),
-    tilecount: integer("tilecount").notNull(),
-    image: text("image").notNull(),
-    builtIn: boolean("built_in").default(false).notNull(),
-    tags: text("tags"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  },
-  (table) => [uniqueIndex("idx_tileset_images_name").on(table.name)],
-);
-
-const projects = pgTable("projects", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  thumbnail: text("thumbnail"),
-  tiledJson: jsonb("tiled_json"),
-  settings: jsonb("settings"),
-  createdBy: uuid("created_by").references(() => users.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-const projectTilesets = pgTable(
-  "project_tilesets",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    tilesetId: uuid("tileset_id")
-      .notNull()
-      .references(() => tilesetImages.id, { onDelete: "cascade" }),
-    firstgid: integer("firstgid").notNull(),
-    addedAt: timestamp("added_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [unique("uq_project_tileset").on(t.projectId, t.tilesetId)],
-);
-
-const projectStamps = pgTable(
-  "project_stamps",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    stampId: uuid("stamp_id")
-      .notNull()
-      .references(() => stamps.id, { onDelete: "cascade" }),
-    addedAt: timestamp("added_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [unique("uq_project_stamp").on(t.projectId, t.stampId)],
-);
-
 module.exports = {
   users,
   characters,
@@ -694,9 +581,6 @@ module.exports = {
   groupPermissions,
   userPermissionOverrides,
   channelMembers,
-  maps,
-  mapPortals,
-  mapTemplates,
   npcs,
   npcSessions,
   chatMessages,
@@ -704,9 +588,4 @@ module.exports = {
   chatRoomMembers,
   chatRoomMessages,
   meetingMinutes,
-  stamps,
-  tilesetImages,
-  projects,
-  projectTilesets,
-  projectStamps,
 };

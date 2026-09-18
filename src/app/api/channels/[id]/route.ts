@@ -6,7 +6,7 @@ import {
 import { resolveChannelMapUpgrade } from "@/lib/channel-map-upgrade";
 import { backupChannelMap } from "@/lib/channel-map-backup";
 import { requestMapRefresh } from "@/lib/channel-map-refresh";
-import { db, tilesetImages, isPostgres, jsonForDb } from "@/db";
+import { db, isPostgres, jsonForDb } from "@/db";
 import { channels, channelMembers, groupMembers, groups } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
@@ -26,15 +26,6 @@ import internalTransport from "@/lib/internal-transport.js";
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
   buildInternalAuthHeaders: () => Record<string, string>;
   getInternalSocketBaseUrl: () => string;
-};
-
-type RestorableMapTileset = {
-  name?: string;
-  image?: string;
-};
-
-type RestorableMapData = {
-  tilesets?: RestorableMapTileset[];
 };
 
 // GET /api/channels/:id — get channel details + map data
@@ -168,37 +159,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     channel = resolved;
     const mapRevision = mapContentRevision(channel.mapData);
 
-    // Restore tileset images in mapData if they were stripped
     const parsedMapData = parseDbJson<Record<string, unknown>>(channel.mapData) ?? channel.mapData;
     const parsedMapConfig =
       parseDbJson<Record<string, unknown>>(channel.mapConfig) ?? channel.mapConfig;
-
-    if (parsedMapData && typeof parsedMapData === "object" && !Array.isArray(parsedMapData)) {
-      try {
-        const mapObj = parsedMapData as RestorableMapData;
-        if (mapObj?.tilesets) {
-          let restored = false;
-          for (const ts of mapObj.tilesets) {
-            if ((!ts.image || ts.image === "") && ts.name) {
-              const [dbTs] = await db
-                .select({ image: tilesetImages.image })
-                .from(tilesetImages)
-                .where(eq(tilesetImages.name, ts.name))
-                .limit(1);
-              if (dbTs) {
-                ts.image = dbTs.image;
-                restored = true;
-              }
-            }
-          }
-          if (restored) {
-            (channel as Record<string, unknown>).mapData = mapObj;
-          }
-        }
-      } catch {
-        /* ignore parse errors */
-      }
-    }
 
     const gatewayBinding = await getChannelGatewayBinding(id);
     let effectiveMap;

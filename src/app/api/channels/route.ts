@@ -2,12 +2,16 @@ import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { db, jsonForDb } from "@/db";
 import { normalizeMeetingMap } from "@/game/meeting-map-normalization";
 import {
+  buildOfficeEnvironment,
+  OFFICE_ENVIRONMENTS,
+  type OfficeEnvironmentId,
+} from "@/game/three/office-environments";
+import {
   channels,
   channelMembers,
   groupMembers,
   groupPermissions,
   groups,
-  mapTemplates,
   userPermissionOverrides,
   users,
 } from "@/db";
@@ -15,7 +19,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
-import { parseDbArray, parseDbJson } from "@/lib/db-json";
 import {
   bindGatewayToChannel,
   getAccessibleGatewayResource,
@@ -23,6 +26,7 @@ import {
 } from "@/lib/gateway-resources";
 import { hireGatewayProfilesIntoChannel } from "@/lib/npc-roster";
 import { ensureOfficeRoom } from "@/lib/chat-rooms";
+import { effectiveMapSpawn } from "@/lib/effective-map-spawn";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
 import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
 import { isChannelPasswordValid } from "@/lib/security-policy";
@@ -32,6 +36,12 @@ import {
   summarizeChannelDetailAccess,
   summarizeChannelJoinAccess,
 } from "@/lib/rbac/channel-access";
+
+function isOfficeEnvironmentId(value: unknown): value is OfficeEnvironmentId {
+  return (
+    typeof value === "string" && OFFICE_ENVIRONMENTS.some((environment) => environment.id === value)
+  );
+}
 
 async function canCreateChannel(userId: string, groupId: string) {
   const [user] = await db
@@ -189,7 +199,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, description, isPublic, mapTemplateId, password, gatewayConfig, groupId } = body;
+    const { name, description, isPublic, environmentId, password, gatewayConfig, groupId } = body;
     if (
       !(typeof gatewayConfig?.gatewayId === "string" && gatewayConfig.gatewayId) &&
       isManagedSshUrl(gatewayConfig?.url)
@@ -210,11 +220,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!mapTemplateId) {
+    // 맵 템플릿 표는 없어졌다. 옛 계약으로 오는 요청은 조용히 무시하지 않고 거부한다.
+    if (body.mapTemplateId !== undefined) {
       return NextResponse.json(
         {
-          errorCode: "map_template_required",
-          error: "mapTemplateId is required",
+          errorCode: "map_template_removed",
+          error: "mapTemplateId is no longer supported; send environmentId",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (environmentId === undefined || environmentId === null || environmentId === "") {
+      return NextResponse.json(
+        {
+          errorCode: "environment_required",
+          error: "environmentId is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!isOfficeEnvironmentId(environmentId)) {
+      return NextResponse.json(
+        {
+          errorCode: "environment_unknown",
+          error: "Unknown office environment",
         },
         { status: 400 },
       );
@@ -264,28 +295,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [template] = await db
-      .select()
-      .from(mapTemplates)
-      .where(eq(mapTemplates.id, mapTemplateId))
-      .limit(1);
-
-    if (!template) {
+    // 환경 배치는 코드가 만든다. 채널은 그 사본을 갖고, 이후 환경 버전 업그레이드는
+    // GET /api/channels/:id 의 업그레이드 경로가 맡는다.
+    const environmentMap = buildOfficeEnvironment(environmentId);
+    const spawn = effectiveMapSpawn(environmentMap);
+    if (!spawn) {
       return NextResponse.json(
-        {
-          errorCode: "map_template_not_found",
-          error: "Map template not found",
-        },
-        { status: 404 },
+        { errorCode: "environment_unknown", error: "Office environment has no spawn" },
+        { status: 400 },
       );
     }
-
-    // Parse layers/objects if stored as JSON string (SQLite)
-    const templateLayers = parseDbJson(template.layers) ?? template.layers;
-    const templateObjects = parseDbArray(template.objects);
-
-    // If template has tiledJson, store it directly as channel mapData
-    const templateTiledJson = parseDbJson(template.tiledJson);
+    const mapConfig = {
+      cols: environmentMap.width,
+      rows: environmentMap.height,
+      spawnCol: spawn.col,
+      spawnRow: spawn.row,
+    };
 
     const channelIsPublic = isPublic !== false;
 
@@ -316,10 +341,10 @@ export async function POST(req: NextRequest) {
     const inviteCode = generateChannelInviteCode();
     let effectiveMap;
     try {
-      effectiveMap = normalizeMeetingMap(
-        templateTiledJson || { layers: templateLayers, objects: templateObjects },
-        { spawnCol: template.spawnCol, spawnRow: template.spawnRow },
-      );
+      effectiveMap = normalizeMeetingMap(environmentMap, {
+        spawnCol: mapConfig.spawnCol,
+        spawnRow: mapConfig.spawnRow,
+      });
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : "회의실 맵을 확인할 수 없습니다" },
@@ -338,12 +363,7 @@ export async function POST(req: NextRequest) {
         inviteCode,
         maxPlayers: 50,
         mapData: jsonForDb(effectiveMap.mapData),
-        mapConfig: jsonForDb({
-          cols: template.cols,
-          rows: template.rows,
-          spawnCol: template.spawnCol,
-          spawnRow: template.spawnRow,
-        }),
+        mapConfig: jsonForDb(mapConfig),
         password: passwordHash,
       })
       .returning();

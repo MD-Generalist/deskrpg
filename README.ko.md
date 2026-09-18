@@ -18,12 +18,12 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.918.1` — 채용 마법사가 직원이 실제로 출근한 채널만 알리고, 직원을 만들면 프로필 목록이 곧바로 갱신됩니다.
+- 버전: `v2026.918.2` — 보안 수정: 사무실 입장 시 다른 사용자의 캐릭터를 쓸 수 없도록 서버가 캐릭터 소유를 확인합니다. 모든 운영자는 업데이트를 권장합니다.
 
 ## 무엇을 할 수 있나요
 
 - 나와 모든 NPC의 외형을 50종의 스타일화된 오피스 룩(CC0 Quaternius 베이스를 완성형 인물로 재제작) 중에서 고릅니다. 룩 하나가 GLB 하나이고, 맵·출근부·회의실이 같은 모델을 씁니다.
-- three.js로 그린 3D 오피스를 다섯 가지 환경(종합상사·에이전시·테크 스타트업·임원실·출판사)에서 걸어 다닙니다. 이동·좌석·충돌은 기존 Phaser 시뮬레이션이 계속 맡고, three.js는 그리기만 합니다.
+- three.js로 그린 3D 오피스를 다섯 가지 환경(종합상사·에이전시·테크 스타트업·임원실·출판사)에서 걸어 다닙니다.
 - Hermes 게이트웨이를 주소로 등록하거나, 설정 마법사로 로컬·SSH로 닿는 Hermes 설치를 찾아 플러그인을 점검하고 프로필을 등록합니다.
 - Hermes 프로필에 묶인 AI NPC를 고용하고, `SOUL.md`를 웹에서 편집하고, NPC마다 모델·프로바이더·툴셋·추론 강도를 정합니다.
 - 오피스 방에서 지명해 대화하고, NPC를 초대한 그룹 방을 열고, 응답의 전체 상태(대기 → 생각 중 → 스트리밍 → 완료·실패·취소)와 에이전트가 지금 쓰는 도구를 봅니다.
@@ -249,24 +249,16 @@ DeskRPG는 플러그인이 없거나 낡았다고 판단하면 보드·일정 �
 - 작업을 일시정지·재개하거나 즉시 실행하고, 최근 실행 기록을 확인하고, 블루프린트로 자주 쓰는 일정을 만듭니다.
 - 실행이 끝나면 구조화된 결과가 해당 일정을 만든 오피스 방에 게시됩니다.
 
-### 맵 에디터 — 추후 제공
-
-브라우저 맵 에디터는 이후 릴리스를 위해 준비 중이며, 현재 공개 워크플로에는 포함되지 않습니다.
-
 ## 제품 메모
 
 - 초대 코드가 있어도 로그인은 필요합니다.
 - 초대 코드는 채널 접근을 돕는 수단이지, 익명 접근 토큰은 아닙니다.
 - 오피스 배치는 코드로 조립하고, 실제 three.js 렌더러는 버전이 고정된 GLB 가구·건축·캐릭터 모델과 제작된 PBR 표면 텍스처를 사용합니다.
-- 레거시 2D LPC 아바타 스프라이트 자산은 별도 크레딧과 라이선스 문서를 따릅니다.
 
 ## 라이선스와 크레딧
 
 - 프로젝트 라이선스: [LICENSE.md](LICENSE.md)
 - 서드파티 라이선스: [public/third-party-licenses.html](public/third-party-licenses.html)
-- LPC 아바타 크레딧: [public/assets/spritesheets/CREDITS.md](public/assets/spritesheets/CREDITS.md)
-- LPC 아바타 라이선스 안내: [public/assets/spritesheets/LICENSE-assets.md](public/assets/spritesheets/LICENSE-assets.md)
-- LPC 전체 크레딧 데이터: [public/assets/spritesheets/CREDITS.csv](public/assets/spritesheets/CREDITS.csv)
 
 ## 문의
 

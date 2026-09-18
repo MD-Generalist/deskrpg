@@ -96,8 +96,15 @@
     {
       "idx": 13,
       "version": "7",
+      "when": 1789374170635,
+      "tag": "0013_drop_map_editor_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
       "when": 1789458000000,
-      "tag": "0013_character_bio",
+      "tag": "0014_character_bio",
       "breakpoints": true
     }
   ]

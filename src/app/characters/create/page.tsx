@@ -10,5 +10,7 @@ export default async function CharacterCreatePage({
   searchParams: Promise<{ joinChannel?: string }>;
 }) {
   const { joinChannel } = await searchParams;
-  redirect(joinChannel ? `/characters?joinChannel=${joinChannel}` : "/characters");
+  redirect(
+    joinChannel ? `/characters?joinChannel=${encodeURIComponent(joinChannel)}` : "/characters",
+  );
 }

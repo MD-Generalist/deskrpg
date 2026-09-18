@@ -7,8 +7,7 @@ import dynamic from "next/dynamic";
 import { useLocale } from "@/lib/i18n";
 import { OFFICE_ENVIRONMENTS, buildOfficeEnvironment } from "@/game/three/office-environments";
 
-const Preview = dynamic(() => import("./map-editor/ThreeMapPreview"), { ssr: false });
-const images = {};
+const Preview = dynamic(() => import("./ThreeMapPreview"), { ssr: false });
 
 export default function OfficeEnvironmentPicker({
   value,
@@ -66,7 +65,7 @@ export default function OfficeEnvironmentPicker({
         className="h-72 sm:h-96 overflow-hidden rounded-lg border border-border"
         aria-label={ko ? "선택한 사무환경 3D 미리보기" : "Selected office 3D preview"}
       >
-        <Preview map={map} images={images} />
+        <Preview map={map} />
       </div>
       <p className="text-sm text-text-muted">
         {ko ? selected.descriptionKo : selected.descriptionEn}

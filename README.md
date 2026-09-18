@@ -18,12 +18,12 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.918.1` — The hire wizard tells the truth about where a new employee reported for duty, and the profile list refreshes as soon as one is created.
+- Version: `v2026.918.2` — Security fix: the server now verifies character ownership when joining an office, so a user can no longer enter as someone else's character. All operators should update.
 
 ## What You Can Do
 
 - Pick one of 50 stylized office looks (CC0 Quaternius bases, rebuilt as complete characters) for yourself and for every NPC — one GLB per look, shared by the map, the roster and the meeting room.
-- Walk a live 3D office rendered with three.js, in five curated environments (trading company, agency, tech startup, executive suite, publisher). The original Phaser simulation still drives movement, seating and collisions; three.js only draws.
+- Walk a live 3D office rendered with three.js, in five curated environments (trading company, agency, tech startup, executive suite, publisher).
 - Register a Hermes gateway by address, or let the setup wizard discover a local / SSH-reachable Hermes install, check the plugin, and register its profiles.
 - Hire AI NPCs bound to Hermes profiles, edit their `SOUL.md` from the web, and choose model, provider, toolsets and reasoning effort per NPC.
 - Talk in the office room (mention to address one employee), open group rooms with invited NPCs, and watch the full response lifecycle (queued → thinking → streaming → complete, failed or cancelled) plus what tool the agent is using right now.
@@ -250,24 +250,16 @@ later without firing it.
 - Pause, resume or run jobs immediately, inspect recent runs, and create common schedules from blueprints.
 - Completed runs post structured results to the office room that originated the schedule.
 
-### Map Editor — Coming Later
-
-The browser map editor is being prepared for a later release. It is not part of the current public workflow.
-
 ## Product Notes
 
 - Login is required even if you have an invite code.
 - Invite codes are channel access helpers, not anonymous access tokens.
 - Office layouts are assembled in code, while the live three.js renderer uses versioned GLB furniture, architecture and character models plus authored PBR surface textures.
-- Legacy 2D LPC avatar sprite assets are bundled separately and have their own credits and license notes.
 
 ## Licenses And Credits
 
 - Project license: [LICENSE.md](LICENSE.md)
 - Third-party licenses: [public/third-party-licenses.html](public/third-party-licenses.html)
-- LPC avatar credits: [public/assets/spritesheets/CREDITS.md](public/assets/spritesheets/CREDITS.md)
-- LPC avatar license notes: [public/assets/spritesheets/LICENSE-assets.md](public/assets/spritesheets/LICENSE-assets.md)
-- Full LPC credits data: [public/assets/spritesheets/CREDITS.csv](public/assets/spritesheets/CREDITS.csv)
 
 ## Support
 

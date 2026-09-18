@@ -41,7 +41,7 @@ function CharactersPageInner() {
 
       <MyCharacterForm
         onSaved={() => {
-          if (joinChannel) router.push(`/game?channelId=${joinChannel}`);
+          if (joinChannel) router.push(`/game?channelId=${encodeURIComponent(joinChannel)}`);
         }}
       />
     </div>

@@ -57,16 +57,10 @@ test("DELETE 는 지워진 NPC 수와 채널 수를 돌려주고, npcs 에 그 �
   assert.deepEqual(await profileUsage(profileId), { npcs: 0, channels: 0 });
 });
 
-// validateAppearance 는 body 레이어를 요구한다(lpc-registry.ts) — api/characters 가
+// 외형의 정본 형태는 `{ officeLookId, bodyType }` 다(office-appearance.ts) — api/characters 가
 // 쓰는 것과 같은 모양의 픽스처를 쓴다.
-const MALE_APPEARANCE = {
-  bodyType: "male",
-  layers: { body: { itemKey: "body", variant: "light" } },
-};
-const FEMALE_APPEARANCE = {
-  bodyType: "female",
-  layers: { body: { itemKey: "body", variant: "light" } },
-};
+const MALE_APPEARANCE = { officeLookId: "office-jun", bodyType: "male" };
+const FEMALE_APPEARANCE = { officeLookId: "office-nari", bodyType: "female" };
 
 test("외형은 소유자만 바꾼다 — 공유받은 사용자는 forbidden", async () => {
   const { gatewayId, userId, profileId } = await hiredProfile();
@@ -118,6 +112,16 @@ test("망가진 외형은 400 으로 막는다 — 프로필이 정본이라 모
     }),
     { params: Promise.resolve({ id: gatewayId, profileId }) },
   );
+  const unknownLook = await PATCH(
+    new NextRequest(`http://localhost/api/gateways/${gatewayId}/profiles/${profileId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ appearance: { officeLookId: "office-nobody", bodyType: "male" } }),
+      headers: authHeaders(userId),
+    }),
+    { params: Promise.resolve({ id: gatewayId, profileId }) },
+  );
+  assert.equal(unknownLook.status, 400);
+  assert.equal((await unknownLook.json()).errorCode, "character_appearance_invalid");
   assert.equal(res.status, 400);
   // api/characters 두 라우트와 같은 코드를 쓴다 — 화면의 번역이 이미 있다.
   assert.equal((await res.json()).errorCode, "character_appearance_invalid");

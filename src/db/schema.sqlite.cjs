@@ -438,48 +438,6 @@ const channelMembers = sqliteTable(
   ],
 );
 
-const maps = sqliteTable("maps", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  tilemapPath: text("tilemap_path").notNull(),
-  config: text("config"),
-  createdAt: text("created_at").$defaultFn(isoNow),
-  updatedAt: text("updated_at").$defaultFn(isoNow),
-});
-
-const mapPortals = sqliteTable("map_portals", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  fromMapId: text("from_map_id").references(() => maps.id),
-  toMapId: text("to_map_id").references(() => maps.id),
-  fromX: integer("from_x").notNull(),
-  fromY: integer("from_y").notNull(),
-  toX: integer("to_x").notNull(),
-  toY: integer("to_y").notNull(),
-});
-
-const mapTemplates = sqliteTable("map_templates", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  name: text("name").notNull(),
-  icon: text("icon").notNull().default("\u{1F5FA}️"),
-  description: text("description"),
-  cols: integer("cols").notNull(),
-  rows: integer("rows").notNull(),
-  layers: text("layers"),
-  objects: text("objects"),
-  tiledJson: text("tiled_json"),
-  thumbnail: text("thumbnail"),
-  spawnCol: integer("spawn_col").notNull(),
-  spawnRow: integer("spawn_row").notNull(),
-  tags: text("tags"),
-  createdBy: text("created_by").references(() => users.id),
-  createdAt: text("created_at").$defaultFn(isoNow),
-  updatedAt: text("updated_at").$defaultFn(isoNow),
-});
-
 const npcs = sqliteTable(
   "npcs",
   {
@@ -648,91 +606,6 @@ const meetingMinutes = sqliteTable(
   ],
 );
 
-const stamps = sqliteTable("stamps", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  name: text("name").notNull(),
-  cols: integer("cols").notNull(),
-  rows: integer("rows").notNull(),
-  tileWidth: integer("tile_width").notNull().default(32),
-  tileHeight: integer("tile_height").notNull().default(32),
-  layers: text("layers").notNull(),
-  tilesets: text("tilesets").notNull(),
-  thumbnail: text("thumbnail"),
-  createdBy: text("created_by").references(() => users.id),
-  builtIn: integer("built_in", { mode: "boolean" }).default(false).notNull(),
-  tags: text("tags"),
-  createdAt: text("created_at").$defaultFn(isoNow),
-});
-
-const tilesetImages = sqliteTable(
-  "tileset_images",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => randomUUID()),
-    name: text("name").notNull(),
-    tilewidth: integer("tilewidth").notNull().default(32),
-    tileheight: integer("tileheight").notNull().default(32),
-    columns: integer("columns").notNull(),
-    tilecount: integer("tilecount").notNull(),
-    image: text("image").notNull(), // base64 data URL
-    builtIn: integer("built_in", { mode: "boolean" }).default(false).notNull(),
-    tags: text("tags"),
-    createdAt: text("created_at").$defaultFn(isoNow),
-  },
-  (table) => [uniqueIndex("idx_tileset_images_name").on(table.name)],
-);
-
-const projects = sqliteTable("projects", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  name: text("name").notNull(),
-  thumbnail: text("thumbnail"),
-  tiledJson: text("tiled_json"),
-  settings: text("settings"),
-  createdBy: text("created_by").references(() => users.id),
-  createdAt: text("created_at").$defaultFn(isoNow).notNull(),
-  updatedAt: text("updated_at").$defaultFn(isoNow).notNull(),
-});
-
-const projectTilesets = sqliteTable(
-  "project_tilesets",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => randomUUID()),
-    projectId: text("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    tilesetId: text("tileset_id")
-      .notNull()
-      .references(() => tilesetImages.id, { onDelete: "cascade" }),
-    firstgid: integer("firstgid").notNull(),
-    addedAt: text("added_at").$defaultFn(isoNow).notNull(),
-  },
-  (t) => [unique("uq_project_tileset").on(t.projectId, t.tilesetId)],
-);
-
-const projectStamps = sqliteTable(
-  "project_stamps",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => randomUUID()),
-    projectId: text("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    stampId: text("stamp_id")
-      .notNull()
-      .references(() => stamps.id, { onDelete: "cascade" }),
-    addedAt: text("added_at").$defaultFn(isoNow).notNull(),
-  },
-  (t) => [unique("uq_project_stamp").on(t.projectId, t.stampId)],
-);
-
 module.exports = {
   users,
   characters,
@@ -752,9 +625,6 @@ module.exports = {
   groupPermissions,
   userPermissionOverrides,
   channelMembers,
-  maps,
-  mapPortals,
-  mapTemplates,
   npcs,
   npcSessions,
   chatMessages,
@@ -762,9 +632,4 @@ module.exports = {
   chatRoomMembers,
   chatRoomMessages,
   meetingMinutes,
-  stamps,
-  tilesetImages,
-  projects,
-  projectTilesets,
-  projectStamps,
 };

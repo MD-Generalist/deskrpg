@@ -4,14 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildOfficeEnvironment } from "../../src/game/three/office-environments";
 import { CAPTURE_ACCOUNT, prepareFixture, type FixtureApi } from "./fixture";
 
-function recordingFixtureApi(
-  calls: string[],
-  options: { mapTemplateId?: string } = {},
-): FixtureApi {
-  const mapTemplateId = options.mapTemplateId ?? "template-trading";
+function recordingFixtureApi(calls: string[]): FixtureApi {
   return {
     async request<T>(
       method: "GET" | "POST" | "PUT" | "PATCH",
@@ -69,42 +64,13 @@ function recordingFixtureApi(
         });
         return { npc: { id: sophie ? "npc-sophie" : "npc-noah" } } as T;
       }
-      if (method === "GET" && requestPath === "/api/map-templates") {
-        calls.push("template");
-        return {
-          templates: [
-            { id: "template-other", name: "Small Office", tags: null },
-            {
-              id: mapTemplateId,
-              name: "종합상사",
-              tags: "deskrpg-office-v2:trading",
-              cols: 30,
-              rows: 22,
-            },
-          ],
-        } as T;
-      }
-      if (method === "GET" && requestPath === `/api/map-templates/${mapTemplateId}`) {
-        return {
-          template: {
-            id: mapTemplateId,
-            name: "종합상사",
-            tags: "deskrpg-office-v2:trading",
-            cols: 30,
-            rows: 22,
-            spawnCol: 15,
-            spawnRow: 19,
-            tiledJson: buildOfficeEnvironment("trading"),
-          },
-        } as T;
-      }
       if (method === "POST" && requestPath === "/api/channels") {
         calls.push("channel");
         assert.deepEqual(body, {
           name: "Dante Labs Office",
           description: "Hermes agents at work",
           isPublic: true,
-          mapTemplateId,
+          environmentId: "trading",
           groupId: "group-1",
           gatewayConfig: { gatewayId: "gateway-1" },
         });
@@ -197,7 +163,6 @@ test("creates a user, character, channel, gateway, profiles and NPCs in dependen
     "profile:sophie",
     "profile:noah",
     "group",
-    "template",
     "channel",
     "roster",
     "board",
@@ -294,7 +259,6 @@ test("an interrupted run reuses the fixed account character and channel", async 
     "profile:sophie",
     "profile:noah",
     "group",
-    "template",
     "channel:list",
     "roster",
     "board",
@@ -302,66 +266,29 @@ test("an interrupted run reuses the fixed account character and channel", async 
   ]);
 });
 
-test("a fresh runtime creates the tagged trading-company template through the API", async (t) => {
+test("never touches the removed map-template API", async (t) => {
   const { root, sqlitePath } = withRuntime();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const calls: string[] = [];
-  const base = recordingFixtureApi(calls, { mapTemplateId: "template-created" });
+  const base = recordingFixtureApi([]);
+  const paths: string[] = [];
   const api: FixtureApi = {
     async request<T>(
-      method: "GET" | "POST" | "PUT",
+      method: "GET" | "POST" | "PUT" | "PATCH",
       requestPath: string,
       body?: unknown,
     ): Promise<T> {
-      if (method === "GET" && requestPath === "/api/map-templates") {
-        calls.push("template");
-        return { templates: [{ id: "template-other", name: "Small Office", tags: null }] } as T;
-      }
-      if (method === "POST" && requestPath === "/api/map-templates") {
-        calls.push("template:create");
-        const template = body as {
-          tags?: string;
-          cols?: number;
-          rows?: number;
-          tiledJson?: {
-            layers?: Array<{
-              name?: string;
-              properties?: Array<{ name?: string; value?: string }>;
-            }>;
-          };
-        };
-        assert.equal(template.tags, "deskrpg-office-v2:trading");
-        assert.equal(template.cols, 30);
-        assert.equal(template.rows, 22);
-        const objectLayer = template.tiledJson?.layers?.find((layer) => layer.name === "Objects");
-        assert.ok(
-          objectLayer?.properties?.some(
-            (property) => property.name === "officeEnvironment" && property.value === "trading",
-          ),
-        );
-        return { template: { id: "template-created" } } as T;
-      }
+      paths.push(requestPath);
       return base.request<T>(method, requestPath, body);
     },
   };
 
-  const fixture = await prepareFixture(api, "http://127.0.0.1:38642", sqlitePath);
+  await prepareFixture(api, "http://127.0.0.1:38642", sqlitePath);
 
-  assert.equal(fixture.channelId, "channel-1");
-  assert.deepEqual(calls, [
-    "register",
-    "character",
-    "gateway",
-    "profile:sophie",
-    "profile:noah",
-    "group",
-    "template",
-    "template:create",
-    "channel",
-    "roster",
-    "board",
-    "report",
-  ]);
+  assert.equal(
+    paths.some((entry) => entry.startsWith("/api/map-templates")),
+    false,
+    "채널 배치는 서버가 환경 ID 로 만든다 — 템플릿 API 를 부르지 않는다",
+  );
 });
 
 test("refuses non-loopback gateway URLs before making requests", async () => {

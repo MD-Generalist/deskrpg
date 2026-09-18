@@ -6,8 +6,12 @@ import { useT, useLocale } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import CharacterPreview from "@/components/CharacterPreview";
 import OfficeLookGallery from "@/components/OfficeLookGallery";
-import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
-import { normalizeAppearance, type CharacterAppearance } from "@/lib/lpc-registry";
+import { officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
+import {
+  DEFAULT_OFFICE_LOOK_ID,
+  normalizeOfficeAppearance,
+  type CharacterAppearance,
+} from "@/game/three/office-appearance";
 import { BIO_MAX_LENGTH } from "@/lib/my-character-limits";
 import "@/game/three/lookbook.css";
 
@@ -52,16 +56,16 @@ export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = 
         if (mine) {
           setName(mine.name);
           setBio(mine.bio ?? "");
-          setSelectedAppearance(normalizeAppearance(mine.appearance));
+          setSelectedAppearance(normalizeOfficeAppearance(mine.appearance));
         } else {
-          setSelectedAppearance(officeLookAppearance(OFFICE_LOOKS[0].id));
+          setSelectedAppearance(officeLookAppearance(DEFAULT_OFFICE_LOOK_ID));
         }
       })
       .catch(() => {
         if (controller.signal.aborted) return;
         setError(t("errors.failedToLoadCharacter"));
         setCharacter(null);
-        setSelectedAppearance(officeLookAppearance(OFFICE_LOOKS[0].id));
+        setSelectedAppearance(officeLookAppearance(DEFAULT_OFFICE_LOOK_ID));
       });
     return () => controller.abort();
   }, [t]);

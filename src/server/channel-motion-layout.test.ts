@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import smallOffice from "../lib/builtin/small-office-template.json";
+import smallOffice from "./fixtures/small-office-map.json";
 import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "../game/three/office-environments";
 import { tiledSnapshot } from "../game/three/tiled-preview";
 import { furnitureSeats } from "../game/three/seating";
@@ -148,7 +148,7 @@ test("missing or malformed snapshots fail closed", () => {
   }
 });
 
-test("edited themed maps keep edits and GameScene's no-Collision legacy wall fallback", () => {
+test("edited themed maps keep edits and the renderer's no-Collision legacy wall fallback", () => {
   const map = buildOfficeEnvironment("agency");
   const walls = map.layers.find((layer) => layer.name === "Walls")!;
   map.layers = map.layers.filter((layer) => layer.name.toLowerCase() !== "collision");

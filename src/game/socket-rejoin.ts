@@ -3,13 +3,13 @@
  * 채워져 있으므로, 다시 `player:join` 을 보내지 않으면 그 뒤의 chat:send·player:move 가
  * 서버 첫 줄(`players.get(socket.id)`)에서 조용히 버려진다 — 헤더는 "AI 연결" 초록인 채로.
  *
- * 첫 connect 에는 재조인하지 않는다: 스폰 경로(`GameScene.joinMultiplayer`)가 이미 보냈고,
+ * 첫 connect 에는 재조인하지 않는다: 스폰 경로(`OfficeSimulation.joinMultiplayer`)가 이미 보냈고,
  * 두 번 보내면 다른 클라이언트에 `player:joined` 가 두 번 간다.
  */
 /**
- * `setupSocketListeners()` 는 정상 흐름에서 두 번 불린다 — `create()` 의 `request-socket` →
- * `socket-ready` 1차, 그리고 `spawnPlayer()` 의 `player-spawned` → `PhaserGame.tsx` 가 같은
- * 소켓으로 `socket-ready` 를 재발행하는 2차. 씬이 살아 있는 동안 `on` 을 그냥 쌓으면 같은
+ * `setupSocketListeners()` 는 정상 흐름에서 두 번 불린다 — 부팅의 `request-socket` →
+ * `socket-ready` 1차, 그리고 `createPlayer()` 의 `player-spawned` → `ThreeGame.tsx` 가 같은
+ * 소켓으로 `socket-ready` 를 재발행하는 2차. 시뮬레이션이 살아 있는 동안 `on` 을 그냥 쌓으면 같은
  * 이벤트에 핸들러가 두 번 걸려, 재조인 1회에 `player:join` 이 두 번 나간다.
  *
  * 씬 전체를 "이미 셋업됨" 플래그로 건너뛰는 대신, 등록 자체를 멱등으로 만든다 — 2차
