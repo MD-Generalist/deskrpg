@@ -1,4 +1,5 @@
 """Build 26 female OfficeLooks from supplied Quaternius meshes and approved baked rig.
+History only: inputs live outside the repo. Current wardrobe source of truth is wardrobe_fit.py.
 Run Blender --background --disable-autoexec --python tools/characters/build_female_catalog.py.
 The authoritative female OfficeLooks snapshot is refreshed via local npx tsx.
 """

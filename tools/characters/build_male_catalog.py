@@ -1,4 +1,5 @@
 """Deterministic OfficeLook male wardrobe on the supplied ClothedMan rig.
+History only: inputs live outside the repo. Current wardrobe source of truth is wardrobe_fit.py.
 Run with Blender --background --disable-autoexec --python this_file.py.
 No human generator, body replacement or OfficeLook ID mutation.
 """
