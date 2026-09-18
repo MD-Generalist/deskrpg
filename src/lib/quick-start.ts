@@ -104,11 +104,8 @@ export function assignSeats<T extends { id: string }>(
   return unplaced.slice(0, free.length).map((npc, index) => ({ npcId: npc.id, seat: free[index] }));
 }
 
-/** 빠른 시작이 끝나고 브라우저가 갈 곳. */
-export function quickStartGamePath(input: { channelId: string; characterId: string }): string {
-  const params = new URLSearchParams({
-    channelId: input.channelId,
-    characterId: input.characterId,
-  });
+/** 빠른 시작이 끝나고 브라우저가 갈 곳. 캐릭터는 싣지 않는다 — "나" 는 서버가 정한다. */
+export function quickStartGamePath(input: { channelId: string }): string {
+  const params = new URLSearchParams({ channelId: input.channelId });
   return `/game?${params.toString()}`;
 }

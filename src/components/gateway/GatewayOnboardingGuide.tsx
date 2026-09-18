@@ -50,9 +50,7 @@ export default function GatewayOnboardingGuide() {
         fail(t("quickStart.failed"));
         return;
       }
-      router.push(
-        quickStartGamePath({ channelId: payload.channelId, characterId: payload.characterId }),
-      );
+      router.push(quickStartGamePath({ channelId: payload.channelId }));
     } catch {
       fail(t("quickStart.failed"));
     } finally {

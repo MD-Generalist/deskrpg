@@ -68,9 +68,6 @@ test("빈 좌석보다 NPC 가 많으면 좌석 수만큼만 짝짓는다", () =
   ]);
 });
 
-test("게임 경로에 두 식별자가 실린다", () => {
-  assert.equal(
-    quickStartGamePath({ channelId: "c1", characterId: "x1" }),
-    "/game?channelId=c1&characterId=x1",
-  );
+test("게임 경로에는 채널만 실린다 — 캐릭터는 서버가 정한다", () => {
+  assert.equal(quickStartGamePath({ channelId: "c 1" }), "/game?channelId=c+1");
 });

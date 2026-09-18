@@ -32,7 +32,7 @@ test("직원 화면 주소는 게이트웨이와 이어서 할 일을 함께 싣
   assert.equal(employeesHref("gw-1"), "/profiles?gateway=gw-1");
   assert.equal(employeesHref("gw-1", { create: true }), "/profiles/new?gateway=gw-1");
   assert.equal(
-    employeesHref("gw-1", { create: true, returnTo: "/game?channelId=c1&characterId=x" }),
-    "/profiles/new?gateway=gw-1&returnTo=%2Fgame%3FchannelId%3Dc1%26characterId%3Dx",
+    employeesHref("gw-1", { create: true, returnTo: "/game?channelId=c1&view=x" }),
+    "/profiles/new?gateway=gw-1&returnTo=%2Fgame%3FchannelId%3Dc1%26view%3Dx",
   );
 });

@@ -16,8 +16,8 @@ test("이어서 편집할 직원과 돌아갈 자리를 함께 싣는다", () =>
 
 test("게임에서 들어왔으면 그 자리로 돌아가 자리 지정까지 잇는다", () => {
   assert.equal(
-    hireDoneHref("gw-1", "/game?channelId=c1&characterId=x"),
-    "/game?channelId=c1&characterId=x&assignSeat=1",
+    hireDoneHref("gw-1", "/game?channelId=c1&view=x"),
+    "/game?channelId=c1&view=x&assignSeat=1",
   );
   assert.equal(hireDoneHref("gw-1", "/game"), "/game?assignSeat=1");
 });
