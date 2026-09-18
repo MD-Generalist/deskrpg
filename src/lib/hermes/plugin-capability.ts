@@ -220,7 +220,7 @@ export function supportsProfileClone(info: PluginInfo | null): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// 프로바이더 인증 게이트 (플러그인 0.10.0)
+// 프로바이더 인증 게이트 (플러그인 0.9.0)
 // ---------------------------------------------------------------------------
 
 export function supportsProfileOauth(info: PluginInfo | null): boolean {

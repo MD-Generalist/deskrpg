@@ -263,7 +263,7 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
     getToolsets: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/toolsets`, profileToken),
     getSkills: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/skills`, profileToken),
 
-    // 프로바이더 인증(0.10.0). 전부 프로필 스코프·프로필 토큰 — 세그먼트는 전부 인코딩한다.
+    // 프로바이더 인증(0.9.0). 전부 프로필 스코프·프로필 토큰 — 세그먼트는 전부 인코딩한다.
     startOAuth: (name, profileToken, provider) =>
       call(`/p/${seg(name)}/deskrpg/oauth/${seg(provider)}/start`, profileToken, {
         method: "POST",
