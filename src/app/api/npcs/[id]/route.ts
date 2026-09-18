@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
 import { selectNpcById } from "@/lib/npc-projection";
 import { isUniqueViolation } from "@/lib/db-unique-violation";
+import { seatingMapFor, seatNumberAt } from "@/lib/seat-assignment";
 
 async function verifyNpcOwnership(req: NextRequest, npcId: string) {
   const userId = getUserId(req);
@@ -56,6 +57,20 @@ async function updatePlacement(req: NextRequest, id: string) {
       },
       { status: 400 },
     );
+  }
+
+  if (typeof body.positionX === "number" || typeof body.positionY === "number") {
+    // 자리 변경은 데스크 좌석으로만. 서는 칸은 시스템 배정만 쓴다.
+    // 좌석을 계산할 수 없는 맵(옛 커스텀 맵·맵 없음)은 예전처럼 통과시킨다.
+    const seating = seatingMapFor(result.channel);
+    const col = typeof body.positionX === "number" ? body.positionX : result.npc.positionX;
+    const row = typeof body.positionY === "number" ? body.positionY : result.npc.positionY;
+    if (seating && seating.seats.length > 0 && seatNumberAt(seating.seats, col, row) === null) {
+      return NextResponse.json(
+        { errorCode: "not_a_desk_seat", error: "NPC seats must be desk chairs" },
+        { status: 400 },
+      );
+    }
   }
 
   const updates: Record<string, unknown> = {

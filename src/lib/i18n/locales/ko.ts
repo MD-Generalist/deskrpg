@@ -2173,6 +2173,8 @@ const ko: Record<string, string> = {
   "errors.onlyChannelOwnerCanHireNpcs": "채널 소유자만 NPC를 고용할 수 있습니다",
   "errors.maxNpcsPerChannel": "채널당 NPC는 최대 10명까지 가능합니다",
   "errors.tileAlreadyOccupied": "이 타일은 이미 사용 중입니다",
+  "errors.notADeskSeat": "데스크 의자만 지정자리로 고를 수 있습니다",
+  "errors.mapHasNoDeskSeats": "맵에 데스크 의자가 하나 이상 있어야 합니다",
   "errors.failedToCreateNpc": "NPC를 생성하지 못했습니다",
   "errors.npcNotFound": "NPC를 찾을 수 없습니다",
   "errors.onlyChannelOwnerCanModifyNpcs": "채널 소유자만 NPC를 수정할 수 있습니다",

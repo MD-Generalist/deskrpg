@@ -2190,6 +2190,8 @@ const ja: Record<string, string> = {
   "errors.onlyChannelOwnerCanHireNpcs": "チャンネル所有者のみ NPC を雇えます",
   "errors.maxNpcsPerChannel": "1 チャンネルあたり NPC は最大 10 人までです",
   "errors.tileAlreadyOccupied": "このタイルはすでに使用されています",
+  "errors.notADeskSeat": "デスクの椅子だけを指定席にできます",
+  "errors.mapHasNoDeskSeats": "マップにはデスクの椅子が1つ以上必要です",
   "errors.failedToCreateNpc": "NPC の作成に失敗しました",
   "errors.npcNotFound": "NPC が見つかりません",
   "errors.onlyChannelOwnerCanModifyNpcs": "チャンネル所有者のみ NPC を変更できます",

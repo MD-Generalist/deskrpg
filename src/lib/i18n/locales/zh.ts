@@ -2130,6 +2130,8 @@ const zh: Record<string, string> = {
   "errors.onlyChannelOwnerCanHireNpcs": "只有频道所有者可以雇佣 NPC",
   "errors.maxNpcsPerChannel": "每个频道最多只能有 10 个 NPC",
   "errors.tileAlreadyOccupied": "该图块位置已被占用",
+  "errors.notADeskSeat": "只能将办公桌椅指定为座位",
+  "errors.mapHasNoDeskSeats": "地图至少需要一把办公桌椅",
   "errors.failedToCreateNpc": "无法创建 NPC",
   "errors.npcNotFound": "未找到 NPC",
   "errors.onlyChannelOwnerCanModifyNpcs": "只有频道所有者可以修改 NPC",

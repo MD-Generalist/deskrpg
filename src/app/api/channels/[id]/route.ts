@@ -21,6 +21,7 @@ import {
   summarizeChannelJoinAccess,
 } from "@/lib/rbac/channel-access";
 import { isChannelPasswordValid } from "@/lib/security-policy";
+import { seatingMapFor } from "@/lib/seat-assignment";
 import internalTransport from "@/lib/internal-transport.js";
 
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
@@ -255,10 +256,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (body.maxPlayers !== undefined) updates.maxPlayers = body.maxPlayers;
     if (body.mapData !== undefined) {
       try {
-        updates.mapData = jsonForDb(
-          normalizeMeetingMap(body.mapData, body.mapConfig ?? parseDbJson(rows[0].mapConfig))
-            .mapData,
-        );
+        const normalizedMap = normalizeMeetingMap(
+          body.mapData,
+          body.mapConfig ?? parseDbJson(rows[0].mapConfig),
+        ).mapData;
+        const seating = seatingMapFor({ mapData: normalizedMap, mapConfig: body.mapConfig });
+        if (seating && seating.seats.length === 0) {
+          return NextResponse.json(
+            { errorCode: "map_has_no_desk_seats", error: "Map needs at least one desk chair" },
+            { status: 400 },
+          );
+        }
+        updates.mapData = jsonForDb(normalizedMap);
       } catch (error) {
         return NextResponse.json(
           { error: error instanceof Error ? error.message : "회의실 맵을 확인할 수 없습니다" },

@@ -2180,6 +2180,8 @@ const en: Record<string, string> = {
   "errors.onlyChannelOwnerCanHireNpcs": "Only the channel owner can hire NPCs",
   "errors.maxNpcsPerChannel": "Maximum 10 NPCs per channel",
   "errors.tileAlreadyOccupied": "This tile is already occupied",
+  "errors.notADeskSeat": "Only desk chairs can be assigned as seats",
+  "errors.mapHasNoDeskSeats": "The map needs at least one desk chair",
   "errors.failedToCreateNpc": "Failed to create NPC",
   "errors.npcNotFound": "NPC not found",
   "errors.onlyChannelOwnerCanModifyNpcs": "Only the channel owner can modify NPCs",

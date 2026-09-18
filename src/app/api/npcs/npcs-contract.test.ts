@@ -8,6 +8,7 @@ import {
   seedUser,
   setupThrowawaySqlite,
 } from "@/test-setup/npc-seed";
+import { buildOfficeEnvironment } from "@/game/three/office-environments";
 
 // `GET /api/npcs?channelId=` 의 계약을 고정한다. 이 응답은 맵 시뮬레이션이 그대로 먹는다 —
 // 형태가 조용히 바뀌면 맵이 깨지고, 그 사실은 브라우저에서야 드러난다.
@@ -127,4 +128,22 @@ test("로그인하지 않으면 401 이다", async () => {
   const { GET } = await import("./route");
   const res = await GET(new NextRequest(`http://localhost/api/npcs?channelId=${channelId}`));
   assert.equal(res.status, 401);
+});
+
+test("roster=1 은 좌석 번호를 싣는다 — 데스크 좌석이면 번호, 서 있으면 null", async () => {
+  const { channelId, userId } = await seedChannelWithProfiles({
+    unplaced: 5,
+    mapData: buildOfficeEnvironment("executive"),
+  });
+  const { placeUnplacedNpcs } = await import("@/lib/npc-seating");
+  await placeUnplacedNpcs(channelId);
+
+  const body = await get(`channelId=${channelId}&roster=1`, userId);
+
+  const numbers = body.npcs.map((n) => (n as unknown as { seatNumber: number | null }).seatNumber);
+  assert.deepEqual(
+    numbers.filter((n): n is number => n !== null).sort((a, b) => a - b),
+    [1, 2, 3, 4],
+  );
+  assert.equal(numbers.filter((n) => n === null).length, 1);
 });
