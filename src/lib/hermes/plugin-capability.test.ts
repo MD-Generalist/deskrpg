@@ -400,7 +400,8 @@ describe("직원 설정 피커 게이트", () => {
 });
 
 describe("프로바이더 인증 게이트", () => {
-  const info = (capabilities: string[]) => ({ version: "0.10.0", capabilities }) as unknown as PluginInfo;
+  const info = (capabilities: string[]) =>
+    ({ version: "0.10.0", capabilities }) as unknown as PluginInfo;
 
   it("supportsProfileOauth 는 profile_oauth 하나로 판정한다", () => {
     assert.equal(supportsProfileOauth(info(["profile_oauth"])), true);
