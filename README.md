@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.918.2` — Security fix: the server now verifies character ownership when joining an office, so a user can no longer enter as someone else's character. All operators should update.
+- Version: `v2026.918.3` — Data fix: Docker installs that use PostgreSQL (`DATABASE_URL`) without setting `DB_TYPE` were writing to an SQLite file inside the container. After updating, their data is stored in PostgreSQL. Hostinger one-click (SQLite) is not affected.
 
 ## What You Can Do
 

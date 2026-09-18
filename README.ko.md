@@ -18,7 +18,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.918.2` — 보안 수정: 사무실 입장 시 다른 사용자의 캐릭터를 쓸 수 없도록 서버가 캐릭터 소유를 확인합니다. 모든 운영자는 업데이트를 권장합니다.
+- 버전: `v2026.918.3` — 데이터 보존 수정: PostgreSQL(`DATABASE_URL`)로 Docker 를 운영하면서 `DB_TYPE` 을 지정하지 않은 설치가 컨테이너 안 SQLite 에 기록하던 문제를 고쳤습니다. 해당 설치는 업데이트 후 데이터가 PostgreSQL 에 저장됩니다. Hostinger 원클릭(SQLite)은 영향이 없습니다.
 
 ## 무엇을 할 수 있나요
 
