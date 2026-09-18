@@ -1,5 +1,14 @@
 "use client";
-import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { ArrowUpRight, Copy, Download, Trash2, X } from "lucide-react";
 
 import MarkdownContent from "@/components/ui/MarkdownContent";
@@ -8,6 +17,7 @@ import type { ArtifactDetail } from "@/lib/hermes/deskrpg-plugin-types";
 
 import type { ArtifactsApi } from "./artifacts-api";
 import {
+  codeLanguageFor,
   hasRenderedMode,
   sourceTarget,
   TEXT_PREVIEW_MAX_BYTES,
@@ -20,6 +30,11 @@ import HtmlViewer from "./viewers/HtmlViewer";
 import LinkViewer from "./viewers/LinkViewer";
 import MediaViewer from "./viewers/MediaViewer";
 
+// 무겁다(pdf.js·shiki·dompurify) — 실제 쓰일 때만 지연 로드한다.
+const PdfViewer = lazy(() => import("./viewers/PdfViewer"));
+const CodeViewer = lazy(() => import("./viewers/CodeViewer"));
+const SvgViewer = lazy(() => import("./viewers/SvgViewer"));
+
 /** 본문을 텍스트로 읽어야 그릴 수 있는 뷰어. 나머지는 URL 만으로 그린다. */
 const TEXT_VIEWERS: ReadonlySet<ViewerKind> = new Set([
   "markdown",
@@ -31,11 +46,8 @@ const TEXT_VIEWERS: ReadonlySet<ViewerKind> = new Set([
   "svg",
 ]);
 
-/**
- * 렌더/소스 전환을 지금 켜는 뷰어. svg 는 `hasRenderedMode` 가 참이지만 이 단계에선 소스만
- * 보여 준다 — Task 9 가 svg 렌더러를 넣을 때 이 예외를 지운다.
- */
-const showsModeToggle = (v: ViewerKind) => hasRenderedMode(v) && v !== "svg";
+/** 렌더/소스 전환을 켜는 뷰어. */
+const showsModeToggle = hasRenderedMode;
 
 type Content = { version: number; text: string; truncated: boolean };
 
@@ -79,6 +91,7 @@ export default function ArtifactViewer({
   const [version, setVersion] = useState<number | null>(null);
   const [mode, setMode] = useState<"rendered" | "source">("rendered");
   const [loaded, setLoaded] = useState<Content | null>(null);
+  const [blobLoaded, setBlobLoaded] = useState<{ version: number; blob: Blob } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -112,8 +125,10 @@ export default function ArtifactViewer({
   };
   const viewer: ViewerKind | null = shape ? viewerFor(shape) : null;
   const needsText = !!viewer && TEXT_VIEWERS.has(viewer) && !artifact?.missing;
+  const needsBlob = viewer === "pdf" && !artifact?.missing;
   // 버전을 바꾸면 새 본문이 올 때까지 옛 본문을 보이지 않는다.
   const content = needsText && loaded?.version === version ? loaded : null;
+  const blobContent = needsBlob && blobLoaded?.version === version ? blobLoaded.blob : null;
 
   useEffect(() => {
     if (!needsText || version === null) return;
@@ -130,6 +145,22 @@ export default function ArtifactViewer({
       alive = false;
     };
   }, [api, artifactId, version, needsText]);
+
+  useEffect(() => {
+    if (!needsBlob || version === null) return;
+    let alive = true;
+    api.fetchBlob(artifactId, version).then(
+      (blob) => {
+        if (alive) setBlobLoaded({ version, blob });
+      },
+      (err: unknown) => {
+        if (alive) setError(err instanceof Error ? err.message : String(err));
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [api, artifactId, version, needsBlob]);
 
   useEffect(
     () => () => {
@@ -189,16 +220,32 @@ export default function ArtifactViewer({
       );
     if (viewer === "audio" || viewer === "video")
       return <MediaViewer kind={viewer} src={contentUrl} />;
-    if (viewer === "pdf" || viewer === "download")
+    if (viewer === "download")
       return (
         <p className="text-text-secondary flex items-center gap-2">
           {t("artifacts.noPreview")} {downloadLink}
         </p>
       );
+    if (viewer === "pdf") {
+      if (!blobContent) return <p className="text-text-dim">{t("common.loading")}</p>;
+      return (
+        <Suspense fallback={<p className="text-text-dim">{t("common.loading")}</p>}>
+          <PdfViewer blob={blobContent} />
+        </Suspense>
+      );
+    }
     if (!content) return <p className="text-text-dim">{t("common.loading")}</p>;
     const { text } = content;
     const pre = <pre className="whitespace-pre-wrap font-mono text-xs break-words">{text}</pre>;
-    if (mode === "source" && showsModeToggle(viewer)) return pre;
+    const filename = shape!.filename;
+    if (mode === "source" && showsModeToggle(viewer)) {
+      const sourceLanguage = viewer === "svg" ? "xml" : viewer === "html" ? "html" : "markdown";
+      return (
+        <Suspense fallback={pre}>
+          <CodeViewer text={text} language={sourceLanguage} />
+        </Suspense>
+      );
+    }
     switch (viewer) {
       case "markdown":
         return <MarkdownContent content={text} />;
@@ -208,9 +255,19 @@ export default function ArtifactViewer({
         return <CsvViewer text={text} />;
       case "link":
         return <LinkViewer text={text} onCopy={copy} copied={copied} />;
+      case "svg":
+        return (
+          <Suspense fallback={pre}>
+            <SvgViewer text={text} />
+          </Suspense>
+        );
       default:
-        // text·code·svg — Task 9 가 code·svg 를 전용 뷰어로 바꾼다.
-        return pre;
+        // text·code
+        return (
+          <Suspense fallback={pre}>
+            <CodeViewer text={text} language={codeLanguageFor(filename)} />
+          </Suspense>
+        );
     }
   })();
 
