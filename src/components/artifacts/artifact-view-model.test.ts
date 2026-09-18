@@ -9,6 +9,7 @@ import {
   parseCsv,
   sourceTarget,
   brandIconFor,
+  categoryOf,
 } from "./artifact-view-model";
 
 const a = (kind: string, mime: string, filename: string) => ({ kind, mime, filename }) as never;
@@ -104,4 +105,15 @@ test("브랜드 아이콘은 호스트 이름으로만 고른다", () => {
   assert.equal(brandIconFor("https://github.com/a/b"), "github");
   assert.equal(brandIconFor("https://www.youtube.com/watch?v=1"), "youtube");
   assert.equal(brandIconFor("https://example.com"), null);
+});
+
+test("categoryOf 는 kind 를 미디어·파일·링크 세 카테고리로 묶는다", () => {
+  assert.equal(categoryOf("image"), "media");
+  assert.equal(categoryOf("media"), "media");
+  assert.equal(categoryOf("document"), "file");
+  assert.equal(categoryOf("web"), "file");
+  assert.equal(categoryOf("react"), "file");
+  assert.equal(categoryOf("data"), "file");
+  assert.equal(categoryOf("file"), "file");
+  assert.equal(categoryOf("link"), "link");
 });

@@ -118,6 +118,36 @@ test("profile 필터는 채널 NPC 만 받는다", async () => {
   assert.equal((await bad.json()).code, "invalid_field");
 });
 
+test("category 는 쉼표 목록으로 플러그인에 전달된다", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  const res = await routes.list.GET(
+    req(owner.id, "GET", `${base(channel.id)}?category=media`),
+    ctx(channel.id),
+  );
+  assert.equal(res.status, 200);
+  assert.match(server.lastRequest()!.path, /kind=image%2Cmedia|kind=image,media/);
+});
+
+test("모르는 category 는 400 invalid_field", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  const res = await routes.list.GET(
+    req(owner.id, "GET", `${base(channel.id)}?category=bogus`),
+    ctx(channel.id),
+  );
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, "invalid_field");
+});
+
+test("category 와 kind 를 함께 주면 400 invalid_field", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  const res = await routes.list.GET(
+    req(owner.id, "GET", `${base(channel.id)}?category=media&kind=image`),
+    ctx(channel.id),
+  );
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, "invalid_field");
+});
+
 test("taskId 는 플러그인 0.8.4 미만이면 428", async () => {
   // 플러그인 게이트는 게이트웨이 바인딩 시점에 프로브해 캐시한다(~1h) — 바뀐 버전을
   // 보게 하려면 setInfo 를 먼저 하고 그 뒤에 채널+게이트웨이를 새로 심는다.

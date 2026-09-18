@@ -1,4 +1,9 @@
-import type { ArtifactKind, ArtifactSummary } from "@/lib/hermes/deskrpg-plugin-types";
+import {
+  ARTIFACT_CATEGORIES,
+  type ArtifactCategory,
+  type ArtifactKind,
+  type ArtifactSummary,
+} from "@/lib/hermes/deskrpg-plugin-types";
 
 export const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 export const CSV_MAX_ROWS = 1000;
@@ -165,6 +170,17 @@ const BRANDS: Array<[RegExp, string]> = [
   [/(^|\.)(twitter\.com|x\.com)$/, "twitter"],
   [/(^|\.)linkedin\.com$/, "linkedin"],
 ];
+
+const KIND_TO_CATEGORY = new Map<ArtifactKind, ArtifactCategory>(
+  (
+    Object.entries(ARTIFACT_CATEGORIES) as Array<[ArtifactCategory, readonly ArtifactKind[]]>
+  ).flatMap(([category, kinds]) => kinds.map((kind) => [kind, category] as const)),
+);
+
+/** `kind` 를 탭 카테고리(미디어·파일·링크)로 묶는다. `ARTIFACT_KINDS` 는 전부 셋 중 하나에 있다. */
+export function categoryOf(kind: ArtifactKind): ArtifactCategory {
+  return KIND_TO_CATEGORY.get(kind) ?? "file";
+}
 
 export function brandIconFor(url: string): string | null {
   let host = "";

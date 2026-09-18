@@ -17,8 +17,9 @@ import { relativeTime } from "@/components/rooms/RoomList";
 import { epochSecondsToMs } from "@/lib/epoch";
 import { useLocale, useT } from "@/lib/i18n";
 import {
-  ARTIFACT_KINDS,
+  ARTIFACT_CATEGORIES,
   ARTIFACT_SOURCES,
+  type ArtifactCategory,
   type ArtifactKind,
   type ArtifactSource,
   type ArtifactSummary,
@@ -28,11 +29,14 @@ import { safeHttpUrl } from "./artifact-view-model";
 import { LinkIcon } from "./viewers/link-icon";
 
 export type ArtifactFilter = {
-  kind?: ArtifactKind;
+  category?: ArtifactCategory;
   source?: ArtifactSource;
   profile?: string;
   q?: string;
 };
+
+/** 탭 순서 — 전체 다음 미디어·파일·링크(`ARTIFACT_CATEGORIES` 선언 순). */
+const TAB_CATEGORIES = Object.keys(ARTIFACT_CATEGORIES) as ArtifactCategory[];
 
 export type ArtifactListNpc = { profileName: string; npcName: string; npcId: string };
 
@@ -106,20 +110,20 @@ export default function ArtifactList({
   return (
     <div className="flex flex-col h-full min-h-0 text-xs">
       <div role="tablist" className="flex flex-wrap gap-1 px-3 pt-3">
-        {([undefined, ...ARTIFACT_KINDS] as Array<ArtifactKind | undefined>).map((kind) => (
+        {([undefined, ...TAB_CATEGORIES] as Array<ArtifactCategory | undefined>).map((category) => (
           <button
-            key={kind ?? "all"}
+            key={category ?? "all"}
             type="button"
             role="tab"
-            aria-selected={filter.kind === kind}
-            onClick={() => onFilter({ ...filter, kind })}
+            aria-selected={filter.category === category}
+            onClick={() => onFilter({ ...filter, category })}
             className={`px-2 py-0.5 rounded-full ${
-              filter.kind === kind
+              filter.category === category
                 ? "bg-primary text-white"
                 : "bg-surface-raised text-text-secondary hover:brightness-125"
             }`}
           >
-            {t(`artifacts.tab.${kind ?? "all"}`)}
+            {t(`artifacts.tab.${category ?? "all"}`)}
           </button>
         ))}
       </div>
@@ -172,30 +176,49 @@ export default function ArtifactList({
         {items.length === 0 && !loading && (
           <p className="p-4 text-text-dim">{t("artifacts.empty")}</p>
         )}
-        {filter.kind === "image" ? (
+        {filter.category === "media" ? (
           <div className="grid grid-cols-3 gap-2 p-3">
-            {items.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                title={a.title}
-                aria-label={a.title}
-                onClick={() => {
-                  onSelect(a.id);
-                  setZoomed(a);
-                }}
-                className={`aspect-square overflow-hidden rounded-md border ${
-                  a.id === selectedId ? "border-primary" : "border-border"
-                } bg-surface`}
-              >
-                <img
-                  src={thumbnailUrl(a)}
-                  alt={a.title}
-                  loading="lazy"
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            ))}
+            {items.map((a) =>
+              a.kind === "image" ? (
+                <button
+                  key={a.id}
+                  type="button"
+                  title={a.title}
+                  aria-label={a.title}
+                  onClick={() => {
+                    onSelect(a.id);
+                    setZoomed(a);
+                  }}
+                  className={`aspect-square overflow-hidden rounded-md border ${
+                    a.id === selectedId ? "border-primary" : "border-border"
+                  } bg-surface`}
+                >
+                  <img
+                    src={thumbnailUrl(a)}
+                    alt={a.title}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ) : (
+                // 오디오·비디오는 썸네일이 없다 — 아이콘 타일 + 제목.
+                <button
+                  key={a.id}
+                  type="button"
+                  title={a.title}
+                  aria-label={a.title}
+                  onClick={() => onSelect(a.id)}
+                  className={`aspect-square flex flex-col items-center justify-center gap-1.5 overflow-hidden rounded-md border p-2 text-center ${
+                    a.id === selectedId ? "border-primary" : "border-border"
+                  } bg-surface`}
+                >
+                  <KindIcon artifact={a} />
+                  <span className="line-clamp-2 text-[11px] text-text-secondary break-words">
+                    {a.title}
+                  </span>
+                </button>
+              ),
+            )}
           </div>
         ) : (
           <ul>

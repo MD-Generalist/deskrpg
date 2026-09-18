@@ -548,3 +548,56 @@ test("F2: 저장 안 한 변경이 있으면 Escape·배경·닫기 버튼이 �
   await click(byText("확인"));
   assert.equal(closed, 1);
 });
+
+test("탭은 전체·미디어·파일·링크 넷뿐이다", async () => {
+  mockFetch({ [LIST]: { artifacts: [], cursor: "", has_more: false } });
+  await render();
+  const tabs = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).map((el) =>
+    el.textContent?.trim(),
+  );
+  assert.deepEqual(tabs, ["전체", "미디어", "파일", "링크"]);
+});
+
+test("미디어 탭을 누르면 목록 요청에 category=media 가 붙는다", async () => {
+  const calls = mockFetch({
+    [LIST]: { artifacts: [], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts?category=media&limit=50": {
+      artifacts: [],
+      cursor: "",
+      has_more: false,
+    },
+  });
+  await render();
+  await click(byText("미디어"));
+  assert.ok(calls.includes("GET /api/channels/ch-1/artifacts?category=media&limit=50"));
+});
+
+test("미디어 탭 격자는 이미지는 썸네일로, 오디오·비디오는 아이콘 타일로 그린다", async () => {
+  const img = summary({
+    id: "img1",
+    kind: "image",
+    title: "그림",
+    filename: "a.png",
+    mime: "image/png",
+  });
+  const audio = summary({
+    id: "aud1",
+    kind: "media",
+    title: "오디오",
+    filename: "a.mp3",
+    mime: "audio/mpeg",
+  });
+  mockFetch({
+    [LIST]: { artifacts: [], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts?category=media&limit=50": {
+      artifacts: [img, audio],
+      cursor: "",
+      has_more: false,
+    },
+  });
+  await render();
+  await click(byText("미디어"));
+  assert.ok(container.querySelector('img[alt="그림"]'), "이미지는 썸네일이다");
+  assert.equal(container.querySelector('img[alt="오디오"]'), null, "오디오는 썸네일이 아니다");
+  assert.ok(queryText("오디오"), "오디오는 제목이 붙은 타일이다");
+});

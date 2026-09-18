@@ -7,8 +7,8 @@
  */
 
 import type {
+  ArtifactCategory,
   ArtifactDetail,
-  ArtifactKind,
   ArtifactPage,
   ArtifactSource,
   ArtifactVersion,
@@ -38,7 +38,7 @@ export type ArtifactDetailView = ArtifactDetail & {
 };
 
 export type ArtifactListFilter = {
-  kind?: ArtifactKind;
+  category?: ArtifactCategory;
   source?: ArtifactSource;
   profile?: string;
   q?: string;
@@ -108,7 +108,7 @@ export function createArtifactsApi(channelId: string, fetchImpl?: FetchLike) {
   return {
     list: async (filter: ArtifactListFilter, cursor?: string): Promise<ArtifactPage> => {
       const qs = new URLSearchParams();
-      if (filter.kind) qs.set("kind", filter.kind);
+      if (filter.category) qs.set("category", filter.category);
       if (filter.source) qs.set("source", filter.source);
       if (filter.profile) qs.set("profile", filter.profile);
       if (filter.q) qs.set("q", filter.q);

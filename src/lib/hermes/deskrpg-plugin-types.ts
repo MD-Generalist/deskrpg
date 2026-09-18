@@ -488,6 +488,18 @@ export const ARTIFACT_KINDS = [
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 export const ARTIFACT_SOURCES = ["chat", "kanban", "cron"] as const;
 export type ArtifactSource = (typeof ARTIFACT_SOURCES)[number];
+
+/**
+ * 화면 탭 묶음(2026-09-18 follow-up). `media`=image+media, `file`=document+web+react+data+file,
+ * `link`=link. 순서가 탭 표시 순서다(전체 다음 미디어·파일·링크). 플러그인 쪽 매핑은
+ * deskrpg-hermes-plugin `GET /deskrpg/artifacts?kind=<쉼표 목록>`(0.8.4+)이 받는다.
+ */
+export const ARTIFACT_CATEGORIES = {
+  media: ["image", "media"],
+  file: ["document", "web", "react", "data", "file"],
+  link: ["link"],
+} as const satisfies Record<string, readonly ArtifactKind[]>;
+export type ArtifactCategory = keyof typeof ARTIFACT_CATEGORIES;
 export const ARTIFACTS_MIN_VERSION = "0.8.0";
 export const ARTIFACTS_TASK_FILTER_MIN_VERSION = "0.8.4";
 export type ArtifactSummary = {

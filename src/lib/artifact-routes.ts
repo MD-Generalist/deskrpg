@@ -13,9 +13,11 @@ import {
 } from "@/lib/artifact-access";
 import { cronError, pluginFailureResponse } from "@/lib/cron-access";
 import {
+  ARTIFACT_CATEGORIES,
   ARTIFACT_KINDS,
   ARTIFACT_SOURCES,
   ARTIFACTS_TASK_FILTER_MIN_VERSION,
+  type ArtifactCategory,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
 import { compareSemver } from "@/lib/hermes/plugin-capability";
@@ -35,15 +37,24 @@ export async function listArtifacts(req: NextRequest, channelId: string): Promis
   if (!resolved.ok) return resolved.response;
   const { ctx } = resolved;
   const sp = req.nextUrl.searchParams;
-  const kind = sp.get("kind") || undefined;
+  const kindParam = sp.get("kind") || undefined;
+  const categoryParam = sp.get("category") || undefined;
   const source = sp.get("source") || undefined;
   const profile = sp.get("profile") || undefined;
   const taskId = sp.get("taskId") || undefined;
   const q = (sp.get("q") || "").slice(0, 200) || undefined;
   const rawLimit = Number(sp.get("limit"));
   const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, LIMIT_MAX) : 50;
-  if (kind && !(ARTIFACT_KINDS as readonly string[]).includes(kind))
+  // 화면 탭(전체/미디어/파일/링크)은 `category` 로 오고, 여기서 플러그인의 쉼표 kind 목록으로 편다.
+  // 옛 단일 kind= 호출자도 그대로 동작해야 하므로 kind 는 남겨 둔다 — 둘을 같이 주면 모호해 400.
+  if (kindParam && categoryParam) return cronError(400, "invalid_field", "category");
+  if (categoryParam && !(categoryParam in ARTIFACT_CATEGORIES))
+    return cronError(400, "invalid_field", "category");
+  if (kindParam && !(ARTIFACT_KINDS as readonly string[]).includes(kindParam))
     return cronError(400, "invalid_field", "kind");
+  const kind = categoryParam
+    ? ARTIFACT_CATEGORIES[categoryParam as ArtifactCategory].join(",")
+    : kindParam;
   if (source && !(ARTIFACT_SOURCES as readonly string[]).includes(source)) {
     return cronError(400, "invalid_field", "source");
   }
