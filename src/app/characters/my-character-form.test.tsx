@@ -51,7 +51,7 @@ test("캐릭터가 없으면 등록 폼, 있으면 수정 폼 — 화면은 하�
     );
     assert.match(m.el.textContent ?? "", /내 캐릭터 만들기/);
     assert.doesNotMatch(m.el.textContent ?? "", /새 캐릭터 만들기/);
-    m.root.unmount();
+    await act(async () => m.root.unmount());
     m.el.remove();
 
     globalThis.fetch = stubFetch(calls, {
@@ -68,7 +68,7 @@ test("캐릭터가 없으면 등록 폼, 있으면 수정 폼 — 화면은 하�
     assert.match(m.el.textContent ?? "", /저장/);
     const bio = [...m.el.querySelectorAll("textarea")].find((t) => t.value === "소개");
     assert.ok(bio, "소개 칸이 기존 값으로 채워져야 한다");
-    m.root.unmount();
+    await act(async () => m.root.unmount());
     m.el.remove();
   } finally {
     globalThis.fetch = original;
@@ -101,7 +101,7 @@ test("저장은 PATCH 로 bio 를 보낸다", async () => {
     const patch = calls.find((c) => c.method === "PATCH" && c.url.includes("/api/characters/c1"));
     assert.ok(patch, "PATCH 가 나가지 않았다");
     assert.equal((patch!.body as { bio: string }).bio, "단테랩스 대표");
-    root.unmount();
+    await act(async () => root.unmount());
     el.remove();
   } finally {
     globalThis.fetch = original;
