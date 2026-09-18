@@ -5,7 +5,6 @@ import {
   channelGatewayBindings,
   channelMembers,
   channels,
-  characters,
   db,
   groupMembers,
   groups,
@@ -13,14 +12,13 @@ import {
   users,
 } from "@/db";
 import { getUserId } from "@/lib/internal-rpc";
+import { ensureMyCharacter } from "@/lib/my-character";
 import { ensureOfficeEnvironmentTemplate } from "@/lib/office-environment-template";
 import {
   assignSeats,
   freeSeatTiles,
-  QUICK_START_APPEARANCE,
   QUICK_START_ENVIRONMENT_ID,
   quickStartChannelName,
-  quickStartCharacterName,
   quickStartSeatTiles,
 } from "@/lib/quick-start";
 
@@ -94,36 +92,6 @@ async function inProcessMapTemplateFetch(req: NextRequest): Promise<typeof fetch
       params: Promise.resolve({ id: decodeURIComponent(segments) }),
     });
   }) as unknown as typeof fetch;
-}
-
-async function ensureCharacter(req: NextRequest, userId: string, nickname: string | null) {
-  const [existing] = await db
-    .select({ id: characters.id })
-    .from(characters)
-    .where(eq(characters.userId, userId))
-    .orderBy(asc(characters.createdAt))
-    .limit(1);
-  if (existing) return existing.id;
-
-  const { POST } = await import("../characters/route");
-  const payload = await expectOk(
-    await POST(
-      subRequest(req, "/api/characters", {
-        name: quickStartCharacterName(nickname),
-        appearance: QUICK_START_APPEARANCE,
-      }),
-    ),
-  );
-  const created = payload.character as { id?: string } | undefined;
-  if (!created?.id) {
-    throw new QuickStartFailure(
-      NextResponse.json(
-        { errorCode: "failed_to_create_character", error: "Failed to create character" },
-        { status: 500 },
-      ),
-    );
-  }
-  return created.id;
 }
 
 /** 채널을 만들 그룹. 사용자의 소속 중 관리 권한이 있는 쪽을 먼저 본다 — 권한 판정 자체는 채널 라우트가 한다. */
@@ -280,7 +248,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const characterId = await ensureCharacter(req, userId, user.nickname);
+    const mine = await ensureMyCharacter(userId, user.nickname);
+    const characterId = mine.id;
     const channelId = await ensureChannel(req, userId, user.nickname);
 
     // 채널 소유자만 NPC 자리를 바꿀 수 있다(배치 라우트의 규칙). 남의 채널에 들어가는
