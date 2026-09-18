@@ -403,6 +403,12 @@ const en: Record<string, string> = {
   "hermes.wizard.config.toolsets": "Toolsets",
   "hermes.wizard.config.toolsetsHint": "Comma-separated",
   "hermes.wizard.config.notAuthenticated": "not authenticated",
+  "hermes.wizard.config.loginHint":
+    'Hermes signs in each employee separately. To use a subscription model such as ChatGPT or Codex, sign in as the {name} profile in the Hermes dashboard, then press "Check sign-in". API-key models (OpenRouter, etc.) need no sign-in.',
+  "hermes.wizard.config.loginOpen": "Sign in {name} on dashboard ↗",
+  "hermes.wizard.config.loginNoDashboard":
+    "In the Hermes dashboard Keys page, switch the top profile to {name} and sign in.",
+  "hermes.wizard.config.loginRecheck": "Check sign-in",
   "hermes.wizard.config.effort": "Reasoning effort (unset)",
   "hermes.wizard.config.locked": "The config file can't be read, so this form is locked.",
   "hermes.wizard.config.save": "Save",
@@ -414,7 +420,11 @@ const en: Record<string, string> = {
     "Profile '{name}' is already registered — no need to create it again.",
   "hermes.wizard.placement.goToChannels": "Go to channels",
   "hermes.wizard.placement.guide":
-    'This profile has already clocked in to the channel. Open the channel\'s roster and click "Unplaced" to give it a seat.',
+    'If a channel already uses this gateway, this employee is on duty there. Open the channel roster, click "no seat yet" and pick a chair to save a fixed seat.',
+  "hermes.wizard.placement.guideAttended":
+    'This employee reported to {count} channel(s). Open the channel roster, click "no seat yet" and pick a chair to save a fixed seat.',
+  "hermes.wizard.placement.guideNoChannel":
+    "No channel uses this gateway yet, so nobody reported for duty. Create a channel and attach this gateway under Settings → AI Connection; the employee then reports automatically.",
   "hermes.wizard.placement.done": "Close wizard",
   "hermes.wizard.closeConfirmTitle": "What happens if you close now",
   "hermes.wizard.closeConfirmBody":

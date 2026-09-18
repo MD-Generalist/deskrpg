@@ -38,6 +38,9 @@ for (const key of [
   install(key, (win as unknown as Record<string, unknown>)[key]);
 }
 install("window", win);
+// `next/link` 는 모듈 안에서 `self` 를 읽는다 — 없으면 Link 를 그리는 화면이
+// "self is not defined" 로 렌더 단계에서 통째로 터진다(마법사 ④ 배치에서 실측).
+install("self", g);
 
 // React 19 는 act() 환경을 이 플래그로 판별한다. 없으면 상태 갱신마다 경고가 쏟아진다.
 install("IS_REACT_ACT_ENVIRONMENT", true);
