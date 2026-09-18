@@ -314,56 +314,65 @@ export default function HermesProfileList({
             </div>
           )}
 
-          <h3 className="text-sm font-semibold">{t("gateway.profile.addTitle")}</h3>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <input
-              type="text"
-              value={profileName}
-              onChange={(e) => setProfileName(e.target.value)}
-              onBlur={async () => {
-                if (!profileName.trim()) {
-                  setProbeStatus("idle");
-                  return;
-                }
-                const r = await fetch(`/api/gateways/${gatewayId}/profiles/probe`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ profileName }),
-                })
-                  .then((x) => x.json())
-                  .catch(() => ({ status: "unknown" }));
-                setProbeStatus(toProbeStatus(r.status));
-              }}
-              placeholder={t("gateway.profile.profileNamePlaceholder")}
-              className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
-            />
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={t("gateway.profile.displayName")}
-              className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
-            />
-            <input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={t("gateway.profile.tokenPlaceholder")}
-              className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-          {probeStatus !== "idle" && (
-            <p className="text-xs text-text-muted">{t(`hermes.probe.${probeStatus}`)}</p>
-          )}
-          {addError && <p className="text-sm text-danger">{addError}</p>}
-          <button
-            type="button"
-            onClick={() => void handleAdd()}
-            disabled={adding || !profileName.trim() || !token.trim()}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
-          >
-            {adding ? t("common.loading") : t("gateway.profile.add")}
-          </button>
+          {/* 새 직원은 "+ 새 직원 고용" 마법사로 만든다. 이 폼은 Hermes 에 **이미 있는** 원격
+              프로필을 토큰으로 등록하는 유일한 길이라 지우지 않고 접어 둔다 — 처음 쓰는 사람이
+              "프로필 추가" 를 채용으로 오해해 토큰을 찾다 막히지 않게 한다. */}
+          <details className="rounded border border-border px-3 py-2">
+            <summary className="cursor-pointer text-sm font-semibold">
+              {t("gateway.profile.addTitle")}
+            </summary>
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  onBlur={async () => {
+                    if (!profileName.trim()) {
+                      setProbeStatus("idle");
+                      return;
+                    }
+                    const r = await fetch(`/api/gateways/${gatewayId}/profiles/probe`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ profileName }),
+                    })
+                      .then((x) => x.json())
+                      .catch(() => ({ status: "unknown" }));
+                    setProbeStatus(toProbeStatus(r.status));
+                  }}
+                  placeholder={t("gateway.profile.profileNamePlaceholder")}
+                  className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
+                />
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder={t("gateway.profile.displayName")}
+                  className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
+                />
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder={t("gateway.profile.tokenPlaceholder")}
+                  className="rounded border border-border bg-bg px-3 py-2 text-text text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              {probeStatus !== "idle" && (
+                <p className="text-xs text-text-muted">{t(`hermes.probe.${probeStatus}`)}</p>
+              )}
+              {addError && <p className="text-sm text-danger">{addError}</p>}
+              <button
+                type="button"
+                onClick={() => void handleAdd()}
+                disabled={adding || !profileName.trim() || !token.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+              >
+                {adding ? t("common.loading") : t("gateway.profile.add")}
+              </button>
+            </div>
+          </details>
         </div>
       ) : (
         <p className="border-t border-border pt-4 text-sm text-text-muted">

@@ -9,7 +9,7 @@ import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/pl
 import { useLocale, useT } from "@/lib/i18n";
 import { backLinkTarget } from "@/app/gateways/return-target";
 
-import { hireDoneHref } from "../hire-navigation";
+import { hireDoneHref, hireFinishedHref } from "../hire-navigation";
 
 /**
  * 직원 채용 — **이 페이지는 마법사 하나만 책임진다.**
@@ -172,7 +172,9 @@ function HireEmployeeContent() {
             initialProfile={initialProfile}
             dashboardUrl={dashboardUrl}
             localDiscovery={localDiscovery}
-            onDone={() => router.push(hireDoneHref(gatewayId, returnTo))}
+            onDone={(result) =>
+              router.push(hireFinishedHref(gatewayId, returnTo, result?.profileName ?? null))
+            }
           />
         )}
 

@@ -22,6 +22,7 @@ import { parseDbJson } from "@/lib/db-json";
 import { HermesClient, HermesError } from "@/lib/hermes/hermes-client";
 import type { HermesCapabilities } from "@/lib/hermes/types";
 import { isUniqueViolation } from "./db-unique-violation";
+import { pickOfficeLookForNewProfile } from "./profile-look-assignment";
 
 export type ProfileValidationStatus =
   "valid" | "unauthorized" | "unknown_profile" | "unreachable" | "error";
@@ -107,6 +108,16 @@ export async function registerHermesProfile(input: {
     return { profile: updated };
   }
 
+  // 새 직원은 외형을 가진 채 태어난다 — 비어 있으면 모두 기본 룩으로 보인다.
+  // 기존 행(위 update 경로)의 외형은 사람이 골랐을 수 있으므로 건드리지 않는다.
+  const siblings = await db
+    .select({ appearance: hermesProfiles.appearance })
+    .from(hermesProfiles)
+    .where(eq(hermesProfiles.gatewayId, input.gatewayId));
+  const appearance = pickOfficeLookForNewProfile(
+    siblings.map((row) => parseDbJson<unknown>(row.appearance) ?? row.appearance),
+  );
+
   try {
     const [created] = await db
       .insert(hermesProfiles)
@@ -116,6 +127,7 @@ export async function registerHermesProfile(input: {
         tokenEncrypted: encryptGatewayToken(input.token.trim()),
         displayName: input.displayName?.trim() || profileName,
         provisionedByDeskrpg: input.provisionedByDeskrpg ?? false,
+        appearance: jsonForDb(appearance),
       })
       .returning();
     return { profile: created };

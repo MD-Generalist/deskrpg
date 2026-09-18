@@ -208,7 +208,7 @@ const ko: Record<string, string> = {
   // Hermes profiles
   "gateway.profile.title": "직원 (Hermes 프로필)",
   "gateway.profile.empty": "등록된 프로필이 없습니다.",
-  "gateway.profile.addTitle": "프로필 추가",
+  "gateway.profile.addTitle": "이미 있는 프로필 등록 (고급)",
   "gateway.profile.profileNamePlaceholder": "프로필 이름 (예: default)",
   "gateway.profile.displayName": "표시 이름 (선택)",
   "gateway.profile.tokenPlaceholder": "프로필 토큰 (16자 이상)",
@@ -253,15 +253,20 @@ const ko: Record<string, string> = {
   "hermes.plugin.locked.absent": "이 게이트웨이 머신에 deskrpg 플러그인이 설치돼 있지 않습니다.",
   "hermes.plugin.locked.unknown":
     "플러그인 상태를 확인할 수 없습니다. 게이트웨이 연결을 다시 테스트하세요.",
-  "hermes.wizard.openButton": "직원 등록 마법사",
+  "hermes.wizard.openButton": "+ 새 직원 고용",
   "hermes.wizard.title": "직원 등록 마법사",
   "hermes.wizard.close": "닫기",
   "hermes.wizard.next": "다음",
+  "hermes.wizard.finish": "완료",
+  "hermes.wizard.locked.needsProfile": "먼저 ① 에서 프로필을 만드세요",
+  "hermes.wizard.config.advanced": "도구·스킬 (고급)",
+  "hermes.wizard.result.attended": "'{name}' 이(가) 채널 {count}곳에 출근했습니다.",
+  "hermes.wizard.result.noChannel":
+    "'{name}' 을(를) 등록했습니다. 이 게이트웨이를 채널에 연결하면 그 채널에 출근합니다.",
   "hermes.wizard.back": "이전",
   "hermes.wizard.step.profile": "① 프로필",
   "hermes.wizard.step.identity": "② 인격",
-  "hermes.wizard.step.config": "③ 설정",
-  "hermes.wizard.step.placement": "④ 배치",
+  "hermes.wizard.step.config": "③ AI 모델",
   "hermes.wizard.step.installingService": "게이트웨이 서비스 등록",
   "hermes.wizard.step.updatingPlugin": "DeskRPG 플러그인 갱신",
   "hermes.wizard.step.settingTimezone": "게이트웨이 시간대 설정",
@@ -415,17 +420,6 @@ const ko: Record<string, string> = {
   "hermes.wizard.config.saving": "저장하는 중…",
   "hermes.wizard.config.saved": "저장했습니다.",
   "hermes.wizard.config.loading": "설정을 불러오는 중…",
-  "hermes.wizard.placement.ready": "프로필 '{name}' 준비 완료.",
-  "hermes.wizard.placement.alreadyRegistered":
-    "프로필 '{name}' 은(는) 이미 등록돼 있습니다 — 다시 만들 필요 없습니다.",
-  "hermes.wizard.placement.goToChannels": "채널로 이동",
-  "hermes.wizard.placement.guide":
-    "채널에 이 게이트웨이가 붙어 있으면 이 직원은 이미 출근해 있습니다. 채널의 출근부에서 '자리 미정' 을 눌러 의자를 선택해 고정 자리를 저장하세요.",
-  "hermes.wizard.placement.guideAttended":
-    "이 직원이 채널 {count}곳에 자동 출근했습니다. 채널의 출근부에서 '자리 미정' 을 눌러 의자를 선택해 고정 자리를 저장하세요.",
-  "hermes.wizard.placement.guideNoChannel":
-    "아직 이 게이트웨이를 쓰는 채널이 없어 출근한 곳이 없습니다. 채널을 만들고 설정 → AI 연결에서 이 게이트웨이를 붙이면 이 직원이 자동으로 출근합니다.",
-  "hermes.wizard.placement.done": "마법사 닫기",
   "hermes.wizard.closeConfirmTitle": "지금 닫으면 어떻게 되나요",
   "hermes.wizard.closeConfirmBody": "①에서 만든 프로필 '{name}' 이(가) 남습니다. 지울까요?",
   "hermes.wizard.closeConfirmDelete": "프로필 지우기",

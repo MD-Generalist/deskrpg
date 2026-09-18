@@ -8,7 +8,7 @@
 
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 
-export type WizardStep = "profile" | "identity" | "config" | "placement";
+export type WizardStep = "profile" | "identity" | "config";
 
 export type StepAvailability = {
   step: WizardStep;
@@ -17,9 +17,20 @@ export type StepAvailability = {
   lockedReason: string | null;
 };
 
-const ORDER: WizardStep[] = ["profile", "identity", "config", "placement"];
+/**
+ * ① 프로필 → ② 인격 → ③ AI 모델. 여기서 끝난다.
+ *
+ * 예전의 ④ 배치는 할 일이 없는 링크 버튼만 남은 단계였다 — 자리는 맵이, 외형은 등록 시
+ * 자동 배정과 직원 상세가 맡는다.
+ */
+const ORDER: WizardStep[] = ["profile", "identity", "config"];
 
-export function availableSteps(status: PluginStatus, localDiscovery: boolean): StepAvailability[] {
+export function availableSteps(
+  status: PluginStatus,
+  localDiscovery: boolean,
+  /** 이 마법사가 다룰 프로필이 이미 있는가(방금 만들었거나 기존 프로필로 들어왔다). */
+  hasProfile: boolean,
+): StepAvailability[] {
   const pluginOk = status === "plugin_ready";
 
   // 401 과 404 는 사용자가 할 일이 정반대다 — 키 교체 vs 플러그인 설치.
@@ -31,17 +42,18 @@ export function availableSteps(status: PluginStatus, localDiscovery: boolean): S
         : "hermes.plugin.locked.unknown";
 
   return ORDER.map((step) => {
-    if (step === "placement") {
-      // 배치는 플러그인과 무관하다 — NPC 레코드와 맵 좌표만 쓴다.
-      return { step, enabled: true, lockedReason: null };
-    }
     if (step === "profile") {
       // 프로필은 플러그인이 없어도 로컬 파일시스템 발견으로 찾아 등록할 수 있다.
       const enabled = pluginOk || localDiscovery;
       return { step, enabled, lockedReason: enabled ? null : blockedReason };
     }
-    // 인격·설정은 플러그인 없이는 원격에서 손댈 방법이 없다.
-    return { step, enabled: pluginOk, lockedReason: pluginOk ? null : blockedReason };
+    // 인격·AI 모델은 플러그인 없이는 원격에서 손댈 방법이 없다.
+    if (!pluginOk) return { step, enabled: false, lockedReason: blockedReason };
+    // 프로필이 없으면 읽을 대상이 없다. 예전에는 이 단계가 열려 있어, 빈 조회 결과가
+    // "인격 파일을 읽을 수 없다" 로 보이고 모델 목록 대신 자유 입력이 떴다(2026-09-18).
+    if (!hasProfile)
+      return { step, enabled: false, lockedReason: "hermes.wizard.locked.needsProfile" };
+    return { step, enabled: true, lockedReason: null };
   });
 }
 
