@@ -687,7 +687,13 @@ export default function TaskDrawer({
                         key={file.id}
                         className="flex items-center justify-between gap-2 rounded-md bg-surface px-2 py-1"
                       >
-                        <span className="truncate text-text">{file.filename}</span>
+                        <a
+                          href={api.attachmentUrl(file.id)}
+                          download={file.filename}
+                          className="truncate text-text hover:underline"
+                        >
+                          {file.filename}
+                        </a>
                         <span className="text-[10px] text-text-dim">
                           {typeof file.size === "number" ? `${file.size} B` : ""}
                         </span>

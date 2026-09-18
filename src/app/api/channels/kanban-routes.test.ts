@@ -755,7 +755,8 @@ test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지
     ctx(seed.channelId, "", attachment.id),
   );
   assert.equal(fetched.status, 200);
-  assert.equal((await fetched.json()).id, attachment.id);
+  assert.equal(await fetched.text(), "hello");
+  assert.match(fetched.headers.get("content-disposition") ?? "", /attachment/);
 
   const removed = await routes.attachment.DELETE(
     req(seed.ownerId, "DELETE", `${base(seed.channelId)}/attachments/${attachment.id}`),

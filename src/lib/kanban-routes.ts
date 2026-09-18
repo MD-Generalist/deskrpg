@@ -35,6 +35,7 @@ import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
 import { swarmGate } from "@/lib/hermes/plugin-capability";
 import type { KanbanTaskActionInput } from "@/lib/hermes/plugin-client-types";
 import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
+import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
 import { getUserId } from "@/lib/internal-rpc";
 import {
   AUTOMATION_MIN_PLUGIN_VERSION,
@@ -387,9 +388,13 @@ export async function uploadAttachment(req: NextRequest, channelId: string, task
 export async function getAttachment(req: NextRequest, channelId: string, attachmentId: string) {
   const resolved = await resolveForAttachments(req, channelId);
   if (!resolved.ok) return resolved.response;
-  const res = await resolved.ctx.client.kanban.getAttachment(resolved.ctx.boardSlug, attachmentId);
-  if (!res.ok) return pluginFailureResponse(res);
-  return NextResponse.json(res.data);
+  const res = await resolved.ctx.client.kanban.attachmentContent(
+    resolved.ctx.boardSlug,
+    attachmentId,
+    { range: req.headers.get("range") },
+  );
+  if (!res.ok) return rawFailureResponse(res);
+  return streamProxyResponse(res.response);
 }
 
 export async function deleteAttachment(req: NextRequest, channelId: string, attachmentId: string) {

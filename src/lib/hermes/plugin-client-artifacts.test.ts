@@ -76,3 +76,16 @@ test("events.poll 은 include 를 쿼리로 보낸다", async () => {
   await client().events.poll({ board: "b1", include: "artifacts" });
   assert.match(server.lastRequest()!.path, /include=artifacts/);
 });
+
+test("첨부 바이트는 attachmentContent 로 스트림된다", async () => {
+  const board = server.seedAttachment({
+    board: "b1",
+    taskId: "t1",
+    filename: "a.txt",
+    body: "hello",
+  });
+  const res = await client().kanban.attachmentContent("b1", board.id, {});
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+  assert.equal(await res.response.text(), "hello");
+});

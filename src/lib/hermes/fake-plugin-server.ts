@@ -94,6 +94,13 @@ export type FakePluginServer = {
     body: string | Buffer;
     source_kind?: ArtifactSource;
   }): ArtifactSummary;
+  /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
+  seedAttachment(input: {
+    board: string;
+    taskId: string;
+    filename: string;
+    body: string | Buffer;
+  }): { id: string };
 };
 
 // ---------------------------------------------------------------------------
@@ -112,7 +119,7 @@ type BoardRecord = {
   tasks: Map<string, TaskRecord>;
   /** "parent|child" */
   links: Set<string>;
-  attachments: Map<string, KanbanAttachment & { task_id: string }>;
+  attachments: Map<string, KanbanAttachment & { task_id: string; bytes: Buffer }>;
   logs: Map<string, string>;
 };
 
@@ -765,10 +772,81 @@ export async function startFakePluginServer(
       filename: part.filename,
       size: part.size,
       task_id: id,
+      bytes: part.content,
     };
     board.attachments.set(attachment.id, attachment);
-    const { task_id: _taskId, ...publicShape } = attachment;
+    const { task_id: _taskId, bytes: _bytes, ...publicShape } = attachment;
     return { status: 201, body: { attachment: publicShape } };
+  }
+
+  /** 첨부 바이트를 내려준다(`kanban_files.download_attachment_handler` 와 같은 모양). */
+  function attachmentContent(
+    attachment: KanbanAttachment & { task_id: string; bytes: Buffer },
+    req: ParsedRequest,
+  ): Reply {
+    const bytes = attachment.bytes;
+    const baseHeaders: Record<string, string> = {
+      "content-type": "application/octet-stream",
+      "content-disposition": `attachment; filename="${attachment.filename}"`,
+      "accept-ranges": "bytes",
+    };
+    const range = req.headers.range;
+    const rangeMatch = range ? /^bytes=(\d*)-(\d*)$/.exec(range) : null;
+    if (rangeMatch) {
+      const total = bytes.length;
+      const startByte =
+        rangeMatch[1] === "" ? total - Number(rangeMatch[2]) : Number(rangeMatch[1]);
+      const endByte = rangeMatch[2] === "" ? total - 1 : Number(rangeMatch[2]);
+      const slice = bytes.subarray(startByte, endByte + 1);
+      return {
+        status: 206,
+        body: null,
+        raw: {
+          bytes: slice,
+          headers: {
+            ...baseHeaders,
+            "content-range": `bytes ${startByte}-${endByte}/${total}`,
+            "content-length": String(slice.length),
+          },
+        },
+      };
+    }
+    return {
+      status: 200,
+      body: null,
+      raw: { bytes, headers: { ...baseHeaders, "content-length": String(bytes.length) } },
+    };
+  }
+
+  /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
+  function seedAttachment(input: {
+    board: string;
+    taskId: string;
+    filename: string;
+    body: string | Buffer;
+  }): { id: string } {
+    let board = boards.get(input.board);
+    if (!board) {
+      board = {
+        meta: { slug: input.board, name: input.board },
+        tasks: new Map(),
+        links: new Set(),
+        attachments: new Map(),
+        logs: new Map(),
+      };
+      boards.set(input.board, board);
+      if (currentBoard === null) currentBoard = input.board;
+    }
+    const bytes = typeof input.body === "string" ? Buffer.from(input.body, "utf8") : input.body;
+    const id = nextId("att");
+    board.attachments.set(id, {
+      id,
+      filename: input.filename,
+      size: bytes.length,
+      task_id: input.taskId,
+      bytes,
+    });
+    return { id };
   }
 
   function updateOrchestration(body: Record<string, unknown>): Reply {
@@ -1183,10 +1261,7 @@ export async function startFakePluginServer(
       const board = boardOf(params);
       const attachment = board.attachments.get(decodeURIComponent(m[1]));
       if (!attachment) throw notFound();
-      if (method === "GET") {
-        const { task_id: _taskId, ...publicShape } = attachment;
-        return { status: 200, body: publicShape };
-      }
+      if (method === "GET") return attachmentContent(attachment, req);
       if (method === "DELETE") {
         board.attachments.delete(attachment.id);
         return { status: 200, body: { ok: true } };
@@ -1400,6 +1475,7 @@ export async function startFakePluginServer(
       cronFor(profile).blueprints = blueprints;
     },
     seedArtifact,
+    seedAttachment,
   };
 }
 
@@ -1456,7 +1532,7 @@ function pick(body: Record<string, unknown>, keys: readonly string[]): Record<st
 function parseMultipartFile(
   contentType: string | null,
   raw: Buffer,
-): { filename: string; size: number } | null {
+): { filename: string; size: number; content: Buffer } | null {
   const boundaryMatch = /boundary=("?)([^";]+)\1/.exec(contentType ?? "");
   if (!boundaryMatch) return null;
   const delimiter = Buffer.from(`--${boundaryMatch[2]}`);
@@ -1476,7 +1552,7 @@ function parseMultipartFile(
         // 본문은 헤더 뒤 CRLF 두 개 다음부터, 다음 구분자 앞의 CRLF 전까지.
         let content = part.slice(headerEnd + 4);
         if (content.slice(-2).toString() === "\r\n") content = content.slice(0, -2);
-        return { filename: filenameMatch[1], size: content.length };
+        return { filename: filenameMatch[1], size: content.length, content };
       }
     }
     cursor = next;

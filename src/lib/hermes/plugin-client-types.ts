@@ -168,7 +168,6 @@ export type KanbanApi = {
     id: string,
     file: { filename: string; content: Blob | string },
   ): Promise<PluginResponse<{ attachment: KanbanAttachment }>>;
-  getAttachment(board: string, attachmentId: string): Promise<PluginResponse<KanbanAttachment>>;
   attachmentContent(
     board: string,
     attachmentId: string,

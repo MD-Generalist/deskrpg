@@ -174,6 +174,8 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike) {
       request<{ ok: true }>(f, `${root}/attachments/${encodeURIComponent(attachmentId)}`, {
         method: "DELETE",
       }),
+    attachmentUrl: (attachmentId: string) =>
+      `${root}/attachments/${encodeURIComponent(attachmentId)}`,
     addLink: (parentId: string, childId: string) =>
       request<{ ok: true }>(
         f,

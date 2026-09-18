@@ -294,8 +294,6 @@ export function createOwnerPluginClient(
       formData.append("file", blob, file.filename);
       return call(task(board, id, "/attachments"), token, { method: "POST", formData });
     },
-    getAttachment: (board, attachmentId) =>
-      call(`/deskrpg/kanban/attachments/${seg(attachmentId)}${query({ board })}`, token),
     attachmentContent: (board, attachmentId, opts) =>
       callRaw(`/deskrpg/kanban/attachments/${seg(attachmentId)}${query({ board })}`, token, {
         headers: opts.range ? { range: opts.range } : {},
