@@ -4323,10 +4323,8 @@ export class GameScene extends Phaser.Scene {
     this.playerSeatGoal = null;
     this.spawnRequest = { x, y };
     this.spawnInputStarted = false;
+    // 캐릭터(id·이름·외형)는 보내지 않는다 — 서버가 이 사용자의 내 캐릭터로 정한다.
     this.socket.emit("player:join", {
-      characterId: this.characterId,
-      characterName: this.characterName,
-      appearance: this.appearance,
       mapId: this.channelId || "office",
       mapRevision: this.mapRevision,
       x,

@@ -167,14 +167,14 @@ test("isolated humans walk, share seats and leave independently on the original 
         nickname: identity,
         password: `Isolated-meeting-${suffix}!`,
       });
-      const { character } = await post(context.request, "/api/characters", {
+      await post(context.request, "/api/characters", {
         name: identity,
         appearance: { bodyType: "male", layers: { body: { itemKey: "body", variant: "light" } } },
       });
       await post(context.request, `/api/channels/${channel.id}/join`, {});
       const page = await context.newPage();
       frames.push(observe(page));
-      await page.goto(`/game?channelId=${channel.id}&characterId=${character.id}`);
+      await page.goto(`/game?channelId=${channel.id}`);
       await expect(page.locator(".office-three-canvas canvas")).toBeVisible();
       await waitForOfficeReady(page, frames[index]);
       pages.push(page);
@@ -302,7 +302,7 @@ test("seven map meeting smoke: official environments and legacy/Tiled annex", as
       nickname,
       password: `Isolated-matrix-${suffix}!`,
     });
-    const { character } = await post(user, "/api/characters", {
+    await post(user, "/api/characters", {
       name: nickname,
       appearance: { bodyType: "male", layers: { body: { itemKey: "body", variant: "light" } } },
     });
@@ -335,7 +335,7 @@ test("seven map meeting smoke: official environments and legacy/Tiled annex", as
             mapTemplateId: template.id,
           });
           await post(user, `/api/channels/${channel.id}/join`, {});
-          await page.goto(`/game?channelId=${channel.id}&characterId=${character.id}`);
+          await page.goto(`/game?channelId=${channel.id}`);
           await expect(page.locator(".office-three-canvas canvas")).toBeVisible({
             timeout: 60_000,
           });

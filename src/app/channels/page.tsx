@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PasswordModal from "@/components/PasswordModal";
 import { useT } from "@/lib/i18n";
@@ -58,8 +58,6 @@ export default function ChannelsPage() {
 
 function ChannelsPageInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const characterId = searchParams.get("characterId");
   const t = useT();
 
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -72,6 +70,8 @@ function ChannelsPageInner() {
   const [passwordChannel, setPasswordChannel] = useState<Channel | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [availableGroups, setAvailableGroups] = useState<GroupOption[]>([]);
+  // 사무실에 들어가는 "나" 는 서버가 정한다. 여기서는 있는지만 본다 — 없으면 안내 카드를 그린다.
+  const [hasCharacter, setHasCharacter] = useState(true);
 
   const fetchLobbyData = async () => {
     const [channelResponse, groupResponse] = await Promise.all([
@@ -89,22 +89,24 @@ function ChannelsPageInner() {
   };
 
   useEffect(() => {
-    if (!characterId) {
-      router.push("/characters");
-      return;
-    }
-
     void (async () => {
       try {
-        const data = await fetchLobbyData();
+        const [data, mine] = await Promise.all([
+          fetchLobbyData(),
+          fetch("/api/characters/me")
+            .then((res) => (res.ok ? res.json() : null))
+            .catch(() => null),
+        ]);
         setChannels(data.channels);
         setCurrentUserId(data.currentUserId);
         setAvailableGroups(data.availableGroups);
+        // 조회 자체가 실패하면 목록을 막지 않는다 — 입장 시 서버가 character_missing 으로 다시 막는다.
+        setHasCharacter(mine ? mine.character !== null : true);
       } finally {
         setLoading(false);
       }
     })();
-  }, [characterId, router]);
+  }, []);
 
   const handleDeleteChannel = async (e: React.MouseEvent, channelId: string) => {
     e.stopPropagation();
@@ -134,7 +136,7 @@ function ChannelsPageInner() {
     if ((channel.requiresPassword ?? channel.isLocked) && !channel.isMember) {
       setPasswordChannel(channel);
     } else {
-      router.push(`/game?channelId=${channel.id}&characterId=${characterId}`);
+      router.push(`/game?channelId=${channel.id}`);
     }
   };
 
@@ -150,7 +152,7 @@ function ChannelsPageInner() {
         const data = await res.json().catch(() => ({}));
         return getLocalizedErrorMessage(t, data, "password.wrong");
       }
-      router.push(`/game?channelId=${passwordChannel.id}&characterId=${characterId}`);
+      router.push(`/game?channelId=${passwordChannel.id}`);
       return null;
     } catch {
       return t("channels.joinFailed");
@@ -170,7 +172,7 @@ function ChannelsPageInner() {
         return;
       }
 
-      router.push(`/game?channelId=${data.channel.id}&characterId=${characterId}`);
+      router.push(`/game?channelId=${data.channel.id}`);
     } catch {
       setJoinError(t("channels.joinFailed"));
     }
@@ -245,7 +247,7 @@ function ChannelsPageInner() {
             )}
             {canCreateChannels ? (
               <Link
-                href={`/channels/create?characterId=${characterId}`}
+                href="/channels/create"
                 className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"
               >
                 {t("channels.createChannel")}
@@ -316,7 +318,20 @@ function ChannelsPageInner() {
         </div>
 
         {/* Channel grid */}
-        {channels.length === 0 ? (
+        {!hasCharacter ? (
+          <div className="rounded-2xl border border-border bg-surface px-6 py-14 text-center">
+            <h2 className="text-lg font-semibold">{t("channels.needCharacterTitle")}</h2>
+            <p className="mx-auto mt-2 max-w-lg text-sm text-text-muted">
+              {t("channels.needCharacterBody")}
+            </p>
+            <Link
+              href="/characters"
+              className="mt-6 inline-flex rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white"
+            >
+              {t("channels.needCharacterAction")}
+            </Link>
+          </div>
+        ) : channels.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-text-muted mb-4">{t("channels.noChannels")}</p>
           </div>

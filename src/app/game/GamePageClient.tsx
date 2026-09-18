@@ -181,10 +181,11 @@ function GamePageInner() {
   const router = useRouter();
   const t = useT();
   const { locale, setLocale } = useLocale();
-  const characterId = searchParams.get("characterId");
   const channelId = searchParams.get("channelId");
 
+  // "나" 는 서버가 정한다 — URL 이 아니라 GET /api/characters/me 로 읽는다(player:join 도 같은 규칙).
   const [character, setCharacter] = useState<Character | null>(null);
+  const characterId = character?.id ?? null;
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
   const [spritesheetDataUrl, setSpritesheetDataUrl] = useState<string | null>(null);
   const [gameChannelData, setGameChannelData] = useState<PendingChannelData>(null);
@@ -423,12 +424,8 @@ function GamePageInner() {
 
   // Redirect to channel select if no channelId
   useEffect(() => {
-    if (!channelId && characterId) {
-      router.replace(`/channels?characterId=${characterId}`);
-    } else if (!channelId && !characterId) {
-      router.replace("/characters");
-    }
-  }, [channelId, characterId, router]);
+    if (!channelId) router.replace("/channels");
+  }, [channelId, router]);
 
   // Track player position for beforeunload save
   useEffect(() => {
@@ -524,12 +521,13 @@ function GamePageInner() {
         if (channelId) {
           socketInstance?.emit("room:list", { channelId });
         }
+      });
+      // 열려 있던 대화의 이력은 재입장(player:spawn) 뒤에 다시 받는다. 이력의 주인은
+      // player:join 이 서버에서 정하므로, connect 직후에 물으면 아직 몰라 빈 이력이 온다.
+      socketInstance.on("player:spawn", () => {
         const openNpc = dialogNpcRef.current;
         if (openNpc) {
-          socketInstance?.emit("npc:history", {
-            npcId: openNpc.npcId,
-            characterId: characterId ?? undefined,
-          });
+          socketInstance?.emit("npc:history", { npcId: openNpc.npcId });
         }
       });
       socketInstance.on("disconnect", (reason: string) => {
@@ -811,7 +809,7 @@ function GamePageInner() {
 
       socketInstance.on("member:kicked", () => {
         alert(t("game.removedFromChannel"));
-        router.push(`/channels?characterId=${characterId}`);
+        router.push("/channels");
       });
 
       socketInstance.on(
@@ -829,16 +827,27 @@ function GamePageInner() {
 
       socketInstance.on("channel:deleted", () => {
         alert(t("game.channelDeleted"));
-        router.push(`/channels?characterId=${characterId}`);
+        router.push("/channels");
       });
 
       socketInstance.on(
         "channel:access-denied",
         (data: { channelId?: string; action?: string; reason?: string; errorCode?: string }) => {
           setIsNpcStreaming(false);
+          const message = getLocalizedErrorMessage(t, data, "errors.forbidden");
+          if (data.errorCode === "character_missing") {
+            // 입장은 내 캐릭터가 있어야 한다 — 만들고 나서 이 채널로 돌아온다.
+            alert(message);
+            router.push(
+              channelId
+                ? `/characters?joinChannel=${encodeURIComponent(channelId)}`
+                : "/characters",
+            );
+            return;
+          }
           showToastNotification(
             `channel-access-denied-${data.action ?? "unknown"}-${data.reason ?? "unknown"}`,
-            getLocalizedErrorMessage(t, data, "errors.forbidden"),
+            message,
           );
         },
       );
@@ -846,12 +855,12 @@ function GamePageInner() {
       socketInstance.on("session:kicked", (data: { reason: string }) => {
         setIsNpcStreaming(false);
         alert(getLocalizedMessage(t, data.reason, "game.sessionKicked"));
-        router.push(`/channels?characterId=${characterId}`);
+        router.push("/channels");
       });
 
       socketInstance.on("join-error", () => {
         setIsNpcStreaming(false);
-        router.push(`/channels?characterId=${characterId}`);
+        router.push("/channels");
       });
 
       socketInstance.on("npc:motion-state", (snapshot: MotionSnapshot) => {
@@ -1011,7 +1020,7 @@ function GamePageInner() {
       setChannelPlayers([]);
       socketRef.current = null;
     };
-  }, [channelId, characterId, router, showToastNotification, t]);
+  }, [channelId, router, showToastNotification, t]);
 
   // Shared dialog state reset
   const resetDialog = useCallback(() => {
@@ -1046,10 +1055,7 @@ function GamePageInner() {
       EventBus.emit("npc:bubble-clear", { npcId: data.npcId });
       // Request NPC chat history from server
       if (socketRef.current) {
-        socketRef.current.emit("npc:history", {
-          npcId: data.npcId,
-          characterId: characterId ?? undefined,
-        });
+        socketRef.current.emit("npc:history", { npcId: data.npcId });
       }
     };
 
@@ -1152,10 +1158,7 @@ function GamePageInner() {
         // Always request history to ensure conversation is complete
         // (dialog might have been auto-closed during NPC approach, losing partial messages)
         if (socketRef.current) {
-          socketRef.current.emit("npc:history", {
-            npcId: data.npcId,
-            characterId: characterId ?? undefined,
-          });
+          socketRef.current.emit("npc:history", { npcId: data.npcId });
         }
       }
     };
@@ -1197,7 +1200,7 @@ function GamePageInner() {
       EventBus.off("npc:movement-arrived", handleMovementArrived);
       EventBus.off("npc:movement-returned", handleMovementReturned);
     };
-  }, [characterId, resetDialog, showToastNotification, t]);
+  }, [resetDialog, showToastNotification, t]);
 
   const handleDialogClose = useCallback(() => {
     resetDialog();
@@ -1278,7 +1281,7 @@ function GamePageInner() {
   const handleResetNpcChatById = useCallback(
     (npcId: string) => {
       if (socketRef.current) {
-        socketRef.current.emit("npc:reset-chat", { npcId, characterId: characterId ?? undefined });
+        socketRef.current.emit("npc:reset-chat", { npcId });
       }
       if (dialogNpcRef.current?.npcId === npcId) {
         setNpcMessages([]);
@@ -1287,7 +1290,7 @@ function GamePageInner() {
       setContextMenu(null);
       closeRosterMenus();
     },
-    [characterId, closeRosterMenus],
+    [closeRosterMenus],
   );
 
   /**
@@ -1319,8 +1322,8 @@ function GamePageInner() {
 
   const handleEditCharacter = useCallback(() => {
     closeRosterMenus();
-    router.push(`/characters/create?editId=${characterId}`);
-  }, [characterId, closeRosterMenus, router]);
+    router.push("/characters");
+  }, [closeRosterMenus, router]);
 
   const handleStartPositionSetting = useCallback(() => {
     if (!isOwner || mode !== "office") return;
@@ -1337,10 +1340,10 @@ function GamePageInner() {
       EventBus.emit("dialog:open");
       EventBus.emit("npc:bubble-clear", { npcId });
       if (socketRef.current) {
-        socketRef.current.emit("npc:history", { npcId, characterId: characterId ?? undefined });
+        socketRef.current.emit("npc:history", { npcId });
       }
     },
-    [characterId, resetDialog],
+    [resetDialog],
   );
 
   const handleDialogSend = useCallback(
@@ -1545,11 +1548,6 @@ function GamePageInner() {
 
   // Fetch character data and channel data
   useEffect(() => {
-    if (!characterId) {
-      setError(t("errors.noCharacterSelected"));
-      setLoading(false);
-      return;
-    }
     if (!channelId) {
       return; // will redirect above
     }
@@ -1567,18 +1565,17 @@ function GamePageInner() {
       }
 
       Promise.all([
-        fetch("/api/characters").then((res) => res.json()),
+        fetch("/api/characters/me").then((res) => res.json()),
         channelRes
           ? channelRes.json()
           : fetch(`/api/channels/${channelId}`).then((res) => res.json()),
       ])
         .then(async ([charData, channelData]) => {
           // Character
-          const chars: Character[] = charData.characters || [];
-          const found = chars.find((c) => c.id === characterId);
+          const found: Character | null = charData.character ?? null;
           if (!found) {
-            setError(t("errors.characterNotFound"));
-            setLoading(false);
+            // 내 캐릭터가 없으면 입장할 수 없다 — 만들고 나서 이 채널로 돌아온다.
+            router.replace(`/characters?joinChannel=${encodeURIComponent(channelId)}`);
             return;
           }
           setCharacter(found);
@@ -1662,7 +1659,7 @@ function GamePageInner() {
           setLoading(false);
         });
     })();
-  }, [characterId, channelId, t]);
+  }, [channelId, router, t]);
 
   /**
    * 맵 목록과 출근부를 함께 읽는다. 하나만 갱신하면 화면 두 곳이 서로 다른 사실을
@@ -2608,7 +2605,7 @@ function GamePageInner() {
                     } catch {
                       /* best effort */
                     }
-                    window.location.href = `/channels?characterId=${characterId}`;
+                    window.location.href = "/channels";
                   }}
                   className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
                 >
@@ -2806,7 +2803,7 @@ function GamePageInner() {
         <PasswordModal
           channelName={channel?.name || t("channels.privateChannel")}
           onSubmit={handleGamePasswordSubmit}
-          onClose={() => router.push(`/channels?characterId=${characterId}`)}
+          onClose={() => router.push("/channels")}
         />
       )}
 

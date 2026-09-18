@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
@@ -57,8 +57,6 @@ export default function CreateChannelPage() {
 
 function CreateChannelPageInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const characterId = searchParams.get("characterId");
   const t = useT();
 
   const [name, setName] = useState("");
@@ -260,7 +258,7 @@ function CreateChannelPageInner() {
         return;
       }
 
-      router.push(`/game?channelId=${data.channel.id}&characterId=${characterId}`);
+      router.push(`/game?channelId=${data.channel.id}`);
     } catch {
       setError(t("channels.create.failed"));
       setSubmitting(false);
@@ -564,10 +562,7 @@ function CreateChannelPageInner() {
             >
               {submitting ? t("channels.create.creating") : t("common.create")}
             </button>
-            <Link
-              href={`/channels?characterId=${characterId}`}
-              className="text-text-muted hover:text-text text-sm"
-            >
+            <Link href="/channels" className="text-text-muted hover:text-text text-sm">
               {t("common.cancel")}
             </Link>
           </div>

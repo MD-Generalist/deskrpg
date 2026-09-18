@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams, useParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
@@ -24,9 +24,7 @@ export default function JoinChannelPage() {
 function JoinChannelPageInner() {
   const router = useRouter();
   const params = useParams();
-  const searchParams = useSearchParams();
   const code = params.code as string;
-  const characterId = searchParams.get("characterId");
   const t = useT();
 
   const [error, setError] = useState("");
@@ -42,18 +40,13 @@ function JoinChannelPageInner() {
           return;
         }
 
-        if (characterId) {
-          // Has character selected, go directly to game
-          router.replace(`/game?channelId=${data.channel.id}&characterId=${characterId}`);
-        } else {
-          // Need to select character first, then come back
-          router.replace(`/characters?joinChannel=${data.channel.id}`);
-        }
+        // 캐릭터는 고르지 않는다 — 게임 화면이 내 캐릭터를 읽고, 없으면 만들고 돌아오게 한다.
+        router.replace(`/game?channelId=${data.channel.id}`);
       })
       .catch(() => {
         setError(t("errors.failedToResolveInviteCode"));
       });
-  }, [code, characterId, router, t]);
+  }, [code, router, t]);
 
   if (error) {
     return (
