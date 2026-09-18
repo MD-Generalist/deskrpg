@@ -5,7 +5,8 @@
  *
  * 선택 상태는 호출부가 소유한다(제어 컴포넌트). `null` 을 넘기면 서버의 현재 상태가
  * 기본값이고, 불러온 직후 `onLoaded` 로 그 값을 알려 준다. 저장도 호출부 몫이다 —
- * config PUT 에 `{ enabledToolsets, disabledSkills }` 로 보낸다.
+ * config PUT 에 `{ enabledToolsets, disabledSkills }` 로 보낸다. 올리는 목록에는 불러온 행 이름만
+ * 싣는다(필수 스킬 제외) — 플러그인이 모르는 이름을 400 으로 거절하므로, 시드는 `onLoaded` 로 한다.
  * 구버전 플러그인(`plugin_upgrade_required`)이면 아무것도 그리지 않고 `onUnsupported` 를
  * 불러 호출부가 텍스트 입력으로 폴백하게 한다.
  */
@@ -15,7 +16,13 @@ import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import type { SkillRow, ToolsetRow } from "@/lib/hermes/plugin-client-types";
 
-import { classifyLoad, groupSkills, initialSelection, toggle } from "./picker-model";
+import {
+  classifyLoad,
+  groupSkills,
+  initialSelection,
+  toggleSkill,
+  toggleToolset,
+} from "./picker-model";
 
 export type ToolsetSkillPickerProps = {
   profileBase: string; // `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(name)}`
@@ -167,7 +174,9 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
               checked={enabledToolsets.includes(ts.name)}
               disabled={props.disabled}
               onChange={(e) =>
-                props.onEnabledToolsetsChange(toggle(enabledToolsets, ts.name, e.target.checked))
+                props.onEnabledToolsetsChange(
+                  toggleToolset(enabledToolsets, ts.name, e.target.checked, toolsets),
+                )
               }
             />
             <span className="min-w-0">
@@ -216,7 +225,7 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
                       disabled={props.disabled || skill.essential}
                       onChange={(e) =>
                         props.onDisabledSkillsChange(
-                          toggle(disabledSkills, skill.name, !e.target.checked),
+                          toggleSkill(disabledSkills, skill.name, e.target.checked, skills),
                         )
                       }
                     />

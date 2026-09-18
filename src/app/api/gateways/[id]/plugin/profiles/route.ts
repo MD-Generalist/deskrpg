@@ -112,7 +112,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
   const res = await client.createProfile(
     nameCheck.name,
-    options.cloneFrom ? { cloneFrom: options.cloneFrom } : undefined,
+    options.cloneFrom ? { cloneFrom: options.cloneFrom, cloneKeys: options.cloneKeys } : undefined,
   );
   if (!res.ok) {
     return NextResponse.json(

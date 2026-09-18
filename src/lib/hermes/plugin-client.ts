@@ -225,7 +225,11 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
     createProfile: (name, options) =>
       call("/deskrpg/profiles", input.defaultToken, {
         method: "POST",
-        body: options?.cloneFrom ? { name, cloneFrom: options.cloneFrom } : { name },
+        body: {
+          name,
+          ...(options?.cloneFrom ? { cloneFrom: options.cloneFrom } : {}),
+          ...(options?.cloneKeys ? { cloneKeys: options.cloneKeys } : {}),
+        },
       }),
 
     // `confirm` 이 경로의 이름과 정확히 같아야 플러그인이 지운다(400 가드).

@@ -148,3 +148,27 @@ test("다른 오류는 메시지와 다시 시도 버튼을 보여 준다", asyn
     f.restore();
   }
 });
+
+test("부모가 준 목록에 플러그인이 거절할 이름이 있어도 올리는 목록에는 싣지 않는다", async () => {
+  const f = stubFetch({ "/toolsets": TOOLSETS, "/skills": SKILLS });
+  const toolsets: string[][] = [];
+  const skills: string[][] = [];
+  const { host, unmount } = await mount({
+    // config GET 의 enabledToolsets 에는 MCP 서버 이름이 섞여 올 수 있다.
+    enabledToolsets: ["web", "my-mcp", "ghost-toolset"],
+    disabledSkills: ["pdf", "hermes-agent", "ghost-skill"],
+    onEnabledToolsetsChange: (v) => toolsets.push(v),
+    onDisabledSkillsChange: (v) => skills.push(v),
+  });
+  try {
+    await act(async () =>
+      host.querySelector<HTMLInputElement>('input[data-toolset="tts"]')!.click(),
+    );
+    await act(async () => host.querySelector<HTMLInputElement>('input[data-skill="pdf"]')!.click());
+    assert.deepEqual(toolsets, [["tts", "web"]]);
+    assert.deepEqual(skills, [[]]);
+  } finally {
+    await unmount();
+    f.restore();
+  }
+});

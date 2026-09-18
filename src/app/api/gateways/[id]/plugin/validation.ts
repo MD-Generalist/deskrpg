@@ -6,6 +6,7 @@
  */
 
 import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
+import type { CloneKeyScope } from "@/lib/hermes/plugin-client-types";
 
 export type CreatableNameValidation =
   { ok: true; name: string } | { ok: false; errorCode: "invalid_profile_name" };
@@ -75,12 +76,27 @@ export function validateConfigPatch(input: unknown): ConfigPutValidation {
 }
 
 export type CreateOptionsValidation =
-  { ok: true; cloneFrom?: "default" } | { ok: false; errorCode: "bad_request" };
+  | { ok: true; cloneFrom?: "default"; cloneKeys?: CloneKeyScope }
+  | { ok: false; errorCode: "bad_request" };
 
-/** 복제 원본은 지금 `default` 뿐이다 — 플러그인이 400 을 내기 전에 여기서 이유를 분명히 한다. */
+const CLONE_KEY_SCOPES: readonly CloneKeyScope[] = ["referenced", "api_keys"];
+
+/**
+ * 복제 원본은 지금 `default` 뿐이다 — 플러그인이 400 을 내기 전에 여기서 이유를 분명히 한다.
+ * `cloneKeys`(키 복제 범위)는 `cloneFrom` 과 함께일 때만, `referenced`·`api_keys` 둘 중 하나.
+ */
 export function validateCreateOptions(input: unknown): CreateOptionsValidation {
-  const raw = (input as { cloneFrom?: unknown } | null)?.cloneFrom;
-  if (raw === undefined || raw === null) return { ok: true };
+  const record = (input ?? {}) as { cloneFrom?: unknown; cloneKeys?: unknown };
+  const raw = record.cloneFrom;
+  const keys = record.cloneKeys;
+  const hasKeys = keys !== undefined && keys !== null;
+  if (raw === undefined || raw === null) {
+    return hasKeys ? { ok: false, errorCode: "bad_request" } : { ok: true };
+  }
   if (raw !== "default") return { ok: false, errorCode: "bad_request" };
-  return { ok: true, cloneFrom: "default" };
+  if (!hasKeys) return { ok: true, cloneFrom: "default" };
+  if (!CLONE_KEY_SCOPES.includes(keys as CloneKeyScope)) {
+    return { ok: false, errorCode: "bad_request" };
+  }
+  return { ok: true, cloneFrom: "default", cloneKeys: keys as CloneKeyScope };
 }

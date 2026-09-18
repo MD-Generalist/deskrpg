@@ -47,7 +47,7 @@ export type CreateProfilePayload = {
   apiKey?: string;
   keyIssued: boolean;
   keyError?: string;
-  cloned?: { configKeys: string[]; envKeys: string[] };
+  cloned?: { configKeys: string[]; envKeys: string[]; keyScope: CloneKeyScope };
   needsLogin?: string[];
   cloneError?: string;
 };
@@ -76,7 +76,13 @@ export type SkillRow = {
 
 export type SkillsPayload = { skills: SkillRow[] };
 
-export type CreateProfileOptions = { cloneFrom?: "default" };
+/**
+ * 키 복제 범위(플러그인 0.9.0 `cloneKeys`). `referenced` 는 복제한 설정이 가리키는 프로바이더의 키만,
+ * `api_keys` 는 API 키 방식 프로바이더 키 전부(범용·OAuth 토큰 제외) + referenced 몫. 생략하면 referenced.
+ */
+export type CloneKeyScope = "referenced" | "api_keys";
+
+export type CreateProfileOptions = { cloneFrom?: "default"; cloneKeys?: CloneKeyScope };
 
 export type DeleteProfilePayload = {
   name: string;
