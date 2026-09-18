@@ -69,6 +69,7 @@
     "capture:readme:verify": "tsx scripts/readme-capture/verify-readme.ts"
   },
   "dependencies": {
+    "@codemirror/language": "^6.12.4",
     "@codemirror/language-data": "^6.5.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "12.8.0",
