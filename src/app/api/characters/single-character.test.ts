@@ -5,9 +5,7 @@ import { NextRequest } from "next/server";
 import { seedUser } from "@/test-setup/npc-seed";
 import { QUICK_START_APPEARANCE } from "@/lib/quick-start";
 
-// 브리프의 { officeLookId, bodyType } 조각은 body 레이어가 없어 validateAppearance 를
-// 통과하지 못한다(레지스트리는 body 레이어를 필수로 요구한다) — 검증을 통과하는
-// 최소 구성(QUICK_START_APPEARANCE 와 동일)으로 바꿔 쓴다.
+// 빠른 시작이 쓰는 외형을 그대로 쓴다 — validateOfficeAppearance 를 통과하는 오피스 룩이다.
 const APPEARANCE = QUICK_START_APPEARANCE;
 
 function req(url: string, userId: string, method = "GET", body?: unknown) {
