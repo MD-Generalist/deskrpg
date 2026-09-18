@@ -122,6 +122,7 @@ export class OfficeRenderer {
   private fill = new T.DirectionalLight();
   private sky = new T.HemisphereLight();
   private seats: Seat[] = [];
+  private seatBadges = new Map<number, HTMLDivElement>();
   private camera = new T.PerspectiveCamera(38, 1, 0.1, 250);
   private controls: OrbitControls;
   private meetingCamera: MeetingCamera;
@@ -1632,6 +1633,7 @@ export class OfficeRenderer {
           actor.bubble.style.zIndex = String(anchor.priority + 1);
         }
       }
+      this.syncSeatBadges(viewportWidth, viewportHeight);
       // Stable priority order and speaker prefix retain readable text for every visible overflow speaker.
       for (const [index, id] of layout.overflow.entries()) {
         const bubble = this.actors.get(id)!.bubble;
@@ -1680,6 +1682,34 @@ export class OfficeRenderer {
       }
     }
   };
+  /** 자리 변경 모드의 데스크 좌석 번호 배지 — 액터 라벨과 같은 DOM 오버레이에 둔다. */
+  private syncSeatBadges(width: number, height: number) {
+    const labels = this.bridge?.editor().seatLabels ?? [];
+    const live = new Set(labels.map((l) => l.number));
+    for (const [number, el] of this.seatBadges) {
+      if (live.has(number)) continue;
+      el.remove();
+      this.seatBadges.delete(number);
+    }
+    for (const label of labels) {
+      let el = this.seatBadges.get(label.number);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "office-seat-badge";
+        el.dataset.testid = `seat-badge-${label.number}`;
+        el.textContent = String(label.number);
+        this.labels.append(el);
+        this.seatBadges.set(label.number, el);
+      }
+      el.dataset.taken = String(label.taken);
+      const screen = new T.Vector3(label.col + 0.5, 1.1, label.row + 0.5).project(this.camera);
+      const x = ((screen.x + 1) / 2) * width,
+        y = ((1 - screen.y) / 2) * height;
+      el.hidden = screen.z > 1;
+      el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`;
+    }
+  }
+
   dispose() {
     this.exitMeeting();
     this.meetingCamera.dispose();
@@ -1713,6 +1743,7 @@ export class OfficeRenderer {
     this.renderer.domElement.remove();
     this.statsLabel?.remove();
     this.labels.replaceChildren();
+    this.seatBadges.clear();
     this.actors.clear();
   }
 }

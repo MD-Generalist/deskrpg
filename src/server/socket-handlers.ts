@@ -1109,6 +1109,14 @@ export function setupSocketHandlers(io: Server) {
     console.error("[automation-poller] failed to start:", err);
   });
 
+  // 이 기능 이전에 자리 없이 만들어진 직원을 1회 이행한다. 멱등이고, 실패해도 부팅은 계속한다.
+  void import("../lib/npc-seating")
+    .then(({ placeAllUnplacedNpcs }) => placeAllUnplacedNpcs())
+    .then((r) => {
+      if (r.channels > 0) console.log("[seating] backfill", r);
+    })
+    .catch((err: unknown) => console.error("[seating] backfill failed:", err));
+
   io.on("connection", async (socket) => {
     const user = await authenticateSocket(socket);
     if (!user) {

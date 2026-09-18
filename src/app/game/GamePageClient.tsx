@@ -1306,21 +1306,6 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     [channelNpcs, closeRosterMenus],
   );
 
-  const seatAssignmentStarted = useRef(false);
-  useEffect(() => {
-    if (
-      searchParams.get("assignSeat") !== "1" ||
-      seatAssignmentStarted.current ||
-      !channel?.isOwner
-    )
-      return;
-    const unplaced = rosterNpcs.find((n) => n.active && !n.placed);
-    if (unplaced) {
-      seatAssignmentStarted.current = true;
-      handleMoveNpcById(unplaced.id);
-    }
-  }, [searchParams, rosterNpcs, channel?.isOwner, handleMoveNpcById]);
-
   const gatewayId = channel?.gatewayConfig?.gatewayId ?? null;
 
   const openProfileSettings = useCallback(() => {
@@ -1730,12 +1715,19 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         if (Array.isArray(rosterData.npcs)) {
           setRosterNpcs(
             rosterData.npcs.map(
-              (npc: RosterNpc & { positionX?: number | null; placed?: boolean }) => ({
+              (
+                npc: RosterNpc & {
+                  positionX?: number | null;
+                  placed?: boolean;
+                  seatNumber?: number | null;
+                },
+              ) => ({
                 id: npc.id,
                 name: npc.name,
                 appearance: npc.appearance,
                 active: !!npc.active,
                 placed: !!npc.placed,
+                seatNumber: npc.seatNumber ?? null,
                 profile: npc.profile ?? null,
               }),
             ),

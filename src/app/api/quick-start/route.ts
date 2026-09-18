@@ -1,25 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, asc, eq } from "drizzle-orm";
 
-import {
-  channelGatewayBindings,
-  channelMembers,
-  channels,
-  db,
-  groupMembers,
-  groups,
-  npcs,
-  users,
-} from "@/db";
+import { channelMembers, channels, db, groupMembers, groups, users } from "@/db";
 import { getUserId } from "@/lib/internal-rpc";
 import { ensureMyCharacter } from "@/lib/my-character";
-import {
-  assignSeats,
-  freeSeatTiles,
-  QUICK_START_ENVIRONMENT_ID,
-  quickStartChannelName,
-  quickStartSeatTiles,
-} from "@/lib/quick-start";
+import { QUICK_START_ENVIRONMENT_ID, quickStartChannelName } from "@/lib/quick-start";
 
 /**
  * `POST /api/quick-start` — 가입 직후의 여섯 화면(캐릭터 → 채널 → 배치 → …)을 한 번에 접는다.
@@ -143,59 +128,13 @@ async function ensureChannel(req: NextRequest, userId: string, nickname: string 
 }
 
 /**
- * 게이트웨이가 묶여 있고 출근했는데 자리가 없는 NPC 를 빈 좌석에 앉힌다.
- *
- * 게이트웨이가 없으면 조용히 끝난다 — 빠른 시작의 목적은 "일단 들어가 보는 것" 이다.
- * 배치 실패(예: 같은 칸 경합 409)도 빠른 시작을 깨뜨리지 않는다.
+ * 출근했는데 자리가 없는 NPC 를 배치한다. 고용 경로가 이미 배치하므로 보통은 할 일이
+ * 없다 — 이 기능 이전에 만들어진 채널을 빠른 시작으로 다시 여는 경우를 위한 안전망이다.
  */
-async function seatUnplacedNpcs(req: NextRequest, channelId: string) {
-  const [binding] = await db
-    .select({ gatewayId: channelGatewayBindings.gatewayId })
-    .from(channelGatewayBindings)
-    .where(eq(channelGatewayBindings.channelId, channelId))
-    .limit(1);
-  if (!binding) return 0;
-
-  const [channel] = await db
-    .select({ mapData: channels.mapData })
-    .from(channels)
-    .where(eq(channels.id, channelId))
-    .limit(1);
-  if (!channel) return 0;
-
-  const roster = await db
-    .select({
-      id: npcs.id,
-      active: npcs.active,
-      positionX: npcs.positionX,
-      positionY: npcs.positionY,
-    })
-    .from(npcs)
-    .where(eq(npcs.channelId, channelId))
-    .orderBy(asc(npcs.id));
-
-  const unplaced = roster.filter(
-    (npc) => npc.active && !(Number.isInteger(npc.positionX) && Number.isInteger(npc.positionY)),
-  );
-  if (unplaced.length === 0) return 0;
-
-  const free = freeSeatTiles(quickStartSeatTiles(channel.mapData), roster);
-  const plan = assignSeats(unplaced, free);
-  if (plan.length === 0) return 0;
-
-  const { PATCH } = await import("../npcs/[id]/route");
-  let seated = 0;
-  for (const { npcId, seat } of plan) {
-    const response = await PATCH(
-      subRequest(req, `/api/npcs/${encodeURIComponent(npcId)}`, {
-        positionX: seat.col,
-        positionY: seat.row,
-      }),
-      { params: Promise.resolve({ id: npcId }) },
-    );
-    if (response.ok) seated += 1;
-  }
-  return seated;
+async function seatUnplacedNpcs(channelId: string) {
+  const { placeUnplacedNpcs } = await import("@/lib/npc-seating");
+  const { seated, standing } = await placeUnplacedNpcs(channelId);
+  return seated + standing;
 }
 
 export async function POST(req: NextRequest) {
@@ -230,7 +169,7 @@ export async function POST(req: NextRequest) {
       .limit(1);
     if (owned) {
       try {
-        await seatUnplacedNpcs(req, channelId);
+        await seatUnplacedNpcs(channelId);
       } catch (seatErr) {
         console.warn("Quick start could not seat NPCs:", seatErr);
       }

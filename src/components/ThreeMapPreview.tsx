@@ -27,7 +27,7 @@ export default function ThreeMapPreview({ map }: { map: TiledMap }) {
       actors: () => [],
       mapKey: () => "editor-preview",
       map: () => snapshot,
-      editor: () => ({ placement: false, spawn: false, owner: false, tiled: true }),
+      editor: () => ({ placement: false, spawn: false, owner: false, tiled: true, seatLabels: [] }),
       pointer: () => {},
       setPresentation: () => {},
       walkable: (x, y) =>

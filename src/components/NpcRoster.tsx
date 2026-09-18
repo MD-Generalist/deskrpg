@@ -8,10 +8,8 @@ import RosterAvatar from "./RosterAvatar";
 /**
  * NPC 출근부.
  *
- * NPC 는 더 이상 사용자가 "고용" 하는 것이 아니라 **게이트웨이 프로필이 채널에 갖는
- * 자리** 다. 그래서 이 목록은 맵에 서 있는 NPC 만이 아니라 세 상태를 모두 보여준다 —
- * 자리 있음(출근·배치됨) · 자리 미정(출근했지만 아직 맵에 자리가 없음) · 쉬는 중(퇴근).
- * "자리 미정" 은 버튼이다: 누르면 맵 배치 모드로 들어간다.
+ * 출근한 직원은 항상 자리가 있다: 데스크 좌석이면 번호, 만석이라 서 있으면 "서 있음".
+ * 둘 다 버튼이고 누르면 자리 변경 모드로 들어간다(소유자만).
  */
 export type RosterNpc = {
   id: string;
@@ -19,6 +17,7 @@ export type RosterNpc = {
   appearance?: unknown;
   active: boolean;
   placed: boolean;
+  seatNumber?: number | null;
   profile?: { ownerUserId?: string; profileName?: string } | null;
 };
 
@@ -52,6 +51,10 @@ export default function NpcRoster({
   onStartGroupChat,
 }: NpcRosterProps) {
   const t = useT();
+  const seatLabel = (npc: RosterNpc) =>
+    npc.seatNumber
+      ? t("game.roster.seatNumber", { number: npc.seatNumber })
+      : t("game.roster.standing");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -152,15 +155,16 @@ export default function NpcRoster({
                 <div className="ml-auto flex items-center gap-1 shrink-0">
                   {!npc.active ? (
                     <span className="text-micro text-text-dim">{t("game.roster.dormant")}</span>
-                  ) : npc.placed ? (
-                    <span className="text-micro text-text-dim">{t("game.roster.placed")}</span>
-                  ) : (
+                  ) : isOwner ? (
                     <button
+                      data-testid={`seat-${npc.id}`}
                       onClick={() => onPlace(npc.id)}
                       className="text-micro px-2 py-0.5 rounded bg-surface-raised hover:brightness-125 text-primary-light"
                     >
-                      {t("game.roster.unplaced")}
+                      {seatLabel(npc)}
                     </button>
+                  ) : (
+                    <span className="text-micro text-text-dim">{seatLabel(npc)}</span>
                   )}
                   {isOwner && (
                     <button

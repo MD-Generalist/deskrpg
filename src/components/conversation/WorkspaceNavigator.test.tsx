@@ -57,7 +57,7 @@ const npcs: NavigatorNpc[] = [
   },
 ];
 
-async function mount(isOwner = true) {
+async function mount(isOwner = true, customNpcs: NavigatorNpc[] = npcs) {
   const selected: string[] = [];
   const actions: string[] = [];
   const element = document.createElement("div");
@@ -71,7 +71,7 @@ async function mount(isOwner = true) {
           rooms={rooms}
           currentRoomId="office"
           players={[{ id: "u2", name: "은채", online: true, self: false }]}
-          npcs={npcs}
+          npcs={customNpcs}
           isOwner={isOwner}
           onSelectRoom={(id) => selected.push(`room:${id}`)}
           onSelectNpc={(id) => selected.push(`npc:${id}`)}
@@ -99,7 +99,7 @@ test("rooms, online users and every NPC employment state remain discoverable", a
   assert.match(element.textContent ?? "", /디자인 리뷰/);
   assert.match(element.textContent ?? "", /소피[\s\S]*대기/);
   assert.match(element.textContent ?? "", /레오[\s\S]*쉬는 중/);
-  assert.match(element.textContent ?? "", /미나[\s\S]*자리 미정/);
+  assert.match(element.textContent ?? "", /미나[\s\S]*서 있음/);
 
   await act(async () => button(element, "디자인 리뷰").click());
   await act(async () => button(element, "은채").click());
@@ -127,4 +127,55 @@ test("NPC overflow actions follow motion state and owner permissions", async () 
     false,
   );
   assert.ok(button(member.element, "대화 초기화"));
+});
+
+test("seat number shows in the roster detail, standing when unseated, resting hides the seat", async () => {
+  const seatedAvailable: NavigatorNpc = {
+    id: "iris",
+    name: "아이리스",
+    active: true,
+    placed: true,
+    motion: "idle",
+    calledByViewer: false,
+    seatNumber: 3,
+  };
+  const standingActive: NavigatorNpc = {
+    id: "noah",
+    name: "노아",
+    active: true,
+    placed: true,
+    motion: "idle",
+    calledByViewer: false,
+    seatNumber: null,
+  };
+  const dormantSeated: NavigatorNpc = {
+    id: "dana",
+    name: "다나",
+    active: false,
+    placed: true,
+    motion: "resting",
+    calledByViewer: false,
+    seatNumber: 1,
+  };
+
+  const { element } = await mount(true, [seatedAvailable, standingActive, dormantSeated]);
+  assert.match(element.textContent ?? "", /아이리스[\s\S]*3번 자리 · /);
+  assert.match(element.textContent ?? "", /노아[\s\S]*서 있음/);
+  const dormantSection = element.textContent ?? "";
+  const danaIndex = dormantSection.indexOf("다나");
+  assert.match(dormantSection.slice(danaIndex, danaIndex + 40), /쉬는 중/);
+  assert.ok(!dormantSection.slice(danaIndex, danaIndex + 40).includes("번 자리"));
+});
+
+test("the owner menu keeps 자리 이동 and drops the removed place action", async () => {
+  const owner = await mount(true);
+  await act(async () => button(owner.element, "소피 관리").click());
+  assert.ok(button(owner.element, "자리 이동"));
+  const labels = [...owner.element.querySelectorAll("[role='menuitem']")].map(
+    (node) => node.textContent ?? "",
+  );
+  assert.equal(
+    labels.some((label) => label.includes("자리 지정")),
+    false,
+  );
 });

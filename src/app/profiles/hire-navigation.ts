@@ -18,11 +18,11 @@ export function hirePageHref(
 /**
  * 마법사를 닫았을 때 어디로 돌아갈지.
  *
- * 게임 화면의 "새 직원" 으로 들어왔으면 그 자리로 돌려보내고 자리 지정까지 잇는다
- * (`assignSeat=1`). 그 외에는 직원 목록으로 돌아간다 — 방금 만든 직원이 보이는 곳이다.
+ * 자리는 서버가 정한다 — 게임으로 돌아가기만 한다. 게임 화면의 "새 직원" 으로 들어왔으면
+ * 그 자리로 돌려보낸다. 그 외에는 직원 목록으로 돌아간다 — 방금 만든 직원이 보이는 곳이다.
  */
 export function hireDoneHref(gatewayId: string, returnTo?: string | null): string {
-  if (returnTo) return `${returnTo}${returnTo.includes("?") ? "&" : "?"}assignSeat=1`;
+  if (returnTo) return returnTo;
   return `/profiles?gateway=${encodeURIComponent(gatewayId)}`;
 }
 

@@ -7,12 +7,13 @@ import {
   seedGatewayBoundToChannels,
   seedProfile,
 } from "@/test-setup/npc-seed";
+import { buildOfficeEnvironment } from "@/game/three/office-environments";
 
 // `db` 는 지연 초기화 싱글턴이고 node:test 는 파일마다 프로세스를 나누므로, 모듈
 // 최상단에서 한 번 임시 DB 를 잡으면 이 파일의 모든 테스트가 그 DB 를 쓴다.
 setupThrowawaySqlite("npc-roster-test");
 
-test("연결하면 프로필마다 자리 미정 NPC 가 생기고, 재연결은 중복을 만들지 않는다", async () => {
+test("맵을 읽을 수 없는 채널에서는 자리 없이 남고 고용은 성공한다", async () => {
   const { hireGatewayProfilesIntoChannel } = await import("./npc-roster");
   const { selectChannelNpcs } = await import("./npc-projection");
 
@@ -26,6 +27,36 @@ test("연결하면 프로필마다 자리 미정 NPC 가 생기고, 재연결은
   const again = await hireGatewayProfilesIntoChannel(channelId, gatewayId);
   assert.deepEqual(again, { created: 0, reactivated: 0 });
   assert.equal((await selectChannelNpcs(channelId, { roster: true })).length, 3);
+});
+
+test("연결하면 프로필마다 직원이 생기고 곧바로 데스크 좌석에 앉는다", async () => {
+  const { hireGatewayProfilesIntoChannel } = await import("./npc-roster");
+  const { selectChannelNpcs } = await import("./npc-projection");
+  const { channelId, gatewayId } = await seedChannelWithProfiles({
+    profiles: 3,
+    mapData: buildOfficeEnvironment("executive"),
+  });
+  assert.deepEqual(await hireGatewayProfilesIntoChannel(channelId, gatewayId), {
+    created: 3,
+    reactivated: 0,
+  });
+  const onMap = await selectChannelNpcs(channelId);
+  assert.equal(onMap.length, 3, "자리 없는 직원이 없다 — 전부 맵에 나온다");
+});
+
+test("자리 없이 잠들었던 직원도 되살아나면 자리를 받는다", async () => {
+  const { setNpcActive } = await import("./npc-roster");
+  const { selectChannelNpcs } = await import("./npc-projection");
+  const { db, npcs } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const { channelId, npcIds } = await seedChannelWithProfiles({
+    unplaced: 1,
+    mapData: buildOfficeEnvironment("executive"),
+  });
+  await db.update(npcs).set({ active: false }).where(eq(npcs.id, npcIds[0]));
+  await setNpcActive(npcIds[0], true);
+  const [row] = await selectChannelNpcs(channelId);
+  assert.ok(row && row.positionX !== null);
 });
 
 test("휴면 후 재연결하면 자리를 되찾는다", async () => {
