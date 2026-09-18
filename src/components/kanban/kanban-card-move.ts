@@ -69,16 +69,34 @@ export function tryReleasePointerCapture(element: HTMLElement, pointerId: number
 export function clearMoveTargets(root: ParentNode = document) {
   for (const column of root.querySelectorAll<HTMLElement>('[data-move-target="true"]')) {
     column.removeAttribute("data-move-target");
-    column.classList.remove("ring-2", "ring-info", "bg-info/10");
   }
 }
 
+/** 강조는 `[data-move-target="true"]` 에 걸린 CSS 가 그린다(globals.css). */
 export function markMoveTarget(column: HTMLElement | null, root: ParentNode = document) {
   clearMoveTargets(root);
   if (!column) return;
   column.dataset.moveTarget = "true";
-  column.classList.add("ring-2", "ring-info", "bg-info/10");
   column.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+/**
+ * 이동이 살아 있는 동안에만 "여기엔 못 놓는다"를 열에 새긴다. 조용히 무시하면
+ * 사용자는 자기 조준이 빗나간 줄 알고 같은 동작을 반복한다 — 열이 스스로 말해야 한다.
+ */
+export function markLockedColumns(root: ParentNode, source: KanbanTaskStatus) {
+  clearLockedColumns(root);
+  const droppable = new Set(directMoveColumns(root, source));
+  for (const column of visibleKanbanColumns(root)) {
+    if (droppable.has(column) || columnStatus(column) === source) continue;
+    column.dataset.moveLocked = "true";
+  }
+}
+
+export function clearLockedColumns(root: ParentNode = document) {
+  for (const column of root.querySelectorAll<HTMLElement>('[data-move-locked="true"]')) {
+    column.removeAttribute("data-move-locked");
+  }
 }
 
 export function autoScrollKanbanBoard(handle: HTMLElement, clientX: number, edge = 40) {

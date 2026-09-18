@@ -417,3 +417,36 @@ body {
 .auth-office-visual + .auth-office-wordmark {
   margin-top: 0;
 }
+
+/* 칸반 이동 — 상태는 전부 data 속성이 갖는다. 컴포넌트가 classList 를 직접
+   만지면 스타일이 두 곳으로 갈라지고 테스트가 클래스 문자열에 묶인다. */
+[data-column] {
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+[data-column][data-move-target="true"] {
+  background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
+  box-shadow: inset 0 0 0 2px var(--color-info);
+}
+/* Hermes 가 소유한 열은 드래그 중에만 자신이 잠겼음을 드러낸다. */
+[data-column][data-move-locked="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+[data-card-dragging="true"] {
+  cursor: grabbing;
+}
+[data-kanban-drag-preview] {
+  rotate: -2deg;
+}
+/* reduced-motion 에서도 프리뷰는 남긴다 — 그건 장식이 아니라 "무엇을 들고 있는지"의
+   유일한 표시다. 없애는 것은 기울임과 전환뿐이다. */
+@media (prefers-reduced-motion: reduce) {
+  [data-column] {
+    transition: none;
+  }
+  [data-kanban-drag-preview] {
+    rotate: 0deg;
+  }
+}

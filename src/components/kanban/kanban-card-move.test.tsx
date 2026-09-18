@@ -47,6 +47,21 @@ async function mount(options: { disabled?: boolean } = {}) {
     host,
     events,
     opened: () => opened,
+    /** 부모가 새 콜백 신원으로 다시 그리는 상황(보드가 상태를 올릴 때마다 일어난다). */
+    rerender: async () =>
+      await act(async () =>
+        root.render(
+          <I18nProvider initialLocale="en">
+            <div className="overflow-x-auto">
+              {column("todo", [task])}
+              {column("ready", [])}
+              {column("running", [])}
+              {column("blocked", [])}
+              <div hidden>{column("archived", [])}</div>
+            </div>
+          </I18nProvider>,
+        ),
+      ),
     cleanup: async () => {
       await act(async () => root.unmount());
       host.remove();
@@ -441,5 +456,187 @@ test("R2/R5: two boards isolate keyboard targets and target cleanup", async () =
   } finally {
     await act(async () => root.unmount());
     host.remove();
+  }
+});
+
+test("R2: dragging the card body itself starts a move without touching the handle", async () => {
+  const f = await mount();
+  const original = document.elementFromPoint;
+  try {
+    const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
+    const ready = f.host.querySelector<HTMLElement>('[data-column="ready"]')!;
+    document.elementFromPoint = () => ready;
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointermove", { clientX: 13, clientY: 10 })),
+    );
+    assert.equal(f.events.length, 0, "small movement remains a tap");
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointermove", { clientX: 30, clientY: 10 })),
+    );
+    assert.equal(f.events[0]?.type, "start");
+    assert.equal(ready.dataset.moveTarget, "true");
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerup", { clientX: 30, clientY: 10 })),
+    );
+    assert.equal(f.events.at(-1)?.type, "submit");
+  } finally {
+    document.elementFromPoint = original;
+    await f.cleanup();
+  }
+});
+
+test("R2: the click that ends a card-body drag does not open details", async () => {
+  const f = await mount();
+  const original = document.elementFromPoint;
+  try {
+    const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
+    const body = f.host.querySelector<HTMLButtonElement>('[data-card-detail="task-1"]')!;
+    const ready = f.host.querySelector<HTMLElement>('[data-column="ready"]')!;
+    document.elementFromPoint = () => ready;
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointermove", { clientX: 30, clientY: 10 })),
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerup", { clientX: 30, clientY: 10 })),
+    );
+    await act(async () => body.click());
+    assert.equal(f.opened(), 0, "a drag must not fall through to the detail click");
+  } finally {
+    document.elementFromPoint = original;
+    await f.cleanup();
+  }
+});
+
+test("R2: a live move marks locked columns so they read as un-droppable", async () => {
+  const f = await mount();
+  const original = document.elementFromPoint;
+  try {
+    const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
+    const running = f.host.querySelector<HTMLElement>('[data-column="running"]')!;
+    const ready = f.host.querySelector<HTMLElement>('[data-column="ready"]')!;
+    assert.equal(running.hasAttribute("data-move-locked"), false, "idle boards show no lock");
+    document.elementFromPoint = () => ready;
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointermove", { clientX: 30, clientY: 10 })),
+    );
+    assert.equal(running.dataset.moveLocked, "true", "running is Hermes-owned");
+    assert.equal(ready.hasAttribute("data-move-locked"), false);
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerup", { clientX: 30, clientY: 10 })),
+    );
+    assert.equal(running.hasAttribute("data-move-locked"), false, "lock clears with the move");
+  } finally {
+    document.elementFromPoint = original;
+    await f.cleanup();
+  }
+});
+
+test("R2: a pointer drag renders a preview that tracks the pointer and clears on drop", async () => {
+  const f = await mount();
+  const original = document.elementFromPoint;
+  try {
+    const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
+    const ready = f.host.querySelector<HTMLElement>('[data-column="ready"]')!;
+    document.elementFromPoint = () => ready;
+    assert.equal(document.querySelector("[data-kanban-drag-preview]"), null);
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointermove", { clientX: 30, clientY: 40 })),
+    );
+    const preview = document.querySelector<HTMLElement>("[data-kanban-drag-preview]");
+    assert.ok(preview, "a live drag shows the card under the pointer");
+    assert.match(preview.textContent ?? "", /Write release notes/);
+    const first = preview.style.transform;
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointermove", { clientX: 90, clientY: 120 })),
+    );
+    assert.notEqual(
+      document.querySelector<HTMLElement>("[data-kanban-drag-preview]")?.style.transform,
+      first,
+      "the preview follows the pointer",
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerup", { clientX: 90, clientY: 120 })),
+    );
+    assert.equal(document.querySelector("[data-kanban-drag-preview]"), null);
+  } finally {
+    document.elementFromPoint = original;
+    await f.cleanup();
+  }
+});
+
+test("R3: a keyboard move shows no pointer preview", async () => {
+  const f = await mount();
+  try {
+    const handle = f.host.querySelector<HTMLButtonElement>('[data-card-move-handle="task-1"]')!;
+    handle.focus();
+    await act(async () =>
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })),
+    );
+    assert.equal(f.events[0]?.type, "start");
+    assert.equal(document.querySelector("[data-kanban-drag-preview]"), null);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("R2/R5: a parent re-render mid-drag keeps the target and lock marks alive", async () => {
+  const f = await mount();
+  const original = document.elementFromPoint;
+  try {
+    const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
+    const ready = f.host.querySelector<HTMLElement>('[data-column="ready"]')!;
+    const running = f.host.querySelector<HTMLElement>('[data-column="running"]')!;
+    document.elementFromPoint = () => ready;
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointermove", { clientX: 30, clientY: 10 })),
+    );
+    assert.equal(ready.dataset.moveTarget, "true");
+    assert.equal(running.dataset.moveLocked, "true");
+
+    await f.rerender();
+
+    assert.equal(ready.dataset.moveTarget, "true", "the drop target survives a re-render");
+    assert.equal(running.dataset.moveLocked, "true", "the lock survives a re-render");
+    assert.equal(
+      f.events.some((event) => event.type === "cancel"),
+      false,
+      "a re-render is not a cancellation",
+    );
+  } finally {
+    document.elementFromPoint = original;
+    await f.cleanup();
+  }
+});
+
+test("R2: a tap on the card body still opens details", async () => {
+  const f = await mount();
+  try {
+    const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
+    const body = f.host.querySelector<HTMLButtonElement>('[data-card-detail="task-1"]')!;
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
+    );
+    await act(async () =>
+      card.dispatchEvent(pointerEvent("pointerup", { clientX: 11, clientY: 10 })),
+    );
+    await act(async () => body.click());
+    assert.equal(f.opened(), 1);
+  } finally {
+    await f.cleanup();
   }
 });

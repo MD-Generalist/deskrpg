@@ -5,6 +5,7 @@ import { AlertTriangle, GitBranch, GripVertical, MessageSquare, Play } from "luc
 import { useT } from "@/lib/i18n";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 
+import KanbanDragPreview, { type KanbanDragPreviewState } from "./KanbanDragPreview";
 import {
   assigneeLabel,
   elapsedSeconds,
@@ -15,11 +16,13 @@ import {
   type BoardNpc,
 } from "./kanban-view-model";
 import {
+  clearLockedColumns,
   clearMoveTargets,
   autoScrollKanbanBoard,
   columnStatus,
   directMoveColumns,
   isKanbanDirectMoveTarget,
+  markLockedColumns,
   markMoveTarget,
   restoreKanbanMoveFocus,
   tryReleasePointerCapture,
@@ -71,6 +74,10 @@ export default function KanbanCard({
   const [announcement, setAnnouncement] = useState("");
   const [isMoving, setIsMoving] = useState(false);
   const pointerRef = useRef<{ id: number; x: number; y: number } | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const grabRef = useRef<{ x: number; y: number; width: number } | null>(null);
+  const [preview, setPreview] = useState<KanbanDragPreviewState | null>(null);
+  const suppressClickRef = useRef(false);
   const focusFallbackRef = useRef<HTMLElement | null>(null);
   const moveRoot = useCallback(
     () =>
@@ -91,10 +98,15 @@ export default function KanbanCard({
     (restoreFocus = true) => {
       movingRef.current = false;
       setIsMoving(false);
+      setPreview(null);
       pointerRef.current = null;
+      grabRef.current = null;
       targetRef.current = null;
       const root = moveRoot();
-      if (root) clearMoveTargets(root);
+      if (root) {
+        clearMoveTargets(root);
+        clearLockedColumns(root);
+      }
       if (restoreFocus) restoreKanbanMoveFocus(handleRef.current, focusFallbackRef.current);
       focusFallbackRef.current = null;
     },
@@ -117,9 +129,11 @@ export default function KanbanCard({
     focusFallbackRef.current = handleRef.current?.closest<HTMLElement>("[data-column]") ?? null;
     setIsMoving(true);
     targetRef.current = null;
+    const root = moveRoot();
+    if (root) markLockedColumns(root, task.status);
     onMoveInteraction?.({ type: "start", taskId: task.id, source: task.status });
     announce("kanban.move.started", { title: task.title });
-  }, [announce, moveDisabled, onMoveInteraction, task.id, task.status, task.title]);
+  }, [announce, moveDisabled, moveRoot, onMoveInteraction, task.id, task.status, task.title]);
 
   const selectTarget = useCallback(
     (column: HTMLElement) => {
@@ -136,20 +150,30 @@ export default function KanbanCard({
     [announce, moveRoot, onMoveInteraction, t, task.id, task.status],
   );
 
+  // 언마운트 정리는 언마운트에서만 돌아야 한다. 의존성에 콜백이나 task 를 넣으면
+  // 부모가 새 콜백 신원으로 다시 그릴 때마다 cleanup 이 발화해, 진행 중인 드래그의
+  // 강조와 잠금 표시를 지우고 "teardown" 취소까지 보낸다(실제 브라우저에서 관측).
+  const teardownRef = useRef({ moveRoot, onMoveInteraction, task });
+  useEffect(() => {
+    teardownRef.current = { moveRoot, onMoveInteraction, task };
+  });
   useEffect(
     () => () => {
-      if (movingRef.current) {
-        onMoveInteraction?.({
-          type: "cancel",
-          taskId: task.id,
-          source: task.status,
-          reason: "teardown",
-        });
-        const root = moveRoot();
-        if (root) clearMoveTargets(root);
+      if (!movingRef.current) return;
+      const { moveRoot: rootOf, onMoveInteraction: notify, task: current } = teardownRef.current;
+      notify?.({
+        type: "cancel",
+        taskId: current.id,
+        source: current.status,
+        reason: "teardown",
+      });
+      const root = rootOf();
+      if (root) {
+        clearMoveTargets(root);
+        clearLockedColumns(root);
       }
     },
-    [moveRoot, onMoveInteraction, task.id, task.status],
+    [],
   );
 
   useEffect(() => {
@@ -173,19 +197,35 @@ export default function KanbanCard({
       : null;
   };
 
-  const onMovePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const onMovePointerDown = (event: React.PointerEvent<HTMLElement>) => {
     if (moveDisabled || event.button !== 0) return;
     pointerRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    const rect = cardRef.current?.getBoundingClientRect();
+    grabRef.current = rect
+      ? { x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width }
+      : { x: 0, y: 0, width: 0 };
     trySetPointerCapture(event.currentTarget, event.pointerId);
   };
 
-  const onMovePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const onMovePointerMove = (event: React.PointerEvent<HTMLElement>) => {
     const pointer = pointerRef.current;
     if (!pointer || pointer.id !== event.pointerId) return;
     if (!movingRef.current && Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) < 6)
       return;
     if (!movingRef.current) start();
     event.preventDefault();
+    const grab = grabRef.current;
+    if (grab) {
+      setPreview({
+        grabX: grab.x,
+        grabY: grab.y,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        width: grab.width,
+        title: task.title,
+        subtitle: assignee ?? t("kanban.card.unassigned"),
+      });
+    }
     autoScrollKanbanBoard(event.currentTarget, event.clientX);
     const column = columnAtPoint(event.clientX, event.clientY);
     if (column?.dataset.column === task.status) {
@@ -201,12 +241,15 @@ export default function KanbanCard({
     }
   };
 
-  const onMovePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const onMovePointerUp = (event: React.PointerEvent<HTMLElement>) => {
     const pointer = pointerRef.current;
     if (!pointer || pointer.id !== event.pointerId) return;
     tryReleasePointerCapture(event.currentTarget, event.pointerId);
     pointerRef.current = null;
     if (!movingRef.current) return;
+    // 드래그로 끝난 포인터는 뒤이어 click 을 낳는다. 그 click 이 상세를 열면
+    // "옮겼는데 드로어가 뜨는" 이중 동작이 된다(R2).
+    suppressClickRef.current = true;
     const column = columnAtPoint(event.clientX, event.clientY);
     const target = columnStatus(column ?? document.createElement("div"));
     if (!column || !target) return cancel("outside");
@@ -217,7 +260,8 @@ export default function KanbanCard({
     finish();
   };
 
-  const onMovePointerCancel = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const onMovePointerCancel = (event: React.PointerEvent<HTMLElement>) => {
+    if (movingRef.current) suppressClickRef.current = true;
     tryReleasePointerCapture(event.currentTarget, event.pointerId);
     pointerRef.current = null;
     cancel("pointer-cancel");
@@ -275,8 +319,16 @@ export default function KanbanCard({
 
   return (
     <article
+      ref={cardRef}
       data-task-id={task.id}
-      className={`relative w-full rounded-lg border text-xs transition-colors ${
+      data-card-dragging={isMoving ? "true" : undefined}
+      onPointerDown={onMovePointerDown}
+      onPointerMove={onMovePointerMove}
+      onPointerUp={onMovePointerUp}
+      onPointerCancel={onMovePointerCancel}
+      className={`group/card relative w-full rounded-lg border text-xs transition-colors ${
+        moveDisabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
+      } ${isMoving ? "opacity-40" : ""} ${
         selected
           ? "border-info bg-info/10"
           : "border-border bg-surface hover:bg-surface-raised hover:border-border"
@@ -285,7 +337,13 @@ export default function KanbanCard({
       <button
         type="button"
         data-card-detail={task.id}
-        onClick={() => onOpen(task.id)}
+        onClick={() => {
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            return;
+          }
+          onOpen(task.id);
+        }}
         className="w-full p-2.5 pr-9 text-left"
       >
         <div className="font-semibold text-text leading-snug break-words">{task.title}</div>
@@ -346,11 +404,7 @@ export default function KanbanCard({
           if (movingRef.current && event.relatedTarget !== event.currentTarget)
             cancel("focus-loss");
         }}
-        onPointerDown={onMovePointerDown}
-        onPointerMove={onMovePointerMove}
-        onPointerUp={onMovePointerUp}
-        onPointerCancel={onMovePointerCancel}
-        className="absolute right-1.5 top-1.5 rounded p-1 text-text-dim hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-info disabled:opacity-40 touch-none"
+        className="absolute right-1.5 top-1.5 rounded p-1 text-text-dim opacity-0 transition-opacity hover:bg-surface-raised focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-info disabled:opacity-40 group-hover/card:opacity-100"
       >
         <GripVertical className="h-4 w-4" aria-hidden="true" />
       </button>
@@ -360,6 +414,7 @@ export default function KanbanCard({
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </span>
+      <KanbanDragPreview state={preview} />
     </article>
   );
 }
