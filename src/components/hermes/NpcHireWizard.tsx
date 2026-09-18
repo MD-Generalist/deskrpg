@@ -199,6 +199,9 @@ export default function NpcHireWizard({
     [steps],
   );
 
+  // 복제 때 키를 어디까지 물려받을지. 끄면 기본 프로필이 실제로 쓰는 프로바이더 키만,
+  // 켜면 API 키형 프로바이더 키 전부(범용·OAuth 토큰 제외)를 복사한다(플러그인 cloneKeys).
+  const [copyAllApiKeys, setCopyAllApiKeys] = useState(false);
   const nameTrimmed = name.trim();
   const nameValid = nameTrimmed.length > 0 && isCreatableProfileName(nameTrimmed);
 
@@ -293,6 +296,7 @@ export default function NpcHireWizard({
         body: JSON.stringify({
           name: nameTrimmed,
           ...(cloneDefaultProfile ? { cloneFrom: "default" } : {}),
+          ...(cloneDefaultProfile && copyAllApiKeys ? { cloneKeys: "api_keys" } : {}),
         }),
       });
       const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
@@ -352,6 +356,7 @@ export default function NpcHireWizard({
   }, [
     applyIdentityPayload,
     cloneDefaultProfile,
+    copyAllApiKeys,
     gatewayId,
     nameTrimmed,
     nameValid,
@@ -783,6 +788,22 @@ export default function NpcHireWizard({
                     ))}
                   </div>
                 </div>
+              )}
+              {cloneDefaultProfile && (
+                <label className="flex items-start gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={copyAllApiKeys}
+                    onChange={(e) => setCopyAllApiKeys(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    {t("hermes.wizard.profile.copyAllApiKeys")}
+                    <span className="block text-xs text-text-muted">
+                      {t("hermes.wizard.profile.copyAllApiKeysHint")}
+                    </span>
+                  </span>
+                </label>
               )}
               {nameTrimmed.length > 0 && !nameValid && (
                 <p className="text-xs text-danger">{t("hermes.wizard.profile.nameInvalid")}</p>

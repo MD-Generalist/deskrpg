@@ -269,6 +269,9 @@ const ko: Record<string, string> = {
   "hermes.wizard.next": "다음",
   "hermes.wizard.finish": "완료",
   "hermes.wizard.profile.cloned": "기본 프로필의 AI 모델 설정과 키를 물려받았습니다.",
+  "hermes.wizard.profile.copyAllApiKeys": "모든 API 키도 함께 복사",
+  "hermes.wizard.profile.copyAllApiKeysHint":
+    "끄면 기본 프로필이 쓰는 AI 모델의 키만 물려받습니다. 켜도 GitHub·OAuth 같은 범용 토큰은 복사하지 않습니다.",
   "hermes.wizard.profile.cloneFailed":
     "기본 프로필 설정을 물려받지 못했습니다. ③ 에서 AI 모델을 직접 고르세요.",
   "hermes.wizard.locked.needsProfile": "먼저 ① 에서 프로필을 만드세요",

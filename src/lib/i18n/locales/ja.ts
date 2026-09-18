@@ -276,6 +276,9 @@ const ja: Record<string, string> = {
   "hermes.wizard.next": "次へ",
   "hermes.wizard.finish": "完了",
   "hermes.wizard.profile.cloned": "デフォルトプロフィールのAIモデル設定とキーを引き継ぎました。",
+  "hermes.wizard.profile.copyAllApiKeys": "すべてのAPIキーもコピー",
+  "hermes.wizard.profile.copyAllApiKeysHint":
+    "オフ: デフォルトプロフィールが使うAIモデルのキーのみ。オンでもGitHub・OAuthなどの汎用トークンはコピーしません。",
   "hermes.wizard.profile.cloneFailed":
     "デフォルトプロフィールの設定を引き継げませんでした。③でAIモデルを選んでください。",
   "hermes.wizard.locked.needsProfile": "先に①でプロフィールを作成してください",

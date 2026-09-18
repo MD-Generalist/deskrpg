@@ -272,6 +272,9 @@ const en: Record<string, string> = {
   "hermes.wizard.next": "Next",
   "hermes.wizard.finish": "Done",
   "hermes.wizard.profile.cloned": "Inherited the default profile's AI model settings and keys.",
+  "hermes.wizard.profile.copyAllApiKeys": "Also copy all API keys",
+  "hermes.wizard.profile.copyAllApiKeysHint":
+    "Off: only the keys of the AI models the default profile uses. On: every API-key provider key, never general or OAuth tokens such as GitHub.",
   "hermes.wizard.profile.cloneFailed":
     "Couldn't copy the default profile's settings. Pick the AI model in ③.",
   "hermes.wizard.locked.needsProfile": "Create the profile in ① first",

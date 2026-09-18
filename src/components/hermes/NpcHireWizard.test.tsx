@@ -586,3 +586,49 @@ test("구버전 플러그인이면 체크리스트 대신 예전 쉼표 입력�
     globalThis.fetch = originalFetch;
   }
 });
+
+test("'모든 API 키도 함께 복사' 를 켜면 cloneKeys:api_keys 를, 끄면 싣지 않는다", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const all of [true, false]) {
+      const calls: FetchCall[] = [];
+      const { root, el } = await mount(
+        wizardWith(PROFILE_ROUTES(1), calls, undefined, () => {}, true),
+      );
+      const box = [...el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((b) =>
+        b.parentElement?.textContent?.includes("모든 API 키도 함께 복사"),
+      );
+      assert.ok(box, "키 복사 범위 체크박스가 없다");
+      if (all) {
+        await act(async () => {
+          box.click();
+        });
+      }
+      await createProfile(el);
+      const post = calls.find((c) => c.method === "POST" && c.url.endsWith("/plugin/profiles"));
+      assert.deepEqual(
+        post?.body,
+        all
+          ? { name: "mia", cloneFrom: "default", cloneKeys: "api_keys" }
+          : { name: "mia", cloneFrom: "default" },
+      );
+      root.unmount();
+      el.remove();
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("복제를 지원하지 않는 게이트웨이에는 키 복사 체크박스를 보이지 않는다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
+    assert.equal((el.textContent ?? "").includes("모든 API 키도 함께 복사"), false);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
