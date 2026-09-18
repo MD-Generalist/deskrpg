@@ -431,6 +431,22 @@ test("인증된 oauth_device: 연결됨 + 연결 끊기 → DELETE 후 onAuthent
   }
 });
 
+test("연결 끊기가 ok:false(지운 것 없음)면 다시 불러오되 끊겼다고 덮어쓰지 않는다", async () => {
+  // 플러그인은 그 프로필 auth.json 에 지울 것이 없으면 ok:false 다 — 인증은 환경변수·풀에서 올 수 있다.
+  const f = stubFetch({ [`DELETE ${BASE}/oauth/openai-codex`]: { body: { ok: false } } });
+  const view = await mount({ ...CODEX, authenticated: true });
+  try {
+    await click(button(view.host, "연결 끊기"));
+    assert.equal(f.count("DELETE", `${BASE}/oauth/openai-codex`), 1);
+    assert.equal(view.authenticated(), 1);
+    assert.ok(view.host.textContent?.includes("연결됨"));
+    assert.ok(hasButton(view.host, "연결 끊기"));
+  } finally {
+    await view.unmount();
+    f.restore();
+  }
+});
+
 test("인증된 api_key: 연결됨 + 키 교체(입력란) + 키 삭제", async () => {
   const f = stubFetch({
     [`DELETE ${BASE}/provider-keys/openai`]: {

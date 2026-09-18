@@ -169,12 +169,12 @@ export type PluginClient = {
     name: string,
     profileToken: string,
     sessionId: string,
-  ): Promise<PluginResponse<{ ok: true }>>;
+  ): Promise<PluginResponse<{ ok: boolean }>>;
   disconnectOAuth(
     name: string,
     profileToken: string,
     provider: string,
-  ): Promise<PluginResponse<{ ok: true }>>;
+  ): Promise<PluginResponse<{ ok: boolean }>>;
   putProviderKey(
     name: string,
     profileToken: string,

@@ -307,32 +307,35 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
     dispatch({ type: "cancel" });
   };
 
-  /** 연결 끊기·키 저장·키 삭제의 공통 뼈대. 성공이면 true. */
-  const mutate = async (url: string, init: RequestInit): Promise<boolean> => {
+  /** 연결 끊기·키 저장·키 삭제의 공통 뼈대. 성공이면 응답 본문, 실패면 null. */
+  const mutate = async (url: string, init: RequestInit): Promise<Body | null> => {
     setBusy(true);
     setActionError(null);
     try {
       const response = await fetch(url, init);
       const body = await readBody(response);
-      if (unmounted.current) return false;
+      if (unmounted.current) return null;
       if (!succeeded(response, body)) {
         setActionError(errorCodeOf(body, "unknown"));
-        return false;
+        return null;
       }
-      return true;
+      return body;
     } catch {
       if (!unmounted.current) setActionError("unknown");
-      return false;
+      return null;
     } finally {
       if (!unmounted.current) setBusy(false);
     }
   };
 
   const disconnect = async () => {
-    if (await mutate(providerPath, { method: "DELETE" })) {
-      dispatch({ type: "cancel" });
-      markAuthenticated(false);
-    }
+    const body = await mutate(providerPath, { method: "DELETE" });
+    if (!body) return;
+    dispatch({ type: "cancel" });
+    // ok:false 는 그 프로필 auth.json 에 지울 것이 없었다는 뜻이다(인증은 환경변수·풀에서 올 수 있다) —
+    // 끊겼다고 덮어쓰지 않고 다시 불러온 카탈로그 상태를 그대로 보인다.
+    if (body.ok === false) latest.current.onAuthenticated();
+    else markAuthenticated(false);
   };
 
   const saveKey = async (event: FormEvent) => {
@@ -340,11 +343,12 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
     const input = keyInput.current;
     const value = input?.value ?? "";
     if (!value) return;
-    const ok = await mutate(keyPath, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value }),
-    });
+    const ok =
+      (await mutate(keyPath, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      })) !== null;
     if (!ok) return;
     if (input) input.value = "";
     setHasKeyValue(false);
@@ -353,7 +357,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
   };
 
   const removeKey = async () => {
-    if (await mutate(keyPath, { method: "DELETE" })) {
+    if ((await mutate(keyPath, { method: "DELETE" })) !== null) {
       setEditingKey(false);
       markAuthenticated(false);
     }
