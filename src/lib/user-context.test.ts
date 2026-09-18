@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatUserContext, prefixUserContext, requesterLine } from "./user-context";
+import {
+  appendRequesterLine,
+  formatUserContext,
+  prefixUserContext,
+  requesterLine,
+} from "./user-context";
 
 test("이름과 소개를 한 줄로 만든다", () => {
   assert.equal(
@@ -35,4 +40,12 @@ test("prefixUserContext 는 앞머리에 붙이고, 컨텍스트가 없으면 �
 test("칸반 요청자 줄", () => {
   assert.equal(requesterLine({ name: "곽지호", bio: "대표" }), "요청자: 곽지호 — 대표");
   assert.equal(requesterLine({ name: "곽지호", bio: null }), "요청자: 곽지호");
+});
+
+test("칸반 본문 끝에 요청자 줄 — 컨텍스트가 없으면 본문 그대로", () => {
+  const ctx = { name: "곽지호", bio: "대표" };
+  assert.equal(appendRequesterLine("본문", ctx), "본문\n\n요청자: 곽지호 — 대표");
+  assert.equal(appendRequesterLine(undefined, ctx), "요청자: 곽지호 — 대표");
+  assert.equal(appendRequesterLine("본문", null), "본문");
+  assert.equal(appendRequesterLine(undefined, null), undefined);
 });

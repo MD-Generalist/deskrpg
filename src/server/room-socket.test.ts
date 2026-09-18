@@ -15,6 +15,7 @@ function fakeSocket(emitted: Emitted[], id = "s1") {
   return {
     id,
     joined,
+    data: {} as Record<string, unknown>,
     on(e: string, h: (p: unknown) => unknown) {
       handlers.set(e, h);
     },
@@ -55,11 +56,13 @@ function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = 
   const io = fakeIo(emitted);
   const players = new Map();
   const woke: { roomId: string; text: string }[] = [];
+  const callerContexts: unknown[] = [];
   return {
     emitted,
     socket,
     players,
     woke,
+    callerContexts,
     async register(seeded: Seeded) {
       // 기본 신원은 채널 소유자. `userId` 를 주면 그 사람인 척 등록한다 — 권한 갈래용.
       const actingUserId = opts.userId ?? seeded.userId;
@@ -89,8 +92,15 @@ function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = 
           rooms,
           getRuntime: async (_io, room) =>
             ({
-              handleHumanMessage: async (_s: string, text: string) => {
+              handleHumanMessage: async (
+                _s: string,
+                text: string,
+                _socketId: string,
+                _sourceMessageId: string,
+                callerContext: unknown,
+              ) => {
                 woke.push({ roomId: room.id, text });
+                callerContexts.push(callerContext);
               },
             }) as never,
           invalidateRuntime: () => {},
@@ -154,6 +164,17 @@ test("room:send 성공은 저장 + 방 방송 + 런타임 호출, 채널 권한 
   await t2.register(seeded);
   await t2.socket.trigger("room:open", { roomId: office.id });
   assert.deepEqual(ev(t2.emitted, "room:error").at(-1), { roomId: office.id, code: "forbidden" });
+});
+
+test("room:send 는 player:join 이 심은 부른 사람의 이름·소개를 런타임에 넘긴다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  t.socket.data.userContext = { name: "곽지호", bio: "단테랩스 대표" };
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  await t.socket.trigger("room:open", { roomId: office.id });
+  await t.socket.trigger("room:send", { roomId: office.id, message: "@[소피] 안녕" });
+  assert.deepEqual(t.callerContexts, [{ name: "곽지호", bio: "단테랩스 대표" }]);
 });
 
 test("players 에 없는 소켓은 not_joined", async () => {

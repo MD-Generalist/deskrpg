@@ -47,6 +47,8 @@ import {
   type KanbanChannelContext,
 } from "@/lib/kanban-access";
 import { channelBoardSlug, getChannelBoard } from "@/lib/kanban-boards";
+import { getMyCharacter } from "@/lib/my-character";
+import { appendRequesterLine } from "@/lib/user-context";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
 export type TaskParams = { params: Promise<{ id: string; taskId: string }> };
@@ -200,6 +202,9 @@ export async function createTask(req: NextRequest, channelId: string) {
     ...pickTaskFields(body),
     ...(typeof assignee.assignee === "string" ? { assignee: assignee.assignee } : {}),
   };
+  // 누가 시켰는지를 카드 본문 끝에 남긴다. 캐릭터가 없으면 붙이지 않고 그대로 만든다.
+  const mine = await getMyCharacter(ctx.userId);
+  if (mine) task.body = appendRequesterLine(task.body, { name: mine.name, bio: mine.bio });
   const res = await ctx.client.kanban.createTask(ctx.boardSlug, task);
   if (!res.ok) return pluginFailureResponse(res);
 

@@ -6,6 +6,8 @@
 // 지명 형식만은 회의와 **똑같이** 안내한다. 형식이 갈리면 파서가 둘이 되고, 그 순간
 // 한쪽에서만 통하는 지목이 생긴다.
 
+import { formatUserContext, type UserContext } from "@/lib/user-context";
+
 export type ChatLine = { sender: string; content: string };
 
 export function formatOpenChatMessage(
@@ -13,12 +15,15 @@ export function formatOpenChatMessage(
   others: Array<{ displayName: string; role: string }>,
   recent: ChatLine[],
   calledBy: string,
+  caller?: UserContext | null,
 ): string {
   const lines: string[] = [];
 
   lines.push(
     `당신은 ${self.displayName} 입니다. 사무실에서 오가는 대화 중 ${calledBy} 님이 당신을 불렀습니다.`,
   );
+  // 부른 사람이 누구인지(이름·소개). 넘기지 않으면 예전 대본과 바이트까지 같다.
+  if (caller?.name) lines.push(formatUserContext(caller));
   lines.push("");
 
   if (others.length > 0) {

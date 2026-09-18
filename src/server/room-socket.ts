@@ -11,6 +11,7 @@ import { getRoomResponseSnapshot } from "./room-runtime";
 import type { Server } from "socket.io";
 import { resolveRoomAccessDecision, type RoomAccess } from "@/lib/chat-rooms-policy";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
+import type { UserContext } from "@/lib/user-context";
 import type * as chatRooms from "@/lib/chat-rooms";
 import type { PlayerState } from "./socket-handlers";
 import type { getOrCreateRoomRuntime, invalidateRoomRuntime } from "./room-runtime";
@@ -25,6 +26,8 @@ const HISTORY_LIMIT = 60;
 
 type RoomSocket = {
   id: string;
+  /** player:join 이 심은 값. `userContext` 는 부른 사람의 이름·소개(대본 앞머리에 들어간다). */
+  data?: { userContext?: UserContext | null };
   on(event: string, handler: (payload: unknown) => unknown): void;
   emit(event: string, payload: unknown): void;
   join(room: string): void;
@@ -256,7 +259,13 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         const runtime = await getRuntime(io, access.room, user.userId);
         if (runtime) {
           void runtime
-            .handleHumanMessage(senderName, content, socket.id, saved.id)
+            .handleHumanMessage(
+              senderName,
+              content,
+              socket.id,
+              saved.id,
+              socket.data?.userContext ?? null,
+            )
             .catch((err) => console.error("[room] turn failed:", err));
         }
       } catch (err) {

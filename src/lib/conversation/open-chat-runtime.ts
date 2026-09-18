@@ -14,6 +14,7 @@ import { extractMentionNames, parseAllMentions } from "./mention";
 import { ChatQuota, DEFAULT_CHAT_BUDGET } from "./chat-quota";
 import { formatOpenChatMessage, type ChatLine } from "@/lib/open-chat-formatter";
 import type { EngineParticipant } from "./types";
+import type { UserContext } from "@/lib/user-context";
 
 /** speakWithPrompt 는 이 둘을 읽지 않는다. 읽히면 테스트에서 드러나도록 눈에 띄는 값을 넣는다. */
 const UNUSED_TOPIC = "__open_chat_topic_should_never_be_read__";
@@ -23,6 +24,11 @@ export type TurnContext = {
   requestId: string;
   sourceMessageId: string;
   callerSocketId: string | null;
+  /**
+   * 사람이 직접 부른 턴에서만 그 사람의 이름·소개. NPC 가 NPC 를 부른 턴은 null 이다 —
+   * 그 턴의 "부른 사람" 은 동료 NPC 라서 사람의 소개를 붙이면 상대를 잘못 알려 준다.
+   */
+  callerContext?: UserContext | null;
 };
 
 export type OpenChatCallbacks = {
@@ -116,6 +122,7 @@ export class OpenChatRuntime {
     text: string,
     callerSocketId: string | null = null,
     sourceMessageId: string = randomUUID(),
+    callerContext: UserContext | null = null,
   ): Promise<void> {
     if (this.disposed) return;
     this.quota.resetByHuman();
@@ -127,7 +134,15 @@ export class OpenChatRuntime {
     const recent = (this.deps.recentForSource?.(sourceMessageId) ?? this.deps.recent()).map(
       (line) => ({ ...line }),
     );
-    await this.dispatch(targets, senderName, true, callerSocketId, sourceMessageId, recent);
+    await this.dispatch(
+      targets,
+      senderName,
+      true,
+      callerSocketId,
+      sourceMessageId,
+      recent,
+      callerContext,
+    );
   }
 
   private participantsView(): Array<{ npcId: string; displayName: string }> {
@@ -141,6 +156,7 @@ export class OpenChatRuntime {
     callerSocketId: string | null,
     sourceMessageId: string,
     recent: ChatLine[],
+    callerContext: UserContext | null = null,
   ): Promise<void> {
     if (this.disposed) return;
     const work: Promise<void>[] = [];
@@ -156,7 +172,12 @@ export class OpenChatRuntime {
         continue;
       }
       if (!fromHuman && !this.quota.spend()) break;
-      const context: TurnContext = { requestId: randomUUID(), sourceMessageId, callerSocketId };
+      const context: TurnContext = {
+        requestId: randomUUID(),
+        sourceMessageId,
+        callerSocketId,
+        callerContext: fromHuman ? callerContext : null,
+      };
       this.callbacks.onTurnQueued?.(npcId, runtime.displayName, context);
       // The chain runs after this job releases its queue slot, avoiding A -> B -> A deadlocks.
       const job = this.queue.run(npcId, () => this.speakOne(npcId, calledBy, context, recent));
@@ -198,6 +219,7 @@ export class OpenChatRuntime {
         others,
         recent,
         calledBy,
+        context.callerContext,
       );
       const outcome = await withStreamDiagnosticRequest(context.requestId, () =>
         runtime.speakWithPrompt(prompt, {

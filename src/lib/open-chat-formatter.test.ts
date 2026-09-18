@@ -51,3 +51,17 @@ describe("formatOpenChatMessage", () => {
     assert.match(p, /지호/);
   });
 });
+
+test("부른 사람의 컨텍스트를 넘기면 첫 줄 바로 뒤에 [대화 상대] 한 줄이 들어간다", () => {
+  const without = formatOpenChatMessage({ displayName: "단비" }, [], [], "곽지호");
+  const withCaller = formatOpenChatMessage({ displayName: "단비" }, [], [], "곽지호", {
+    name: "곽지호",
+    bio: "단테랩스 대표",
+  });
+  const [first, ...rest] = without.split("\n");
+  assert.equal(
+    withCaller,
+    [first, "[대화 상대] 이름: 곽지호 · 소개: 단테랩스 대표", ...rest].join("\n"),
+  );
+  assert.equal(formatOpenChatMessage({ displayName: "단비" }, [], [], "곽지호", null), without);
+});

@@ -82,6 +82,7 @@ import {
   invalidateRoomRuntimesForChannel,
 } from "./room-runtime";
 import * as chatRooms from "@/lib/chat-rooms";
+import { prefixUserContext, type UserContext } from "@/lib/user-context";
 import { AdapterRegistry } from "../lib/adapters/types.js";
 import { ClaudeAdapter } from "../lib/adapters/claude-adapter.js";
 import { CodexAdapter } from "../lib/adapters/codex-adapter.js";
@@ -391,6 +392,12 @@ function myCharacterIdOf(socket: Socket): string | null {
   return typeof id === "string" && id ? id : null;
 }
 
+/** player:join 이 심은 "이 사람이 누구인지"(이름·소개). join 전이면 null — 앞머리를 붙이지 않는다. */
+function userContextOf(socket: { data?: Record<string, unknown> }): UserContext | null {
+  const ctx = socket.data?.userContext as UserContext | undefined;
+  return ctx && typeof ctx.name === "string" && ctx.name ? ctx : null;
+}
+
 // 예전에는 여기에 OpenClaw 게이트웨이 커넥션 풀(getOrConnectGateway /
 // invalidateGatewayConnectionForChannel)이 있었다. 게이트웨이 런타임 상태의 진짜
 // 무효화는 gateway-resources.ts 가 설정 변경 시점에 invalidateGatewayRuntimeState 로
@@ -499,6 +506,8 @@ async function streamNpcResponse(
   const { _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
   const responseEvent = emitEvent || "npc:response";
   const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
+  // 대화 상대 한 줄은 메시지 앞머리에 붙인다 — 시스템 프롬프트(instructions)는 건드리지 않는다.
+  const prompt = prefixUserContext(message, userContextOf(socket));
 
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
 
@@ -532,7 +541,7 @@ async function streamNpcResponse(
         adapter,
         {
           sessionKey,
-          prompt: message,
+          prompt,
           instructions: npcConfig.instructions,
           onDelta: (delta: string) => {
             socket.emit(responseEvent, { npcId, chunk: delta, done: false });
@@ -582,7 +591,7 @@ async function streamNpcResponse(
         adapter,
         {
           sessionKey,
-          prompt: message,
+          prompt,
           instructions: npcConfig.instructions,
           attachments,
           model:
@@ -622,6 +631,7 @@ async function streamMeetingNpcResponse(
   userMessage: string,
   senderName: string,
   userId: string,
+  userContext: UserContext | null,
 ): Promise<void> {
   const { id: npcId, agentId, sessionKeyPrefix, _name, adapterType, hermesProfileId } = npcConfig;
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
@@ -652,7 +662,8 @@ async function streamMeetingNpcResponse(
   if (dispatchKind === "openclaw" && !agentId) return;
 
   const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
-  const prompt = `${senderName}: ${userMessage}`;
+  // 발언한 사람의 이름·소개를 앞머리에 붙인다(회의 상대는 발언자다).
+  const prompt = prefixUserContext(`${senderName}: ${userMessage}`, userContext);
 
   let hermesAdapter: Awaited<ReturnType<typeof createHermesAdapterForNpc>> = null;
   let hermesContextKey = "";
@@ -1709,6 +1720,7 @@ export function setupSocketHandlers(io: Server) {
                     message,
                     player?.characterName || "Unknown",
                     user.userId,
+                    userContextOf(socket),
                   );
                 } catch (err) {
                   console.error(`[meeting] NPC ${npc._name} failed:`, err);

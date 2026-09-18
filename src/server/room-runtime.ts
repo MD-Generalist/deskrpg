@@ -11,6 +11,7 @@ import { OpenChatRuntime } from "@/lib/conversation/open-chat-runtime";
 import type { OpenChatCallbacks, OpenChatDeps } from "@/lib/conversation/open-chat-runtime";
 import type { EngineParticipant } from "@/lib/conversation/types";
 import type { ChatLine } from "@/lib/open-chat-formatter";
+import type { UserContext } from "@/lib/user-context";
 import { decideResponders } from "@/lib/chat-rooms-policy";
 import { appendRoomMessage, recentRoomMessages, roomNpcMemberIds } from "@/lib/chat-rooms";
 import type { RoomRow } from "@/lib/chat-rooms";
@@ -90,6 +91,7 @@ class RoomChatRuntime extends OpenChatRuntime {
     text: string,
     callerSocketId: string | null = null,
     sourceMessageId?: string,
+    callerContext: UserContext | null = null,
   ): Promise<void> {
     if (sourceMessageId) {
       // Admission must stay synchronous: an awaited refresh lets a later send overtake this one.
@@ -98,7 +100,13 @@ class RoomChatRuntime extends OpenChatRuntime {
       // Compatibility for callers predating source IDs; production room:send always supplies one.
       this.recent.seed(await loadRecentEntries(this.roomId));
     }
-    await super.handleHumanMessage(senderName, text, callerSocketId, sourceMessageId);
+    await super.handleHumanMessage(
+      senderName,
+      text,
+      callerSocketId,
+      sourceMessageId,
+      callerContext,
+    );
   }
 }
 

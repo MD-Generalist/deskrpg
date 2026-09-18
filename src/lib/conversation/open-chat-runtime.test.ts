@@ -411,3 +411,44 @@ test("ordinary completion closes the chunk callback before a late adapter delta 
   late();
   assert.deepEqual(chunks, []);
 });
+
+test("사람이 부른 턴의 대본 둘째 줄에 [대화 상대] 가 실리고, NPC 가 이어 부른 턴에는 실리지 않는다", async () => {
+  const prompts = new Map<string, string[]>();
+  const capturing = (npcId: string, reply: string): NpcAdapter =>
+    ({
+      type: "mock",
+      async execute(o: AdapterExecuteOptions) {
+        prompts.set(npcId, [...(prompts.get(npcId) ?? []), o.prompt]);
+        return { response: reply, session: { sessionRef: o.sessionKey } };
+      },
+      async testConnection() {
+        return { status: "ok" as const };
+      },
+    }) as NpcAdapter;
+  const rt = new OpenChatRuntime(
+    {
+      participants: [
+        p("n1", "단비", capturing("n1", "@[하늘] 부탁해요")),
+        p("n2", "하늘", capturing("n2", "네")),
+      ],
+      recent: () => [],
+      turnTimeout: TIMEOUT,
+    },
+    {},
+  );
+
+  await rt.handleHumanMessage("곽지호", "@[단비] 안녕", "socket-1", "source-1", {
+    name: "곽지호",
+    bio: "단테랩스 대표",
+  });
+
+  const human = prompts.get("n1")?.[0] ?? "";
+  assert.equal(
+    human.split("\n")[1],
+    "[대화 상대] 이름: 곽지호 · 소개: 단테랩스 대표",
+    human.slice(0, 200),
+  );
+  const chained = prompts.get("n2")?.[0] ?? "";
+  assert.ok(chained, "단비의 지목으로 하늘이 불렸다");
+  assert.ok(!chained.includes("[대화 상대]"), chained.slice(0, 200));
+});

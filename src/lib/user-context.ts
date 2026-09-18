@@ -31,3 +31,15 @@ export function requesterLine(ctx: UserContext): string {
   const bio = foldBio(ctx.bio);
   return bio ? `요청자: ${ctx.name} — ${bio}` : `요청자: ${ctx.name}`;
 }
+
+/**
+ * 칸반 카드 본문 **끝**에 요청자 줄을 붙인다 — 사람이 읽는 카드라 앞머리를 더럽히지 않는다.
+ * 컨텍스트가 없으면(캐릭터 없음) 본문을 그대로 돌려준다.
+ */
+export function appendRequesterLine(
+  body: string | undefined,
+  ctx: UserContext | null | undefined,
+): string | undefined {
+  if (!ctx || !ctx.name) return body;
+  return [body ?? "", "", requesterLine(ctx)].join("\n").trim();
+}

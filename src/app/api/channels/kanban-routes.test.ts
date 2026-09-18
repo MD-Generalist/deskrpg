@@ -369,6 +369,46 @@ test("카드 생성 — assignee 는 npcId 로 받아 profile_name 으로 보내
   assert.deepEqual(polled, [seed.channelId], "생성 직후 즉시 폴링을 요청한다");
 });
 
+test("카드 생성 — 만든 사람의 캐릭터가 있으면 본문 끝에 요청자 줄, 없으면 본문 그대로", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const { db, characters } = await import("@/db");
+  const withChar = await seedUser("requester");
+  await addMember(seed.channelId, withChar.id);
+  await db
+    .insert(characters)
+    .values({ userId: withChar.id, name: "곽지호", bio: "단테랩스 대표", appearance: "{}" });
+  const noChar = await seedUser("no-character");
+  await addMember(seed.channelId, noChar.id);
+
+  const sentBodies = (since: number) =>
+    server
+      .requests()
+      .slice(since)
+      .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"))
+      .map((r) => (r.json as Record<string, unknown>).body);
+
+  let before = server.requests().length;
+  assert.equal(
+    (await createTask(routes, withChar.id, seed.channelId, { body: "본문" })).status,
+    201,
+  );
+  assert.deepEqual(sentBodies(before), ["본문\n\n요청자: 곽지호 — 단테랩스 대표"]);
+
+  before = server.requests().length;
+  assert.equal((await createTask(routes, withChar.id, seed.channelId)).status, 201);
+  assert.deepEqual(sentBodies(before), ["요청자: 곽지호 — 단테랩스 대표"]);
+
+  before = server.requests().length;
+  assert.equal(
+    (await createTask(routes, noChar.id, seed.channelId, { body: "본문" })).status,
+    201,
+    "캐릭터가 없어도 카드는 만들어진다",
+  );
+  assert.deepEqual(sentBodies(before), ["본문"]);
+});
+
 test("담당자 검증 — 잠든 NPC·다른 채널 NPC 는 400 assignee_not_in_channel 이고 Hermes 를 부르지 않는다", async () => {
   server.reset();
   const routes = await loadRoutes();
