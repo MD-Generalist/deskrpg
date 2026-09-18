@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db, channels, npcs, nowForDb } from "@/db";
 import { isUniqueViolation } from "./db-unique-violation";
 import { planPlacements, seatingMapFor, type DeskSeat, type SeatingMap } from "./seat-assignment";
@@ -29,6 +29,35 @@ export async function channelSeats(channelId: string): Promise<DeskSeat[] | null
  * 어떤 실패도 고용을 깨뜨리지 않는다 — `failed` 로 세고 끝낸다.
  */
 export async function placeUnplacedNpcs(channelId: string): Promise<PlacementResult> {
+  let result: PlacementResult;
+  try {
+    result = await placeUnplacedNpcsInternal(channelId);
+  } catch (err) {
+    console.error("[seating] placement failed", { channelId, err });
+    const failed = await countActiveUnplaced(channelId).catch(() => 0);
+    result = { seated: 0, standing: 0, failed };
+  }
+  if (result.failed > 0) {
+    console.warn("[seating] active NPCs left without a spot", { channelId, failed: result.failed });
+  }
+  return result;
+}
+
+async function countActiveUnplaced(channelId: string): Promise<number> {
+  const left = await db
+    .select({ id: npcs.id })
+    .from(npcs)
+    .where(
+      and(
+        eq(npcs.channelId, channelId),
+        eq(npcs.active, true),
+        or(isNull(npcs.positionX), isNull(npcs.positionY)),
+      ),
+    );
+  return left.length;
+}
+
+async function placeUnplacedNpcsInternal(channelId: string): Promise<PlacementResult> {
   const result: PlacementResult = { seated: 0, standing: 0, failed: 0 };
   const map = await loadSeatingMap(channelId);
 
@@ -53,10 +82,12 @@ export async function placeUnplacedNpcs(channelId: string): Promise<PlacementRes
     let conflict = false;
     for (const step of plan) {
       try {
-        await db
+        const updated = await db
           .update(npcs)
           .set({ positionX: step.col, positionY: step.row, updatedAt: nowForDb() })
-          .where(and(eq(npcs.id, step.npcId), isNull(npcs.positionX)));
+          .where(and(eq(npcs.id, step.npcId), or(isNull(npcs.positionX), isNull(npcs.positionY))))
+          .returning({ id: npcs.id });
+        if (updated.length === 0) continue;
         if (step.seated) result.seated += 1;
         else result.standing += 1;
       } catch (err) {
@@ -69,11 +100,8 @@ export async function placeUnplacedNpcs(channelId: string): Promise<PlacementRes
     if (!conflict) return { ...result, failed: unplaced.length - plan.length };
   }
 
-  const left = await db
-    .select({ id: npcs.id })
-    .from(npcs)
-    .where(and(eq(npcs.channelId, channelId), eq(npcs.active, true), isNull(npcs.positionX)));
-  return { ...result, failed: left.length };
+  const left = await countActiveUnplaced(channelId);
+  return { ...result, failed: left };
 }
 
 /** 서버 부팅 때 1회 — 이 기능 이전에 자리 없이 만들어진 직원을 이행한다. 멱등. */
