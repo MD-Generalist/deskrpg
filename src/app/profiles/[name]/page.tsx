@@ -274,6 +274,7 @@ function EmployeeDetailContent() {
             {sections.includes("persona") && (
               <section className="rounded-xl border border-border bg-surface p-5">
                 <NpcHireWizard
+                  title={ko ? "인격·설정" : "Persona & settings"}
                   gatewayId={gatewayId}
                   pluginStatus={pluginStatus}
                   existingProfiles={allNames}

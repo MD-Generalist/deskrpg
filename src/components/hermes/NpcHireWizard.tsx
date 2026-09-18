@@ -91,6 +91,11 @@ interface NpcHireWizardProps {
    * ③ 설정에서 "이 직원으로 로그인" 링크를 만든다. 없으면 안내 문구만 보인다.
    */
   dashboardUrl?: string | null;
+  /**
+   * 화면 제목. 직원 상세에서 이 마법사를 **편집기로** 쓸 때 "직원 등록 마법사" 라는 제목이
+   * 맥락과 어긋나므로 호출부가 바꿔 준다.
+   */
+  title?: string;
   /** ①에서 프로필이 실제로 만들어진 직후. 바깥 프로필 목록이 이것으로 곧바로 다시 읽는다. */
   onProfileCreated?: (profileName: string) => void;
   onDone: () => void;
@@ -142,6 +147,7 @@ export default function NpcHireWizard({
   existingProfiles,
   initialProfile = null,
   dashboardUrl = null,
+  title,
   onProfileCreated,
   onDone,
 }: NpcHireWizardProps) {
@@ -607,7 +613,7 @@ export default function NpcHireWizard({
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t("hermes.wizard.title")}</h2>
+        <h2 className="text-lg font-semibold">{title ?? t("hermes.wizard.title")}</h2>
         <button
           type="button"
           onClick={requestClose}
