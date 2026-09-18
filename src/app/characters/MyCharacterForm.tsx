@@ -193,8 +193,12 @@ export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = 
             onChange={(e) => setBio(e.target.value)}
             rows={4}
           />
-          <p className="lookbook-preview-description">{BIO_MAX_LENGTH - bio.length}</p>
-          <p className="lookbook-preview-description">{t("characters.my.bioHint")}</p>
+          <p className="lookbook-field-meta">
+            <span>{t("characters.my.bioHint")}</span>
+            <span aria-label={ko ? "글자 수" : "Character count"}>
+              {bio.length} / {BIO_MAX_LENGTH}
+            </span>
+          </p>
         </div>
         {error && (
           <p className="lookbook-error" role="alert">

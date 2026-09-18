@@ -193,13 +193,35 @@
   color: #778374;
   margin-bottom: 7px;
 }
-.lookbook-name input {
+.lookbook-name input,
+.lookbook-name textarea {
+  display: block;
   width: 100%;
   border: 1px solid #d4dccc;
   border-radius: 9px;
   padding: 12px 14px;
   background: #fffefa;
+  font: inherit;
   font-size: 14px;
+  line-height: 1.5;
+}
+.lookbook-name textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+.lookbook-field-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #778374;
+  text-align: left;
+}
+.lookbook-field-meta span:last-child {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .lookbook-save {
   display: flex;
