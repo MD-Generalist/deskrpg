@@ -53,9 +53,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, appearance } = body;
 
-    if (!name || !appearance) {
+    if (!name) {
       return NextResponse.json(
-        { errorCode: "character_name_required", error: "name and appearance are required" },
+        { errorCode: "character_name_required", error: "name is required" },
+        { status: 400 },
+      );
+    }
+
+    if (!appearance) {
+      return NextResponse.json(
+        { errorCode: "character_appearance_invalid", error: "appearance is required" },
         { status: 400 },
       );
     }

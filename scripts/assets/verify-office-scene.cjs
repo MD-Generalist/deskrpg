@@ -20,7 +20,7 @@ assert.ok(["trading", "agency", "tech", "executive", "publishing"].includes(envi
  const map=tiledSnapshot(buildOfficeEnvironment('${environment}'));
  const r:any=new OfficeRenderer(document.getElementById('view')!,document.getElementById('labels')!);
  Object.assign(window,{r,map,seats:furnitureSeats(map.objects),sofaSeats:furnitureSeats(map.objects.filter(o=>o.type.includes("sofa")))});
- r.attach({map:()=>map,mapKey:()=> 'tech-review',actors:()=>[],setPresentation:()=>{},editor:()=>({enabled:false}),walkable:()=>true,pointer:()=>{},save:async()=>false,edit:()=>{}} as any);
+ r.attach({map:()=>map,mapKey:()=> 'tech-review',actors:()=>[],setPresentation:()=>{},editor:()=>({placement:false,spawn:false,owner:false,tiled:true}),walkable:()=>true,pointer:()=>{}} as any);
  r.overview(map.cols,map.rows);r.buildMap(map);r.lastMap='tech-review';
  `,
       resolveDir: process.cwd(),

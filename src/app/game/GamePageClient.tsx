@@ -367,7 +367,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // Ref to accumulate streaming text (avoids setState-in-effect issues)
   const streamBufferRef = useRef("");
   const socketRef = useRef<Socket | null>(null);
-  // Current player position — updated from GameScene for beforeunload save
+  // Current player position — updated from the simulation for beforeunload save
   const playerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const [instanceId, setInstanceId] = useState("");
   const [debugCopied, setDebugCopied] = useState(false);
@@ -901,7 +901,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           ),
         );
       });
-      // NPC movement socket events — relay to GameScene via EventBus
+      // NPC movement socket events — relay to the simulation via EventBus
       socketInstance.on(
         "npc:come-to-player",
         (data: { npcId: string; targetPlayerId: string; reason?: string; roomId?: string }) => {
@@ -928,7 +928,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             // 그 자리에서 도착까지 진행하므로, 반드시 emit 앞에서 기록해야 한다.
             // 컨텍스트 메뉴 호출(reason 없음)은 이전 맵 채팅 대기를 무효화한다. 지우지 않으면
             // 그 NPC 가 도착했을 때 사용자가 방금 명시적으로 요청한 1:1 대화창이 삼켜진다 —
-            // GameScene 은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
+            // 시뮬레이션은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
             // 걷기로 일어나고 항목은 그때까지 살아 있다.
             mapChatWalkersRef.current.noteCall(data.npcId, data.reason);
             mapChatParticipantsRef.current.noteCalled(data.roomId, data.npcId, data.reason);
@@ -1054,7 +1054,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     npcMessagesRef.current = npcMessages;
   }, [npcMessages]);
 
-  // Listen for NPC interact event from GameScene
+  // Listen for NPC interact event from the simulation
   useEffect(() => {
     const handleNpcInteract = (data: { npcId: string; npcName: string }) => {
       resetDialog();

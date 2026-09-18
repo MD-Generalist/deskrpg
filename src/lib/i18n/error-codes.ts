@@ -182,8 +182,8 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   map_template_not_found: "errors.mapTemplateNotFound",
   // 채널 생성은 환경 ID 를 받는다. 새 문구 대신 기존 키를 재사용한다(로케일 파일은 다른 작업이 만진다).
   environment_required: "errors.missingRequiredFields",
-  environment_unknown: "errors.mapTemplateNotFound",
-  map_template_removed: "errors.mapTemplateInvalid",
+  environment_unknown: "errors.environmentUnknown",
+  map_template_removed: "errors.mapTemplateRemoved",
   template_not_found: "errors.mapTemplateNotFound",
   private_channel_password_required: "errors.privateChannelPasswordRequired",
   channel_creation_forbidden: "errors.forbidden",

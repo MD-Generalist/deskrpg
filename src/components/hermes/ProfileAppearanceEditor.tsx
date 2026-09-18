@@ -4,6 +4,7 @@ import { useState } from "react";
 import OfficeLookGallery from "@/components/OfficeLookGallery";
 import CharacterPreview from "@/components/CharacterPreview";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
+import { DEFAULT_OFFICE_LOOK_ID } from "@/game/three/office-appearance";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT, useLocale } from "@/lib/i18n";
 import type { CharacterAppearance } from "@/game/three/office-appearance";
@@ -26,7 +27,7 @@ export default function ProfileAppearanceEditor({
     { locale } = useLocale(),
     ko = locale === "ko";
   const [appearance, setAppearance] = useState(
-    () => initialAppearance ?? officeLookAppearance(OFFICE_LOOKS[0].id),
+    () => initialAppearance ?? officeLookAppearance(DEFAULT_OFFICE_LOOK_ID),
   );
   const selected = resolveOfficeLook(appearance);
   const [saving, setSaving] = useState(false),

@@ -2067,6 +2067,9 @@ const ja: Record<string, string> = {
   "errors.channelNameRequired": "チャンネル名が必要です (1-100文字)",
   "errors.mapTemplateRequired": "マップテンプレートが必要です",
   "errors.mapTemplateNotFound": "マップテンプレートが見つかりません",
+  "errors.environmentUnknown": "選択したオフィス環境が見つかりません。",
+  "errors.mapTemplateRemoved":
+    "マップテンプレートは廃止されました。オフィス環境を選択してください。",
   "errors.privateChannelPasswordRequired": "非公開チャンネルにはパスワードが必要です (8文字以上)",
   "errors.failedToFetchChannels": "チャンネルの取得に失敗しました",
   "errors.failedToCreateChannel": "チャンネルの作成に失敗しました",

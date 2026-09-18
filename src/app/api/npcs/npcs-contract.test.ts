@@ -9,7 +9,7 @@ import {
   setupThrowawaySqlite,
 } from "@/test-setup/npc-seed";
 
-// `GET /api/npcs?channelId=` 의 계약을 고정한다. 이 응답은 GameScene 이 그대로 먹는다 —
+// `GET /api/npcs?channelId=` 의 계약을 고정한다. 이 응답은 맵 시뮬레이션이 그대로 먹는다 —
 // 형태가 조용히 바뀌면 맵이 깨지고, 그 사실은 브라우저에서야 드러난다.
 //
 // `db` 는 지연 초기화 싱글턴이고 node:test 는 파일마다 프로세스를 나누므로, 모듈
@@ -57,7 +57,7 @@ test("roster 없이 부르면 자리 미정·휴면 NPC 는 절대 나오지 않
     assert.notEqual(
       n.positionX,
       null,
-      "GameScene 이 positionX*TILE_SIZE 를 바로 계산한다 — null 이 새면 NaN 좌표다",
+      "시뮬레이션이 positionX*TILE_SIZE 를 바로 계산한다 — null 이 새면 NaN 좌표다",
     );
     assert.notEqual(n.positionY, null);
     assert.equal(n.active, undefined, "roster 없이 부르면 active/placed 는 실리지 않는다");

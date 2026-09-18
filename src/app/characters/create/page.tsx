@@ -8,6 +8,7 @@ import LocaleSwitcher from "@/components/LocaleSwitcher";
 import CharacterPreview from "@/components/CharacterPreview";
 import OfficeLookGallery from "@/components/OfficeLookGallery";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
+import { DEFAULT_OFFICE_LOOK_ID } from "@/game/three/office-appearance";
 import {
   normalizeOfficeAppearance,
   type CharacterAppearance,
@@ -31,7 +32,7 @@ function CharacterCreatePageInner() {
     editId = searchParams.get("editId"),
     isEditMode = !!editId;
   const [selectedAppearance, setSelectedAppearance] = useState<CharacterAppearance | null>(() =>
-    isEditMode ? null : officeLookAppearance(OFFICE_LOOKS[0].id),
+    isEditMode ? null : officeLookAppearance(DEFAULT_OFFICE_LOOK_ID),
   );
   const [name, setName] = useState(""),
     [saving, setSaving] = useState(false),

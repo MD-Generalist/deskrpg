@@ -110,7 +110,7 @@ async function createSpatialChannel(
 }
 
 async function waitForOfficeReady(page: Page, frames: Frame[]) {
-  // GameScene.canMovePlayer requires all three server snapshots, even with zero NPCs.
+  // 시뮬레이션은 세 서버 스냅샷이 다 와야 플레이어를 움직인다(NPC 가 0명이어도).
   await expect
     .poll(
       () =>

@@ -2052,6 +2052,9 @@ const ko: Record<string, string> = {
   "errors.channelNameRequired": "채널 이름이 필요합니다 (1-100자)",
   "errors.mapTemplateRequired": "맵 템플릿이 필요합니다",
   "errors.mapTemplateNotFound": "맵 템플릿을 찾을 수 없습니다",
+  "errors.environmentUnknown": "선택한 사무실 환경을 찾을 수 없습니다.",
+  "errors.mapTemplateRemoved":
+    "맵 템플릿은 더 이상 지원하지 않습니다. 사무실 환경을 선택해 주세요.",
   "errors.privateChannelPasswordRequired": "비공개 채널은 비밀번호가 필요합니다 (8자 이상)",
   "errors.failedToFetchChannels": "채널 목록을 불러오지 못했습니다",
   "errors.failedToCreateChannel": "채널 생성에 실패했습니다",

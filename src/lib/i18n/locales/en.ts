@@ -2058,6 +2058,9 @@ const en: Record<string, string> = {
   "errors.channelNameRequired": "Channel name is required (1-100 chars)",
   "errors.mapTemplateRequired": "Map template is required",
   "errors.mapTemplateNotFound": "Map template not found",
+  "errors.environmentUnknown": "The selected office environment was not found.",
+  "errors.mapTemplateRemoved":
+    "Map templates are no longer supported. Choose an office environment instead.",
   "errors.privateChannelPasswordRequired": "Private channels require a password (min 8 chars)",
   "errors.failedToFetchChannels": "Failed to fetch channels",
   "errors.failedToCreateChannel": "Failed to create channel",

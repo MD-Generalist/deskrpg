@@ -18,7 +18,7 @@ export type ChannelMotionLayout = {
   npcs: Array<NavigationPoint & { id: string }>;
   seats: Array<NavigationPoint & { id: string }>;
   bounds: { width: number; height: number };
-  /** Logical tile indices, matching GameScene navigation. */
+  /** Logical tile indices, matching the client simulation's navigation. */
   isWalkable: Walkable;
   /** Pixel coordinates, including actor body clearance at wall corners. */
   canStandAt: (point: NavigationPoint) => boolean;

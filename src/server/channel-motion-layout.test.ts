@@ -148,7 +148,7 @@ test("missing or malformed snapshots fail closed", () => {
   }
 });
 
-test("edited themed maps keep edits and GameScene's no-Collision legacy wall fallback", () => {
+test("edited themed maps keep edits and the renderer's no-Collision legacy wall fallback", () => {
   const map = buildOfficeEnvironment("agency");
   const walls = map.layers.find((layer) => layer.name === "Walls")!;
   map.layers = map.layers.filter((layer) => layer.name.toLowerCase() !== "collision");

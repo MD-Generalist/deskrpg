@@ -2014,6 +2014,8 @@ const zh: Record<string, string> = {
   "errors.channelNameRequired": "频道名称为必填项（1-100 个字符）",
   "errors.mapTemplateRequired": "需要地图模板",
   "errors.mapTemplateNotFound": "未找到地图模板",
+  "errors.environmentUnknown": "找不到所选的办公室环境。",
+  "errors.mapTemplateRemoved": "地图模板已停用，请改为选择办公室环境。",
   "errors.privateChannelPasswordRequired": "私密频道需要密码（至少 8 个字符）",
   "errors.failedToFetchChannels": "无法获取频道列表",
   "errors.failedToCreateChannel": "创建频道失败",
