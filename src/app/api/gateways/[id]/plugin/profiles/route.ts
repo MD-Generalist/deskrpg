@@ -10,7 +10,7 @@ import { getUserId } from "@/lib/internal-rpc";
 import { hireProfileIntoBoundChannels } from "@/lib/npc-roster";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
-import { validateCreatableProfileName } from "../validation";
+import { validateCreatableProfileName, validateCreateOptions } from "../validation";
 
 /**
  * 프로필 생성·목록은 **default 키**를 쓴다 — 게이트웨이 전체를 다루는 자격이라
@@ -92,6 +92,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
+  // 복제 원본은 지금 `default` 뿐이다 — 원격이 400 을 내기 전에 여기서 이유를 분명히 한다.
+  const options = validateCreateOptions(payload);
+  if (!options.ok) {
+    return NextResponse.json(
+      { errorCode: options.errorCode, error: options.errorCode },
+      { status: 400 },
+    );
+  }
+
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) {
     return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
@@ -101,7 +110,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     baseUrl: accessible.resource.baseUrl,
     defaultToken: decryptGatewayToken(accessible.resource.tokenEncrypted),
   });
-  const res = await client.createProfile(nameCheck.name);
+  const res = await client.createProfile(
+    nameCheck.name,
+    options.cloneFrom ? { cloneFrom: options.cloneFrom } : undefined,
+  );
   if (!res.ok) {
     return NextResponse.json(
       { errorCode: res.failure.code, error: res.failure.message, upstreamStatus: res.status },
@@ -155,8 +167,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
+  // `stripApiKey` 는 `apiKey` 를 절대 옮기지 않는다 — `cloned`/`needsLogin`/`cloneError`
+  // 는 그 함수가 모르는 필드라 여기서 **있을 때만** 따로 얹는다(값을 지어내지 않는다).
+  const cloneFields: Record<string, unknown> = {};
+  if (res.data.cloned !== undefined) cloneFields.cloned = res.data.cloned;
+  if (res.data.needsLogin !== undefined) cloneFields.needsLogin = res.data.needsLogin;
+  if (res.data.cloneError !== undefined) cloneFields.cloneError = res.data.cloneError;
+
   return NextResponse.json(
-    { ...attachKeyStorage(stripApiKey(res.data), keyStorage), attendedChannels },
+    { ...attachKeyStorage(stripApiKey(res.data), keyStorage), attendedChannels, ...cloneFields },
     { status: 201 },
   );
 }
