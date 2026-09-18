@@ -127,6 +127,7 @@ COPY --from=builder /app/src/lib/i18n/locales ./src/lib/i18n/locales
 # profile-name.ts, neither of which had its own COPY line before this fix).
 COPY --from=builder /app/src/lib/adapters ./src/lib/adapters
 COPY --from=builder /app/src/lib/hermes-profiles.ts ./src/lib/hermes-profiles.ts
+COPY --from=builder /app/src/lib/profile-look-assignment.ts ./src/lib/profile-look-assignment.ts
 COPY --from=builder /app/src/lib/hermes ./src/lib/hermes
 
 # .dockerignore does NOT apply to `COPY --from=<stage>` — it filters the build context

@@ -9,38 +9,50 @@ import {
 } from "./hire-wizard-steps";
 
 describe("availableSteps — 축소 사다리", () => {
-  it("플러그인이 있으면 4단 전부 열린다", () => {
-    const steps = availableSteps("plugin_ready", false);
+  it("플러그인이 있고 프로필이 있으면 3단 전부 열린다 — ④ 배치는 없다", () => {
+    const steps = availableSteps("plugin_ready", false, true);
     assert.deepEqual(
       steps.map((s) => s.step),
-      ["profile", "identity", "config", "placement"],
+      ["profile", "identity", "config"],
     );
     assert.ok(steps.every((s) => s.enabled));
   });
 
-  it("플러그인이 없고 로컬 발견이 되면 인격·설정만 잠긴다", () => {
-    // 프로필은 파일시스템 발견으로 찾아 등록할 수 있고, 배치도 된다.
-    // 인격·설정만 원격에서 손댈 방법이 없다.
-    const steps = availableSteps("plugin_absent", true);
+  it("프로필을 만들기 전에는 인격·AI 모델이 잠기고 그 이유를 준다", () => {
+    // 2026-09-18 실측: 잠기지 않은 ② 가 빈 조회 결과를 "인격 파일을 읽을 수 없다" 로
+    // 보여줬고, ③ 은 모델 목록을 못 받아 자유 입력으로 떨어졌다.
+    const steps = availableSteps("plugin_ready", false, false);
     const byStep = Object.fromEntries(steps.map((s) => [s.step, s]));
     assert.equal(byStep.profile.enabled, true);
     assert.equal(byStep.identity.enabled, false);
     assert.equal(byStep.config.enabled, false);
-    assert.equal(byStep.placement.enabled, true);
-    assert.ok(byStep.identity.lockedReason);
+    assert.equal(byStep.identity.lockedReason, "hermes.wizard.locked.needsProfile");
+    assert.equal(byStep.config.lockedReason, "hermes.wizard.locked.needsProfile");
   });
 
-  it("플러그인도 로컬 발견도 없으면 배치만 남는다", () => {
-    const steps = availableSteps("plugin_absent", false);
+  it("플러그인이 없고 로컬 발견이 되면 인격·AI 모델만 잠긴다", () => {
+    // 프로필은 파일시스템 발견으로 찾아 등록할 수 있다.
+    // 인격·설정만 원격에서 손댈 방법이 없다.
+    const steps = availableSteps("plugin_absent", true, true);
     const byStep = Object.fromEntries(steps.map((s) => [s.step, s]));
-    assert.equal(byStep.profile.enabled, false);
-    assert.equal(byStep.placement.enabled, true);
+    assert.equal(byStep.profile.enabled, true);
+    assert.equal(byStep.identity.enabled, false);
+    assert.equal(byStep.config.enabled, false);
+    assert.equal(byStep.identity.lockedReason, "hermes.plugin.locked.absent");
+  });
+
+  it("플러그인 잠금 이유가 프로필 없음보다 먼저다 — 프로필을 만들어도 열리지 않으므로", () => {
+    const steps = availableSteps("plugin_absent", false, false);
+    assert.equal(
+      steps.find((s) => s.step === "identity")!.lockedReason,
+      "hermes.plugin.locked.absent",
+    );
   });
 
   it("401 은 404 와 다른 이유를 준다", () => {
     // 사용자가 할 일이 정반대다 — 키 교체 vs 플러그인 설치.
-    const unauthorized = availableSteps("plugin_unauthorized", false);
-    const absent = availableSteps("plugin_absent", false);
+    const unauthorized = availableSteps("plugin_unauthorized", false, false);
+    const absent = availableSteps("plugin_absent", false, false);
     const a = unauthorized.find((s) => s.step === "profile")!.lockedReason;
     const b = absent.find((s) => s.step === "profile")!.lockedReason;
     assert.ok(a);
@@ -49,7 +61,7 @@ describe("availableSteps — 축소 사다리", () => {
   });
 
   it("unknown 은 기능을 켜지 않는다", () => {
-    const steps = availableSteps("unknown", false);
+    const steps = availableSteps("unknown", false, true);
     assert.equal(steps.find((s) => s.step === "identity")!.enabled, false);
   });
 });
@@ -76,14 +88,19 @@ describe("identityDecision — 사람이 쓴 인격을 모르고 지우지 않�
 });
 
 describe("nextStep", () => {
-  it("잠긴 단계는 건너뛴다", () => {
-    const steps = availableSteps("plugin_absent", true);
-    assert.equal(nextStep("profile", steps), "placement");
+  it("잠긴 단계는 건너뛴다 — 뒤에 열린 단계가 없으면 끝이다", () => {
+    const steps = availableSteps("plugin_absent", true, true);
+    assert.equal(nextStep("profile", steps), null);
   });
 
-  it("마지막 단계 다음은 없다", () => {
-    const steps = availableSteps("plugin_ready", false);
-    assert.equal(nextStep("placement", steps), null);
+  it("① 다음은 ② 다", () => {
+    const steps = availableSteps("plugin_ready", false, true);
+    assert.equal(nextStep("profile", steps), "identity");
+  });
+
+  it("③ AI 모델이 마지막 단계다", () => {
+    const steps = availableSteps("plugin_ready", false, true);
+    assert.equal(nextStep("config", steps), null);
   });
 });
 

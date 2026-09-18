@@ -211,7 +211,7 @@ const en: Record<string, string> = {
   // Hermes profiles
   "gateway.profile.title": "Employees (Hermes profiles)",
   "gateway.profile.empty": "No profiles registered yet.",
-  "gateway.profile.addTitle": "Add profile",
+  "gateway.profile.addTitle": "Register an existing profile (advanced)",
   "gateway.profile.profileNamePlaceholder": "Profile name (e.g. default)",
   "gateway.profile.displayName": "Display name (optional)",
   "gateway.profile.tokenPlaceholder": "Profile token (16+ characters)",
@@ -256,15 +256,36 @@ const en: Record<string, string> = {
   "hermes.plugin.locked.absent": "The deskrpg plugin isn't installed on this gateway machine.",
   "hermes.plugin.locked.unknown":
     "Couldn't determine plugin status. Re-test the gateway connection.",
-  "hermes.wizard.openButton": "Employee registration wizard",
+  "hermes.picker.toolsets": "Tools",
+  "hermes.picker.skills": "Skills",
+  "hermes.picker.loading": "Loading…",
+  "hermes.picker.loadFailed": "Could not load the lists.",
+  "hermes.picker.retry": "Retry",
+  "hermes.picker.needsKey": "Needs key",
+  "hermes.picker.essential": "Required",
+  "hermes.picker.searchSkills": "Search skills",
+  "hermes.picker.uncategorized": "Other",
+  "hermes.picker.noSkills": "No matching skills.",
+  "hermes.wizard.openButton": "+ Hire new employee",
   "hermes.wizard.title": "Employee registration wizard",
   "hermes.wizard.close": "Close",
   "hermes.wizard.next": "Next",
+  "hermes.wizard.finish": "Done",
+  "hermes.wizard.profile.cloned": "Inherited the default profile's AI model settings and keys.",
+  "hermes.wizard.profile.copyAllApiKeys": "Also copy all API keys",
+  "hermes.wizard.profile.copyAllApiKeysHint":
+    "Off: only the keys of the AI models the default profile uses. On: every API-key provider key, never general or OAuth tokens such as GitHub.",
+  "hermes.wizard.profile.cloneFailed":
+    "Couldn't copy the default profile's settings. Pick the AI model in ③.",
+  "hermes.wizard.locked.needsProfile": "Create the profile in ① first",
+  "hermes.wizard.config.advanced": "Tools & skills (advanced)",
+  "hermes.wizard.result.attended": "'{name}' has joined {count} channel(s).",
+  "hermes.wizard.result.noChannel":
+    "'{name}' is registered. It joins a channel once this gateway is attached to one.",
   "hermes.wizard.back": "Back",
   "hermes.wizard.step.profile": "① Profile",
   "hermes.wizard.step.identity": "② Identity",
-  "hermes.wizard.step.config": "③ Config",
-  "hermes.wizard.step.placement": "④ Placement",
+  "hermes.wizard.step.config": "③ AI model",
   "hermes.wizard.step.installingService": "Register the gateway service",
   "hermes.wizard.step.updatingPlugin": "Update the DeskRPG plugin",
   "hermes.wizard.step.settingTimezone": "Set the gateway time zone",
@@ -420,17 +441,6 @@ const en: Record<string, string> = {
   "hermes.wizard.config.saving": "Saving…",
   "hermes.wizard.config.saved": "Saved.",
   "hermes.wizard.config.loading": "Loading config…",
-  "hermes.wizard.placement.ready": "Profile '{name}' is ready.",
-  "hermes.wizard.placement.alreadyRegistered":
-    "Profile '{name}' is already registered — no need to create it again.",
-  "hermes.wizard.placement.goToChannels": "Go to channels",
-  "hermes.wizard.placement.guide":
-    'If a channel already uses this gateway, this employee is on duty there. Open the channel roster, click "no seat yet" and pick a chair to save a fixed seat.',
-  "hermes.wizard.placement.guideAttended":
-    'This employee reported to {count} channel(s). Open the channel roster, click "no seat yet" and pick a chair to save a fixed seat.',
-  "hermes.wizard.placement.guideNoChannel":
-    "No channel uses this gateway yet, so nobody reported for duty. Create a channel and attach this gateway under Settings → AI Connection; the employee then reports automatically.",
-  "hermes.wizard.placement.done": "Close wizard",
   "hermes.wizard.closeConfirmTitle": "What happens if you close now",
   "hermes.wizard.closeConfirmBody":
     "The profile '{name}' created in step ① will remain. Delete it?",

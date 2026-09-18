@@ -86,7 +86,7 @@ test("설정 저장이 선택한 reasoning_effort 를 PUT 본문에 싣는다", 
 
     // ③ 설정 단계로 이동
     const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
-    assert.ok(configTab, "③ 설정 탭을 찾지 못했다");
+    assert.ok(configTab, "③ AI 모델 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();
     });
@@ -165,7 +165,7 @@ test("카탈로그를 못 받으면 드롭다운 대신 직접 입력으로 떨�
     );
 
     const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
-    assert.ok(configTab, "③ 설정 탭을 찾지 못했다");
+    assert.ok(configTab, "③ AI 모델 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();
     });
@@ -223,7 +223,7 @@ test("설정 단계가 이 직원의 대시보드 로그인으로 안내하고, 
     );
 
     const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
-    assert.ok(configTab, "③ 설정 탭을 찾지 못했다");
+    assert.ok(configTab, "③ AI 모델 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();
     });
@@ -287,7 +287,27 @@ test("대시보드 주소가 없으면 링크 대신 프로필을 바꿔 로그�
   }
 });
 
-async function createAndOpenPlacement(el: HTMLElement) {
+const PROFILE_ROUTES = (attendedChannels: number) => ({
+  // 구체적인 경로를 먼저 둔다 — stubFetch 는 `includes` 로 첫 키를 고른다.
+  "/identity": { isDefaultTemplate: true, body: "", revision: "r0" },
+  "/config": { model: null, provider: null, toolsets: null, reasoning_effort: null },
+  "/catalog": { providers: [], models: {}, reasoningEfforts: [] },
+  "/toolsets": {
+    platform: "api_server",
+    toolsets: [
+      { name: "web", label: "Web", description: "검색", enabled: true, configured: true },
+      { name: "tts", label: "TTS", description: "음성", enabled: false, configured: true },
+    ],
+  },
+  "/skills": { skills: [] },
+  "/plugin/profiles": { name: "mia", keyIssued: true, keyStored: true, attendedChannels },
+});
+
+function tabByNumber(el: HTMLElement, mark: string): HTMLButtonElement | undefined {
+  return [...el.querySelectorAll("button")].find((b) => b.textContent?.startsWith(mark));
+}
+
+async function createProfile(el: HTMLElement) {
   const nameInput = [...el.querySelectorAll("input")].find((i) =>
     i.placeholder?.includes("새 프로필 이름"),
   );
@@ -298,10 +318,14 @@ async function createAndOpenPlacement(el: HTMLElement) {
   await act(async () => {
     buttonByText(el, "프로필 만들기").click();
   });
-  const placementTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("④"));
-  assert.ok(placementTab, "④ 배치 탭을 찾지 못했다");
+}
+
+async function createAndOpenModel(el: HTMLElement) {
+  await createProfile(el);
+  const modelTab = tabByNumber(el, "③");
+  assert.ok(modelTab, "③ 탭을 찾지 못했다");
   await act(async () => {
-    placementTab.click();
+    modelTab.click();
   });
 }
 
@@ -315,6 +339,8 @@ function wizardWith(
   routes: Record<string, unknown>,
   calls: FetchCall[],
   onProfileCreated?: (n: string) => void,
+  onDone: (result?: { profileName: string }) => void = () => {},
+  cloneDefaultProfile = false,
 ) {
   globalThis.fetch = stubFetch(calls, routes) as typeof fetch;
   return (
@@ -325,36 +351,27 @@ function wizardWith(
         localDiscovery={false}
         existingProfiles={[]}
         onProfileCreated={onProfileCreated}
-        onDone={() => {}}
+        cloneDefaultProfile={cloneDefaultProfile}
+        onDone={onDone}
       />
     </I18nProvider>
   );
 }
 
-test("붙은 채널이 없으면 배치 단계가 '출근했다'고 말하지 않는다", async () => {
-  // 채널이 없는데 "이미 채널에 자동 출근했습니다" 를 띄우면, 사용자는 있지도 않은
-  // 출근부에서 자리를 찾다 막힌다(Hostinger VPS 실측 2026-09-17).
+test("단계는 ① 프로필 ② 인격 ③ AI 모델 셋이고, ④ 배치의 링크 버튼은 없다", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
-    const { root, el } = await mount(
-      wizardWith(
-        {
-          "/plugin/profiles": {
-            name: "mia",
-            keyIssued: true,
-            keyStored: true,
-            attendedChannels: 0,
-          },
-          "/identity": { isDefaultTemplate: true, soul: "" },
-        },
-        calls,
-      ),
-    );
-    await createAndOpenPlacement(el);
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
+    const tabs = [...el.querySelectorAll("button")]
+      .map((b) => b.textContent ?? "")
+      .filter((text) => /^[①②③④]/.test(text));
+    assert.deepEqual(tabs, ["① 프로필", "② 인격", "③ AI 모델"]);
+    await createAndOpenModel(el);
     const text = el.textContent ?? "";
-    assert.equal(/자동 출근했습니다/.test(text), false, "출근하지 않았는데 출근했다고 말한다");
-    assert.match(text, /채널/, "다음에 무엇을 해야 하는지 안내가 없다");
+    for (const gone of ["완성형 외형 선택하기", "채널로 이동", "마법사 닫기"]) {
+      assert.equal(text.includes(gone), false, `"${gone}" 가 남아 있다`);
+    }
     root.unmount();
     el.remove();
   } finally {
@@ -362,26 +379,74 @@ test("붙은 채널이 없으면 배치 단계가 '출근했다'고 말하지 �
   }
 });
 
-test("붙은 채널이 있으면 출근 안내를 그대로 보여준다", async () => {
+test("프로필을 만들기 전에는 ②③ 이 잠기고 그 이유를 글자로 보여준다", async () => {
+  // 2026-09-18 스테이징 실측: 새 프로필인데 ② 를 누르면 "인격 파일을 읽을 수 없어
+  // 편집기를 열지 않습니다" 가 떴고, ③ 은 모델 목록 대신 자유 입력이었다.
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
+    assert.equal(tabByNumber(el, "②")?.disabled, true, "② 가 잠기지 않았다");
+    assert.equal(tabByNumber(el, "③")?.disabled, true, "③ 이 잠기지 않았다");
+    const text = el.textContent ?? "";
+    assert.match(text, /먼저 ① 에서 프로필을 만드세요/);
+    assert.equal(text.includes("인격 파일을 읽을 수 없어"), false);
+
+    await createProfile(el);
+    assert.equal(tabByNumber(el, "②")?.disabled, false, "프로필을 만든 뒤에도 ② 가 잠겨 있다");
+    assert.equal(tabByNumber(el, "③")?.disabled, false, "프로필을 만든 뒤에도 ③ 이 잠겨 있다");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("붙은 채널이 없으면 '출근했다'고 말하지 않는다", async () => {
+  // 채널이 없는데 출근했다고 띄우면, 사용자는 있지도 않은 출근부에서 직원을 찾다 막힌다
+  // (Hostinger VPS 실측 2026-09-17).
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(0), calls));
+    await createAndOpenModel(el);
+    const text = el.textContent ?? "";
+    assert.equal(/출근했습니다/.test(text), false, "출근하지 않았는데 출근했다고 말한다");
+    assert.match(text, /채널에 연결하면/, "다음에 무엇을 해야 하는지 안내가 없다");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("붙은 채널이 있으면 출근 결과를 한 줄로 알린다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(2), calls));
+    await createAndOpenModel(el);
+    assert.match(el.textContent ?? "", /채널 2곳에 출근했습니다/);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("③ 의 완료가 마법사를 끝내며 그 직원 이름을 넘긴다", async () => {
+  const calls: FetchCall[] = [];
+  const done: Array<{ profileName: string } | undefined> = [];
+  const originalFetch = globalThis.fetch;
+  try {
     const { root, el } = await mount(
-      wizardWith(
-        {
-          "/plugin/profiles": {
-            name: "mia",
-            keyIssued: true,
-            keyStored: true,
-            attendedChannels: 2,
-          },
-          "/identity": { isDefaultTemplate: true, soul: "" },
-        },
-        calls,
-      ),
+      wizardWith(PROFILE_ROUTES(1), calls, undefined, (r) => done.push(r)),
     );
-    await createAndOpenPlacement(el);
-    assert.match(el.textContent ?? "", /출근/, "출근했다는 사실을 알리지 않는다");
+    await createAndOpenModel(el);
+    await act(async () => {
+      buttonByText(el, "완료").click();
+    });
+    assert.deepEqual(done, [{ profileName: "mia" }]);
     root.unmount();
     el.remove();
   } finally {
@@ -397,22 +462,170 @@ test("프로필을 만들면 곧바로 바깥 목록에 알린다", async () => 
   const originalFetch = globalThis.fetch;
   try {
     const { root, el } = await mount(
-      wizardWith(
-        {
-          "/plugin/profiles": {
-            name: "mia",
-            keyIssued: true,
-            keyStored: true,
-            attendedChannels: 0,
-          },
-          "/identity": { isDefaultTemplate: true, soul: "" },
-        },
-        calls,
-        (name) => created.push(name),
-      ),
+      wizardWith(PROFILE_ROUTES(0), calls, (name) => created.push(name)),
     );
-    await createAndOpenPlacement(el);
+    await createProfile(el);
     assert.deepEqual(created, ["mia"]);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("방금 만든 프로필의 ② 는 곧바로 빈 편집기를 연다 — 덮어쓸지 묻지 않는다", async () => {
+  // 2026-09-18 로컬 실측: 새 프로필(SOUL.md = Hermes 기본 템플릿, isDefaultTemplate:true)인데
+  // ② 가 "이미 작성된 인격이 있습니다. 어떻게 할까요?" 를 물었다. ① 의 서빙 확인이 받은 인격
+  // 응답을 저장만 하고 편집 모드를 정하지 않아, ② 가 다시 읽지도 판정하지도 않았다.
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
+    await createProfile(el);
+    await act(async () => {
+      tabByNumber(el, "②")!.click();
+    });
+    const text = el.textContent ?? "";
+    assert.equal(
+      text.includes("이미 작성된 인격이 있습니다"),
+      false,
+      "새 프로필인데 덮어쓸지 묻는다",
+    );
+    assert.ok(el.querySelector("textarea"), "인격 편집기가 열리지 않았다");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("플러그인이 복제를 지원할 때만 새 프로필을 기본 프로필에서 복제해 달라고 한다", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const clone of [true, false]) {
+      const calls: FetchCall[] = [];
+      const { root, el } = await mount(
+        wizardWith(PROFILE_ROUTES(1), calls, undefined, () => {}, clone),
+      );
+      await createProfile(el);
+      const post = calls.find((c) => c.method === "POST" && c.url.endsWith("/plugin/profiles"));
+      assert.ok(post, "프로필 생성 요청이 없다");
+      assert.deepEqual(
+        post.body,
+        clone ? { name: "mia", cloneFrom: "default" } : { name: "mia" },
+        clone ? "복제를 요청하지 않았다" : "구버전 플러그인에 모르는 필드를 보냈다",
+      );
+      root.unmount();
+      el.remove();
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("툴셋 체크리스트에서 고른 것만 저장하고, 대화에 안 쓰이는 최상위 toolsets 는 보내지 않는다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
+    await createAndOpenModel(el);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // 안 건드리고 저장하면 서버의 현재 상태를 다시 쓰지 않는다.
+    await act(async () => {
+      buttonByText(el, "저장").click();
+    });
+    let put = calls.filter((c) => c.method === "PUT" && c.url.endsWith("/config")).at(-1);
+    assert.ok(put, "저장 요청이 없다");
+    assert.equal("enabledToolsets" in (put.body as object), false);
+    assert.equal("toolsets" in (put.body as object), false);
+
+    const tts = el.querySelector<HTMLInputElement>('input[data-toolset="tts"]');
+    assert.ok(tts, "툴셋 체크리스트가 보이지 않는다");
+    await act(async () => {
+      tts.click();
+    });
+    await act(async () => {
+      buttonByText(el, "저장").click();
+    });
+    put = calls.filter((c) => c.method === "PUT" && c.url.endsWith("/config")).at(-1);
+    assert.deepEqual((put!.body as { enabledToolsets?: string[] }).enabledToolsets?.sort(), [
+      "tts",
+      "web",
+    ]);
+    assert.equal("toolsets" in (put!.body as object), false);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("구버전 플러그인이면 체크리스트 대신 예전 쉼표 입력으로 떨어진다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const routes = {
+      ...PROFILE_ROUTES(1),
+      "/toolsets": { errorCode: "plugin_upgrade_required" },
+      "/skills": { errorCode: "plugin_upgrade_required" },
+    };
+    // 스프레드는 키 순서를 유지하므로 "/plugin/profiles" 가 여전히 마지막이다.
+    const { root, el } = await mount(wizardWith(routes, calls));
+    await createAndOpenModel(el);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const text = [...el.querySelectorAll("input")].find((i) => i.placeholder === "툴셋");
+    assert.ok(text, "텍스트 입력으로 떨어지지 않았다 — 툴셋을 지정할 방법이 사라진다");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("'모든 API 키도 함께 복사' 를 켜면 cloneKeys:api_keys 를, 끄면 싣지 않는다", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const all of [true, false]) {
+      const calls: FetchCall[] = [];
+      const { root, el } = await mount(
+        wizardWith(PROFILE_ROUTES(1), calls, undefined, () => {}, true),
+      );
+      const box = [...el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((b) =>
+        b.parentElement?.textContent?.includes("모든 API 키도 함께 복사"),
+      );
+      assert.ok(box, "키 복사 범위 체크박스가 없다");
+      if (all) {
+        await act(async () => {
+          box.click();
+        });
+      }
+      await createProfile(el);
+      const post = calls.find((c) => c.method === "POST" && c.url.endsWith("/plugin/profiles"));
+      assert.deepEqual(
+        post?.body,
+        all
+          ? { name: "mia", cloneFrom: "default", cloneKeys: "api_keys" }
+          : { name: "mia", cloneFrom: "default" },
+      );
+      root.unmount();
+      el.remove();
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("복제를 지원하지 않는 게이트웨이에는 키 복사 체크박스를 보이지 않는다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
+    assert.equal((el.textContent ?? "").includes("모든 API 키도 함께 복사"), false);
     root.unmount();
     el.remove();
   } finally {

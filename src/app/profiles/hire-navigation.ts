@@ -27,6 +27,21 @@ export function hireDoneHref(gatewayId: string, returnTo?: string | null): strin
 }
 
 /**
+ * 마법사가 끝났을 때 어디로 갈지.
+ *
+ * ③ 의 "완료" 로 끝나면(직원 이름이 있으면) 방금 만든 그 직원의 상세로 간다 — 외형·인격·모델을
+ * 한곳에서 다시 볼 수 있는 곳이다. 게임 화면에서 들어왔거나 닫기로 끝났으면 예전대로 돌아간다.
+ */
+export function hireFinishedHref(
+  gatewayId: string,
+  returnTo: string | null | undefined,
+  profileName: string | null,
+): string {
+  if (profileName && !returnTo) return employeeDetailHref(gatewayId, profileName);
+  return hireDoneHref(gatewayId, returnTo);
+}
+
+/**
  * 직원 상세 화면 — 그 직원 하나를 고치는 곳(인격·외형·모델·계정·삭제).
  *
  * 프로필 이름은 게이트웨이 안에서 고유하므로 이름을 경로에, 게이트웨이를 쿼리에 싣는다.

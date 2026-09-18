@@ -1,24 +1,19 @@
 "use client";
 
 /**
- * NPC 고용 마법사 — ①프로필 ②인격 ③설정 ④배치.
+ * NPC 고용 마법사 — ①프로필 ②인격 ③AI 모델. ③ 에서 끝난다.
  *
  * 능력에 따라 단계가 눈에 보이게 줄어든다(`availableSteps`) — 잠긴 단계도 회색으로
- * 남고 이유를 보여준다, 숨기지 않는다.
+ * 남고 이유를 보여준다, 숨기지 않는다. ②③ 은 다룰 프로필이 생기기 전까지 잠긴다.
  *
- * 이 마법사는 게이트웨이 관리 화면(`HermesProfileList` → `/gateways`)에서 연다.
- * 그 화면에는 **채널이 없다** — 삭제된 NPC 고용 모달은 `channelId` 를 필수로 받는
- * 맵 배치 컴포넌트라 여기서 직접 열 수 없다(판정 G, 파일 스코프 제약과 겹쳐 실제로도
- * 불가능하다). 그래서 ④ 배치는 여기서 재구현하지 않고, ①에서 등록한 프로필이
- * `hermesProfiles` 테이블에 이미 저장돼 있다는 사실(POST 라우트가 그 자리에서
- * `registerHermesProfile` 을 부른다)에 기대어 "채널로 가서 기존 NPC 고용 흐름에서
- * 이 프로필을 선택하라" 는 안내로 마무리한다. 상세 사유는 task-10-report.md 참조.
+ * 예전의 ④ 배치는 없앴다. 할 일이 없는 링크 버튼("완성형 외형 선택하기"·"채널로 이동"·
+ * "마법사 닫기")만 남은 단계였다. 외형은 등록 때 자동으로 배정되고(`registerHermesProfile`)
+ * 직원 상세에서 바꾼다. 자리는 맵이 맡는다.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 
-import { useT, useLocale } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
 import { profileLoginUrl } from "@/lib/hermes/dashboard-link";
@@ -33,6 +28,7 @@ import {
   type StepAvailability,
   type WizardStep,
 } from "./hire-wizard-steps";
+import ToolsetSkillPicker from "./ToolsetSkillPicker";
 import { getWizardErrorMessage } from "./wizard-error-codes";
 
 // ---------------------------------------------------------------------------
@@ -43,7 +39,7 @@ type ProvisionedProfile = {
   name: string;
   /**
    * 이 프로필이 **실제로 출근한 채널 수**. 출근은 그 게이트웨이가 이미 붙어 있는 채널에만
-   * 일어나므로, 0 이면 ④ 배치에서 "출근했습니다" 라고 말하면 안 된다. 이어서 편집하는
+   * 일어나므로, 0 이면 ③ 의 결과 줄에서 "출근했습니다" 라고 말하면 안 된다. 이어서 편집하는
    * 기존 프로필(`resumed`)은 알 수 없으므로 `undefined` 다.
    */
   attendedChannels?: number;
@@ -51,6 +47,10 @@ type ProvisionedProfile = {
   keyError?: string;
   keyStored: boolean;
   keyStoredError?: string;
+  /** 기본 프로필 복제가 실패했다(프로필은 만들어졌다). 복제를 요청했을 때만 온다. */
+  cloneError?: string;
+  /** 복제로 물려받은 설정·키의 **이름**. 값은 오지 않는다. */
+  cloned?: { configKeys?: string[]; envKeys?: string[] };
 };
 
 type IdentityPayload = {
@@ -74,7 +74,7 @@ interface NpcHireWizardProps {
   /**
    * 이 게이트웨이에 **이미 등록된** 프로필 이름들.
    *
-   * 없으면 마법사는 "이번에 만든 프로필" 로만 ②③④ 를 진행할 수 있어, 중간에 닫으면
+   * 없으면 마법사는 "이번에 만든 프로필" 로만 ②③ 을 진행할 수 있어, 중간에 닫으면
    * 돌아갈 길이 사라진다(스테이징 실측 2026-09-03: `oliver` 를 만들고 닫았더니 인격을
    * 편집할 방법이 없었다). 기존 프로필의 인격·설정을 나중에 고치는 것도 마법사의
    * 정당한 용도다 — 스펙이 그 입구를 빠뜨렸다.
@@ -96,9 +96,18 @@ interface NpcHireWizardProps {
    * 맥락과 어긋나므로 호출부가 바꿔 준다.
    */
   title?: string;
+  /**
+   * 새 프로필을 기본 프로필에서 복제해 모델 설정·프로바이더 키를 물려받는다. 플러그인이
+   * `profile_clone` 을 알릴 때만 켠다 — 구버전에는 모르는 필드를 보내지 않는다.
+   */
+  cloneDefaultProfile?: boolean;
   /** ①에서 프로필이 실제로 만들어진 직후. 바깥 프로필 목록이 이것으로 곧바로 다시 읽는다. */
   onProfileCreated?: (profileName: string) => void;
-  onDone: () => void;
+  /**
+   * 마법사가 끝났다. ③ 의 "완료" 로 끝나면 그 직원 이름을 싣는다 — 호출부가 직원 상세로
+   * 보낼 수 있다. 닫기·삭제로 끝나면 인자가 없다.
+   */
+  onDone: (result?: { profileName: string }) => void;
 }
 
 /**
@@ -148,26 +157,19 @@ export default function NpcHireWizard({
   initialProfile = null,
   dashboardUrl = null,
   title,
+  cloneDefaultProfile = false,
   onProfileCreated,
   onDone,
 }: NpcHireWizardProps) {
   const t = useT();
-  const { locale } = useLocale();
 
-  const steps = useMemo(
-    () => availableSteps(pluginStatus, localDiscovery),
-    [pluginStatus, localDiscovery],
-  );
-  const stepByName = useMemo(
-    () => Object.fromEntries(steps.map((s) => [s.step, s])) as Record<WizardStep, StepAvailability>,
-    [steps],
-  );
-
-  const firstEnabled = steps.find((s) => s.enabled)?.step ?? "placement";
   // `initialProfile` 로 들어오면 ①(프로필 만들기)은 이미 끝난 일이다 — 곧바로 ②로 연다.
-  // 다만 ②가 잠겨 있으면(플러그인 없음) 그리 보낼 수 없으므로 열린 첫 단계로 떨어진다.
-  const [current, setCurrent] = useState<WizardStep>(
-    initialProfile && stepByName.identity?.enabled ? "identity" : firstEnabled,
+  // 다만 ②가 잠겨 있으면(플러그인 없음) 그리 보낼 수 없으므로 ①로 떨어진다.
+  const [current, setCurrent] = useState<WizardStep>(() =>
+    initialProfile &&
+    availableSteps(pluginStatus, localDiscovery, true).find((s) => s.step === "identity")?.enabled
+      ? "identity"
+      : "profile",
   );
 
   // --- Step ① profile ---
@@ -188,6 +190,18 @@ export default function NpcHireWizard({
   const [deleteShellCommand, setDeleteShellCommand] = useState<string | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
+  const steps = useMemo(
+    () => availableSteps(pluginStatus, localDiscovery, created !== null),
+    [pluginStatus, localDiscovery, created],
+  );
+  const stepByName = useMemo(
+    () => Object.fromEntries(steps.map((s) => [s.step, s])) as Record<WizardStep, StepAvailability>,
+    [steps],
+  );
+
+  // 복제 때 키를 어디까지 물려받을지. 끄면 기본 프로필이 실제로 쓰는 프로바이더 키만,
+  // 켜면 API 키형 프로바이더 키 전부(범용·OAuth 토큰 제외)를 복사한다(플러그인 cloneKeys).
+  const [copyAllApiKeys, setCopyAllApiKeys] = useState(false);
   const nameTrimmed = name.trim();
   const nameValid = nameTrimmed.length > 0 && isCreatableProfileName(nameTrimmed);
 
@@ -212,6 +226,12 @@ export default function NpcHireWizard({
   const [model, setModel] = useState("");
   const [provider, setProvider] = useState("");
   const [toolsetsText, setToolsetsText] = useState("");
+  // 툴셋·스킬 체크리스트(플러그인 0.9.0+). null 이면 서버의 현재 상태가 기본값이다.
+  // 사람이 건드렸을 때만 저장에 싣는다 — 안 건드린 채 저장해 현재 상태를 다시 쓰지 않는다.
+  const [enabledToolsets, setEnabledToolsets] = useState<string[] | null>(null);
+  const [disabledSkills, setDisabledSkills] = useState<string[] | null>(null);
+  const [pickerDirty, setPickerDirty] = useState(false);
+  const [pickerUnsupported, setPickerUnsupported] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const [effort, setEffort] = useState("");
@@ -225,6 +245,28 @@ export default function NpcHireWizard({
   const profileBase = created
     ? `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(created.name)}`
     : null;
+
+  /**
+   * 인격 응답 하나를 화면 상태로 옮긴다 — 저장과 **편집 모드 판정을 함께** 한다.
+   *
+   * ① 의 서빙 확인과 ② 의 조회가 같은 응답을 받는다. 예전에는 ① 쪽이 payload 만 저장하고
+   * 모드를 정하지 않아, ② 가 (이미 payload 가 있으니) 다시 읽지 않은 채 모드 null 로 떨어져
+   * 방금 만든 프로필에 "이미 작성된 인격이 있습니다" 를 물었다(2026-09-18 로컬 실측).
+   */
+  const applyIdentityPayload = useCallback((payload: IdentityPayload) => {
+    setIdentityPayload(payload);
+    const decision = identityDecision(payload);
+    if (decision === "edit_fresh") {
+      setIdentityMode("new");
+      setIdentityBody("");
+    } else if (decision === "ask_overwrite") {
+      setIdentityMode(null);
+      setIdentityBody(payload.body ?? "");
+    } else {
+      // blocked — 편집기를 열지 않는다.
+      setIdentityMode(null);
+    }
+  }, []);
 
   // --- Step ① actions ---
 
@@ -251,7 +293,11 @@ export default function NpcHireWizard({
       const res = await fetch(`/api/gateways/${gatewayId}/plugin/profiles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nameTrimmed }),
+        body: JSON.stringify({
+          name: nameTrimmed,
+          ...(cloneDefaultProfile ? { cloneFrom: "default" } : {}),
+          ...(cloneDefaultProfile && copyAllApiKeys ? { cloneKeys: "api_keys" } : {}),
+        }),
       });
       const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
@@ -293,7 +339,7 @@ export default function NpcHireWizard({
       });
       if (verdict === "served") {
         setServing("served");
-        setIdentityPayload(idData as IdentityPayload);
+        applyIdentityPayload(idData as IdentityPayload);
       } else if (verdict === "key_rejected") {
         setServing("key_rejected");
       } else if (verdict === "not_served") {
@@ -307,7 +353,16 @@ export default function NpcHireWizard({
     } finally {
       setCreating(false);
     }
-  }, [gatewayId, nameTrimmed, nameValid, onProfileCreated, t]);
+  }, [
+    applyIdentityPayload,
+    cloneDefaultProfile,
+    copyAllApiKeys,
+    gatewayId,
+    nameTrimmed,
+    nameValid,
+    onProfileCreated,
+    t,
+  ]);
 
   const handleDeleteCreated = useCallback(async () => {
     if (!created) return;
@@ -359,25 +414,13 @@ export default function NpcHireWizard({
         setIdentityPayload(null);
         return;
       }
-      const payload = data as IdentityPayload;
-      setIdentityPayload(payload);
-      const decision = identityDecision(payload);
-      if (decision === "edit_fresh") {
-        setIdentityMode("new");
-        setIdentityBody("");
-      } else if (decision === "ask_overwrite") {
-        setIdentityMode(null);
-        setIdentityBody(payload.body ?? "");
-      } else {
-        // blocked — 편집기를 열지 않는다.
-        setIdentityMode(null);
-      }
+      applyIdentityPayload(data as IdentityPayload);
     } catch {
       setIdentityError(t("errors.connectionFailed"));
     } finally {
       setIdentityLoading(false);
     }
-  }, [profileBase, t]);
+  }, [applyIdentityPayload, profileBase, t]);
 
   useEffect(() => {
     if (current === "identity" && !identityPayload && !identityLoading) {
@@ -540,11 +583,18 @@ export default function NpcHireWizard({
       const patch: Record<string, unknown> = {};
       if (model.trim()) patch.model = model.trim();
       if (provider.trim()) patch.provider = provider.trim();
-      const toolsets = toolsetsText
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (toolsets.length > 0) patch.toolsets = toolsets;
+      if (!pickerUnsupported) {
+        // 체크리스트는 대화에 실제로 반영되는 플랫폼별 툴셋을 쓴다. 최상위 `toolsets` 는
+        // 대화에 반영되지 않으므로 함께 보내지 않는다(플러그인 0.9.0 계약).
+        if (pickerDirty && enabledToolsets) patch.enabledToolsets = enabledToolsets;
+        if (pickerDirty && disabledSkills) patch.disabledSkills = disabledSkills;
+      } else {
+        const toolsets = toolsetsText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (toolsets.length > 0) patch.toolsets = toolsets;
+      }
       // 빈 문자열도 보낸다 — "지정 안 함" 으로 되돌리는 유일한 방법이다.
       // 조건을 걸면 한 번 고른 effort 를 화면에서 해제할 수 없어진다.
       if (catalog) patch.reasoning_effort = effort;
@@ -570,7 +620,19 @@ export default function NpcHireWizard({
     } finally {
       setConfigSaving(false);
     }
-  }, [catalog, effort, model, profileBase, provider, t, toolsetsText]);
+  }, [
+    catalog,
+    disabledSkills,
+    effort,
+    enabledToolsets,
+    model,
+    pickerDirty,
+    pickerUnsupported,
+    profileBase,
+    provider,
+    t,
+    toolsetsText,
+  ]);
 
   // --- Navigation ---
 
@@ -645,7 +707,7 @@ export default function NpcHireWizard({
         ))}
       </div>
       {/* M-5: 잠긴 탭은 `disabled` 라 현재 단계가 될 수 없다 — `title` 툴팁 하나로만
-          이유가 도달하면 터치·키보드 환경에서는 아예 안 보이고, 초기 단계가 ④로
+          이유가 도달하면 터치·키보드 환경에서는 아예 안 보이고, 초기 단계가 한쪽으로
           점프하는 조합(예: plugin_absent + localDiscovery:false)에서는 ①②③이 왜
           잠겼는지 화면 어디에도 글자로 없다. 잠긴 단계 전부의 이유를 항상 나열한다. */}
       {steps.some((s) => !s.enabled && s.lockedReason) && (
@@ -680,7 +742,7 @@ export default function NpcHireWizard({
             </button>
             <button
               type="button"
-              onClick={onDone}
+              onClick={() => onDone()}
               className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
             >
               {t("hermes.wizard.closeConfirmKeep")}
@@ -727,6 +789,22 @@ export default function NpcHireWizard({
                   </div>
                 </div>
               )}
+              {cloneDefaultProfile && (
+                <label className="flex items-start gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={copyAllApiKeys}
+                    onChange={(e) => setCopyAllApiKeys(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    {t("hermes.wizard.profile.copyAllApiKeys")}
+                    <span className="block text-xs text-text-muted">
+                      {t("hermes.wizard.profile.copyAllApiKeysHint")}
+                    </span>
+                  </span>
+                </label>
+              )}
               {nameTrimmed.length > 0 && !nameValid && (
                 <p className="text-xs text-danger">{t("hermes.wizard.profile.nameInvalid")}</p>
               )}
@@ -745,6 +823,13 @@ export default function NpcHireWizard({
               <p className="text-sm text-text">
                 {t("hermes.wizard.profile.created", { name: created.name })}
               </p>
+              {created.cloned && !created.cloneError && (
+                <p className="text-xs text-text-muted">{t("hermes.wizard.profile.cloned")}</p>
+              )}
+              {created.cloneError && (
+                // 프로필은 만들어졌다 — 모델을 ③ 에서 직접 고르면 된다. 막지 않고 알린다.
+                <p className="text-xs text-amber-300">{t("hermes.wizard.profile.cloneFailed")}</p>
+              )}
 
               {!created.keyIssued && (
                 <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
@@ -766,7 +851,7 @@ export default function NpcHireWizard({
                     </button>
                     <button
                       type="button"
-                      onClick={onDone}
+                      onClick={() => onDone()}
                       className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
                     >
                       {t("hermes.wizard.profile.enterKeyInShell")}
@@ -829,8 +914,11 @@ export default function NpcHireWizard({
             <p className="text-sm text-text-muted">{t("hermes.wizard.identity.loading")}</p>
           ) : identityError ? (
             <p className="text-sm text-danger">{identityError}</p>
-          ) : identityPayload?.unreadable ||
-            identityDecision(identityPayload ?? { isDefaultTemplate: null }) === "blocked" ? (
+          ) : !identityPayload ? (
+            // 조회 전 한 틱. 예전에는 여기서 null 을 "읽지 못함" 으로 접어, 조회가 시작되기도
+            // 전에 "인격 파일을 읽을 수 없어…" 가 떴다.
+            <p className="text-sm text-text-muted">{t("hermes.wizard.identity.loading")}</p>
+          ) : identityPayload.unreadable || identityDecision(identityPayload) === "blocked" ? (
             <p className="text-sm text-danger">{t("hermes.wizard.identity.blocked")}</p>
           ) : identityMode === null && identityPayload ? (
             <div className="space-y-2">
@@ -1062,16 +1150,63 @@ export default function NpcHireWizard({
                   ))}
                 </select>
               )}
-              <input
-                type="text"
-                value={toolsetsText}
-                onChange={(e) => setToolsetsText(e.target.value)}
-                placeholder={t("hermes.wizard.config.toolsets")}
-                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
-              />
-              <p className="text-xs text-text-muted">{t("hermes.wizard.config.toolsetsHint")}</p>
+              {/* 도구·스킬은 처음 쓰는 사람이 고를 것이 아니다 — 기본값으로 두고 접는다. */}
+              <details className="rounded border border-border px-3 py-2">
+                <summary className="cursor-pointer text-sm font-semibold text-text">
+                  {t("hermes.wizard.config.advanced")}
+                </summary>
+                <div className="mt-2 space-y-1">
+                  {profileBase && !pickerUnsupported ? (
+                    <ToolsetSkillPicker
+                      profileBase={profileBase}
+                      enabledToolsets={enabledToolsets}
+                      onEnabledToolsetsChange={(next) => {
+                        setEnabledToolsets(next);
+                        setPickerDirty(true);
+                      }}
+                      disabledSkills={disabledSkills}
+                      onDisabledSkillsChange={(next) => {
+                        setDisabledSkills(next);
+                        setPickerDirty(true);
+                      }}
+                      onLoaded={(initial) => {
+                        setEnabledToolsets(initial.enabledToolsets);
+                        setDisabledSkills(initial.disabledSkills);
+                      }}
+                      onUnsupported={() => setPickerUnsupported(true)}
+                      disabled={configSaving}
+                    />
+                  ) : (
+                    // 구버전 플러그인(< 0.9.0)은 목록을 주지 않는다 — 예전처럼 이름을 적는다.
+                    <>
+                      <input
+                        type="text"
+                        value={toolsetsText}
+                        onChange={(e) => setToolsetsText(e.target.value)}
+                        placeholder={t("hermes.wizard.config.toolsets")}
+                        className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                      />
+                      <p className="text-xs text-text-muted">
+                        {t("hermes.wizard.config.toolsetsHint")}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </details>
               {configSaved && (
                 <p className="text-xs text-emerald-300">{t("hermes.wizard.config.saved")}</p>
+              )}
+              {/* 출근 결과 한 줄 — 붙은 채널이 없으면 "출근했다" 고 말하지 않는다. 이어서
+                  편집하는 기존 직원(`attendedChannels` 없음)은 알 수 없으므로 말하지 않는다. */}
+              {typeof created?.attendedChannels === "number" && (
+                <p className="text-sm text-text-muted">
+                  {created.attendedChannels === 0
+                    ? t("hermes.wizard.result.noChannel", { name: created.name })
+                    : t("hermes.wizard.result.attended", {
+                        name: created.name,
+                        count: String(created.attendedChannels),
+                      })}
+                </p>
               )}
               <div className="flex gap-2">
                 <button
@@ -1084,60 +1219,14 @@ export default function NpcHireWizard({
                 </button>
                 <button
                   type="button"
-                  onClick={goNext}
+                  onClick={() => onDone(created ? { profileName: created.name } : undefined)}
                   className="rounded bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
                 >
-                  {t("hermes.wizard.next")}
+                  {t("hermes.wizard.finish")}
                 </button>
               </div>
             </>
           )}
-        </div>
-      )}
-
-      {!showCloseConfirm && current === "placement" && stepByName.placement?.enabled && (
-        <div className="space-y-3">
-          <p className="text-sm text-text">
-            {created ? t("hermes.wizard.placement.ready", { name: created.name }) : ""}
-          </p>
-          {/* M-1: 안내에 채널로 가는 링크와 "이미 등록돼 있다" 는 사실을 함께 준다 —
-              둘 다 없으면 사용자가 채널에서 프로필을 못 찾고 마법사로 돌아와 같은
-              이름으로 다시 만들다 409 를 맞는다. */}
-          {created && (
-            <p className="text-sm text-text-muted">
-              {t("hermes.wizard.placement.alreadyRegistered", { name: created.name })}
-            </p>
-          )}
-          <p className="text-sm text-text-muted">
-            {created?.attendedChannels === 0
-              ? t("hermes.wizard.placement.guideNoChannel")
-              : typeof created?.attendedChannels === "number"
-                ? t("hermes.wizard.placement.guideAttended", {
-                    count: String(created.attendedChannels),
-                  })
-                : t("hermes.wizard.placement.guide")}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/profiles?gateway=${encodeURIComponent(gatewayId)}${created ? `&profile=${encodeURIComponent(created.name)}` : ""}`}
-              className="rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-hover"
-            >
-              {locale === "ko" ? "완성형 외형 선택하기" : "Choose a complete office look"}
-            </Link>
-            <Link
-              href="/channels"
-              className="rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-hover"
-            >
-              {t("hermes.wizard.placement.goToChannels")}
-            </Link>
-            <button
-              type="button"
-              onClick={onDone}
-              className="rounded bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
-            >
-              {t("hermes.wizard.placement.done")}
-            </button>
-          </div>
         </div>
       )}
     </div>
