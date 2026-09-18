@@ -25,7 +25,7 @@ export async function getMyCharacter(userId: string): Promise<MyCharacter | null
     })
     .from(characters)
     .where(eq(characters.userId, userId))
-    .orderBy(asc(characters.createdAt))
+    .orderBy(asc(characters.createdAt), asc(characters.id))
     .limit(1);
   if (!row) return null;
   return {

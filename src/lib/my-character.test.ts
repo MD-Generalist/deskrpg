@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import { seedUser } from "@/test-setup/npc-seed";
@@ -27,6 +28,31 @@ test("getMyCharacter 는 가장 이른 캐릭터를 고른다", async () => {
   });
   const mine = await getMyCharacter(user.id);
   assert.equal(mine?.name, "첫째");
+});
+
+test("createdAt 이 같으면 id 가 작은 쪽이 나다 — 호출마다 같은 캐릭터", async () => {
+  const { db, characters, isPostgres } = await loadDb();
+  const { getMyCharacter } = await import("./my-character");
+  const user = await seedUser("tie");
+  const same = isPostgres ? new Date("2026-03-01T00:00:00Z") : "2026-03-01T00:00:00.000Z";
+  const appearance = JSON.stringify({ officeLookId: "look-1", bodyType: "male" });
+  const [smallId, bigId] = [randomUUID(), randomUUID()].sort();
+  // 삽입 순서와 id 순서를 반대로 둔다 — 삽입 순서(rowid)에 기대면 "나중" 이 뽑힌다.
+  await db.insert(characters).values({
+    id: bigId,
+    userId: user.id,
+    name: "큰 id",
+    appearance,
+    createdAt: same as unknown as Date,
+  });
+  await db.insert(characters).values({
+    id: smallId,
+    userId: user.id,
+    name: "작은 id",
+    appearance,
+    createdAt: same as unknown as Date,
+  });
+  assert.equal((await getMyCharacter(user.id))?.name, "작은 id");
 });
 
 test("없으면 null, ensureMyCharacter 는 닉네임으로 하나 만든다", async () => {
