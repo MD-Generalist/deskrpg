@@ -1148,7 +1148,7 @@ export function setupSocketHandlers(io: Server) {
         // 클라이언트가 보낸 characterId 를 믿지 않는다 — 이 사용자의 캐릭터인지 DB 로
         // 확인하고, 이름·외형도 그 행에서 읽는다. 거절은 아래 단일 세션 kick 보다 먼저라서
         // 거절된 입장이 같은 사용자의 살아 있는 세션을 끊지 못한다. 조회 실패(PG 에서 uuid 가
-        // 아닌 값 등)도 거절로 접는다 — async 핸들러의 거부는 아무도 잡지 않는다.
+        // 아닌 값 등)도 거절로 접는다 — 던지면 클라이언트가 응답을 못 받고 입장이 멈춘다.
         let ownedCharacter: { name: string; appearance: unknown } | undefined;
         try {
           [ownedCharacter] = await db
@@ -1156,10 +1156,12 @@ export function setupSocketHandlers(io: Server) {
             .from(characters)
             .where(and(eq(characters.id, data.characterId), eq(characters.userId, user.userId)))
             .limit(1);
-        } catch {
+        } catch (err) {
+          console.error("[player:join] character ownership lookup failed:", err);
           ownedCharacter = undefined;
         }
         if (!ownedCharacter) {
+          console.warn(`[player:join] rejected character claim from user ${user.userId}`);
           socket.emit("channel:access-denied", {
             channelId: data.mapId,
             action: "player:join",
