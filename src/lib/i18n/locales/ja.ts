@@ -108,6 +108,10 @@ const ja: Record<string, string> = {
   "channels.createChannel": "チャンネル作成",
   "channels.manageGroups": "グループ管理",
   "channels.noChannels": "まだチャンネルがありません。最初のチャンネルを作りましょう！",
+  "channels.needCharacterAction": "キャラクターを作成",
+  "channels.needCharacterBody":
+    "オフィスに入るには、マップを歩き回る「自分」が必要です。名前・見た目・自己紹介を一度決めるだけです。",
+  "channels.needCharacterTitle": "まず自分のキャラクターを作成してください",
   "channels.loadingChannels": "チャンネル読み込み中...",
   "channels.joinFailed": "チャンネルへの参加に失敗しました",
   "channels.invalidInvite": "無効な招待コードです",
@@ -2417,6 +2421,9 @@ const ja: Record<string, string> = {
   "errors.characterAppearanceInvalid": "キャラクターの見た目データが不正です",
   "errors.noCharacterSelected": "キャラクターが選択されていません",
   "errors.characterNotFound": "キャラクターが見つかりません",
+  "errors.characterNotYours": "自分のキャラクター以外では入室できません。",
+  "errors.characterMissing":
+    "オフィスに入るには、まず自分のキャラクターを作成してください。マイキャラクター画面(/characters)で作成できます。",
   "errors.failedToLoadCharacterSprite": "キャラクタースプライトの読み込みに失敗しました",
   "errors.failedToLoadGameData": "ゲームデータの読み込みに失敗しました",
   "errors.failedToFetchTemplate": "テンプレートの取得に失敗しました",

@@ -107,6 +107,10 @@ const en: Record<string, string> = {
   "channels.createChannel": "Create Channel",
   "channels.manageGroups": "Manage Groups",
   "channels.noChannels": "No channels yet. Create the first one!",
+  "channels.needCharacterAction": "Create my character",
+  "channels.needCharacterBody":
+    "To enter an office you need a 'you' to walk around the map. Set a name, look and bio once and you're done.",
+  "channels.needCharacterTitle": "Create your character first",
   "channels.loadingChannels": "Loading channels...",
   "channels.joinFailed": "Failed to join channel",
   "channels.invalidInvite": "Invalid invite code",
@@ -2407,6 +2411,9 @@ const en: Record<string, string> = {
   "errors.characterAppearanceInvalid": "Character appearance is invalid",
   "errors.noCharacterSelected": "No character selected",
   "errors.characterNotFound": "Character not found",
+  "errors.characterNotYours": "You can only enter as your own character.",
+  "errors.characterMissing":
+    "Create your character before entering the office. You can do it on the My Character page (/characters).",
   "errors.failedToLoadCharacterSprite": "Failed to load character sprite",
   "errors.failedToLoadGameData": "Failed to load game data",
   "errors.failedToFetchTemplate": "Failed to fetch template",

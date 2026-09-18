@@ -9,6 +9,7 @@ import {
   type PlayerDestination,
 } from "./player-resume-state";
 import { setNpcActive } from "../lib/npc-roster";
+import { getMyCharacter, isMyCharacter } from "../lib/my-character";
 import { createNpcCoordination } from "./npc-coordination";
 import {
   createMeetingSpatialCoordinator,
@@ -382,6 +383,12 @@ async function resolveHistoryCharacterId(
     console.error("[chat-history] failed to verify character claim", err);
     return null;
   }
+}
+
+/** player:join 이 서버에서 확정한 이 소켓의 내 캐릭터 id. join 전이면 null. */
+function myCharacterIdOf(socket: Socket): string | null {
+  const id = socket.data.myCharacterId;
+  return typeof id === "string" && id ? id : null;
 }
 
 // 예전에는 여기에 OpenClaw 게이트웨이 커넥션 풀(getOrConnectGateway /
@@ -1114,9 +1121,10 @@ export function setupSocketHandlers(io: Server) {
     socket.on(
       "player:join",
       async (data: {
-        characterId: string;
-        characterName: string;
-        appearance: unknown;
+        /** 선택 — 보내면 내 캐릭터인지 검사만 한다. 이름·외형은 서버가 채운다. */
+        characterId?: string;
+        characterName?: string;
+        appearance?: unknown;
         mapId: string;
         mapRevision?: string;
         x: number;
@@ -1143,6 +1151,30 @@ export function setupSocketHandlers(io: Server) {
           return;
         }
 
+        // "나" 는 서버가 정한다 — 클라이언트가 보낸 characterId·이름·외형은 믿지 않는다.
+        // 남의 캐릭터 id 로 들어오면 그 캐릭터로 행세하게 되므로(이력·방송) 거절한다.
+        const mine = await getMyCharacter(user.userId);
+        if (!mine) {
+          socket.emit("channel:access-denied", {
+            channelId: data.mapId,
+            action: "player:join",
+            reason: "forbidden",
+            errorCode: "character_missing",
+          });
+          return;
+        }
+        if (data.characterId && !isMyCharacter(mine, data.characterId)) {
+          socket.emit("channel:access-denied", {
+            channelId: data.mapId,
+            action: "player:join",
+            reason: "forbidden",
+            errorCode: "character_not_yours",
+          });
+          return;
+        }
+        socket.data.myCharacterId = mine.id;
+        socket.data.userContext = { name: mine.name, bio: mine.bio };
+
         // Enforce single session per user — disconnect any prior session(s)
         // for this account now that the join is authorized and proceeding.
         const priorSocketIds = getSocketIdsToKick(getSocketIdsForUser(user.userId), socket.id);
@@ -1165,7 +1197,7 @@ export function setupSocketHandlers(io: Server) {
           await coordination.left(socket, previousChannel);
           notifyChannelActivity(io, previousChannel);
         }
-        const identity = { userId: user.userId, characterId: data.characterId, mapId: data.mapId };
+        const identity = { userId: user.userId, characterId: mine.id, mapId: data.mapId };
         const resume = playerResumeStates.get(identity);
         let spawn = resume ? { x: resume.x, y: resume.y } : { x: data.x, y: data.y };
         let restored = !!resume;
@@ -1258,9 +1290,9 @@ export function setupSocketHandlers(io: Server) {
         const playerState: PlayerState = {
           id: socket.id,
           userId: user.userId,
-          characterId: data.characterId,
-          characterName: data.characterName,
-          appearance: data.appearance,
+          characterId: mine.id,
+          characterName: mine.name,
+          appearance: mine.appearance,
           mapId: data.mapId,
           x: spawn.x,
           y: spawn.y,
@@ -1544,62 +1576,58 @@ export function setupSocketHandlers(io: Server) {
       },
     );
 
-    socket.on(
-      "npc:history",
-      async ({ npcId, characterId: claimed }: { npcId: string; characterId?: string }) => {
-        if (!npcId) return;
-        const characterId = await resolveHistoryCharacterId(socket, user.userId, claimed);
-        if (!characterId) {
-          socket.emit("npc:history", { npcId, messages: [] });
-          return;
-        }
+    // 이력의 주인은 player:join 에서 서버가 정한 내 캐릭터다. 클라이언트가 보낸 characterId 는
+    // 무시한다 — join 전(socket.data.myCharacterId 없음)에는 빈 이력으로 답한다.
+    socket.on("npc:history", async ({ npcId }: { npcId: string }) => {
+      if (!npcId) return;
+      const characterId = myCharacterIdOf(socket);
+      if (!characterId) {
+        socket.emit("npc:history", { npcId, messages: [] });
+        return;
+      }
 
-        const historyKey = npcHistoryKey(characterId, npcId);
-        let history = npcChatHistory.get(historyKey);
-        if (!history) {
-          // 캐시 미스 — 재시작 직후가 여기다. DB 가 정본이므로 거기서 채운다.
-          try {
-            history = await loadNpcChatHistory(db, { chatMessages }, { characterId, npcId });
-            npcChatHistory.set(historyKey, history);
-          } catch (err) {
-            console.error("[chat-history] failed to load history", { characterId, npcId }, err);
-            history = [];
-          }
-        }
-        const scope = dmResponseScope(user.userId, characterId, npcId);
-        await socket.join(scope);
-        socket.emit("npc:history", { npcId, messages: history });
-        socket.emit("npc:response-snapshot", {
-          npcId,
-          responses: dmResponseTrackers.get(scope)?.snapshot() ?? [],
-        });
-      },
-    );
-
-    socket.on(
-      "npc:reset-chat",
-      async ({ npcId, characterId: claimed }: { npcId: string; characterId?: string }) => {
-        if (!npcId) return;
-        const characterId = await resolveHistoryCharacterId(socket, user.userId, claimed);
-        if (!characterId) return;
-
-        const scope = dmResponseScope(user.userId, characterId, npcId);
-        const queueKey = `${user.userId}:${npcId}`;
-        dmResetting.add(queueKey);
+      const historyKey = npcHistoryKey(characterId, npcId);
+      let history = npcChatHistory.get(historyKey);
+      if (!history) {
+        // 캐시 미스 — 재시작 직후가 여기다. DB 가 정본이므로 거기서 채운다.
         try {
-          dmResponseTrackers.get(scope)?.cancelAll();
-          await dmResponseQueue.idle(queueKey);
-          dmResponseTrackers.delete(scope);
-          npcChatHistory.delete(npcHistoryKey(characterId, npcId));
-          await clearNpcChatHistory(db, { chatMessages }, { characterId, npcId });
-          socket.emit("npc:response-snapshot", { npcId, responses: [] });
+          history = await loadNpcChatHistory(db, { chatMessages }, { characterId, npcId });
+          npcChatHistory.set(historyKey, history);
         } catch (err) {
-          console.error("[chat-history] failed to clear history", { characterId, npcId }, err);
-        } finally {
-          dmResetting.delete(queueKey);
+          console.error("[chat-history] failed to load history", { characterId, npcId }, err);
+          history = [];
         }
-      },
-    );
+      }
+      const scope = dmResponseScope(user.userId, characterId, npcId);
+      await socket.join(scope);
+      socket.emit("npc:history", { npcId, messages: history });
+      socket.emit("npc:response-snapshot", {
+        npcId,
+        responses: dmResponseTrackers.get(scope)?.snapshot() ?? [],
+      });
+    });
+
+    socket.on("npc:reset-chat", async ({ npcId }: { npcId: string }) => {
+      if (!npcId) return;
+      const characterId = myCharacterIdOf(socket);
+      if (!characterId) return;
+
+      const scope = dmResponseScope(user.userId, characterId, npcId);
+      const queueKey = `${user.userId}:${npcId}`;
+      dmResetting.add(queueKey);
+      try {
+        dmResponseTrackers.get(scope)?.cancelAll();
+        await dmResponseQueue.idle(queueKey);
+        dmResponseTrackers.delete(scope);
+        npcChatHistory.delete(npcHistoryKey(characterId, npcId));
+        await clearNpcChatHistory(db, { chatMessages }, { characterId, npcId });
+        socket.emit("npc:response-snapshot", { npcId, responses: [] });
+      } catch (err) {
+        console.error("[chat-history] failed to clear history", { characterId, npcId }, err);
+      } finally {
+        dmResetting.delete(queueKey);
+      }
+    });
 
     // NPC movement and seat ownership use the compatible channel coordinator above.
 

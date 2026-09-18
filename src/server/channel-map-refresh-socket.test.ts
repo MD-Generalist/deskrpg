@@ -56,10 +56,12 @@ const joinResult = (client: Socket, payload: unknown) =>
 
 test("real socket admission rejects absent/empty/stale map revisions after upgrade and reconnect; reactivation uses repaired homes; metadata rename preserves map authority", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
-  const { db, channels, jsonForDb, npcs, channelMembers } = await import("../db");
+  const { db, channels, characters, jsonForDb, npcs, channelMembers } = await import("../db");
   const { setupSocketHandlers } = await import("./socket-handlers");
   const { DEV_JWT_SECRET } = await import("../lib/dev-constants");
   const user = await seedUser();
+  // player:join 은 서버가 정한 내 캐릭터로만 입장시킨다 — 캐릭터가 없으면 character_missing.
+  await db.insert(characters).values({ userId: user.id, name: "Test", appearance: "{}" });
   const channel = await seedChannel(user.id);
   const gateway = await seedGateway(user.id);
   const profile = await seedHermesProfile(gateway.id);
@@ -102,9 +104,6 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
   };
   const join = {
     mapId: channel.id,
-    characterId: "test-character",
-    characterName: "Test",
-    appearance: {},
     x: 496,
     y: 624,
   };
@@ -217,6 +216,7 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
     assert.ok((await returned).npcs.some((n) => n.npcId === npc.id && n.homeX === state.homeX));
     const viewer = await seedUser();
     await db.insert(channelMembers).values({ channelId: channel.id, userId: viewer.id });
+    await db.insert(characters).values({ userId: viewer.id, name: "Viewer", appearance: "{}" });
     const viewerToken = await new SignJWT({ userId: viewer.id, nickname: "Viewer" })
       .setProtectedHeader({ alg: "HS256" })
       .setExpirationTime("1h")
@@ -225,7 +225,6 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
     assert.equal(
       await joinResult(observer, {
         ...join,
-        characterId: "observer-character",
         mapRevision: currentRevision,
       }),
       "player:spawn",

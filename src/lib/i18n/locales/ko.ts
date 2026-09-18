@@ -106,6 +106,10 @@ const ko: Record<string, string> = {
   "channels.createChannel": "채널 만들기",
   "channels.manageGroups": "그룹 관리",
   "channels.noChannels": "아직 채널이 없습니다. 첫 번째 채널을 만들어보세요!",
+  "channels.needCharacterAction": "내 캐릭터 만들기",
+  "channels.needCharacterBody":
+    "사무실에 들어가려면 맵에서 돌아다닐 '나' 가 필요합니다. 이름·외형·소개를 한 번만 정하면 됩니다.",
+  "channels.needCharacterTitle": "먼저 내 캐릭터를 만드세요",
   "channels.loadingChannels": "채널 로딩 중...",
   "channels.joinFailed": "채널 참여에 실패했습니다",
   "channels.invalidInvite": "유효하지 않은 초대 코드입니다",
@@ -2400,6 +2404,9 @@ const ko: Record<string, string> = {
   "errors.characterAppearanceInvalid": "캐릭터 외형 정보가 올바르지 않습니다",
   "errors.noCharacterSelected": "선택된 캐릭터가 없습니다",
   "errors.characterNotFound": "캐릭터를 찾을 수 없습니다",
+  "errors.characterNotYours": "내 캐릭터가 아닌 캐릭터로는 입장할 수 없습니다.",
+  "errors.characterMissing":
+    "사무실에 들어가려면 먼저 내 캐릭터를 만드세요. 내 캐릭터 화면(/characters)에서 만들 수 있습니다.",
   "errors.failedToLoadCharacterSprite": "캐릭터 스프라이트를 불러오지 못했습니다",
   "errors.failedToLoadGameData": "게임 데이터를 불러오지 못했습니다",
   "errors.failedToFetchTemplate": "템플릿을 불러오지 못했습니다",
