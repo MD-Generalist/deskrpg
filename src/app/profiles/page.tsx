@@ -131,11 +131,12 @@ function ProfilesPageContent() {
           className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-text-secondary"
           aria-label={ko ? "NPC 관리 순서" : "NPC management flow"}
         >
+          {/* 채용 마법사가 3단계가 되며 외형(자동 배정)과 자리(맵)는 사용자가 거치는 단계가 아니다. */}
           {[
             ko ? "게이트웨이 선택" : "Choose gateway",
-            ko ? "프로필 선택" : "Choose profile",
-            ko ? "완성형 외형 선택" : "Choose a complete look",
-            ko ? "채널에서 배치" : "Place in a channel",
+            ko ? "새 직원 고용" : "Hire an employee",
+            ko ? "인격·AI 모델" : "Persona & AI model",
+            ko ? "사무실 출근" : "Joins the office",
           ].map((label, index) => (
             <li key={label} className="inline-flex items-center gap-3">
               {index > 0 && <ArrowRight size={14} className="text-text-dim" aria-hidden="true" />}

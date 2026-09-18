@@ -226,6 +226,28 @@ export default function NpcHireWizard({
     ? `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(created.name)}`
     : null;
 
+  /**
+   * 인격 응답 하나를 화면 상태로 옮긴다 — 저장과 **편집 모드 판정을 함께** 한다.
+   *
+   * ① 의 서빙 확인과 ② 의 조회가 같은 응답을 받는다. 예전에는 ① 쪽이 payload 만 저장하고
+   * 모드를 정하지 않아, ② 가 (이미 payload 가 있으니) 다시 읽지 않은 채 모드 null 로 떨어져
+   * 방금 만든 프로필에 "이미 작성된 인격이 있습니다" 를 물었다(2026-09-18 로컬 실측).
+   */
+  const applyIdentityPayload = useCallback((payload: IdentityPayload) => {
+    setIdentityPayload(payload);
+    const decision = identityDecision(payload);
+    if (decision === "edit_fresh") {
+      setIdentityMode("new");
+      setIdentityBody("");
+    } else if (decision === "ask_overwrite") {
+      setIdentityMode(null);
+      setIdentityBody(payload.body ?? "");
+    } else {
+      // blocked — 편집기를 열지 않는다.
+      setIdentityMode(null);
+    }
+  }, []);
+
   // --- Step ① actions ---
 
   /**
@@ -293,7 +315,7 @@ export default function NpcHireWizard({
       });
       if (verdict === "served") {
         setServing("served");
-        setIdentityPayload(idData as IdentityPayload);
+        applyIdentityPayload(idData as IdentityPayload);
       } else if (verdict === "key_rejected") {
         setServing("key_rejected");
       } else if (verdict === "not_served") {
@@ -307,7 +329,7 @@ export default function NpcHireWizard({
     } finally {
       setCreating(false);
     }
-  }, [gatewayId, nameTrimmed, nameValid, onProfileCreated, t]);
+  }, [applyIdentityPayload, gatewayId, nameTrimmed, nameValid, onProfileCreated, t]);
 
   const handleDeleteCreated = useCallback(async () => {
     if (!created) return;
@@ -359,25 +381,13 @@ export default function NpcHireWizard({
         setIdentityPayload(null);
         return;
       }
-      const payload = data as IdentityPayload;
-      setIdentityPayload(payload);
-      const decision = identityDecision(payload);
-      if (decision === "edit_fresh") {
-        setIdentityMode("new");
-        setIdentityBody("");
-      } else if (decision === "ask_overwrite") {
-        setIdentityMode(null);
-        setIdentityBody(payload.body ?? "");
-      } else {
-        // blocked — 편집기를 열지 않는다.
-        setIdentityMode(null);
-      }
+      applyIdentityPayload(data as IdentityPayload);
     } catch {
       setIdentityError(t("errors.connectionFailed"));
     } finally {
       setIdentityLoading(false);
     }
-  }, [profileBase, t]);
+  }, [applyIdentityPayload, profileBase, t]);
 
   useEffect(() => {
     if (current === "identity" && !identityPayload && !identityLoading) {

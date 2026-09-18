@@ -462,3 +462,29 @@ test("프로필을 만들면 곧바로 바깥 목록에 알린다", async () => 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("방금 만든 프로필의 ② 는 곧바로 빈 편집기를 연다 — 덮어쓸지 묻지 않는다", async () => {
+  // 2026-09-18 로컬 실측: 새 프로필(SOUL.md = Hermes 기본 템플릿, isDefaultTemplate:true)인데
+  // ② 가 "이미 작성된 인격이 있습니다. 어떻게 할까요?" 를 물었다. ① 의 서빙 확인이 받은 인격
+  // 응답을 저장만 하고 편집 모드를 정하지 않아, ② 가 다시 읽지도 판정하지도 않았다.
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
+    await createProfile(el);
+    await act(async () => {
+      tabByNumber(el, "②")!.click();
+    });
+    const text = el.textContent ?? "";
+    assert.equal(
+      text.includes("이미 작성된 인격이 있습니다"),
+      false,
+      "새 프로필인데 덮어쓸지 묻는다",
+    );
+    assert.ok(el.querySelector("textarea"), "인격 편집기가 열리지 않았다");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
