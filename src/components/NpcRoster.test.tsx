@@ -11,13 +11,33 @@ import NpcRoster, { type RosterNpc } from "./NpcRoster";
 
 /**
  * 출근부는 "맵에 있는 NPC" 가 아니라 **채널이 고용한 프로필 전부** 를 그린다.
- * 세 상태(자리 있음·자리 미정·쉬는 중)를 한 화면에서 구분하지 못하면, 출근했는데
- * 자리가 없어 맵에 안 보이는 NPC 가 사라진 것처럼 보인다.
+ * 출근한 직원은 항상 자리가 있다(좌석 번호 또는 "서 있음") — "자리 미정" 은 없다.
  */
 const roster: RosterNpc[] = [
-  { id: "a", name: "소피", active: true, placed: true, profile: { ownerUserId: "me" } },
-  { id: "b", name: "올리버", active: true, placed: false, profile: { ownerUserId: "me" } },
-  { id: "c", name: "미아", active: false, placed: true, profile: { ownerUserId: "someone" } },
+  {
+    id: "a",
+    name: "소피",
+    active: true,
+    placed: true,
+    seatNumber: 3,
+    profile: { ownerUserId: "me" },
+  },
+  {
+    id: "b",
+    name: "올리버",
+    active: true,
+    placed: true,
+    seatNumber: null,
+    profile: { ownerUserId: "me" },
+  },
+  {
+    id: "c",
+    name: "미아",
+    active: false,
+    placed: true,
+    seatNumber: 1,
+    profile: { ownerUserId: "someone" },
+  },
 ];
 
 async function mount(node: React.ReactElement): Promise<{ root: Root; el: HTMLElement }> {
@@ -36,7 +56,7 @@ function buttonByText(el: HTMLElement, text: string): HTMLButtonElement {
   return found as HTMLButtonElement;
 }
 
-test("세 상태를 구분해 그린다", async () => {
+test("출근한 직원은 좌석 번호 또는 '서 있음' 버튼을 보이고, '자리 미정' 은 없다", async () => {
   const { el } = await mount(
     <I18nProvider initialLocale="ko">
       <NpcRoster
@@ -51,12 +71,13 @@ test("세 상태를 구분해 그린다", async () => {
     </I18nProvider>,
   );
   const text = el.textContent ?? "";
-  assert.match(text, /자리 있음/);
-  assert.match(text, /자리 미정/);
+  assert.match(text, /3번 자리/);
+  assert.match(text, /서 있음/);
   assert.match(text, /쉬는 중/);
+  assert.doesNotMatch(text, /자리 미정/);
 });
 
-test("자리 미정을 누르면 onPlace, 회의 중이면 토글이 비활성이다", async () => {
+test("좌석 버튼을 누르면 onPlace, 회의 중이면 토글이 비활성이다", async () => {
   const placed: string[] = [];
   const { el } = await mount(
     <I18nProvider initialLocale="ko">
@@ -71,7 +92,7 @@ test("자리 미정을 누르면 onPlace, 회의 중이면 토글이 비활성�
       />
     </I18nProvider>,
   );
-  await act(async () => buttonByText(el, "자리 미정").click());
+  await act(async () => buttonByText(el, "서 있음").click());
   assert.deepEqual(placed, ["b"]);
   const toggleA = el.querySelector('[data-testid="toggle-a"]') as HTMLButtonElement;
   assert.equal(toggleA.disabled, true);

@@ -46,7 +46,7 @@ type Props = {
 
 function npcDetail(npc: NavigatorNpc, t: ReturnType<typeof useT>): string {
   if (!npc.active || npc.motion === "resting") return t("workspace.status.resting");
-  if (!npc.placed || npc.motion === "unplaced") return t("workspace.status.unplaced");
+  if (!npc.placed || npc.motion === "unplaced") return t("game.roster.standing");
   if (npc.motion === "waiting")
     return t(
       npc.calledByViewer ? "workspace.status.waitingForMe" : "workspace.status.waitingForOther",

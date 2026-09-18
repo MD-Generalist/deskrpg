@@ -99,7 +99,7 @@ test("rooms, online users and every NPC employment state remain discoverable", a
   assert.match(element.textContent ?? "", /디자인 리뷰/);
   assert.match(element.textContent ?? "", /소피[\s\S]*대기/);
   assert.match(element.textContent ?? "", /레오[\s\S]*쉬는 중/);
-  assert.match(element.textContent ?? "", /미나[\s\S]*자리 미정/);
+  assert.match(element.textContent ?? "", /미나[\s\S]*서 있음/);
 
   await act(async () => button(element, "디자인 리뷰").click());
   await act(async () => button(element, "은채").click());
