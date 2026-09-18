@@ -31,8 +31,10 @@ for (const env of OFFICE_ENVIRONMENTS) {
   test(`${env.id}: 레이아웃의 deskSeatTiles 는 결정적이고 row→col 로 정렬된다`, () => {
     const map = buildOfficeEnvironment(env.id);
     const a = deriveChannelMotionLayout({ mapData: map }, [])!.deskSeatTiles;
-    const b = deriveChannelMotionLayout({ mapData: buildOfficeEnvironment(env.id) }, [])!
-      .deskSeatTiles;
+    const b = deriveChannelMotionLayout(
+      { mapData: buildOfficeEnvironment(env.id) },
+      [],
+    )!.deskSeatTiles;
     assert.deepEqual(a, b);
     assert.equal(a.length, EXPECTED[env.id]);
     const sorted = [...a].sort((x, y) => x.row - y.row || x.col - y.col);

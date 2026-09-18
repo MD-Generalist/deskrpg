@@ -61,5 +61,6 @@ test("placeAllUnplacedNpcs 는 미배치 직원이 있는 채널을 모두 처�
   const b = await seedChannelWithProfiles({ unplaced: 1, mapData: executiveMap() });
   const result = await placeAllUnplacedNpcs();
   assert.ok(result.channels >= 2 && result.seated >= 2);
-  for (const c of [a, b]) assert.ok((await positions(c.channelId)).every((r) => r.positionX !== null));
+  for (const c of [a, b])
+    assert.ok((await positions(c.channelId)).every((r) => r.positionX !== null));
 });

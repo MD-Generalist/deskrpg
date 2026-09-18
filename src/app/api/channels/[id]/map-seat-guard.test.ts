@@ -37,8 +37,7 @@ function stripDeskChairs(map: TiledMap): TiledMap {
         ? {
             ...layer,
             objects: (layer.objects ?? []).filter(
-              (object) =>
-                object.type !== "chair" || keep.has(`${object.x / 32},${object.y / 32}`),
+              (object) => object.type !== "chair" || keep.has(`${object.x / 32},${object.y / 32}`),
             ),
           }
         : layer,

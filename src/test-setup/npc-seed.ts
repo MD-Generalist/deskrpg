@@ -119,7 +119,9 @@ export async function seedChannel(ownerId: string, name = "Test Channel", mapDat
   const { db, channels, jsonForDb } = await loadDb();
   const [channel] = await db
     .insert(channels)
-    .values(mapData !== undefined ? { name, ownerId, mapData: jsonForDb(mapData) } : { name, ownerId })
+    .values(
+      mapData !== undefined ? { name, ownerId, mapData: jsonForDb(mapData) } : { name, ownerId },
+    )
     .returning();
   return channel;
 }

@@ -60,7 +60,9 @@ test("빈 좌석을 번호 순으로 채우고, 만석이면 서는 칸에 세�
       ["d", true, 4],
     ],
   );
-  assert.ok(plan.slice(4).every((p) => !p.seated && seatNumberAt(map.seats, p.col, p.row) === null));
+  assert.ok(
+    plan.slice(4).every((p) => !p.seated && seatNumberAt(map.seats, p.col, p.row) === null),
+  );
   assert.equal(new Set(plan.map((p) => `${p.col},${p.row}`)).size, 6, "같은 칸에 둘을 두지 않는다");
   assert.deepEqual(planPlacements(npcs, map, []), plan, "결정적이다");
 });
