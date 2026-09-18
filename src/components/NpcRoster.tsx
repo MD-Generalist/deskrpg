@@ -19,7 +19,7 @@ export type RosterNpc = {
   appearance?: unknown;
   active: boolean;
   placed: boolean;
-  profile?: { ownerUserId?: string } | null;
+  profile?: { ownerUserId?: string; profileName?: string } | null;
 };
 
 export type NpcRosterProps = {

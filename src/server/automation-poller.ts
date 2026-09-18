@@ -209,6 +209,7 @@ export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Pr
         board: boardSlug,
         cursor: cursor ?? undefined,
         limit: deps.pageLimit,
+        include: "artifacts",
       });
 
       if (!res.ok) {

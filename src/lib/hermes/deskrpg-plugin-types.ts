@@ -281,6 +281,9 @@ export const PLUGIN_EVENT_KINDS = [
   "task.updated",
   "cron.run.started",
   "cron.run.finished",
+  "artifact.created",
+  "artifact.versioned",
+  "artifact.deleted",
 ] as const;
 
 export type PluginEventKind = (typeof PLUGIN_EVENT_KINDS)[number];
@@ -312,7 +315,7 @@ export type CronRunFinishedPayload = CronRunStartedPayload & {
 
 export type PluginEvent = {
   id: string;
-  /** epoch 밀리초 */
+  /** epoch 초(플러그인 0.6.0+ 전 출처). 화면은 epochSecondsToMs 로 바꾼다 */
   ts: number;
   kind: PluginEventKind;
   board?: string;
@@ -467,3 +470,82 @@ export type SwarmCreated = {
 
 /** 루트 카드의 블랙보드. key 별 최신값 + `_authors`. 값의 모양은 Hermes 가 정한다. */
 export type Blackboard = Record<string, unknown>;
+
+// ---------------------------------------------------------------------------
+// 아티팩트(0.8.0+) — /deskrpg/artifacts
+// ---------------------------------------------------------------------------
+
+export const ARTIFACT_KINDS = [
+  "document",
+  "image",
+  "media",
+  "web",
+  "react",
+  "data",
+  "file",
+  "link",
+] as const;
+export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
+export const ARTIFACT_SOURCES = ["chat", "kanban", "cron"] as const;
+export type ArtifactSource = (typeof ARTIFACT_SOURCES)[number];
+
+/**
+ * 화면 탭 묶음(2026-09-18 follow-up). `media`=image+media, `file`=document+web+react+data+file,
+ * `link`=link. 순서가 탭 표시 순서다(전체 다음 미디어·파일·링크). 플러그인 쪽 매핑은
+ * deskrpg-hermes-plugin `GET /deskrpg/artifacts?kind=<쉼표 목록>`(0.8.4+)이 받는다.
+ */
+export const ARTIFACT_CATEGORIES = {
+  media: ["image", "media"],
+  file: ["document", "web", "react", "data", "file"],
+  link: ["link"],
+} as const satisfies Record<string, readonly ArtifactKind[]>;
+export type ArtifactCategory = keyof typeof ARTIFACT_CATEGORIES;
+export const ARTIFACTS_MIN_VERSION = "0.8.0";
+export const ARTIFACTS_TASK_FILTER_MIN_VERSION = "0.8.4";
+export type ArtifactSummary = {
+  id: string;
+  kind: ArtifactKind;
+  title: string;
+  summary?: string | null;
+  profile: string;
+  source_kind: ArtifactSource;
+  session_id: string;
+  board?: string | null;
+  task_id?: string | null;
+  job_id?: string | null;
+  run_id?: string | null;
+  current_version: number;
+  filename: string;
+  mime: string;
+  size: number;
+  sha256: string;
+  created_at: number;
+  updated_at: number;
+  missing?: true;
+};
+export type ArtifactVersion = {
+  version: number;
+  filename: string;
+  mime: string;
+  size: number;
+  sha256: string;
+  origin_path?: string | null;
+  created_by: string;
+  captured_via: "tool" | "hook" | "edit" | "response";
+  note?: string | null;
+  created_at: number;
+  pruned_at?: number;
+};
+export type ArtifactPage = { artifacts: ArtifactSummary[]; cursor: string; has_more: boolean };
+export type ArtifactDetail = { artifact: ArtifactSummary; versions: ArtifactVersion[] };
+export type ArtifactEventPayload = {
+  artifact_id: string;
+  version?: number;
+  kind?: ArtifactKind;
+  title?: string;
+  profile?: string;
+  source_kind?: ArtifactSource;
+  board?: string | null;
+  task_id?: string | null;
+  captured_via?: string;
+};

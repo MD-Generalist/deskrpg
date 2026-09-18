@@ -755,7 +755,10 @@ test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지
     ctx(seed.channelId, "", attachment.id),
   );
   assert.equal(fetched.status, 200);
-  assert.equal((await fetched.json()).id, attachment.id);
+  assert.equal(await fetched.text(), "hello");
+  assert.match(fetched.headers.get("content-disposition") ?? "", /attachment/);
+  assert.equal(fetched.headers.get("content-security-policy"), "sandbox");
+  assert.equal(fetched.headers.get("x-content-type-options"), "nosniff");
 
   const removed = await routes.attachment.DELETE(
     req(seed.ownerId, "DELETE", `${base(seed.channelId)}/attachments/${attachment.id}`),
@@ -790,6 +793,36 @@ test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지
   } finally {
     server.setInfo({ kanban: { dispatcher_present: true, attachments: true } });
   }
+});
+
+test("첨부 — HTML 업로드도 항상 attachment 로 내려받고 CSP sandbox·nosniff 를 강제한다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  const taskId = created.body.task.id as string;
+
+  const form = new FormData();
+  form.append("file", new Blob(["<script>alert(1)</script>"]), "a.html");
+  const uploaded = await routes.taskAttachments.POST(
+    new NextRequest(`${base(seed.channelId)}/tasks/${taskId}/attachments`, {
+      method: "POST",
+      headers: { "x-user-id": seed.ownerId },
+      body: form,
+    }),
+    ctx(seed.channelId, taskId),
+  );
+  assert.equal(uploaded.status, 201, JSON.stringify(await uploaded.clone().json()));
+  const attachment = (await uploaded.json()).attachment;
+
+  const fetched = await routes.attachment.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments/${attachment.id}`),
+    ctx(seed.channelId, "", attachment.id),
+  );
+  assert.equal(fetched.status, 200);
+  assert.match(fetched.headers.get("content-disposition") ?? "", /^attachment/);
+  assert.equal(fetched.headers.get("content-security-policy"), "sandbox");
+  assert.equal(fetched.headers.get("x-content-type-options"), "nosniff");
 });
 
 test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더 편집, 게이트웨이 소유자는 운영 설정 편집", async () => {
@@ -953,4 +986,33 @@ test("크론 변경도 즉시 폴링을 요청한다", async () => {
   );
   assert.equal(deleted.status, 200);
   assert.deepEqual(polled, [seed.channelId, seed.channelId]);
+});
+
+test("첨부 — '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에 404 attachment_not_found", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  for (const bad of [".", "..", "a/b", "", "x".repeat(129)]) {
+    const before = server.requests().length;
+    const got = await routes.attachment.GET(
+      req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments/x`),
+      ctx(seed.channelId, "", bad),
+    );
+    const removed = await routes.attachment.DELETE(
+      req(seed.ownerId, "DELETE", `${base(seed.channelId)}/attachments/x`),
+      ctx(seed.channelId, "", bad),
+    );
+    for (const res of [got, removed]) {
+      assert.equal(res.status, 404, `id ${JSON.stringify(bad)}`);
+      assert.equal((await res.json()).code, "attachment_not_found");
+    }
+    assert.equal(
+      server
+        .requests()
+        .slice(before)
+        .filter((r) => r.path.includes("/kanban/")).length,
+      0,
+      `id ${JSON.stringify(bad)} 로 칸반 경로를 부르지 않는다`,
+    );
+  }
 });

@@ -106,6 +106,7 @@ test("첫 폴링(커서 없음)은 '지금' 토큰만 저장하고 아무것도 
   assert.equal(polls.length, 1);
   assert.ok(!polls[0].path.includes("cursor="), "커서 없이 부른다");
   assert.ok(polls[0].path.includes(`board=${slugOf(channel.id)}`), "보드로 좁힌다");
+  assert.match(polls[0].path, /include=artifacts/, "아티팩트 사건도 함께 묻는다");
 
   const row = await readRow(channel.id);
   assert.ok(row.eventCursor, "지금 토큰이 저장된다");

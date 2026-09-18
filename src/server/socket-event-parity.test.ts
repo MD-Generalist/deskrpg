@@ -286,18 +286,18 @@ test("a blank token never overwrites a stored profile credential", () => {
   );
 });
 
-// T5 하드 게이트 10: 자동화가 더하는 소켓 이벤트는 `kanban:event`·`cron:event`·`npc:working`
-// 세 개뿐이고, 방 쪽은 `room:message` 에 `notice` 필드를 얹는 것이 전부다. 이름을 상수
-// (`AUTOMATION_SOCKET_EVENTS`)로 묶어 두었으니 네 번째 이름이 생기면 여기서 빨개진다.
-test("automation adds exactly three channel-scoped socket events and reuses room:message", () => {
+// T5 하드 게이트 10: 자동화가 더하는 소켓 이벤트는 `kanban:event`·`cron:event`·`npc:working`·
+// `artifact:event` 넷뿐이고, 방 쪽은 `room:message` 에 `notice` 필드를 얹는 것이 전부다. 이름을
+// 상수(`AUTOMATION_SOCKET_EVENTS`)로 묶어 두었으니 다섯째 이름이 생기면 여기서 빨개진다.
+test("automation adds exactly four channel-scoped socket events and reuses room:message", () => {
   const sink = readFileSync(path.join(repoRoot, "src/server/automation-events.ts"), "utf8");
   const poller = readFileSync(path.join(repoRoot, "src/server/automation-poller.ts"), "utf8");
   const literal = (src: string, re: RegExp) => [...new Set([...src.matchAll(re)].map((m) => m[1]))];
 
   assert.deepEqual(
-    literal(sink, /"((?:kanban|cron|npc):[a-z-]+)"/g).sort(),
-    ["cron:event", "kanban:event", "npc:working"],
-    "사건 싱크가 쓰는 채널 이벤트는 정확히 세 개여야 합니다.",
+    literal(sink, /"((?:artifact|kanban|cron|npc):[a-z-]+)"/g).sort(),
+    ["artifact:event", "cron:event", "kanban:event", "npc:working"],
+    "사건 싱크가 쓰는 채널 이벤트는 정확히 네 개여야 합니다.",
   );
   // `npc:response-state` 와 섞이지 않는다(R27) — 싱크·폴러 어디에도 그 이름이 없다.
   for (const src of [sink, poller]) assert.doesNotMatch(src, /npc:response-state/);

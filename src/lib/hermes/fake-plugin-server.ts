@@ -11,10 +11,15 @@
  * 되고, 릴리스 이미지에도 필요 없다. `*.test.ts` 에서만 부른다.
  */
 
+import { createHash } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 
 import type {
+  ArtifactKind,
+  ArtifactSource,
+  ArtifactSummary,
+  ArtifactVersion,
   AutomationBlueprint,
   BoardMeta,
   CronDeliveryTarget,
@@ -58,6 +63,8 @@ export type RecordedRequest = {
   /** JSON 본문이면 파싱 결과, 아니면 null */
   json: unknown;
   status: number;
+  /** 소문자 키로 정규화한 요청 헤더 전부. */
+  headers: Record<string, string>;
 };
 
 export type FakePluginServer = {
@@ -73,6 +80,27 @@ export type FakePluginServer = {
   setTaskLog(board: string, taskId: string, content: string): void;
   setDeliveryTargets(profile: string, targets: CronDeliveryTarget[]): void;
   setBlueprints(profile: string, blueprints: AutomationBlueprint[]): void;
+  /** 아티팩트 하나를 상태에 심는다(버전 1). 기본 kind `document`, mime `text/markdown`,
+   * filename `<title>.md`, source `chat`. */
+  seedArtifact(input: {
+    id: string;
+    title: string;
+    profile: string;
+    board?: string | null;
+    task_id?: string | null;
+    kind?: ArtifactKind;
+    mime?: string;
+    filename?: string;
+    body: string | Buffer;
+    source_kind?: ArtifactSource;
+  }): ArtifactSummary;
+  /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
+  seedAttachment(input: {
+    board: string;
+    taskId: string;
+    filename: string;
+    body: string | Buffer;
+  }): { id: string };
 };
 
 // ---------------------------------------------------------------------------
@@ -91,7 +119,7 @@ type BoardRecord = {
   tasks: Map<string, TaskRecord>;
   /** "parent|child" */
   links: Set<string>;
-  attachments: Map<string, KanbanAttachment & { task_id: string }>;
+  attachments: Map<string, KanbanAttachment & { task_id: string; bytes: Buffer }>;
   logs: Map<string, string>;
 };
 
@@ -102,7 +130,19 @@ type CronState = {
   blueprints: AutomationBlueprint[];
 };
 
-type Reply = { status: number; body: unknown };
+type Reply = {
+  status: number;
+  body: unknown;
+  /** 있으면 JSON 대신 이 바이트를 이 헤더로 그대로 내보낸다(아티팩트 원시 콘텐츠). */
+  raw?: { bytes: Buffer; headers: Record<string, string> };
+};
+
+type ArtifactVersionRecord = { meta: ArtifactVersion; bytes: Buffer };
+type ArtifactRecord = {
+  summary: ArtifactSummary;
+  versions: ArtifactVersionRecord[];
+  deleted: boolean;
+};
 
 const SLUG_RE = /^[a-z0-9-]{1,64}$/;
 const DEFAULT_EVENT_LIMIT = 200;
@@ -149,6 +189,7 @@ export async function startFakePluginServer(
   let cursors = new Set<string>();
   let orchestration: OrchestrationSettings = defaultOrchestration(profileNames);
   let cron = new Map<string, CronState>();
+  let artifacts = new Map<string, ArtifactRecord>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -160,6 +201,7 @@ export async function startFakePluginServer(
     cursors = new Set();
     orchestration = defaultOrchestration(profileNames);
     cron = new Map();
+    artifacts = new Map();
     seq = 0;
   }
 
@@ -730,10 +772,81 @@ export async function startFakePluginServer(
       filename: part.filename,
       size: part.size,
       task_id: id,
+      bytes: part.content,
     };
     board.attachments.set(attachment.id, attachment);
-    const { task_id: _taskId, ...publicShape } = attachment;
+    const { task_id: _taskId, bytes: _bytes, ...publicShape } = attachment;
     return { status: 201, body: { attachment: publicShape } };
+  }
+
+  /** 첨부 바이트를 내려준다(`kanban_files.download_attachment_handler` 와 같은 모양). */
+  function attachmentContent(
+    attachment: KanbanAttachment & { task_id: string; bytes: Buffer },
+    req: ParsedRequest,
+  ): Reply {
+    const bytes = attachment.bytes;
+    const baseHeaders: Record<string, string> = {
+      "content-type": "application/octet-stream",
+      "content-disposition": `attachment; filename="${attachment.filename}"`,
+      "accept-ranges": "bytes",
+    };
+    const range = req.headers.range;
+    const rangeMatch = range ? /^bytes=(\d*)-(\d*)$/.exec(range) : null;
+    if (rangeMatch) {
+      const total = bytes.length;
+      const startByte =
+        rangeMatch[1] === "" ? total - Number(rangeMatch[2]) : Number(rangeMatch[1]);
+      const endByte = rangeMatch[2] === "" ? total - 1 : Number(rangeMatch[2]);
+      const slice = bytes.subarray(startByte, endByte + 1);
+      return {
+        status: 206,
+        body: null,
+        raw: {
+          bytes: slice,
+          headers: {
+            ...baseHeaders,
+            "content-range": `bytes ${startByte}-${endByte}/${total}`,
+            "content-length": String(slice.length),
+          },
+        },
+      };
+    }
+    return {
+      status: 200,
+      body: null,
+      raw: { bytes, headers: { ...baseHeaders, "content-length": String(bytes.length) } },
+    };
+  }
+
+  /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
+  function seedAttachment(input: {
+    board: string;
+    taskId: string;
+    filename: string;
+    body: string | Buffer;
+  }): { id: string } {
+    let board = boards.get(input.board);
+    if (!board) {
+      board = {
+        meta: { slug: input.board, name: input.board },
+        tasks: new Map(),
+        links: new Set(),
+        attachments: new Map(),
+        logs: new Map(),
+      };
+      boards.set(input.board, board);
+      if (currentBoard === null) currentBoard = input.board;
+    }
+    const bytes = typeof input.body === "string" ? Buffer.from(input.body, "utf8") : input.body;
+    const id = nextId("att");
+    board.attachments.set(id, {
+      id,
+      filename: input.filename,
+      size: bytes.length,
+      task_id: input.taskId,
+      bytes,
+    });
+    return { id };
   }
 
   function updateOrchestration(body: Record<string, unknown>): Reply {
@@ -864,6 +977,195 @@ export async function startFakePluginServer(
     return createJob(profile, { schedule, prompt: blueprint.command, name: blueprint.title });
   }
 
+  // ---- 아티팩트(0.8.0+) -----------------------------------------------------
+
+  function nowEpochSeconds(): number {
+    return Math.floor(Date.now() / 1000);
+  }
+
+  function sha256Hex(bytes: Buffer): string {
+    return createHash("sha256").update(bytes).digest("hex");
+  }
+
+  function seedArtifact(input: {
+    id: string;
+    title: string;
+    profile: string;
+    board?: string | null;
+    task_id?: string | null;
+    kind?: ArtifactKind;
+    mime?: string;
+    filename?: string;
+    body: string | Buffer;
+    source_kind?: ArtifactSource;
+  }): ArtifactSummary {
+    const bytes = typeof input.body === "string" ? Buffer.from(input.body, "utf8") : input.body;
+    const now = nowEpochSeconds();
+    const kind = input.kind ?? "document";
+    const mime = input.mime ?? "text/markdown";
+    const filename = input.filename ?? `${input.title}.md`;
+    const sha256 = sha256Hex(bytes);
+    const summary: ArtifactSummary = {
+      id: input.id,
+      kind,
+      title: input.title,
+      profile: input.profile,
+      source_kind: input.source_kind ?? "chat",
+      session_id: nextId("sess"),
+      board: input.board ?? null,
+      task_id: input.task_id ?? null,
+      current_version: 1,
+      filename,
+      mime,
+      size: bytes.length,
+      sha256,
+      created_at: now,
+      updated_at: now,
+    };
+    const version: ArtifactVersion = {
+      version: 1,
+      filename,
+      mime,
+      size: bytes.length,
+      sha256,
+      created_by: input.profile,
+      captured_via: "tool",
+      created_at: now,
+    };
+    artifacts.set(input.id, { summary, versions: [{ meta: version, bytes }], deleted: false });
+    return summary;
+  }
+
+  function artifactOf(id: string): ArtifactRecord {
+    const record = artifacts.get(id);
+    if (!record) throw notFound("artifact_not_found");
+    if (record.deleted) throw new HttpError(410, { error: "artifact_deleted" });
+    return record;
+  }
+
+  function listArtifacts(params: URLSearchParams): Reply {
+    const profilesRaw = params.get("profiles");
+    const profiles = profilesRaw ? profilesRaw.split(",").filter(Boolean) : [];
+    const board = params.get("board") ?? undefined;
+    const kind = params.get("kind") ?? undefined;
+    const source = params.get("source") ?? undefined;
+    const taskId = params.get("task_id") ?? undefined;
+    const limitRaw = params.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : 50;
+    if (!Number.isInteger(limit) || limit < 1) throw badRequest("invalid_limit");
+    const cursorRaw = params.get("cursor");
+    const start = cursorRaw ? Number(cursorRaw.replace(/^a/, "")) || 0 : 0;
+
+    const all = [...artifacts.values()]
+      .filter((r) => !r.deleted)
+      .map((r) => r.summary)
+      .filter((s) => {
+        const inScope =
+          (profiles.length > 0 && profiles.includes(s.profile)) ||
+          (board !== undefined && s.board === board);
+        if (!inScope) return false;
+        if (kind !== undefined && s.kind !== kind) return false;
+        if (source !== undefined && s.source_kind !== source) return false;
+        if (taskId !== undefined && s.task_id !== taskId) return false;
+        return true;
+      })
+      .sort((a, b) => b.updated_at - a.updated_at);
+
+    const page = all.slice(start, start + limit);
+    const hasMore = start + page.length < all.length;
+    return {
+      status: 200,
+      body: { artifacts: page, cursor: `a${start + page.length}`, has_more: hasMore },
+    };
+  }
+
+  function getArtifact(id: string): Reply {
+    const record = artifactOf(id);
+    return {
+      status: 200,
+      body: { artifact: record.summary, versions: record.versions.map((v) => v.meta) },
+    };
+  }
+
+  function artifactContent(id: string, versionNum: number, req: ParsedRequest): Reply {
+    const record = artifactOf(id);
+    const versionRecord = record.versions.find((v) => v.meta.version === versionNum);
+    if (!versionRecord) throw notFound("version_not_found");
+    const bytes = versionRecord.bytes;
+    const download = req.params.get("download") === "1";
+    const disposition = `${download ? "attachment" : "inline"}; filename="${versionRecord.meta.filename}"`;
+    const baseHeaders: Record<string, string> = {
+      "content-type": versionRecord.meta.mime,
+      "content-security-policy": "sandbox",
+      "x-content-type-options": "nosniff",
+      "accept-ranges": "bytes",
+      "content-disposition": disposition,
+    };
+    const range = req.headers.range;
+    const rangeMatch = range ? /^bytes=(\d*)-(\d*)$/.exec(range) : null;
+    if (rangeMatch) {
+      const total = bytes.length;
+      const startByte =
+        rangeMatch[1] === "" ? total - Number(rangeMatch[2]) : Number(rangeMatch[1]);
+      const endByte = rangeMatch[2] === "" ? total - 1 : Number(rangeMatch[2]);
+      const slice = bytes.subarray(startByte, endByte + 1);
+      return {
+        status: 206,
+        body: null,
+        raw: {
+          bytes: slice,
+          headers: {
+            ...baseHeaders,
+            "content-range": `bytes ${startByte}-${endByte}/${total}`,
+            "content-length": String(slice.length),
+          },
+        },
+      };
+    }
+    return {
+      status: 200,
+      body: null,
+      raw: { bytes, headers: { ...baseHeaders, "content-length": String(bytes.length) } },
+    };
+  }
+
+  function addArtifactVersion(id: string, body: Record<string, unknown>): Reply {
+    const record = artifactOf(id);
+    if (typeof body.content !== "string" || typeof body.filename !== "string") {
+      throw badRequest("invalid_body");
+    }
+    const bytes = Buffer.from(body.content, "utf8");
+    const now = nowEpochSeconds();
+    const nextVersion = record.summary.current_version + 1;
+    const version: ArtifactVersion = {
+      version: nextVersion,
+      filename: body.filename,
+      mime: record.summary.mime,
+      size: bytes.length,
+      sha256: sha256Hex(bytes),
+      created_by: record.summary.profile,
+      captured_via: "tool",
+      note: typeof body.note === "string" ? body.note : undefined,
+      created_at: now,
+    };
+    record.versions.push({ meta: version, bytes });
+    record.summary = {
+      ...record.summary,
+      current_version: nextVersion,
+      filename: version.filename,
+      size: version.size,
+      sha256: version.sha256,
+      updated_at: now,
+    };
+    return { status: 201, body: { version } };
+  }
+
+  function deleteArtifact(id: string): Reply {
+    const record = artifactOf(id);
+    record.deleted = true;
+    return { status: 200, body: { ok: true } };
+  }
+
   // ---- 라우팅 -------------------------------------------------------------
 
   function routeOwner(req: ParsedRequest): Reply {
@@ -875,6 +1177,26 @@ export async function startFakePluginServer(
     if (pathname === "/deskrpg/events") {
       if (method !== "GET") throw notFound();
       return pollEvents(params);
+    }
+
+    if (pathname === "/deskrpg/artifacts") {
+      if (method !== "GET") throw notFound();
+      return listArtifacts(params);
+    }
+    let artifactMatch = /^\/deskrpg\/artifacts\/([^/]+)$/.exec(pathname);
+    if (artifactMatch) {
+      const id = decodeURIComponent(artifactMatch[1]);
+      if (method === "GET") return getArtifact(id);
+      if (method === "DELETE") return deleteArtifact(id);
+      throw notFound();
+    }
+    artifactMatch = /^\/deskrpg\/artifacts\/([^/]+)\/versions$/.exec(pathname);
+    if (artifactMatch && method === "POST") {
+      return addArtifactVersion(decodeURIComponent(artifactMatch[1]), body);
+    }
+    artifactMatch = /^\/deskrpg\/artifacts\/([^/]+)\/versions\/(\d+)\/content$/.exec(pathname);
+    if (artifactMatch && method === "GET") {
+      return artifactContent(decodeURIComponent(artifactMatch[1]), Number(artifactMatch[2]), req);
     }
 
     if (pathname === "/deskrpg/kanban/boards") {
@@ -939,10 +1261,7 @@ export async function startFakePluginServer(
       const board = boardOf(params);
       const attachment = board.attachments.get(decodeURIComponent(m[1]));
       if (!attachment) throw notFound();
-      if (method === "GET") {
-        const { task_id: _taskId, ...publicShape } = attachment;
-        return { status: 200, body: publicShape };
-      }
+      if (method === "GET") return attachmentContent(attachment, req);
       if (method === "DELETE") {
         board.attachments.delete(attachment.id);
         return { status: 200, body: { ok: true } };
@@ -1082,6 +1401,11 @@ export async function startFakePluginServer(
           json = {};
         }
       }
+      const headers: Record<string, string> = {};
+      for (const [key, value] of Object.entries(incoming.headers)) {
+        if (value === undefined) continue;
+        headers[key.toLowerCase()] = Array.isArray(value) ? value.join(", ") : value;
+      }
       const parsed: ParsedRequest = {
         method: incoming.method ?? "GET",
         pathname: url.pathname,
@@ -1090,6 +1414,7 @@ export async function startFakePluginServer(
         contentType,
         json,
         raw,
+        headers,
       };
 
       let reply: Reply;
@@ -1108,10 +1433,16 @@ export async function startFakePluginServer(
         contentType,
         json: raw.length > 0 && contentType?.startsWith("application/json") ? json : null,
         status: reply.status,
+        headers,
       });
-      const payload = JSON.stringify(reply.body);
-      outgoing.writeHead(reply.status, { "content-type": "application/json" });
-      outgoing.end(payload);
+      if (reply.raw) {
+        outgoing.writeHead(reply.status, reply.raw.headers);
+        outgoing.end(reply.raw.bytes);
+      } else {
+        const payload = JSON.stringify(reply.body);
+        outgoing.writeHead(reply.status, { "content-type": "application/json" });
+        outgoing.end(payload);
+      }
     });
   });
 
@@ -1143,6 +1474,8 @@ export async function startFakePluginServer(
     setBlueprints: (profile, blueprints) => {
       cronFor(profile).blueprints = blueprints;
     },
+    seedArtifact,
+    seedAttachment,
   };
 }
 
@@ -1158,6 +1491,8 @@ type ParsedRequest = {
   contentType: string | null;
   json: Record<string, unknown>;
   raw: Buffer;
+  /** 소문자 키로 정규화한 요청 헤더 전부. */
+  headers: Record<string, string>;
 };
 
 function defaultOrchestration(profileNames: string[]): OrchestrationSettings {
@@ -1197,7 +1532,7 @@ function pick(body: Record<string, unknown>, keys: readonly string[]): Record<st
 function parseMultipartFile(
   contentType: string | null,
   raw: Buffer,
-): { filename: string; size: number } | null {
+): { filename: string; size: number; content: Buffer } | null {
   const boundaryMatch = /boundary=("?)([^";]+)\1/.exec(contentType ?? "");
   if (!boundaryMatch) return null;
   const delimiter = Buffer.from(`--${boundaryMatch[2]}`);
@@ -1217,7 +1552,7 @@ function parseMultipartFile(
         // 본문은 헤더 뒤 CRLF 두 개 다음부터, 다음 구분자 앞의 CRLF 전까지.
         let content = part.slice(headerEnd + 4);
         if (content.slice(-2).toString() === "\r\n") content = content.slice(0, -2);
-        return { filename: filenameMatch[1], size: content.length };
+        return { filename: filenameMatch[1], size: content.length, content };
       }
     }
     cursor = next;

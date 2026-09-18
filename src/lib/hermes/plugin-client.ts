@@ -27,6 +27,7 @@ import { transportFetch } from "./setup/transport";
 import { mapPluginFailure, type PluginFailure } from "./plugin-errors";
 
 import type {
+  ArtifactsApi,
   CronApi,
   EventsApi,
   KanbanApi,
@@ -34,9 +35,11 @@ import type {
   PluginClient,
   PluginResponse,
   ProfilePluginClient,
+  RawPluginResponse,
 } from "./plugin-client-types";
 export type {
   PluginResponse,
+  RawPluginResponse,
   IdentityPayload,
   CreateProfilePayload,
   DeleteProfilePayload,
@@ -44,6 +47,8 @@ export type {
   PluginClient,
   KanbanApi,
   EventsApi,
+  ArtifactsApi,
+  ArtifactListQuery,
   CronApi,
   OwnerPluginClient,
   ProfilePluginClient,
@@ -91,6 +96,7 @@ type CallInit = {
   body?: unknown;
   /** multipart 본문(첨부 업로드). content-type 은 fetch 가 boundary 와 함께 붙인다. */
   formData?: FormData;
+  headers?: Record<string, string>;
 };
 
 /**
@@ -103,7 +109,7 @@ function createPluginTransport(input: TransportInput) {
   const base = input.baseUrl.replace(/\/+$/, "");
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  return async function call<T>(
+  async function call<T>(
     path: string,
     token: string,
     init: CallInit = {},
@@ -118,6 +124,7 @@ function createPluginTransport(input: TransportInput) {
         headers: {
           authorization: `Bearer ${token}`,
           ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+          ...(init.headers ?? {}),
         },
         ...(init.formData !== undefined
           ? { body: init.formData }
@@ -153,7 +160,42 @@ function createPluginTransport(input: TransportInput) {
     const failure = mapPluginFailure({ status: res.status, body });
     if (failure) return { ok: false, failure, status: res.status };
     return { ok: true, data: body as T };
-  };
+  }
+
+  async function callRaw(
+    path: string,
+    token: string,
+    init: { headers?: Record<string, string> } = {},
+  ): Promise<RawPluginResponse> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let res: Response;
+    try {
+      // 타임아웃은 응답 머리까지만 — 본문은 스트림이라 오래 걸려도 정상이다.
+      res = await fetchImpl(`${base}${path}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+        signal: controller.signal,
+      });
+    } catch {
+      return controller.signal.aborted
+        ? { ok: false, failure: TIMEOUT, status: 0 }
+        : { ok: false, failure: UNREACHABLE, status: 0 };
+    } finally {
+      clearTimeout(timer);
+    }
+    if (res.status >= 200 && res.status < 300) return { ok: true, response: res };
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    const failure = mapPluginFailure({ status: res.status, body }) ?? MALFORMED_RESPONSE;
+    return { ok: false, failure, status: res.status };
+  }
+
+  return { call, callRaw };
 }
 
 /** 쿼리스트링 조립. `undefined` 값은 빼고, 있는 것만 인코딩한다. 비면 빈 문자열. */
@@ -167,7 +209,7 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 }
 
 export function createPluginClient(input: TransportInput & { defaultToken: string }): PluginClient {
-  const call = createPluginTransport(input);
+  const { call } = createPluginTransport(input);
 
   // 프로필 이름은 검증을 통과하지 않은 채 들어올 수 있는 경로가 있다(사용자 입력).
   const seg = (name: string) => encodeURIComponent(name);
@@ -215,7 +257,7 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
 export function createOwnerPluginClient(
   input: TransportInput & { ownerToken: string },
 ): OwnerPluginClient {
-  const call = createPluginTransport(input);
+  const { call, callRaw } = createPluginTransport(input);
   const token = input.ownerToken;
   const seg = (value: string) => encodeURIComponent(value);
   const task = (board: string, id: string, suffix = "") =>
@@ -252,8 +294,10 @@ export function createOwnerPluginClient(
       formData.append("file", blob, file.filename);
       return call(task(board, id, "/attachments"), token, { method: "POST", formData });
     },
-    getAttachment: (board, attachmentId) =>
-      call(`/deskrpg/kanban/attachments/${seg(attachmentId)}${query({ board })}`, token),
+    attachmentContent: (board, attachmentId, opts) =>
+      callRaw(`/deskrpg/kanban/attachments/${seg(attachmentId)}${query({ board })}`, token, {
+        headers: opts.range ? { range: opts.range } : {},
+      }),
     deleteAttachment: (board, attachmentId) =>
       call(`/deskrpg/kanban/attachments/${seg(attachmentId)}${query({ board })}`, token, {
         method: "DELETE",
@@ -289,15 +333,58 @@ export function createOwnerPluginClient(
   const events: EventsApi = {
     poll: (opts) =>
       call(
-        `/deskrpg/events${query({ board: opts.board, cursor: opts.cursor, limit: opts.limit })}`,
+        `/deskrpg/events${query({
+          board: opts.board,
+          cursor: opts.cursor,
+          limit: opts.limit,
+          include: opts.include,
+        })}`,
         token,
       ),
+  };
+
+  const artifacts: ArtifactsApi = {
+    list: (q) =>
+      call(
+        `/deskrpg/artifacts${query({
+          profiles: q.profiles.length ? q.profiles.join(",") : undefined,
+          board: q.board,
+          kind: q.kind,
+          source: q.source,
+          q: q.q,
+          cursor: q.cursor,
+          limit: q.limit,
+          task_id: q.taskId,
+        })}`,
+        token,
+      ),
+    get: (id) => call(`/deskrpg/artifacts/${seg(id)}`, token),
+    content: (id, version, opts) =>
+      callRaw(
+        `/deskrpg/artifacts/${seg(id)}/versions/${version}/content${query({
+          download: opts.download ? 1 : undefined,
+        })}`,
+        token,
+        { headers: opts.range ? { range: opts.range } : {} },
+      ),
+    addVersion: (id, body, user) =>
+      call(`/deskrpg/artifacts/${seg(id)}/versions`, token, {
+        method: "POST",
+        body,
+        headers: { "x-deskrpg-user": user },
+      }),
+    remove: (id, user) =>
+      call(`/deskrpg/artifacts/${seg(id)}`, token, {
+        method: "DELETE",
+        headers: { "x-deskrpg-user": user },
+      }),
   };
 
   return {
     info: () => call("/deskrpg/info", token),
     kanban,
     events,
+    artifacts,
   };
 }
 
@@ -305,7 +392,7 @@ export function createOwnerPluginClient(
 export function createProfilePluginClient(
   input: TransportInput & { profileName: string; profileToken: string },
 ): ProfilePluginClient {
-  const call = createPluginTransport(input);
+  const { call } = createPluginTransport(input);
   const token = input.profileToken;
   const seg = (value: string) => encodeURIComponent(value);
   // `hermes-client.ts` 와 같은 프리픽스 규약 — 프로필 스코프는 `/p/<name>` 뒤에 붙는다.

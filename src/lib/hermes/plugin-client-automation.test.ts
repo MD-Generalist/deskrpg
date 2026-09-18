@@ -290,8 +290,9 @@ describe("kanban — 카드", () => {
     const listed = unwrap(await api.listAttachments("dev", task.id));
     assert.equal(listed.attachments.length, 1);
 
-    const one = unwrap(await api.getAttachment("dev", uploaded.attachment.id));
-    assert.equal(one.id, uploaded.attachment.id);
+    const contentRes = await api.attachmentContent("dev", uploaded.attachment.id, {});
+    assert.equal(contentRes.ok, true);
+    if (contentRes.ok) assert.equal(await contentRes.response.text(), "# 스펙");
     assert.equal(
       server.lastRequest()?.path,
       `/deskrpg/kanban/attachments/${uploaded.attachment.id}?board=dev`,

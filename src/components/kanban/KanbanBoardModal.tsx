@@ -8,7 +8,7 @@ import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-t
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
-import TaskDrawer from "./TaskDrawer";
+import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
 import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
 import {
@@ -41,6 +41,17 @@ interface KanbanBoardModalProps {
   debounceMs?: number;
   /** 열자마자 이 카드의 상세를 편다 — 방 알림의 "카드 열기"(R29). 마운트 시에만 읽는다. */
   initialTaskId?: string | null;
+  /** 카드 드로어의 결과물 섹션 — 그대로 `TaskDrawer` 에 넘긴다. 없으면 섹션이 없다. */
+  artifacts?: TaskDrawerArtifacts | null;
+  /** 채널 `artifact:event` 수 — 드로어의 결과물 섹션이 디바운스해 다시 읽는다. */
+  artifactsRefreshTick?: number;
+  /**
+   * 이미 열린 보드에 "이 카드를 펴라" — 결과물의 "출처로 이동". `seq` 가 바뀔 때마다 선택을 옮긴다
+   * (`initialTaskId` 는 마운트 때만 읽으므로 열린 보드에는 닿지 않는다).
+   */
+  focusRequest?: { taskId: string; seq: number } | null;
+  /** 다른 모달(결과물)이 보드를 덮고 있다 — Escape 는 위 모달 몫이라 보드는 닫지 않는다. */
+  covered?: boolean;
 }
 
 /** `kanban:event` 연타를 한 번의 재조회로 접는 간격. */
@@ -93,6 +104,10 @@ export default function KanbanBoardModal({
   refreshTick = 0,
   debounceMs = KANBAN_EVENT_DEBOUNCE_MS,
   initialTaskId = null,
+  artifacts = null,
+  artifactsRefreshTick = 0,
+  focusRequest = null,
+  covered = false,
 }: KanbanBoardModalProps) {
   const t = useT();
   const api = useMemo(() => createKanbanApi(channelId), [channelId]);
@@ -131,6 +146,13 @@ export default function KanbanBoardModal({
   currentApi.current = api;
   selectedTaskIdRef.current = selectedTaskId;
   const getBoardRoot = useCallback(() => boardRootRef.current, []);
+
+  // 출처로 이동 — 열린 보드에서도 요청된 카드로 드로어를 옮긴다(보드 상태는 그대로 둔다).
+  const focusSeq = focusRequest?.seq ?? null;
+  const focusTaskId = focusRequest?.taskId ?? null;
+  useEffect(() => {
+    if (focusSeq !== null && focusTaskId) setSelectedTaskId(focusTaskId);
+  }, [focusSeq, focusTaskId]);
 
   useEffect(() => {
     mounted.current = true;
@@ -364,11 +386,11 @@ export default function KanbanBoardModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !editor && !showSettings && !showSwarm) onClose();
+      if (e.key === "Escape" && !covered && !editor && !showSettings && !showSwarm) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, editor, showSettings, showSwarm]);
+  }, [onClose, covered, editor, showSettings, showSwarm]);
 
   const openEditor = (next: Editor) => {
     setEditorError(null);
@@ -653,6 +675,8 @@ export default function KanbanBoardModal({
               onEdit={(task) => openEditor({ mode: "edit", task })}
               onDeleted={() => setSelectedTaskId(null)}
               onClose={() => setSelectedTaskId(null)}
+              artifacts={artifacts}
+              artifactsRefreshTick={artifactsRefreshTick}
             />
           )}
         </div>
