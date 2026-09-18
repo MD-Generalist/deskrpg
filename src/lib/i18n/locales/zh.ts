@@ -2072,6 +2072,7 @@ const zh: Record<string, string> = {
   "errors.characterAppearanceInvalid": "角色外观数据无效",
   "errors.noCharacterSelected": "未选择角色",
   "errors.characterNotFound": "未找到角色",
+  "errors.characterNotYours": "这不是你的角色。请重新选择角色。",
   "errors.failedToLoadCharacterSprite": "无法加载角色精灵图",
   "errors.failedToLoadGameData": "无法加载游戏数据",
   "errors.failedToFetchTemplate": "无法获取模板",

@@ -2112,6 +2112,7 @@ const ko: Record<string, string> = {
   "errors.characterAppearanceInvalid": "캐릭터 외형 정보가 올바르지 않습니다",
   "errors.noCharacterSelected": "선택된 캐릭터가 없습니다",
   "errors.characterNotFound": "캐릭터를 찾을 수 없습니다",
+  "errors.characterNotYours": "내 캐릭터가 아닙니다. 캐릭터를 다시 선택해 주세요.",
   "errors.failedToLoadCharacterSprite": "캐릭터 스프라이트를 불러오지 못했습니다",
   "errors.failedToLoadGameData": "게임 데이터를 불러오지 못했습니다",
   "errors.failedToFetchTemplate": "템플릿을 불러오지 못했습니다",

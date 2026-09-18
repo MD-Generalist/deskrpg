@@ -75,6 +75,7 @@ export type ErrorCode =
   | "character_appearance_invalid"
   | "no_character_selected"
   | "character_not_found"
+  | "character_not_yours"
   | "failed_to_load_character_sprite"
   | "failed_to_load_game_data"
   | "failed_to_fetch_template"
@@ -242,6 +243,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   character_appearance_invalid: "errors.characterAppearanceInvalid",
   no_character_selected: "errors.noCharacterSelected",
   character_not_found: "errors.characterNotFound",
+  character_not_yours: "errors.characterNotYours",
   failed_to_load_character_sprite: "errors.failedToLoadCharacterSprite",
   failed_to_load_game_data: "errors.failedToLoadGameData",
   failed_to_fetch_template: "errors.failedToFetchTemplate",

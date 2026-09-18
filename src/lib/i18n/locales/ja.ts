@@ -2128,6 +2128,8 @@ const ja: Record<string, string> = {
   "errors.characterAppearanceInvalid": "キャラクターの見た目データが不正です",
   "errors.noCharacterSelected": "キャラクターが選択されていません",
   "errors.characterNotFound": "キャラクターが見つかりません",
+  "errors.characterNotYours":
+    "自分のキャラクターではありません。キャラクターを選び直してください。",
   "errors.failedToLoadCharacterSprite": "キャラクタースプライトの読み込みに失敗しました",
   "errors.failedToLoadGameData": "ゲームデータの読み込みに失敗しました",
   "errors.failedToFetchTemplate": "テンプレートの取得に失敗しました",

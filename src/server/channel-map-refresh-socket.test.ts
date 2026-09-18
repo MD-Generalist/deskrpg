@@ -56,11 +56,16 @@ const joinResult = (client: Socket, payload: unknown) =>
 
 test("real socket admission rejects absent/empty/stale map revisions after upgrade and reconnect; reactivation uses repaired homes; metadata rename preserves map authority", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
-  const { db, channels, jsonForDb, npcs, channelMembers } = await import("../db");
+  const { db, channels, characters, jsonForDb, npcs, channelMembers } = await import("../db");
   const { setupSocketHandlers } = await import("./socket-handlers");
   const { DEV_JWT_SECRET } = await import("../lib/dev-constants");
   const user = await seedUser();
   const channel = await seedChannel(user.id);
+  // player:join 은 characterId 가 이 사용자의 캐릭터인지 DB 로 확인한다.
+  const [character] = await db
+    .insert(characters)
+    .values({ userId: user.id, name: "Test", appearance: jsonForDb({}) })
+    .returning();
   const gateway = await seedGateway(user.id);
   const profile = await seedHermesProfile(gateway.id);
   const npc = await seedNpc({
@@ -102,7 +107,7 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
   };
   const join = {
     mapId: channel.id,
-    characterId: "test-character",
+    characterId: character.id,
     characterName: "Test",
     appearance: {},
     x: 496,
@@ -217,6 +222,10 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
     assert.ok((await returned).npcs.some((n) => n.npcId === npc.id && n.homeX === state.homeX));
     const viewer = await seedUser();
     await db.insert(channelMembers).values({ channelId: channel.id, userId: viewer.id });
+    const [viewerCharacter] = await db
+      .insert(characters)
+      .values({ userId: viewer.id, name: "Viewer", appearance: jsonForDb({}) })
+      .returning();
     const viewerToken = await new SignJWT({ userId: viewer.id, nickname: "Viewer" })
       .setProtectedHeader({ alg: "HS256" })
       .setExpirationTime("1h")
@@ -225,7 +234,7 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
     assert.equal(
       await joinResult(observer, {
         ...join,
-        characterId: "observer-character",
+        characterId: viewerCharacter.id,
         mapRevision: currentRevision,
       }),
       "player:spawn",

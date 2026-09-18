@@ -2118,6 +2118,7 @@ const en: Record<string, string> = {
   "errors.characterAppearanceInvalid": "Character appearance is invalid",
   "errors.noCharacterSelected": "No character selected",
   "errors.characterNotFound": "Character not found",
+  "errors.characterNotYours": "This character is not yours. Please select your character again.",
   "errors.failedToLoadCharacterSprite": "Failed to load character sprite",
   "errors.failedToLoadGameData": "Failed to load game data",
   "errors.failedToFetchTemplate": "Failed to fetch template",
