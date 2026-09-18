@@ -454,8 +454,8 @@ function GatewayManagementPageInner() {
         <section className="mb-6 rounded-xl border border-border bg-surface p-5">
           <p className="text-xs font-semibold tracking-wide text-text-muted">
             {locale === "ko"
-              ? "01 연결 → 02 직원 등록·로그인 → 03 내 캐릭터 → 04 사무실 만들기"
-              : "01 Connect → 02 Hire and sign in → 03 My character → 04 Create an office"}
+              ? "01 내 캐릭터 → 02 연결 → 03 직원 등록·로그인 → 04 사무실 만들기"
+              : "01 My character → 02 Connect → 03 Hire and sign in → 04 Create an office"}
           </p>
           <p className="mt-2 text-sm text-text-muted">
             {locale === "ko"

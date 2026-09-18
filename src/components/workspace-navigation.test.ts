@@ -3,11 +3,12 @@ import test from "node:test";
 
 import { WORKSPACE_NAV, employeesHref } from "./workspace-navigation";
 
-test("사이드바는 온보딩 순서대로 네 칸이다", () => {
-  // 순서가 흐트러지면 신규 사용자가 다음에 어디로 갈지 스스로 짐작해야 한다.
+test("사이드바는 온보딩 순서대로 네 칸이다 — 내 캐릭터가 먼저다", () => {
+  // 캐릭터가 없으면 사무실 화면이 캐릭터 화면으로 되돌려 보낸다. "나" 를 먼저 만드는 것이
+  // 실제 순서이고, 순서가 흐트러지면 사용자가 다음 행동을 스스로 짐작해야 한다.
   assert.deepEqual(
     WORKSPACE_NAV.map((item) => item.href),
-    ["/gateways", "/profiles", "/characters", "/channels"],
+    ["/characters", "/gateways", "/profiles", "/channels"],
   );
 });
 
