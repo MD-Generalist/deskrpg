@@ -45,13 +45,7 @@ export default function RosterAvatar({
             alt=""
             width={size}
             height={size}
-            style={{
-              width: size,
-              height: size,
-              objectFit: "cover",
-              transform: "scale(1.8)",
-              transformOrigin: "50% 25%",
-            }}
+            style={{ width: size, height: size, objectFit: "cover" }}
           />
         ) : (
           <span aria-hidden="true">{look.name.slice(0, 1)}</span>
