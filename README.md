@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.918.1` — The hire wizard tells the truth about where a new employee reported for duty, and the profile list refreshes as soon as one is created.
+- Version: `v2026.918.2` — Security fix: the server now verifies character ownership when joining an office, so a user can no longer enter as someone else's character. All operators should update.
 
 ## What You Can Do
 
