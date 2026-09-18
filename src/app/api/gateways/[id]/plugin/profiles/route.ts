@@ -114,6 +114,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // 은 게이트웨이 소유자가 아니면 `{error:"forbidden"}` 을 돌려주는데, 라우트는
   // system_admin 만 검사하므로 그 실패를 삼키지 않고 응답에 실어 보낸다.
   let keyStorage: { ok: true } | { ok: false; reason: string } | null;
+  // 이 프로필이 실제로 **몇 개 채널에 출근했는지**. 출근은 그 게이트웨이가 이미 붙어 있는
+  // 채널에만 일어난다 — 화면이 "이미 출근했습니다" 를 조건 없이 말하지 않도록 사실을 함께 보낸다.
+  let attendedChannels = 0;
   if (!res.data.keyIssued) {
     // 애초에 발급이 없었다 — attachKeyStorage 가 이 경우를 null 로 구분한다.
     keyStorage = null;
@@ -141,7 +144,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 고용 실패로 500 을 내면 원격 Hermes 에는 프로필이 남고 사용자는 같은 이름으로
       // 다시 만들 수 없다 — 되돌릴 수 없는 상태를 만드는 대신 삼키고 로그만 남긴다.
       try {
-        await hireProfileIntoBoundChannels(stored.profile.id);
+        attendedChannels = (await hireProfileIntoBoundChannels(stored.profile.id)).created;
       } catch (hireErr) {
         console.error(
           `Failed to hire wizard profile ${stored.profile.id} into bound channels:`,
@@ -152,5 +155,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  return NextResponse.json(attachKeyStorage(stripApiKey(res.data), keyStorage), { status: 201 });
+  return NextResponse.json(
+    { ...attachKeyStorage(stripApiKey(res.data), keyStorage), attendedChannels },
+    { status: 201 },
+  );
 }

@@ -389,6 +389,12 @@ const zh: Record<string, string> = {
   "hermes.wizard.config.toolsets": "工具集",
   "hermes.wizard.config.toolsetsHint": "请用逗号分隔",
   "hermes.wizard.config.notAuthenticated": "未认证",
+  "hermes.wizard.config.loginHint":
+    'Hermes 为每位员工单独登录。要使用 ChatGPT、Codex 等订阅模型,请在 Hermes 仪表板中以 {name} 配置文件登录,然后点击"检查登录"。API 密钥模型(如 OpenRouter)无需登录。',
+  "hermes.wizard.config.loginOpen": "在仪表板登录 {name} ↗",
+  "hermes.wizard.config.loginNoDashboard":
+    "请在 Hermes 仪表板的 Keys 页面将顶部配置文件切换为 {name} 后登录。",
+  "hermes.wizard.config.loginRecheck": "检查登录",
   "hermes.wizard.config.effort": "推理强度（未指定）",
   "hermes.wizard.config.locked": "无法读取设置文件，此表单已锁定。",
   "hermes.wizard.config.save": "保存",
@@ -399,7 +405,11 @@ const zh: Record<string, string> = {
   "hermes.wizard.placement.alreadyRegistered": "配置文件“{name}”已注册 — 无需再次创建。",
   "hermes.wizard.placement.goToChannels": "前往频道",
   "hermes.wizard.placement.guide":
-    "该配置文件已自动在频道上班。请在频道的出勤表中点击“未定座位”来安排座位。",
+    "如果频道已连接此网关,该员工已经出勤。在频道的出勤表中点击「未定座位」,选择椅子以保存固定座位。",
+  "hermes.wizard.placement.guideAttended":
+    "该员工已自动出勤 {count} 个频道。在频道的出勤表中点击「未定座位」,选择椅子以保存固定座位。",
+  "hermes.wizard.placement.guideNoChannel":
+    "目前还没有频道使用此网关,因此没有出勤的地方。创建频道并在设置 → AI 连接中接入此网关,该员工便会自动出勤。",
   "hermes.wizard.placement.done": "关闭向导",
   "hermes.wizard.closeConfirmTitle": "现在关闭会怎样",
   "hermes.wizard.closeConfirmBody": "步骤①中创建的配置文件“{name}”将会保留。要删除吗？",

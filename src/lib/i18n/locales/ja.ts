@@ -407,6 +407,12 @@ const ja: Record<string, string> = {
   "hermes.wizard.config.toolsets": "ツールセット",
   "hermes.wizard.config.toolsetsHint": "カンマ区切りで入力してください",
   "hermes.wizard.config.notAuthenticated": "未認証",
+  "hermes.wizard.config.loginHint":
+    "Hermes は社員ごとに個別にログインします。ChatGPT・Codex などのサブスクリプションモデルを使うには、Hermes ダッシュボードで {name} プロフィールとしてログインしてから「ログイン確認」を押してください。API キーのモデル(OpenRouter など)はログイン不要です。",
+  "hermes.wizard.config.loginOpen": "ダッシュボードで {name} にログイン ↗",
+  "hermes.wizard.config.loginNoDashboard":
+    "Hermes ダッシュボードの Keys 画面で上部のプロフィールを {name} に切り替えてログインしてください。",
+  "hermes.wizard.config.loginRecheck": "ログイン確認",
   "hermes.wizard.config.effort": "推論強度（未指定）",
   "hermes.wizard.config.locked": "設定ファイルを読み込めないため、フォームをロックします。",
   "hermes.wizard.config.save": "保存",
@@ -418,7 +424,11 @@ const ja: Record<string, string> = {
     "プロフィール「{name}」はすでに登録されています — 再度作成する必要はありません。",
   "hermes.wizard.placement.goToChannels": "チャンネルへ移動",
   "hermes.wizard.placement.guide":
-    "プロフィールはすでにチャンネルへ自動出勤しています。チャンネルの出勤簿で「席未定」を押して席を決めてください。",
+    "チャンネルにこのゲートウェイが接続されていれば、この社員はすでに出社しています。チャンネルの出席リストで「席未定」を押し、椅子を選んで固定席を保存してください。",
+  "hermes.wizard.placement.guideAttended":
+    "この社員が {count} 件のチャンネルに自動出社しました。チャンネルの出席リストで「席未定」を押し、椅子を選んで固定席を保存してください。",
+  "hermes.wizard.placement.guideNoChannel":
+    "このゲートウェイを使うチャンネルがまだないため、出社先がありません。チャンネルを作り、設定 → AI 接続でこのゲートウェイを接続すると自動で出社します。",
   "hermes.wizard.placement.done": "ウィザードを閉じる",
   "hermes.wizard.closeConfirmTitle": "今閉じるとどうなるか",
   "hermes.wizard.closeConfirmBody": "①で作成したプロフィール「{name}」が残ります。削除しますか？",
