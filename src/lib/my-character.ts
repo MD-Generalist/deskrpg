@@ -8,9 +8,10 @@ import { asc, eq } from "drizzle-orm";
 
 import { characters, db, jsonForDb, nowForDb } from "@/db";
 import { parseDbJson } from "@/lib/db-json";
+import { BIO_MAX_LENGTH } from "@/lib/my-character-limits";
 import { QUICK_START_APPEARANCE, quickStartCharacterName } from "@/lib/quick-start";
 
-export const BIO_MAX_LENGTH = 2000;
+export { BIO_MAX_LENGTH };
 
 export type MyCharacter = { id: string; name: string; bio: string | null; appearance: unknown };
 

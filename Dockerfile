@@ -82,6 +82,7 @@ COPY --from=builder /app/src/db ./src/db
 COPY --from=builder /app/src/lib/file-extractor.ts ./src/lib/file-extractor.ts
 COPY --from=builder /app/src/lib/db-json.ts ./src/lib/db-json.ts
 COPY --from=builder /app/src/lib/my-character.ts ./src/lib/my-character.ts
+COPY --from=builder /app/src/lib/my-character-limits.ts ./src/lib/my-character-limits.ts
 COPY --from=builder /app/src/lib/quick-start.ts ./src/lib/quick-start.ts
 COPY --from=builder /app/src/lib/channel-map-refresh.ts ./src/lib/channel-map-refresh.ts
 COPY --from=builder /app/src/lib/channel-motion-layout.ts ./src/lib/channel-motion-layout.ts

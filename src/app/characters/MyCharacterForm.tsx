@@ -8,9 +8,8 @@ import CharacterPreview from "@/components/CharacterPreview";
 import OfficeLookGallery from "@/components/OfficeLookGallery";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
 import { normalizeAppearance, type CharacterAppearance } from "@/lib/lpc-registry";
+import { BIO_MAX_LENGTH } from "@/lib/my-character-limits";
 import "@/game/three/lookbook.css";
-
-const BIO_MAX_LENGTH = 2000;
 
 type MyCharacter = {
   id: string;
