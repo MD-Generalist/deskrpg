@@ -302,6 +302,8 @@ const en: Record<string, string> = {
   "hermes.wizard.close": "Close",
   "hermes.wizard.next": "Next",
   "hermes.wizard.finish": "Done",
+  "hermes.wizard.config.ownerMustAuthenticate":
+    "The gateway owner has to set up sign-in for this AI model.",
   "hermes.wizard.profile.cloned": "Inherited the default profile's AI model settings and keys.",
   "hermes.wizard.profile.copyAllApiKeys": "Also copy all API keys",
   "hermes.wizard.profile.copyAllApiKeysHint":

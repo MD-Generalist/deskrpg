@@ -308,6 +308,8 @@ const ja: Record<string, string> = {
   "hermes.wizard.close": "閉じる",
   "hermes.wizard.next": "次へ",
   "hermes.wizard.finish": "完了",
+  "hermes.wizard.config.ownerMustAuthenticate":
+    "このAIモデルの認証はゲートウェイの所有者が設定する必要があります。",
   "hermes.wizard.profile.cloned": "デフォルトプロフィールのAIモデル設定とキーを引き継ぎました。",
   "hermes.wizard.profile.copyAllApiKeys": "すべてのAPIキーもコピー",
   "hermes.wizard.profile.copyAllApiKeysHint":

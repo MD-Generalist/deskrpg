@@ -299,6 +299,8 @@ const ko: Record<string, string> = {
   "hermes.wizard.close": "닫기",
   "hermes.wizard.next": "다음",
   "hermes.wizard.finish": "완료",
+  "hermes.wizard.config.ownerMustAuthenticate":
+    "이 AI 모델의 인증은 게이트웨이 소유자가 설정해야 합니다.",
   "hermes.wizard.profile.cloned": "기본 프로필의 AI 모델 설정과 키를 물려받았습니다.",
   "hermes.wizard.profile.copyAllApiKeys": "모든 API 키도 함께 복사",
   "hermes.wizard.profile.copyAllApiKeysHint":

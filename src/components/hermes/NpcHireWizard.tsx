@@ -28,6 +28,7 @@ import {
   type StepAvailability,
   type WizardStep,
 } from "./hire-wizard-steps";
+import ProviderAuthPanel from "./ProviderAuthPanel";
 import ToolsetSkillPicker from "./ToolsetSkillPicker";
 import { getWizardErrorMessage } from "./wizard-error-codes";
 
@@ -101,6 +102,11 @@ interface NpcHireWizardProps {
    * `profile_clone` 을 알릴 때만 켠다 — 구버전에는 모르는 필드를 보내지 않는다.
    */
   cloneDefaultProfile?: boolean;
+  /**
+   * 이 사용자가 게이트웨이 소유자인가. 프로바이더 키 저장·로그인은 소유자만 할 수 있다
+   * (공유 사용자는 403). 모르면 false — 누를 수 없는 버튼을 보여주지 않는다.
+   */
+  canManageProviderAuth?: boolean;
   /** ①에서 프로필이 실제로 만들어진 직후. 바깥 프로필 목록이 이것으로 곧바로 다시 읽는다. */
   onProfileCreated?: (profileName: string) => void;
   /**
@@ -158,6 +164,7 @@ export default function NpcHireWizard({
   dashboardUrl = null,
   title,
   cloneDefaultProfile = false,
+  canManageProviderAuth = false,
   onProfileCreated,
   onDone,
 }: NpcHireWizardProps) {
@@ -672,6 +679,11 @@ export default function NpcHireWizard({
     </div>
   );
 
+  // 플러그인 0.9.0+ 는 카탈로그 행에 인증 방식(authType)을 싣는다 — 그러면 DeskRPG 안에서
+  // 키를 넣거나 로그인할 수 있으니, 인증 안 된 프로바이더도 고를 수 있게 하고 아래 패널로 인증한다.
+  const inAppAuth = Boolean(catalog?.providers.some((p) => p.authType));
+  const selectedProviderRow = catalog?.providers.find((p) => p.id === provider) ?? null;
+
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="mb-4 flex items-center justify-between">
@@ -1048,7 +1060,7 @@ export default function NpcHireWizard({
             <>
               {configError && !configLocked && <p className="text-sm text-danger">{configError}</p>}
               {catalogError && <p className="text-xs text-text-muted">{catalogError}</p>}
-              {created && (
+              {created && !inAppAuth && (
                 // Hermes 는 NPC(프로필)마다 로그인한다 — default 로 로그인한 구독을 새 직원이
                 // 물려받지 않는다(업스트림 #111724). 목록의 "인증 안 됨" 만으로는 어디서
                 // 로그인해야 하는지 알 수 없어, 그 직원 프로필의 로그인 화면으로 바로 보낸다.
@@ -1081,8 +1093,9 @@ export default function NpcHireWizard({
               )}
               <div className="grid gap-2 sm:grid-cols-2">
                 {/* 프로바이더를 먼저 고른다 — 모델 목록이 거기서 나온다. 인증되지 않은
-                    것도 목록에 남기되(지우면 "왜 내 모델이 없지" 를 알 수 없다) 고를 수
-                    없게 한다. 목록을 못 받았으면 예전처럼 직접 입력으로 떨어진다. */}
+                    것도 목록에 남긴다(지우면 "왜 내 모델이 없지" 를 알 수 없다). 앱 안에서 인증할 수
+                    있으면(0.9.0+ 이고 소유자) 골라서 아래 패널로 인증하고, 아니면 고를 수 없다.
+                    목록을 못 받았으면 예전처럼 직접 입력으로 떨어진다. */}
                 {catalog ? (
                   <select
                     value={provider}
@@ -1096,7 +1109,11 @@ export default function NpcHireWizard({
                   >
                     <option value="">{t("hermes.wizard.config.provider")}</option>
                     {catalog.providers.map((p) => (
-                      <option key={p.id} value={p.id} disabled={!p.authenticated}>
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        disabled={!p.authenticated && !(inAppAuth && canManageProviderAuth)}
+                      >
                         {p.name}
                         {p.authenticated ? "" : ` — ${t("hermes.wizard.config.notAuthenticated")}`}
                       </option>
@@ -1135,6 +1152,22 @@ export default function NpcHireWizard({
                   />
                 )}
               </div>
+
+              {selectedProviderRow?.authType &&
+                (canManageProviderAuth ? (
+                  <ProviderAuthPanel
+                    profileBase={profileBase ?? ""}
+                    provider={selectedProviderRow}
+                    onAuthenticated={() => void loadCatalog()}
+                    disabled={configSaving}
+                  />
+                ) : (
+                  !selectedProviderRow.authenticated && (
+                    <p className="text-xs text-text-muted">
+                      {t("hermes.wizard.config.ownerMustAuthenticate")}
+                    </p>
+                  )
+                ))}
 
               {catalog && catalog.reasoningEfforts.length > 0 && (
                 <select
