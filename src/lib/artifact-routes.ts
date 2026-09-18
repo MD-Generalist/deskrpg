@@ -3,7 +3,14 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 
-import { loadScopedArtifact, resolveArtifactChannelContext } from "@/lib/artifact-access";
+import {
+  artifactNotFound,
+  artifactReadOnly,
+  canModifyArtifact,
+  isValidArtifactId,
+  loadScopedArtifact,
+  resolveArtifactChannelContext,
+} from "@/lib/artifact-access";
 import { cronError, pluginFailureResponse } from "@/lib/cron-access";
 import {
   ARTIFACT_KINDS,
@@ -71,9 +78,16 @@ export async function getArtifact(
 ): Promise<Response> {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
+  if (!isValidArtifactId(artifactId)) return artifactNotFound();
   const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
   if (!loaded.ok) return loaded.response;
-  return NextResponse.json(loaded.detail);
+  const { artifact } = loaded.detail;
+  // 화면이 편집·삭제·출처 이동을 숨길지 정하는 신호. 권한 자체는 변경 라우트가 다시 확인한다.
+  return NextResponse.json({
+    ...loaded.detail,
+    modifiable: await canModifyArtifact(resolved.ctx, artifact),
+    sourceInChannel: artifact.source_kind !== "kanban" || artifact.board === resolved.ctx.boardSlug,
+  });
 }
 
 export async function getArtifactContent(
@@ -85,6 +99,7 @@ export async function getArtifactContent(
   if (!/^\d{1,9}$/.test(v)) return cronError(400, "invalid_field", "v");
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
+  if (!isValidArtifactId(artifactId)) return artifactNotFound();
   const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
   if (!loaded.ok) return loaded.response;
   const res = await resolved.ctx.client.artifacts.content(artifactId, Number(v), {
@@ -102,6 +117,7 @@ export async function addArtifactVersion(
 ): Promise<Response> {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
+  if (!isValidArtifactId(artifactId)) return artifactNotFound();
   let body: unknown;
   try {
     body = await req.json();
@@ -117,6 +133,7 @@ export async function addArtifactVersion(
   const note = typeof b.note === "string" ? b.note.slice(0, 400) : undefined;
   const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
   if (!loaded.ok) return loaded.response;
+  if (!(await canModifyArtifact(resolved.ctx, loaded.detail.artifact))) return artifactReadOnly();
   const res = await resolved.ctx.client.artifacts.addVersion(
     artifactId,
     { content: b.content, filename: b.filename.trim().slice(0, 200), ...(note ? { note } : {}) },
@@ -133,8 +150,10 @@ export async function deleteArtifact(
 ): Promise<Response> {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
+  if (!isValidArtifactId(artifactId)) return artifactNotFound();
   const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
   if (!loaded.ok) return loaded.response;
+  if (!(await canModifyArtifact(resolved.ctx, loaded.detail.artifact))) return artifactReadOnly();
   const res = await resolved.ctx.client.artifacts.remove(artifactId, resolved.ctx.userId);
   if (!res.ok) return pluginFailureResponse(res);
   return NextResponse.json({ ok: true });

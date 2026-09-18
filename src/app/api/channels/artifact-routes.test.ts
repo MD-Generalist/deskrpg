@@ -224,3 +224,200 @@ test("삭제는 범위 안이면 ok, 밖이면 404", async () => {
   );
   assert.equal(out.status, 404);
 });
+
+/**
+ * 같은 게이트웨이에 묶인 채널 A·B. 프로필 `sophie` 는 두 채널 모두에 고용, `solo` 는 A 에만.
+ * (플러그인 게이트는 게이트웨이마다 캐시한다 — 두 채널이 한 게이트웨이를 공유하는 것이 이 경우다.)
+ */
+async function seedSharedGateway() {
+  const owner = await seedUser("artifact-shared-owner");
+  const gateway = await seedGateway(owner.id, server.baseUrl);
+  const { bindGatewayToChannel } = await import("@/lib/gateway-resources");
+  const { channelBoardSlug } = await import("@/lib/kanban-boards");
+  const a = await seedChannel(owner.id, "채널 A");
+  const b = await seedChannel(owner.id, "채널 B");
+  for (const ch of [a, b]) {
+    await bindGatewayToChannel({
+      channelId: ch.id,
+      gatewayId: gateway.id,
+      boundByUserId: owner.id,
+    });
+  }
+  const sophie = await seedHermesProfile(gateway.id, {
+    profileName: "sophie",
+    displayName: "소피",
+  });
+  const solo = await seedHermesProfile(gateway.id, { profileName: "solo", displayName: "솔로" });
+  await seedNpc({ channelId: a.id, hermesProfileId: sophie.id, positionX: 0, positionY: 0 });
+  await seedNpc({ channelId: b.id, hermesProfileId: sophie.id, positionX: 1, positionY: 0 });
+  await seedNpc({ channelId: a.id, hermesProfileId: solo.id, positionX: 2, positionY: 0 });
+  return { owner, a, b, boardA: channelBoardSlug(a.id), boardB: channelBoardSlug(b.id) };
+}
+
+function mutatingArtifactRequests(since: number) {
+  return server
+    .requests()
+    .slice(since)
+    .filter(
+      (r) =>
+        r.path.startsWith("/deskrpg/artifacts") &&
+        (r.method === "DELETE" || (r.method === "POST" && r.path.includes("/versions"))),
+    );
+}
+
+test("F3: 다른 채널과 공유한 프로필의 채팅 결과물은 읽기만 된다 — 편집·삭제 403, 플러그인에 안 보낸다", async () => {
+  const { owner, b } = await seedSharedGateway();
+  server.seedArtifact({ id: "shared-chat", title: "공유", profile: "sophie", body: "v1" });
+
+  const got = await routes.item.GET(
+    req(owner.id, "GET", `${base(b.id)}/shared-chat`),
+    ctx(b.id, "shared-chat"),
+  );
+  assert.equal(got.status, 200);
+  assert.equal((await got.json()).modifiable, false);
+
+  const before = server.requests().length;
+  const edit = await routes.versions.POST(
+    req(owner.id, "POST", `${base(b.id)}/shared-chat/versions`, {
+      content: "v2",
+      filename: "t.md",
+    }),
+    ctx(b.id, "shared-chat"),
+  );
+  assert.equal(edit.status, 403);
+  const editBody = await edit.json();
+  assert.equal(editBody.code, "artifact_read_only_other_channel");
+  assert.equal(editBody.message, "Artifacts from another channel are read-only here");
+  const del = await routes.item.DELETE(
+    req(owner.id, "DELETE", `${base(b.id)}/shared-chat`),
+    ctx(b.id, "shared-chat"),
+  );
+  assert.equal(del.status, 403);
+  assert.equal((await del.json()).code, "artifact_read_only_other_channel");
+  assert.equal(mutatingArtifactRequests(before).length, 0, "플러그인 변경 경로를 부르지 않는다");
+});
+
+test("F3: 이 채널에만 고용된 프로필의 채팅 결과물은 고칠 수 있다", async () => {
+  const { owner, a } = await seedSharedGateway();
+  server.seedArtifact({ id: "solo-chat", title: "솔로", profile: "solo", body: "v1" });
+  const got = await routes.item.GET(
+    req(owner.id, "GET", `${base(a.id)}/solo-chat`),
+    ctx(a.id, "solo-chat"),
+  );
+  assert.equal((await got.json()).modifiable, true);
+  const edit = await routes.versions.POST(
+    req(owner.id, "POST", `${base(a.id)}/solo-chat/versions`, { content: "v2", filename: "t.md" }),
+    ctx(a.id, "solo-chat"),
+  );
+  assert.equal(edit.status, 201);
+  const del = await routes.item.DELETE(
+    req(owner.id, "DELETE", `${base(a.id)}/solo-chat`),
+    ctx(a.id, "solo-chat"),
+  );
+  assert.equal(del.status, 200);
+});
+
+test("F3: 보드 결과물은 그 보드의 채널에서만 고친다 — 다른 채널은 읽기만", async () => {
+  const { owner, a, b, boardA } = await seedSharedGateway();
+  server.seedArtifact({
+    id: "board-a",
+    title: "카드 결과",
+    profile: "sophie",
+    board: boardA,
+    source_kind: "kanban",
+    task_id: "t-1",
+    body: "v1",
+  });
+  const inB = await routes.item.GET(
+    req(owner.id, "GET", `${base(b.id)}/board-a`),
+    ctx(b.id, "board-a"),
+  );
+  assert.equal(inB.status, 200);
+  const inBBody = await inB.json();
+  assert.equal(inBBody.modifiable, false);
+  assert.equal(inBBody.sourceInChannel, false, "다른 보드의 카드로는 출처 이동을 못 한다");
+
+  const before = server.requests().length;
+  const editB = await routes.versions.POST(
+    req(owner.id, "POST", `${base(b.id)}/board-a/versions`, { content: "v2", filename: "t.md" }),
+    ctx(b.id, "board-a"),
+  );
+  assert.equal(editB.status, 403);
+  const delB = await routes.item.DELETE(
+    req(owner.id, "DELETE", `${base(b.id)}/board-a`),
+    ctx(b.id, "board-a"),
+  );
+  assert.equal(delB.status, 403);
+  assert.equal(mutatingArtifactRequests(before).length, 0);
+
+  const inA = await routes.item.GET(
+    req(owner.id, "GET", `${base(a.id)}/board-a`),
+    ctx(a.id, "board-a"),
+  );
+  const inABody = await inA.json();
+  assert.equal(inABody.modifiable, true);
+  assert.equal(inABody.sourceInChannel, true);
+  const editA = await routes.versions.POST(
+    req(owner.id, "POST", `${base(a.id)}/board-a/versions`, { content: "v2", filename: "t.md" }),
+    ctx(a.id, "board-a"),
+  );
+  assert.equal(editA.status, 201);
+  const delA = await routes.item.DELETE(
+    req(owner.id, "DELETE", `${base(a.id)}/board-a`),
+    ctx(a.id, "board-a"),
+  );
+  assert.equal(delA.status, 200);
+});
+
+test("F4: '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에 404 artifact_not_found", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  for (const bad of [".", "..", "a/b", "", "x".repeat(129), "a b"]) {
+    const before = server.requests().length;
+    const responses = [
+      await routes.item.GET(req(owner.id, "GET", `${base(channel.id)}/x`), ctx(channel.id, bad)),
+      await routes.item.DELETE(
+        req(owner.id, "DELETE", `${base(channel.id)}/x`),
+        ctx(channel.id, bad),
+      ),
+      await routes.versions.POST(
+        req(owner.id, "POST", `${base(channel.id)}/x/versions`, { content: "v", filename: "t" }),
+        ctx(channel.id, bad),
+      ),
+      await routes.content.GET(
+        req(owner.id, "GET", `${base(channel.id)}/x/versions/1/content`),
+        ctx(channel.id, bad, "1"),
+      ),
+    ];
+    for (const res of responses) {
+      assert.equal(res.status, 404, `id ${JSON.stringify(bad)}`);
+      assert.equal((await res.json()).code, "artifact_not_found");
+    }
+    assert.equal(
+      server
+        .requests()
+        .slice(before)
+        .filter((r) => r.path.startsWith("/deskrpg/artifacts")).length,
+      0,
+      `id ${JSON.stringify(bad)} 로 결과물 경로를 부르지 않는다`,
+    );
+  }
+});
+
+test("F4: 플러그인 상세 응답에 artifact 가 없으면 404 로 본다", async () => {
+  const { loadScopedArtifact } = await import("@/lib/artifact-access");
+  const fakeCtx = {
+    userId: "u",
+    channelId: "c",
+    gatewayId: "g",
+    boardSlug: "deskrpg-c",
+    profiles: ["sophie"],
+    pluginVersion: "0.8.4",
+    client: { artifacts: { get: async () => ({ ok: true, data: {} }) } },
+  } as unknown as Parameters<typeof loadScopedArtifact>[0];
+  const loaded = await loadScopedArtifact(fakeCtx, "abc");
+  assert.equal(loaded.ok, false);
+  if (!loaded.ok) {
+    assert.equal(loaded.response.status, 404);
+    assert.equal((await loaded.response.json()).code, "artifact_not_found");
+  }
+});

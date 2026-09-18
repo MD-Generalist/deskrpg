@@ -987,3 +987,32 @@ test("크론 변경도 즉시 폴링을 요청한다", async () => {
   assert.equal(deleted.status, 200);
   assert.deepEqual(polled, [seed.channelId, seed.channelId]);
 });
+
+test("첨부 — '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에 404 attachment_not_found", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  for (const bad of [".", "..", "a/b", "", "x".repeat(129)]) {
+    const before = server.requests().length;
+    const got = await routes.attachment.GET(
+      req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments/x`),
+      ctx(seed.channelId, "", bad),
+    );
+    const removed = await routes.attachment.DELETE(
+      req(seed.ownerId, "DELETE", `${base(seed.channelId)}/attachments/x`),
+      ctx(seed.channelId, "", bad),
+    );
+    for (const res of [got, removed]) {
+      assert.equal(res.status, 404, `id ${JSON.stringify(bad)}`);
+      assert.equal((await res.json()).code, "attachment_not_found");
+    }
+    assert.equal(
+      server
+        .requests()
+        .slice(before)
+        .filter((r) => r.path.includes("/kanban/")).length,
+      0,
+      `id ${JSON.stringify(bad)} 로 칸반 경로를 부르지 않는다`,
+    );
+  }
+});

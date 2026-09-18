@@ -385,9 +385,17 @@ export async function uploadAttachment(req: NextRequest, channelId: string, task
   return NextResponse.json({ attachment: res.data.attachment }, { status: 201 });
 }
 
+/** 첨부 id 모양. `.`·`..`·`/` 는 URL 정규화로 소유자 토큰이 다른 경로에 닿게 한다 — 부르기 전에 막는다. */
+const ATTACHMENT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+function attachmentNotFound() {
+  return cronError(404, "attachment_not_found", "attachment not found");
+}
+
 export async function getAttachment(req: NextRequest, channelId: string, attachmentId: string) {
   const resolved = await resolveForAttachments(req, channelId);
   if (!resolved.ok) return resolved.response;
+  if (!ATTACHMENT_ID_RE.test(attachmentId)) return attachmentNotFound();
   const res = await resolved.ctx.client.kanban.attachmentContent(
     resolved.ctx.boardSlug,
     attachmentId,
@@ -400,6 +408,7 @@ export async function getAttachment(req: NextRequest, channelId: string, attachm
 export async function deleteAttachment(req: NextRequest, channelId: string, attachmentId: string) {
   const resolved = await resolveForAttachments(req, channelId);
   if (!resolved.ok) return resolved.response;
+  if (!ATTACHMENT_ID_RE.test(attachmentId)) return attachmentNotFound();
   const ctx = resolved.ctx;
   const res = await ctx.client.kanban.deleteAttachment(ctx.boardSlug, attachmentId);
   if (!res.ok) return pluginFailureResponse(res);
