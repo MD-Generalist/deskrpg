@@ -39,6 +39,7 @@ import {
   Info,
   KanbanSquare,
   AlarmClock,
+  Package,
 } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
@@ -67,6 +68,8 @@ import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
 import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
 import CronModal from "@/components/cron/CronModal";
+import ArtifactsModal from "@/components/artifacts/ArtifactsModal";
+import type { SourceTarget } from "@/components/artifacts/artifact-view-model";
 import {
   EMPTY_NPC_WORKING,
   parseNpcWorkingPayload,
@@ -229,6 +232,17 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // 채널 크론 화면(T10, R15). "이력 열기"(R30) 는 그 잡의 실행 이력으로 연다.
   const [showCron, setShowCron] = useState(false);
   const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
+  // 채널 결과물 모달. `artifact:event` 마다 tick 이 오르고 마지막 사건을 모달에 넘긴다.
+  const [showArtifacts, setShowArtifacts] = useState(false);
+  const [artifactsRefreshTick, setArtifactsRefreshTick] = useState(0);
+  const [artifactsLastEvent, setArtifactsLastEvent] = useState<{
+    kind: string;
+    artifactId: string;
+  } | null>(null);
+  const [artifactsInitial, setArtifactsInitial] = useState<{
+    artifactId?: string;
+    taskId?: string;
+  } | null>(null);
   // 맵의 "작업 중"(R27). 소켓의 `npc:working` 만 담는다 — 낙관적 갱신 없음(R26).
   const [npcWorking, setNpcWorking] = useState<NpcWorkingMap>(EMPTY_NPC_WORKING);
   const meetingEntry = useMeetingEntry(socket, channelId);
@@ -1860,6 +1874,25 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, [socket, channelId]);
 
+  /** 결과물 사건(`artifact:event`) — 이 채널 것만 세고, 마지막 사건(삭제·새 버전)을 모달에 넘긴다. */
+  useEffect(() => {
+    if (!socket || !channelId) return;
+    const onArtifactEvent = (data: {
+      channelId?: string;
+      event?: { kind?: string; payload?: { artifact_id?: string } };
+    }) => {
+      if (data?.channelId && data.channelId !== channelId) return;
+      setArtifactsRefreshTick((n) => n + 1);
+      const kind = data?.event?.kind;
+      const artifactId = data?.event?.payload?.artifact_id;
+      if (kind && artifactId) setArtifactsLastEvent({ kind, artifactId });
+    };
+    socket.on("artifact:event", onArtifactEvent);
+    return () => {
+      socket.off("artifact:event", onArtifactEvent);
+    };
+  }, [socket, channelId]);
+
   /**
    * `npc:working`(R27) — 값이 바뀔 때만 오고, 접속 때 스냅샷이 한 번 온다. 채널이 바뀌면
    * 비운다: 스냅샷이 새 채널 것으로 다시 오므로 옛 채널의 표시가 남지 않는다.
@@ -1895,6 +1928,33 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     setShowCron(false);
     setCronInitialJobId(null);
   }, []);
+  /** 결과물 모달을 연다 — 특정 결과물을 펴거나 카드의 결과물로 거른다(Task 11 의 진입점). */
+  const openArtifacts = useCallback((initial?: { artifactId?: string; taskId?: string }) => {
+    setArtifactsInitial(initial ?? null);
+    setShowArtifacts(true);
+  }, []);
+  const closeArtifacts = useCallback(() => {
+    setShowArtifacts(false);
+    setArtifactsInitial(null);
+  }, []);
+  /** "출처로 이동" — 결과물 모달을 닫고 그 카드·대화·크론 작업을 연다. */
+  const openArtifactSource = useCallback(
+    (target: SourceTarget) => {
+      if (target.type === "chat") {
+        // 채널에 그 프로필의 NPC 가 없으면(해고 등) 갈 곳이 없으니 모달을 그대로 둔다.
+        const npc = rosterNpcs.find((n) => n.profile?.profileName === target.profile);
+        if (!npc) return;
+        closeArtifacts();
+        handleSelectNpc(npc.id, npc.name);
+        return;
+      }
+      closeArtifacts();
+      if (target.type === "kanban") openNoticeCard(target.taskId);
+      else if (target.jobId) openNoticeCronJob(target.jobId);
+      else setShowCron(true);
+    },
+    [rosterNpcs, closeArtifacts, handleSelectNpc, openNoticeCard, openNoticeCronJob],
+  );
 
   // Spawn set mode coordination
   useEffect(() => {
@@ -2077,6 +2137,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const cronNpcs = rosterNpcs
     .filter((npc) => npc.active)
     .map((npc) => ({ npcId: npc.id, npcName: npc.name }));
+  // 결과물 모달의 NPC 필터 — 크론과 같은 출근부지만 잠든 NPC 도 넣는다(서버 목록 범위와 같다).
+  const artifactNpcs = rosterNpcs.flatMap((npc) =>
+    npc.profile?.profileName
+      ? [{ npcId: npc.id, npcName: npc.name, profileName: npc.profile.profileName }]
+      : [],
+  );
   const navigatorNpcs: NavigatorNpc[] = rosterNpcs.map((npc) => {
     const motion = npcMotionUi(
       npcMotionSnapshotRef.current,
@@ -2449,6 +2515,17 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             <span className="header-full-label">{t("cron.open")}</span>
           </button>
 
+          {/* 채널 결과물 */}
+          <button
+            onClick={() => openArtifacts()}
+            title={t("artifacts.title")}
+            aria-label={t("artifacts.title")}
+            className="flex items-center gap-1 px-2.5 py-1 bg-primary/80 hover:bg-primary text-white rounded-md text-caption font-semibold"
+          >
+            <Package className="w-3 h-3" />
+            <span className="header-full-label">{t("artifacts.open")}</span>
+          </button>
+
           {/* Separator */}
           <div className="header-separator w-px h-5 bg-border" />
 
@@ -2792,6 +2869,19 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           onToast={cronToast}
           initialJobId={cronInitialJobId}
           onClose={closeCron}
+        />
+      )}
+
+      {showArtifacts && channelId && (
+        <ArtifactsModal
+          channelId={channelId}
+          npcs={artifactNpcs}
+          refreshTick={artifactsRefreshTick}
+          lastEvent={artifactsLastEvent}
+          initialArtifactId={artifactsInitial?.artifactId ?? null}
+          initialTaskId={artifactsInitial?.taskId ?? null}
+          onOpenSource={openArtifactSource}
+          onClose={closeArtifacts}
         />
       )}
 
