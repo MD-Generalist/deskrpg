@@ -5,13 +5,17 @@ import {
   classifyPluginProbe,
   classifyPluginProbeWithInfo,
   compareSemver,
+  isMissingPluginRoute,
   meetsAutomationContract,
   parsePluginInfo,
   probeDeskrpgPlugin,
   probeDeskrpgPluginWithInfo,
   resolvePluginStatusFromCache,
   shouldReprobePlugin,
+  supportsProfileClone,
+  supportsProfilePicker,
 } from "./plugin-capability";
+import type { PluginInfo } from "./deskrpg-plugin-types";
 
 describe("classifyPluginProbe", () => {
   // 401 과 404 를 뭉치면 사용자가 할 일이 사라진다 — 전자는 키 교체,
@@ -363,5 +367,25 @@ describe("compareSemver", () => {
     assert.equal(compareSemver("v1.2.3", "1.2.3"), 0);
     assert.equal(compareSemver("0.6.0-rc.1", "0.6.0"), 0);
     assert.equal(compareSemver("abc", "1.0.0"), null);
+  });
+});
+
+describe("직원 설정 피커 게이트", () => {
+  const info = (capabilities: string[]) => ({ version: "0.9.0", capabilities }) as unknown as PluginInfo;
+  it("두 capability 가 모두 있어야 피커를 쓴다", () => {
+    assert.equal(supportsProfilePicker(info(["profile_toolsets", "profile_skills"])), true);
+    assert.equal(supportsProfilePicker(info(["profile_toolsets"])), false);
+    assert.equal(supportsProfilePicker(null), false);
+  });
+  it("복제는 profile_clone 하나로 판정한다", () => {
+    assert.equal(supportsProfileClone(info(["profile_clone"])), true);
+    assert.equal(supportsProfileClone(info([])), false);
+  });
+  it("404 인데 플러그인의 알려진 코드가 아니면 라우트가 없는 것이다", () => {
+    assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "upstream_error" } }), true);
+    assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "plugin_error" } }), true);
+    assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "profile_not_found" } }), false);
+    assert.equal(isMissingPluginRoute({ status: 404, failure: { code: "oauth_session_not_found" } }), false);
+    assert.equal(isMissingPluginRoute({ status: 500, failure: { code: "internal_error" } }), false);
   });
 });

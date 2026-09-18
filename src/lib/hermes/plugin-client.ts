@@ -42,8 +42,13 @@ export type {
   RawPluginResponse,
   IdentityPayload,
   CreateProfilePayload,
+  CreateProfileOptions,
   DeleteProfilePayload,
   CatalogPayload,
+  ToolsetRow,
+  ToolsetsPayload,
+  SkillRow,
+  SkillsPayload,
   PluginClient,
   KanbanApi,
   EventsApi,
@@ -217,8 +222,11 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
   return {
     listProfiles: () => call("/deskrpg/profiles", input.defaultToken),
 
-    createProfile: (name) =>
-      call("/deskrpg/profiles", input.defaultToken, { method: "POST", body: { name } }),
+    createProfile: (name, options) =>
+      call("/deskrpg/profiles", input.defaultToken, {
+        method: "POST",
+        body: options?.cloneFrom ? { name, cloneFrom: options.cloneFrom } : { name },
+      }),
 
     // `confirm` 이 경로의 이름과 정확히 같아야 플러그인이 지운다(400 가드).
     deleteProfile: (name) =>
@@ -242,6 +250,10 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
 
     putConfig: (name, profileToken, patch) =>
       call(`/p/${seg(name)}/deskrpg/config`, profileToken, { method: "PUT", body: patch }),
+
+    // 직원 설정 피커(0.9.0). 프로필 스코프 — 스킬 폴더와 키 설정 여부가 프로필마다 다르다.
+    getToolsets: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/toolsets`, profileToken),
+    getSkills: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/skills`, profileToken),
   };
 }
 

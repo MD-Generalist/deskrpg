@@ -203,6 +203,33 @@ export function swarmGate(
   };
 }
 
+// ---------------------------------------------------------------------------
+// 직원 설정 피커·복제 게이트 (플러그인 0.9.0)
+// ---------------------------------------------------------------------------
+
+/** 안내 문구용. 가용성의 정본은 capability 다 — 스웜 게이트와 같은 이유. */
+export const PROFILE_PICKER_MIN_VERSION = "0.9.0";
+
+export function supportsProfilePicker(info: PluginInfo | null): boolean {
+  const caps = info?.capabilities ?? [];
+  return caps.includes("profile_toolsets") && caps.includes("profile_skills");
+}
+
+export function supportsProfileClone(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("profile_clone"));
+}
+
+/** 플러그인이 **자기 코드로** 돌려주는 404. 이 밖의 404 는 그 라우트가 없는 것(구버전 플러그인)이다. */
+const KNOWN_PLUGIN_404_CODES = new Set(["profile_not_found", "invalid_profile", "oauth_session_not_found"]);
+
+/**
+ * 프록시가 캐시된 plugin info 대신 이것으로 구버전을 판정한다. 캐시는 최대 1시간 낡을 수 있어
+ * (`REPROBE_AFTER_MS`), 방금 업그레이드한 게이트웨이를 "구버전" 으로 막으면 안 된다.
+ */
+export function isMissingPluginRoute(res: { status: number; failure: { code: string } }): boolean {
+  return res.status === 404 && !KNOWN_PLUGIN_404_CODES.has(res.failure.code);
+}
+
 /** 캐시된 판정을 다시 확인할 주기. 플러그인은 나중에 설치될 수 있으므로 영구 캐시는 틀린다. */
 const REPROBE_AFTER_MS = 60 * 60 * 1000;
 
