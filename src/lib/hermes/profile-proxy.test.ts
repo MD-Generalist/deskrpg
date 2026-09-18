@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { mapPluginFailure } from "./plugin-errors";
 import { proxyFailureBody } from "./profile-proxy";
 
 const failure = (code: string, message = "") => ({
@@ -32,5 +33,17 @@ describe("프로필 프록시의 실패 본문", () => {
       error: "bad yaml",
       upstreamStatus: 409,
     });
+  });
+  it("Hermes 멀티플렉스의 '모르는 프로필' 404 는 업그레이드가 아니라 profile_not_found 다", () => {
+    // gateway/platforms/api_server.py profile_prefix_middleware 가 내는 본문 그대로.
+    const failed = mapPluginFailure({
+      status: 404,
+      body: { error: "Unknown or unconfigured profile" },
+    })!;
+    const got = proxyFailureBody({ status: 404, failure: failed });
+    assert.equal(got.errorCode, "profile_not_found");
+    assert.equal(got.body.errorCode, "profile_not_found");
+    assert.equal(got.body.upstreamStatus, 404);
+    assert.equal(got.body.details, undefined);
   });
 });

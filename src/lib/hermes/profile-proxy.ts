@@ -8,10 +8,36 @@
 import { isMissingPluginRoute, PROFILE_PICKER_MIN_VERSION } from "./plugin-capability";
 import { pluginUpgradeRequired, type PluginFailure } from "./plugin-errors";
 
+/**
+ * Hermes 멀티플렉스 미들웨어가 모르는 `/p/{profile}` 에 내는 404 본문(gateway/platforms/api_server.py
+ * `profile_prefix_middleware`, 0.21.3 ~1513행: `{"error":"Unknown or unconfigured profile"}`).
+ * 플러그인 라우트에 닿기도 전의 응답이라 코드가 없고, `mapPluginFailure` 가 `upstream_error` + 문장으로
+ * 접는다 — 문장으로 알아본다. 이걸 "라우트 없음" 으로 읽으면 프로필이 없는데 "플러그인을 올리라" 고 한다.
+ */
+const HERMES_UNKNOWN_PROFILE_RE = /^unknown or unconfigured profile$/i;
+
+function isHermesUnknownProfile(res: { status: number; failure: PluginFailure }): boolean {
+  return (
+    res.status === 404 &&
+    res.failure.code === "upstream_error" &&
+    HERMES_UNKNOWN_PROFILE_RE.test(res.failure.message.trim())
+  );
+}
+
 export function proxyFailureBody(res: { status: number; failure: PluginFailure }): {
   body: Record<string, unknown>;
   errorCode: string;
 } {
+  if (isHermesUnknownProfile(res)) {
+    return {
+      errorCode: "profile_not_found",
+      body: {
+        errorCode: "profile_not_found",
+        error: res.failure.message,
+        upstreamStatus: res.status,
+      },
+    };
+  }
   if (isMissingPluginRoute(res)) {
     const upgrade = pluginUpgradeRequired({
       ok: false,
