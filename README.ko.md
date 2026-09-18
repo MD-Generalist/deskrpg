@@ -18,7 +18,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.918.3` — 데이터 보존 수정: PostgreSQL(`DATABASE_URL`)로 Docker 를 운영하면서 `DB_TYPE` 을 지정하지 않은 설치가 컨테이너 안 SQLite 에 기록하던 문제를 고쳤습니다. 해당 설치는 업데이트 후 데이터가 PostgreSQL 에 저장됩니다. Hostinger 원클릭(SQLite)은 영향이 없습니다.
+- 버전: `v2026.918.4` — 온보딩 정리: 사이드바가 내 캐릭터 → 연결 → 직원 → 사무실 순서가 됩니다. 내 캐릭터는 한 명이고 소개를 적으면 채팅·칸반·회의에서 직원에게 함께 전달됩니다. 직원 고용·상세 화면이 분리되고 직원마다 모델 로그인을 안내합니다.
 
 ## 무엇을 할 수 있나요
 
