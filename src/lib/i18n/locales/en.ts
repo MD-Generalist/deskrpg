@@ -206,7 +206,7 @@ const en: Record<string, string> = {
   "gateway.connected": "Connected to the gateway.",
   "gateway.failed": "Failed: {error}",
   // Hermes profiles
-  "gateway.profile.title": "Hermes profiles",
+  "gateway.profile.title": "Employees (Hermes profiles)",
   "gateway.profile.empty": "No profiles registered yet.",
   "gateway.profile.addTitle": "Add profile",
   "gateway.profile.profileNamePlaceholder": "Profile name (e.g. default)",
@@ -1901,7 +1901,7 @@ const en: Record<string, string> = {
   "gateways.employeesHint":
     "Register employees (Hermes profiles) and manage their persona, look and model on the Employees page.",
   "gateways.employeesOpen": "Open employees →",
-  "gateways.title": "My Gateways",
+  "gateways.title": "Connections",
   "gateways.subtitle": "Register, test, and share your Hermes gateways with other users.",
   "gateways.backToChannels": "Back to channels",
   "gateways.listTitle": "Gateway List",

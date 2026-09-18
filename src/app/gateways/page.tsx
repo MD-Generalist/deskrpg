@@ -462,14 +462,6 @@ function GatewayManagementPageInner() {
               ? "왼쪽 메뉴 순서가 곧 진행 순서입니다. 여기서 Hermes 게이트웨이를 연결하면, 직원 화면에서 직원을 만들고 그 직원으로 모델에 로그인합니다. Hermes 는 직원마다 따로 로그인합니다."
               : "The sidebar order is the setup order. Connect your Hermes gateway here, then hire employees and sign each one in — Hermes signs in per employee."}
           </p>
-          {selectedGateway && (
-            <Link
-              href={`/profiles?gateway=${encodeURIComponent(selectedGateway.id)}`}
-              className="mt-3 inline-block font-semibold text-primary"
-            >
-              {locale === "ko" ? "이 게이트웨이의 NPC 보기 →" : "View this gateway’s NPCs →"}
-            </Link>
-          )}
         </section>
 
         {gateways.length === 0 && <GatewayOnboardingGuide />}

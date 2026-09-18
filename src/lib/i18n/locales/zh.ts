@@ -202,7 +202,7 @@ const zh: Record<string, string> = {
   "gateway.connected": "已连接到网关。",
   "gateway.failed": "失败: {error}",
   // Hermes profiles
-  "gateway.profile.title": "Hermes 配置文件",
+  "gateway.profile.title": "员工 (Hermes 配置文件)",
   "gateway.profile.empty": "尚未注册任何配置文件。",
   "gateway.profile.addTitle": "添加配置文件",
   "gateway.profile.profileNamePlaceholder": "配置文件名称 (例如 default)",
@@ -1865,7 +1865,7 @@ const zh: Record<string, string> = {
   "gateways.employeesTitle": "此网关的员工",
   "gateways.employeesHint": "员工(Hermes 配置文件)的注册、人格、外观与模型在员工页面管理。",
   "gateways.employeesOpen": "打开员工管理 →",
-  "gateways.title": "我的网关",
+  "gateways.title": "连接",
   "gateways.subtitle": "注册、测试并与其他用户共享你的 Hermes 网关。",
   "gateways.backToChannels": "返回频道列表",
   "gateways.listTitle": "网关列表",

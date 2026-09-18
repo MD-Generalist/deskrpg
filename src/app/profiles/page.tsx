@@ -94,10 +94,10 @@ function ProfilesPageContent() {
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold tracking-widest text-primary mb-2">HERMES</p>
-            <h1 className="text-3xl font-bold">{ko ? "내 NPC" : "My NPCs"}</h1>
+            <h1 className="text-3xl font-bold">{ko ? "직원" : "Employees"}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">
               {ko
-                ? "연결된 게이트웨이의 프로필을 선택하고 NPC의 이름과 외형을 관리하세요. 각 NPC의 정체성과 외형은 해당 Hermes 프로필에 저장됩니다."
+                ? "직원 한 명이 Hermes 프로필 하나입니다. 여기서 직원을 등록하고 인격·외형·모델을 관리합니다. 모델 로그인은 직원마다 따로 합니다."
                 : "Choose a profile from a connected gateway to manage your NPC’s name and appearance. Each NPC’s identity and appearance belong to that Hermes profile."}
             </p>
           </div>

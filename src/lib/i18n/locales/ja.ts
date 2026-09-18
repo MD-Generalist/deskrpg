@@ -207,7 +207,7 @@ const ja: Record<string, string> = {
   "gateway.connected": "ゲートウェイに接続しました。",
   "gateway.failed": "失敗: {error}",
   // Hermes profiles
-  "gateway.profile.title": "Hermesプロファイル",
+  "gateway.profile.title": "社員 (Hermes プロフィール)",
   "gateway.profile.empty": "登録されたプロファイルがありません。",
   "gateway.profile.addTitle": "プロファイルを追加",
   "gateway.profile.profileNamePlaceholder": "プロファイル名 (例: default)",
@@ -1908,7 +1908,7 @@ const ja: Record<string, string> = {
   "gateways.employeesHint":
     "社員(Hermes プロフィール)の登録・人格・外見・モデルは社員画面で管理します。",
   "gateways.employeesOpen": "社員管理を開く →",
-  "gateways.title": "マイゲートウェイ",
+  "gateways.title": "接続",
   "gateways.subtitle": "Hermes ゲートウェイを登録、接続テスト、共有できます。",
   "gateways.backToChannels": "チャンネル一覧へ",
   "gateways.listTitle": "ゲートウェイ一覧",

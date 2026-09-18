@@ -203,7 +203,7 @@ const ko: Record<string, string> = {
   "gateway.connected": "게이트웨이에 연결되었습니다.",
   "gateway.failed": "실패: {error}",
   // Hermes profiles
-  "gateway.profile.title": "Hermes 프로필",
+  "gateway.profile.title": "직원 (Hermes 프로필)",
   "gateway.profile.empty": "등록된 프로필이 없습니다.",
   "gateway.profile.addTitle": "프로필 추가",
   "gateway.profile.profileNamePlaceholder": "프로필 이름 (예: default)",
@@ -1895,7 +1895,7 @@ const ko: Record<string, string> = {
   "gateways.employeesTitle": "이 게이트웨이의 직원",
   "gateways.employeesHint": "직원(Hermes 프로필) 등록·인격·외형·모델은 직원 화면에서 관리합니다.",
   "gateways.employeesOpen": "직원 관리 열기 →",
-  "gateways.title": "내 게이트웨이",
+  "gateways.title": "연결",
   "gateways.subtitle":
     "Hermes 게이트웨이를 등록하고, 테스트하고, 다른 사용자에게 공유할 수 있습니다.",
   "gateways.backToChannels": "채널 목록으로",
