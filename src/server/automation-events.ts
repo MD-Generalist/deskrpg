@@ -6,9 +6,11 @@
  * 하드 게이트 5: 방 알림·맵 상태는 다른 어떤 경로도 직접 만들지 않는다 — 모두 여기를 거친다.
  *
  * 한 사건에 대해 하는 일은 셋뿐이다.
- *  (a) 채널 소켓 방송 — `task.*` 는 `kanban:event`, `cron.*` 는 `cron:event`. 크론 사건은 호스트의
- *      모든 프로필 것이 실려 오므로 프로필이 **이 채널의 NPC** 로 풀릴 때만 방송한다(잠든 NPC 포함).
- *      남의 채널 프로필의 실행이 이 채널 화면에 새면 안 된다.
+ *  (a) 채널 소켓 방송 — 허용 목록이다. `task.*` 는 `kanban:event`, `cron.*` 는 `cron:event`,
+ *      `artifact.*` 는 `artifact:event`. 크론 사건은 호스트의 모든 프로필 것이 실려 오므로
+ *      프로필이 **이 채널의 NPC** 로 풀릴 때만 방송한다(잠든 NPC 포함). 아티팩트 사건은 채널
+ *      NPC 프로필이거나 채널 보드일 때만 방송한다. 남의 채널 프로필·보드의 것이 이 채널 화면에
+ *      새면 안 된다. 목록 밖의 kind 는 어느 채널로도 방송하지 않는다.
  *  (b) 맵 상태 — NPC 에게 진행 중인 카드 실행·크론 실행이 하나라도 있으면 "작업 중"(R27).
  *      `npc:working` 은 값이 **바뀔 때만** 나간다.
  *  (c) 방 알림 — 카드의 blocked 진입(모두)·최상위 카드의 done 진입(R28), 이 채널 출처의
@@ -27,22 +29,40 @@ import { db, hermesProfiles, npcs } from "@/db";
 import type { RoomMessage, RoomNotice } from "@/lib/chat-rooms-policy";
 import { appendRoomMessage, ensureOfficeRoom, getChannelOwnerId } from "@/lib/chat-rooms";
 import { findCronOrigin, resolveOriginForGateway } from "@/lib/cron-origins";
-import type {
-  CronRunFinishedPayload,
-  CronRunStartedPayload,
-  PluginEvent,
-  TaskStatusEventPayload,
+import {
+  PLUGIN_EVENT_KINDS,
+  type CronRunFinishedPayload,
+  type CronRunStartedPayload,
+  type PluginEvent,
+  type TaskStatusEventPayload,
 } from "@/lib/hermes/deskrpg-plugin-types";
 
 // ---------------------------------------------------------------------------
-// 소켓 이벤트 이름 — 하드 게이트 10: 새 이벤트는 이 셋뿐이다.
+// 소켓 이벤트 이름 — 하드 게이트 10: 새 이벤트는 이 넷뿐이다.
 // ---------------------------------------------------------------------------
 
 export const AUTOMATION_SOCKET_EVENTS = {
   kanban: "kanban:event",
   cron: "cron:event",
   working: "npc:working",
+  artifact: "artifact:event",
 } as const;
+
+const KANBAN_EVENT_KINDS: ReadonlySet<string> = new Set(
+  PLUGIN_EVENT_KINDS.filter((k) => k.startsWith("task.")),
+);
+
+const ARTIFACT_PAYLOAD_KEYS = [
+  "artifact_id",
+  "version",
+  "kind",
+  "title",
+  "profile",
+  "source_kind",
+  "board",
+  "task_id",
+  "captured_via",
+] as const;
 
 export type NpcWorkingPayload = {
   npcId: string;
@@ -223,17 +243,52 @@ function remember(seen: Set<string>, id: string, limit: number) {
 // ---- (a) 방송 -------------------------------------------------------------
 
 async function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps) {
-  if (!event.kind.startsWith("cron.")) {
+  if (KANBAN_EVENT_KINDS.has(event.kind)) {
     deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.kanban, { channelId, event });
     return;
   }
-  // 크론 사건은 프로필이 이 채널의 NPC(잠든 NPC 포함)일 때만 — `updateWorking`·`postNotice` 와
-  // 같은 조회다.
-  const profile = profileOf(event);
-  if (!profile) return;
-  const lookup = await deps.findNpcByProfile(channelId, profile);
-  if (!lookup?.npc) return;
-  deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.cron, { channelId, event });
+  if (event.kind.startsWith("artifact.")) {
+    await broadcastArtifact(channelId, event, deps);
+    return;
+  }
+  if (event.kind.startsWith("cron.")) {
+    // 크론 사건은 프로필이 이 채널의 NPC(잠든 NPC 포함)일 때만 — `updateWorking`·`postNotice` 와
+    // 같은 조회다.
+    const profile = profileOf(event);
+    if (!profile) return;
+    const lookup = await deps.findNpcByProfile(channelId, profile);
+    if (!lookup?.npc) return;
+    deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.cron, { channelId, event });
+    return;
+  }
+  // 허용 목록 밖 — 채널 범위를 모르는 사건을 브라우저로 넘기지 않는다.
+  console.warn(`[automation-events] ${channelId} dropped unknown event kind ${event.kind}`);
+}
+
+async function broadcastArtifact(channelId: string, event: PluginEvent, deps: IngestDeps) {
+  const p = event.payload as Record<string, unknown>;
+  const base = { id: event.id, ts: event.ts, kind: event.kind };
+  if (event.kind === "artifact.deleted") {
+    // 삭제 사건엔 프로필·보드가 없다 — 불투명 id 만 보낸다(제목 등은 싣지 않는다).
+    if (typeof p.artifact_id !== "string") return;
+    deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.artifact, {
+      channelId,
+      event: { ...base, payload: { artifact_id: p.artifact_id } },
+    });
+    return;
+  }
+  if (event.kind !== "artifact.created" && event.kind !== "artifact.versioned") return;
+  const board = typeof p.board === "string" ? p.board : null;
+  const profile = typeof p.profile === "string" ? p.profile : null;
+  const inBoard = !!board && board === deps.boardSlug;
+  const inProfile = !!profile && !!(await deps.findNpcByProfile(channelId, profile))?.npc;
+  if (!inBoard && !inProfile) return;
+  const payload: Record<string, unknown> = {};
+  for (const key of ARTIFACT_PAYLOAD_KEYS) if (p[key] !== undefined) payload[key] = p[key];
+  deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.artifact, {
+    channelId,
+    event: { ...base, payload },
+  });
 }
 
 // ---- (b) 맵 상태 ----------------------------------------------------------
