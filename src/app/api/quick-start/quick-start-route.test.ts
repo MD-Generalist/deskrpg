@@ -6,6 +6,7 @@ import {
   authHeaders,
   seedGateway,
   seedHermesProfile,
+  seedNpc,
   seedUser,
   setupThrowawaySqlite,
 } from "@/test-setup/npc-seed";
@@ -114,12 +115,12 @@ test("게이트웨이가 하나도 없어도 성공한다", async () => {
   assert.equal(typeof body.channelId, "string");
 });
 
-test("자리 없는 NPC 가 있으면 빈 좌석에 앉힌다", async () => {
+test("게이트웨이를 붙이고 출근시키면 곧바로 데스크 좌석에 앉는다", async () => {
   const { userId } = await seedDefaultGroupAdmin();
   const first = await callQuickStart(userId);
   const channelId = first.body.channelId as string;
 
-  // 게이트웨이를 붙이고 프로필을 출근시킨다 — 새로 고용된 NPC 는 자리가 NULL 이다.
+  // 게이트웨이를 붙이고 프로필을 출근시킨다 — 고용 경로가 이미 배치까지 끝낸다.
   const gateway = await seedGateway(userId);
   await seedHermesProfile(gateway.id);
   const { bindGatewayToChannel } = await import("@/lib/gateway-resources");
@@ -127,29 +128,43 @@ test("자리 없는 NPC 가 있으면 빈 좌석에 앉힌다", async () => {
   await bindGatewayToChannel({ channelId, gatewayId: gateway.id, boundByUserId: userId });
   await hireGatewayProfilesIntoChannel(channelId, gateway.id);
 
-  const { db, npcs, channels } = await import("@/db");
+  const { db, npcs } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const after = await db.select().from(npcs).where(eq(npcs.channelId, channelId));
+  assert.equal(after.length, 1);
+  assert.ok(
+    Number.isInteger(after[0].positionX) && Number.isInteger(after[0].positionY),
+    "데스크 좌석 또는 서는 칸에 이미 앉아 있다",
+  );
+});
+
+test("빠른 시작은 이 기능 이전에 자리 없이 만들어진 직원의 안전망이다", async () => {
+  const { userId } = await seedDefaultGroupAdmin();
+  const first = await callQuickStart(userId);
+  const channelId = first.body.channelId as string;
+
+  // `hireGatewayProfilesIntoChannel` 을 거치지 않고 자리 미정 NPC 를 직접 심는다 —
+  // 이 기능 이전 데이터를 흉내낸다.
+  const gateway = await seedGateway(userId);
+  const profile = await seedHermesProfile(gateway.id);
+  const { bindGatewayToChannel } = await import("@/lib/gateway-resources");
+  await bindGatewayToChannel({ channelId, gatewayId: gateway.id, boundByUserId: userId });
+  await seedNpc({ channelId, hermesProfileId: profile.id, active: true });
+
+  const { db, npcs } = await import("@/db");
   const { eq } = await import("drizzle-orm");
   const before = await db.select().from(npcs).where(eq(npcs.channelId, channelId));
   assert.equal(before.length, 1);
   assert.equal(before[0].positionX, null, "전제: 아직 자리가 없다");
-
-  const { quickStartSeatTiles } = await import("@/lib/quick-start");
-  const [channel] = await db
-    .select({ mapData: channels.mapData })
-    .from(channels)
-    .where(eq(channels.id, channelId));
-  const seats = quickStartSeatTiles(channel.mapData);
-  assert.ok(seats.length > 0, "기본 오피스 환경에는 좌석이 있다");
 
   const second = await callQuickStart(userId);
   assert.equal(second.response.status, 200);
 
   const after = await db.select().from(npcs).where(eq(npcs.channelId, channelId));
   assert.equal(after.length, 1, "NPC 를 새로 만들지 않는다");
-  assert.ok(Number.isInteger(after[0].positionX), "자리가 생겼다");
   assert.ok(
-    seats.some((seat) => seat.col === after[0].positionX && seat.row === after[0].positionY),
-    "앉힌 칸은 실제 좌석이다",
+    Number.isInteger(after[0].positionX) && Number.isInteger(after[0].positionY),
+    "데스크 좌석 또는 서는 칸에 앉았다",
   );
 });
 

@@ -1,11 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, npcs, hermesProfiles, channelGatewayBindings, nowForDb } from "@/db";
+import { placeUnplacedNpcs } from "./npc-seating";
 
 /**
  * 채널에 묶인 게이트웨이의 프로필을 전부 "출근" 시킨다 — `(channel_id, hermes_profile_id)`
- * 유니크에 기대어, 없으면 만들고 있으면 `active=true` 로 되살린다. 자리(`positionX/Y`)는
- * 건드리지 않는다: 새로 만든 NPC 는 자리 미정(NULL)이고, 되살린 NPC 는 잠들기 전 자리를
- * 그대로 되찾는다.
+ * 유니크에 기대어, 없으면 만들고 있으면 `active=true` 로 되살린다. 새로 만든 NPC 는
+ * 곧바로 `placeUnplacedNpcs` 가 빈 데스크 좌석(만석이면 서는 칸)에 배치하고, 되살린
+ * NPC 는 잠들기 전 자리를 그대로 되찾는다.
  */
 export async function hireGatewayProfilesIntoChannel(
   channelId: string,
@@ -38,6 +39,7 @@ export async function hireGatewayProfilesIntoChannel(
       reactivated += 1;
     }
   }
+  if (created > 0 || reactivated > 0) await placeUnplacedNpcs(channelId);
   return { created, reactivated };
 }
 
@@ -74,6 +76,7 @@ export async function hireProfileIntoBoundChannels(
         updatedAt: nowForDb(),
       });
       created += 1;
+      await placeUnplacedNpcs(binding.channelId);
     }
   }
   return { created };
@@ -107,4 +110,12 @@ export async function setNpcActive(npcId: string, active: boolean): Promise<void
   // `updated_at` 은 마이그레이션이 "최신 하나" 를 고르는 기준이다 — 상태를 바꾸는
   // 경로가 전부 같이 갱신해야 그 판단이 낡은 값 위에서 이뤄지지 않는다.
   await db.update(npcs).set({ active, updatedAt: nowForDb() }).where(eq(npcs.id, npcId));
+  if (!active) return;
+  // 자리 없이 잠들었던 직원(이 기능 이전 데이터)은 되살아나면서 자리를 받는다.
+  const [row] = await db
+    .select({ channelId: npcs.channelId })
+    .from(npcs)
+    .where(eq(npcs.id, npcId))
+    .limit(1);
+  if (row) await placeUnplacedNpcs(row.channelId);
 }
