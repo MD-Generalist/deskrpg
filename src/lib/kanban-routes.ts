@@ -394,7 +394,7 @@ export async function getAttachment(req: NextRequest, channelId: string, attachm
     { range: req.headers.get("range") },
   );
   if (!res.ok) return rawFailureResponse(res);
-  return streamProxyResponse(res.response);
+  return streamProxyResponse(res.response, { forceAttachment: true });
 }
 
 export async function deleteAttachment(req: NextRequest, channelId: string, attachmentId: string) {

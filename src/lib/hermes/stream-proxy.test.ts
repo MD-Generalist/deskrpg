@@ -38,3 +38,42 @@ test("본문을 모으지 않고 흘린다 — 끝나지 않는 스트림의 첫
   assert.equal(new TextDecoder().decode(value), "first");
   await reader.cancel();
 });
+
+test("업스트림이 CSP·nosniff 를 안 보내도 강제로 붙인다", () => {
+  const upstream = new Response("<script>alert(1)</script>", {
+    status: 200,
+    headers: { "content-type": "text/html" },
+  });
+  const res = streamProxyResponse(upstream);
+  assert.equal(res.headers.get("content-security-policy"), "sandbox");
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+});
+
+test("업스트림의 약한 CSP 를 sandbox 로 덮어쓴다", () => {
+  const upstream = new Response("abc", {
+    status: 200,
+    headers: { "content-security-policy": "default-src *" },
+  });
+  const res = streamProxyResponse(upstream);
+  assert.equal(res.headers.get("content-security-policy"), "sandbox");
+});
+
+test("forceAttachment 는 inline 을 attachment 로 바꾸고, 없으면 새로 붙인다", () => {
+  const withInline = streamProxyResponse(
+    new Response("abc", {
+      status: 200,
+      headers: { "content-disposition": 'inline; filename="a.html"' },
+    }),
+    { forceAttachment: true },
+  );
+  assert.equal(withInline.headers.get("content-disposition"), 'attachment; filename="a.html"');
+
+  const withoutDisposition = streamProxyResponse(new Response("abc", { status: 200 }), {
+    forceAttachment: true,
+    filename: "note.txt",
+  });
+  assert.equal(
+    withoutDisposition.headers.get("content-disposition"),
+    "attachment; filename*=UTF-8''note.txt",
+  );
+});

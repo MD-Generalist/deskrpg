@@ -757,6 +757,8 @@ test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지
   assert.equal(fetched.status, 200);
   assert.equal(await fetched.text(), "hello");
   assert.match(fetched.headers.get("content-disposition") ?? "", /attachment/);
+  assert.equal(fetched.headers.get("content-security-policy"), "sandbox");
+  assert.equal(fetched.headers.get("x-content-type-options"), "nosniff");
 
   const removed = await routes.attachment.DELETE(
     req(seed.ownerId, "DELETE", `${base(seed.channelId)}/attachments/${attachment.id}`),
@@ -791,6 +793,36 @@ test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지
   } finally {
     server.setInfo({ kanban: { dispatcher_present: true, attachments: true } });
   }
+});
+
+test("첨부 — HTML 업로드도 항상 attachment 로 내려받고 CSP sandbox·nosniff 를 강제한다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  const taskId = created.body.task.id as string;
+
+  const form = new FormData();
+  form.append("file", new Blob(["<script>alert(1)</script>"]), "a.html");
+  const uploaded = await routes.taskAttachments.POST(
+    new NextRequest(`${base(seed.channelId)}/tasks/${taskId}/attachments`, {
+      method: "POST",
+      headers: { "x-user-id": seed.ownerId },
+      body: form,
+    }),
+    ctx(seed.channelId, taskId),
+  );
+  assert.equal(uploaded.status, 201, JSON.stringify(await uploaded.clone().json()));
+  const attachment = (await uploaded.json()).attachment;
+
+  const fetched = await routes.attachment.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments/${attachment.id}`),
+    ctx(seed.channelId, "", attachment.id),
+  );
+  assert.equal(fetched.status, 200);
+  assert.match(fetched.headers.get("content-disposition") ?? "", /^attachment/);
+  assert.equal(fetched.headers.get("content-security-policy"), "sandbox");
+  assert.equal(fetched.headers.get("x-content-type-options"), "nosniff");
 });
 
 test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더 편집, 게이트웨이 소유자는 운영 설정 편집", async () => {
