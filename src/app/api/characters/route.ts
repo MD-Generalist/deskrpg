@@ -2,7 +2,10 @@ import { db, jsonForDb, isPostgres } from "@/db";
 import { characters } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { validateAppearance } from "@/lib/lpc-registry";
+import {
+  normalizeOfficeAppearance,
+  validateOfficeAppearance,
+} from "@/game/three/office-appearance";
 import { parseDbJson } from "@/lib/db-json";
 
 function getUserId(req: NextRequest): string | null {
@@ -50,9 +53,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, appearance } = body;
 
-    if (!name || !appearance) {
+    if (!name) {
       return NextResponse.json(
-        { errorCode: "character_name_required", error: "name and appearance are required" },
+        { errorCode: "character_name_required", error: "name is required" },
+        { status: 400 },
+      );
+    }
+
+    if (!appearance) {
+      return NextResponse.json(
+        { errorCode: "character_appearance_invalid", error: "appearance is required" },
         { status: 400 },
       );
     }
@@ -76,7 +86,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const validationError = validateAppearance(appearance);
+    const validationError = validateOfficeAppearance(appearance);
     if (validationError) {
       return NextResponse.json(
         { errorCode: "character_appearance_invalid", error: validationError },
@@ -86,7 +96,8 @@ export async function POST(req: NextRequest) {
 
     const [character] = await db
       .insert(characters)
-      .values({ userId, name, appearance: jsonForDb(appearance) })
+      // 검증을 통과한 값도 저장 전에 정규화한다 — bodyType 은 룩의 값으로 맞춘다.
+      .values({ userId, name, appearance: jsonForDb(normalizeOfficeAppearance(appearance)) })
       .returning();
 
     return NextResponse.json(

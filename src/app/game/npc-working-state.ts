@@ -52,7 +52,7 @@ export function reduceNpcWorking(map: NpcWorkingMap, payload: NpcWorkingPayload)
   return { ...map, [payload.npcId]: payload };
 }
 
-/** 지금 작업 중인 NPC id — 맵(GameScene)에 넘기는 형태. */
+/** 지금 작업 중인 NPC id — 맵 시뮬레이션에 넘기는 형태. */
 export function workingNpcIds(map: NpcWorkingMap): string[] {
   return Object.keys(map).filter((id) => map[id].working);
 }

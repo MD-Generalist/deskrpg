@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import GamePageClient from "./GamePageClient";
+import GameWebglGate from "./GameWebglGate";
 import { resolveGamePageMetadataTitle } from "./metadata";
 
 type GamePageProps = {
@@ -20,5 +20,7 @@ export async function generateMetadata({ searchParams }: GamePageProps): Promise
 }
 
 export default function GamePage() {
-  return <GamePageClient />;
+  // 채널 화면은 관문을 통과한 뒤에만 마운트된다 — 이 파일은 서버 컴포넌트로 남아야
+  // `generateMetadata` 가 산다. 검사는 그 아래 `"use client"` 관문이 한다.
+  return <GameWebglGate />;
 }

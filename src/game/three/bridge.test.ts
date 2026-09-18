@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { pixelToWorld, worldToPixel, worldToCamera, matchesNpcTarget } from "./bridge";
+import { pixelToWorld, worldToPixel, matchesNpcTarget } from "./bridge";
 import { tiledSnapshot } from "./tiled-preview";
-import type { TiledMap } from "../../components/map-editor/hooks/useMapEditor";
+import type { TiledMap } from "../../lib/tiled-map";
 
 test("saved and multiplayer pixel positions round-trip without tile quantization", () => {
   for (const [x, y] of [
@@ -15,12 +15,6 @@ test("saved and multiplayer pixel positions round-trip without tile quantization
     assert.deepEqual(worldToPixel(world.x, world.z), { x, y });
   }
   assert.deepEqual(pixelToWorld(16, 48), { x: 0.5, z: 1.5 });
-});
-test("3D picks map into the legacy camera including centered bounds and zoom", () => {
-  const camera = { x: 0, y: 0, width: 1000, height: 600, zoom: 2, scrollX: -180, scrollY: -60 };
-  assert.deepEqual(worldToCamera(320, 240, camera), { x: 500, y: 300 });
-  assert.deepEqual(worldToCamera(352, 272, camera), { x: 564, y: 364 });
-  assert.deepEqual(worldToCamera(352, 272, { ...camera, x: 24, y: 48 }), { x: 588, y: 412 });
 });
 test("a raycast/name target selects B even when A was inserted first within the hit radius", () => {
   const npcs = [

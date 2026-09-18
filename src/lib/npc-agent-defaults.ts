@@ -1,15 +1,16 @@
 import { OFFICE_PRESETS, applyPresetName } from "./office-presets";
 import { PERSONA_PRESETS } from "./npc-persona-presets";
 import { normalizeLocale, type ServerLocale } from "./i18n/server";
+import {
+  normalizeOfficeAppearance,
+  type CharacterAppearance,
+} from "@/game/three/office-appearance";
 
 export interface NpcPresetDefaults {
   presetId: string;
   displayName: string;
   defaultAgentId: string;
-  appearance: {
-    bodyType: string;
-    layers: Record<string, { itemKey: string; variant: string }>;
-  };
+  appearance: CharacterAppearance;
   identity: string;
   soul: string;
   meetingProtocol: string;
@@ -221,14 +222,8 @@ export function getNpcPresetDefaults(
     presetId: preset.id,
     displayName: preset.nameKo,
     defaultAgentId: getDefaultAgentIdForPreset(presetId),
-    appearance: {
-      bodyType: preset.bodyType,
-      layers: Object.fromEntries(
-        Object.entries(preset.layers)
-          .filter(([, value]) => value !== null)
-          .map(([key, value]) => [key, { itemKey: value!.itemKey, variant: value!.variant }]),
-      ),
-    },
+    // 프리셋의 옛 레이어는 버리고 성별만 기본 룩으로 접는다(변환 규칙 D).
+    appearance: normalizeOfficeAppearance({ bodyType: preset.bodyType })!,
     identity: localizeNpcPromptDocument(
       applyPresetName(preset.identity, resolvedName),
       locale,

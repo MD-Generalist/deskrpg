@@ -17,6 +17,8 @@ async function runMigrations() {
   }
 
   const pool = new Pool({ connectionString: databaseUrl });
+  // 마이그레이션이 RAISE NOTICE 로 내는 변환 건수는 리스너가 없으면 조용히 버려진다.
+  pool.on("connect", (client) => client.on("notice", (n) => console.log("[migrate]", n.message)));
 
   try {
     const db = drizzle(pool);

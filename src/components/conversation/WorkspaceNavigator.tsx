@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { sortRooms, type RoomSummary } from "@/lib/chat-rooms-policy";
 import { useT } from "@/lib/i18n";
 import type { RosterNpc } from "../NpcRoster";
@@ -19,7 +18,7 @@ export type NavigatorPlayer = {
   name: string;
   online: boolean;
   self: boolean;
-  appearance?: CharacterAppearance | LegacyCharacterAppearance | null;
+  appearance?: unknown;
 };
 
 export type NpcNavigatorAction =
@@ -179,9 +178,7 @@ export default function WorkspaceNavigator(props: Props) {
                 key={npc.id}
                 name={npc.name}
                 detail={npcDetail(npc, t)}
-                appearance={
-                  (npc.appearance ?? null) as CharacterAppearance | LegacyCharacterAppearance | null
-                }
+                appearance={npc.appearance ?? null}
                 selected={npc.id === props.selectedNpcId}
                 onSelect={() => props.onSelectNpc(npc.id, npc.name)}
                 menuLabel={`${npc.name} 관리`}

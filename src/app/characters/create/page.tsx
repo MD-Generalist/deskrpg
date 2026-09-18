@@ -8,7 +8,11 @@ import LocaleSwitcher from "@/components/LocaleSwitcher";
 import CharacterPreview from "@/components/CharacterPreview";
 import OfficeLookGallery from "@/components/OfficeLookGallery";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
-import { normalizeAppearance, type CharacterAppearance } from "@/lib/lpc-registry";
+import { DEFAULT_OFFICE_LOOK_ID } from "@/game/three/office-appearance";
+import {
+  normalizeOfficeAppearance,
+  type CharacterAppearance,
+} from "@/game/three/office-appearance";
 import "@/game/three/lookbook.css";
 
 export default function CharacterCreatePage() {
@@ -28,7 +32,7 @@ function CharacterCreatePageInner() {
     editId = searchParams.get("editId"),
     isEditMode = !!editId;
   const [selectedAppearance, setSelectedAppearance] = useState<CharacterAppearance | null>(() =>
-    isEditMode ? null : officeLookAppearance(OFFICE_LOOKS[0].id),
+    isEditMode ? null : officeLookAppearance(DEFAULT_OFFICE_LOOK_ID),
   );
   const [name, setName] = useState(""),
     [saving, setSaving] = useState(false),
@@ -48,7 +52,7 @@ function CharacterCreatePageInner() {
         if (!data.character) throw new Error("missing");
         if (controller.signal.aborted) return;
         setName(data.character.name);
-        setSelectedAppearance(normalizeAppearance(data.character.appearance));
+        setSelectedAppearance(normalizeOfficeAppearance(data.character.appearance));
         setLoadingEdit(false);
       })
       .catch(() => {

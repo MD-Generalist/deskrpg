@@ -84,10 +84,7 @@ async function installFixture(context: BrowserContext, state: FixtureState) {
           {
             id: CHARACTER_ID,
             name: "E2E Character",
-            appearance: {
-              bodyType: "male",
-              layers: { body: { itemKey: "body", variant: "light" } },
-            },
+            appearance: { officeLookId: "office-jun", bodyType: "male" },
           },
         ],
       });

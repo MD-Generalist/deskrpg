@@ -14,10 +14,11 @@ import {
   type DiscoveryRow,
   type ProbeStatus,
 } from "./discovery-rows";
-import type { CharacterAppearance } from "@/lib/lpc-registry";
+import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 import NpcHireWizard from "./NpcHireWizard";
 import ProfileAppearanceEditor from "./ProfileAppearanceEditor";
+import RosterAvatar from "../RosterAvatar";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -102,6 +103,8 @@ export default function HermesProfileList({
   // 쓰고, 오래됐거나 없으면 그때만 `/test` 를 쏜다(원격 왕복 2회, 최대 10초) — 예전엔
   // 이 화면을 열 때마다(마법사를 열지 않아도) 무조건 다시 찔렀다.
   const [pluginStatus, setPluginStatus] = useState<PluginStatus>("unknown");
+  // 고용 마법사 ③ 이 "이 직원으로 로그인" 링크를 만드는 데 쓴다. 소유자에게만 값이 온다.
+  const [dashboardUrl, setDashboardUrl] = useState<string | null>(null);
   // `?new=1` 은 "지금 새 인격을 만들러 왔다" 는 뜻이다 — 소유자가 아니면 마법사
   // 자체가 없으므로 열지 않는다.
   const [wizardOpen, setWizardOpen] = useState(autoOpenCreate && canRegister);
@@ -127,9 +130,17 @@ export default function HermesProfileList({
           ? (data as { gateways: unknown[] }).gateways
           : [];
         const mine = rows.find(
-          (g): g is { pluginStatus: string | null; pluginCheckedAt: string | Date | null } =>
-            !!g && typeof g === "object" && (g as { id?: unknown }).id === gatewayId,
+          (
+            g,
+          ): g is {
+            pluginStatus: string | null;
+            pluginCheckedAt: string | Date | null;
+            dashboardUrl?: string | null;
+          } => !!g && typeof g === "object" && (g as { id?: unknown }).id === gatewayId,
         );
+        if (!cancelled) {
+          setDashboardUrl(typeof mine?.dashboardUrl === "string" ? mine.dashboardUrl : null);
+        }
         const cached = resolvePluginStatusFromCache({
           pluginStatus: mine?.pluginStatus ?? null,
           pluginCheckedAt: mine?.pluginCheckedAt ?? null,
@@ -371,6 +382,12 @@ export default function HermesProfileList({
             pluginStatus={pluginStatus}
             existingProfiles={profiles.map((p) => p.profileName)}
             initialProfile={wizardProfile}
+            dashboardUrl={dashboardUrl}
+            onProfileCreated={() => {
+              // 마법사가 열려 있는 동안에도 목록을 맞춘다 — 닫을 때까지 기다리면
+              // 방금 만든 직원이 목록에서 빠져 "등록된 프로필이 없습니다" 가 남는다.
+              void loadProfiles().then(() => onCreated?.());
+            }}
             localDiscovery={!!discovery?.available && !!discovery?.optedIn}
             onDone={() => {
               setWizardOpen(false);
@@ -400,11 +417,14 @@ export default function HermesProfileList({
             return (
               <div key={profile.id} className="rounded-lg bg-bg px-3 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-text">
-                      {profile.displayName || profile.profileName}
-                    </p>
-                    <p className="text-xs text-text-muted">{profile.profileName}</p>
+                  <div className="flex items-center gap-2">
+                    <RosterAvatar appearance={profile.appearance ?? null} />
+                    <div>
+                      <p className="font-medium text-text">
+                        {profile.displayName || profile.profileName}
+                      </p>
+                      <p className="text-xs text-text-muted">{profile.profileName}</p>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span

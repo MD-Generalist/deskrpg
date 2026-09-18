@@ -499,3 +499,64 @@ describe("plugin proxy — 실패 응답에 upstreamStatus 를 함께 싣는다 
     assert.equal(body.upstreamStatus, 0);
   });
 });
+
+describe("plugin proxy — 만든 프로필이 실제로 몇 개 채널에 출근했는지 알린다", () => {
+  // 마법사 ④ 배치는 "이미 채널에 자동 출근했습니다" 를 조건 없이 띄웠다. 출근은 그
+  // 게이트웨이가 **이미 붙어 있는 채널** 에만 일어나므로, 붙은 채널이 없으면 그 문장은
+  // 거짓이다(Hostinger VPS 실측 2026-09-17: 채널이 없는데도 출근했다고 안내했다).
+  async function createProfile(gatewayId: string, adminId: string) {
+    const { POST } = await import("./[id]/plugin/profiles/route");
+    const res = await POST(
+      mutatingReq(`http://localhost/api/gateways/${gatewayId}/plugin/profiles`, adminId, "POST", {
+        name: "noah",
+      }),
+      { params: Promise.resolve({ id: gatewayId }) },
+    );
+    return { res, body: await res.json() };
+  }
+
+  async function withStubPlugin<T>(fn: (baseUrl: string) => Promise<T>): Promise<T> {
+    const server = http.createServer((_httpReq, httpRes) => {
+      httpRes.writeHead(200, { "content-type": "application/json" });
+      httpRes.end(
+        JSON.stringify({ name: "noah", keyIssued: true, apiKey: "profile-key-abcdefghij" }),
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("failed to bind stub server");
+    try {
+      return await fn(`http://127.0.0.1:${address.port}`);
+    } finally {
+      server.close();
+    }
+  }
+
+  test("붙은 채널이 없으면 attendedChannels 는 0 이다", async () => {
+    await withStubPlugin(async (baseUrl) => {
+      const admin = await seedUser("system_admin");
+      const gateway = await seedGateway(admin.id, baseUrl);
+      const { res, body } = await createProfile(gateway.id, admin.id);
+      assert.equal(res.status, 201);
+      assert.equal(body.keyStored, true);
+      assert.equal(body.attendedChannels, 0, "채널이 없는데 출근했다고 말하면 안 된다");
+    });
+  });
+
+  test("게이트웨이가 붙은 채널 수만큼 attendedChannels 가 온다", async () => {
+    await withStubPlugin(async (baseUrl) => {
+      const admin = await seedUser("system_admin");
+      const gateway = await seedGateway(admin.id, baseUrl);
+      const { seedChannel } = await import("@/test-setup/npc-seed");
+      const { db, channelGatewayBindings } = await loadDb();
+      for (const name of ["사무실 A", "사무실 B"]) {
+        const channel = await seedChannel(admin.id, name);
+        await db
+          .insert(channelGatewayBindings)
+          .values({ channelId: channel.id, gatewayId: gateway.id, boundByUserId: admin.id });
+      }
+      const { body } = await createProfile(gateway.id, admin.id);
+      assert.equal(body.attendedChannels, 2);
+    });
+  });
+});

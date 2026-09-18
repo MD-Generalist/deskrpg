@@ -2,7 +2,10 @@ import { db, jsonForDb, isPostgres } from "@/db";
 import { characters, channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { validateAppearance } from "@/lib/lpc-registry";
+import {
+  normalizeOfficeAppearance,
+  validateOfficeAppearance,
+} from "@/game/three/office-appearance";
 import { parseDbJson } from "@/lib/db-json";
 
 function getUserId(req: NextRequest): string | null {
@@ -86,14 +89,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (appearance !== undefined) {
-      const validationError = validateAppearance(appearance);
+      const validationError = validateOfficeAppearance(appearance);
       if (validationError) {
         return NextResponse.json(
           { errorCode: "character_appearance_invalid", error: validationError },
           { status: 400 },
         );
       }
-      updates.appearance = jsonForDb(appearance);
+      // 검증을 통과한 값도 저장 전에 정규화한다 — bodyType 은 룩의 값으로 맞춘다.
+      updates.appearance = jsonForDb(normalizeOfficeAppearance(appearance));
     }
 
     const [updated] = await db

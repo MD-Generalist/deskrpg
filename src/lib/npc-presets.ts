@@ -1,5 +1,6 @@
 import { OFFICE_PRESETS } from "./office-presets";
 import { getNpcPresetDefaults } from "./npc-agent-defaults";
+import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 export interface NpcPreset {
   id: string;
@@ -8,10 +9,7 @@ export interface NpcPreset {
   defaultAgentId: string;
   identity: string;
   soul: string;
-  appearance: {
-    bodyType: string;
-    layers: Record<string, { itemKey: string; variant: string }>;
-  };
+  appearance: CharacterAppearance;
 }
 
 /** Convert office presets to NPC appearance presets */

@@ -1,5 +1,6 @@
 import type { MeetingDiscussionState } from "../lib/meeting-discussion-state";
 import type { MeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
+import { normalizeOfficeAppearance } from "@/game/three/office-appearance";
 export const MEETING_NPC_STREAM_EVENT = "meeting:npc-stream";
 
 type MeetingRoom = {
@@ -281,7 +282,10 @@ export function registerMeetingSocketHandlers({
       const existingPlayer = players.get(socket.id);
       const displayName =
         existingPlayer?.characterName || characterName || user.nickname || "Unknown";
-      const displayAppearance = existingPlayer?.appearance ?? appearance ?? null;
+      // 클라이언트가 보낸 외형은 거절하지 않고 정규화해서 중계한다.
+      const displayAppearance = normalizeOfficeAppearance(
+        existingPlayer?.appearance ?? appearance ?? null,
+      );
 
       if (!existingPlayer && storeMeetingFallbackPlayer) {
         players.set(socket.id, {

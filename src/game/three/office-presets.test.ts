@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { applyOfficePreset } from "./office-presets";
 import { tiledSnapshot } from "./tiled-preview";
 import { OBJECT_TYPES } from "../../lib/object-types";
-import type { TiledMap } from "../../components/map-editor/hooks/useMapEditor";
+import type { TiledMap } from "../../lib/tiled-map";
 const base = {
   width: 20,
   height: 15,

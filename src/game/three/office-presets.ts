@@ -1,4 +1,4 @@
-import type { TiledMap, TiledObject } from "../../components/map-editor/hooks/useMapEditor";
+import type { TiledMap, TiledObject } from "../../lib/tiled-map";
 import { getObjectDimensions } from "../../lib/object-types";
 export type OfficePreset = "blank" | "garden" | "courtyard" | "cafe" | "trading";
 /** New-project templates only. Existing channel/project data is never replaced automatically. */

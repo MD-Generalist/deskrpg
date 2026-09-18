@@ -1,4 +1,4 @@
-import type { AppearanceSelection } from "@/lib/lpc-registry";
+import type { AppearanceSelection } from "@/game/three/office-appearance";
 
 export interface OfficePreset {
   id: string;

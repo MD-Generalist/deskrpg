@@ -219,44 +219,6 @@ const SQLITE_BASE_SCHEMA = `
     CREATE INDEX IF NOT EXISTS idx_channel_members_user_id ON channel_members(user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS channel_members_channel_user_unique ON channel_members(channel_id, user_id);
 
-    CREATE TABLE IF NOT EXISTS maps (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      tilemap_path TEXT NOT NULL,
-      config TEXT,
-      created_at TEXT,
-      updated_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS map_portals (
-      id TEXT PRIMARY KEY NOT NULL,
-      from_map_id TEXT REFERENCES maps(id),
-      to_map_id TEXT REFERENCES maps(id),
-      from_x INTEGER NOT NULL,
-      from_y INTEGER NOT NULL,
-      to_x INTEGER NOT NULL,
-      to_y INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS map_templates (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      icon TEXT NOT NULL DEFAULT '🗺️',
-      description TEXT,
-      cols INTEGER NOT NULL,
-      rows INTEGER NOT NULL,
-      layers TEXT,
-      objects TEXT,
-      tiled_json TEXT,
-      thumbnail TEXT,
-      spawn_col INTEGER NOT NULL,
-      spawn_row INTEGER NOT NULL,
-      tags TEXT,
-      created_by TEXT REFERENCES users(id),
-      created_at TEXT,
-      updated_at TEXT
-    );
-
     CREATE TABLE IF NOT EXISTS npcs (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
@@ -375,63 +337,6 @@ const SQLITE_BASE_SCHEMA = `
     CREATE INDEX IF NOT EXISTS idx_meeting_minutes_channel ON meeting_minutes(channel_id);
     CREATE INDEX IF NOT EXISTS idx_meeting_minutes_created ON meeting_minutes(created_at);
 
-    CREATE TABLE IF NOT EXISTS stamps (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      cols INTEGER NOT NULL,
-      rows INTEGER NOT NULL,
-      tile_width INTEGER NOT NULL DEFAULT 32,
-      tile_height INTEGER NOT NULL DEFAULT 32,
-      layers TEXT NOT NULL,
-      tilesets TEXT NOT NULL,
-      thumbnail TEXT,
-      created_by TEXT REFERENCES users(id),
-      built_in INTEGER NOT NULL DEFAULT 0,
-      tags TEXT,
-      created_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS tileset_images (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      tilewidth INTEGER NOT NULL DEFAULT 32,
-      tileheight INTEGER NOT NULL DEFAULT 32,
-      columns INTEGER NOT NULL,
-      tilecount INTEGER NOT NULL,
-      image TEXT NOT NULL,
-      built_in INTEGER NOT NULL DEFAULT 0,
-      tags TEXT,
-      created_at TEXT
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tileset_images_name ON tileset_images(name);
-
-    CREATE TABLE IF NOT EXISTS projects (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      thumbnail TEXT,
-      tiled_json TEXT,
-      settings TEXT,
-      created_by TEXT REFERENCES users(id),
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS project_tilesets (
-      id TEXT PRIMARY KEY NOT NULL,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      tileset_id TEXT NOT NULL REFERENCES tileset_images(id) ON DELETE CASCADE,
-      firstgid INTEGER NOT NULL,
-      added_at TEXT NOT NULL,
-      UNIQUE(project_id, tileset_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS project_stamps (
-      id TEXT PRIMARY KEY NOT NULL,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      stamp_id TEXT NOT NULL REFERENCES stamps(id) ON DELETE CASCADE,
-      added_at TEXT NOT NULL,
-      UNIQUE(project_id, stamp_id)
-    );
   `;
 
 function ensureSqliteBaseSchema(sqlite) {

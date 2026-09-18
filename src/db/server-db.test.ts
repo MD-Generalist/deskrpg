@@ -200,8 +200,8 @@ test("server-db sqlite bootstraps base tables for a fresh empty database", () =>
   assert.ok(!tableNames.includes("tasks"), "2026-04 태스크 테이블은 신규 DB 에 만들지 않는다");
   assert.ok(!tableNames.includes("npc_reports"));
   assert.ok(tableNames.includes("meeting_minutes"));
-  assert.ok(tableNames.includes("map_templates"));
-  assert.ok(tableNames.includes("tileset_images"));
+  assert.ok(!tableNames.includes("map_templates"), "맵 에디터 표는 신규 DB 에 만들지 않는다");
+  assert.ok(!tableNames.includes("tileset_images"));
 
   const npcCols = sqlite.prepare("PRAGMA table_info(npcs)").all() as Array<{
     name: string;

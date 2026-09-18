@@ -26,7 +26,7 @@ export function buildPlacementRequest(
  *
  * 자리 **이동** 일 때 `npc:broadcast-add` 만 보내면 다른 화면은 옛 칸에 그대로 서 있다 —
  * 받는 쪽 `npc:added` 는 `if (this.npcSprites.some(n => n.id === id)) return;` 로
- * 이미 있는 NPC 를 무시하기 때문이다(GameScene). 그래서 이동은 먼저 빼고 다시 넣는다.
+ * 이미 있는 NPC 를 무시하기 때문이다(OfficeSimulation.addNpc). 그래서 이동은 먼저 빼고 다시 넣는다.
  * 첫 배치는 뺄 것이 없으므로 add 하나뿐이다.
  */
 export type PlacementBroadcastStep = "remove" | "add";

@@ -14,6 +14,7 @@ const { migrateNpcsToProfileOwnership } = require("./sqlite-npc-profile-ownershi
 const { ensureChatRoomTables } = require("./sqlite-chat-rooms.js");
 const { ensureKanbanCronBookkeeping } = require("./sqlite-kanban-cron-bookkeeping.js");
 const { dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js");
+const { retireMapEditor } = require("./sqlite-map-editor-drop.js");
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -375,6 +376,9 @@ function ensureSqliteCompatibility(sqlite) {
   ensureKanbanCronBookkeeping(sqlite);
   // 2026-04 태스크 시스템 폐기 — 옛 태스크·보고 테이블은 데이터째 지운다.
   dropLegacyTaskTables(sqlite);
+  // 맵 에디터 폐기 — 옛 외형을 오피스 룩으로 접고 맵 에디터 표 8개를 지운다.
+  // index.ts 의 동명 함수와 **같은 순서**를 지킨다.
+  retireMapEditor(sqlite);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",

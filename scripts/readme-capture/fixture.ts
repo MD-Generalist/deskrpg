@@ -4,7 +4,6 @@ import path from "node:path";
 import type { KanbanBoard } from "../../src/lib/hermes/deskrpg-plugin-types";
 
 import { OFFICE_LOOKS, officeLookAppearance } from "../../src/game/three/office-looks";
-import { ensureOfficeEnvironmentTemplate } from "../../src/lib/office-environment-template";
 
 export type FixtureApi = {
   request<T>(method: "GET" | "POST" | "PUT" | "PATCH", path: string, body?: unknown): Promise<T>;
@@ -58,6 +57,8 @@ const PROFILE_REGISTRATIONS = [
 ] as const;
 
 const CHANNEL_NAME = "Dante Labs Office";
+/** 캡처 채널의 환경. 배치는 서버가 코드에서 만들므로 ID 만 넘긴다. */
+const CHANNEL_ENVIRONMENT_ID = "trading";
 const REPORT_TITLE = "시네마틱 캡처 준비";
 
 function assertLoopbackUrl(rawUrl: string): void {
@@ -108,22 +109,6 @@ function findRosterNpc(npcs: RosterNpc[], profileName: "sophie" | "noah"): Roste
   );
   if (!npc) throw new Error(`${displayName} is missing from the channel roster`);
   return npc;
-}
-
-function fixtureApiAsFetch(api: FixtureApi): typeof globalThis.fetch {
-  return (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(input instanceof Request ? input.url : input.toString(), "http://fixture");
-    const method = (
-      init?.method ?? (input instanceof Request ? input.method : "GET")
-    ).toUpperCase();
-    if (method !== "GET" && method !== "POST" && method !== "PUT") {
-      throw new Error(`Unsupported fixture method: ${method}`);
-    }
-    const rawBody = init?.body;
-    const body = typeof rawBody === "string" && rawBody ? JSON.parse(rawBody) : undefined;
-    const data = await api.request(method, `${url.pathname}${url.search}`, body);
-    return Response.json(data);
-  }) as typeof globalThis.fetch;
 }
 
 export async function prepareFixture(
@@ -188,8 +173,6 @@ export async function prepareFixture(
   const group = groups.groups.find((entry) => entry.isDefault || entry.slug === "default");
   const groupId = requireId(group, "Default group");
 
-  const mapTemplateId = await ensureOfficeEnvironmentTemplate("trading", fixtureApiAsFetch(api));
-
   let channelId: string;
   if (registration.existing) {
     const existing = await api.request<ChannelsResponse>("GET", "/api/channels");
@@ -204,7 +187,7 @@ export async function prepareFixture(
               name: CHANNEL_NAME,
               description: "Hermes agents at work",
               isPublic: true,
-              mapTemplateId,
+              environmentId: CHANNEL_ENVIRONMENT_ID,
               groupId,
               gatewayConfig: { gatewayId },
             })
@@ -216,7 +199,7 @@ export async function prepareFixture(
       name: CHANNEL_NAME,
       description: "Hermes agents at work",
       isPublic: true,
-      mapTemplateId,
+      environmentId: CHANNEL_ENVIRONMENT_ID,
       groupId,
       gatewayConfig: { gatewayId },
     });

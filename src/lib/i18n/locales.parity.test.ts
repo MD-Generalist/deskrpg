@@ -27,7 +27,7 @@ test("all four locale files share an identical key set", () => {
   }
 });
 
-// 빈 문자열은 허용한다 — `mapEditor.help.footerHintBefore` 처럼 일부러 비운 값이 있다.
+// 빈 문자열은 허용한다 — 일부러 비운 값이 있을 수 있다.
 test("locale values are strings", () => {
   for (const [name, map] of Object.entries(LOCALES)) {
     for (const [key, value] of Object.entries(map)) {

@@ -81,16 +81,22 @@ ssh root@<VPS IP>
 cd /docker/deskrpg          # Docker Manager keeps each project in /docker/<project name>
 ```
 
-**A. ChatGPT login (Codex OAuth)** — no API key.
+**A. ChatGPT login (Codex OAuth)** — no API key. **Hermes signs in each employee (profile) separately**: since upstream [93889b77](https://github.com/NousResearch/hermes-agent/commit/93889b770d) a profile no longer inherits the default profile's `auth.json`. Logging in only as the default profile and then hiring `noah` left `noah` answering `No Codex credentials stored` (measured 2026-09-17), so log in **after** hiring, as that employee:
+
+1. Hire the employee in DeskRPG (step 5). Step ③ of the hire wizard shows **Sign in <name> on dashboard ↗**, which opens the dashboard's Keys page with that profile selected (`https://<project>-hermes.<TRAEFIK_HOST>/env?profile=<name>`). Without the dashboard, switch the profile selector at the top-left of the dashboard to the employee first.
+2. **ChatGPT or Codex Subscription** → **Login** → approve on OpenAI with the shown code. The Keys header turns to `1/8` for that profile.
+3. Back in the wizard press **Check sign-in**, pick `openai-codex` and a model (e.g. `gpt-5.5`), **Save**. No gateway restart is needed — the employee answered right after the login in the test.
+
+Repeat for every employee that should use the subscription. The CLI equivalent targets the profile through `HERMES_HOME`:
 
 ```bash
-docker compose exec hermes hermes auth add openai-codex --type oauth --no-browser
-# open the printed URL on any device, enter the code, approve
-docker compose exec hermes hermes config set model.provider openai-codex
-docker compose exec hermes hermes config set model.default gpt-5.5
+P=noah
+docker compose exec -e HERMES_HOME=/opt/data/profiles/$P hermes hermes auth add openai-codex --type oauth --no-browser
+docker compose exec -e HERMES_HOME=/opt/data/profiles/$P hermes hermes config set model.provider openai-codex
+docker compose exec -e HERMES_HOME=/opt/data/profiles/$P hermes hermes config set model.default gpt-5.5
 ```
 
-Skipping the two `config set` lines leaves Hermes on its default model (`anthropic/claude-opus-4.6`): Codex rejects it with `model is not supported when using Codex`, and if an OpenRouter key is also set Hermes keeps using OpenRouter. No restart needed; the login lives in `hermes-data` and survived Update in the test.
+Skipping the model lines leaves the profile on Hermes' default model (`anthropic/claude-opus-4.6`), which Codex rejects with `model is not supported when using Codex`. Logins live in `hermes-data` and survive Update.
 
 **B. API key** (filled in the Environment box before Deploy):
 

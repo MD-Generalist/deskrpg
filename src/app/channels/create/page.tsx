@@ -7,7 +7,6 @@ import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { ChevronRight } from "lucide-react";
 import OfficeEnvironmentPicker from "@/components/OfficeEnvironmentPicker";
-import { ensureOfficeEnvironmentTemplate } from "@/lib/office-environment-template";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import { CHANNEL_PASSWORD_MIN_LENGTH } from "@/lib/security-policy";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
@@ -225,13 +224,12 @@ function CreateChannelPageInner() {
     setError("");
 
     try {
-      const mapTemplateId = await ensureOfficeEnvironmentTemplate(environmentId);
       const payload: Record<string, unknown> = {
         name: name.trim(),
         description: description.trim() || null,
         groupId,
         isPublic,
-        mapTemplateId,
+        environmentId,
         password: isPublic ? undefined : password,
       };
 

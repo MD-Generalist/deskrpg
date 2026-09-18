@@ -24,9 +24,25 @@ const KOREAN_CAPTIONS = [
   "실시간 스몰토크",
   "에이전트 회의",
 ];
-const CURRENT_MAP_EDITOR_CLAIMS = [
-  /Build or upload your own office maps(?: with the browser-based map editor)?/i,
-  /브라우저 맵 에디터로 오피스 맵을 직접 만들거나 올립니다/,
+/**
+ * 맵 에디터는 제거됐다 — 현재 기능으로도, 예정 기능으로도 README 에 나오면 안 된다.
+ * 레거시 2D(Phaser·LPC 스프라이트) 자취도 같이 막는다. 공개 README 는 실제로 배포하는
+ * 것만 주장한다.
+ */
+const FORBIDDEN_CLAIMS: { pattern: RegExp; reason: string }[] = [
+  { pattern: /map editor/i, reason: "Map Editor was removed and must not appear in the README" },
+  { pattern: /맵 에디터/, reason: "맵 에디터는 제거됐다 — README 에 남기지 않는다" },
+  {
+    pattern: /Build or upload your own office maps/i,
+    reason: "map upload was removed with the map editor",
+  },
+  {
+    pattern: /오피스 맵을 직접 만들거나 올립니다/,
+    reason: "맵 업로드는 맵 에디터와 함께 제거됐다",
+  },
+  { pattern: /\bphaser\b/i, reason: "the Phaser runtime was removed" },
+  { pattern: /\bLPC\b/, reason: "LPC sprite assets were removed" },
+  { pattern: /assets\/spritesheets/, reason: "the spritesheet assets were removed" },
 ];
 
 type ProbeMedia = (file: string) => VideoProbe;
@@ -88,10 +104,12 @@ export async function verifyReadmes(
     throw new Error("README.md must mark https://deskrpg.com as a clickable live website");
   if (!korean.includes("웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)"))
     throw new Error("README.ko.md must mark https://deskrpg.com as a clickable live website");
-  if (CURRENT_MAP_EDITOR_CLAIMS.some((claim) => claim.test(english) || claim.test(korean)))
-    throw new Error("Map Editor must not be presented as a current capability");
-  if (!english.includes("Map Editor — Coming Later") || !korean.includes("맵 에디터 — 추후 제공"))
-    throw new Error("Both README files must mark Map Editor as coming later");
+  for (const { pattern, reason } of FORBIDDEN_CLAIMS)
+    for (const [label, readme] of [
+      ["README.md", english],
+      ["README.ko.md", korean],
+    ] as const)
+      if (pattern.test(readme)) throw new Error(`${label} must not mention ${pattern}: ${reason}`);
 
   for (const relativePath of RETIRED_GIF_PATHS) {
     try {

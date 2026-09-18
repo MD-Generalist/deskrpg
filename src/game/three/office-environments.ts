@@ -25,11 +25,7 @@ import {
   furnishCreativeStudio,
   type CreativeStudioPlacement,
 } from "./creative-studio-layout";
-import type {
-  TiledMap,
-  TiledObject,
-  TiledProperty,
-} from "../../components/map-editor/hooks/useMapEditor";
+import type { TiledMap, TiledObject, TiledProperty } from "../../lib/tiled-map";
 import { getObjectDimensions } from "../../lib/object-types";
 
 /**

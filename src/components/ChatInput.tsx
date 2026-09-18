@@ -97,7 +97,7 @@ export default function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Prevent Phaser from capturing keys while focused
+      // 포커스가 있는 동안 시뮬레이션이 키를 가로채지 않게 한다
       e.stopPropagation();
 
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

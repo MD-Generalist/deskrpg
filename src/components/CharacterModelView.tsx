@@ -3,24 +3,22 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import * as T from "three";
 import { createActor, cylinder } from "@/game/three/characters";
 import type { OfficeLook } from "@/game/three/office-looks";
-import { spritePalette } from "@/game/three/appearance";
 import { disposeTree } from "@/game/three/office-renderer";
 
+/** 룩 하나를 돌려 보는 작은 3D 무대. 색은 룩 정의에서 그대로 읽는다. */
 export default function CharacterModelView({
-  source,
+  look,
   size,
   direction,
   active,
   onUnavailable,
-  look,
   walking = true,
 }: {
-  source: HTMLCanvasElement | null;
+  look: OfficeLook;
   size: number;
   direction: string;
   active: boolean;
   onUnavailable: () => void;
-  look?: OfficeLook;
   walking?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null),
@@ -33,7 +31,7 @@ export default function CharacterModelView({
     failed.current = onUnavailable;
   }, [onUnavailable]);
   useEffect(() => {
-    if (!host.current || (!source && !look)) return;
+    if (!host.current) return;
     let renderer: T.WebGLRenderer;
     try {
       renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
@@ -47,15 +45,15 @@ export default function CharacterModelView({
     host.current.append(renderer.domElement);
     const scene = new T.Scene(),
       camera = new T.PerspectiveCamera(32, 1, 0.1, 20),
-      palette = spritePalette(source ?? undefined);
-    camera.position.set(2, 1.8, look ? 4.9 : 3.7);
-    camera.lookAt(0, look ? 1 : 0.8, 0);
+      palette = { skin: look.skin, hair: look.hair, legs: look.trousers };
+    camera.position.set(2, 1.8, 4.9);
+    camera.lookAt(0, 1, 0);
     scene.add(new T.HemisphereLight("#fff7e4", "#839b78", 2.5));
     const light = new T.DirectionalLight("#fff2d5", 3);
     light.position.set(2, 5, 4);
     scene.add(light);
     cylinder(scene, 0.65, 0.7, 0.1, "#d3bd96", 0, -0.08, 0);
-    const actor = createActor("character-preview", palette.shirt, 0, palette, look);
+    const actor = createActor("character-preview", look.shirt, 0, palette, look);
     scene.add(actor.root);
     let frame = 0;
     const render = (time: number) => {
@@ -81,6 +79,6 @@ export default function CharacterModelView({
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
-  }, [source, size, look]);
+  }, [size, look]);
   return <div ref={host} style={{ width: size, height: size }} aria-hidden="true" />;
 }

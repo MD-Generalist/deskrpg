@@ -1,4 +1,4 @@
-import type { TiledMap } from "../components/map-editor/hooks/useMapEditor";
+import type { TiledMap } from "../lib/tiled-map";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { clearMovementSegment, clearSegment, findPath } from "./navigation";
