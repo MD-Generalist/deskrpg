@@ -46,19 +46,22 @@ type Props = {
 
 function npcDetail(npc: NavigatorNpc, t: ReturnType<typeof useT>): string {
   if (!npc.active || npc.motion === "resting") return t("workspace.status.resting");
-  if (!npc.placed || npc.motion === "unplaced") return t("workspace.status.unplaced");
+  const prefix = npc.seatNumber
+    ? t("game.roster.seatNumber", { number: npc.seatNumber })
+    : t("game.roster.standing");
+  if (!npc.placed || npc.motion === "unplaced") return prefix;
   if (npc.motion === "waiting")
-    return t(
+    return `${prefix} · ${t(
       npc.calledByViewer ? "workspace.status.waitingForMe" : "workspace.status.waitingForOther",
-    );
-  if (npc.motion === "moving") return t("workspace.status.moving");
-  if (npc.response === "queued") return t("workspace.status.queued");
-  if (npc.response === "thinking") return t("workspace.status.thinking");
-  if (npc.response === "streaming") return t("workspace.status.streaming");
-  if (npc.response === "failed") return t("workspace.status.failed");
+    )}`;
+  if (npc.motion === "moving") return `${prefix} · ${t("workspace.status.moving")}`;
+  if (npc.response === "queued") return `${prefix} · ${t("workspace.status.queued")}`;
+  if (npc.response === "thinking") return `${prefix} · ${t("workspace.status.thinking")}`;
+  if (npc.response === "streaming") return `${prefix} · ${t("workspace.status.streaming")}`;
+  if (npc.response === "failed") return `${prefix} · ${t("workspace.status.failed")}`;
   return npc.role
-    ? `${npc.role} · ${t("workspace.status.available")}`
-    : t("workspace.status.available");
+    ? `${prefix} · ${npc.role} · ${t("workspace.status.available")}`
+    : `${prefix} · ${t("workspace.status.available")}`;
 }
 
 export default function WorkspaceNavigator(props: Props) {
@@ -207,15 +210,6 @@ export default function WorkspaceNavigator(props: Props) {
               className="w-full rounded px-3 py-2 text-left text-sm hover:bg-surface-raised"
             >
               {t("npc.return")}
-            </button>
-          )}
-          {props.isOwner && selectedNpc.active && !selectedNpc.placed && (
-            <button
-              role="menuitem"
-              onClick={() => action("place")}
-              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-surface-raised"
-            >
-              {t("workspace.action.place")}
             </button>
           )}
           {props.isOwner && (

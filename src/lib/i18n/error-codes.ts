@@ -125,6 +125,8 @@ export type ErrorCode =
   | "failed_to_delete_npc"
   | "npc_in_meeting"
   | "unsupported_npc_field"
+  | "not_a_desk_seat"
+  | "map_has_no_desk_seats"
   | "internal_server_error"
   | "failed_to_fetch_projects"
   | "project_name_required"
@@ -297,6 +299,8 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   failed_to_delete_npc: "errors.failedToDeleteNpc",
   npc_in_meeting: "errors.npcInMeeting",
   unsupported_npc_field: "errors.unsupportedNpcField",
+  not_a_desk_seat: "errors.notADeskSeat",
+  map_has_no_desk_seats: "errors.mapHasNoDeskSeats",
   internal_server_error: "errors.internalServerError",
   failed_to_fetch_projects: "errors.failedToFetchProjects",
   project_name_required: "errors.projectNameRequired",

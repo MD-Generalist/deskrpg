@@ -98,6 +98,8 @@ COPY --from=builder /app/src/lib/chat-response.ts ./src/lib/chat-response.ts
 COPY --from=builder /app/src/lib/npc-projection.ts ./src/lib/npc-projection.ts
 # npc:set-active 소켓 핸들러가 출근/퇴근 토글에 쓴다.
 COPY --from=builder /app/src/lib/npc-roster.ts ./src/lib/npc-roster.ts
+COPY --from=builder /app/src/lib/npc-seating.ts ./src/lib/npc-seating.ts
+COPY --from=builder /app/src/lib/seat-assignment.ts ./src/lib/seat-assignment.ts
 # NOTE: src/lib/runtime-paths.ts (ESM) is distinct from src/lib/runtime-paths.js
 # (CJS, copied above for openclaw-gateway.js's require()). db/index.ts imports the
 # extensionless "../lib/runtime-paths", which TypeScript resolves to the .ts file.

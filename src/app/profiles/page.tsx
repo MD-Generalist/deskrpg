@@ -38,7 +38,7 @@ function ProfilesPageContent() {
   const router = useRouter();
   const requestedGateway = searchParams.get("gateway");
   // 게임 화면의 "새 직원"·"프로필 설정" 이 이 화면으로 들어온다. 만들고 나면 왔던 자리로
-  // 돌려보내야 사용자가 다시 채널을 찾아 들어가지 않는다(`assignSeat=1` 로 자리 지정까지 잇는다).
+  // 돌려보내야 사용자가 다시 채널을 찾아 들어가지 않는다.
   const wantsCreate = searchParams.get("new") === "1";
   const returnTo = backLinkTarget(searchParams.get("returnTo"));
   const { locale } = useLocale();

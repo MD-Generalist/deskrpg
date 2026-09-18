@@ -10,6 +10,8 @@ import { db, channelMembers, channels } from "@/db";
 import { getUserId } from "@/lib/internal-rpc";
 import { getGatewayRuntimeStateForChannel } from "@/lib/gateway-resources";
 import { selectChannelNpcs } from "@/lib/npc-projection";
+import { channelSeats } from "@/lib/npc-seating";
+import { seatNumberAt } from "@/lib/seat-assignment";
 import { resolveMeetingMinutesAccess } from "../meetings/meeting-access";
 
 export async function GET(req: NextRequest) {
@@ -75,6 +77,9 @@ export async function GET(req: NextRequest) {
     }
 
     const list = await selectChannelNpcs(channelId, { roster });
+    // roster 는 "고용 명부" 화면이 자리 번호를 보여줘야 한다 — 맵용 기본 응답은 좌석을
+    // 계산할 필요가 없으니 여기서만 채널 맵을 한 번 더 읽는다.
+    const seats = roster ? await channelSeats(channelId) : null;
     const [mapChannel] = !roster
       ? await db
           .select({ mapData: channels.mapData })
@@ -106,7 +111,12 @@ export async function GET(req: NextRequest) {
         adapterType: npc.adapterType,
         hermesProfileId: npc.hermesProfileId,
         ...(roster
-          ? { active: npc.active, placed: npc.positionX !== null, profile: npc.profile }
+          ? {
+              active: npc.active,
+              placed: npc.positionX !== null,
+              profile: npc.profile,
+              seatNumber: seats ? seatNumberAt(seats, npc.positionX, npc.positionY) : null,
+            }
           : {}),
       };
     });
