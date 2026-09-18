@@ -24,7 +24,7 @@ export function employeesHref(
   options: { create?: boolean; returnTo?: string } = {},
 ): string {
   const params = new URLSearchParams({ gateway: gatewayId });
-  if (options.create) params.set("new", "1");
   if (options.returnTo) params.set("returnTo", options.returnTo);
-  return `/profiles?${params.toString()}`;
+  // 채용은 전용 페이지가 전담한다(docs/standards.md "1기능 1페이지").
+  return `/profiles${options.create ? "/new" : ""}?${params.toString()}`;
 }

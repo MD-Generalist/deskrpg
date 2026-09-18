@@ -8,6 +8,7 @@ import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { useLocale, useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { backLinkTarget } from "@/app/gateways/return-target";
+import { hirePageHref } from "./hire-navigation";
 
 type Gateway = {
   id: string;
@@ -37,7 +38,7 @@ function ProfilesPageContent() {
   const requestedGateway = searchParams.get("gateway");
   // 게임 화면의 "새 직원"·"프로필 설정" 이 이 화면으로 들어온다. 만들고 나면 왔던 자리로
   // 돌려보내야 사용자가 다시 채널을 찾아 들어가지 않는다(`assignSeat=1` 로 자리 지정까지 잇는다).
-  const autoOpenCreate = searchParams.get("new") === "1";
+  const wantsCreate = searchParams.get("new") === "1";
   const returnTo = backLinkTarget(searchParams.get("returnTo"));
   const { locale } = useLocale();
   const t = useT();
@@ -88,6 +89,12 @@ function ProfilesPageContent() {
   }, [attempt, requestedGateway, t]);
 
   const selected = gateways.find((gateway) => gateway.id === selectedId);
+
+  // `?new=1` 은 예전 주소다(게임의 "새 직원" 이 쓰던 형태). 채용은 전용 페이지가 전담하므로
+  // 그대로 넘긴다 — 목록 화면에서 마법사를 다시 펼치지 않는다.
+  useEffect(() => {
+    if (wantsCreate && selectedId) router.replace(hirePageHref(selectedId, { returnTo }));
+  }, [returnTo, router, selectedId, wantsCreate]);
   return (
     <div className="theme-web min-h-screen bg-bg text-text p-6 md:p-8">
       <div className="max-w-6xl mx-auto space-y-7">
@@ -228,15 +235,7 @@ function ProfilesPageContent() {
                   gatewayId={selected.id}
                   initialAppearanceProfile={searchParams.get("profile")}
                   canRegister={selected.isOwner === true}
-                  autoOpenCreate={autoOpenCreate && selected.isOwner === true}
-                  onCreated={
-                    returnTo
-                      ? () =>
-                          router.push(
-                            `${returnTo}${returnTo.includes("?") ? "&" : "?"}assignSeat=1`,
-                          )
-                      : undefined
-                  }
+                  returnTo={returnTo}
                 />
               </section>
             )}

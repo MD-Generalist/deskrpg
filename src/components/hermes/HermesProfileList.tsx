@@ -16,7 +16,7 @@ import {
 } from "./discovery-rows";
 import type { CharacterAppearance } from "@/lib/lpc-registry";
 
-import NpcHireWizard from "./NpcHireWizard";
+import { hirePageHref } from "@/app/profiles/hire-navigation";
 import ProfileAppearanceEditor from "./ProfileAppearanceEditor";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
@@ -35,7 +35,8 @@ interface HermesProfileListProps {
   /** Registering a profile requires gateway ownership; a shared-access user can only view + test. */
   canRegister: boolean;
   /** `?new=1` 로 들어왔을 때 고용 마법사를 바로 연다. */
-  autoOpenCreate?: boolean;
+  /** 게임 화면에서 들어왔을 때 돌아갈 자리. 채용 페이지 링크에 그대로 실어 보낸다. */
+  returnTo?: string | null;
   initialAppearanceProfile?: string | null;
   /** 프로필이 실제로 하나 생겼을 때만 부른다(닫기·삭제는 해당 없음). */
   onCreated?: () => void;
@@ -44,7 +45,7 @@ interface HermesProfileListProps {
 export default function HermesProfileList({
   gatewayId,
   canRegister,
-  autoOpenCreate = false,
+  returnTo = null,
   initialAppearanceProfile,
   onCreated,
 }: HermesProfileListProps) {
@@ -89,7 +90,6 @@ export default function HermesProfileList({
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const [registering, setRegistering] = useState(false);
   /** "인격" 버튼이 지정한 프로필 — 마법사를 그 프로필의 ②단계로 바로 연다. */
-  const [wizardProfile, setWizardProfile] = useState<string | null>(null);
   const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>(
     [],
   );
@@ -102,11 +102,6 @@ export default function HermesProfileList({
   // 쓰고, 오래됐거나 없으면 그때만 `/test` 를 쏜다(원격 왕복 2회, 최대 10초) — 예전엔
   // 이 화면을 열 때마다(마법사를 열지 않아도) 무조건 다시 찔렀다.
   const [pluginStatus, setPluginStatus] = useState<PluginStatus>("unknown");
-  // 고용 마법사 ③ 이 "이 직원으로 로그인" 링크를 만드는 데 쓴다. 소유자에게만 값이 온다.
-  const [dashboardUrl, setDashboardUrl] = useState<string | null>(null);
-  // `?new=1` 은 "지금 새 인격을 만들러 왔다" 는 뜻이다 — 소유자가 아니면 마법사
-  // 자체가 없으므로 열지 않는다.
-  const [wizardOpen, setWizardOpen] = useState(autoOpenCreate && canRegister);
 
   const reprobePlugin = useCallback(async () => {
     try {
@@ -134,12 +129,8 @@ export default function HermesProfileList({
           ): g is {
             pluginStatus: string | null;
             pluginCheckedAt: string | Date | null;
-            dashboardUrl?: string | null;
           } => !!g && typeof g === "object" && (g as { id?: unknown }).id === gatewayId,
         );
-        if (!cancelled) {
-          setDashboardUrl(typeof mine?.dashboardUrl === "string" ? mine.dashboardUrl : null);
-        }
         const cached = resolvePluginStatusFromCache({
           pluginStatus: mine?.pluginStatus ?? null,
           pluginCheckedAt: mine?.pluginCheckedAt ?? null,
@@ -359,49 +350,16 @@ export default function HermesProfileList({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("gateway.profile.title")}</h2>
         {canRegister && (
-          // I-3: 열려 있을 때는 이 버튼을 비활성화한다. 이전엔 토글(prev => !prev)이라
-          // 열린 채로 한 번 더 누르면 마법사의 "프로필이 남습니다" 확인 없이 그대로
-          // 언마운트됐다 — 닫는 유일한 경로는 이제 마법사 자신의 "닫기"(내부에서
-          // requestClose 가 확인을 거친다)뿐이다.
-          <button
-            type="button"
-            disabled={wizardOpen}
-            onClick={() => setWizardOpen(true)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+          // 마법사는 `/profiles/new` 한 페이지가 전담한다 — 목록 화면은 링크만 갖는다
+          // (docs/standards.md "1기능 1페이지"). 예전에는 이 버튼이 목록 위에 4단계를 펼쳤다.
+          <Link
+            href={hirePageHref(gatewayId, { returnTo })}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
           >
             {t("hermes.wizard.openButton")}
-          </button>
+          </Link>
         )}
       </div>
-
-      {wizardOpen && (
-        <div className="mb-4">
-          <NpcHireWizard
-            gatewayId={gatewayId}
-            pluginStatus={pluginStatus}
-            existingProfiles={profiles.map((p) => p.profileName)}
-            initialProfile={wizardProfile}
-            dashboardUrl={dashboardUrl}
-            onProfileCreated={() => {
-              // 마법사가 열려 있는 동안에도 목록을 맞춘다 — 닫을 때까지 기다리면
-              // 방금 만든 직원이 목록에서 빠져 "등록된 프로필이 없습니다" 가 남는다.
-              void loadProfiles().then(() => onCreated?.());
-            }}
-            localDiscovery={!!discovery?.available && !!discovery?.optedIn}
-            onDone={() => {
-              setWizardOpen(false);
-              setWizardProfile(null);
-              // 마법사의 `onDone` 은 "만들었다" 가 아니라 "끝났다" 다 — 그냥 닫아도,
-              // 만든 프로필을 도로 지워도 같은 콜백이 온다. 목록이 실제로 늘었을
-              // 때만 생성으로 친다(안 그러면 닫기만 해도 화면이 튕겨 나간다).
-              const before = profiles.length;
-              void loadProfiles().then((rows) => {
-                if (rows.length > before) onCreated?.();
-              });
-            }}
-          />
-        </div>
-      )}
 
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
@@ -429,16 +387,15 @@ export default function HermesProfileList({
                       {t(key)}
                     </span>
                     {canRegister && pluginStatus === "plugin_ready" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWizardProfile(profile.profileName);
-                          setWizardOpen(true);
-                        }}
+                      <Link
+                        href={hirePageHref(gatewayId, {
+                          profile: profile.profileName,
+                          returnTo,
+                        })}
                         className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
                       >
                         {t("gateway.profile.persona")}
-                      </button>
+                      </Link>
                     )}
                     <button
                       type="button"

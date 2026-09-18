@@ -30,9 +30,9 @@ test("내 캐릭터가 사이드바에 있다", () => {
 
 test("직원 화면 주소는 게이트웨이와 이어서 할 일을 함께 싣는다", () => {
   assert.equal(employeesHref("gw-1"), "/profiles?gateway=gw-1");
-  assert.equal(employeesHref("gw-1", { create: true }), "/profiles?gateway=gw-1&new=1");
+  assert.equal(employeesHref("gw-1", { create: true }), "/profiles/new?gateway=gw-1");
   assert.equal(
     employeesHref("gw-1", { create: true, returnTo: "/game?channelId=c1&characterId=x" }),
-    "/profiles?gateway=gw-1&new=1&returnTo=%2Fgame%3FchannelId%3Dc1%26characterId%3Dx",
+    "/profiles/new?gateway=gw-1&returnTo=%2Fgame%3FchannelId%3Dc1%26characterId%3Dx",
   );
 });
