@@ -104,62 +104,76 @@ test("retries oversize palettes in order, stops on success and reports final fai
   assert.throws(() => selectPalette(() => 12_345_678), /12345678/);
 });
 
-test("real FFmpeg outputs retain exact cadence and loop metadata; missing batch cannot touch committed files", () => {
-  const base = path.resolve(".artifacts/readme-capture/tests");
-  fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, "media-"));
-  const raw = path.join(root, "raw.webm");
-  const master = path.join(root, "master.mp4");
-  const palette = path.join(root, "palette.png");
-  const gif = path.join(root, "loop.gif");
-  const run = (args: string[]) =>
-    execFileSync("ffmpeg", ["-v", "error", "-y", ...args], { stdio: "pipe" });
-  run(["-f", "lavfi", "-i", "color=c=navy:s=1280x720:r=25:d=10", "-c:v", "libvpx-vp9", raw]);
-  const timing = { startSeconds: 0.5, durationSeconds: 9 };
-  run(masterArgs(raw, timing, master));
-  run(paletteArgs(master, { startSeconds: 0, durationSeconds: 9 }, palette, 192));
-  run(gifArgs(master, { startSeconds: 0, durationSeconds: 9 }, palette, gif));
-  assert.equal(probeMedia(master).fps, 30);
-  assert.equal(probeMedia(master).frames, 270);
-  const probe = probeMedia(gif);
-  validateProbe("small-talk", probe, fs.statSync(gif).size);
-  assert.equal(probe.fps, 12);
-  assert.equal(probe.duration, 9);
-  assert.equal(probe.frames, 108);
-  const committed = path.join(root, "public/readme/deskrpg-home-commute.gif");
-  fs.mkdirSync(path.dirname(committed), { recursive: true });
-  fs.writeFileSync(committed, "previous committed asset");
-  assert.throws(() => installCandidates(root));
-  assert.equal(fs.readFileSync(committed, "utf8"), "previous committed asset");
-  const candidates = path.join(root, ".artifacts/readme-capture/candidates");
-  fs.mkdirSync(candidates, { recursive: true });
-  for (const scene of SCENES) fs.copyFileSync(gif, path.join(candidates, `${scene}.gif`));
-  const finite = fs.readFileSync(gif);
-  const extension = finite.indexOf(Buffer.from("NETSCAPE2.0"));
-  assert.ok(extension >= 0);
-  finite.writeUInt16LE(2, extension + 13);
-  fs.writeFileSync(path.join(candidates, "ai-meeting.gif"), finite);
-  assert.equal(probeMedia(path.join(candidates, "ai-meeting.gif")).loop, 2);
-  assert.throws(() => installCandidates(root), /infinitely looping/);
-  assert.equal(fs.readFileSync(committed, "utf8"), "previous committed asset");
-  fs.copyFileSync(gif, path.join(candidates, "ai-meeting.gif"));
-  run([
-    "-i",
-    master,
-    "-frames:v",
-    "1",
-    "-update",
-    "1",
-    path.join(candidates, "home-screenshot.png"),
-  ]);
-  const sheet = probeMedia(buildContactSheet(root));
-  assert.equal(sheet.width, 2880);
-  assert.equal(sheet.height, 2160);
-  installCandidates(root);
-  for (const scene of SCENES)
-    assert.deepEqual(
-      fs.readFileSync(path.join(root, `public/readme/deskrpg-${scene}.gif`)),
-      fs.readFileSync(gif),
-    );
-  assert.equal(probeMedia(path.join(root, "public/readme/home-screenshot.png")).width, 1280);
-});
+/** ffmpeg 가 없는 곳(릴리스 CI 러너)에서는 이 검사를 건너뛴다 — 나머지 인자 계산은 그대로 돈다. */
+const hasFfmpeg = (() => {
+  try {
+    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+test(
+  "real FFmpeg outputs retain exact cadence and loop metadata; missing batch cannot touch committed files",
+  { skip: hasFfmpeg ? false : "ffmpeg 없음" },
+  () => {
+    const base = path.resolve(".artifacts/readme-capture/tests");
+    fs.mkdirSync(base, { recursive: true });
+    const root = fs.mkdtempSync(path.join(base, "media-"));
+    const raw = path.join(root, "raw.webm");
+    const master = path.join(root, "master.mp4");
+    const palette = path.join(root, "palette.png");
+    const gif = path.join(root, "loop.gif");
+    const run = (args: string[]) =>
+      execFileSync("ffmpeg", ["-v", "error", "-y", ...args], { stdio: "pipe" });
+    run(["-f", "lavfi", "-i", "color=c=navy:s=1280x720:r=25:d=10", "-c:v", "libvpx-vp9", raw]);
+    const timing = { startSeconds: 0.5, durationSeconds: 9 };
+    run(masterArgs(raw, timing, master));
+    run(paletteArgs(master, { startSeconds: 0, durationSeconds: 9 }, palette, 192));
+    run(gifArgs(master, { startSeconds: 0, durationSeconds: 9 }, palette, gif));
+    assert.equal(probeMedia(master).fps, 30);
+    assert.equal(probeMedia(master).frames, 270);
+    const probe = probeMedia(gif);
+    validateProbe("small-talk", probe, fs.statSync(gif).size);
+    assert.equal(probe.fps, 12);
+    assert.equal(probe.duration, 9);
+    assert.equal(probe.frames, 108);
+    const committed = path.join(root, "public/readme/deskrpg-home-commute.gif");
+    fs.mkdirSync(path.dirname(committed), { recursive: true });
+    fs.writeFileSync(committed, "previous committed asset");
+    assert.throws(() => installCandidates(root));
+    assert.equal(fs.readFileSync(committed, "utf8"), "previous committed asset");
+    const candidates = path.join(root, ".artifacts/readme-capture/candidates");
+    fs.mkdirSync(candidates, { recursive: true });
+    for (const scene of SCENES) fs.copyFileSync(gif, path.join(candidates, `${scene}.gif`));
+    const finite = fs.readFileSync(gif);
+    const extension = finite.indexOf(Buffer.from("NETSCAPE2.0"));
+    assert.ok(extension >= 0);
+    finite.writeUInt16LE(2, extension + 13);
+    fs.writeFileSync(path.join(candidates, "ai-meeting.gif"), finite);
+    assert.equal(probeMedia(path.join(candidates, "ai-meeting.gif")).loop, 2);
+    assert.throws(() => installCandidates(root), /infinitely looping/);
+    assert.equal(fs.readFileSync(committed, "utf8"), "previous committed asset");
+    fs.copyFileSync(gif, path.join(candidates, "ai-meeting.gif"));
+    run([
+      "-i",
+      master,
+      "-frames:v",
+      "1",
+      "-update",
+      "1",
+      path.join(candidates, "home-screenshot.png"),
+    ]);
+    const sheet = probeMedia(buildContactSheet(root));
+    assert.equal(sheet.width, 2880);
+    assert.equal(sheet.height, 2160);
+    installCandidates(root);
+    for (const scene of SCENES)
+      assert.deepEqual(
+        fs.readFileSync(path.join(root, `public/readme/deskrpg-${scene}.gif`)),
+        fs.readFileSync(gif),
+      );
+    assert.equal(probeMedia(path.join(root, "public/readme/home-screenshot.png")).width, 1280);
+  },
+);

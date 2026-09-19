@@ -7,7 +7,7 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
-## [2026.920.1] - 2026-09-20
+## [2026.920.2] - 2026-09-20
 
 ### Added
 
@@ -22,6 +22,7 @@ GitHub Releases will be written later at actual release time.
 - Korean UI says "오피스" everywhere (was a mix of 채널 and 사무실).
 - New 3D miniature logo rendered from the same three.js model as the sidebar headquarters, with a simplified favicon that reads at 16px.
 - Web screens use the Dante Labs brand v2 tokens (cream surfaces, navy text, 8px radius cap, navy-tinted shadows); the office green stays as the single product accent.
+- Release note: `2026.920.1` was tagged but never published — its release job failed before npm/GHCR upload.
 - One page frame for every workspace screen — the same padding and max width instead of per-page values.
 
 ## [2026.9.19] - 2026-09-15
