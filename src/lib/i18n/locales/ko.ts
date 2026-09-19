@@ -307,7 +307,7 @@ const ko: Record<string, string> = {
   "hermes.wizard.profile.copyAllApiKeysHint":
     "끄면 기본 프로필이 쓰는 AI 모델의 키만 물려받습니다. 켜도 GitHub·OAuth 같은 범용 토큰은 복사하지 않습니다.",
   "hermes.wizard.profile.cloneFailed":
-    "기본 프로필 설정을 물려받지 못했습니다. ③ 에서 AI 모델을 직접 고르세요.",
+    "기본 프로필 설정을 물려받지 못했습니다. ④ 에서 AI 모델을 직접 고르세요.",
   "hermes.wizard.locked.needsProfile": "먼저 ① 에서 프로필을 만드세요",
   "hermes.wizard.config.advanced": "도구·스킬 (고급)",
   "hermes.wizard.result.attended": "'{name}' 이(가) 채널 {count}곳에 출근했습니다.",
@@ -316,7 +316,10 @@ const ko: Record<string, string> = {
   "hermes.wizard.back": "이전",
   "hermes.wizard.step.profile": "① 프로필",
   "hermes.wizard.step.identity": "② 인격",
-  "hermes.wizard.step.config": "③ AI 모델",
+  "hermes.wizard.step.appearance": "③ 외형",
+  "hermes.wizard.appearance.saved": "외형을 저장했습니다.",
+  "hermes.wizard.appearance.loadFailed": "직원 정보를 불러오지 못했습니다.",
+  "hermes.wizard.step.config": "④ AI 모델",
   "hermes.wizard.step.installingService": "게이트웨이 서비스 등록",
   "hermes.wizard.step.updatingPlugin": "DeskRPG 플러그인 갱신",
   "hermes.wizard.step.settingTimezone": "게이트웨이 시간대 설정",

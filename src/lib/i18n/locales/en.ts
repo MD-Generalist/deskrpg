@@ -310,7 +310,7 @@ const en: Record<string, string> = {
   "hermes.wizard.profile.copyAllApiKeysHint":
     "Off: only the keys of the AI models the default profile uses. On: every API-key provider key, never general or OAuth tokens such as GitHub.",
   "hermes.wizard.profile.cloneFailed":
-    "Couldn't copy the default profile's settings. Pick the AI model in ③.",
+    "Couldn't copy the default profile's settings. Pick the AI model in ④.",
   "hermes.wizard.locked.needsProfile": "Create the profile in ① first",
   "hermes.wizard.config.advanced": "Tools & skills (advanced)",
   "hermes.wizard.result.attended": "'{name}' has joined {count} channel(s).",
@@ -319,7 +319,10 @@ const en: Record<string, string> = {
   "hermes.wizard.back": "Back",
   "hermes.wizard.step.profile": "① Profile",
   "hermes.wizard.step.identity": "② Identity",
-  "hermes.wizard.step.config": "③ AI model",
+  "hermes.wizard.step.appearance": "③ Appearance",
+  "hermes.wizard.appearance.saved": "Appearance saved.",
+  "hermes.wizard.appearance.loadFailed": "Couldn't load this employee.",
+  "hermes.wizard.step.config": "④ AI model",
   "hermes.wizard.step.installingService": "Register the gateway service",
   "hermes.wizard.step.updatingPlugin": "Update the DeskRPG plugin",
   "hermes.wizard.step.settingTimezone": "Set the gateway time zone",

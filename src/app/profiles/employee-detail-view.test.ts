@@ -35,6 +35,6 @@ test("삭제 뒤 알림은 서버의 deletedNpcs·channels 를 그대로 읽는�
 });
 
 test("공유받은 사용자에게는 인격·외형·계정 편집을 보이지 않는다", () => {
-  assert.deepEqual(visibleSections(true), ["status", "persona", "appearance", "account"]);
+  assert.deepEqual(visibleSections(true), ["status", "persona", "account"]);
   assert.deepEqual(visibleSections(false), ["status"]);
 });

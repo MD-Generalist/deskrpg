@@ -9,11 +9,11 @@ import {
 } from "./hire-wizard-steps";
 
 describe("availableSteps — 축소 사다리", () => {
-  it("플러그인이 있고 프로필이 있으면 3단 전부 열린다 — ④ 배치는 없다", () => {
+  it("플러그인이 있고 프로필이 있으면 4단 전부 열린다 — ① 프로필 ② 인격 ③ 외형 ④ AI 모델", () => {
     const steps = availableSteps("plugin_ready", false, true);
     assert.deepEqual(
       steps.map((s) => s.step),
-      ["profile", "identity", "config"],
+      ["profile", "identity", "appearance", "config"],
     );
     assert.ok(steps.every((s) => s.enabled));
   });
@@ -28,6 +28,13 @@ describe("availableSteps — 축소 사다리", () => {
     assert.equal(byStep.config.enabled, false);
     assert.equal(byStep.identity.lockedReason, "hermes.wizard.locked.needsProfile");
     assert.equal(byStep.config.lockedReason, "hermes.wizard.locked.needsProfile");
+    assert.equal(byStep.appearance.enabled, false);
+    assert.equal(byStep.appearance.lockedReason, "hermes.wizard.locked.needsProfile");
+  });
+
+  it("외형은 플러그인과 무관하다 — 프로필만 있으면 플러그인이 없어도 열린다", () => {
+    const steps = availableSteps("plugin_absent", true, true);
+    assert.equal(steps.find((s) => s.step === "appearance")!.enabled, true);
   });
 
   it("플러그인이 없고 로컬 발견이 되면 인격·AI 모델만 잠긴다", () => {
@@ -88,9 +95,16 @@ describe("identityDecision — 사람이 쓴 인격을 모르고 지우지 않�
 });
 
 describe("nextStep", () => {
-  it("잠긴 단계는 건너뛴다 — 뒤에 열린 단계가 없으면 끝이다", () => {
+  it("잠긴 단계는 건너뛴다", () => {
     const steps = availableSteps("plugin_absent", true, true);
-    assert.equal(nextStep("profile", steps), null);
+    assert.equal(nextStep("profile", steps), "appearance");
+    assert.equal(nextStep("appearance", steps), null);
+  });
+
+  it("② 다음은 ③ 외형, ③ 다음은 ④ AI 모델이다", () => {
+    const steps = availableSteps("plugin_ready", false, true);
+    assert.equal(nextStep("identity", steps), "appearance");
+    assert.equal(nextStep("appearance", steps), "config");
   });
 
   it("① 다음은 ② 다", () => {
@@ -98,7 +112,7 @@ describe("nextStep", () => {
     assert.equal(nextStep("profile", steps), "identity");
   });
 
-  it("③ AI 모델이 마지막 단계다", () => {
+  it("④ AI 모델이 마지막 단계다", () => {
     const steps = availableSteps("plugin_ready", false, true);
     assert.equal(nextStep("config", steps), null);
   });

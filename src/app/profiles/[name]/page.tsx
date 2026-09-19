@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import NpcHireWizard from "@/components/hermes/NpcHireWizard";
-import ProfileAppearanceEditor from "@/components/hermes/ProfileAppearanceEditor";
 import { profileStatusLabel } from "@/components/hermes/profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "@/components/hermes/profile-status-style";
 import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
@@ -274,7 +273,7 @@ function EmployeeDetailContent() {
             {sections.includes("persona") && (
               <section className="rounded-xl border border-border bg-surface p-5">
                 <NpcHireWizard
-                  title={ko ? "인격·AI 모델" : "Persona & AI model"}
+                  title={ko ? "인격·외형·AI 모델" : "Persona, appearance & AI model"}
                   gatewayId={gatewayId}
                   pluginStatus={pluginStatus}
                   existingProfiles={allNames}
@@ -283,21 +282,6 @@ function EmployeeDetailContent() {
                   localDiscovery={false}
                   canManageProviderAuth={canEdit}
                   onDone={() => void loadProfile()}
-                />
-              </section>
-            )}
-
-            {sections.includes("appearance") && (
-              <section className="rounded-xl border border-border bg-surface p-5">
-                <h2 className="text-lg font-semibold">{t("gateway.profile.appearance")}</h2>
-                <ProfileAppearanceEditor
-                  gatewayId={gatewayId}
-                  profileId={profile.id}
-                  initialAppearance={profile.appearance ?? null}
-                  onSaved={() => {
-                    setNotice(ko ? "직원 외형을 저장했습니다." : "Appearance saved.");
-                    void loadProfile();
-                  }}
                 />
               </section>
             )}

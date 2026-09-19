@@ -28,9 +28,10 @@ export function deletedNoticeFrom(data: unknown): { npcs: number; channels: numb
   return { npcs: Math.trunc(npcs), channels: Number.isFinite(channels) ? Math.trunc(channels) : 0 };
 }
 
-/** 소유자만 인격·외형·계정·삭제를 만진다. 공유받은 사용자는 상태 확인까지다. */
-export function visibleSections(
-  isOwner: boolean,
-): ReadonlyArray<"status" | "persona" | "appearance" | "account"> {
-  return isOwner ? ["status", "persona", "appearance", "account"] : ["status"];
+/**
+ * 소유자만 인격·외형·AI 모델·계정·삭제를 만진다. 공유받은 사용자는 상태 확인까지다.
+ * 외형은 따로 두지 않는다 — 마법사의 ③ 외형 단계가 그 편집기다(같은 편집기가 두 번 보였다).
+ */
+export function visibleSections(isOwner: boolean): ReadonlyArray<"status" | "persona" | "account"> {
+  return isOwner ? ["status", "persona", "account"] : ["status"];
 }
