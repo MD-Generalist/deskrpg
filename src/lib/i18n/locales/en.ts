@@ -192,6 +192,8 @@ const en: Record<string, string> = {
   "admin.groups.approve": "Approve",
   "admin.groups.reject": "Reject",
   "admin.groups.savePermission": "Save",
+  "admin.groups.role.group_admin": "Group admin",
+  "admin.groups.role.member": "Member",
   "admin.groups.permission.create_channel.label": "Create channels",
   "admin.groups.permission.create_channel.description": "Can create new offices in this group",
   "admin.groups.permission.manage_group_members.label": "Manage members",

@@ -189,6 +189,8 @@ const ko: Record<string, string> = {
   "admin.groups.approve": "승인",
   "admin.groups.reject": "거절",
   "admin.groups.savePermission": "저장",
+  "admin.groups.role.group_admin": "그룹 관리자",
+  "admin.groups.role.member": "멤버",
   "admin.groups.permission.create_channel.label": "채널 만들기",
   "admin.groups.permission.create_channel.description": "이 그룹에 새 사무실을 만들 수 있습니다",
   "admin.groups.permission.manage_group_members.label": "멤버 관리",

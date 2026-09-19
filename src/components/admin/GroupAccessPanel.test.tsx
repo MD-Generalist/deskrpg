@@ -10,7 +10,19 @@ import { I18nProvider } from "@/lib/i18n";
 import GroupAccessPanel from "./GroupAccessPanel";
 
 const responses: Record<string, unknown> = {
-  members: { members: [] },
+  members: {
+    members: [
+      {
+        userId: "u2",
+        role: "group_admin",
+        approvedBy: null,
+        approvedAt: null,
+        joinedAt: null,
+        loginId: "dev3",
+        nickname: "dev3",
+      },
+    ],
+  },
   invites: { invites: [] },
   "join-requests": { joinRequests: [] },
   permissions: { permissions: [] },
@@ -64,7 +76,15 @@ test("권한 행은 원시 키 대신 사람이 읽는 이름과 번역된 값�
     assert.match(text, /멤버 관리/);
     assert.match(text, /상속/);
     assert.match(text, /거부/);
-    for (const raw of ["create_channel", "manage_group_members", "inherit", "deny"]) {
+    assert.match(text, /그룹 관리자/);
+    for (const raw of [
+      "create_channel",
+      "manage_group_members",
+      "inherit",
+      "deny",
+      "group_admin",
+      "member",
+    ]) {
       assert.ok(!text.includes(raw), `원시 값 "${raw}" 가 화면에 보인다`);
     }
   } finally {

@@ -188,6 +188,8 @@ const zh: Record<string, string> = {
   "admin.groups.approve": "批准",
   "admin.groups.reject": "拒绝",
   "admin.groups.savePermission": "保存",
+  "admin.groups.role.group_admin": "群组管理员",
+  "admin.groups.role.member": "成员",
   "admin.groups.permission.create_channel.label": "创建频道",
   "admin.groups.permission.create_channel.description": "可以在此群组中创建新的办公室",
   "admin.groups.permission.manage_group_members.label": "管理成员",

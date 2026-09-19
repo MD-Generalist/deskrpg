@@ -367,8 +367,8 @@ export default function GroupAccessPanel({
                   onChange={(event) => setMemberRole(event.target.value as GroupMemberRole)}
                   className="rounded-lg border border-border bg-bg px-3 py-2"
                 >
-                  <option value="member">member</option>
-                  <option value="group_admin">group_admin</option>
+                  <option value="member">{t("admin.groups.role.member")}</option>
+                  <option value="group_admin">{t("admin.groups.role.group_admin")}</option>
                 </select>
                 <button
                   type="submit"
@@ -394,7 +394,7 @@ export default function GroupAccessPanel({
                       <div>
                         <p className="font-medium">{member.nickname || member.loginId}</p>
                         <p className="text-xs text-text-muted">
-                          {member.loginId} · {member.role}
+                          {member.loginId} · {t(`admin.groups.role.${member.role}`)}
                         </p>
                       </div>
                       <button

@@ -193,6 +193,8 @@ const ja: Record<string, string> = {
   "admin.groups.approve": "承認",
   "admin.groups.reject": "却下",
   "admin.groups.savePermission": "保存",
+  "admin.groups.role.group_admin": "グループ管理者",
+  "admin.groups.role.member": "メンバー",
   "admin.groups.permission.create_channel.label": "チャンネル作成",
   "admin.groups.permission.create_channel.description":
     "このグループに新しいオフィスを作成できます",
