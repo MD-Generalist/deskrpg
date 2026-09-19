@@ -62,7 +62,31 @@ export type ToolsetRow = {
   description: string;
   enabled: boolean;
   configured: boolean | null;
+  /** 0.10.0 — 프로바이더를 고르는 툴셋인가(`hermes tools` 의 TOOL_CATEGORIES). 구버전은 없다. */
+  hasProviders?: boolean;
 };
+
+/** 도구 프로바이더 행(플러그인 0.10.0). 키 값은 절대 오지 않는다 — 설정 여부만. */
+export type ToolProviderRow = {
+  name: string;
+  badge: string;
+  tag: string;
+  envVars: Array<{ key: string; prompt: string; url: string | null; isSet: boolean }>;
+  active: boolean;
+  status: "ready" | "needs_keys" | "needs_auth" | "needs_setup";
+  /** none: 고르기만 하면 된다 · keys: 키가 필요하다 · cli: 서버에서 설치·로그인해야 한다 */
+  setup: "none" | "keys" | "cli";
+};
+
+export type ToolProvidersPayload = {
+  toolset: string;
+  hasProviders: boolean;
+  providers: ToolProviderRow[];
+  activeProvider: string | null;
+  cliCommand: string;
+};
+
+export type ToolProviderSelectResult = { provider: string; isSet: Record<string, boolean> };
 
 export type ToolsetsPayload = { platform: string; toolsets: ToolsetRow[] };
 
@@ -153,6 +177,18 @@ export type PluginClient = {
   // 직원 설정 피커(0.9.0). 프로필 스코프 — 스킬 폴더와 키 설정 여부가 프로필마다 다르다.
   getToolsets(name: string, profileToken: string): Promise<PluginResponse<ToolsetsPayload>>;
   getSkills(name: string, profileToken: string): Promise<PluginResponse<SkillsPayload>>;
+  // 도구별 프로바이더(0.10.0). 프로필 스코프 — 키는 쓰기 전용이다.
+  getToolProviders(
+    name: string,
+    profileToken: string,
+    toolset: string,
+  ): Promise<PluginResponse<ToolProvidersPayload>>;
+  putToolProvider(
+    name: string,
+    profileToken: string,
+    toolset: string,
+    body: { provider: string; env: Record<string, string> },
+  ): Promise<PluginResponse<ToolProviderSelectResult>>;
   // 프로바이더 인증(0.9.0). 전부 프로필 스코프 — 게이트웨이 소유자 권한 체크는 라우트 계층 몫이다.
   startOAuth(
     name: string,

@@ -47,6 +47,9 @@ export type {
   CatalogPayload,
   ToolsetRow,
   ToolsetsPayload,
+  ToolProviderRow,
+  ToolProvidersPayload,
+  ToolProviderSelectResult,
   SkillRow,
   SkillsPayload,
   ProviderAuthType,
@@ -262,6 +265,13 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
     // 직원 설정 피커(0.9.0). 프로필 스코프 — 스킬 폴더와 키 설정 여부가 프로필마다 다르다.
     getToolsets: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/toolsets`, profileToken),
     getSkills: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/skills`, profileToken),
+    getToolProviders: (name, profileToken, toolset) =>
+      call(`/p/${seg(name)}/deskrpg/toolsets/${seg(toolset)}/providers`, profileToken),
+    putToolProvider: (name, profileToken, toolset, body) =>
+      call(`/p/${seg(name)}/deskrpg/toolsets/${seg(toolset)}/provider`, profileToken, {
+        method: "PUT",
+        body,
+      }),
 
     // 프로바이더 인증(0.9.0). 전부 프로필 스코프·프로필 토큰 — 세그먼트는 전부 인코딩한다.
     startOAuth: (name, profileToken, provider) =>

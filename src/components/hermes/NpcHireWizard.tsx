@@ -1297,6 +1297,7 @@ export default function NpcHireWizard({
                         setDisabledSkills(initial.disabledSkills);
                       }}
                       onUnsupported={() => setPickerUnsupported(true)}
+                      canManageToolProviders={canManageProviderAuth}
                       disabled={configSaving}
                     />
                   ) : (

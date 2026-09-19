@@ -227,6 +227,11 @@ export function supportsProfileOauth(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("profile_oauth"));
 }
 
+/** 0.10.0 — 도구별 프로바이더 선택·키 입력. */
+export function supportsToolProviders(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("profile_tool_providers"));
+}
+
 export function supportsProviderKeys(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("profile_provider_keys"));
 }
@@ -237,6 +242,8 @@ const KNOWN_PLUGIN_404_CODES = new Set([
   "invalid_profile",
   "oauth_session_not_found",
   "provider_not_found",
+  // 0.10.0 — 도구 프로바이더 라우트가 자기 코드로 내는 404(모르는 툴셋).
+  "toolset_not_found",
 ]);
 
 /**

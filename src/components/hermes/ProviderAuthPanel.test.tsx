@@ -177,7 +177,10 @@ test("api_key: 비밀번호 입력으로 키를 저장하고 값을 어디에도
   try {
     const input = view.host.querySelector<HTMLInputElement>("input")!;
     assert.equal(input.getAttribute("type"), "password");
-    assert.equal(input.getAttribute("autocomplete"), "off");
+    // 비밀번호 관리자가 이 칸을 로그인으로 보지 않게 한다(2026-09-19 스테이징 실측: Bitwarden 이
+    // "기존 로그인 업데이트" 를 띄웠다). "off" 는 password 입력에서 무시된다.
+    assert.equal(input.getAttribute("autocomplete"), "new-password");
+    assert.equal(input.getAttribute("data-bwignore"), "true");
     await typeInto(input, SECRET);
     await click(button(view.host, "키 저장"));
 

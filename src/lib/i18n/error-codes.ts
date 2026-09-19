@@ -181,7 +181,13 @@ export type ErrorCode =
   | "provider_not_api_key"
   | "invalid_key_value"
   | "env_write_failed"
-  | "invalid_profile";
+  | "invalid_profile"
+  | "missing_keys"
+  | "unknown_env_key"
+  | "provider_needs_cli"
+  | "toolset_not_found"
+  | "toolset_has_no_providers"
+  | "config_write_failed";
 
 /** 등록된 모든 에러코드 → 번역 키. 커버리지 가드가 이 표 전체를 훑는다. */
 export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
@@ -372,6 +378,13 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   invalid_key_value: "hermes.providerAuth.errors.invalidKeyValue",
   env_write_failed: "hermes.providerAuth.errors.envWriteFailed",
   invalid_profile: "hermes.providerAuth.errors.invalidProfile",
+  // 도구별 프로바이더(플러그인 profile_tool_providers, 0.10.0). 문구는 hermes.toolProviders.* 블록.
+  missing_keys: "hermes.toolProviders.errors.missingKeys",
+  unknown_env_key: "hermes.toolProviders.errors.unknownEnvKey",
+  provider_needs_cli: "hermes.toolProviders.errors.providerNeedsCli",
+  toolset_not_found: "hermes.toolProviders.errors.toolsetNotFound",
+  toolset_has_no_providers: "hermes.toolProviders.errors.toolsetHasNoProviders",
+  config_write_failed: "hermes.toolProviders.errors.configWriteFailed",
 };
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;

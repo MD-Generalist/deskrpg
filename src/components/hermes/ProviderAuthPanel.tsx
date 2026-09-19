@@ -37,6 +37,7 @@ import type {
 } from "@/lib/hermes/plugin-client-types";
 
 import { isSafeHttpUrl, oauthReducer, pollDelayMs } from "./provider-auth-model";
+import { SECRET_INPUT_PROPS } from "./secret-input";
 import { getWizardErrorMessage, isWizardErrorCode } from "./wizard-error-codes";
 
 /**
@@ -507,9 +508,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
           </span>
           <input
             ref={keyInput}
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
+            {...SECRET_INPUT_PROPS}
             placeholder={t("hermes.providerAuth.keyPlaceholder")}
             disabled={disabled || busy}
             onChange={(e) => setHasKeyValue(e.target.value !== "")}
