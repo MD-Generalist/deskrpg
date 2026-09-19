@@ -121,6 +121,7 @@ const SAFE_CODES = new Set([
   "token_invalid",
   "ssh_unknown_host",
   "ssh_connection_failed",
+  "ssh_auth_failed",
   "ssh_host_key_failed",
   "ssh_unavailable",
   "ssh_timeout",

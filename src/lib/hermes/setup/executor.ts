@@ -143,7 +143,11 @@ export function sshExecutor(hostId: string, execute: HostExecutor = localExecuto
       throw new Error(
         /REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(result.stderr)
           ? "ssh_host_key_failed"
-          : "ssh_connection_failed",
+          : // 호스트에는 닿았지만 키가 거절됐다 — 대개 공개키를 authorized_keys 에 아직 안 넣었다.
+            // "연결 실패" 로 뭉치면 서버·포트를 의심하게 된다(2026-09-19 스테이징 실측).
+            /Permission denied \(publickey/i.test(result.stderr)
+            ? "ssh_auth_failed"
+            : "ssh_connection_failed",
       );
     return result;
   };

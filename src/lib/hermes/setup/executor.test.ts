@@ -52,6 +52,21 @@ test("SSH identity failures redact raw stderr", async () => {
       !error.message.includes("SECRET"),
   );
 });
+test("키가 거절되면 연결 실패가 아니라 인증 실패로 알린다 — stderr 는 싣지 않는다", async () => {
+  process.env.DESKRPG_SETUP_SSH_HOSTS = "test-host";
+  const executor = sshExecutor("test-host", async () => ({
+    stdout: "",
+    stderr: "SECRET dante@host.docker.internal: Permission denied (publickey).",
+    code: 255,
+  }));
+  await assert.rejects(
+    executor("true", []),
+    (error) =>
+      error instanceof Error &&
+      error.message === "ssh_auth_failed" &&
+      !error.message.includes("SECRET"),
+  );
+});
 test("bounded subprocess timeouts and cancellation stop owned process", async () => {
   const child = fake();
   await assert.rejects(

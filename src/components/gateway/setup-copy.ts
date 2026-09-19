@@ -396,6 +396,7 @@ const hostErrorGroups: Record<string, string> = {
   hermes_not_found: "missing",
   ssh_unknown_host: "ssh",
   ssh_connection_failed: "ssh",
+  ssh_auth_failed: "sshAuth",
   hermes_version_unsupported: "hermesVersion",
   plugin_update_failed: "pluginUpdate",
   service_install_failed: "serviceInstall",
@@ -418,6 +419,8 @@ const hostErrorGroups: Record<string, string> = {
 };
 const hostRemediation: Record<Locale, Record<string, string>> = {
   ko: {
+    sshAuth:
+      "서버에 닿았지만 DeskRPG 키가 거절됐습니다. 1단계의 공개키 명령을 연결할 서버에서, 등록한 사용자 계정으로 실행했는지 확인하세요(~/.ssh/authorized_keys). 등록 화면은 '+ 새 SSH 호스트 등록' 에서 다시 볼 수 있습니다.",
     securityReview:
       "Hermes 보안 스캔이 설치를 차단했습니다. 관리자가 해당 버전의 검사 결과와 코드를 검토해야 합니다. 이 마법사는 차단을 자동 해제하지 않습니다.",
     sourceUnavailable:
@@ -470,6 +473,8 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     resumeUnavailable: koText["hermes.wizard.error.resumeUnavailable"],
   },
   en: {
+    sshAuth:
+      "The server was reached but DeskRPG's key was rejected. Make sure you ran step 1's public-key command on the target server, as the registered user (~/.ssh/authorized_keys). You can reopen it from '+ Register a new SSH host'.",
     securityReview:
       "Hermes security scanning blocked installation. An administrator must review the findings and code for this version. This wizard never overrides the block.",
     sourceUnavailable:
@@ -522,6 +527,8 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     resumeUnavailable: enText["hermes.wizard.error.resumeUnavailable"],
   },
   ja: {
+    sshAuth:
+      "サーバーには届きましたが DeskRPG のキーが拒否されました。手順 1 の公開鍵コマンドを 接続先サーバーで、登録したユーザーとして 実行したか確認してください（~/.ssh/authorized_keys）。「+ 新しい SSH ホストを登録」から再表示できます。",
     securityReview:
       "Hermesのセキュリティ検査がインストールをブロックしました。管理者がこのバージョンの検査結果とコードを確認してください。このウィザードはブロックを解除しません。",
     sourceUnavailable:
@@ -574,6 +581,8 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     resumeUnavailable: jaText["hermes.wizard.error.resumeUnavailable"],
   },
   zh: {
+    sshAuth:
+      "已连接到服务器，但 DeskRPG 的密钥被拒绝。请确认已在目标服务器上、以注册的用户身份运行第 1 步的公钥命令（~/.ssh/authorized_keys）。可从「+ 注册新的 SSH 主机」重新打开。",
     securityReview:
       "Hermes安全扫描阻止了安装。管理员需要审查此版本的扫描结果和代码。此向导不会自动绕过阻止。",
     sourceUnavailable: "无法访问插件源仓库。请管理员检查分发地址和网络访问。",

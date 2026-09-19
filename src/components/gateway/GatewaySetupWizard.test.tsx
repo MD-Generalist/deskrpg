@@ -1544,3 +1544,28 @@ test("등록한 SSH 호스트가 없으면 SSH 화면이 곧바로 등록 패널
     await f.cleanup();
   }
 });
+
+test("SSH 탐색이 인증 실패로 끝나면 설치를 권하지 않고 공개키 등록을 확인하라고 말한다", async () => {
+  const f = await fixture(async (_url, init) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    if (body?.action === "discover")
+      return new Response(JSON.stringify({ errorCode: "ssh_auth_failed" }), { status: 400 });
+    return response(capabilities);
+  });
+  try {
+    await clickContaining(f.host, "원격 연결");
+    await clickContaining(f.host, "SSH로 연결");
+    const select = f.host.querySelector("select")!;
+    await act(async () => {
+      select.value = "approved";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await f.click("설치 찾기");
+    const text = f.host.textContent!;
+    assert.match(text, /DeskRPG 키가 거절됐습니다/);
+    assert.equal(/Hermes 를 설치할까요/.test(text), false, "인증 실패인데 설치를 권한다");
+    assert.equal(/설치를 찾지 못했습니다/.test(text), false, "인증 실패인데 Hermes 가 없다고 한다");
+  } finally {
+    await f.cleanup();
+  }
+});

@@ -70,6 +70,8 @@ export default function GatewaySetupWizard({
   const [screen, setScreen] = useState<Screen>("choice");
   const [mode, setMode] = useState<"local" | "ssh">("local");
   const [hostId, setHostId] = useState("");
+  // 탐색이 **성공**했는가. 실패(SSH 인증·연결 오류)는 "Hermes 가 없다" 가 아니다 — 설치를 제안하면 안 된다.
+  const [discovered, setDiscovered] = useState(false);
   // SSH 호스트 등록 패널. 등록한 호스트가 하나도 없으면 처음부터 펼친다.
   const [registering, setRegistering] = useState(false);
   const [candidates, setCandidates] = useState<SetupCandidate[]>([]);
@@ -194,6 +196,7 @@ export default function GatewaySetupWizard({
   function discover(targetMode = mode) {
     setMode(targetMode);
     setScreen("discover");
+    setDiscovered(false);
     setCandidates([]);
     setInspection(null);
     setJob(null);
@@ -211,7 +214,10 @@ export default function GatewaySetupWizard({
           "",
           signal,
         ),
-      (data) => setCandidates(data.candidates),
+      (data) => {
+        setCandidates(data.candidates);
+        setDiscovered(true);
+      },
     );
   }
   const target = { mode, ...(mode === "ssh" ? { hostId } : {}) };
@@ -369,7 +375,8 @@ export default function GatewaySetupWizard({
             })
           : setupStep(c, change);
   // Hermes 를 못 찾았을 때 설치를 제안한다 — 로컬·SSH 모두. 가능 여부는 서버 판정(capabilities)을 따른다.
-  const installOffered = (mode === "local" || mode === "ssh") && !busy && !candidates.length;
+  const installOffered =
+    (mode === "local" || mode === "ssh") && discovered && !busy && !candidates.length;
   const canInstallHermes =
     mode === "ssh" ? cap?.canInstallHermesSsh === true : cap?.canInstallHermes === true;
   // 막힌 이유별 문구. 이유가 오지 않는 구버전 서버 응답이면 예전 한 문장으로 떨어진다.
@@ -608,7 +615,7 @@ export default function GatewaySetupWizard({
             <p role="status">{c.discovering}</p>
           ) : (
             <>
-              {!candidates.length && <p>{c.empty}</p>}
+              {discovered && !candidates.length && <p>{c.empty}</p>}
               {installOffered &&
                 (canInstallHermes ? (
                   <article className="rounded-lg border border-primary/40 bg-bg p-4">
