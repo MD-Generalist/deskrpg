@@ -123,6 +123,13 @@ function string(value: unknown, max = 256): string {
     throw new Error("host_operation_failed");
   return value;
 }
+const GATEWAY_STATES = new Set(["running", "stopped", "profile_gateways"]);
+/** 헬퍼가 준 프로필 이름 목록 — 모양이 어긋난 값은 버린다(화면에 그대로 싣는 값이다). */
+function profileNames(value: unknown[]): string[] {
+  return value
+    .filter((n): n is string => typeof n === "string" && PROFILE_NAME.test(n))
+    .slice(0, 256);
+}
 function publicCandidate(value: unknown): SetupCandidate {
   const item = record(value);
   const id = string(item.id);
@@ -148,6 +155,13 @@ function publicCandidate(value: unknown): SetupCandidate {
     pluginVersion: typeof item.pluginVersion === "string" ? string(item.pluginVersion, 64) : null,
     timezone: typeof item.timezone === "string" ? string(item.timezone, 64) : null,
     hasToken: item.hasToken as boolean,
+    ...(GATEWAY_STATES.has(item.gatewayState as string)
+      ? { gatewayState: item.gatewayState as SetupCandidate["gatewayState"] }
+      : {}),
+    ...(Array.isArray(item.profiles) ? { profiles: profileNames(item.profiles) } : {}),
+    ...(Array.isArray(item.profileGateways)
+      ? { profileGateways: profileNames(item.profileGateways) }
+      : {}),
     ...(typeof item.warning === "string" && WARNING_CODES.has(item.warning)
       ? { warning: item.warning }
       : {}),

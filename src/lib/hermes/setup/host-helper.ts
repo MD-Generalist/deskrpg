@@ -342,10 +342,39 @@ def candidate(name, home):
     return public, owner, cfg, token, plugin_name
 
 def select(candidate_id):
-    for name, home in homes():
-        item = candidate(name, home)
-        if item[0]['id'] == candidate_id: return name, home, item
+    # 게이트웨이는 default 하나다. 프로필은 그 게이트웨이가 /p/<이름>/ 으로 싣는다 —
+    # 프로필 폴더를 따로 게이트웨이로 고르는 길은 두지 않는다(유닛도 포트도 없는 후보가 된다).
+    item = candidate('default', ROOT)
+    if item[0]['id'] == candidate_id: return 'default', ROOT, item
     fail('candidate_changed')
+
+def port_listening(port):
+    # 여는지만 본다. 키는 보내지 않는다 — 누가 여는지는 연결 단계의 assert_port_owned 가 가린다.
+    try:
+        with socket.create_connection(('127.0.0.1', port), timeout=0.5): return True
+    except OSError: return False
+
+def gateway_state(public, owner, cfg):
+    """running / stopped / profile_gateways(따로 떠 있는 프로필 게이트웨이 이름들)."""
+    if owner['pid'] or port_listening(public['port']): return 'running', []
+    others = []
+    for child, childhome in profile_names(cfg):
+        if child == 'default': continue
+        running = bool(identity(child, childhome)['pid'])
+        if not running and (childhome / 'gateway.pid').exists():
+            try:
+                from hermes_cli.gateway import get_running_pid
+                running = bool(get_running_pid(childhome / 'gateway.pid', cleanup_stale=False))
+            except Exception: running = False
+        if running: others.append(child)
+    return ('profile_gateways', others) if others else ('stopped', [])
+
+def discover():
+    public, owner, cfg, token, plugin_name = candidate('default', ROOT)
+    state, others = gateway_state(public, owner, cfg)
+    result = {**public, 'gatewayState': state, 'profiles': [n for n, h in profile_names(cfg) if n != 'default']}
+    if others: result['profileGateways'] = others
+    return {'candidates': [result]}
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl): return None
@@ -503,7 +532,7 @@ def main(action, candidate_id=None, option=None):
             fail('host_busy')
         LOCK = os.fdopen(fd,'w')
     if action == 'discover':
-        return {'candidates': [candidate(name,home)[0] for name,home in homes()]}
+        return discover()
     name, home, item = select(candidate_id)
     public, owner, cfg, token, plugin_name = item
     if action == 'check-model':

@@ -162,6 +162,7 @@ def fixture_identity(name,home):
     return {'id':hashlib.sha256(str(home).encode()).hexdigest(),'service':'hermes-gateway' + ('' if name == 'default' else '-' + name) + '.service','command':['false'],'pid':0,'warning':None}
 identity = fixture_identity
 assert_port_owned = lambda public, owner: False
+port_listening = lambda port: False
 original_main = main
 def main(action,candidate_id=None,option=None):
     global LOCK
@@ -220,7 +221,7 @@ print(json.dumps({'token_length':len(envfile(ROOT)['API_SERVER_KEY'])}))
   assert.equal(result.body.token_length, 64);
   assert.match(result.env, /^OTHER_KEY=keep-me\nAPI_SERVER_KEY=[a-f0-9]{64}\n$/);
 });
-test("Python helper discovers actual profiles without exposing env secrets", () => {
+test("Python helper discovers one gateway carrying its profiles without exposing env secrets", () => {
   const result = fixture(
     String.raw`
 child = ROOT / 'profiles' / 'sophie'
@@ -231,10 +232,45 @@ print(json.dumps(main('discover')))
 `,
     { env: "API_SERVER_KEY=private-default-valid-key\n" },
   );
-  assert.equal(result.body.candidates.length, 2);
-  assert.equal(result.body.candidates[1].label, "Hermes sophie");
-  assert.equal(result.body.candidates[1].warning, undefined);
+  // 게이트웨이는 default 하나다 — 프로필은 후보가 아니라 그 후보의 내용이다.
+  assert.equal(result.body.candidates.length, 1);
+  assert.equal(result.body.candidates[0].label, "Hermes default");
+  assert.deepEqual(result.body.candidates[0].profiles, ["sophie"]);
+  assert.equal(result.body.candidates[0].gatewayState, "stopped");
   assert.ok(!JSON.stringify(result.body).includes("private"));
+});
+test("프로필 폴더를 게이트웨이로 고르는 후보 ID 는 받지 않는다", () => {
+  const result = fixture(String.raw`
+child = ROOT / 'profiles' / 'sophie'
+child.mkdir(parents=True)
+entry('configure', hashlib.sha256(str(child).encode()).hexdigest())
+`);
+  assert.equal(result.body.error, "candidate_changed");
+  assert.equal(result.config, "{}");
+});
+test("게이트웨이 상태 — 실행 중·중지·프로필 게이트웨이 따로 실행", () => {
+  const result = fixture(String.raw`
+(ROOT / 'profiles' / 'sophie').mkdir(parents=True)
+(ROOT / 'profiles' / 'mia').mkdir(parents=True)
+states = {}
+port_listening = lambda port: True
+states['listening'] = main('discover')['candidates'][0]['gatewayState']
+port_listening = lambda port: False
+states['stopped'] = main('discover')['candidates'][0]['gatewayState']
+def running_profile(name, home):
+    owner = fixture_identity(name, home)
+    if name == 'mia': owner['pid'] = 4242
+    return owner
+identity = running_profile
+found = main('discover')['candidates'][0]
+states['conflict'] = [found['gatewayState'], found['profileGateways']]
+print(json.dumps(states))
+`);
+  assert.deepEqual(result.body, {
+    listening: "running",
+    stopped: "stopped",
+    conflict: ["profile_gateways", ["mia"]],
+  });
 });
 test("Python helper refuses external secret providers and invalid existing key", () => {
   const external = fixture(
@@ -366,34 +402,6 @@ print(json.dumps(calls))
 test("SSH host-key failures retain an actionable sanitized code", async () => {
   const f = fake([new Error("ssh_host_key_failed")]);
   await assert.rejects(discoverHost(f.execute), /^Error: ssh_host_key_failed$/);
-});
-test("named-profile setup keeps multiplex off, preserves default home, and verifies only its own profile", () => {
-  const result = fixture(
-    String.raw`
-child = ROOT / 'profiles' / 'sophie'
-child.mkdir(parents=True)
-(child / '.env').write_text('API_SERVER_KEY=sophie-own-valid-token\n')
-id = main('discover')['candidates'][1]['id']
-main('configure',id)
-assert not config(child)['gateway'].get('multiplex_profiles',False)
-assert config(ROOT) == {}
-assert envfile(ROOT)['API_SERVER_KEY'] == 'default-own-valid-token'
-assert_port_owned = lambda public,owner: True
-def live(port,token,path):
-    assert token == 'sophie-own-valid-token'
-    if path == '/deskrpg/info': return 200, {'plugin':'deskrpg','version':'0.5.0'}
-    if path == '/deskrpg/profiles': return 200, {'profiles':[{'name':'default'},{'name':'sophie'}]}
-    if path == '/p/sophie/v1/models': return 200, {'data':[]}
-    return 404, None
-request = live
-print(json.dumps(main('verify',id)))
-`,
-    { env: "API_SERVER_KEY=default-own-valid-token\n" },
-  );
-  assert.deepEqual(result.body.prepared.profiles, [
-    { name: "sophie", token: "sophie-own-valid-token" },
-  ]);
-  assert.equal(result.body.prepared.token, "sophie-own-valid-token");
 });
 test("external secret provider can coexist with an existing locally stored key verified against the owning service", () => {
   const result = fixture(
@@ -997,17 +1005,6 @@ entry('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(
   );
   assert.deepEqual(result.body, { error: "profile_exists" });
 });
-test("소유자(default)가 아닌 후보는 프로필을 늘릴 수 없다", () => {
-  const result = fixture(
-    String.raw`
-(ROOT / 'profiles' / 'sophie').mkdir(parents=True)
-subprocess.Popen = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('must not run'))
-entry('create-profile',main('discover')['candidates'][1]['id'],${JSON.stringify(JSON.stringify({ name: "oliver" }))})
-`,
-    { config: { gateway: { multiplex_profiles: true } } },
-  );
-  assert.deepEqual(result.body, { error: "profile_provision_forbidden" });
-});
 test("프로필 생성은 Hermes CLI 만 부르고 디스크에 생겼는지 되읽어 확인한다", () => {
   const result = fixture(
     String.raw`
@@ -1107,16 +1104,16 @@ entry('provision-key',main('discover')['candidates'][0]['id'],'sophie')
   );
   assert.deepEqual(result.body, { error: "profile_provision_forbidden" });
 });
-test("소유자가 아닌 후보는 형제 프로필 키를 발급할 수 없다", () => {
+test("프로필 폴더를 후보로 삼아 형제 프로필 키를 발급할 수 없다", () => {
   const result = fixture(
     String.raw`
 for name in ('sophie','oliver'):
     (ROOT / 'profiles' / name).mkdir(parents=True)
-entry('provision-key',main('discover')['candidates'][2]['id'],'oliver')
+entry('provision-key',hashlib.sha256(str(ROOT / 'profiles' / 'sophie').encode()).hexdigest(),'oliver')
 `,
     { config: { gateway: { multiplex_profiles: true } } },
   );
-  assert.deepEqual(result.body, { error: "profile_provision_forbidden" });
+  assert.deepEqual(result.body, { error: "candidate_changed" });
 });
 test("provision-key 도 예약어와 잘못된 이름을 거부한다", () => {
   for (const name of ["default", "root", "Sophie", ""]) {

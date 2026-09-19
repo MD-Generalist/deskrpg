@@ -692,12 +692,37 @@ export default function GatewaySetupWizard({
                       ? ` · ${c.pluginVersion} ${candidate.pluginVersion}`
                       : ""}
                   </p>
+                  {candidate.profiles && (
+                    <p className="mt-1 text-sm text-text-muted" data-candidate-profiles>
+                      {candidate.profiles.length
+                        ? `${c.profilesIncluded} ${candidate.profiles.length}: ${candidate.profiles.join(", ")}`
+                        : c.noProfiles}
+                    </p>
+                  )}
+                  {candidate.gatewayState && (
+                    <p
+                      className={`mt-1 text-sm ${candidate.gatewayState === "running" ? "text-text-muted" : "text-amber-600"}`}
+                      data-gateway-state={candidate.gatewayState}
+                    >
+                      {candidate.gatewayState === "running"
+                        ? c.stateRunning
+                        : candidate.gatewayState === "stopped"
+                          ? c.stateStopped
+                          : c.stateProfileGateways}
+                    </p>
+                  )}
+                  {candidate.gatewayState === "profile_gateways" &&
+                    candidate.profileGateways?.map((name) => (
+                      <code key={name} className="mt-1 block text-xs">
+                        {candidate.service.replace(/\.service$/, "")}-{name}
+                      </code>
+                    ))}
                   <button
                     className={`${button} mt-3`}
-                    disabled={busy}
+                    disabled={busy || candidate.gatewayState === "profile_gateways"}
                     onClick={() => inspect(candidate.id)}
                   >
-                    {c.inspect}
+                    {candidate.gatewayState === "stopped" ? c.startAndConnect : c.inspect}
                   </button>
                 </article>
               ))}
