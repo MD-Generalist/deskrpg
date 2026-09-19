@@ -1,4 +1,11 @@
-/* DeskRPG UI 2.0 — warm miniature-office palette */
+/*
+ * DeskRPG UI 토큰 — 단테랩스 브랜드 v2 에 부분 정렬한다(2026-09-20 단테 결정).
+ *
+ * 글자·상태·그림자·radius 는 브랜드 토큰을 그대로 쓴다. **제품 고유색은 오피스 녹색 하나뿐이고**
+ * 그것만 예외다 — 3D 오피스의 따뜻한 녹색 톤과 이어지는 제품 정체성이라 버튼·선택 표시에 계속 쓴다.
+ * 브랜드 규칙(khaki 는 면 전용, 포인트는 밝은 면 blue)은 마케팅 자료에 적용되고, 제품 화면의
+ * 예외는 docs/standards.md 에 적어 둔다.
+ */
 :root {
   color-scheme: light;
   --color-primary: #365e4b;
@@ -7,16 +14,23 @@
   --color-primary-muted: #e6eee2;
   --color-npc: #93632e;
   --color-npc-dark: #704619;
-  --color-danger: #b53939;
-  --color-danger-hover: #932828;
-  --color-danger-bg: #fbe7e4;
-  --color-info: #356a91;
+  --color-danger: #a63d33; /* 브랜드 danger */
+  --color-danger-hover: #8b3029;
+  --color-danger-bg: #f6e3de;
+  --color-info: #245c9e; /* 브랜드 blue-strong */
   --color-success: #327649;
   --color-meeting: #735b8f;
-  --text: #34483e;
-  --text-secondary: #526459;
-  --text-muted: #667468;
-  --text-dim: #727a6b;
+  --text: #09223f; /* 브랜드 navy */
+  --text-secondary: #3f4346; /* 브랜드 gray */
+  --text-muted: #5f666d; /* 브랜드 gray-muted */
+  --text-dim: #7b8189;
+  /* 브랜드 radius·shadow — 8px 가 상한이고 그림자는 navy-tint 전용이다. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --shadow-sm: 0 0 0 1px rgba(9, 34, 63, 0.06), 0 1px 2px rgba(9, 34, 63, 0.04);
+  --shadow-md: 0 0 0 1px rgba(9, 34, 63, 0.08), 0 3px 6px rgba(9, 34, 63, 0.06);
+  --shadow-lg: 0 0 0 1px rgba(9, 34, 63, 0.1), 0 8px 16px rgba(9, 34, 63, 0.08);
   --gap-tight: 4px;
   --gap-normal: 8px;
   --gap-loose: 16px;

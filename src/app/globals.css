@@ -32,6 +32,14 @@
   --color-text-muted: var(--text-muted);
   --color-text-dim: var(--text-dim);
 
+  /* 브랜드 radius 상한(8px)을 Tailwind 스케일에 물린다 — rounded-xl·2xl 을 쓰는 화면도 함께 맞는다. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+  --radius-3xl: 8px;
+
   /* Fonts */
   --font-sans:
     "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
@@ -83,7 +91,7 @@ body {
 
 /* Shared chrome for the same warm, compact workspace as the Three.js office. */
 :where(button, a, input, select, textarea):focus-visible {
-  outline: 3px solid #b48651;
+  outline: 3px solid var(--color-primary);
   outline-offset: 3px;
 }
 :where(button, a) {
@@ -141,7 +149,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 13px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 550;
   color: var(--text-muted);
@@ -186,9 +194,10 @@ body {
   font-size: clamp(24px, 2.3vw, 32px);
 }
 .workspace-content :is(.bg-surface.rounded-lg, .bg-surface.rounded-xl) {
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  box-shadow: 0 3px 0 rgba(52, 72, 62, 0.025);
+  /* 브랜드 shadow 는 헤어라인 인셋을 품고 있어 테두리를 따로 두지 않는다. */
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 .workspace-content :is(input, select, textarea) {
   color: var(--text);
