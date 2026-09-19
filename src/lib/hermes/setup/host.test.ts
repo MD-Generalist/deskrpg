@@ -1864,3 +1864,13 @@ test("Linger 판정 — yes/no 를 읽고, 모르면 unknown 이며 던지지 �
     "unknown",
   );
 });
+
+test("SSH 키 거절은 탐색에서도 ssh_auth_failed 로 올라간다 — host_operation_failed 로 뭉개지지 않는다", async () => {
+  const { discoverHost } = await import("./host");
+  await assert.rejects(
+    discoverHost(async () => {
+      throw new Error("ssh_auth_failed");
+    }),
+    /^Error: ssh_auth_failed$/,
+  );
+});

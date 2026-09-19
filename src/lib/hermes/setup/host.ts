@@ -12,6 +12,8 @@ export const HOST_ERROR_CODES = new Set([
   "ssh_unknown_host",
   "ssh_host_key_failed",
   "ssh_connection_failed",
+  // 키 거절. 이 목록에 없으면 아래에서 host_operation_failed 로 뭉개져, 화면이 공개키 등록을 안내하지 못한다.
+  "ssh_auth_failed",
   "command_timeout",
   "output_limit",
   "host_busy",
