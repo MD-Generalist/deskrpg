@@ -28,17 +28,19 @@ function CharactersPageInner() {
   const joinChannel = searchParams.get("joinChannel");
 
   return (
-    <div className="min-h-screen bg-bg text-text p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">{t("characters.title")}</h1>
-        <div className="flex items-center gap-2"></div>
-      </div>
+    <div className="theme-web workspace-page">
+      <div className="workspace-page-inner">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">{t("characters.title")}</h1>
+          <div className="flex items-center gap-2"></div>
+        </div>
 
-      <MyCharacterForm
-        onSaved={() => {
-          if (joinChannel) router.push(`/game?channelId=${encodeURIComponent(joinChannel)}`);
-        }}
-      />
+        <MyCharacterForm
+          onSaved={() => {
+            if (joinChannel) router.push(`/game?channelId=${encodeURIComponent(joinChannel)}`);
+          }}
+        />
+      </div>
     </div>
   );
 }
