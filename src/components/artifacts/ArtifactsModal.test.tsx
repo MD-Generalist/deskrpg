@@ -486,7 +486,7 @@ test("F3: modifiable 이 false 면 편집·삭제를 숨기고 읽기 전용 안
   assert.ok(container.querySelector(".markdown-chat h1"), "읽기는 된다");
   assert.equal(queryText("편집") === undefined, true);
   assert.equal(queryText("삭제") === undefined, true);
-  assert.ok(queryText("다른 채널에서 만든 결과물 — 읽기 전용"));
+  assert.ok(queryText("다른 오피스에서 만든 결과물 — 읽기 전용"));
   const go = byText("출처로 이동").closest("button")!;
   assert.equal(go.disabled, true, "다른 채널 보드의 카드로는 이동하지 않는다");
   await click(go);

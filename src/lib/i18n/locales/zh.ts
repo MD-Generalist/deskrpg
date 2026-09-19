@@ -113,6 +113,7 @@ const zh: Record<string, string> = {
   "channels.loadingChannels": "加载频道中...",
   "channels.joinFailed": "加入频道失败",
   "channels.invalidInvite": "无效的邀请码",
+  "channels.joinByCode": "加入代码",
   "channels.inviteCodePlaceholder": "输入邀请码...",
   "channels.groupInviteTitle": "加入群组",
   "channels.groupInviteSubtitle": "在加入受保护的频道前，先用群组邀请码获得成员资格。",
@@ -450,7 +451,10 @@ const zh: Record<string, string> = {
     "运营者已在此服务器上关闭主机设置（DESKRPG_HOST_SETUP_ENABLED=0）。请改用网关地址连接。",
   "hermes.wizard.hostReason.unsupported_platform": "此服务器的操作系统不支持本地连接。",
   "hermes.wizard.hostReason.container_without_hermes":
-    "DeskRPG 运行在容器中，且容器内没有 Hermes。安装到容器中会在重新部署时丢失，因此不提供安装。请通过网关地址（例如 http://host.docker.internal:8642）或 SSH 连接主机上的 Hermes。",
+    "Docker容器环境不支持本地安装Hermes。请使用远程连接方式。",
+  "hermes.wizard.hostReason.container_without_hermesDetail":
+    "DeskRPG运行在容器内，其中没有Hermes。装在容器里会在重新部署时消失，因此不进行安装。请通过网关地址（例如 http://host.docker.internal:8642）或SSH连接宿主机的Hermes。",
+  "hermes.wizard.hostReason.more": "详细",
   "hermes.wizard.hostReason.ssh_missing": "此服务器没有 ssh 命令，无法使用 SSH 连接。",
   "hermes.wizard.ssh.keyTitle": "1. 将 DeskRPG 专用密钥添加到目标服务器",
   "hermes.wizard.ssh.keyBody":

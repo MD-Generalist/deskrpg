@@ -115,6 +115,7 @@ const ja: Record<string, string> = {
   "channels.loadingChannels": "チャンネル読み込み中...",
   "channels.joinFailed": "チャンネルへの参加に失敗しました",
   "channels.invalidInvite": "無効な招待コードです",
+  "channels.joinByCode": "参加コード",
   "channels.inviteCodePlaceholder": "招待コードを入力...",
   "channels.groupInviteTitle": "グループに参加",
   "channels.groupInviteSubtitle":
@@ -476,7 +477,10 @@ const ja: Record<string, string> = {
   "hermes.wizard.hostReason.unsupported_platform":
     "このサーバーの OS ではローカル接続に対応していません。",
   "hermes.wizard.hostReason.container_without_hermes":
-    "DeskRPG はコンテナ内で動いており、その中に Hermes はありません。コンテナにインストールしても再デプロイで消えるため行いません。ホストの Hermes にはゲートウェイのアドレス（例: http://host.docker.internal:8642）か SSH で接続してください。",
+    "Dockerコンテナ環境ではローカルHermesのインストールに対応していません。リモート接続をご利用ください。",
+  "hermes.wizard.hostReason.container_without_hermesDetail":
+    "DeskRPGはコンテナ内で動作しており、その中にHermesはありません。コンテナに入れても再デプロイで消えるためインストールしません。ホストのHermesにはゲートウェイアドレス（例: http://host.docker.internal:8642）かSSHで接続してください。",
+  "hermes.wizard.hostReason.more": "詳細",
   "hermes.wizard.hostReason.ssh_missing":
     "このサーバーに ssh コマンドがないため SSH 接続は使えません。",
   "hermes.wizard.ssh.keyTitle": "1. DeskRPG 専用キーを接続先サーバーに登録",

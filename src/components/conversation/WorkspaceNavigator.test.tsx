@@ -95,7 +95,7 @@ function button(element: HTMLElement, name: string) {
 
 test("rooms, online users and every NPC employment state remain discoverable", async () => {
   const { element, selected } = await mount();
-  assert.match(element.textContent ?? "", /사무실 전체/);
+  assert.match(element.textContent ?? "", /오피스 전체/);
   assert.match(element.textContent ?? "", /디자인 리뷰/);
   assert.match(element.textContent ?? "", /소피[\s\S]*대기/);
   assert.match(element.textContent ?? "", /레오[\s\S]*쉬는 중/);

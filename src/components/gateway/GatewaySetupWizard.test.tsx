@@ -1508,7 +1508,10 @@ test("로컬을 못 쓰면 막힌 이유를 그대로 보여 준다 — 컨테�
     }),
   );
   try {
-    assert.match(f.host.textContent!, /컨테이너 안에서 돌고 있고/);
+    assert.match(
+      f.host.textContent!,
+      /Docker 컨테이너 환경에서는 로컬 Hermes 설치를 지원하지 않습니다/,
+    );
     assert.equal(/호스트 접근이 허용되지 않습니다/.test(f.host.textContent!), false);
   } finally {
     await f.cleanup();
@@ -1565,6 +1568,27 @@ test("SSH 탐색이 인증 실패로 끝나면 설치를 권하지 않고 공개
     assert.match(text, /DeskRPG 키가 거절됐습니다/);
     assert.equal(/Hermes 를 설치할까요/.test(text), false, "인증 실패인데 설치를 권한다");
     assert.equal(/설치를 찾지 못했습니다/.test(text), false, "인증 실패인데 Hermes 가 없다고 한다");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("컨테이너 이유는 한 줄로 보이고, 자세한 사정은 ? 버튼을 눌러야 나온다", async () => {
+  const f = await fixture(async () =>
+    response({ ...capabilities, local: false, localReason: "container_without_hermes" }),
+  );
+  try {
+    assert.match(
+      f.host.textContent!,
+      /Docker 컨테이너 환경에서는 로컬 Hermes 설치를 지원하지 않습니다/,
+    );
+    assert.ok(!f.host.textContent!.includes("host.docker.internal"));
+    const more = f.host.querySelector<HTMLButtonElement>(
+      '[data-reason-detail="container_without_hermes"]',
+    );
+    assert.ok(more);
+    await act(async () => more.click());
+    assert.match(f.host.textContent!, /host\.docker\.internal/);
   } finally {
     await f.cleanup();
   }

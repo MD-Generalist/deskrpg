@@ -892,7 +892,7 @@ test("unbound gateway offers connection to owners and guidance to members", asyn
     assert.equal(connects, 1);
     assert.ok(!f.host.querySelector("[data-blocker]")?.textContent?.includes("재시도"));
     await f.render({});
-    assert.match(f.host.textContent ?? "", /채널 소유자에게/);
+    assert.match(f.host.textContent ?? "", /오피스 소유자에게/);
     assert.equal(f.host.querySelector("[data-blocker] button"), null);
   } finally {
     await f.cleanup();

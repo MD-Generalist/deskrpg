@@ -312,6 +312,9 @@ export default function GroupAccessPanel({
     }
   };
 
+  // 처음 불러오는 동안에는 섹션마다 같은 문장을 반복하지 않는다 — 화면에 다섯 번 찍혔다(2026-09-20).
+  const initialLoading =
+    members.loading && invites.loading && joinRequests.loading && permissions.loading;
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-surface p-4">
@@ -329,6 +332,9 @@ export default function GroupAccessPanel({
           </button>
         </div>
         {flashMessage && <p className="mt-3 text-sm text-danger">{flashMessage}</p>}
+        {initialLoading && (
+          <p className="mt-3 text-sm text-text-muted">{t("admin.groups.loading")}</p>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -379,7 +385,9 @@ export default function GroupAccessPanel({
                 </button>
               </form>
               {members.loading ? (
-                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                initialLoading ? null : (
+                  <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                )
               ) : members.error ? (
                 <p className="text-sm text-danger">{members.error}</p>
               ) : members.items.length === 0 ? (
@@ -476,7 +484,9 @@ export default function GroupAccessPanel({
               </form>
               <p className="text-xs text-text-muted">{t("admin.groups.inviteFormHint")}</p>
               {invites.loading ? (
-                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                initialLoading ? null : (
+                  <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                )
               ) : invites.error ? (
                 <p className="text-sm text-danger">{invites.error}</p>
               ) : invites.items.length === 0 ? (
@@ -555,7 +565,9 @@ export default function GroupAccessPanel({
             t("admin.groups.joinRequests"),
             <div className="space-y-2">
               {joinRequests.loading ? (
-                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                initialLoading ? null : (
+                  <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                )
               ) : joinRequests.error ? (
                 <p className="text-sm text-danger">{joinRequests.error}</p>
               ) : joinRequests.items.length === 0 ? (
@@ -630,7 +642,9 @@ export default function GroupAccessPanel({
                 {t("admin.groups.groupDefaults")}
               </h4>
               {permissions.loading ? (
-                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                initialLoading ? null : (
+                  <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                )
               ) : permissions.error ? (
                 <p className="text-sm text-danger">{permissions.error}</p>
               ) : (
@@ -751,7 +765,9 @@ export default function GroupAccessPanel({
                 </button>
               </form>
               {overrides.loading ? (
-                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                initialLoading ? null : (
+                  <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+                )
               ) : overrides.error ? (
                 <p className="text-sm text-danger">{overrides.error}</p>
               ) : Object.keys(groupedOverrides).length === 0 ? (

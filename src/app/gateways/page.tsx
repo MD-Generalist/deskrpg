@@ -4,15 +4,13 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-import LocaleSwitcher from "@/components/LocaleSwitcher";
-import LogoutButton from "@/components/LogoutButton";
 import GatewaySetupWizard from "@/components/gateway/GatewaySetupWizard";
 import { nextSelectedGatewayId } from "./gateway-selection";
 import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
-import { useT, useLocale } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 
 import { planGatewayDelete } from "./gateway-delete-plan";
 import { backLinkTarget } from "./return-target";
@@ -77,7 +75,6 @@ export default function GatewayManagementPage() {
 
 function GatewayManagementPageInner() {
   const t = useT();
-  const { locale } = useLocale();
   // 사무실(채널 화면)에서 "인격을 하나 더 만들자"로 넘어온 왕복. `gateway` 는 어느
   // 게이트웨이를 열지, `new=1` 은 만들기 화면을 바로 펼칠지, `returnTo` 는 만든 뒤
   // 어디로 돌아갈지를 말한다. `returnTo` 는 그대로 믿지 않는다 — safeReturnTo 가
@@ -112,6 +109,9 @@ function GatewayManagementPageInner() {
   const [testStates, setTestStates] = useState<Record<string, GatewayTestState>>({});
   const [blockingChannels, setBlockingChannels] = useState<BlockingChannel[]>([]);
   const [unbinding, setUnbinding] = useState("");
+  // 공유·진단은 상단 버튼으로 연다(2026-09-20 단테 결정) — 늘 펼쳐 두면 화면이 길어진다.
+  const [panel, setPanel] = useState<"share" | "diagnostics" | null>(null);
+  const [diagnosticsAvailable, setDiagnosticsAvailable] = useState(false);
 
   const loadGateways = useCallback(
     async (options: { autoSelect?: boolean } = {}) => {
@@ -424,45 +424,42 @@ function GatewayManagementPageInner() {
   }
 
   return (
-    <div className="theme-web min-h-screen bg-bg px-8 py-8 text-text">
+    <div className="theme-web min-h-screen bg-bg px-4 py-6 text-text sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div>
             <h1 className="text-3xl font-bold">{t("gateways.title")}</h1>
             <p className="mt-1 text-text-muted">{t("gateways.subtitle")}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {returnTo && (
               <Link
                 href={returnTo}
-                className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+                className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
               >
                 {t("gateways.backToOffice")}
               </Link>
             )}
-            <Link
-              href="/channels"
-              className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+            <button
+              type="button"
+              onClick={() => setPanel(panel === "share" ? null : "share")}
+              aria-pressed={panel === "share"}
+              className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
             >
-              {t("gateways.backToChannels")}
-            </Link>
-            <LogoutButton />
-            <LocaleSwitcher />
+              {t("gateways.shareTitle")}
+            </button>
+            {diagnosticsAvailable && (
+              <button
+                type="button"
+                onClick={() => setPanel(panel === "diagnostics" ? null : "diagnostics")}
+                aria-pressed={panel === "diagnostics"}
+                className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+              >
+                {t("diagnostics.title")}
+              </button>
+            )}
           </div>
         </div>
-
-        <section className="mb-6 rounded-xl border border-border bg-surface p-5">
-          <p className="text-xs font-semibold tracking-wide text-text-muted">
-            {locale === "ko"
-              ? "01 내 캐릭터 → 02 연결 → 03 직원 등록·로그인 → 04 사무실 만들기"
-              : "01 My character → 02 Connect → 03 Hire and sign in → 04 Create an office"}
-          </p>
-          <p className="mt-2 text-sm text-text-muted">
-            {locale === "ko"
-              ? "왼쪽 메뉴 순서가 곧 진행 순서입니다. 여기서 Hermes 게이트웨이를 연결하면, 직원 화면에서 직원을 만들고 그 직원으로 모델에 로그인합니다. Hermes 는 직원마다 따로 로그인합니다."
-              : "The sidebar order is the setup order. Connect your Hermes gateway here, then hire employees and sign each one in — Hermes signs in per employee."}
-          </p>
-        </section>
 
         {gateways.length === 0 && <GatewayOnboardingGuide />}
 
@@ -594,7 +591,7 @@ function GatewayManagementPageInner() {
                           href={selectedGateway.dashboardUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+                          className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
                         >
                           {t("gateways.openDashboard")} ↗
                         </a>
@@ -683,7 +680,8 @@ function GatewayManagementPageInner() {
                   />
                 )}
 
-                <div className="mt-5 flex gap-3">
+                {/* 삭제는 저장과 붙여 두지 않는다 — 되돌릴 수 없는 버튼이 먼저 눈에 들었다(2026-09-20). */}
+                <div className="mt-5 flex items-center justify-between gap-3">
                   <>
                     <button
                       type="button"
@@ -702,7 +700,7 @@ function GatewayManagementPageInner() {
                       type="button"
                       onClick={() => void handleDelete()}
                       disabled={deleting || !selectedGateway?.isOwner}
-                      className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-60"
+                      className="ml-auto rounded-lg border border-danger/50 px-4 py-2 text-sm font-semibold text-danger hover:bg-danger/10 disabled:opacity-60"
                     >
                       {deleting ? t("common.loading") : t("common.delete")}
                     </button>
@@ -729,71 +727,76 @@ function GatewayManagementPageInner() {
               </section>
             )}
 
-            <section className="rounded-xl border border-border bg-surface p-5">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold">{t("gateways.shareTitle")}</h2>
-                <p className="mt-1 text-sm text-text-muted">{t("gateways.shareHelp")}</p>
-              </div>
-
-              {!selectedGateway ? (
-                <p className="text-sm text-text-muted">{t("gateways.selectGatewayFirst")}</p>
-              ) : !selectedGateway.isOwner ? (
-                <p className="text-sm text-text-muted">{t("gateways.shareOwnerOnly")}</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={shareLoginId}
-                      onChange={(e) => setShareLoginId(e.target.value)}
-                      className="flex-1 rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary"
-                      placeholder={t("gateways.shareLoginId")}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void handleAddShare()}
-                      disabled={shareSaving || !shareLoginId.trim()}
-                      className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
-                    >
-                      {shareSaving ? t("common.loading") : t("gateways.shareAdd")}
-                    </button>
-                  </div>
-                  {shareError && <p className="text-sm text-danger">{shareError}</p>}
-                  {sharesLoading ? (
-                    <p className="text-sm text-text-muted">{t("common.loading")}</p>
-                  ) : shares.length === 0 ? (
-                    <p className="text-sm text-text-muted">{t("gateways.shareEmpty")}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {shares.map((share) => (
-                        <div
-                          key={share.userId}
-                          className="flex items-center justify-between rounded-lg bg-bg px-3 py-3"
-                        >
-                          <div>
-                            <p className="font-medium text-text">
-                              {share.nickname || share.loginId}
-                            </p>
-                            <p className="text-xs text-text-muted">{share.loginId}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void handleRemoveShare(share.userId)}
-                            disabled={shareSaving}
-                            className="rounded bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 disabled:opacity-60"
-                          >
-                            {t("common.delete")}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            {panel === "share" && (
+              <section className="rounded-xl border border-border bg-surface p-5">
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold">{t("gateways.shareTitle")}</h2>
+                  <p className="mt-1 text-sm text-text-muted">{t("gateways.shareHelp")}</p>
                 </div>
-              )}
-            </section>
 
-            {/* 관리자에게만 보이는 진단. 권한이 없으면 스스로 사라진다. */}
-            <DiagnosticsPanel />
+                {!selectedGateway ? (
+                  <p className="text-sm text-text-muted">{t("gateways.selectGatewayFirst")}</p>
+                ) : !selectedGateway.isOwner ? (
+                  <p className="text-sm text-text-muted">{t("gateways.shareOwnerOnly")}</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={shareLoginId}
+                        onChange={(e) => setShareLoginId(e.target.value)}
+                        className="flex-1 rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary"
+                        placeholder={t("gateways.shareLoginId")}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleAddShare()}
+                        disabled={shareSaving || !shareLoginId.trim()}
+                        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+                      >
+                        {shareSaving ? t("common.loading") : t("gateways.shareAdd")}
+                      </button>
+                    </div>
+                    {shareError && <p className="text-sm text-danger">{shareError}</p>}
+                    {sharesLoading ? (
+                      <p className="text-sm text-text-muted">{t("common.loading")}</p>
+                    ) : shares.length === 0 ? (
+                      <p className="text-sm text-text-muted">{t("gateways.shareEmpty")}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {shares.map((share) => (
+                          <div
+                            key={share.userId}
+                            className="flex items-center justify-between rounded-lg bg-bg px-3 py-3"
+                          >
+                            <div>
+                              <p className="font-medium text-text">
+                                {share.nickname || share.loginId}
+                              </p>
+                              <p className="text-xs text-text-muted">{share.loginId}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveShare(share.userId)}
+                              disabled={shareSaving}
+                              className="rounded bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 disabled:opacity-60"
+                            >
+                              {t("common.delete")}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* 관리자에게만 보이는 진단. 권한이 없으면 버튼도 나오지 않는다. */}
+            <DiagnosticsPanel
+              open={panel === "diagnostics"}
+              onAvailable={setDiagnosticsAvailable}
+            />
           </main>
         </div>
       </div>

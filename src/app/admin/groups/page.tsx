@@ -4,8 +4,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import GroupAccessPanel from "@/components/admin/GroupAccessPanel";
-import LocaleSwitcher from "@/components/LocaleSwitcher";
-import LogoutButton from "@/components/LogoutButton";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
@@ -100,8 +98,6 @@ function AdminGroupsPageInner() {
             >
               {t("admin.groups.backToChannels")}
             </Link>
-            <LogoutButton />
-            <LocaleSwitcher />
           </div>
         </div>
 

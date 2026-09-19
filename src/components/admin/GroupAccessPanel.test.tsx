@@ -72,7 +72,7 @@ test("권한 행은 원시 키 대신 사람이 읽는 이름과 번역된 값�
     });
 
     const text = el.textContent ?? "";
-    assert.match(text, /채널 만들기/);
+    assert.match(text, /오피스 만들기/);
     assert.match(text, /멤버 관리/);
     assert.match(text, /상속/);
     assert.match(text, /거부/);
