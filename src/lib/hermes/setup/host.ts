@@ -1,4 +1,10 @@
-import { HOST_BOOTSTRAP, HOST_HELPER, HOST_INSTALLER } from "./host-helper";
+import { HOST_BOOTSTRAP, HOST_HELPER, HOST_INSTALLER, HOST_LAUNCHER } from "./host-helper";
+import {
+  packageManagerFor,
+  parseSystemPackages,
+  type PackageManager,
+  type SystemPackage,
+} from "./system-packages";
 import type {
   HostExecutor,
   PreparedHost,
@@ -55,6 +61,10 @@ export const HOST_ERROR_CODES = new Set([
   "profile_provision_forbidden",
   "hermes_already_installed",
   "hermes_install_failed",
+  "curl_missing",
+  "system_packages_missing",
+  "git_missing",
+  "python_bootstrap_failed",
   "hermes_installer_unavailable",
 ]);
 /** 실패가 아닌 알림만 담는다. 오류 경로에는 절대 오르지 않는다. */
@@ -67,6 +77,16 @@ const SUGGEST_MAX = 8699;
  * `port_conflict` 만 대안 포트를 하나 들고 온다. 코드는 그대로이고 숫자 하나만 더 실린다 —
  * 제안이 없으면 `suggestedPort` 는 undefined 이고 화면은 지금처럼 오류만 보여 준다.
  */
+/** 설치에 필요한 시스템 패키지가 없다 — 코드와 패키지 관리자만 싣는다(명령 문자열은 화면이 만든다). */
+export class SetupPackagesMissingError extends Error {
+  readonly packages: SystemPackage[];
+  readonly manager: PackageManager | null;
+  constructor(packages: SystemPackage[], manager: PackageManager | null) {
+    super("system_packages_missing");
+    this.packages = packages;
+    this.manager = manager;
+  }
+}
 export class SetupPortConflictError extends Error {
   readonly suggestedPort?: number;
   constructor(suggestedPort?: number) {
@@ -202,23 +222,29 @@ async function invoke(
           ? 60
           : 45;
   try {
-    const result = await execute("python3", ["-c", HOST_BOOTSTRAP], {
-      input: JSON.stringify({
-        action,
-        timeout,
-        script:
-          HOST_HELPER +
-          "\nentry(" +
-          JSON.stringify(action) +
-          ", " +
-          (candidateId ? JSON.stringify(candidateId) : "None") +
-          ", " +
-          (option === undefined ? "None" : JSON.stringify(option)) +
-          ")\n",
-      }),
-      timeoutMs: (timeout + 5) * 1000,
-      signal,
-    });
+    // 파이썬이 하나도 없으면 Hermes 도 없다 — 탐색은 빈 목록(→ 설치 제안), 그 밖은 hermes_not_found.
+    const none = action === "discover" ? '{"candidates": []}' : '{"error": "hermes_not_found"}';
+    const result = await execute(
+      "sh",
+      ["-c", HOST_LAUNCHER, "deskrpg", "run", HOST_BOOTSTRAP, none],
+      {
+        input: JSON.stringify({
+          action,
+          timeout,
+          script:
+            HOST_HELPER +
+            "\nentry(" +
+            JSON.stringify(action) +
+            ", " +
+            (candidateId ? JSON.stringify(candidateId) : "None") +
+            ", " +
+            (option === undefined ? "None" : JSON.stringify(option)) +
+            ")\n",
+        }),
+        timeoutMs: (timeout + 5) * 1000,
+        signal,
+      },
+    );
     checkAbort(signal);
     if (result.code !== 0 || result.stdout.length > 262144)
       throw new Error("host_operation_failed");
@@ -255,13 +281,22 @@ export async function installHermesHost(
 ): Promise<{ installerDigest: string; milestones: string[] }> {
   checkAbort(signal);
   try {
-    const result = await execute("python3", ["-c", HOST_INSTALLER], {
-      timeoutMs: 600_000,
-      signal,
-    });
+    const result = await execute(
+      "sh",
+      ["-c", HOST_LAUNCHER, "deskrpg", "install", HOST_INSTALLER],
+      {
+        timeoutMs: 600_000,
+        signal,
+      },
+    );
     checkAbort(signal);
     if (result.code !== 0 || result.stdout.length > 65536) throw new Error("hermes_install_failed");
     const body = record(JSON.parse(result.stdout));
+    if (body.error === "system_packages_missing")
+      throw new SetupPackagesMissingError(
+        parseSystemPackages(body.packages),
+        packageManagerFor(body.distro),
+      );
     if ("error" in body)
       throw new Error(
         typeof body.error === "string" && HOST_ERROR_CODES.has(body.error)

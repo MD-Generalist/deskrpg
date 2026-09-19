@@ -418,6 +418,22 @@ const zh: Record<string, string> = {
     "此主机已安装Hermes。请返回查找安装并直接连接，而不是重新安装。",
   "hermes.wizard.error.hermesInstallForbidden":
     "此向导无法安装Hermes。远程(SSH)目标不会被安装，且运维人员需要启用DESKRPG_HERMES_INSTALL_ENABLED。",
+  "hermes.wizard.error.curlMissing":
+    "目标服务器缺少curl，Hermes安装脚本需要它。请安装curl（例如 sudo apt install curl）后重试。",
+  "hermes.wizard.error.gitMissing":
+    "目标服务器缺少git，且无法自动安装（sudo）。请安装git（例如 sudo apt install git，macOS 用 xcode-select --install）后重试。",
+  "hermes.wizard.error.pythonBootstrap":
+    "服务器缺少python3，尝试在用户目录下载Python但失败了。请确认服务器能访问astral.sh和github.com后重试。",
+  "hermes.wizard.error.systemPackages":
+    "目标服务器缺少Hermes所需的系统软件包，且无法免密使用sudo，因此无法自动安装。",
+  "hermes.wizard.packages.missing": "缺少：",
+  "hermes.wizard.packages.curl": "curl",
+  "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.cxx": "C++编译器",
+  "hermes.wizard.packages.unknownDistro":
+    "无法识别此服务器的包管理器。请用服务器的包管理器安装上述软件包。",
+  "hermes.wizard.packages.retry":
+    "在目标服务器终端运行上面的命令后，再次点击安装。Python和Node由DeskRPG下载到用户目录。",
   "hermes.wizard.error.hermesInstallFailed":
     "Hermes安装未能完成。请管理员在服务器上直接运行安装脚本并检查输出，然后重试。",
   "hermes.wizard.error.hermesInstallerUnavailable":
@@ -433,7 +449,6 @@ const zh: Record<string, string> = {
   "hermes.wizard.hostReason.disabled":
     "运营者已在此服务器上关闭主机设置（DESKRPG_HOST_SETUP_ENABLED=0）。请改用网关地址连接。",
   "hermes.wizard.hostReason.unsupported_platform": "此服务器的操作系统不支持本地连接。",
-  "hermes.wizard.hostReason.python3_missing": "此服务器没有 python3，无法查找或安装 Hermes。",
   "hermes.wizard.hostReason.container_without_hermes":
     "DeskRPG 运行在容器中，且容器内没有 Hermes。安装到容器中会在重新部署时丢失，因此不提供安装。请通过网关地址（例如 http://host.docker.internal:8642）或 SSH 连接主机上的 Hermes。",
   "hermes.wizard.hostReason.ssh_missing": "此服务器没有 ssh 命令，无法使用 SSH 连接。",

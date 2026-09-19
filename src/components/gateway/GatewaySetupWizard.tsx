@@ -19,6 +19,11 @@ import {
   isSetupWarningBlocking,
 } from "./setup-copy";
 import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
+import {
+  packageManagerFor,
+  parseSystemPackages,
+  systemPackagesCommand,
+} from "../../lib/hermes/setup/system-packages";
 import SshHostRegistration from "./SshHostRegistration";
 import { CopyCommand } from "../CopyCommand";
 
@@ -969,6 +974,28 @@ export default function GatewaySetupWizard({
               {errorMessage(job.error)}
             </p>
           )}
+          {job.error === "system_packages_missing" &&
+            (() => {
+              const packages = parseSystemPackages((job.missingPackages ?? []).join(" "));
+              const command = systemPackagesCommand(
+                packageManagerFor(job.packageManager),
+                packages,
+              );
+              return (
+                <div className="space-y-2 text-sm" data-missing-packages={packages.join(" ")}>
+                  <p>
+                    {t("hermes.wizard.packages.missing")}{" "}
+                    {packages.map((p) => t(`hermes.wizard.packages.${p}`)).join(", ")}
+                  </p>
+                  {command ? (
+                    <CopyCommand command={command} />
+                  ) : (
+                    <p className="text-text-muted">{t("hermes.wizard.packages.unknownDistro")}</p>
+                  )}
+                  <p className="text-xs text-text-muted">{t("hermes.wizard.packages.retry")}</p>
+                </div>
+              );
+            })()}
           {job.status === "running" ? (
             <>
               <p className="text-xs text-text-muted">{c.cancelHelp}</p>

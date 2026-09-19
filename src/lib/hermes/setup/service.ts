@@ -12,6 +12,7 @@ import {
   discoverHost,
   inspectHost,
   installHermesHost,
+  SetupPackagesMissingError,
   prepareHost,
 } from "./host";
 import { localExecutor, sshExecutor, getSshHosts, sshFailureCode, sshOptions } from "./executor";
@@ -116,7 +117,6 @@ export async function setupCapabilities(userId: string): Promise<SetupCapabiliti
     switchedOff: systemRole === "system_admin" && !enabled,
     installAllowed: hermesInstallAllowed(process.env, systemRole, "local"),
     platform: process.platform,
-    hasPython3: hasCommand("python3"),
     hasSsh: hasCommand("ssh"),
     inContainer: inContainer(),
     localHermesFound: localHermesFound(),
@@ -431,6 +431,12 @@ export async function startSetup(
       jobs.update(userId, job.id, {
         status: code === "setup_cancelled" ? "cancelled" : "failed",
         error: code,
+        ...(error instanceof SetupPackagesMissingError
+          ? {
+              missingPackages: error.packages,
+              ...(error.manager ? { packageManager: error.manager } : {}),
+            }
+          : {}),
       });
     } finally {
       controllers.delete(job.id);

@@ -30,8 +30,59 @@ except Exception:
 `;
 
 /**
- * 로컬 Hermes 설치 전용 스크립트. 설치가 없을 때 돌아야 하므로 HOST_BOOTSTRAP(=Hermes venv 파이썬)을
- * 거치지 않고 시스템 python3 에서 직접 실행된다. 표준 라이브러리만 쓴다.
+ * 파이썬 구동기 앞의 sh 런처. 시스템 python3 가 없어도 Hermes 를 찾고 설치할 수 있게 한다(2026-09-19 단테 결정).
+ *
+ * 인자: $1 = run | install, $2 = 파이썬 코드, $3 = (run) 파이썬이 하나도 없을 때 그대로 찍을 JSON.
+ * 고르는 순서: Hermes venv 파이썬 → 시스템 python3 → (install 만) uv 로 사용자 홈에 파이썬을 받는다.
+ * uv 는 Hermes 설치 스크립트가 스스로 쓰는 자리(`~/.hermes/bin/uv`)에 둔다 — 설치 스크립트가 그 uv 를 재사용한다.
+ * sudo 는 쓰지 않는다. 받은 설치 스크립트의 출력은 버리고 미리 정한 코드로만 실패를 알린다.
+ * Hermes 설치 스크립트가 curl 을 요구하므로 여기서도 curl 만 쓴다.
+ */
+export const HOST_LAUNCHER = String.raw`
+mode=$1
+code=$2
+# 설치 전에 sudo 가 필요한 시스템 패키지를 본다. root 이거나 비밀번호 없는 sudo 면 설치 스크립트가 스스로 깐다.
+# 아니면 여기서 멈춘다 — 몇 분 받다가 중간에 실패하는 대신 관리자에게 명령 한 줄을 보여 준다(system-packages.ts).
+if [ "$mode" = install ]; then
+  miss=""
+  command -v curl >/dev/null 2>&1 || miss="$miss curl"
+  { command -v git >/dev/null 2>&1 && git --version >/dev/null 2>&1; } || miss="$miss git"
+  command -v g++ >/dev/null 2>&1 || command -v clang++ >/dev/null 2>&1 || miss="$miss cxx"
+  if [ -n "$miss" ] && [ "$(id -u)" != 0 ] && ! sudo -n true >/dev/null 2>&1; then
+    if [ "$(uname -s)" = Darwin ]; then distro=macos
+    else distro=$( (. /etc/os-release >/dev/null 2>&1 && printf '%s' "$ID") | tr -cd 'a-z0-9_-' | cut -c1-32); fi
+    printf '{"error": "system_packages_missing", "packages": "%s", "distro": "%s"}' "$miss" "$distro"
+    exit 0
+  fi
+fi
+for p in "$HOME/.hermes/hermes-agent/venv/bin/python" "$HOME/.hermes/hermes-agent/.venv/bin/python"; do
+  if [ -x "$p" ]; then exec "$p" -c "$code"; fi
+done
+if command -v python3 >/dev/null 2>&1; then exec python3 -c "$code"; fi
+if [ "$mode" != install ]; then printf '%s' "$3"; exit 0; fi
+fail() { printf '{"error": "%s"}' "$1"; exit 0; }
+[ -n "$HOME" ] && [ -d "$HOME" ] || fail unsafe_host_path
+root="$HOME/.hermes"
+if [ -L "$root" ] || { [ -e "$root" ] && [ ! -d "$root" ]; }; then fail unsafe_host_path; fi
+command -v curl >/dev/null 2>&1 || fail curl_missing
+mkdir -p "$root/bin" || fail python_bootstrap_failed
+uv="$root/bin/uv"
+if [ ! -x "$uv" ]; then
+  tmp=$(mktemp "$root/.deskrpg-uv-install.XXXXXX") || fail python_bootstrap_failed
+  if ! curl -fsSL --proto '=https' --tlsv1.2 https://astral.sh/uv/install.sh -o "$tmp"; then rm -f "$tmp"; fail hermes_installer_unavailable; fi
+  UV_UNMANAGED_INSTALL="$root/bin" UV_NO_MODIFY_PATH=1 sh "$tmp" >/dev/null 2>&1
+  rm -f "$tmp"
+  [ -x "$uv" ] || fail python_bootstrap_failed
+fi
+"$uv" python install 3.12 >/dev/null 2>&1 || fail python_bootstrap_failed
+py=$("$uv" python find 3.12 2>/dev/null) || fail python_bootstrap_failed
+[ -x "$py" ] || fail python_bootstrap_failed
+exec "$py" -c "$code"
+`;
+
+/**
+ * Hermes 설치 전용 스크립트. 설치가 없을 때 돌아야 하므로 HOST_BOOTSTRAP(=Hermes venv 파이썬)을
+ * 거치지 않고 HOST_LAUNCHER 가 고른 파이썬(시스템 python3, 없으면 uv 로 받은 파이썬)에서 실행된다. 표준 라이브러리만 쓴다.
  * 설치 스크립트는 파이프가 아니라 임시 파일로 내려받아 sha256 지문을 남기고 `bash <파일>` 로 실행한다.
  * 설치 출력은 저장도 반환도 하지 않는다 — 실패 분류용 마지막 8KiB 만 메모리에 둔다.
  */
@@ -121,6 +172,8 @@ try:
         diagnostic = tail.decode('utf-8', errors='replace').lower()
         if 'could not resolve host' in diagnostic or 'failed to connect' in diagnostic or 'connection refused' in diagnostic:
             out({'error': 'hermes_installer_unavailable'})
+        # git 은 설치 스크립트가 sudo 로 깔아 보려다 실패하면 이 문장을 남긴다(install.sh check_git 원문).
+        if 'could not install git automatically' in diagnostic: out({'error': 'git_missing'})
         out({'error': 'hermes_install_failed'})
     python = next((INSTALL / folder / 'bin' / 'python' for folder in ('venv', '.venv') if (INSTALL / folder / 'bin' / 'python').is_file()), None)
     if python is None: out({'error': 'hermes_install_failed'})
