@@ -193,6 +193,28 @@ const ja: Record<string, string> = {
   "admin.groups.approve": "承認",
   "admin.groups.reject": "却下",
   "admin.groups.savePermission": "保存",
+  "admin.groups.role.group_admin": "グループ管理者",
+  "admin.groups.role.member": "メンバー",
+  "admin.groups.permission.create_channel.label": "チャンネル作成",
+  "admin.groups.permission.create_channel.description":
+    "このグループに新しいオフィスを作成できます",
+  "admin.groups.permission.manage_group_members.label": "メンバー管理",
+  "admin.groups.permission.manage_group_members.description":
+    "メンバーの追加・削除と招待コードの作成ができます",
+  "admin.groups.permission.manage_group_permissions.label": "権限管理",
+  "admin.groups.permission.manage_group_permissions.description":
+    "グループの既定権限とユーザー別の例外を変更できます",
+  "admin.groups.permission.approve_join_requests.label": "参加リクエストの承認",
+  "admin.groups.permission.approve_join_requests.description":
+    "グループへの参加リクエストを承認・拒否できます",
+  "admin.groups.permission.manage_group_channels.label": "グループチャンネル管理",
+  "admin.groups.permission.manage_group_channels.description":
+    "このグループに属するチャンネルを管理できます",
+  "admin.groups.permissionValue.inherit": "継承",
+  "admin.groups.permissionValue.allow": "許可",
+  "admin.groups.permissionValue.deny": "拒否",
+  "admin.groups.groupDefaults": "グループの既定値",
+  "admin.groups.userExceptions": "ユーザー別の例外",
   "admin.groups.saveOverride": "オーバーライド保存",
   "admin.groups.remove": "削除",
   "admin.groups.canCreate": "チャンネル作成可",

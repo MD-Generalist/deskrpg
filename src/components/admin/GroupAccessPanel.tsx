@@ -91,6 +91,8 @@ type GroupAccessPanelProps = {
   canManageMembers: boolean;
   canManagePermissions: boolean;
   canApproveJoinRequests: boolean;
+  /** 관리할 그룹이 여럿일 때 page 가 넘기는 그룹 전환 셀렉트. */
+  groupSwitcher?: ReactNode;
 };
 
 export default function GroupAccessPanel({
@@ -99,6 +101,7 @@ export default function GroupAccessPanel({
   canManageMembers,
   canManagePermissions,
   canApproveJoinRequests,
+  groupSwitcher,
 }: GroupAccessPanelProps) {
   const t = useT();
 
@@ -281,10 +284,20 @@ export default function GroupAccessPanel({
 
   const sectionCard = (title: string, content: ReactNode) => (
     <section className="rounded-xl border border-border bg-surface p-4">
-      <h3 className="mb-4 text-lg font-semibold">{title}</h3>
+      <h3 className="mb-3 text-lg font-semibold">{title}</h3>
       {content}
     </section>
   );
+
+  const permissionLabel = (permissionKey: PermissionKey) =>
+    t(`admin.groups.permission.${permissionKey}.label`);
+  const permissionValueLabel = (value: "inherit" | "allow" | "deny") =>
+    t(`admin.groups.permissionValue.${value}`);
+  const permissionValueOptions = (["inherit", "allow", "deny"] as const).map((value) => (
+    <option key={value} value={value}>
+      {permissionValueLabel(value)}
+    </option>
+  ));
 
   const formatInviteStatus = (invite: InviteRow) => {
     switch (invite.status) {
@@ -302,15 +315,15 @@ export default function GroupAccessPanel({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-surface p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold">{groupName}</h2>
-            <p className="mt-1 text-sm text-text-muted">{t("admin.groups.subtitle")}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+            <h2 className="min-w-0 truncate text-2xl font-bold">{groupName}</h2>
+            {groupSwitcher}
           </div>
           <button
             type="button"
             onClick={() => void refreshAll()}
-            className="rounded-lg bg-surface-raised px-3 py-2 text-sm font-medium hover:bg-surface-raised/80"
+            className="shrink-0 whitespace-nowrap rounded-lg bg-surface-raised px-3 py-2 text-sm font-medium hover:bg-surface-raised/80"
           >
             {t("admin.groups.refresh")}
           </button>
@@ -318,13 +331,13 @@ export default function GroupAccessPanel({
         {flashMessage && <p className="mt-3 text-sm text-danger">{flashMessage}</p>}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-4">
         {canManageMembers &&
           sectionCard(
             t("admin.groups.members"),
             <div className="space-y-4">
               <form
-                className="flex flex-col gap-2 sm:flex-row"
+                className="flex flex-wrap gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (!memberLoginId.trim()) return;
@@ -347,20 +360,20 @@ export default function GroupAccessPanel({
                   value={memberLoginId}
                   onChange={(event) => setMemberLoginId(event.target.value)}
                   placeholder={t("admin.groups.targetLoginId")}
-                  className="flex-1 rounded-lg border border-border bg-bg px-3 py-2"
+                  className="min-w-0 flex-1 basis-48 rounded-lg border border-border bg-bg px-3 py-2"
                 />
                 <select
                   value={memberRole}
                   onChange={(event) => setMemberRole(event.target.value as GroupMemberRole)}
                   className="rounded-lg border border-border bg-bg px-3 py-2"
                 >
-                  <option value="member">member</option>
-                  <option value="group_admin">group_admin</option>
+                  <option value="member">{t("admin.groups.role.member")}</option>
+                  <option value="group_admin">{t("admin.groups.role.group_admin")}</option>
                 </select>
                 <button
                   type="submit"
                   disabled={submitting === "member-add"}
-                  className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
                 >
                   {t("admin.groups.addMember")}
                 </button>
@@ -381,7 +394,7 @@ export default function GroupAccessPanel({
                       <div>
                         <p className="font-medium">{member.nickname || member.loginId}</p>
                         <p className="text-xs text-text-muted">
-                          {member.loginId} · {member.role}
+                          {member.loginId} · {t(`admin.groups.role.${member.role}`)}
                         </p>
                       </div>
                       <button
@@ -419,7 +432,7 @@ export default function GroupAccessPanel({
             t("admin.groups.invites"),
             <div className="space-y-4">
               <form
-                className="grid gap-2 sm:grid-cols-[1fr_220px_auto]"
+                className="flex flex-wrap gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void submitAction("invite-create", async () => {
@@ -444,19 +457,19 @@ export default function GroupAccessPanel({
                   value={inviteLoginId}
                   onChange={(event) => setInviteLoginId(event.target.value)}
                   placeholder={t("admin.groups.inviteTargetOptional")}
-                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                  className="min-w-0 flex-1 basis-48 rounded-lg border border-border bg-bg px-3 py-2"
                 />
                 <input
                   type="datetime-local"
                   value={inviteExpiresAt}
                   onChange={(event) => setInviteExpiresAt(event.target.value)}
                   placeholder={t("admin.groups.inviteExpirationOptional")}
-                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                  className="min-w-0 flex-1 basis-48 rounded-lg border border-border bg-bg px-3 py-2"
                 />
                 <button
                   type="submit"
                   disabled={submitting === "invite-create"}
-                  className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
                 >
                   {t("admin.groups.createInvite")}
                 </button>
@@ -613,6 +626,9 @@ export default function GroupAccessPanel({
           sectionCard(
             t("admin.groups.permissions"),
             <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-text-muted">
+                {t("admin.groups.groupDefaults")}
+              </h4>
               {permissions.loading ? (
                 <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
               ) : permissions.error ? (
@@ -623,8 +639,13 @@ export default function GroupAccessPanel({
                     key={permissionKey}
                     className="flex flex-col gap-2 rounded-lg bg-bg px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <span className="text-sm font-medium">{permissionKey}</span>
-                    <div className="flex gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{permissionLabel(permissionKey)}</p>
+                      <p className="text-xs text-text-muted">
+                        {t(`admin.groups.permission.${permissionKey}.description`)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
                       <select
                         value={permissionDraft[permissionKey]}
                         onChange={(event) =>
@@ -635,9 +656,7 @@ export default function GroupAccessPanel({
                         }
                         className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
                       >
-                        <option value="inherit">inherit</option>
-                        <option value="allow">allow</option>
-                        <option value="deny">deny</option>
+                        {permissionValueOptions}
                       </select>
                       <button
                         type="button"
@@ -658,7 +677,7 @@ export default function GroupAccessPanel({
                             );
                           })
                         }
-                        className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white"
+                        className="shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white"
                       >
                         {t("admin.groups.savePermission")}
                       </button>
@@ -666,15 +685,12 @@ export default function GroupAccessPanel({
                   </div>
                 ))
               )}
-            </div>,
-          )}
 
-        {canManagePermissions &&
-          sectionCard(
-            t("admin.groups.userOverrides"),
-            <div className="space-y-4">
+              <h4 className="pt-3 text-sm font-semibold text-text-muted">
+                {t("admin.groups.userExceptions")}
+              </h4>
               <form
-                className="grid gap-2 md:grid-cols-[1fr_1fr_140px_auto]"
+                className="flex flex-wrap gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (!overrideTargetUserId) return;
@@ -696,7 +712,7 @@ export default function GroupAccessPanel({
                 <select
                   value={overrideTargetUserId}
                   onChange={(event) => setOverrideTargetUserId(event.target.value)}
-                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                  className="min-w-0 flex-1 basis-40 rounded-lg border border-border bg-bg px-3 py-2"
                 >
                   {members.items.map((member) => (
                     <option key={member.userId} value={member.userId}>
@@ -709,11 +725,11 @@ export default function GroupAccessPanel({
                   onChange={(event) =>
                     setOverridePermissionKey(event.target.value as PermissionKey)
                   }
-                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                  className="min-w-0 flex-1 basis-40 rounded-lg border border-border bg-bg px-3 py-2"
                 >
                   {PERMISSION_KEYS.map((permissionKey) => (
                     <option key={permissionKey} value={permissionKey}>
-                      {permissionKey}
+                      {permissionLabel(permissionKey)}
                     </option>
                   ))}
                 </select>
@@ -724,14 +740,12 @@ export default function GroupAccessPanel({
                   }
                   className="rounded-lg border border-border bg-bg px-3 py-2"
                 >
-                  <option value="inherit">inherit</option>
-                  <option value="allow">allow</option>
-                  <option value="deny">deny</option>
+                  {permissionValueOptions}
                 </select>
                 <button
                   type="submit"
                   disabled={!overrideTargetUserId || submitting === "override-save"}
-                  className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
                 >
                   {t("admin.groups.saveOverride")}
                 </button>
@@ -753,10 +767,11 @@ export default function GroupAccessPanel({
                         {userOverrides.map((override) => (
                           <div
                             key={override.id}
-                            className="flex items-center justify-between text-sm"
+                            className="flex items-center justify-between gap-3 text-sm"
                           >
-                            <span>
-                              {override.permissionKey}: {override.effect}
+                            <span className="min-w-0">
+                              {permissionLabel(override.permissionKey)}:{" "}
+                              {permissionValueLabel(override.effect)}
                             </span>
                             <button
                               type="button"
@@ -775,7 +790,7 @@ export default function GroupAccessPanel({
                                   );
                                 })
                               }
-                              className="text-danger"
+                              className="shrink-0 text-danger"
                             >
                               {t("admin.groups.remove")}
                             </button>

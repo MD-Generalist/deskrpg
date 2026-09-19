@@ -192,6 +192,27 @@ const en: Record<string, string> = {
   "admin.groups.approve": "Approve",
   "admin.groups.reject": "Reject",
   "admin.groups.savePermission": "Save",
+  "admin.groups.role.group_admin": "Group admin",
+  "admin.groups.role.member": "Member",
+  "admin.groups.permission.create_channel.label": "Create channels",
+  "admin.groups.permission.create_channel.description": "Can create new offices in this group",
+  "admin.groups.permission.manage_group_members.label": "Manage members",
+  "admin.groups.permission.manage_group_members.description":
+    "Can add or remove members and create invite codes",
+  "admin.groups.permission.manage_group_permissions.label": "Manage permissions",
+  "admin.groups.permission.manage_group_permissions.description":
+    "Can change group defaults and per-user exceptions",
+  "admin.groups.permission.approve_join_requests.label": "Approve join requests",
+  "admin.groups.permission.approve_join_requests.description":
+    "Can approve or reject requests to join this group",
+  "admin.groups.permission.manage_group_channels.label": "Manage group channels",
+  "admin.groups.permission.manage_group_channels.description":
+    "Can manage channels that belong to this group",
+  "admin.groups.permissionValue.inherit": "Inherit",
+  "admin.groups.permissionValue.allow": "Allow",
+  "admin.groups.permissionValue.deny": "Deny",
+  "admin.groups.groupDefaults": "Group defaults",
+  "admin.groups.userExceptions": "Per-user exceptions",
   "admin.groups.saveOverride": "Save Override",
   "admin.groups.remove": "Remove",
   "admin.groups.canCreate": "Can create channels",
