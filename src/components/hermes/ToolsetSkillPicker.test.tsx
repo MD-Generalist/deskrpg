@@ -172,3 +172,64 @@ test("부모가 준 목록에 플러그인이 거절할 이름이 있어도 올�
     f.restore();
   }
 });
+
+test("소유자는 제공자를 고르는 도구에 '설정' 이 있고, 키가 없는 도구를 켜면 설정 패널이 펼쳐진다", async () => {
+  const withProviders = {
+    ...TOOLSETS,
+    toolsets: TOOLSETS.toolsets.map((t) => ({ ...t, hasProviders: t.name === "tts" })),
+  };
+  const providers = {
+    toolset: "tts",
+    hasProviders: true,
+    activeProvider: null,
+    cliCommand: "hermes -p noah tools",
+    providers: [],
+  };
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: string) => {
+    const u = String(url);
+    const body = u.endsWith("/providers")
+      ? providers
+      : u.endsWith("/skills")
+        ? SKILLS
+        : withProviders;
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as typeof fetch;
+  const { host, unmount } = await mount({ canManageToolProviders: true });
+  try {
+    assert.ok(host.querySelector('[data-configure-tool="tts"]'), "tts 에 설정이 없다");
+    assert.equal(
+      host.querySelector('[data-configure-tool="web"]'),
+      null,
+      "web 에는 설정이 없어야 한다",
+    );
+    await act(async () => {
+      host.querySelector<HTMLInputElement>('input[data-toolset="tts"]')!.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.ok(
+      host.querySelector('[data-tool-panel="tts"]'),
+      "키 없는 도구를 켰는데 설정이 펼쳐지지 않았다",
+    );
+  } finally {
+    globalThis.fetch = original;
+    await unmount();
+  }
+});
+
+test("공유 사용자에게는 '설정' 이 없다", async () => {
+  const withProviders = {
+    ...TOOLSETS,
+    toolsets: TOOLSETS.toolsets.map((t) => ({ ...t, hasProviders: true })),
+  };
+  const f = stubFetch({ "/toolsets": withProviders, "/skills": SKILLS });
+  const { host, unmount } = await mount({});
+  try {
+    assert.equal(host.querySelector("[data-configure-tool]"), null);
+  } finally {
+    f.restore();
+    await unmount();
+  }
+});

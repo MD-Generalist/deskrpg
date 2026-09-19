@@ -23,6 +23,7 @@ import {
   toggleSkill,
   toggleToolset,
 } from "./picker-model";
+import ToolProviderPanel from "./ToolProviderPanel";
 
 export type ToolsetSkillPickerProps = {
   profileBase: string; // `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(name)}`
@@ -33,6 +34,11 @@ export type ToolsetSkillPickerProps = {
   onLoaded?(initial: { enabledToolsets: string[]; disabledSkills: string[] }): void;
   onUnsupported?(): void; // plugin_upgrade_required → 호출부가 텍스트 입력으로 폴백
   disabled?: boolean;
+  /**
+   * 게이트웨이 소유자인가(플러그인 0.10.0 `profile_tool_providers`). 참이면 프로바이더를 고르는 도구에
+   * "설정" 을 붙이고, 설정이 필요한 도구를 체크하는 순간 설정 패널을 펼친다. 키 쓰기가 소유자 전용이다.
+   */
+  canManageToolProviders?: boolean;
 };
 
 type Phase = "loading" | "ok" | "error" | "unsupported";
@@ -65,6 +71,10 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
   const t = useT();
   const { profileBase } = props;
   const [query, setQuery] = useState("");
+  // 펼친 도구 설정 패널 하나. 저장이 끝난 도구는 목록을 다시 받지 않고 "키 필요" 만 걷는다 —
+  // 다시 받으면 onLoaded 가 체크 상태를 서버 값으로 되돌려, 아직 저장 안 한 체크를 잃는다.
+  const [openTool, setOpenTool] = useState<string | null>(null);
+  const [configuredNow, setConfiguredNow] = useState<Record<string, boolean>>({});
   const [reloadSeq, setReloadSeq] = useState(0);
   // 결과에 요청 키를 붙여 둔다 — 키가 지금 요청과 다르면 "불러오는 중" 이다. 효과 안에서
   // 동기로 loading 을 되돌리지 않아도 profileBase 가 바뀌거나 다시 시도하면 곧바로 로딩이 된다.
@@ -165,33 +175,64 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
         <legend className="px-1 text-xs font-semibold text-text">
           {t("hermes.picker.toolsets")}
         </legend>
-        {toolsets.map((ts) => (
-          <label key={ts.name} className="flex items-start gap-2 text-sm text-text">
-            <input
-              type="checkbox"
-              className="mt-1"
-              data-toolset={ts.name}
-              checked={enabledToolsets.includes(ts.name)}
-              disabled={props.disabled}
-              onChange={(e) =>
-                props.onEnabledToolsetsChange(
-                  toggleToolset(enabledToolsets, ts.name, e.target.checked, toolsets),
-                )
-              }
-            />
-            <span className="min-w-0">
-              <span className="font-medium">{ts.label || ts.name}</span>
-              {ts.configured === false && (
-                <span className="ml-2 rounded bg-surface-raised px-1.5 py-0.5 text-[10px] text-text-muted">
-                  {t("hermes.picker.needsKey")}
-                </span>
+        {toolsets.map((ts) => {
+          const configurable = Boolean(props.canManageToolProviders && ts.hasProviders);
+          const configured = configuredNow[ts.name] ?? ts.configured;
+          return (
+            <div key={ts.name} className="space-y-1">
+              <div className="flex items-start gap-2">
+                <label className="flex min-w-0 flex-1 items-start gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    data-toolset={ts.name}
+                    checked={enabledToolsets.includes(ts.name)}
+                    disabled={props.disabled}
+                    onChange={(e) => {
+                      props.onEnabledToolsetsChange(
+                        toggleToolset(enabledToolsets, ts.name, e.target.checked, toolsets),
+                      );
+                      // `hermes tools` 처럼, 설정이 안 된 도구를 켜면 곧바로 프로바이더·키를 묻는다.
+                      if (e.target.checked && configurable && configured === false)
+                        setOpenTool(ts.name);
+                    }}
+                  />
+                  <span className="min-w-0">
+                    <span className="font-medium">{ts.label || ts.name}</span>
+                    {configured === false && (
+                      <span className="ml-2 rounded bg-surface-raised px-1.5 py-0.5 text-[10px] text-text-muted">
+                        {t("hermes.picker.needsKey")}
+                      </span>
+                    )}
+                    {ts.description && (
+                      <span className="block text-xs text-text-muted">{ts.description}</span>
+                    )}
+                  </span>
+                </label>
+                {configurable && (
+                  <button
+                    type="button"
+                    data-configure-tool={ts.name}
+                    onClick={() => setOpenTool((cur) => (cur === ts.name ? null : ts.name))}
+                    className="shrink-0 rounded bg-surface-raised px-2 py-1 text-xs font-semibold text-text hover:bg-surface-raised/80"
+                  >
+                    {openTool === ts.name
+                      ? t("hermes.toolProviders.close")
+                      : t("hermes.toolProviders.configure")}
+                  </button>
+                )}
+              </div>
+              {configurable && openTool === ts.name && (
+                <ToolProviderPanel
+                  profileBase={profileBase}
+                  toolset={ts.name}
+                  disabled={props.disabled}
+                  onSaved={() => setConfiguredNow((cur) => ({ ...cur, [ts.name]: true }))}
+                />
               )}
-              {ts.description && (
-                <span className="block text-xs text-text-muted">{ts.description}</span>
-              )}
-            </span>
-          </label>
-        ))}
+            </div>
+          );
+        })}
       </fieldset>
 
       <fieldset className="space-y-2 rounded border border-border p-3">
