@@ -13,6 +13,12 @@ export type SetupCandidate = {
   /** config.yaml 의 최상위 timezone. 비어 있으면 null — 그때만 마법사가 채워 준다. */
   timezone: string | null;
   warning?: string;
+  /** 탐색 시점의 게이트웨이 상태. 중지돼 있으면 연결이 시작시킨다. */
+  gatewayState?: "running" | "stopped" | "profile_gateways";
+  /** 이 게이트웨이가 /p/<이름>/ 으로 싣는 프로필(default 제외). */
+  profiles?: string[];
+  /** default 가 멈춘 채 따로 떠 있는 프로필 게이트웨이 — 먼저 멈춰야 연결할 수 있다. */
+  profileGateways?: string[];
 };
 export type SetupInspection = {
   candidate: SetupCandidate;
