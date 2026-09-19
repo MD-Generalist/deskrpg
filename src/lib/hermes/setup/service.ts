@@ -14,7 +14,7 @@ import {
   installHermesHost,
   prepareHost,
 } from "./host";
-import { localExecutor, sshExecutor, getSshHosts } from "./executor";
+import { localExecutor, sshExecutor, getSshHosts, sshFailureCode, sshOptions } from "./executor";
 import { ensureSshTunnel, registerSshTransport, transportFetch } from "./transport";
 import {
   collectSetupWarnings,
@@ -26,6 +26,13 @@ import {
 import { SetupJobStore } from "./store";
 import { describeCapabilities } from "./capabilities";
 import { managedSsh } from "./ssh-hosts";
+import {
+  readSshConfigHosts,
+  systemSsh,
+  systemSshArgs,
+  systemSshAvailable,
+  validateSystemTarget,
+} from "./system-ssh";
 import { buildPluginInfoCacheUpdate } from "../plugin-cache-update";
 import { verifySetupGateway } from "./verify";
 import type {
@@ -142,10 +149,43 @@ export async function sshRegisterHost(userId: string, input: Record<string, unkn
   return { host: { id: host.id, label: host.label } };
 }
 export async function sshRemoveHost(userId: string, hostId: unknown) {
-  if (typeof hostId !== "string" || !/^h-[a-f0-9]{10}$/.test(hostId))
+  if (typeof hostId !== "string" || !/^[hs]-[a-f0-9]{10}$/.test(hostId))
     throw new Error("setup_invalid_request");
-  await (await requireHostAdmin(userId)).remove(hostId);
+  const managed = await requireHostAdmin(userId);
+  if (hostId.startsWith("s-")) await systemSsh().remove(hostId);
+  else await managed.remove(hostId);
   return { removed: hostId };
+}
+/** Desktop 방식을 쓸 수 있는지와 `~/.ssh/config` 별칭(추천용). 관리자 전용. */
+export async function sshSystemInfo(userId: string) {
+  await requireHostAdmin(userId);
+  const available = systemSshAvailable();
+  return { available, aliases: available ? readSshConfigHosts() : [] };
+}
+/**
+ * Desktop 방식 호스트 추가 — 한 번 접속해 본 뒤에만 저장한다. 서버 사용자 설정·agent 를 그대로 쓰고,
+ * 처음 보는 호스트 키는 서버 사용자 known_hosts 에 기록된다(accept-new).
+ */
+export async function sshSystemAdd(userId: string, input: Record<string, unknown>) {
+  await requireHostAdmin(userId);
+  if (!systemSshAvailable()) throw new Error("ssh_system_unavailable");
+  const target = validateSystemTarget(input);
+  const probe = await localExecutor(
+    "ssh",
+    [
+      ...systemSshArgs({ ...target, id: "", label: "", addedAt: "" }),
+      ...sshOptions("accept-new"),
+      "-T",
+      "--",
+      target.target,
+      "true",
+    ],
+    { timeoutMs: 20_000 },
+  );
+  if (probe.code === 255) throw new Error(sshFailureCode(probe.stderr));
+  if (probe.code !== 0) throw new Error("ssh_connection_failed");
+  const host = await systemSsh().add(target);
+  return { host: { id: host.id, label: host.label } };
 }
 async function requireHost(userId: string, target: HostTarget) {
   if (!hostSetupAllowed(process.env, await role(userId))) throw new Error("setup_forbidden");

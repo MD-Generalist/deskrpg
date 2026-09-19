@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, access, rm, readFile, rename, writeFile, unlink } from 
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { assertSshHost, localExecutor, sshConfigArgs, SSH_OPTIONS } from "./executor";
+import { assertSshHost, localExecutor, sshRoute } from "./executor";
 
 type Target = { hostId: string; remotePort: number };
 const SUFFIX = ".deskrpg-ssh.invalid";
@@ -94,11 +94,12 @@ export async function ensureSshTunnel(
     const controlDir = await mkdtemp(path.join(os.tmpdir(), "deskrpg-ssh-"));
     const socket = path.join(controlDir, "master");
     // A private control socket acknowledges forward creation; a random open TCP port is not proof of ownership.
+    const route = sshRoute(hostId);
     const child = (dependencies.spawnImpl ?? spawn)(
       "ssh",
       [
-        ...sshConfigArgs(hostId),
-        ...SSH_OPTIONS.slice(0, -4),
+        ...route.args,
+        ...route.options.slice(0, -4),
         "-M",
         "-S",
         socket,
@@ -109,7 +110,7 @@ export async function ensureSshTunnel(
         "-N",
         "-T",
         "--",
-        hostId,
+        route.dest,
       ],
       { stdio: ["ignore", "ignore", "pipe"] },
     );

@@ -479,6 +479,26 @@ const ja: Record<string, string> = {
     "サーバーで確認: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
   "hermes.wizard.ssh.fingerprintConfirm": "フィンガープリントはサーバーで確認した値と同じです。",
   "hermes.wizard.ssh.register": "このサーバーを登録",
+  "hermes.wizard.ssh.methodSystem": "自分のSSH設定を使う",
+  "hermes.wizard.ssh.methodManaged": "DeskRPG専用キー",
+  "hermes.wizard.ssh.systemBody":
+    "Hermesデスクトップアプリと同じ方式です。このDeskRPGサーバーアカウントの~/.ssh/config・ssh-agent・鍵ファイルで接続します。初めてのホスト鍵は記録し、変わった鍵は拒否します。",
+  "hermes.wizard.ssh.systemTarget": "ホストまたは~/.ssh/configのエイリアス",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "例: DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemUserPlaceholder": "ユーザー（任意）",
+  "hermes.wizard.ssh.systemKeyPlaceholder": "鍵ファイルのパス（任意、例: ~/.ssh/id_ed25519）",
+  "hermes.wizard.ssh.systemHint":
+    "空欄ならconfigとssh-agentに従います。パスワードやパスフレーズは尋ねません。パスフレーズ付きの鍵は先にssh-addでagentに載せてください。",
+  "hermes.wizard.ssh.systemAdd": "接続を確認して追加",
+  "hermes.wizard.ssh.systemTesting": "接続中…",
+  "hermes.wizard.ssh.errors.systemAuth":
+    "サーバーには届きましたが鍵が拒否されました。このアカウントの公開鍵が接続先のauthorized_keysにあるか、パスフレーズ付きの鍵をssh-addしたか確認してください。",
+  "hermes.wizard.ssh.errors.keyNotFound":
+    "鍵ファイルが見つかりません。DeskRPGサーバー上のパスか確認してください。",
+  "hermes.wizard.ssh.errors.systemKeyChanged":
+    "ホスト鍵がknown_hostsの記録と異なります。サーバーが変わったことを確認してからknown_hostsを整理してください。",
+  "hermes.wizard.ssh.errors.systemInvalid":
+    "ホスト・ユーザー・ポート・鍵パスの形式が正しくありません。",
   "hermes.wizard.ssh.cancel": "閉じる",
   "hermes.wizard.ssh.addHost": "+ 新しい SSH ホストを登録",
   "hermes.wizard.ssh.removeHost": "選択したホストを削除",

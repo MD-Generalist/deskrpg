@@ -23,7 +23,8 @@ const ko = {
     "이 인스턴스에서는 호스트 접근이 허용되지 않습니다. 관리자에게 호스트 설정을 요청하거나 게이트웨이 주소로 연결하세요.",
   ssh: "SSH로 연결",
   url: "게이트웨이 주소로 연결",
-  sshHelp: "관리자가 허용한 SSH 호스트에서 설치를 확인합니다.",
+  sshHelp:
+    "등록한 SSH 호스트에서 Hermes 를 찾습니다. 내 SSH 설정(~/.ssh/config·ssh-agent) 또는 DeskRPG 전용 키로 호스트를 등록할 수 있습니다.",
   urlHelp: "기존 주소와 인증 키로 연결합니다.",
   host: "SSH 호스트",
   chooseHost: "호스트 선택",
@@ -115,7 +116,8 @@ const en: Copy = {
     "Host access is unavailable on this instance. Ask an administrator to enable host setup, or connect by gateway address.",
   ssh: "Connect over SSH",
   url: "Connect by gateway address",
-  sshHelp: "Inspect an administrator-approved SSH host.",
+  sshHelp:
+    "Find Hermes on a registered SSH host. Register hosts with your SSH config (~/.ssh/config, ssh-agent) or a DeskRPG key.",
   urlHelp: "Use an existing address and API credential.",
   host: "SSH host",
   chooseHost: "Choose a host",
@@ -231,7 +233,8 @@ Object.assign(ja, {
   remoteHelp: "別のサーバーのHermesに接続します。",
   unavailable:
     "この環境ではホストにアクセスできません。管理者にホスト設定を依頼するか、ゲートウェイURLで接続してください。",
-  sshHelp: "管理者が許可したSSHホストのインストールを確認します。",
+  sshHelp:
+    "登録したSSHホストでHermesを探します。自分のSSH設定（~/.ssh/config・ssh-agent）またはDeskRPG専用キーでホストを登録できます。",
   urlHelp: "既存のURLとAPI認証キーで接続します。",
   host: "SSHホスト",
   chooseHost: "ホストを選択",
@@ -306,7 +309,8 @@ Object.assign(zh, {
   noSelectedProfiles: "未选择配置文件。网关将被连接；之后请单独注册配置文件。",
   remoteHelp: "连接其他服务器上的Hermes。",
   unavailable: "此实例不允许访问主机。请联系管理员启用主机设置，或通过网关地址连接。",
-  sshHelp: "检查管理员批准的SSH主机。",
+  sshHelp:
+    "在已登记的SSH主机上查找Hermes。可使用自己的SSH配置（~/.ssh/config、ssh-agent）或DeskRPG专用密钥登记主机。",
   urlHelp: "使用现有地址和API凭据连接。",
   host: "SSH主机",
   chooseHost: "选择主机",

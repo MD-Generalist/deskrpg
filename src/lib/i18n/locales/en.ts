@@ -471,6 +471,24 @@ const en: Record<string, string> = {
     "On the server: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
   "hermes.wizard.ssh.fingerprintConfirm": "The fingerprint matches what the server shows.",
   "hermes.wizard.ssh.register": "Register this server",
+  "hermes.wizard.ssh.methodSystem": "Use my SSH config",
+  "hermes.wizard.ssh.methodManaged": "DeskRPG key",
+  "hermes.wizard.ssh.systemBody":
+    "Same as the Hermes desktop app. Connects with this DeskRPG server account's ~/.ssh/config, ssh-agent and key files. New host keys are recorded; changed keys are refused.",
+  "hermes.wizard.ssh.systemTarget": "Host or ~/.ssh/config alias",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "e.g. DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemUserPlaceholder": "User (optional)",
+  "hermes.wizard.ssh.systemKeyPlaceholder": "Key file path (optional, e.g. ~/.ssh/id_ed25519)",
+  "hermes.wizard.ssh.systemHint":
+    "Leave blank to follow your config and ssh-agent. No password or passphrase prompts — load passphrase-protected keys with ssh-add first.",
+  "hermes.wizard.ssh.systemAdd": "Test and add",
+  "hermes.wizard.ssh.systemTesting": "Connecting…",
+  "hermes.wizard.ssh.errors.systemAuth":
+    "The server was reached but the key was refused. Check that this account's public key is in the target's authorized_keys, and load passphrase-protected keys with ssh-add.",
+  "hermes.wizard.ssh.errors.keyNotFound": "Key file not found. Use a path on the DeskRPG server.",
+  "hermes.wizard.ssh.errors.systemKeyChanged":
+    "The host key differs from known_hosts. Confirm the server really changed, then clean up known_hosts.",
+  "hermes.wizard.ssh.errors.systemInvalid": "Host, user, port or key path format is invalid.",
   "hermes.wizard.ssh.cancel": "Close",
   "hermes.wizard.ssh.addHost": "+ Register a new SSH host",
   "hermes.wizard.ssh.removeHost": "Remove selected host",

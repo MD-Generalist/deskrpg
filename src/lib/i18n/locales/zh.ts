@@ -450,6 +450,24 @@ const zh: Record<string, string> = {
     "在服务器上确认：ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
   "hermes.wizard.ssh.fingerprintConfirm": "指纹与服务器上确认的值一致。",
   "hermes.wizard.ssh.register": "注册此服务器",
+  "hermes.wizard.ssh.methodSystem": "使用我的SSH配置",
+  "hermes.wizard.ssh.methodManaged": "DeskRPG专用密钥",
+  "hermes.wizard.ssh.systemBody":
+    "与Hermes桌面应用相同。使用此DeskRPG服务器账户的~/.ssh/config、ssh-agent和密钥文件连接。首次见到的主机密钥会被记录，变更的密钥会被拒绝。",
+  "hermes.wizard.ssh.systemTarget": "主机或~/.ssh/config别名",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "例如：DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemUserPlaceholder": "用户（可选）",
+  "hermes.wizard.ssh.systemKeyPlaceholder": "密钥文件路径（可选，例如 ~/.ssh/id_ed25519）",
+  "hermes.wizard.ssh.systemHint":
+    "留空则遵循config和ssh-agent。不会询问密码或口令——带口令的密钥请先用ssh-add加入agent。",
+  "hermes.wizard.ssh.systemAdd": "测试连接并添加",
+  "hermes.wizard.ssh.systemTesting": "正在连接…",
+  "hermes.wizard.ssh.errors.systemAuth":
+    "已连到服务器但密钥被拒绝。请确认此账户的公钥在目标服务器的authorized_keys中，带口令的密钥已用ssh-add加入agent。",
+  "hermes.wizard.ssh.errors.keyNotFound": "找不到密钥文件。请使用DeskRPG服务器上的路径。",
+  "hermes.wizard.ssh.errors.systemKeyChanged":
+    "主机密钥与known_hosts记录不同。确认服务器确实变更后再清理known_hosts。",
+  "hermes.wizard.ssh.errors.systemInvalid": "主机、用户、端口或密钥路径格式不正确。",
   "hermes.wizard.ssh.cancel": "关闭",
   "hermes.wizard.ssh.addHost": "+ 注册新的 SSH 主机",
   "hermes.wizard.ssh.removeHost": "删除所选主机",

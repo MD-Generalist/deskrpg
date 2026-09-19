@@ -467,6 +467,25 @@ const ko: Record<string, string> = {
     "서버에서 확인: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
   "hermes.wizard.ssh.fingerprintConfirm": "지문이 서버에서 확인한 값과 같습니다.",
   "hermes.wizard.ssh.register": "이 서버 등록",
+  "hermes.wizard.ssh.methodSystem": "내 SSH 설정 사용",
+  "hermes.wizard.ssh.methodManaged": "DeskRPG 전용 키",
+  "hermes.wizard.ssh.systemBody":
+    "Hermes 데스크톱 앱과 같은 방식입니다. 이 DeskRPG 서버 계정의 ~/.ssh/config·ssh-agent·키 파일로 접속합니다. 처음 보는 호스트 키는 기록하고, 바뀐 키는 거절합니다.",
+  "hermes.wizard.ssh.systemTarget": "호스트 또는 ~/.ssh/config 별칭",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "예: DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemUserPlaceholder": "사용자(선택)",
+  "hermes.wizard.ssh.systemKeyPlaceholder": "키 파일 경로(선택, 예: ~/.ssh/id_ed25519)",
+  "hermes.wizard.ssh.systemHint":
+    "비워 두면 config 와 ssh-agent 설정을 따릅니다. 비밀번호·패스프레이즈는 묻지 않습니다 — 패스프레이즈가 있는 키는 먼저 ssh-add 로 agent 에 올리세요.",
+  "hermes.wizard.ssh.systemAdd": "접속 확인 후 추가",
+  "hermes.wizard.ssh.systemTesting": "접속해 보는 중…",
+  "hermes.wizard.ssh.errors.systemAuth":
+    "서버에 닿았지만 키가 거절됐습니다. 이 계정의 공개키가 대상 서버 authorized_keys 에 있는지, 패스프레이즈가 있는 키라면 ssh-add 로 agent 에 올렸는지 확인하세요.",
+  "hermes.wizard.ssh.errors.keyNotFound":
+    "키 파일을 찾지 못했습니다. DeskRPG 서버 기준 경로인지 확인하세요.",
+  "hermes.wizard.ssh.errors.systemKeyChanged":
+    "호스트 키가 known_hosts 에 기록된 값과 다릅니다. 서버가 바뀐 것이 맞는지 확인한 뒤 known_hosts 를 정리하세요.",
+  "hermes.wizard.ssh.errors.systemInvalid": "호스트·사용자·포트·키 경로 형식이 올바르지 않습니다.",
   "hermes.wizard.ssh.cancel": "닫기",
   "hermes.wizard.ssh.addHost": "+ 새 SSH 호스트 등록",
   "hermes.wizard.ssh.removeHost": "선택한 호스트 삭제",
