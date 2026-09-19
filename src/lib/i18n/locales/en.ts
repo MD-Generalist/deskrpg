@@ -435,6 +435,22 @@ const en: Record<string, string> = {
     "Hermes is already installed on this host. Go back to discovery and connect to it instead of installing.",
   "hermes.wizard.error.hermesInstallForbidden":
     "This wizard cannot install Hermes here. Remote (SSH) targets are never installed to, and an operator must enable DESKRPG_HERMES_INSTALL_ENABLED.",
+  "hermes.wizard.error.curlMissing":
+    "curl is missing on the target server; the Hermes installer needs it. Install curl (e.g. sudo apt install curl) and retry.",
+  "hermes.wizard.error.gitMissing":
+    "git is missing on the target server and could not be installed automatically (sudo). Install git (e.g. sudo apt install git, or xcode-select --install on macOS) and retry.",
+  "hermes.wizard.error.pythonBootstrap":
+    "python3 is missing, and downloading a user-local Python failed. Check that the server can reach astral.sh and github.com, then retry.",
+  "hermes.wizard.error.systemPackages":
+    "System packages Hermes needs are missing on the target server, and sudo is not available without a password, so they could not be installed automatically.",
+  "hermes.wizard.packages.missing": "Missing:",
+  "hermes.wizard.packages.curl": "curl",
+  "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.cxx": "C++ compiler",
+  "hermes.wizard.packages.unknownDistro":
+    "Unknown package manager on this server. Install the packages above with its package manager.",
+  "hermes.wizard.packages.retry":
+    "Run the command above in a terminal on the target server, then install again. DeskRPG downloads Python and Node into the user's home.",
   "hermes.wizard.error.hermesInstallFailed":
     "The Hermes installation did not finish. Ask the administrator to run the installer on the server directly and check its output, then retry.",
   "hermes.wizard.error.hermesInstallerUnavailable":
@@ -451,8 +467,6 @@ const en: Record<string, string> = {
     "The operator turned host setup off on this server (DESKRPG_HOST_SETUP_ENABLED=0). Connect by gateway address instead.",
   "hermes.wizard.hostReason.unsupported_platform":
     "Local connection isn't supported on this server's OS.",
-  "hermes.wizard.hostReason.python3_missing":
-    "This server has no python3, so it can't find or install Hermes.",
   "hermes.wizard.hostReason.container_without_hermes":
     "DeskRPG runs inside a container that has no Hermes. Installing there would vanish on redeploy, so it isn't offered. Connect to the host's Hermes by gateway address (e.g. http://host.docker.internal:8642) or over SSH.",
   "hermes.wizard.hostReason.ssh_missing":

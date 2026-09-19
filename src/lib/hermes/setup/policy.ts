@@ -156,6 +156,10 @@ const SAFE_CODES = new Set([
   "hermes_already_installed",
   "hermes_install_forbidden",
   "hermes_install_failed",
+  "curl_missing",
+  "system_packages_missing",
+  "git_missing",
+  "python_bootstrap_failed",
   "hermes_installer_unavailable",
   "resume_unavailable",
 ]);

@@ -8,7 +8,6 @@ const base: CapabilityProbe = {
   switchedOff: false,
   installAllowed: true,
   platform: "linux",
-  hasPython3: true,
   hasSsh: true,
   inContainer: false,
   localHermesFound: true,
@@ -57,8 +56,7 @@ test("컨테이너 안에 Hermes 가 없으면 로컬을 닫는다 — Docker �
   assert.equal(describeCapabilities({ ...base, inContainer: true }).local, true);
 });
 
-test("python3·ssh 가 없으면 그 이유를 준다", () => {
-  assert.equal(describeCapabilities({ ...base, hasPython3: false }).localReason, "python3_missing");
+test("ssh 가 없으면 그 이유를 준다 — python3 는 이유가 아니다(설치가 파이썬까지 받는다)", () => {
   const noSsh = describeCapabilities({ ...base, hasSsh: false });
   assert.equal(noSsh.ssh, false);
   assert.equal(noSsh.sshReason, "ssh_missing");

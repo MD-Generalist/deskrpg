@@ -41,6 +41,10 @@ export type SetupJob = {
    * 설치 출력의 원문이 아니라 미리 정한 코드 하나다.
    */
   progress?: string;
+  /** 설치 전 검사에서 빠진 시스템 패키지 코드(curl·git·cxx). 화면이 설치 명령을 만든다. */
+  missingPackages?: string[];
+  /** 그 서버의 패키지 관리자(apt·dnf·pacman·macos). 모르면 없음. */
+  packageManager?: string;
   /**
    * 성공한 단계 이름. `steps` 는 "시도한 것" 이라 성공 여부를 모른다 — 재개가 이 목록을 읽는다.
    * 재개 잡은 앞선 잡의 목록을 그대로 물려받고 시작한다.
@@ -63,12 +67,7 @@ export type SetupCapabilities = {
   localHermesFound?: boolean;
   /** 로컬을 못 여는 이유. 열려 있으면 null. */
   localReason?:
-    | "not_admin"
-    | "disabled"
-    | "unsupported_platform"
-    | "python3_missing"
-    | "container_without_hermes"
-    | null;
+    "not_admin" | "disabled" | "unsupported_platform" | "container_without_hermes" | null;
   /** SSH 를 못 여는 이유. 열려 있으면 null(등록된 호스트가 없어도 열린다 — 화면에서 등록한다). */
   sshReason?: "not_admin" | "disabled" | "ssh_missing" | null;
 };

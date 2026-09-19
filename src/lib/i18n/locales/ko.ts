@@ -432,6 +432,22 @@ const ko: Record<string, string> = {
     "이 호스트에는 이미 Hermes 가 설치돼 있습니다. 설치 대신 설치 찾기로 돌아가 연결하세요.",
   "hermes.wizard.error.hermesInstallForbidden":
     "이 마법사에서는 Hermes 를 설치할 수 없습니다. 원격(SSH) 대상에는 설치하지 않으며, 운영자가 DESKRPG_HERMES_INSTALL_ENABLED 를 켜야 합니다.",
+  "hermes.wizard.error.curlMissing":
+    "설치할 서버에 curl 이 없습니다. Hermes 설치 스크립트가 curl 을 씁니다. 서버에서 curl 을 설치한 뒤(예: sudo apt install curl) 다시 시도하세요.",
+  "hermes.wizard.error.gitMissing":
+    "설치할 서버에 git 이 없고, 자동 설치(sudo)도 할 수 없었습니다. 서버에서 git 을 설치한 뒤(예: sudo apt install git, macOS 는 xcode-select --install) 다시 시도하세요.",
+  "hermes.wizard.error.pythonBootstrap":
+    "서버에 python3 가 없어 사용자 홈에 파이썬을 받으려 했지만 실패했습니다. 서버가 astral.sh 와 github.com 에 닿는지 확인하고 다시 시도하세요.",
+  "hermes.wizard.error.systemPackages":
+    "Hermes 설치에 필요한 시스템 패키지가 대상 서버에 없고, sudo 를 비밀번호 없이 쓸 수 없어 자동으로 설치하지 못했습니다.",
+  "hermes.wizard.packages.missing": "빠진 패키지:",
+  "hermes.wizard.packages.curl": "curl",
+  "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.cxx": "C++ 컴파일러",
+  "hermes.wizard.packages.unknownDistro":
+    "이 서버의 패키지 관리자를 알 수 없습니다. 위 패키지를 서버의 패키지 관리자로 설치하세요.",
+  "hermes.wizard.packages.retry":
+    "대상 서버 터미널에서 위 명령을 실행한 뒤 다시 설치를 누르세요. Python·Node 는 DeskRPG 가 사용자 홈에 받습니다.",
   "hermes.wizard.error.hermesInstallFailed":
     "Hermes 설치가 끝나지 못했습니다. 관리자가 서버에서 설치 스크립트를 직접 실행해 결과를 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.error.hermesInstallerUnavailable":
@@ -448,8 +464,6 @@ const ko: Record<string, string> = {
     "운영자가 이 서버에서 호스트 설정을 꺼 두었습니다(DESKRPG_HOST_SETUP_ENABLED=0). 게이트웨이 주소로 연결하세요.",
   "hermes.wizard.hostReason.unsupported_platform":
     "이 서버 운영체제에서는 로컬 연결을 지원하지 않습니다.",
-  "hermes.wizard.hostReason.python3_missing":
-    "이 서버에 python3 가 없어 Hermes 를 찾거나 설치할 수 없습니다.",
   "hermes.wizard.hostReason.container_without_hermes":
     "DeskRPG 가 컨테이너 안에서 돌고 있고, 그 안에는 Hermes 가 없습니다. 컨테이너에 설치해도 재배포 때 사라지므로 설치하지 않습니다. 호스트의 Hermes 는 게이트웨이 주소(예: http://host.docker.internal:8642)나 SSH 로 연결하세요.",
   "hermes.wizard.hostReason.ssh_missing": "이 서버에 ssh 명령이 없어 SSH 로 연결할 수 없습니다.",

@@ -443,6 +443,22 @@ const ja: Record<string, string> = {
     "このホストには既にHermesがインストールされています。インストールではなく、検索に戻って接続してください。",
   "hermes.wizard.error.hermesInstallForbidden":
     "このウィザードではHermesをインストールできません。リモート(SSH)対象にはインストールせず、運用者がDESKRPG_HERMES_INSTALL_ENABLEDを有効にする必要があります。",
+  "hermes.wizard.error.curlMissing":
+    "インストール先のサーバーにcurlがありません。Hermesのインストールスクリプトが使います。curlをインストール（例: sudo apt install curl）してから再試行してください。",
+  "hermes.wizard.error.gitMissing":
+    "インストール先のサーバーにgitがなく、自動インストール（sudo）もできませんでした。gitをインストール（例: sudo apt install git、macOSはxcode-select --install）してから再試行してください。",
+  "hermes.wizard.error.pythonBootstrap":
+    "python3がないためユーザーホームにPythonを取得しようとしましたが失敗しました。サーバーがastral.shとgithub.comに接続できるか確認して再試行してください。",
+  "hermes.wizard.error.systemPackages":
+    "Hermesに必要なシステムパッケージが接続先サーバーになく、パスワードなしのsudoも使えないため自動インストールできませんでした。",
+  "hermes.wizard.packages.missing": "不足:",
+  "hermes.wizard.packages.curl": "curl",
+  "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.cxx": "C++コンパイラ",
+  "hermes.wizard.packages.unknownDistro":
+    "このサーバーのパッケージマネージャーが分かりません。上のパッケージをサーバーのパッケージマネージャーでインストールしてください。",
+  "hermes.wizard.packages.retry":
+    "接続先サーバーのターミナルで上のコマンドを実行してから、もう一度インストールしてください。PythonとNodeはDeskRPGがユーザーホームに取得します。",
   "hermes.wizard.error.hermesInstallFailed":
     "Hermesのインストールが完了しませんでした。管理者がサーバーでインストールスクリプトを直接実行して結果を確認してから再試行してください。",
   "hermes.wizard.error.hermesInstallerUnavailable":
@@ -459,8 +475,6 @@ const ja: Record<string, string> = {
     "運用者がこのサーバーでホスト設定をオフにしています（DESKRPG_HOST_SETUP_ENABLED=0）。ゲートウェイのアドレスで接続してください。",
   "hermes.wizard.hostReason.unsupported_platform":
     "このサーバーの OS ではローカル接続に対応していません。",
-  "hermes.wizard.hostReason.python3_missing":
-    "このサーバーに python3 がないため、Hermes を探したりインストールしたりできません。",
   "hermes.wizard.hostReason.container_without_hermes":
     "DeskRPG はコンテナ内で動いており、その中に Hermes はありません。コンテナにインストールしても再デプロイで消えるため行いません。ホストの Hermes にはゲートウェイのアドレス（例: http://host.docker.internal:8642）か SSH で接続してください。",
   "hermes.wizard.hostReason.ssh_missing":
