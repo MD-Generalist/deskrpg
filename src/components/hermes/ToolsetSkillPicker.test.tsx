@@ -173,7 +173,7 @@ test("부모가 준 목록에 플러그인이 거절할 이름이 있어도 올�
   }
 });
 
-test("소유자는 제공자를 고르는 도구에 '설정' 이 있고, 키가 없는 도구를 켜면 설정 패널이 펼쳐진다", async () => {
+test("소유자는 제공자를 고르는 도구에 '설정' 이 있고, 키가 없는 도구를 켜면 설정 팝업이 뜬다", async () => {
   const withProviders = {
     ...TOOLSETS,
     toolsets: TOOLSETS.toolsets.map((t) => ({ ...t, hasProviders: t.name === "tts" })),
@@ -209,10 +209,15 @@ test("소유자는 제공자를 고르는 도구에 '설정' 이 있고, 키가 
     await act(async () => {
       await Promise.resolve();
     });
-    assert.ok(
-      host.querySelector('[data-tool-panel="tts"]'),
-      "키 없는 도구를 켰는데 설정이 펼쳐지지 않았다",
-    );
+    const panel = host.querySelector('[data-tool-panel="tts"]');
+    assert.ok(panel, "키 없는 도구를 켰는데 설정이 열리지 않았다");
+    // 목록 사이에 펼치지 않고 팝업으로 띄운다.
+    assert.ok(panel.closest("[data-modal-overlay]"), "설정이 팝업이 아니라 목록 안에 펼쳐졌다");
+    const close = [...host.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "닫기",
+    )!;
+    await act(async () => close.click());
+    assert.equal(host.querySelector("[data-modal-overlay]"), null, "닫기로 팝업이 닫히지 않았다");
   } finally {
     globalThis.fetch = original;
     await unmount();

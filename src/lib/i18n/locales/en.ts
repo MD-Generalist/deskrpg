@@ -287,6 +287,8 @@ const en: Record<string, string> = {
   "hermes.picker.searchSkills": "Search skills",
   "hermes.picker.uncategorized": "Other",
   "hermes.picker.noSkills": "No matching skills.",
+  "hermes.toolProviders.title": "{tool} — provider setup",
+  "hermes.toolProviders.urlPlaceholder": "Enter the address (e.g. https://…)",
   "hermes.toolProviders.configure": "Set up",
   "hermes.toolProviders.close": "Close",
   "hermes.toolProviders.choose": "Choose a provider for this tool",

@@ -292,6 +292,8 @@ const ja: Record<string, string> = {
   "hermes.picker.searchSkills": "スキルを検索",
   "hermes.picker.uncategorized": "その他",
   "hermes.picker.noSkills": "該当するスキルがありません。",
+  "hermes.toolProviders.title": "{tool} — プロバイダー設定",
+  "hermes.toolProviders.urlPlaceholder": "アドレスを入力してください（例: https://…）",
   "hermes.toolProviders.configure": "設定",
   "hermes.toolProviders.close": "閉じる",
   "hermes.toolProviders.choose": "このツールのプロバイダーを選んでください",

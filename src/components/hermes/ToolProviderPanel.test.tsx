@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 import { I18nProvider } from "../../lib/i18n/context";
-import ToolProviderPanel, { defaultProviderChoice } from "./ToolProviderPanel";
+import ToolProviderPanel, { defaultProviderChoice, isPlainEnvValue } from "./ToolProviderPanel";
 import type { ToolProvidersPayload } from "@/lib/hermes/plugin-client-types";
 
 const BASE = "/api/gateways/g/plugin/profiles/noah";
@@ -105,6 +105,16 @@ function button(host: HTMLElement, text: string) {
 test("처음에는 쓰던 것, 없으면 앱에서 고를 수 있는 첫 행을 고른다", () => {
   assert.equal(defaultProviderChoice(payload()), "Microsoft Edge TTS");
   assert.equal(defaultProviderChoice(payload({ activeProvider: "OpenAI TTS" })), "OpenAI TTS");
+  // 첫 고를 수 있는 행이 키 필요여도, 이미 준비된 행이 뒤에 있으면 그것을 고른다(웹 검색 실측).
+  const web = payload();
+  web.providers = [web.providers[1], web.providers[0], web.providers[2]];
+  assert.equal(defaultProviderChoice(web), "Microsoft Edge TTS");
+});
+
+test("주소 값은 가리지 않는다", () => {
+  assert.equal(isPlainEnvValue("FIRECRAWL_API_URL"), true);
+  assert.equal(isPlainEnvValue("SEARXNG_URL"), true);
+  assert.equal(isPlainEnvValue("OPENAI_API_KEY"), false);
 });
 
 test("키가 필요한 제공자는 키를 넣어야 저장되고, 저장 요청에만 값이 실리고 화면에서는 지운다", async () => {
