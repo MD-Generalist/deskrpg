@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * NPC 고용 마법사 — ①프로필 ②인격 ③AI 모델. ③ 에서 끝난다.
+ * NPC 고용 마법사 — ①프로필 ②인격 ③외형 ④AI 모델. ④ 에서 끝난다.
  *
  * 능력에 따라 단계가 눈에 보이게 줄어든다(`availableSteps`) — 잠긴 단계도 회색으로
  * 남고 이유를 보여준다, 숨기지 않는다. ②③ 은 다룰 프로필이 생기기 전까지 잠긴다.
@@ -28,9 +28,11 @@ import {
   type StepAvailability,
   type WizardStep,
 } from "./hire-wizard-steps";
+import ProfileAppearanceEditor from "./ProfileAppearanceEditor";
 import ProviderAuthPanel from "./ProviderAuthPanel";
 import ToolsetSkillPicker from "./ToolsetSkillPicker";
 import { getWizardErrorMessage } from "./wizard-error-codes";
+import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 // ---------------------------------------------------------------------------
 // Types mirroring the proxy routes' response shapes (Task 5·6·7)
@@ -226,7 +228,16 @@ export default function NpcHireWizard({
   // identityBody 로 옮겨간다.
   const [conflictRemoteBody, setConflictRemoteBody] = useState<string | null>(null);
 
-  // --- Step ③ config ---
+  // --- Step ③ appearance ---
+  // 외형은 DeskRPG 의 hermes_profiles 행에 산다 — 그 행의 id 와 현재 값을 목록에서 찾는다.
+  const [appearanceTarget, setAppearanceTarget] = useState<{
+    id: string;
+    appearance: CharacterAppearance | null;
+  } | null>(null);
+  const [appearanceError, setAppearanceError] = useState("");
+  const [appearanceSaved, setAppearanceSaved] = useState(false);
+
+  // --- Step ④ config ---
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState("");
   const [configLocked, setConfigLocked] = useState(false);
@@ -252,6 +263,36 @@ export default function NpcHireWizard({
   const profileBase = created
     ? `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(created.name)}`
     : null;
+
+  const createdName = created?.name ?? null;
+  useEffect(() => {
+    if (current !== "appearance" || !createdName) return;
+    if (appearanceTarget || appearanceError) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/gateways/${gatewayId}/profiles`);
+        const data = (await res.json().catch(() => ({}))) as {
+          profiles?: Array<{ id?: unknown; profileName?: unknown; appearance?: unknown }>;
+        };
+        const row = (data.profiles ?? []).find((p) => p.profileName === createdName);
+        if (cancelled) return;
+        if (!row || typeof row.id !== "string") {
+          setAppearanceError(t("hermes.wizard.appearance.loadFailed"));
+          return;
+        }
+        setAppearanceTarget({
+          id: row.id,
+          appearance: (row.appearance as CharacterAppearance | null) ?? null,
+        });
+      } catch {
+        if (!cancelled) setAppearanceError(t("errors.connectionFailed"));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [current, createdName, gatewayId, appearanceTarget, appearanceError, t]);
 
   /**
    * 인격 응답 하나를 화면 상태로 옮긴다 — 저장과 **편집 모드 판정을 함께** 한다.
@@ -1055,6 +1096,34 @@ export default function NpcHireWizard({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {!showCloseConfirm && current === "appearance" && stepByName.appearance?.enabled && (
+        <div className="space-y-3">
+          {appearanceError ? (
+            <p className="text-sm text-danger">{appearanceError}</p>
+          ) : !appearanceTarget ? (
+            <p className="text-sm text-text-muted">{t("common.loading")}</p>
+          ) : (
+            <ProfileAppearanceEditor
+              key={appearanceTarget.id}
+              gatewayId={gatewayId}
+              profileId={appearanceTarget.id}
+              initialAppearance={appearanceTarget.appearance}
+              onSaved={() => setAppearanceSaved(true)}
+            />
+          )}
+          {appearanceSaved && (
+            <p className="text-xs text-emerald-300">{t("hermes.wizard.appearance.saved")}</p>
+          )}
+          <button
+            type="button"
+            onClick={goNext}
+            className="rounded bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
+          >
+            {t("hermes.wizard.next")}
+          </button>
         </div>
       )}
 

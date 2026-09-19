@@ -8,7 +8,7 @@
 
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 
-export type WizardStep = "profile" | "identity" | "config";
+export type WizardStep = "profile" | "identity" | "appearance" | "config";
 
 export type StepAvailability = {
   step: WizardStep;
@@ -18,12 +18,12 @@ export type StepAvailability = {
 };
 
 /**
- * ① 프로필 → ② 인격 → ③ AI 모델. 여기서 끝난다.
+ * ① 프로필 → ② 인격 → ③ 외형 → ④ AI 모델. 여기서 끝난다.
  *
- * 예전의 ④ 배치는 할 일이 없는 링크 버튼만 남은 단계였다 — 자리는 맵이, 외형은 등록 시
- * 자동 배정과 직원 상세가 맡는다.
+ * 예전의 ④ 배치는 할 일이 없는 링크 버튼만 남은 단계였다 — 자리는 맵이 맡는다. 외형은 등록 때
+ * 자동으로 하나 배정되고, ③ 에서 바꾼다.
  */
-const ORDER: WizardStep[] = ["profile", "identity", "config"];
+const ORDER: WizardStep[] = ["profile", "identity", "appearance", "config"];
 
 export function availableSteps(
   status: PluginStatus,
@@ -46,6 +46,12 @@ export function availableSteps(
       // 프로필은 플러그인이 없어도 로컬 파일시스템 발견으로 찾아 등록할 수 있다.
       const enabled = pluginOk || localDiscovery;
       return { step, enabled, lockedReason: enabled ? null : blockedReason };
+    }
+    if (step === "appearance") {
+      // 외형은 DeskRPG 가 저장한다 — 플러그인과 무관하고, 다룰 프로필만 있으면 된다.
+      return hasProfile
+        ? { step, enabled: true, lockedReason: null }
+        : { step, enabled: false, lockedReason: "hermes.wizard.locked.needsProfile" };
     }
     // 인격·AI 모델은 플러그인 없이는 원격에서 손댈 방법이 없다.
     if (!pluginOk) return { step, enabled: false, lockedReason: blockedReason };

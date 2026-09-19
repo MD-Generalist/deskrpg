@@ -316,7 +316,7 @@ const ja: Record<string, string> = {
   "hermes.wizard.profile.copyAllApiKeysHint":
     "オフ: デフォルトプロフィールが使うAIモデルのキーのみ。オンでもGitHub・OAuthなどの汎用トークンはコピーしません。",
   "hermes.wizard.profile.cloneFailed":
-    "デフォルトプロフィールの設定を引き継げませんでした。③でAIモデルを選んでください。",
+    "デフォルトプロフィールの設定を引き継げませんでした。④でAIモデルを選んでください。",
   "hermes.wizard.locked.needsProfile": "先に①でプロフィールを作成してください",
   "hermes.wizard.config.advanced": "ツール・スキル（詳細）",
   "hermes.wizard.result.attended": "「{name}」が{count}件のチャンネルに出勤しました。",
@@ -325,7 +325,10 @@ const ja: Record<string, string> = {
   "hermes.wizard.back": "戻る",
   "hermes.wizard.step.profile": "①プロフィール",
   "hermes.wizard.step.identity": "②人格",
-  "hermes.wizard.step.config": "③AIモデル",
+  "hermes.wizard.step.appearance": "③外見",
+  "hermes.wizard.appearance.saved": "外見を保存しました。",
+  "hermes.wizard.appearance.loadFailed": "社員情報を読み込めませんでした。",
+  "hermes.wizard.step.config": "④AIモデル",
   "hermes.wizard.step.installingService": "ゲートウェイをサービスとして登録",
   "hermes.wizard.step.updatingPlugin": "DeskRPGプラグインを更新",
   "hermes.wizard.step.settingTimezone": "ゲートウェイのタイムゾーンを設定",

@@ -85,7 +85,7 @@ test("설정 저장이 선택한 reasoning_effort 를 PUT 본문에 싣는다", 
     );
 
     // ③ 설정 단계로 이동
-    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
+    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("④"));
     assert.ok(configTab, "③ AI 모델 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();
@@ -164,7 +164,7 @@ test("카탈로그를 못 받으면 드롭다운 대신 직접 입력으로 떨�
       </I18nProvider>,
     );
 
-    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
+    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("④"));
     assert.ok(configTab, "③ AI 모델 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();
@@ -222,7 +222,7 @@ test("설정 단계가 이 직원의 대시보드 로그인으로 안내하고, 
       </I18nProvider>,
     );
 
-    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
+    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("④"));
     assert.ok(configTab, "③ AI 모델 탭을 찾지 못했다");
     await act(async () => {
       configTab.click();
@@ -271,7 +271,7 @@ test("대시보드 주소가 없으면 링크 대신 프로필을 바꿔 로그�
         />
       </I18nProvider>,
     );
-    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("③"));
+    const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("④"));
     assert.ok(configTab);
     await act(async () => {
       configTab.click();
@@ -322,7 +322,7 @@ async function createProfile(el: HTMLElement) {
 
 async function createAndOpenModel(el: HTMLElement) {
   await createProfile(el);
-  const modelTab = tabByNumber(el, "③");
+  const modelTab = tabByNumber(el, "④");
   assert.ok(modelTab, "③ 탭을 찾지 못했다");
   await act(async () => {
     modelTab.click();
@@ -358,7 +358,7 @@ function wizardWith(
   );
 }
 
-test("단계는 ① 프로필 ② 인격 ③ AI 모델 셋이고, ④ 배치의 링크 버튼은 없다", async () => {
+test("단계는 ① 프로필 ② 인격 ③ 외형 ④ AI 모델이고, 옛 배치 단계의 링크 버튼은 없다", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -366,7 +366,7 @@ test("단계는 ① 프로필 ② 인격 ③ AI 모델 셋이고, ④ 배치의 
     const tabs = [...el.querySelectorAll("button")]
       .map((b) => b.textContent ?? "")
       .filter((text) => /^[①②③④]/.test(text));
-    assert.deepEqual(tabs, ["① 프로필", "② 인격", "③ AI 모델"]);
+    assert.deepEqual(tabs, ["① 프로필", "② 인격", "③ 외형", "④ AI 모델"]);
     await createAndOpenModel(el);
     const text = el.textContent ?? "";
     for (const gone of ["완성형 외형 선택하기", "채널로 이동", "마법사 닫기"]) {
@@ -379,7 +379,7 @@ test("단계는 ① 프로필 ② 인격 ③ AI 모델 셋이고, ④ 배치의 
   }
 });
 
-test("프로필을 만들기 전에는 ②③ 이 잠기고 그 이유를 글자로 보여준다", async () => {
+test("프로필을 만들기 전에는 ②③④ 가 잠기고 그 이유를 글자로 보여준다", async () => {
   // 2026-09-18 스테이징 실측: 새 프로필인데 ② 를 누르면 "인격 파일을 읽을 수 없어
   // 편집기를 열지 않습니다" 가 떴고, ③ 은 모델 목록 대신 자유 입력이었다.
   const calls: FetchCall[] = [];
@@ -388,13 +388,14 @@ test("프로필을 만들기 전에는 ②③ 이 잠기고 그 이유를 글자
     const { root, el } = await mount(wizardWith(PROFILE_ROUTES(1), calls));
     assert.equal(tabByNumber(el, "②")?.disabled, true, "② 가 잠기지 않았다");
     assert.equal(tabByNumber(el, "③")?.disabled, true, "③ 이 잠기지 않았다");
+    assert.equal(tabByNumber(el, "④")?.disabled, true, "④ 가 잠기지 않았다");
     const text = el.textContent ?? "";
     assert.match(text, /먼저 ① 에서 프로필을 만드세요/);
     assert.equal(text.includes("인격 파일을 읽을 수 없어"), false);
 
     await createProfile(el);
     assert.equal(tabByNumber(el, "②")?.disabled, false, "프로필을 만든 뒤에도 ② 가 잠겨 있다");
-    assert.equal(tabByNumber(el, "③")?.disabled, false, "프로필을 만든 뒤에도 ③ 이 잠겨 있다");
+    assert.equal(tabByNumber(el, "④")?.disabled, false, "프로필을 만든 뒤에도 ③ 이 잠겨 있다");
     root.unmount();
     el.remove();
   } finally {
@@ -668,7 +669,7 @@ async function openModelFor(canManageProviderAuth: boolean) {
     </I18nProvider>,
   );
   await act(async () => {
-    tabByNumber(mounted.el, "③")!.click();
+    tabByNumber(mounted.el, "④")!.click();
   });
   const select = mounted.el.querySelector("select")!;
   return { ...mounted, select };
@@ -757,7 +758,7 @@ test("인증 전 프로바이더는 모델을 비활성으로 두고, 로그인 
       </I18nProvider>,
     );
     await act(async () => {
-      tabByNumber(el, "③")!.click();
+      tabByNumber(el, "④")!.click();
     });
     const modelField = () => el.querySelectorAll("select")[1] as HTMLSelectElement | undefined;
     assert.equal(
@@ -779,6 +780,49 @@ test("인증 전 프로바이더는 모델을 비활성으로 두고, 로그인 
       ["", "gpt-6-astra", "gpt-6", "gpt-6-mini"],
       "저장된 모델이 목록에 없으면 앞에 남겨 두어야 한다",
     );
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("③ 외형은 이 직원의 현재 외형으로 편집기를 열고, 저장하면 그 프로필 행을 고친다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const routes = {
+      "/gateways/gw-1/profiles/p-mia": { ok: true },
+      "/gateways/gw-1/profiles": {
+        profiles: [
+          { id: "p-other", profileName: "noah", appearance: null },
+          {
+            id: "p-mia",
+            profileName: "mia",
+            appearance: { officeLookId: "office-jun", bodyType: "male" },
+          },
+        ],
+      },
+      ...PROFILE_ROUTES(1),
+    };
+    const { root, el } = await mount(wizardWith(routes, calls));
+    await createProfile(el);
+    await act(async () => {
+      tabByNumber(el, "③")!.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const save = [...el.querySelectorAll("button")].find((b) => /저장/.test(b.textContent ?? ""));
+    assert.ok(save, "외형 편집기의 저장 버튼이 없다");
+    await act(async () => {
+      save.click();
+    });
+    const patch = calls.find((c) => c.method === "PATCH");
+    assert.ok(patch?.url.endsWith("/gateways/gw-1/profiles/p-mia"), "다른 직원 행을 고쳤다");
+    assert.deepEqual(patch?.body, {
+      appearance: { officeLookId: "office-jun", bodyType: "male" },
+    });
     root.unmount();
     el.remove();
   } finally {
