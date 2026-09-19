@@ -707,3 +707,81 @@ test("공유 사용자에게는 키 입력 대신 소유자가 설정해야 한�
     globalThis.fetch = originalFetch;
   }
 });
+
+test("인증 전 프로바이더는 모델을 비활성으로 두고, 로그인 뒤 목록이 오면 드롭다운으로 고른다", async () => {
+  // 2026-09-19 스테이징: Codex 가 인증 전이라 카탈로그에 모델 목록이 없었고, 모델 칸이 자유
+  // 입력으로 떨어져 "gpt-6-astra S" 같은 오타를 그대로 받았다.
+  const originalFetch = globalThis.fetch;
+  let authenticated = false;
+  const calls: FetchCall[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, method: init?.method ?? "GET", body: undefined });
+    const payload = url.includes("/catalog")
+      ? {
+          providers: [
+            {
+              id: "openai-codex",
+              name: "OpenAI Codex",
+              authenticated,
+              // authType 을 빼 구버전 안내의 "로그인 확인" 으로 다시 받게 한다 — 패널의 로그인
+              // 완료도 같은 loadCatalog 를 부른다.
+            },
+          ],
+          models: authenticated ? { "openai-codex": ["gpt-6", "gpt-6-mini"] } : {},
+          reasoningEfforts: [],
+        }
+      : url.includes("/config")
+        ? { model: "gpt-6-astra", provider: "openai-codex", toolsets: null }
+        : { isDefaultTemplate: true, body: "", revision: "r0" };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map() as unknown as Headers,
+      json: async () => payload,
+      text: async () => JSON.stringify(payload),
+    } as unknown as Response;
+  }) as typeof fetch;
+  try {
+    const { root, el } = await mount(
+      <I18nProvider initialLocale="ko">
+        <NpcHireWizard
+          gatewayId="gw-1"
+          pluginStatus="plugin_ready"
+          localDiscovery={false}
+          existingProfiles={["oliver"]}
+          initialProfile="oliver"
+          canManageProviderAuth
+          onDone={() => {}}
+        />
+      </I18nProvider>,
+    );
+    await act(async () => {
+      tabByNumber(el, "③")!.click();
+    });
+    const modelField = () => el.querySelectorAll("select")[1] as HTMLSelectElement | undefined;
+    assert.equal(
+      [...el.querySelectorAll("input")].some((i) => i.placeholder === "모델"),
+      false,
+      "인증 전인데 모델을 자유 입력으로 받는다",
+    );
+    assert.equal(modelField()?.disabled, true, "인증 전 모델 칸이 비활성이 아니다");
+    assert.equal(modelField()?.value, "gpt-6-astra", "저장된 모델 값을 잃었다");
+
+    authenticated = true;
+    await act(async () => {
+      buttonByText(el, "로그인 확인").click();
+    });
+    const after = modelField();
+    assert.equal(after?.disabled, false);
+    assert.deepEqual(
+      [...(after?.options ?? [])].map((o) => o.value),
+      ["", "gpt-6-astra", "gpt-6", "gpt-6-mini"],
+      "저장된 모델이 목록에 없으면 앞에 남겨 두어야 한다",
+    );
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
