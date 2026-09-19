@@ -178,11 +178,20 @@ body {
 .workspace-content :is(input, select, textarea) {
   color: var(--text);
 }
+/* 사이드바 아래의 공통 동작(로그아웃·언어). 그림 위에 놓고, 좁은 화면에서는 한 줄로 눕는다. */
+.workspace-sidebar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 12px 6px 0;
+  font-size: 13px;
+}
 .workspace-sidebar-art {
   position: relative;
   height: 200px;
   flex-shrink: 0;
-  margin-top: auto;
   opacity: 1;
   overflow: hidden;
 }
@@ -372,6 +381,10 @@ body {
   }
   .workspace-sidebar-art {
     display: none;
+  }
+  .workspace-sidebar-actions {
+    margin-top: 8px;
+    padding: 0 6px;
   }
   .workspace-content > :is(.p-8, .p-6) {
     padding: 20px 16px;

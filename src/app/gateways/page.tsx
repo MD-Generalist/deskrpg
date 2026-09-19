@@ -4,8 +4,6 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-import LocaleSwitcher from "@/components/LocaleSwitcher";
-import LogoutButton from "@/components/LogoutButton";
 import GatewaySetupWizard from "@/components/gateway/GatewaySetupWizard";
 import { nextSelectedGatewayId } from "./gateway-selection";
 import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
@@ -426,18 +424,18 @@ function GatewayManagementPageInner() {
   }
 
   return (
-    <div className="theme-web min-h-screen bg-bg px-8 py-8 text-text">
+    <div className="theme-web min-h-screen bg-bg px-4 py-6 text-text sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div>
             <h1 className="text-3xl font-bold">{t("gateways.title")}</h1>
             <p className="mt-1 text-text-muted">{t("gateways.subtitle")}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {returnTo && (
               <Link
                 href={returnTo}
-                className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+                className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
               >
                 {t("gateways.backToOffice")}
               </Link>
@@ -446,7 +444,7 @@ function GatewayManagementPageInner() {
               type="button"
               onClick={() => setPanel(panel === "share" ? null : "share")}
               aria-pressed={panel === "share"}
-              className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+              className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
             >
               {t("gateways.shareTitle")}
             </button>
@@ -455,13 +453,11 @@ function GatewayManagementPageInner() {
                 type="button"
                 onClick={() => setPanel(panel === "diagnostics" ? null : "diagnostics")}
                 aria-pressed={panel === "diagnostics"}
-                className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+                className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
               >
                 {t("diagnostics.title")}
               </button>
             )}
-            <LogoutButton />
-            <LocaleSwitcher />
           </div>
         </div>
 
@@ -595,7 +591,7 @@ function GatewayManagementPageInner() {
                           href={selectedGateway.dashboardUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
+                          className="whitespace-nowrap rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80"
                         >
                           {t("gateways.openDashboard")} ↗
                         </a>

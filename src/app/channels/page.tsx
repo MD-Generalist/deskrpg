@@ -8,8 +8,6 @@ import PasswordModal from "@/components/PasswordModal";
 import Modal from "@/components/ui/Modal";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
-import LocaleSwitcher from "@/components/LocaleSwitcher";
-import LogoutButton from "@/components/LogoutButton";
 import { Lock, X } from "lucide-react";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
 import RosterAvatar from "@/components/RosterAvatar";
@@ -231,35 +229,33 @@ function ChannelsPageInner() {
   }
 
   return (
-    <div className="theme-web min-h-screen bg-bg text-text p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="theme-web min-h-screen bg-bg text-text px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div>
             <h1 className="text-3xl font-bold">{t("channels.title")}</h1>
             <p className="text-text-muted mt-1">{t("channels.subtitle")}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <LogoutButton />
-            <LocaleSwitcher />
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setJoinDialog("channel")}
-              className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+              className="whitespace-nowrap rounded bg-surface-raised px-4 py-2 font-semibold hover:bg-surface-raised/80"
             >
               {t("channels.joinByCode")}
             </button>
             <button
               type="button"
               onClick={() => setJoinDialog("group")}
-              className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+              className="whitespace-nowrap rounded bg-surface-raised px-4 py-2 font-semibold hover:bg-surface-raised/80"
             >
               {t("channels.groupInviteJoin")}
             </button>
             {canManageGroups && (
               <Link
                 href="/admin/groups"
-                className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+                className="whitespace-nowrap rounded bg-surface-raised px-4 py-2 font-semibold hover:bg-surface-raised/80"
               >
                 {t("channels.manageGroups")}
               </Link>
@@ -267,7 +263,7 @@ function ChannelsPageInner() {
             {canCreateChannels ? (
               <Link
                 href="/channels/create"
-                className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"
+                className="whitespace-nowrap rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover"
               >
                 {t("channels.createChannel")}
               </Link>
@@ -275,7 +271,7 @@ function ChannelsPageInner() {
               <button
                 type="button"
                 disabled
-                className="px-4 py-2 bg-surface-raised text-text-dim rounded font-semibold opacity-60 cursor-not-allowed"
+                className="cursor-not-allowed whitespace-nowrap rounded bg-surface-raised px-4 py-2 font-semibold text-text-dim opacity-60"
                 title={t("channels.create.unavailableHint")}
               >
                 {t("channels.createChannel")}
