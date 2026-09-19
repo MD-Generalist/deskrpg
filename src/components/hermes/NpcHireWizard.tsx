@@ -683,6 +683,14 @@ export default function NpcHireWizard({
   // 키를 넣거나 로그인할 수 있으니, 인증 안 된 프로바이더도 고를 수 있게 하고 아래 패널로 인증한다.
   const inAppAuth = Boolean(catalog?.providers.some((p) => p.authType));
   const selectedProviderRow = catalog?.providers.find((p) => p.id === provider) ?? null;
+  // 목록을 받았는데 고른 프로바이더가 인증 전이면 모델을 고를 수 없다(목록이 오지 않는다).
+  const providerAwaitingAuth = Boolean(selectedProviderRow && !selectedProviderRow.authenticated);
+  const catalogModels = catalog?.models[provider] ?? [];
+  // 저장돼 있던 모델이 목록에 없더라도 드롭다운이 그 값을 말없이 비우지 않게 앞에 둔다.
+  const modelOptions =
+    catalogModels.length > 0 && model && !catalogModels.includes(model)
+      ? [model, ...catalogModels]
+      : catalogModels;
 
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
@@ -1129,14 +1137,27 @@ export default function NpcHireWizard({
                   />
                 )}
 
-                {catalog && (catalog.models[provider]?.length ?? 0) > 0 ? (
+                {providerAwaitingAuth ? (
+                  // 플러그인은 인증된 프로바이더의 모델만 준다. 인증 전에는 목록이 없어 예전엔
+                  // 자유 입력으로 떨어졌다 — 고를 수 없음을 보이고, 로그인하면 목록을 다시 받는다.
+                  <select
+                    value={model}
+                    disabled
+                    title={t("hermes.wizard.config.modelAfterAuth")}
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text-muted opacity-70"
+                  >
+                    <option value={model}>
+                      {model || t("hermes.wizard.config.modelAfterAuth")}
+                    </option>
+                  </select>
+                ) : modelOptions.length > 0 ? (
                   <select
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">{t("hermes.wizard.config.model")}</option>
-                    {(catalog.models[provider] ?? []).map((m) => (
+                    {modelOptions.map((m) => (
                       <option key={m} value={m}>
                         {m}
                       </option>

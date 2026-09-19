@@ -294,6 +294,7 @@ const zh: Record<string, string> = {
   "hermes.wizard.close": "关闭",
   "hermes.wizard.next": "下一步",
   "hermes.wizard.finish": "完成",
+  "hermes.wizard.config.modelAfterAuth": "登录后即可选择模型",
   "hermes.wizard.config.ownerMustAuthenticate": "此 AI 模型的认证需由网关所有者设置。",
   "hermes.wizard.profile.cloned": "已继承默认配置文件的 AI 模型设置和密钥。",
   "hermes.wizard.profile.copyAllApiKeys": "同时复制所有 API 密钥",
