@@ -189,6 +189,25 @@ const ko: Record<string, string> = {
   "admin.groups.approve": "승인",
   "admin.groups.reject": "거절",
   "admin.groups.savePermission": "저장",
+  "admin.groups.permission.create_channel.label": "채널 만들기",
+  "admin.groups.permission.create_channel.description": "이 그룹에 새 사무실을 만들 수 있습니다",
+  "admin.groups.permission.manage_group_members.label": "멤버 관리",
+  "admin.groups.permission.manage_group_members.description":
+    "멤버를 추가·제거하고 초대코드를 만들 수 있습니다",
+  "admin.groups.permission.manage_group_permissions.label": "권한 관리",
+  "admin.groups.permission.manage_group_permissions.description":
+    "그룹 기본 권한과 사용자별 예외를 바꿀 수 있습니다",
+  "admin.groups.permission.approve_join_requests.label": "가입 요청 승인",
+  "admin.groups.permission.approve_join_requests.description":
+    "그룹 가입 요청을 승인하거나 거절할 수 있습니다",
+  "admin.groups.permission.manage_group_channels.label": "그룹 채널 관리",
+  "admin.groups.permission.manage_group_channels.description":
+    "이 그룹에 속한 채널을 관리할 수 있습니다",
+  "admin.groups.permissionValue.inherit": "상속",
+  "admin.groups.permissionValue.allow": "허용",
+  "admin.groups.permissionValue.deny": "거부",
+  "admin.groups.groupDefaults": "그룹 기본값",
+  "admin.groups.userExceptions": "사용자별 예외",
   "admin.groups.saveOverride": "오버라이드 저장",
   "admin.groups.remove": "제거",
   "admin.groups.canCreate": "채널 생성 가능",
