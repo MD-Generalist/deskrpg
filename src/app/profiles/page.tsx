@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Network, RefreshCw, UsersRound } from "lucide-react";
+import { ArrowRight, RefreshCw, UsersRound } from "lucide-react";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { useLocale, useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
@@ -118,37 +118,7 @@ function ProfilesPageContent() {
                 : "Choose a profile from a connected gateway to manage your NPC’s name and appearance. Each NPC’s identity and appearance belong to that Hermes profile."}
             </p>
           </div>
-          <Link
-            href="/gateways"
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:bg-surface-raised"
-          >
-            <Network size={17} aria-hidden="true" />
-            {ko ? "게이트웨이 관리" : "Manage gateways"}
-          </Link>
         </header>
-
-        <ol
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-text-secondary"
-          aria-label={ko ? "NPC 관리 순서" : "NPC management flow"}
-        >
-          {/* 채용 마법사는 프로필·인격·외형·AI 모델 네 단계다. 자리(맵)는 사용자가 거치는 단계가 아니다. */}
-          {[
-            ko ? "게이트웨이 선택" : "Choose gateway",
-            ko ? "새 직원 고용" : "Hire an employee",
-            ko ? "인격·외형·AI 모델" : "Persona, look & AI model",
-            ko ? "사무실 출근" : "Joins the office",
-          ].map((label, index) => (
-            <li key={label} className="inline-flex items-center gap-3">
-              {index > 0 && <ArrowRight size={14} className="text-text-dim" aria-hidden="true" />}
-              <span className="inline-flex items-center gap-2">
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-primary-muted text-xs font-semibold text-primary">
-                  {index + 1}
-                </span>
-                {label}
-              </span>
-            </li>
-          ))}
-        </ol>
 
         {deletedNpcs > 0 && (
           <p role="status" className="text-sm text-text-secondary">

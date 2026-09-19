@@ -27,6 +27,8 @@ import {
   nextStep,
   type StepAvailability,
   type WizardStep,
+  previousStep,
+  nextLockedReason,
 } from "./hire-wizard-steps";
 import ProfileAppearanceEditor from "./ProfileAppearanceEditor";
 import ProviderAuthPanel from "./ProviderAuthPanel";
@@ -211,6 +213,7 @@ export default function NpcHireWizard({
   // 복제 때 키를 어디까지 물려받을지. 끄면 기본 프로필이 실제로 쓰는 프로바이더 키만,
   // 켜면 API 키형 프로바이더 키 전부(범용·OAuth 토큰 제외)를 복사한다(플러그인 cloneKeys).
   const [copyAllApiKeys, setCopyAllApiKeys] = useState(false);
+  const [copyKeysHint, setCopyKeysHint] = useState(false);
   const nameTrimmed = name.trim();
   const nameValid = nameTrimmed.length > 0 && isCreatableProfileName(nameTrimmed);
 
@@ -689,6 +692,11 @@ export default function NpcHireWizard({
     if (next) setCurrent(next);
   }, [current, steps]);
 
+  const goBack = useCallback(() => {
+    const previous = previousStep(current, steps);
+    if (previous) setCurrent(previous);
+  }, [current, steps]);
+
   const requestClose = useCallback(() => {
     // `resumed` 면 이 프로필은 **우리가 만든 것이 아니다** — 지울지 물으면 안 된다.
     // 확인 패널의 문구가 "방금 만든 프로필이 남습니다, 지울까요?" 이므로, 남의
@@ -767,22 +775,6 @@ export default function NpcHireWizard({
           </button>
         ))}
       </div>
-      {/* M-5: 잠긴 탭은 `disabled` 라 현재 단계가 될 수 없다 — `title` 툴팁 하나로만
-          이유가 도달하면 터치·키보드 환경에서는 아예 안 보이고, 초기 단계가 한쪽으로
-          점프하는 조합(예: plugin_absent + localDiscovery:false)에서는 ①②③이 왜
-          잠겼는지 화면 어디에도 글자로 없다. 잠긴 단계 전부의 이유를 항상 나열한다. */}
-      {steps.some((s) => !s.enabled && s.lockedReason) && (
-        <ul className="mb-4 space-y-1 text-xs text-text-muted">
-          {steps
-            .filter((s) => !s.enabled && s.lockedReason)
-            .map((s) => (
-              <li key={s.step}>
-                {t(`hermes.wizard.step.${s.step}`)} — {t(s.lockedReason as string)}
-              </li>
-            ))}
-        </ul>
-      )}
-
       {showCloseConfirm && created && (
         <div className="mb-4 space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
           <p className="text-sm font-semibold text-amber-300">
@@ -860,9 +852,25 @@ export default function NpcHireWizard({
                   />
                   <span>
                     {t("hermes.wizard.profile.copyAllApiKeys")}
-                    <span className="block text-xs text-text-muted">
-                      {t("hermes.wizard.profile.copyAllApiKeysHint")}
-                    </span>
+                    {/* 자세한 사정은 눌러야 보인다 — 체크박스 밑의 두 줄이 화면을 길게 만들었다. */}
+                    <button
+                      type="button"
+                      aria-label={t("hermes.wizard.profile.copyAllApiKeysHint")}
+                      aria-expanded={copyKeysHint}
+                      data-hint="copy-all-api-keys"
+                      className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-xs font-semibold text-text-muted hover:bg-surface-raised"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCopyKeysHint((open) => !open);
+                      }}
+                    >
+                      ?
+                    </button>
+                    {copyKeysHint && (
+                      <span className="mt-1 block text-xs text-text-muted">
+                        {t("hermes.wizard.profile.copyAllApiKeysHint")}
+                      </span>
+                    )}
                   </span>
                 </label>
               )}
@@ -1351,6 +1359,34 @@ export default function NpcHireWizard({
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* 단계 이동은 아래 버튼으로 한다 — 잠긴 단계의 이유를 글로 늘어놓는 대신
+          "다음" 을 눌러 자연스럽게 순서를 밟는다(2026-09-20 단테 결정). */}
+      {!showCloseConfirm && (
+        <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+          <button
+            type="button"
+            disabled={!previousStep(current, steps)}
+            onClick={goBack}
+            data-step-nav="back"
+            className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80 disabled:opacity-40"
+          >
+            {t("hermes.wizard.back")}
+          </button>
+          <button
+            type="button"
+            disabled={!nextStep(current, steps)}
+            onClick={goNext}
+            data-step-nav="next"
+            title={
+              nextLockedReason(current, steps) ? t(nextLockedReason(current, steps)!) : undefined
+            }
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-40"
+          >
+            {t("hermes.wizard.next")}
+          </button>
         </div>
       )}
     </div>

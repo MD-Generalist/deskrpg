@@ -114,6 +114,7 @@ const en: Record<string, string> = {
   "channels.loadingChannels": "Loading channels...",
   "channels.joinFailed": "Failed to join channel",
   "channels.invalidInvite": "Invalid invite code",
+  "channels.joinByCode": "Join by code",
   "channels.inviteCodePlaceholder": "Enter invite code...",
   "channels.groupInviteTitle": "Join a Group",
   "channels.groupInviteSubtitle":
@@ -468,7 +469,10 @@ const en: Record<string, string> = {
   "hermes.wizard.hostReason.unsupported_platform":
     "Local connection isn't supported on this server's OS.",
   "hermes.wizard.hostReason.container_without_hermes":
-    "DeskRPG runs inside a container that has no Hermes. Installing there would vanish on redeploy, so it isn't offered. Connect to the host's Hermes by gateway address (e.g. http://host.docker.internal:8642) or over SSH.",
+    "Installing Hermes locally is not supported inside a Docker container. Use a remote connection instead.",
+  "hermes.wizard.hostReason.container_without_hermesDetail":
+    "DeskRPG runs inside a container and Hermes is not in it. Anything installed there is lost on the next deploy, so installation is disabled. Connect to the host's Hermes by gateway address (e.g. http://host.docker.internal:8642) or over SSH.",
+  "hermes.wizard.hostReason.more": "Details",
   "hermes.wizard.hostReason.ssh_missing":
     "This server has no ssh command, so SSH connection isn't available.",
   "hermes.wizard.ssh.keyTitle": "1. Add DeskRPG's key to the target server",

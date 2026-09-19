@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n";
 
 /**
- * `/gateways` 하단의 접이식 진단 영역. `deskrpg doctor` 가 CLI 에서 보여 주던 것을 그대로 본다.
+ * `/gateways` 의 진단 영역. 2026-09-20 부터 화면 아래가 아니라 상단 "진단" 버튼으로 연다 —
+ * 늘 펼쳐 두면 화면만 길어진다. 이 컴포넌트는 계속 붙어 있고(권한 판정을 한 번만 한다),
+ * 보일지는 `open` 이 정한다. 권한이 없으면 `onAvailable(false)` 로 알려 버튼조차 나오지 않게 한다.
+ * `deskrpg doctor` 가 CLI 에서 보여 주던 것을 그대로 본다.
  *
  * 관리자가 아닌 사용자에게는 서버가 404 를 주고, 그때 이 컴포넌트는 **아무것도 그리지 않는다** —
  * 관리자 기능이 있다는 사실조차 화면에 남기지 않는다. 서버가 만든 문장을 그대로 보여 줄 뿐
@@ -26,7 +29,13 @@ type State =
 
 const mark = (value: boolean) => (value ? "✓" : "✗");
 
-export default function DiagnosticsPanel() {
+export default function DiagnosticsPanel({
+  open = true,
+  onAvailable,
+}: {
+  open?: boolean;
+  onAvailable?: (available: boolean) => void;
+} = {}) {
   const t = useT();
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -49,7 +58,13 @@ export default function DiagnosticsPanel() {
     };
   }, []);
 
-  if (state.kind === "loading" || state.kind === "hidden") return null;
+  // 판정이 끝나면 호출부에 알린다 — 렌더 중에 부모 상태를 바꾸지 않도록 effect 에서.
+  const available = state.kind === "ready" || state.kind === "failed";
+  useEffect(() => {
+    if (state.kind !== "loading") onAvailable?.(available);
+  }, [state.kind, available, onAvailable]);
+
+  if (!available || !open) return null;
 
   return (
     <details

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import PasswordModal from "@/components/PasswordModal";
+import Modal from "@/components/ui/Modal";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
@@ -71,6 +72,7 @@ function ChannelsPageInner() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState("");
+  const [joinDialog, setJoinDialog] = useState<"channel" | "group" | null>(null);
   const [joinError, setJoinError] = useState("");
   const [groupInviteCode, setGroupInviteCode] = useState("");
   const [groupInviteError, setGroupInviteError] = useState("");
@@ -216,6 +218,7 @@ function ChannelsPageInner() {
     }
   };
 
+  const closeJoinDialog = () => setJoinDialog(null);
   const canCreateChannels = availableGroups.some((group) => group.canCreateChannel);
   const canManageGroups = availableGroups.some((group) => group.canManageGroup);
 
@@ -239,12 +242,20 @@ function ChannelsPageInner() {
           <div className="flex items-center gap-3">
             <LogoutButton />
             <LocaleSwitcher />
-            <Link
-              href="/gateways"
+            <button
+              type="button"
+              onClick={() => setJoinDialog("channel")}
               className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
             >
-              {t("gateways.nav")}
-            </Link>
+              {t("channels.joinByCode")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setJoinDialog("group")}
+              className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+            >
+              {t("channels.groupInviteJoin")}
+            </button>
             {canManageGroups && (
               <Link
                 href="/admin/groups"
@@ -279,51 +290,61 @@ function ChannelsPageInner() {
           </div>
         )}
 
-        {/* Join by code */}
-        <div className="mb-8 flex gap-2 items-center">
-          <input
-            type="text"
-            placeholder={t("channels.inviteCodePlaceholder")}
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleJoinByCode()}
-            className="px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent w-60"
-          />
-          <button
-            onClick={handleJoinByCode}
-            className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+        {/* 참여 코드·그룹 참여는 상단 버튼 → 팝업이다(2026-09-20 단테 결정) — 목록 위를 비워 둔다. */}
+        {joinDialog && (
+          <Modal
+            open
+            onClose={closeJoinDialog}
+            title={
+              joinDialog === "channel" ? t("channels.joinByCode") : t("channels.groupInviteTitle")
+            }
+            size="sm"
           >
-            {t("common.join")}
-          </button>
-          {joinError && <span className="text-danger text-sm ml-2">{joinError}</span>}
-        </div>
-
-        <div className="mb-8 rounded-xl border border-border bg-surface p-4">
-          <div className="mb-3">
-            <h2 className="text-lg font-semibold">{t("channels.groupInviteTitle")}</h2>
-            <p className="text-sm text-text-muted">{t("channels.groupInviteSubtitle")}</p>
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <input
-              type="text"
-              placeholder={t("channels.groupInvitePlaceholder")}
-              value={groupInviteCode}
-              onChange={(e) => setGroupInviteCode(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleGroupInviteAccept()}
-              className="px-3 py-2 bg-bg border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent w-72"
-            />
-            <button
-              onClick={handleGroupInviteAccept}
-              className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
-            >
-              {t("channels.groupInviteJoin")}
-            </button>
-          </div>
-          {groupInviteError && <p className="mt-2 text-sm text-danger">{groupInviteError}</p>}
-          {groupInviteSuccess && (
-            <p className="mt-2 text-sm text-primary-light">{groupInviteSuccess}</p>
-          )}
-        </div>
+            {joinDialog === "channel" ? (
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder={t("channels.inviteCodePlaceholder")}
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoinByCode()}
+                  className="w-full rounded border border-border bg-surface px-3 py-2 text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light"
+                />
+                {joinError && <p className="text-sm text-danger">{joinError}</p>}
+                <button
+                  onClick={handleJoinByCode}
+                  className="rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover"
+                >
+                  {t("common.join")}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-text-muted">{t("channels.groupInviteSubtitle")}</p>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder={t("channels.groupInvitePlaceholder")}
+                  value={groupInviteCode}
+                  onChange={(e) => setGroupInviteCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGroupInviteAccept()}
+                  className="w-full rounded border border-border bg-surface px-3 py-2 text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light"
+                />
+                {groupInviteError && <p className="text-sm text-danger">{groupInviteError}</p>}
+                {groupInviteSuccess && (
+                  <p className="text-sm text-primary-light">{groupInviteSuccess}</p>
+                )}
+                <button
+                  onClick={handleGroupInviteAccept}
+                  className="rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover"
+                >
+                  {t("channels.groupInviteJoin")}
+                </button>
+              </div>
+            )}
+          </Modal>
+        )}
 
         {/* Channel grid */}
         {!hasCharacter ? (
@@ -350,7 +371,7 @@ function ChannelsPageInner() {
                 key={channel.id}
                 data-channel-id={channel.id}
                 onClick={() => handleChannelClick(channel)}
-                className={`bg-surface p-5 rounded-lg transition-all ${
+                className={`flex h-full flex-col bg-surface p-5 rounded-lg transition-all ${
                   channel.canJoin === false
                     ? "cursor-default ring-1 ring-border"
                     : "cursor-pointer hover:ring-2 hover:ring-primary"
@@ -362,7 +383,9 @@ function ChannelsPageInner() {
                 />
                 <div className="flex items-center gap-2 mb-1">
                   {channel.isLocked && <Lock className="w-4 h-4 text-text-muted shrink-0" />}
-                  <h3 className="text-lg font-bold flex-1">{channel.name}</h3>
+                  <h3 className="line-clamp-1 flex-1 text-lg font-bold" title={channel.name}>
+                    {channel.name}
+                  </h3>
                   {currentUserId && channel.ownerId === currentUserId && (
                     <button
                       onClick={(e) => handleDeleteChannel(e, channel.id)}
@@ -373,9 +396,13 @@ function ChannelsPageInner() {
                     </button>
                   )}
                 </div>
-                {channel.description && (
-                  <p className="text-text-muted text-sm mb-3 line-clamp-2">{channel.description}</p>
-                )}
+                {/* 설명이 없거나 길어도 아래 줄이 흔들리지 않게 두 줄 자리를 늘 차지한다. */}
+                <p
+                  className="mb-3 line-clamp-2 min-h-[2.5rem] text-sm text-text-muted"
+                  title={channel.description ?? undefined}
+                >
+                  {channel.description}
+                </p>
                 <div className="flex flex-wrap gap-2 mb-3">
                   <span className="rounded-full bg-surface-raised px-2 py-1 text-[11px] font-medium text-text-muted">
                     {channel.isPublic ? t("channels.public") : t("channels.private")}
@@ -394,7 +421,7 @@ function ChannelsPageInner() {
                 {channel.canJoin === false && channel.requiresGroupMembership && (
                   <p className="mb-3 text-xs text-text-muted">{t("channels.browseOnlyHint")}</p>
                 )}
-                <div className="flex items-center justify-between gap-2 text-xs text-text-dim">
+                <div className="mt-auto flex items-center justify-between gap-2 text-xs text-text-dim">
                   <span className="truncate">
                     {t("channels.owner", { name: channel.ownerNickname || t("common.unknown") })}
                   </span>

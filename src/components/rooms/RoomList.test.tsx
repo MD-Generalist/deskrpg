@@ -48,7 +48,7 @@ test("office 가 맨 위에 '사무실 전체' 로, 나머지는 이름·마지�
   );
   const items = [...el.querySelectorAll('[role="listitem"]')].map((li) => li.textContent ?? "");
   assert.equal(items.length, 2);
-  assert.match(items[0], /사무실 전체/);
+  assert.match(items[0], /오피스 전체/);
   assert.match(items[1], /기획/);
   assert.match(items[1], /네, 단테 님/);
 });

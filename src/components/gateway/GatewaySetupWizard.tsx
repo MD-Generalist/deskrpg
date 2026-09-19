@@ -79,6 +79,7 @@ export default function GatewaySetupWizard({
   const [discovered, setDiscovered] = useState(false);
   // SSH 호스트 등록 패널. 등록한 호스트가 하나도 없으면 처음부터 펼친다.
   const [registering, setRegistering] = useState(false);
+  const [detailOpen, setDetailOpen] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<SetupCandidate[]>([]);
   const [inspection, setInspection] = useState<SetupInspection | null>(null);
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
@@ -387,6 +388,33 @@ export default function GatewaySetupWizard({
   // 막힌 이유별 문구. 이유가 오지 않는 구버전 서버 응답이면 예전 한 문장으로 떨어진다.
   const hostReasonText = (reason: string | null | undefined) =>
     reason ? t(`hermes.wizard.hostReason.${reason}`) : c.unavailable;
+  /**
+   * 막힌 이유 한 줄 + 길게 설명할 것이 있으면 `?` 버튼. 본문은 짧게 두고 자세한 사정은 눌러야 보인다
+   * (2026-09-19 단테 결정). 상세 문구가 없는 이유는 버튼도 나오지 않는다.
+   */
+  const hostReasonNote = (reason: string | null | undefined) => {
+    const detailKey = reason ? `hermes.wizard.hostReason.${reason}Detail` : "";
+    const detail = detailKey ? t(detailKey) : "";
+    const open = detailOpen === reason;
+    return (
+      <>
+        <span>{hostReasonText(reason)}</span>
+        {detail && detail !== detailKey && (
+          <button
+            type="button"
+            aria-label={t("hermes.wizard.hostReason.more")}
+            aria-expanded={open}
+            data-reason-detail={reason}
+            className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-xs font-semibold text-text-muted hover:bg-surface-raised"
+            onClick={() => setDetailOpen(open ? null : (reason ?? null))}
+          >
+            ?
+          </button>
+        )}
+        {detail && open && <span className="mt-2 block text-text-muted">{detail}</span>}
+      </>
+    );
+  };
   const trimmedProfileName = newProfileName.trim();
   const profileNameValid = !trimmedProfileName || PROFILE_NAME.test(trimmedProfileName);
   // 확인이 경고를 이긴다: ready 면 지우고, missing 이면 (없더라도) 붙인다. unknown 은 기존 규칙 그대로.
@@ -523,7 +551,7 @@ export default function GatewaySetupWizard({
             {card(c.remote, c.remoteHelp, Globe, () => navigate("remote"))}
           </div>
           {cap && !cap.local && (
-            <p className="mt-3 text-sm text-text-muted">{hostReasonText(cap.localReason)}</p>
+            <p className="mt-3 text-sm text-text-muted">{hostReasonNote(cap.localReason)}</p>
           )}
           {!cap && !errorCode && (
             <p role="status" className="mt-3">
@@ -537,7 +565,7 @@ export default function GatewaySetupWizard({
           {card(c.ssh, c.sshHelp, Terminal, () => navigate("ssh"), !cap?.ssh)}
           {card(c.url, c.urlHelp, Server, () => navigate("url"))}
           {cap && !cap.ssh && (
-            <p className="text-sm text-text-muted sm:col-span-2">{hostReasonText(cap.sshReason)}</p>
+            <p className="text-sm text-text-muted sm:col-span-2">{hostReasonNote(cap.sshReason)}</p>
           )}
         </div>
       )}

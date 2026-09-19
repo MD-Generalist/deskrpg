@@ -379,7 +379,7 @@ test("단계는 ① 프로필 ② 인격 ③ 외형 ④ AI 모델이고, 옛 배
   }
 });
 
-test("프로필을 만들기 전에는 ②③④ 가 잠기고 그 이유를 글자로 보여준다", async () => {
+test("프로필을 만들기 전에는 ②③④ 가 잠기고, 이유는 '다음' 버튼 툴팁으로만 붙는다", async () => {
   // 2026-09-18 스테이징 실측: 새 프로필인데 ② 를 누르면 "인격 파일을 읽을 수 없어
   // 편집기를 열지 않습니다" 가 떴고, ③ 은 모델 목록 대신 자유 입력이었다.
   const calls: FetchCall[] = [];
@@ -390,8 +390,17 @@ test("프로필을 만들기 전에는 ②③④ 가 잠기고 그 이유를 글
     assert.equal(tabByNumber(el, "③")?.disabled, true, "③ 이 잠기지 않았다");
     assert.equal(tabByNumber(el, "④")?.disabled, true, "④ 가 잠기지 않았다");
     const text = el.textContent ?? "";
-    assert.match(text, /먼저 ① 에서 프로필을 만드세요/);
+    // 튜토리얼처럼 늘어놓지 않는다 — 이유는 잠긴 "다음" 버튼의 툴팁에만 있다(2026-09-20).
+    assert.equal(text.includes("먼저 ① 에서 프로필을 만드세요"), false);
     assert.equal(text.includes("인격 파일을 읽을 수 없어"), false);
+    const next = el.querySelector<HTMLButtonElement>('[data-step-nav="next"]');
+    assert.equal(next?.disabled, true, "잠긴 다음 단계인데 '다음' 이 눌린다");
+    assert.match(next?.title ?? "", /먼저 ① 에서 프로필을 만드세요/);
+    assert.equal(
+      el.querySelector<HTMLButtonElement>('[data-step-nav="back"]')?.disabled,
+      true,
+      "첫 단계인데 '이전' 이 눌린다",
+    );
 
     await createProfile(el);
     assert.equal(tabByNumber(el, "②")?.disabled, false, "프로필을 만든 뒤에도 ② 가 잠겨 있다");
@@ -413,7 +422,7 @@ test("붙은 채널이 없으면 '출근했다'고 말하지 않는다", async (
     await createAndOpenModel(el);
     const text = el.textContent ?? "";
     assert.equal(/출근했습니다/.test(text), false, "출근하지 않았는데 출근했다고 말한다");
-    assert.match(text, /채널에 연결하면/, "다음에 무엇을 해야 하는지 안내가 없다");
+    assert.match(text, /오피스에 연결하면/, "다음에 무엇을 해야 하는지 안내가 없다");
     root.unmount();
     el.remove();
   } finally {
@@ -427,7 +436,7 @@ test("붙은 채널이 있으면 출근 결과를 한 줄로 알린다", async (
   try {
     const { root, el } = await mount(wizardWith(PROFILE_ROUTES(2), calls));
     await createAndOpenModel(el);
-    assert.match(el.textContent ?? "", /채널 2곳에 출근했습니다/);
+    assert.match(el.textContent ?? "", /오피스 2곳에 출근했습니다/);
     root.unmount();
     el.remove();
   } finally {

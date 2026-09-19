@@ -116,3 +116,19 @@ export function nextStep(current: WizardStep, steps: StepAvailability[]): Wizard
   }
   return null;
 }
+
+/** 바로 앞의 **열린** 단계. 없으면 null — 첫 단계에서는 "이전" 이 나오지 않는다. */
+export function previousStep(current: WizardStep, steps: StepAvailability[]): WizardStep | null {
+  const idx = ORDER.indexOf(current);
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    const candidate = steps.find((s) => s.step === ORDER[i]);
+    if (candidate?.enabled) return candidate.step;
+  }
+  return null;
+}
+/** 다음 단계가 잠겨 있으면 그 이유 — "다음" 버튼의 툴팁이 된다. */
+export function nextLockedReason(current: WizardStep, steps: StepAvailability[]): string | null {
+  const idx = ORDER.indexOf(current);
+  const candidate = steps.find((s) => s.step === ORDER[idx + 1]);
+  return candidate && !candidate.enabled ? (candidate.lockedReason ?? null) : null;
+}

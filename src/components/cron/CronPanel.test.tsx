@@ -221,9 +221,9 @@ test("editable=false 면 조작 버튼이 전부 비활성이고 이유가 보�
     ]) {
       const btn = byTestId(host, id) as HTMLButtonElement;
       assert.equal(btn.disabled, true, id);
-      assert.match(btn.title, /다른 채널/);
+      assert.match(btn.title, /다른 오피스/);
     }
-    assert.match(byTestId(host, "cron-readonly-reason")?.textContent ?? "", /다른 채널에서 만든/);
+    assert.match(byTestId(host, "cron-readonly-reason")?.textContent ?? "", /다른 오피스에서 만든/);
 
     // 비활성 버튼을 눌러도 요청이 나가지 않는다.
     await click(byTestId(host, "cron-action-run"));
