@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.918.4` — Onboarding cleanup: the sidebar now reads My character → Connection → Employees → Office. You have one character, and its bio is shared with employees in chat, kanban and meetings. Hiring and employee details get their own pages, with per-employee model login guidance.
+- Version: `v2026.920.1` — Connect a host over SSH or locally and install Hermes from the wizard, even without python3. Screens carry less instruction text: reasons sit behind a `?`, the hire wizard moves with Back/Next, and office join codes open in a dialog. New 3D miniature logo and a shared page frame.
 
 ## What You Can Do
 

@@ -111,7 +111,7 @@ for (const scene of SCENES) {
           ),
         ).toBe(true);
         // Arrival opens Sophie's direct chat; the report belongs to the office room.
-        await page.getByRole("button", { name: "사무실 전체", exact: true }).click();
+        await page.getByRole("button", { name: "오피스 전체", exact: true }).click();
         expect((await page.request.patch(cardPath, { data: { status: "done" } })).ok()).toBe(true);
         await expect(page.locator('[data-room-notice="card_done"]')).toContainText(
           "시네마틱 캡처 준비",

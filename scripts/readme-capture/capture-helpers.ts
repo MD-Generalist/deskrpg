@@ -78,9 +78,8 @@ export async function enterCaptureOffice(page: Page, fixture: CaptureFixture) {
   const { npcs } = await roster.json();
   for (const name of fixture.npcNames)
     expect(npcs.some((npc: { name: string }) => npc.name === name)).toBe(true);
-  await page.goto("/characters");
-  await page.getByRole("button", { name: fixture.characterName, exact: true }).click();
-  await page.waitForURL(/\/channels/);
+  // 내 캐릭터는 한 명이고 목록에서 고르지 않는다 — 예전 화면의 "캐릭터 버튼 클릭" 단계는 없어졌다.
+  await page.goto("/channels");
   await page.getByRole("heading", { name: "Dante Labs Office", exact: true }).click();
   await page.waitForURL(new RegExp(fixture.channelId));
   await expect(page.locator(".office-three-canvas canvas")).toBeVisible();

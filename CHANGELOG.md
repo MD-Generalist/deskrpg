@@ -7,6 +7,23 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.920.1] - 2026-09-20
+
+### Added
+
+- Connect a Hermes host locally or over SSH from the wizard: administrators get both by default, register SSH hosts with a DeskRPG-only key or with the server's own `~/.ssh/config` and agent.
+- Install Hermes on a host without python3 — the setup launcher fetches a user-local Python with uv, and names the sudo-only packages (git, C++ compiler, curl) with the exact command when it cannot continue.
+- Show gateway state on the discovery card: running, stopped (connecting starts it) or blocked by separately running profile gateways.
+
+### Changed
+
+- Host discovery lists one gateway and its profiles instead of one candidate per profile.
+- Screens carry less instruction text: blocked reasons sit behind a `?` button, the hire wizard moves with Back/Next, office join codes and group invites open in a dialog, and share/diagnostics moved into header buttons.
+- Korean UI says "오피스" everywhere (was a mix of 채널 and 사무실).
+- New 3D miniature logo rendered from the same three.js model as the sidebar headquarters, with a simplified favicon that reads at 16px.
+- Web screens use the Dante Labs brand v2 tokens (cream surfaces, navy text, 8px radius cap, navy-tinted shadows); the office green stays as the single product accent.
+- One page frame for every workspace screen — the same padding and max width instead of per-page values.
+
 ## [2026.9.19] - 2026-09-15
 
 ### Added
