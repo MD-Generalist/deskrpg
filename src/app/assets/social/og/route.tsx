@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 export async function GET(): Promise<Response> {
   const screenshot = await readFile(join(process.cwd(), "public/readme/home-screenshot.png"));
   const screenshotUrl = `data:image/png;base64,${screenshot.toString("base64")}`;
+  const mark = await readFile(join(process.cwd(), "public/assets/brand/deskrpg-icon-96.png"));
+  const markUrl = `data:image/png;base64,${mark.toString("base64")}`;
 
   return new ImageResponse(
     <div
@@ -50,8 +52,9 @@ export async function GET(): Promise<Response> {
           borderRight: "1px solid #d9e7dd",
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", color: "#234638" }}>
-          <span style={{ fontSize: 32, fontWeight: 800 }}>DeskRPG</span>
+        <div style={{ display: "flex", alignItems: "center", color: "#234638" }}>
+          <img src={markUrl} alt="" width={48} height={48} style={{ borderRadius: 13 }} />
+          <span style={{ fontSize: 32, fontWeight: 800, marginLeft: 12 }}>DeskRPG</span>
           <span style={{ fontSize: 20, marginLeft: 10, color: "#526b5e" }}>for Hermes</span>
         </div>
         <div

@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 
 const PUBLIC_URL = "https://deskrpg.com/";
 const SHARE_IMAGE_URL = "https://deskrpg.com/assets/social/og";
-const SHARE_TITLE = "DeskRPG for Hermes — AI 동료와 함께하는 3D 오피스";
+const SHARE_TITLE = "DeskRPG for Hermes — AI 직원이 일하는 사무실";
 const SHARE_DESCRIPTION =
   "Hermes 에이전트와 함께 대화하고, 회의하고, 칸반 작업을 진행하는 셀프호스팅 3D 가상 오피스.";
 

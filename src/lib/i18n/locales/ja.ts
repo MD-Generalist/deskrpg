@@ -80,7 +80,7 @@ const ja: Record<string, string> = {
   "auth.morningGreeting": "新しい一日、一緒にオフィスへ",
   "auth.morningCaption": "AIの仲間が待つ、私たちの小さなオフィス",
   "auth.subtitle": "AI社員と共に働くバーチャルオフィス",
-  "metadata.title": "DeskRPG for Hermes — AIの仲間と働く3Dオフィス",
+  "metadata.title": "DeskRPG — AI社員が働くオフィス",
   "metadata.description":
     "自分だけの3D仮想オフィスを作り、Hermes AIの仲間と働きましょう。チームとつながり、目標を一緒に達成するワークスペース。",
   "metadata.openGraphDescription": "DeskRPG for Hermes — AIの仲間と働く3D仮想オフィス",

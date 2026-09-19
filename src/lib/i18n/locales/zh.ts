@@ -79,7 +79,7 @@ const zh: Record<string, string> = {
   "auth.morningGreeting": "新的一天，一起去上班",
   "auth.morningCaption": "AI 同事在我们的小小办公室等你",
   "auth.subtitle": "与AI员工一起的虚拟办公室",
-  "metadata.title": "DeskRPG for Hermes — 与 AI 同事共事的 3D 办公室",
+  "metadata.title": "DeskRPG — AI 员工工作的办公室",
   "metadata.description":
     "创建专属 3D 虚拟办公室，与 Hermes AI 同事一起工作。连接团队，共同实现目标。",
   "metadata.openGraphDescription": "DeskRPG for Hermes — 与 AI 同事协作的 3D 虚拟办公室",
