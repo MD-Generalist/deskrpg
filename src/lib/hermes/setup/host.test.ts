@@ -1846,3 +1846,21 @@ test("포트 쓰기 실패는 port_write_failed 로 나가고 뒤 단계는 돌�
   );
   assert.equal(f.calls.length, 1);
 });
+
+test("Linger 판정 — yes/no 를 읽고, 모르면 unknown 이며 던지지 않는다", async () => {
+  const { checkLingerHost } = await import("./host");
+  const exec = (linger: string, code = 0) =>
+    (async (command: string) =>
+      command === "id"
+        ? { stdout: "dante\n", stderr: "", code: 0 }
+        : { stdout: `${linger}\n`, stderr: "", code }) as never;
+  assert.equal(await checkLingerHost(exec("yes")), "enabled");
+  assert.equal(await checkLingerHost(exec("no")), "disabled");
+  assert.equal(await checkLingerHost(exec("", 1)), "unknown");
+  assert.equal(
+    await checkLingerHost((async () => {
+      throw new Error("boom");
+    }) as never),
+    "unknown",
+  );
+});

@@ -441,8 +441,49 @@ const en: Record<string, string> = {
     "The official installer script could not be downloaded. Ask the administrator to check the server's network and proxy settings, then retry.",
   "hermes.wizard.warn.profileNotServed":
     "The gateway does not serve this profile yet. Add its name to the gateway's multiplex profile allowlist. This wizard never edits the allowlist.",
+  "hermes.wizard.warn.lingerRequired":
+    "On this server the Hermes gateway stops when you log out or reboot. Run this once in a terminal on the server: sudo loginctl enable-linger $USER",
   "hermes.wizard.warn.modelProviderRequired":
     "No model provider is configured yet. Run hermes model on the server to sign in to a model. Until then NPCs cannot reply.",
+  "hermes.wizard.hostReason.not_admin":
+    "Local and SSH connections are for the administrator (system_admin) account. Connect by gateway address instead.",
+  "hermes.wizard.hostReason.disabled":
+    "The operator turned host setup off on this server (DESKRPG_HOST_SETUP_ENABLED=0). Connect by gateway address instead.",
+  "hermes.wizard.hostReason.unsupported_platform":
+    "Local connection isn't supported on this server's OS.",
+  "hermes.wizard.hostReason.python3_missing":
+    "This server has no python3, so it can't find or install Hermes.",
+  "hermes.wizard.hostReason.container_without_hermes":
+    "DeskRPG runs inside a container that has no Hermes. Installing there would vanish on redeploy, so it isn't offered. Connect to the host's Hermes by gateway address (e.g. http://host.docker.internal:8642) or over SSH.",
+  "hermes.wizard.hostReason.ssh_missing":
+    "This server has no ssh command, so SSH connection isn't available.",
+  "hermes.wizard.ssh.keyTitle": "1. Add DeskRPG's key to the target server",
+  "hermes.wizard.ssh.keyBody":
+    "This is the SSH key DeskRPG uses on this server. Run the command below once in a terminal on the server you want to connect. The private key never leaves DeskRPG, and deleting this line revokes access immediately.",
+  "hermes.wizard.ssh.hostTitle": "2. Server to connect",
+  "hermes.wizard.ssh.hostPlaceholder": "Host (e.g. minipc.local, 10.0.0.5)",
+  "hermes.wizard.ssh.userPlaceholder": "User",
+  "hermes.wizard.ssh.scan": "Check host key",
+  "hermes.wizard.ssh.scanning": "Checking…",
+  "hermes.wizard.ssh.fingerprintBody":
+    "These are the host key fingerprints the server presented. Compare them with what the server itself shows.",
+  "hermes.wizard.ssh.fingerprintHow":
+    "On the server: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
+  "hermes.wizard.ssh.fingerprintConfirm": "The fingerprint matches what the server shows.",
+  "hermes.wizard.ssh.register": "Register this server",
+  "hermes.wizard.ssh.cancel": "Close",
+  "hermes.wizard.ssh.addHost": "+ Register a new SSH host",
+  "hermes.wizard.ssh.removeHost": "Remove selected host",
+  "hermes.wizard.ssh.errors.unreachable":
+    "Couldn't reach the server or SSH didn't answer. Check the host and port.",
+  "hermes.wizard.ssh.errors.noTools": "The DeskRPG server has no ssh tools.",
+  "hermes.wizard.ssh.errors.keyChanged": "The host key changed after you checked it. Check again.",
+  "hermes.wizard.ssh.errors.invalid": "Host, port or user is not valid.",
+  "hermes.wizard.install.titleSsh": "Install Hermes on the connected server?",
+  "hermes.wizard.install.bodySsh":
+    "Hermes wasn't found on this server. DeskRPG downloads and runs the official installer over SSH (into your home directory, no sudo). It can take a few minutes. Model sign-in comes after installation.",
+  "hermes.wizard.install.consentSsh":
+    "I agree to run the official installer on the connected server.",
   "hermes.wizard.install.title": "Install Hermes on this server?",
   "hermes.wizard.install.body":
     "The official installer script is downloaded and run on the host where the DeskRPG server runs. It can take a few minutes. Model provider sign-in is not included: run hermes model on the server afterwards.",

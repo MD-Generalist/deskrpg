@@ -330,16 +330,17 @@ const HERMES_INSTALL_KEY = "DESKRPG_HERMES_INSTALL_ENABLED";
 
 function readSwitch(envText, key) {
   const match = envText.match(new RegExp(`^${key}=(.*)$`, "m"));
-  const value = (match?.[1] ?? "").trim();
-  return ["1", "true", "yes"].includes(value);
+  const value = (match?.[1] ?? "").trim().toLowerCase();
+  // 2026-09-19 부터 두 스위치는 기본 켜짐이다(관리자에게). 명시적으로 끈 값만 꺼짐이다.
+  return !["0", "false", "no", "off"].includes(value);
 }
 
 /**
  * 호스트 설정 스위치를 켜고 끈다.
  *
- * 이 스위치는 일부러 앱 밖에 있다 — 웹 화면에서 켤 수 있으면 관리자 계정 하나가 뚫렸을 때
- * 곧바로 이 컴퓨터에서 임의 명령을 돌릴 수 있게 된다. 대신 손으로 파일을 여는 마찰만 없앤다.
- * 터미널을 쓸 수 있는 사람만 바꿀 수 있다는 성질은 그대로다.
+ * 2026-09-19 부터 기본은 켜짐이다 — 관리자(system_admin)는 연결 마법사에서 로컬·SSH 연결과 Hermes 설치를
+ * 바로 쓴다(단테 결정). 이 명령은 운영자가 **끄는** 수단이다. 스위치는 여전히 앱 밖에 있어, 웹 화면에서
+ * 켜고 끌 수 없다 — 터미널을 쓸 수 있는 사람만 바꿀 수 있다.
  */
 async function runHostSetup(argv) {
   const runtimePaths = loadRuntimePathsModule();
@@ -450,16 +451,15 @@ async function runDoctor() {
   }
 
   // 연결 마법사가 호스트를 만질 수 있는지. 꺼져 있는 것이 기본이고 정상이므로 실패가 아니다.
-  const hostSetupOn = ["1", "true", "yes"].includes(process.env.DESKRPG_HOST_SETUP_ENABLED ?? "");
-  const hermesInstallOn = ["1", "true", "yes"].includes(
-    process.env.DESKRPG_HERMES_INSTALL_ENABLED ?? "",
-  );
+  const offValue = (v) => ["0", "false", "no", "off"].includes((v ?? "").trim().toLowerCase());
+  const hostSetupOn = !offValue(process.env.DESKRPG_HOST_SETUP_ENABLED);
+  const hermesInstallOn = !offValue(process.env.DESKRPG_HERMES_INSTALL_ENABLED);
   reportCheck(
     "ok",
     "호스트 설정",
     hostSetupOn
-      ? `연결 마법사 켜짐${hermesInstallOn ? " · Hermes 설치 켜짐" : " · Hermes 설치는 꺼짐"}`
-      : "꺼짐 — 이 컴퓨터에 Hermes 를 설치하려면 deskrpg host-setup on --with-install",
+      ? `관리자에게 켜짐${hermesInstallOn ? " · Hermes 설치 켜짐" : " · Hermes 설치는 꺼짐"}`
+      : "운영자가 꺼 둠 — 다시 켜려면 deskrpg host-setup on --with-install",
   );
 
   // 찌를 대상은 앱이 실제로 쓰는 쪽(inspection.dbTarget)이다. URL 유무로 정하면 SQLite

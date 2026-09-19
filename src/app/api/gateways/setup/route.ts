@@ -17,6 +17,10 @@ import {
   getSetupJob,
   cancelSetupJob,
   connectSetupUrl,
+  sshPublicKey,
+  sshScanHost,
+  sshRegisterHost,
+  sshRemoveHost,
 } from "@/lib/hermes/setup/service";
 import type { HostTarget, SetupProvisionRequest } from "@/lib/hermes/setup/types";
 import { SetupPortConflictError } from "@/lib/hermes/setup/host";
@@ -118,6 +122,11 @@ export async function POST(req: NextRequest) {
       throw new Error("setup_invalid_request");
     if (body.action === "cancel") return response({ job: cancelSetupJob(userId, body.jobId) });
     if (body.action === "connect-url") return response(await connectSetupUrl(userId, body));
+    // 관리 SSH(전용 키·확인한 호스트 키). 관리자 전용 — 서비스 계층이 판정한다.
+    if (body.action === "ssh-public-key") return response(await sshPublicKey(userId));
+    if (body.action === "ssh-scan") return response(await sshScanHost(userId, body));
+    if (body.action === "ssh-register") return response(await sshRegisterHost(userId, body));
+    if (body.action === "ssh-remove") return response(await sshRemoveHost(userId, body.hostId));
     if (body.mode !== "local" && body.mode !== "ssh") throw new Error("setup_invalid_request");
     const target: HostTarget =
       body.mode === "local"

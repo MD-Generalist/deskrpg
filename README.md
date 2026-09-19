@@ -144,7 +144,7 @@ Important environment variables:
 - `JWT_SECRET`
 - `POSTGRES_PASSWORD` (PostgreSQL Docker setup)
 - `DESKRPG_LOCAL_DISCOVERY_ENABLED` (optional; lets a loopback gateway read `~/.hermes/profiles` on the host — off by default)
-- `DESKRPG_HOST_SETUP_ENABLED` (optional; enables the local/SSH gateway setup wizard for `system_admin` — off by default)
+- `DESKRPG_HOST_SETUP_ENABLED` (optional; the local/SSH gateway setup wizard is open to `system_admin` by default — set `0` to turn it off)
 
 For production, always set a real `JWT_SECRET`.
 

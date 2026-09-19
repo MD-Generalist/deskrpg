@@ -1488,3 +1488,59 @@ test("포트 쓰기 실패는 안전한 안내로만 나온다", async () => {
     await f.cleanup();
   }
 });
+
+/** 카드 버튼은 제목과 설명을 함께 담는다 — 제목이 들어 있는 버튼을 누른다. */
+async function clickContaining(host: HTMLElement, label: string) {
+  const button = Array.from(host.querySelectorAll("button")).find((b) =>
+    b.textContent?.includes(label),
+  );
+  assert.ok(button, label);
+  await act(async () => button.click());
+}
+
+test("로컬을 못 쓰면 막힌 이유를 그대로 보여 준다 — 컨테이너 안 Hermes 없음", async () => {
+  const f = await fixture(async () =>
+    response({
+      ...capabilities,
+      local: false,
+      localReason: "container_without_hermes",
+      canInstallHermes: false,
+    }),
+  );
+  try {
+    assert.match(f.host.textContent!, /컨테이너 안에서 돌고 있고/);
+    assert.equal(/호스트 접근이 허용되지 않습니다/.test(f.host.textContent!), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("SSH 를 못 쓰면 원격 화면에 그 이유를 보여 준다", async () => {
+  const f = await fixture(async () =>
+    response({ ...capabilities, ssh: false, sshHosts: [], sshReason: "ssh_missing" }),
+  );
+  try {
+    await clickContaining(f.host, "원격 연결");
+    assert.match(f.host.textContent!, /ssh 명령이 없어/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("등록한 SSH 호스트가 없으면 SSH 화면이 곧바로 등록 패널을 연다", async () => {
+  const f = await fixture(async (_url, init) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    if (body?.action === "ssh-public-key")
+      return response({ publicKey: "ssh-ed25519 AAAAPUB deskrpg@server" });
+    return response({ ...capabilities, sshHosts: [] });
+  });
+  try {
+    await clickContaining(f.host, "원격 연결");
+    await clickContaining(f.host, "SSH로 연결");
+    assert.ok(f.host.querySelector("[data-ssh-registration]"), "등록 패널이 열리지 않았다");
+    assert.match(f.host.textContent!, /authorized_keys/);
+    assert.match(f.host.textContent!, /AAAAPUB/);
+  } finally {
+    await f.cleanup();
+  }
+});

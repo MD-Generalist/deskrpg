@@ -626,6 +626,7 @@ export function setupHostError(locale: Locale, code: unknown): string | undefine
 const warningKeys: Record<string, string> = {
   profile_not_served: "hermes.wizard.warn.profileNotServed",
   model_provider_required: "hermes.wizard.warn.modelProviderRequired",
+  linger_required: "hermes.wizard.warn.lingerRequired",
 };
 export function setupWarning(locale: Locale, code: unknown): string | undefined {
   if (typeof code !== "string") return undefined;

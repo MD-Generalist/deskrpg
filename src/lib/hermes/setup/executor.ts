@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { managedSsh } from "./ssh-hosts";
 import type { HostExecutor } from "./types";
 
 export const SSH_OPTIONS = [
@@ -18,15 +19,29 @@ export const SSH_OPTIONS = [
   "ControlPath=none",
 ];
 const ALIAS = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
+/**
+ * SSH 로 닿아도 되는 호스트: 관리자가 화면에서 등록한 호스트(관리 SSH, 전용 키) + 운영자가 환경변수로
+ * 승인한 서버 `~/.ssh/config` 별칭(예전 방식, 호환용).
+ */
 export function getSshHosts(): { id: string; label: string }[] {
-  return [
+  const managed = managedSsh()
+    .list()
+    .map((h) => ({ id: h.id, label: h.label }));
+  const legacy = [
     ...new Set(
       (process.env.DESKRPG_SETUP_SSH_HOSTS ?? "")
         .split(",")
         .map((s) => s.trim())
         .filter((s) => ALIAS.test(s)),
     ),
-  ].map((id) => ({ id, label: id }));
+  ]
+    .filter((id) => !managed.some((h) => h.id === id))
+    .map((id) => ({ id, label: id }));
+  return [...managed, ...legacy];
+}
+/** 관리 호스트면 관리 ssh 설정(`-F`)을 가리킨다. 예전 별칭은 서버 ssh 설정을 그대로 쓴다. */
+export function sshConfigArgs(hostId: string): string[] {
+  return managedSsh().configArgs(hostId);
 }
 export function assertSshHost(hostId: string) {
   if (!ALIAS.test(hostId) || !getSshHosts().some((h) => h.id === hostId))
@@ -113,7 +128,14 @@ export function sshExecutor(hostId: string, execute: HostExecutor = localExecuto
       throw new Error("setup_invalid_request");
     const result = await execute(
       "ssh",
-      [...SSH_OPTIONS, "-T", "--", hostId, [command, ...args].map(quoteShellArg).join(" ")],
+      [
+        ...sshConfigArgs(hostId),
+        ...SSH_OPTIONS,
+        "-T",
+        "--",
+        hostId,
+        [command, ...args].map(quoteShellArg).join(" "),
+      ],
       options,
     );
     // OpenSSH stderr may contain remote banners, paths or secrets. Never propagate it on transport failures.
