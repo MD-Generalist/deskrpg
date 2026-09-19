@@ -144,7 +144,7 @@ DeskRPG는 `http://localhost:3102`에서 열립니다.
 - `JWT_SECRET`
 - `POSTGRES_PASSWORD` (PostgreSQL Docker 구성 사용 시)
 - `DESKRPG_LOCAL_DISCOVERY_ENABLED` (선택 사항. 루프백 게이트웨이가 호스트의 `~/.hermes/profiles`를 읽도록 허용합니다. 기본값은 꺼짐)
-- `DESKRPG_HOST_SETUP_ENABLED` (선택 사항. `system_admin` 에게 로컬·SSH 게이트웨이 설정 마법사를 엽니다. 기본값은 꺼짐)
+- `DESKRPG_HOST_SETUP_ENABLED` (선택 사항. 로컬·SSH 게이트웨이 설정 마법사는 `system_admin` 에게 기본으로 열립니다. 끄려면 `0`)
 
 운영 환경에서는 반드시 실제 `JWT_SECRET` 값을 설정해야 합니다.
 

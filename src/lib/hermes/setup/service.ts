@@ -1,12 +1,19 @@
-import { hostname } from "node:os";
-import { accessSync, constants } from "node:fs";
+import { homedir, hostname } from "node:os";
+import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { db, users, gatewayResources, nowForDb } from "@/db";
 import { upsertOwnedGatewayResource } from "@/lib/gateway-resources";
 import { registerHermesProfile } from "@/lib/hermes-profiles";
 import { isValidProfileName } from "../profile-name";
-import { checkModelHost, discoverHost, inspectHost, installHermesHost, prepareHost } from "./host";
+import {
+  checkLingerHost,
+  checkModelHost,
+  discoverHost,
+  inspectHost,
+  installHermesHost,
+  prepareHost,
+} from "./host";
 import { localExecutor, sshExecutor, getSshHosts } from "./executor";
 import { ensureSshTunnel, registerSshTransport, transportFetch } from "./transport";
 import {
@@ -17,6 +24,8 @@ import {
   validateGatewayUrl,
 } from "./policy";
 import { SetupJobStore } from "./store";
+import { describeCapabilities } from "./capabilities";
+import { managedSsh } from "./ssh-hosts";
 import { buildPluginInfoCacheUpdate } from "../plugin-cache-update";
 import { verifySetupGateway } from "./verify";
 import type {
@@ -78,19 +87,65 @@ function hasCommand(command: string) {
       }
     });
 }
+/** 이 프로세스가 컨테이너 안에서 도는가. 판정 실패는 "아니다" — 막는 쪽으로 틀리지 않게. */
+function inContainer() {
+  if (existsSync("/.dockerenv") || existsSync("/run/.containerenv")) return true;
+  try {
+    return /docker|containerd|kubepods|libpod/.test(readFileSync("/proc/1/cgroup", "utf8"));
+  } catch {
+    return false;
+  }
+}
+/** 호스트 도우미(HOST_BOOTSTRAP)와 같은 기준 — `~/.hermes/hermes-agent/{venv,.venv}/bin/python`. */
+function localHermesFound() {
+  const root = path.join(homedir(), ".hermes", "hermes-agent");
+  return ["venv", ".venv"].some((folder) => existsSync(path.join(root, folder, "bin", "python")));
+}
 export async function setupCapabilities(userId: string): Promise<SetupCapabilities> {
   const systemRole = await role(userId);
   const enabled = hostSetupAllowed(process.env, systemRole);
-  const hosts = enabled && hasCommand("ssh") ? getSshHosts() : [];
-  const local = enabled && process.platform !== "win32" && hasCommand("python3");
-  return {
-    local,
-    ssh: enabled && hosts.length > 0,
-    hostLabel: enabled ? hostname() : "",
-    sshHosts: hosts,
-    // 설치는 local 전용이다. SSH 대상에는 어떤 조합으로도 열리지 않는다.
-    canInstallHermes: local && hermesInstallAllowed(process.env, systemRole, "local"),
-  };
+  return describeCapabilities({
+    role: systemRole,
+    switchedOff: systemRole === "system_admin" && !enabled,
+    installAllowed: hermesInstallAllowed(process.env, systemRole, "local"),
+    platform: process.platform,
+    hasPython3: hasCommand("python3"),
+    hasSsh: hasCommand("ssh"),
+    inContainer: inContainer(),
+    localHermesFound: localHermesFound(),
+    hostLabel: hostname(),
+    sshHosts: enabled ? getSshHosts() : [],
+  });
+}
+/** SSH 호스트 관리 — 관리자 전용(호스트 게이트와 같다). 개인키는 어느 응답에도 실리지 않는다. */
+async function requireHostAdmin(userId: string) {
+  if (!hostSetupAllowed(process.env, await role(userId))) throw new Error("setup_forbidden");
+  return managedSsh();
+}
+export async function sshPublicKey(userId: string) {
+  return { publicKey: await (await requireHostAdmin(userId)).publicKey() };
+}
+export async function sshScanHost(userId: string, input: Record<string, unknown>) {
+  const keys = await (await requireHostAdmin(userId)).scan(input as never);
+  return { keys: keys.map(({ type, fingerprint }) => ({ type, fingerprint })) };
+}
+export async function sshRegisterHost(userId: string, input: Record<string, unknown>) {
+  const fingerprints = input.fingerprints;
+  if (
+    !Array.isArray(fingerprints) ||
+    fingerprints.length === 0 ||
+    fingerprints.length > 8 ||
+    fingerprints.some((f) => typeof f !== "string" || !/^SHA256:[A-Za-z0-9+/]{43}$/.test(f))
+  )
+    throw new Error("setup_invalid_request");
+  const host = await (await requireHostAdmin(userId)).register(input as never, fingerprints);
+  return { host: { id: host.id, label: host.label } };
+}
+export async function sshRemoveHost(userId: string, hostId: unknown) {
+  if (typeof hostId !== "string" || !/^h-[a-f0-9]{10}$/.test(hostId))
+    throw new Error("setup_invalid_request");
+  await (await requireHostAdmin(userId)).remove(hostId);
+  return { removed: hostId };
 }
 async function requireHost(userId: string, target: HostTarget) {
   if (!hostSetupAllowed(process.env, await role(userId))) throw new Error("setup_forbidden");
@@ -164,7 +219,7 @@ export async function startSetup(
   setPort?: number,
 ) {
   const executor = await requireHost(userId, target);
-  // 게이트 셋(호스트 설정 + DESKRPG_HERMES_INSTALL_ENABLED + local)을 모두 통과해야 한다.
+  // 호스트 게이트 + 설치 스위치 + 대상(local·ssh). 대상별 조건은 hermesInstallAllowed 가 판정한다.
   if (installHermes && !hermesInstallAllowed(process.env, await role(userId), target.mode))
     throw new Error("hermes_install_forbidden");
   const jobs = store();
@@ -277,8 +332,15 @@ export async function startSetup(
         selectedCandidateId,
         controller.signal,
       );
+      // SSH 대상은 로그아웃·재부팅 뒤에도 게이트웨이가 살아야 한다 — Linger 가 꺼져 있으면 안내만 한다.
+      const lingerOff =
+        target.mode === "ssh" && (await checkLingerHost(boundedExecutor)) === "disabled";
       jobs.update(userId, job.id, {
-        warnings: collectSetupWarnings(prepared.warnings, Boolean(installHermes), modelState),
+        warnings: collectSetupWarnings(
+          [...(prepared.warnings ?? []), ...(lingerOff ? ["linger_required"] : [])],
+          Boolean(installHermes),
+          modelState,
+        ),
       });
       checkCancelled();
       const baseUrl =

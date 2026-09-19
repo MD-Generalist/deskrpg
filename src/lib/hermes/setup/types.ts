@@ -49,8 +49,22 @@ export type SetupCapabilities = {
   ssh: boolean;
   hostLabel: string;
   sshHosts: { id: string; label: string }[];
-  /** 호스트 설정 게이트 + DESKRPG_HERMES_INSTALL_ENABLED + local 을 모두 통과했는가. */
+  /** 로컬이 열려 있고, 여기 Hermes 가 없고, 설치 스위치가 꺼지지 않았는가. */
   canInstallHermes: boolean;
+  /** SSH 대상에 설치해도 되는가(호스트별 Hermes 유무는 탐색이 알려 준다). */
+  canInstallHermesSsh?: boolean;
+  /** 이 서버 사용자 홈에 Hermes 가 설치돼 있는가. */
+  localHermesFound?: boolean;
+  /** 로컬을 못 여는 이유. 열려 있으면 null. */
+  localReason?:
+    | "not_admin"
+    | "disabled"
+    | "unsupported_platform"
+    | "python3_missing"
+    | "container_without_hermes"
+    | null;
+  /** SSH 를 못 여는 이유. 열려 있으면 null(등록된 호스트가 없어도 열린다 — 화면에서 등록한다). */
+  sshReason?: "not_admin" | "disabled" | "ssh_missing" | null;
 };
 /** Server-only secrets must never be serialized into setup responses. */
 export type PreparedHost = {

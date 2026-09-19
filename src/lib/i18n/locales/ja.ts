@@ -449,8 +449,50 @@ const ja: Record<string, string> = {
     "公式インストールスクリプトをダウンロードできませんでした。管理者がサーバーのネットワークとプロキシ設定を確認してから再試行してください。",
   "hermes.wizard.warn.profileNotServed":
     "このプロファイルはまだゲートウェイで配信されていません。ゲートウェイのmultiplexプロファイル許可リストに名前を追加してください。ウィザードは許可リストを変更しません。",
+  "hermes.wizard.warn.lingerRequired":
+    "このサーバーではログアウトや再起動で Hermes ゲートウェイが止まります。サーバーのターミナルで一度実行してください: sudo loginctl enable-linger $USER",
   "hermes.wizard.warn.modelProviderRequired":
     "モデルプロバイダーがまだありません。サーバーでhermes modelを実行してモデルにログインしてください。それまでNPCは応答できません。",
+  "hermes.wizard.hostReason.not_admin":
+    "ローカル・SSH 接続は管理者（system_admin）アカウントのみ使えます。ゲートウェイのアドレスで接続してください。",
+  "hermes.wizard.hostReason.disabled":
+    "運用者がこのサーバーでホスト設定をオフにしています（DESKRPG_HOST_SETUP_ENABLED=0）。ゲートウェイのアドレスで接続してください。",
+  "hermes.wizard.hostReason.unsupported_platform":
+    "このサーバーの OS ではローカル接続に対応していません。",
+  "hermes.wizard.hostReason.python3_missing":
+    "このサーバーに python3 がないため、Hermes を探したりインストールしたりできません。",
+  "hermes.wizard.hostReason.container_without_hermes":
+    "DeskRPG はコンテナ内で動いており、その中に Hermes はありません。コンテナにインストールしても再デプロイで消えるため行いません。ホストの Hermes にはゲートウェイのアドレス（例: http://host.docker.internal:8642）か SSH で接続してください。",
+  "hermes.wizard.hostReason.ssh_missing":
+    "このサーバーに ssh コマンドがないため SSH 接続は使えません。",
+  "hermes.wizard.ssh.keyTitle": "1. DeskRPG 専用キーを接続先サーバーに登録",
+  "hermes.wizard.ssh.keyBody":
+    "DeskRPG がこのサーバーで使う専用 SSH キーです。接続したいサーバーのターミナルで次のコマンドを一度実行してください。秘密鍵は DeskRPG の外に出ず、この行を消せばすぐにアクセスを取り消せます。",
+  "hermes.wizard.ssh.hostTitle": "2. 接続するサーバー",
+  "hermes.wizard.ssh.hostPlaceholder": "ホスト（例: minipc.local, 10.0.0.5）",
+  "hermes.wizard.ssh.userPlaceholder": "ユーザー",
+  "hermes.wizard.ssh.scan": "ホストキーを確認",
+  "hermes.wizard.ssh.scanning": "確認中…",
+  "hermes.wizard.ssh.fingerprintBody":
+    "サーバーが示したホストキーのフィンガープリントです。サーバー側で確認した値と同じか見てください。",
+  "hermes.wizard.ssh.fingerprintHow":
+    "サーバーで確認: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
+  "hermes.wizard.ssh.fingerprintConfirm": "フィンガープリントはサーバーで確認した値と同じです。",
+  "hermes.wizard.ssh.register": "このサーバーを登録",
+  "hermes.wizard.ssh.cancel": "閉じる",
+  "hermes.wizard.ssh.addHost": "+ 新しい SSH ホストを登録",
+  "hermes.wizard.ssh.removeHost": "選択したホストを削除",
+  "hermes.wizard.ssh.errors.unreachable":
+    "サーバーに届かないか SSH が応答しません。ホストとポートを確認してください。",
+  "hermes.wizard.ssh.errors.noTools": "DeskRPG サーバーに ssh ツールがありません。",
+  "hermes.wizard.ssh.errors.keyChanged":
+    "確認後にホストキーが変わりました。もう一度確認してください。",
+  "hermes.wizard.ssh.errors.invalid": "ホスト・ポート・ユーザーの形式が正しくありません。",
+  "hermes.wizard.install.titleSsh": "接続したサーバーに Hermes をインストールしますか？",
+  "hermes.wizard.install.bodySsh":
+    "このサーバーで Hermes が見つかりませんでした。公式インストールスクリプトを SSH でダウンロードして実行します（sudo なしでホームにインストール）。数分かかることがあります。モデルへのログインはインストール後に行います。",
+  "hermes.wizard.install.consentSsh":
+    "公式インストールスクリプトを接続したサーバーで実行することに同意します。",
   "hermes.wizard.install.title": "このサーバーにHermesをインストールしますか？",
   "hermes.wizard.install.body":
     "公式インストールスクリプトをダウンロードし、DeskRPGサーバーが動作するこのホストで実行します。数分かかる場合があります。モデルプロバイダーへのログインは含まれません。完了後にサーバーでhermes modelを実行してください。",

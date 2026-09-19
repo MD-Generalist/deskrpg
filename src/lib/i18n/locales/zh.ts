@@ -424,8 +424,43 @@ const zh: Record<string, string> = {
     "无法下载官方安装脚本。请管理员检查服务器的网络和代理设置，然后重试。",
   "hermes.wizard.warn.profileNotServed":
     "网关尚未提供此配置文件。请将其名称加入网关的multiplex配置文件允许列表。此向导不会修改允许列表。",
+  "hermes.wizard.warn.lingerRequired":
+    "在此服务器上，注销或重启后 Hermes 网关会停止。请在服务器终端运行一次：sudo loginctl enable-linger $USER",
   "hermes.wizard.warn.modelProviderRequired":
     "尚未配置模型提供商。请在服务器上运行hermes model登录模型。在此之前NPC无法回复。",
+  "hermes.wizard.hostReason.not_admin":
+    "本地和 SSH 连接仅限管理员（system_admin）账户。请改用网关地址连接。",
+  "hermes.wizard.hostReason.disabled":
+    "运营者已在此服务器上关闭主机设置（DESKRPG_HOST_SETUP_ENABLED=0）。请改用网关地址连接。",
+  "hermes.wizard.hostReason.unsupported_platform": "此服务器的操作系统不支持本地连接。",
+  "hermes.wizard.hostReason.python3_missing": "此服务器没有 python3，无法查找或安装 Hermes。",
+  "hermes.wizard.hostReason.container_without_hermes":
+    "DeskRPG 运行在容器中，且容器内没有 Hermes。安装到容器中会在重新部署时丢失，因此不提供安装。请通过网关地址（例如 http://host.docker.internal:8642）或 SSH 连接主机上的 Hermes。",
+  "hermes.wizard.hostReason.ssh_missing": "此服务器没有 ssh 命令，无法使用 SSH 连接。",
+  "hermes.wizard.ssh.keyTitle": "1. 将 DeskRPG 专用密钥添加到目标服务器",
+  "hermes.wizard.ssh.keyBody":
+    "这是 DeskRPG 在此服务器上使用的专用 SSH 密钥。请在要连接的服务器终端中运行一次以下命令。私钥不会离开 DeskRPG，删除这一行即可立即撤销访问。",
+  "hermes.wizard.ssh.hostTitle": "2. 要连接的服务器",
+  "hermes.wizard.ssh.hostPlaceholder": "主机（例如 minipc.local、10.0.0.5）",
+  "hermes.wizard.ssh.userPlaceholder": "用户",
+  "hermes.wizard.ssh.scan": "检查主机密钥",
+  "hermes.wizard.ssh.scanning": "检查中…",
+  "hermes.wizard.ssh.fingerprintBody": "这是服务器提供的主机密钥指纹。请与服务器上确认的值对比。",
+  "hermes.wizard.ssh.fingerprintHow":
+    "在服务器上确认：ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
+  "hermes.wizard.ssh.fingerprintConfirm": "指纹与服务器上确认的值一致。",
+  "hermes.wizard.ssh.register": "注册此服务器",
+  "hermes.wizard.ssh.cancel": "关闭",
+  "hermes.wizard.ssh.addHost": "+ 注册新的 SSH 主机",
+  "hermes.wizard.ssh.removeHost": "删除所选主机",
+  "hermes.wizard.ssh.errors.unreachable": "无法连接服务器或 SSH 无响应。请检查主机和端口。",
+  "hermes.wizard.ssh.errors.noTools": "DeskRPG 服务器上没有 ssh 工具。",
+  "hermes.wizard.ssh.errors.keyChanged": "确认后主机密钥发生了变化。请重新检查。",
+  "hermes.wizard.ssh.errors.invalid": "主机、端口或用户格式不正确。",
+  "hermes.wizard.install.titleSsh": "要在已连接的服务器上安装 Hermes 吗？",
+  "hermes.wizard.install.bodySsh":
+    "在此服务器上未找到 Hermes。DeskRPG 将通过 SSH 下载并运行官方安装脚本（无需 sudo，安装到用户主目录）。可能需要几分钟。模型登录在安装后单独进行。",
+  "hermes.wizard.install.consentSsh": "我同意在已连接的服务器上运行官方安装脚本。",
   "hermes.wizard.install.title": "要在此服务器上安装Hermes吗？",
   "hermes.wizard.install.body":
     "将下载官方安装脚本并在运行DeskRPG服务器的这台主机上执行。可能需要几分钟。不包含模型提供商登录：安装完成后请在服务器上运行hermes model。",

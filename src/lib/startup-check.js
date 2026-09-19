@@ -19,10 +19,10 @@ function readTrimmed(env, key) {
  * @returns {{ errors: string[], warnings: string[], dbTarget: "postgresql" | "sqlite" }}
  */
 /**
- * 이 컴퓨터에 Hermes 가 없고 연결 마법사의 호스트 설정도 꺼져 있으면 한 줄 알려 준다.
+ * 이 컴퓨터에 Hermes 가 없으면 한 줄 알려 준다. Hermes 가 있으면 아무 말도 하지 않는다.
  *
- * 노트북에 처음 깐 사람은 게이트웨이 화면에서 막히고, 그 이유가 스위치라는 걸 알 길이 없다.
- * 스위치가 켜져 있거나 Hermes 가 이미 있으면 아무 말도 하지 않는다 — 조용한 것이 기본이다.
+ * 2026-09-19 부터 호스트 설정은 관리자에게 기본으로 열린다 — 연결 마법사의 "로컬 연결" 에서 설치할 수
+ * 있다고 안내한다. 운영자가 스위치를 `0` 으로 꺼 두었으면 켜는 명령을 안내한다.
  *
  * @param {Record<string, string | undefined>} [env]
  * @param {string} [homeDir]
@@ -31,8 +31,7 @@ function readTrimmed(env, key) {
 function hostSetupHint(env = process.env, homeDir = require("node:os").homedir()) {
   const fs = require("node:fs");
   const path = require("node:path");
-  const on = (key) => ["1", "true", "yes"].includes((env[key] ?? "").trim());
-  if (on("DESKRPG_HOST_SETUP_ENABLED")) return null;
+  const off = (key) => ["0", "false", "no", "off"].includes((env[key] ?? "").trim().toLowerCase());
   try {
     if (fs.existsSync(path.join(homeDir, ".hermes", "hermes-agent"))) return null;
     // 결합 이미지(deskrpg-office)는 Hermes 를 같은 컨테이너에 담고 HERMES_HOME 으로 가리킨다.
@@ -45,7 +44,9 @@ function hostSetupHint(env = process.env, homeDir = require("node:os").homedir()
   } catch {
     return null;
   }
-  return "이 컴퓨터에 Hermes 가 없습니다 — 연결 마법사로 함께 설치하려면 `deskrpg host-setup on --with-install` 을 실행한 뒤 다시 시작하세요.";
+  if (off("DESKRPG_HOST_SETUP_ENABLED") || off("DESKRPG_HERMES_INSTALL_ENABLED"))
+    return "이 컴퓨터에 Hermes 가 없습니다 — 연결 마법사로 함께 설치하려면 `deskrpg host-setup on --with-install` 을 실행한 뒤 다시 시작하세요.";
+  return "이 컴퓨터에 Hermes 가 없습니다 — 관리자 계정으로 연결 → 새 게이트웨이 → 로컬 연결에서 설치할 수 있습니다.";
 }
 
 const { isPlaceholderSecret } = require("./runtime-paths.js");

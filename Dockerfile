@@ -31,6 +31,10 @@ ARG ENABLE_CLAUDE=false
 ARG ENABLE_CODEX=false
 ARG ENABLE_GEMINI=false
 ARG ENABLE_OPENCODE=false
+# 연결 마법사의 SSH 연결(ssh·ssh-keygen·ssh-keyscan). 대상 서버에서 도는 python3 는 넣지 않는다.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssh-client \
+  && rm -rf /var/lib/apt/lists/*
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public

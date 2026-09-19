@@ -46,12 +46,15 @@ test("actual setup route rejects anonymous, ordinary user and disabled operator 
   const denied = await POST(req(ordinary, { action: "discover", mode: "local" }));
   assert.equal(denied.status, 403);
   assert.equal((await denied.json()).errorCode, "setup_forbidden");
-  delete process.env.DESKRPG_HOST_SETUP_ENABLED;
+  // 2026-09-19 부터 관리자는 기본 허용이다 — 운영자가 0 으로 끈 경우만 거절한다.
+  process.env.DESKRPG_HOST_SETUP_ENABLED = "0";
   assert.equal((await POST(req(admin, { action: "discover", mode: "local" }))).status, 403);
   const cap = await (await GET(req(admin))).json();
   assert.equal(cap.local, false);
+  assert.equal(cap.localReason, "disabled");
   assert.equal(cap.hostLabel, "");
   assert.deepEqual(cap.sshHosts, []);
+  delete process.env.DESKRPG_HOST_SETUP_ENABLED;
 });
 test("actual mutation route requires same origin even for administrator", async () => {
   const { POST } = await import("./setup/route");
@@ -94,7 +97,8 @@ test("잘못된 시간대는 호스트를 건드리기 전에 400 으로 거부�
 test("시간대를 보내지 않아도 준비 요청은 그대로 진행된다", async () => {
   const { POST } = await import("./setup/route");
   const admin = await user("system_admin");
-  // 호스트 설정 스위치가 꺼져 있으므로 timezone 검증을 통과한 뒤 권한 게이트에서 멈춘다.
+  // 운영자가 스위치를 꺼 두었으므로 timezone 검증을 통과한 뒤 권한 게이트에서 멈춘다.
+  process.env.DESKRPG_HOST_SETUP_ENABLED = "0";
   const result = await POST(
     req(admin, {
       action: "prepare",
@@ -104,4 +108,5 @@ test("시간대를 보내지 않아도 준비 요청은 그대로 진행된다",
     }),
   );
   assert.equal((await result.json()).errorCode, "setup_forbidden");
+  delete process.env.DESKRPG_HOST_SETUP_ENABLED;
 });

@@ -438,8 +438,48 @@ const ko: Record<string, string> = {
     "공식 설치 스크립트를 내려받지 못했습니다. 관리자가 서버의 네트워크와 프록시 설정을 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.warn.profileNotServed":
     "이 프로필은 아직 게이트웨이가 서빙하지 않습니다. 게이트웨이의 multiplex 프로필 허용 목록에 이름을 넣어야 합니다. 마법사는 허용 목록을 고치지 않습니다.",
+  "hermes.wizard.warn.lingerRequired":
+    "이 서버에서는 로그아웃하거나 재부팅하면 Hermes 게이트웨이가 멈춥니다. 서버 터미널에서 한 번 실행하세요: sudo loginctl enable-linger $USER",
   "hermes.wizard.warn.modelProviderRequired":
     "모델 제공자가 아직 없습니다. 서버에서 hermes model 을 실행해 모델에 로그인하세요. 그전까지 NPC 는 대답하지 못합니다.",
+  "hermes.wizard.hostReason.not_admin":
+    "로컬·SSH 연결은 관리자(system_admin) 계정만 쓸 수 있습니다. 게이트웨이 주소로 연결하세요.",
+  "hermes.wizard.hostReason.disabled":
+    "운영자가 이 서버에서 호스트 설정을 꺼 두었습니다(DESKRPG_HOST_SETUP_ENABLED=0). 게이트웨이 주소로 연결하세요.",
+  "hermes.wizard.hostReason.unsupported_platform":
+    "이 서버 운영체제에서는 로컬 연결을 지원하지 않습니다.",
+  "hermes.wizard.hostReason.python3_missing":
+    "이 서버에 python3 가 없어 Hermes 를 찾거나 설치할 수 없습니다.",
+  "hermes.wizard.hostReason.container_without_hermes":
+    "DeskRPG 가 컨테이너 안에서 돌고 있고, 그 안에는 Hermes 가 없습니다. 컨테이너에 설치해도 재배포 때 사라지므로 설치하지 않습니다. 호스트의 Hermes 는 게이트웨이 주소(예: http://host.docker.internal:8642)나 SSH 로 연결하세요.",
+  "hermes.wizard.hostReason.ssh_missing": "이 서버에 ssh 명령이 없어 SSH 로 연결할 수 없습니다.",
+  "hermes.wizard.ssh.keyTitle": "1. DeskRPG 전용 키를 대상 서버에 등록",
+  "hermes.wizard.ssh.keyBody":
+    "DeskRPG 가 이 서버에서 쓰는 전용 SSH 키입니다. 연결할 서버의 터미널에서 아래 명령을 한 번 실행하세요. 개인키는 DeskRPG 밖으로 나가지 않고, 이 줄을 지우면 접근이 바로 끊깁니다.",
+  "hermes.wizard.ssh.hostTitle": "2. 연결할 서버",
+  "hermes.wizard.ssh.hostPlaceholder": "호스트 (예: minipc.local, 10.0.0.5)",
+  "hermes.wizard.ssh.userPlaceholder": "사용자",
+  "hermes.wizard.ssh.scan": "호스트 키 확인",
+  "hermes.wizard.ssh.scanning": "확인하는 중…",
+  "hermes.wizard.ssh.fingerprintBody":
+    "이 서버가 보여 준 호스트 키 지문입니다. 서버에서 확인한 값과 같은지 보세요.",
+  "hermes.wizard.ssh.fingerprintHow":
+    "서버에서 확인: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
+  "hermes.wizard.ssh.fingerprintConfirm": "지문이 서버에서 확인한 값과 같습니다.",
+  "hermes.wizard.ssh.register": "이 서버 등록",
+  "hermes.wizard.ssh.cancel": "닫기",
+  "hermes.wizard.ssh.addHost": "+ 새 SSH 호스트 등록",
+  "hermes.wizard.ssh.removeHost": "선택한 호스트 삭제",
+  "hermes.wizard.ssh.errors.unreachable":
+    "서버에 닿지 못했거나 SSH 가 응답하지 않습니다. 호스트·포트를 확인하세요.",
+  "hermes.wizard.ssh.errors.noTools": "DeskRPG 서버에 ssh 도구가 없습니다.",
+  "hermes.wizard.ssh.errors.keyChanged": "호스트 키가 확인한 뒤 바뀌었습니다. 다시 확인하세요.",
+  "hermes.wizard.ssh.errors.invalid": "호스트·포트·사용자 형식이 올바르지 않습니다.",
+  "hermes.wizard.install.titleSsh": "연결한 서버에 Hermes 를 설치할까요?",
+  "hermes.wizard.install.bodySsh":
+    "이 서버에서 Hermes 를 찾지 못했습니다. 공식 설치 스크립트를 SSH 로 내려받아 실행합니다(sudo 없이 사용자 홈에 설치). 몇 분 걸릴 수 있습니다. 모델 제공자 로그인은 설치 뒤 따로 합니다.",
+  "hermes.wizard.install.consentSsh":
+    "공식 설치 스크립트를 연결한 서버에서 실행하는 데 동의합니다.",
   "hermes.wizard.install.title": "이 서버에 Hermes 를 설치할까요?",
   "hermes.wizard.install.body":
     "공식 설치 스크립트를 내려받아 DeskRPG 서버가 도는 이 호스트에서 실행합니다. 몇 분 걸릴 수 있습니다. 모델 제공자 로그인은 포함되지 않으며, 설치가 끝난 뒤 서버에서 hermes model 을 따로 실행해야 합니다.",

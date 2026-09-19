@@ -19,6 +19,7 @@ import {
   isSetupWarningBlocking,
 } from "./setup-copy";
 import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
+import SshHostRegistration from "./SshHostRegistration";
 import { CopyCommand } from "../CopyCommand";
 
 const API = "/api/gateways/setup";
@@ -69,6 +70,8 @@ export default function GatewaySetupWizard({
   const [screen, setScreen] = useState<Screen>("choice");
   const [mode, setMode] = useState<"local" | "ssh">("local");
   const [hostId, setHostId] = useState("");
+  // SSH 호스트 등록 패널. 등록한 호스트가 하나도 없으면 처음부터 펼친다.
+  const [registering, setRegistering] = useState(false);
   const [candidates, setCandidates] = useState<SetupCandidate[]>([]);
   const [inspection, setInspection] = useState<SetupInspection | null>(null);
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
@@ -365,9 +368,13 @@ export default function GatewaySetupWizard({
               timezone: inspection?.candidate.timezone || browserTimezone,
             })
           : setupStep(c, change);
-  // 설치는 로컬 대상에서만, 그리고 운영자가 게이트를 켰을 때만 제안한다.
-  const installOffered = mode === "local" && !busy && !candidates.length;
-  const canInstallHermes = cap?.canInstallHermes === true;
+  // Hermes 를 못 찾았을 때 설치를 제안한다 — 로컬·SSH 모두. 가능 여부는 서버 판정(capabilities)을 따른다.
+  const installOffered = (mode === "local" || mode === "ssh") && !busy && !candidates.length;
+  const canInstallHermes =
+    mode === "ssh" ? cap?.canInstallHermesSsh === true : cap?.canInstallHermes === true;
+  // 막힌 이유별 문구. 이유가 오지 않는 구버전 서버 응답이면 예전 한 문장으로 떨어진다.
+  const hostReasonText = (reason: string | null | undefined) =>
+    reason ? t(`hermes.wizard.hostReason.${reason}`) : c.unavailable;
   const trimmedProfileName = newProfileName.trim();
   const profileNameValid = !trimmedProfileName || PROFILE_NAME.test(trimmedProfileName);
   // 확인이 경고를 이긴다: ready 면 지우고, missing 이면 (없더라도) 붙인다. unknown 은 기존 규칙 그대로.
@@ -503,7 +510,9 @@ export default function GatewaySetupWizard({
             {card(c.local, c.localHelp, Monitor, () => discover("local"), !cap?.local)}
             {card(c.remote, c.remoteHelp, Globe, () => navigate("remote"))}
           </div>
-          {cap && !cap.local && <p className="mt-3 text-sm text-text-muted">{c.unavailable}</p>}
+          {cap && !cap.local && (
+            <p className="mt-3 text-sm text-text-muted">{hostReasonText(cap.localReason)}</p>
+          )}
           {!cap && !errorCode && (
             <p role="status" className="mt-3">
               {c.loading}
@@ -515,11 +524,34 @@ export default function GatewaySetupWizard({
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {card(c.ssh, c.sshHelp, Terminal, () => navigate("ssh"), !cap?.ssh)}
           {card(c.url, c.urlHelp, Server, () => navigate("url"))}
+          {cap && !cap.ssh && (
+            <p className="text-sm text-text-muted sm:col-span-2">{hostReasonText(cap.sshReason)}</p>
+          )}
         </div>
       )}
       {screen === "ssh" && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-text-muted">{c.sshHelp}</p>
+          {registering || !cap?.sshHosts.length ? (
+            <SshHostRegistration
+              onRegistered={(host) => {
+                // 등록 목록을 서버에서 다시 받는다 — 판정·라벨은 서버가 정한다.
+                void request<WizardCapabilities>().then((next) => {
+                  setCap(next);
+                  setHostId(host.id);
+                  setRegistering(false);
+                });
+              }}
+              onCancel={cap?.sshHosts.length ? () => setRegistering(false) : undefined}
+            />
+          ) : (
+            <button
+              className="text-sm font-semibold text-primary underline"
+              onClick={() => setRegistering(true)}
+            >
+              {t("hermes.wizard.ssh.addHost")}
+            </button>
+          )}
           <label className="block text-sm font-semibold">
             {c.host}
             <select
@@ -535,13 +567,34 @@ export default function GatewaySetupWizard({
               ))}
             </select>
           </label>
-          <button
-            className={button}
-            disabled={!hostId || !cap?.ssh}
-            onClick={() => discover("ssh")}
-          >
-            {c.discover}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={button}
+              disabled={!hostId || !cap?.ssh}
+              onClick={() => discover("ssh")}
+            >
+              {c.discover}
+            </button>
+            {/^h-[a-f0-9]{10}$/.test(hostId) && (
+              <button
+                className={secondary}
+                disabled={busy}
+                onClick={() =>
+                  void request({ action: "ssh-remove", hostId })
+                    .then(() => request<WizardCapabilities>())
+                    .then((next) => {
+                      setCap(next);
+                      setHostId("");
+                    })
+                    .catch((err: { errorCode?: string }) =>
+                      setErrorCode(err?.errorCode ?? "setup_failed"),
+                    )
+                }
+              >
+                {t("hermes.wizard.ssh.removeHost")}
+              </button>
+            )}
+          </div>
         </div>
       )}
       {screen === "discover" && (
@@ -559,9 +612,19 @@ export default function GatewaySetupWizard({
               {installOffered &&
                 (canInstallHermes ? (
                   <article className="rounded-lg border border-primary/40 bg-bg p-4">
-                    <h3 className="font-semibold">{t("hermes.wizard.install.title")}</h3>
+                    <h3 className="font-semibold">
+                      {t(
+                        mode === "ssh"
+                          ? "hermes.wizard.install.titleSsh"
+                          : "hermes.wizard.install.title",
+                      )}
+                    </h3>
                     <p className="mt-1 text-sm text-text-muted">
-                      {t("hermes.wizard.install.body")}
+                      {t(
+                        mode === "ssh"
+                          ? "hermes.wizard.install.bodySsh"
+                          : "hermes.wizard.install.body",
+                      )}
                     </p>
                     <label className="mt-3 flex items-start gap-2 text-sm">
                       <input
@@ -571,7 +634,13 @@ export default function GatewaySetupWizard({
                         checked={installConsent}
                         onChange={(event) => setInstallConsent(event.target.checked)}
                       />
-                      <span>{t("hermes.wizard.install.consent")}</span>
+                      <span>
+                        {t(
+                          mode === "ssh"
+                            ? "hermes.wizard.install.consentSsh"
+                            : "hermes.wizard.install.consent",
+                        )}
+                      </span>
                     </label>
                     <button
                       className={`${button} mt-3`}
@@ -1008,7 +1077,9 @@ export default function GatewaySetupWizard({
               >
                 {c.guide}
               </a>
-              {!cap?.ssh && <p className="text-sm text-text-muted">{c.unavailable}</p>}
+              {cap && !cap.ssh && (
+                <p className="text-sm text-text-muted">{hostReasonText(cap.sshReason)}</p>
+              )}
             </>
           )}
         </div>

@@ -32,7 +32,8 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       INTERNAL_HOSTNAME: 0.0.0.0
       # Host-level setup from the web UI stays off on a VPS.
-      DESKRPG_HOST_SETUP_ENABLED: ${DESKRPG_HOST_SETUP_ENABLED:-0}
+      # 관리자에게 기본으로 열린다. 끄려면 0.
+      DESKRPG_HOST_SETUP_ENABLED: ${DESKRPG_HOST_SETUP_ENABLED:-1}
     volumes:
       - deskrpg-data:/app/data
     labels:

@@ -469,3 +469,26 @@ export async function prepareHost(
     throw new Error("profile_verify_failed");
   return { baseUrl, token, profiles, ...(warnings.length ? { warnings } : {}) };
 }
+
+/**
+ * 사용자 단위 systemd 서비스가 로그아웃·재부팅 뒤에도 사는가(`loginctl` Linger). SSH 대상에서만 묻는다.
+ * **절대 던지지 않는다** — 판정할 수 없으면(macOS·loginctl 없음) `unknown` 이고 설정을 멈추지 않는다.
+ * 켜는 일은 보통 sudo 가 필요해 DeskRPG 가 하지 않는다 — 꺼져 있으면 명령을 안내한다(2026-09-19 단테 결정).
+ */
+export async function checkLingerHost(
+  execute: HostExecutor,
+): Promise<"enabled" | "disabled" | "unknown"> {
+  try {
+    const who = await execute("id", ["-un"], { timeoutMs: 10_000 });
+    const user = who.stdout.trim();
+    if (who.code !== 0 || !/^[a-z_][a-z0-9_.-]{0,31}$/.test(user)) return "unknown";
+    const res = await execute("loginctl", ["show-user", user, "-p", "Linger", "--value"], {
+      timeoutMs: 10_000,
+    });
+    const value = res.stdout.trim();
+    if (res.code !== 0) return "unknown";
+    return value === "yes" ? "enabled" : value === "no" ? "disabled" : "unknown";
+  } catch {
+    return "unknown";
+  }
+}

@@ -123,14 +123,22 @@ test("PostgreSQL 대상인데 URL 이 없으면 찌르지 않고 실패로 알�
   assert.match(result.message, /DATABASE_URL/);
 });
 
-test("Hermes 도 스위치도 없으면 기동 로그에 힌트를 낸다", () => {
+test("Hermes 가 없으면 연결 마법사에서 설치할 수 있다고 알린다(기본 켜짐)", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-hint-"));
-  assert.match(startupCheck.hostSetupHint({}, home), /host-setup on --with-install/);
+  assert.match(String(startupCheck.hostSetupHint({ PATH: "" }, home)), /로컬 연결에서 설치/);
 });
 
-test("스위치가 켜져 있으면 조용하다", () => {
+test("운영자가 스위치를 꺼 두었으면 켜는 명령을 알린다", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-hint-"));
-  assert.equal(startupCheck.hostSetupHint({ DESKRPG_HOST_SETUP_ENABLED: "1" }, home), null);
+  for (const env of [
+    { DESKRPG_HOST_SETUP_ENABLED: "0" },
+    { DESKRPG_HERMES_INSTALL_ENABLED: "off" },
+  ]) {
+    assert.match(
+      String(startupCheck.hostSetupHint({ ...env, PATH: "" }, home)),
+      /host-setup on --with-install/,
+    );
+  }
 });
 
 test("Hermes 가 이미 있으면 조용하다", () => {
@@ -167,7 +175,7 @@ test("Hermes 가 어디에도 없으면 설치 안내를 낸다", () => {
   const missing = path.join(emptyHome, "nope");
   try {
     const hint = hostSetupHint({ HERMES_HOME: missing, PATH: missing }, emptyHome);
-    assert.match(String(hint), /host-setup on --with-install/);
+    assert.match(String(hint), /Hermes 가 없습니다/);
   } finally {
     fs.rmSync(emptyHome, { recursive: true, force: true });
   }

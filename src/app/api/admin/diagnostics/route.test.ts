@@ -66,8 +66,8 @@ test("관리자는 환경·DB·호스트 설정·게이트웨이 항목을 받�
   assert.equal(body.environment.dbTarget, "sqlite");
   assert.equal(typeof body.database.ok, "boolean");
   assert.equal(typeof body.database.message, "string");
-  // 스위치가 꺼진 기본 상태에서는 둘 다 false 다.
-  assert.deepEqual(body.hostSetup, { wizard: false, hermesInstall: false });
+  // 2026-09-19 부터 기본은 관리자에게 켜짐이다 — 운영자가 0 으로 끄지 않은 한 둘 다 true.
+  assert.deepEqual(body.hostSetup, { wizard: true, hermesInstall: true });
   const row = body.gateways.find((entry: { id: string }) => entry.id === gateway.id);
   assert.ok(row, "등록한 게이트웨이가 목록에 있어야 한다");
   assert.equal(row.label, "진단용 게이트웨이");

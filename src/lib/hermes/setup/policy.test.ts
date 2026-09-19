@@ -13,10 +13,16 @@ import {
   collectSetupWarnings,
 } from "./policy";
 
-test("host execution requires operator opt-in AND system administrator", () => {
-  assert.equal(hostSetupAllowed({}, "system_admin"), false);
-  assert.equal(hostSetupAllowed({ DESKRPG_HOST_SETUP_ENABLED: "1" }, "user"), false);
+test("호스트 실행은 system_admin 이면 기본으로 열리고, 운영자가 0 으로 끌 수 있다", () => {
+  // 2026-09-19 단테 결정: 관리자는 환경변수 없이 로컬·SSH 를 쓴다. 스위치는 거절용으로만 남는다.
+  assert.equal(hostSetupAllowed({}, "system_admin"), true);
+  assert.equal(hostSetupAllowed({}, "user"), false);
+  assert.equal(hostSetupAllowed({}, undefined), false);
+  for (const off of ["0", "false", "no", "off", " OFF "]) {
+    assert.equal(hostSetupAllowed({ DESKRPG_HOST_SETUP_ENABLED: off }, "system_admin"), false, off);
+  }
   assert.equal(hostSetupAllowed({ DESKRPG_HOST_SETUP_ENABLED: "1" }, "system_admin"), true);
+  assert.equal(hostSetupAllowed({ DESKRPG_HOST_SETUP_ENABLED: "1" }, "user"), false);
 });
 test("mutations fail closed for absent, cross-site or malformed origin", () => {
   assert.equal(sameOriginMutation("http://localhost:3102", "localhost:3102"), true);
@@ -67,22 +73,21 @@ test("점 구간이 든 시간대는 모양이 맞아도 거부한다", () => {
   assert.equal(validateTimezone("Asia/Seoul"), "Asia/Seoul");
 });
 
-test("Hermes 설치는 게이트 셋이 모두 켜져야만 허용된다", () => {
-  const full = { DESKRPG_HOST_SETUP_ENABLED: "1", DESKRPG_HERMES_INSTALL_ENABLED: "1" };
-  assert.equal(hermesInstallAllowed(full, "system_admin", "local"), true);
-  // 게이트를 하나씩 끄면 전부 거부된다.
+test("Hermes 설치는 관리자에게 로컬·SSH 모두 기본으로 열리고, 스위치 둘 중 하나라도 0 이면 닫힌다", () => {
+  assert.equal(hermesInstallAllowed({}, "system_admin", "local"), true);
+  assert.equal(hermesInstallAllowed({}, "system_admin", "ssh"), true);
+  assert.equal(hermesInstallAllowed({}, "user", "local"), false);
   assert.equal(
-    hermesInstallAllowed({ DESKRPG_HERMES_INSTALL_ENABLED: "1" }, "system_admin", "local"),
+    hermesInstallAllowed({ DESKRPG_HERMES_INSTALL_ENABLED: "0" }, "system_admin", "local"),
     false,
   );
   assert.equal(
-    hermesInstallAllowed({ DESKRPG_HOST_SETUP_ENABLED: "1" }, "system_admin", "local"),
+    hermesInstallAllowed({ DESKRPG_HOST_SETUP_ENABLED: "0" }, "system_admin", "ssh"),
     false,
   );
-  assert.equal(hermesInstallAllowed(full, "user", "local"), false);
-  // SSH 대상이면 어떤 조합으로도 열리지 않는다.
-  assert.equal(hermesInstallAllowed(full, "system_admin", "ssh"), false);
-  assert.equal(hermesInstallAllowed(full, "system_admin", undefined), false);
+  // 대상이 없거나 모르는 모드면 열지 않는다.
+  assert.equal(hermesInstallAllowed({}, "system_admin", undefined), false);
+  assert.equal(hermesInstallAllowed({}, "system_admin", "url"), false);
 });
 test("프로필 이름은 소문자·숫자·하이픈 64자이고 예약어를 거부한다", () => {
   assert.equal(validateProfileName("sophie-2"), "sophie-2");

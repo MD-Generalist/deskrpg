@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, access, rm, readFile, rename, writeFile, unlink } from 
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { assertSshHost, localExecutor, SSH_OPTIONS } from "./executor";
+import { assertSshHost, localExecutor, sshConfigArgs, SSH_OPTIONS } from "./executor";
 
 type Target = { hostId: string; remotePort: number };
 const SUFFIX = ".deskrpg-ssh.invalid";
@@ -97,6 +97,7 @@ export async function ensureSshTunnel(
     const child = (dependencies.spawnImpl ?? spawn)(
       "ssh",
       [
+        ...sshConfigArgs(hostId),
         ...SSH_OPTIONS.slice(0, -4),
         "-M",
         "-S",

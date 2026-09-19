@@ -1,13 +1,26 @@
 import type { SetupModelState } from "./types";
-export function hostSetupAllowed(env: Record<string, string | undefined>, role?: string) {
-  return (
-    ["1", "true", "yes"].includes(env.DESKRPG_HOST_SETUP_ENABLED ?? "") && role === "system_admin"
-  );
+
+const OFF = new Set(["0", "false", "no", "off"]);
+/** 운영자가 끈 스위치인가. 비어 있으면 켜짐이다 — 이 스위치들은 거절용이다. */
+function switchedOff(value: string | undefined) {
+  return OFF.has((value ?? "").trim().toLowerCase());
 }
 
 /**
- * 로컬 Hermes 설치는 DeskRPG 가 서버에서 외부 스크립트를 실행하는 유일한 경로다.
- * 기존 호스트 게이트에 더해 별도 스위치를 요구하고, SSH 대상에는 절대 열리지 않는다.
+ * 호스트(로컬·SSH)에서 명령을 실행하는 설정 마법사를 열어도 되는가.
+ *
+ * 2026-09-19 단테 결정: `system_admin` 이면 환경변수 없이 연다. 호스트 설정은 서버 프로세스 권한으로
+ * 명령을 실행하므로 여전히 관리자만이다 — 게이트웨이 레코드 소유자는 "이 머신의 주인" 이 아니다.
+ * 운영자는 `DESKRPG_HOST_SETUP_ENABLED=0` 으로 끌 수 있다(예전에는 `1` 로 켜야 했다).
+ */
+export function hostSetupAllowed(env: Record<string, string | undefined>, role?: string) {
+  return role === "system_admin" && !switchedOff(env.DESKRPG_HOST_SETUP_ENABLED);
+}
+
+/**
+ * Hermes 설치 — DeskRPG 가 호스트에서 외부 설치 스크립트를 실행하는 유일한 경로다.
+ * 호스트 게이트에 더해 `DESKRPG_HERMES_INSTALL_ENABLED=0` 으로 따로 끌 수 있다. 로컬과 SSH 에서 연다
+ * (SSH 는 관리자가 등록하고 지문을 확인한 호스트에만 닿는다).
  */
 export function hermesInstallAllowed(
   env: Record<string, string | undefined>,
@@ -16,8 +29,8 @@ export function hermesInstallAllowed(
 ) {
   return (
     hostSetupAllowed(env, role) &&
-    ["1", "true", "yes"].includes(env.DESKRPG_HERMES_INSTALL_ENABLED ?? "") &&
-    mode === "local"
+    !switchedOff(env.DESKRPG_HERMES_INSTALL_ENABLED) &&
+    (mode === "local" || mode === "ssh")
   );
 }
 
@@ -144,7 +157,11 @@ const SAFE_CODES = new Set([
   "resume_unavailable",
 ]);
 /** 실패가 아닌 알림. 잡의 `warnings` 로만 나가고 오류 경로에는 절대 오르지 않는다. */
-export const SETUP_WARNING_CODES = new Set(["profile_not_served", "model_provider_required"]);
+export const SETUP_WARNING_CODES = new Set([
+  "profile_not_served",
+  "model_provider_required",
+  "linger_required",
+]);
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** 호스트와 같은 규칙. 예약어에는 `default` 가 포함된다 — 소유자 키는 configure 가 다룬다. */
 export const RESERVED_PROFILE_NAMES = new Set(["hermes", "test", "tmp", "root", "sudo", "default"]);
