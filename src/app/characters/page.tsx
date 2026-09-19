@@ -4,8 +4,6 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useT } from "@/lib/i18n";
-import LogoutButton from "@/components/LogoutButton";
-import LocaleSwitcher from "@/components/LocaleSwitcher";
 import MyCharacterForm from "./MyCharacterForm";
 
 export default function CharactersPage() {
@@ -33,10 +31,7 @@ function CharactersPageInner() {
     <div className="min-h-screen bg-bg text-text p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{t("characters.title")}</h1>
-        <div className="flex items-center gap-2">
-          <LocaleSwitcher />
-          <LogoutButton />
-        </div>
+        <div className="flex items-center gap-2"></div>
       </div>
 
       <MyCharacterForm
