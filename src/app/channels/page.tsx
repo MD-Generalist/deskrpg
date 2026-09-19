@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import PasswordModal from "@/components/PasswordModal";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
@@ -10,6 +11,8 @@ import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
 import { Lock, X } from "lucide-react";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
+import RosterAvatar from "@/components/RosterAvatar";
+import environmentThumbnails from "@/game/three/office-environment-thumbnails.json";
 
 interface Channel {
   id: string;
@@ -22,8 +25,13 @@ interface Channel {
   isMember: boolean;
   inviteCode: string | null;
   maxPlayers: number;
-  playerCount: number;
   createdAt: string;
+  /** 맵으로 판정한 오피스 환경 — 썸네일에 쓴다. 모르면 null. */
+  environmentId?: string | null;
+  /** 소유자 + 멤버(사람). */
+  memberCount?: number;
+  /** 앞 다섯 명. appearance 는 최근 캐릭터 외형. */
+  participants?: Array<{ nickname: string | null; appearance: unknown }>;
   canView?: boolean;
   canJoin?: boolean;
   requiresGroupMembership?: boolean;
@@ -340,6 +348,7 @@ function ChannelsPageInner() {
             {channels.map((channel) => (
               <div
                 key={channel.id}
+                data-channel-id={channel.id}
                 onClick={() => handleChannelClick(channel)}
                 className={`bg-surface p-5 rounded-lg transition-all ${
                   channel.canJoin === false
@@ -347,6 +356,10 @@ function ChannelsPageInner() {
                     : "cursor-pointer hover:ring-2 hover:ring-primary"
                 }`}
               >
+                <ChannelThumbnail
+                  environmentId={channel.environmentId ?? null}
+                  name={channel.name}
+                />
                 <div className="flex items-center gap-2 mb-1">
                   {channel.isLocked && <Lock className="w-4 h-4 text-text-muted shrink-0" />}
                   <h3 className="text-lg font-bold flex-1">{channel.name}</h3>
@@ -381,13 +394,15 @@ function ChannelsPageInner() {
                 {channel.canJoin === false && channel.requiresGroupMembership && (
                   <p className="mb-3 text-xs text-text-muted">{t("channels.browseOnlyHint")}</p>
                 )}
-                <div className="flex items-center justify-between text-xs text-text-dim">
-                  <span>
+                <div className="flex items-center justify-between gap-2 text-xs text-text-dim">
+                  <span className="truncate">
                     {t("channels.owner", { name: channel.ownerNickname || t("common.unknown") })}
                   </span>
-                  <span>
-                    {t("channels.players", { count: channel.playerCount, max: channel.maxPlayers })}
-                  </span>
+                  <ParticipantStack
+                    participants={channel.participants ?? []}
+                    count={channel.memberCount ?? 0}
+                    label={t("channels.memberCount", { count: channel.memberCount ?? 0 })}
+                  />
                 </div>
               </div>
             ))}
@@ -410,5 +425,69 @@ function ChannelsPageInner() {
         />
       )}
     </div>
+  );
+}
+
+const THUMBNAILS = environmentThumbnails as Record<string, string>;
+
+/** 새 채널 만들기(`OfficeEnvironmentPicker`)와 같은 사전 렌더 썸네일·비율. */
+function ChannelThumbnail({ environmentId, name }: { environmentId: string | null; name: string }) {
+  const src = environmentId ? THUMBNAILS[environmentId] : undefined;
+  return (
+    <div className="-mx-5 -mt-5 mb-4 aspect-[874/450] overflow-hidden rounded-t-lg bg-background">
+      {src ? (
+        <Image
+          data-channel-thumbnail=""
+          src={src}
+          width={874}
+          height={450}
+          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 300px"
+          alt={name}
+          className="h-full w-full object-contain"
+        />
+      ) : (
+        <div data-channel-thumbnail-placeholder="" className="h-full w-full" aria-hidden />
+      )}
+    </div>
+  );
+}
+
+const AVATAR_SIZE = 24;
+
+/** 참여자 원형 아바타(최대 다섯)를 겹쳐 놓고, 넘치면 +N, 옆에 "N명 참여". */
+function ParticipantStack({
+  participants,
+  count,
+  label,
+}: {
+  participants: Array<{ nickname: string | null; appearance: unknown }>;
+  count: number;
+  label: string;
+}) {
+  const rest = Math.max(0, count - participants.length);
+  return (
+    <span className="flex shrink-0 items-center gap-2">
+      <span className="flex -space-x-2">
+        {participants.map((participant, index) => (
+          <span
+            key={index}
+            data-participant-avatar=""
+            title={participant.nickname ?? undefined}
+            className="rounded-full ring-2 ring-surface"
+          >
+            <RosterAvatar appearance={participant.appearance} size={AVATAR_SIZE} />
+          </span>
+        ))}
+        {rest > 0 && (
+          <span
+            className="flex items-center justify-center rounded-full bg-surface-raised text-[10px] font-medium text-text-muted ring-2 ring-surface"
+            style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
+          >
+            +{rest}
+          </span>
+        )}
+      </span>
+      <span>{label}</span>
+    </span>
   );
 }

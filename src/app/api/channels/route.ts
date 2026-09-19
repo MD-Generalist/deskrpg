@@ -9,6 +9,7 @@ import {
 import {
   channels,
   channelMembers,
+  characters,
   groupMembers,
   groupPermissions,
   groups,
@@ -16,7 +17,7 @@ import {
   users,
 } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
 import {
@@ -27,6 +28,12 @@ import {
 import { hireGatewayProfilesIntoChannel } from "@/lib/npc-roster";
 import { ensureOfficeRoom } from "@/lib/chat-rooms";
 import { effectiveMapSpawn } from "@/lib/effective-map-spawn";
+import { parseDbJson } from "@/lib/db-json";
+import {
+  detectOfficeEnvironmentId,
+  summarizeParticipants,
+  type ParticipantRow,
+} from "@/lib/channel-list-summary";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
 import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
 import { isChannelPasswordValid } from "@/lib/security-policy";
@@ -114,6 +121,7 @@ export async function GET(req: NextRequest) {
         maxPlayers: channels.maxPlayers,
         createdAt: channels.createdAt,
         groupId: channels.groupId,
+        mapData: channels.mapData,
         groupName: groups.name,
         ownerNickname: users.nickname,
         memberRole: channelMembers.role,
@@ -172,12 +180,21 @@ export async function GET(req: NextRequest) {
           requiresPassword: detailAccess.requiresPassword,
           groupId: r.groupId,
           groupName: r.groupName,
-          playerCount: 0, // TODO: query from socket.io state
+          // 카드 썸네일용. 채널은 환경 ID 를 저장하지 않으므로 맵으로 판정한다(모르면 null).
+          environmentId: detectOfficeEnvironmentId(r.mapData),
         };
       })
       .filter((channel): channel is NonNullable<typeof channel> => channel !== null);
 
-    return NextResponse.json({ channels: result, currentUserId: userId });
+    const participantsByChannel = await loadParticipants(
+      result.map((channel) => ({ id: channel.id, ownerId: channel.ownerId })),
+    );
+    const withParticipants = result.map((channel) => {
+      const summary = participantsByChannel.get(channel.id) ?? { count: 0, preview: [] };
+      return { ...channel, memberCount: summary.count, participants: summary.preview };
+    });
+
+    return NextResponse.json({ channels: withParticipants, currentUserId: userId });
   } catch (err) {
     console.error("Failed to fetch channels:", err);
     return NextResponse.json(
@@ -188,6 +205,67 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+/**
+ * 채널별 참여자(소유자 + channel_members, 사람만). 미리보기 외형은 각 사용자의 가장 최근 캐릭터다 —
+ * 캐릭터는 사용자당 여럿일 수 있고 채널별 선택을 저장하지 않는다.
+ */
+async function loadParticipants(list: Array<{ id: string; ownerId: string | null }>) {
+  const out = new Map<string, ReturnType<typeof summarizeParticipants>>();
+  if (list.length === 0) return out;
+  const channelIds = list.map((channel) => channel.id);
+  const memberRows = await db
+    .select({
+      channelId: channelMembers.channelId,
+      userId: channelMembers.userId,
+      joinedAt: channelMembers.joinedAt,
+    })
+    .from(channelMembers)
+    .where(inArray(channelMembers.channelId, channelIds));
+  const userIds = [
+    ...new Set([
+      ...memberRows.map((row) => row.userId),
+      ...list.flatMap((channel) => (channel.ownerId ? [channel.ownerId] : [])),
+    ]),
+  ];
+  const userRows = userIds.length
+    ? await db
+        .select({ id: users.id, nickname: users.nickname })
+        .from(users)
+        .where(inArray(users.id, userIds))
+    : [];
+  const characterRows = userIds.length
+    ? await db
+        .select({
+          userId: characters.userId,
+          appearance: characters.appearance,
+          updatedAt: characters.updatedAt,
+        })
+        .from(characters)
+        .where(inArray(characters.userId, userIds))
+    : [];
+  const nickname = new Map(userRows.map((row) => [row.id, row.nickname]));
+  const latest = new Map<string, { appearance: unknown; at: number }>();
+  for (const row of characterRows) {
+    const at = row.updatedAt ? new Date(row.updatedAt as string | Date).getTime() : 0;
+    const prev = latest.get(row.userId);
+    if (!prev || at > prev.at) latest.set(row.userId, { appearance: row.appearance, at });
+  }
+  const participant = (userId: string, joinedAt: Date | string | null): ParticipantRow => ({
+    userId,
+    nickname: nickname.get(userId) ?? null,
+    appearance: parseDbJson(latest.get(userId)?.appearance ?? null),
+    joinedAt,
+  });
+  for (const channel of list) {
+    const rows = memberRows
+      .filter((row) => row.channelId === channel.id)
+      .map((row) => participant(row.userId, row.joinedAt as Date | string | null));
+    if (channel.ownerId) rows.push(participant(channel.ownerId, null));
+    out.set(channel.id, summarizeParticipants(rows, channel.ownerId ?? ""));
+  }
+  return out;
 }
 
 // POST /api/channels — create new channel

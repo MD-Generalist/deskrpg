@@ -129,7 +129,7 @@ const ko: Record<string, string> = {
   "channels.browseOnly": "둘러보기 전용",
   "channels.browseOnlyHint":
     "이 공개 채널은 목록에서 둘러볼 수 있지만, 실제 참여하려면 활성 그룹 멤버십이 필요합니다.",
-  "channels.players": "{count}/{max}명 접속중",
+  "channels.memberCount": "{count}명 참여",
   "channels.owner": "{name}",
   "channels.backToCharacters": "← 캐릭터 선택으로",
   "channels.deleteChannel": "채널 삭제",

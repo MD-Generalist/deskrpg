@@ -130,7 +130,7 @@ const en: Record<string, string> = {
   "channels.browseOnly": "Browse only",
   "channels.browseOnlyHint":
     "You can browse this public channel from the list, but you need active group membership to participate.",
-  "channels.players": "{count}/{max} players",
+  "channels.memberCount": "{count} members",
   "channels.owner": "by {name}",
   "channels.backToCharacters": "← Back to Characters",
   "channels.deleteChannel": "Delete channel",

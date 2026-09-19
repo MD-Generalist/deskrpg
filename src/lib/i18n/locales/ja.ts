@@ -131,7 +131,7 @@ const ja: Record<string, string> = {
   "channels.browseOnly": "閲覧のみ",
   "channels.browseOnlyHint":
     "この公開チャンネルは一覧から閲覧できますが、参加するには有効なグループメンバーシップが必要です。",
-  "channels.players": "{count}/{max}人参加中",
+  "channels.memberCount": "{count}人参加",
   "channels.owner": "{name}",
   "channels.backToCharacters": "← キャラクター選択へ",
   "channels.deleteChannel": "チャンネルを削除",

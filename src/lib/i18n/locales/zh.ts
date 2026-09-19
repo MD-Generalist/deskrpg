@@ -128,7 +128,7 @@ const zh: Record<string, string> = {
   "channels.browseOnly": "仅可浏览",
   "channels.browseOnlyHint":
     "你可以在列表中浏览这个公开频道，但要实际参与仍需要有效的群组成员身份。",
-  "channels.players": "{count}/{max}人在线",
+  "channels.memberCount": "{count}人参与",
   "channels.owner": "{name}",
   "channels.backToCharacters": "← 返回角色选择",
   "channels.deleteChannel": "删除频道",
