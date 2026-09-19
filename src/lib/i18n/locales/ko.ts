@@ -79,7 +79,7 @@ const ko: Record<string, string> = {
   "auth.morningGreeting": "새로운 하루, 함께하는 출근길",
   "auth.morningCaption": "AI 동료가 기다리는 우리의 작은 오피스",
   "auth.subtitle": "AI 직원과 함께하는 가상 오피스",
-  "metadata.title": "DeskRPG for Hermes — AI 동료와 함께하는 3D 오피스",
+  "metadata.title": "DeskRPG — AI 직원이 일하는 사무실",
   "metadata.description":
     "나만의 3D 가상 오피스를 만들고 Hermes AI 동료와 함께 일하세요. 팀과 대화하고 비즈니스 목표를 함께 달성하는 워크스페이스.",
   "metadata.openGraphDescription": "DeskRPG for Hermes — AI 동료와 함께하는 3D 가상 오피스",

@@ -3,7 +3,8 @@
 import type { MouseEvent, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Armchair, UsersRound, Network, UserRound, Building2 } from "lucide-react";
+import { UsersRound, Network, UserRound, Building2 } from "lucide-react";
+import DeskRpgMark from "./DeskRpgMark";
 import OfficeBuilding from "./OfficeBuilding";
 import { WORKSPACE_NAV } from "./workspace-navigation";
 import { useT } from "@/lib/i18n";
@@ -43,10 +44,10 @@ export default function WorkspaceShell({ children }: { children: ReactNode }) {
           onClick={guardNavigation}
         >
           <span className="workspace-brand-mark">
-            <Armchair size={25} aria-hidden="true" />
+            <DeskRpgMark size={25} />
           </span>
           <span>
-            DeskRPG<small>LITTLE OFFICE</small>
+            DeskRPG<small>AI COWORKERS AT WORK</small>
           </span>
         </Link>
         <nav className="workspace-navigation" aria-label="DeskRPG">
