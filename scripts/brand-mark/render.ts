@@ -13,6 +13,9 @@ import { build } from "esbuild";
 import { chromium } from "@playwright/test";
 import sharp from "sharp";
 
+import { packIco } from "./ico";
+import { simpleMarkSvg } from "./simple-mark";
+
 const ROOT = path.resolve(__dirname, "../..");
 /** 굽는 것들. 투명 배경은 사이드바·워드마크용, 크림 배경은 앱 아이콘용이다. */
 const OUTPUTS = [
@@ -22,6 +25,8 @@ const OUTPUTS = [
   { file: "public/apple-icon.png", size: 180, background: "#f3eee2" },
 ];
 const RENDER_SIZE = 1024;
+/** 탭 아이콘은 3D 가 뭉개져 단순형을 쓴다(2026-09-20 단테 결정). */
+const FAVICON_SIZES = [16, 32, 48, 64];
 
 async function main() {
   const work = await mkdtemp(path.join(tmpdir(), "deskrpg-brand-mark-"));
@@ -56,6 +61,20 @@ async function main() {
     } finally {
       await browser.close();
     }
+    const icons = await Promise.all(
+      FAVICON_SIZES.map(async (size) => ({
+        size,
+        png: await sharp(Buffer.from(simpleMarkSvg(size)))
+          .png()
+          .toBuffer(),
+      })),
+    );
+    await writeFile(path.join(ROOT, "public/favicon.ico"), packIco(icons));
+    await writeFile(
+      path.join(ROOT, "public/assets/brand/deskrpg-mark-simple.svg"),
+      simpleMarkSvg(64),
+    );
+    process.stdout.write(`public/favicon.ico (${FAVICON_SIZES.join("·")}px, 단순형)\n`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }
