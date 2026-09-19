@@ -56,13 +56,168 @@ export function authorizeCommand(publicKey: string): string {
   return `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo ${quoted} >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`;
 }
 
-export default function SshHostRegistration({
-  onRegistered,
-  onCancel,
-}: {
+type RegistrationProps = {
   onRegistered(host: { id: string; label: string }): void;
   onCancel?(): void;
-}): JSX.Element {
+};
+
+/**
+ * 두 방식을 모두 받는다(2026-09-19 단테 결정).
+ * - 내 SSH 설정: Hermes Desktop 과 같다. 서버 사용자 `~/.ssh/config`·agent·키 파일을 쓴다. `~/.ssh` 가 있을 때만.
+ * - DeskRPG 전용 키: 공개키를 대상 서버에 심는다. 컨테이너처럼 `~/.ssh` 가 없어도 된다.
+ */
+export default function SshHostRegistration(props: RegistrationProps): JSX.Element {
+  const t = useT();
+  const [info, setInfo] = useState<{ available: boolean; aliases: string[] } | null>(null);
+  const [method, setMethod] = useState<"system" | "managed" | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    post<{ available: boolean; aliases: string[] }>({ action: "ssh-system-info" })
+      .then((data) => !cancelled && setInfo(data))
+      .catch(() => !cancelled && setInfo({ available: false, aliases: [] }));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!info) return <p className="text-sm text-text-muted">{t("common.loading")}</p>;
+  const chosen = method ?? (info.available ? "system" : "managed");
+  return (
+    <div className="space-y-3">
+      {info.available && (
+        <div className="flex gap-2" role="tablist" data-ssh-method>
+          {(["system", "managed"] as const).map((m) => (
+            <button
+              key={m}
+              role="tab"
+              aria-selected={chosen === m}
+              className={chosen === m ? button : secondary}
+              onClick={() => setMethod(m)}
+            >
+              {t(
+                m === "system"
+                  ? "hermes.wizard.ssh.methodSystem"
+                  : "hermes.wizard.ssh.methodManaged",
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {chosen === "system" ? (
+        <SystemSshRegistration aliases={info.aliases} {...props} />
+      ) : (
+        <ManagedKeyRegistration {...props} />
+      )}
+    </div>
+  );
+}
+
+const SYSTEM_ERROR_KEYS: Record<string, string> = {
+  ...SSH_ERROR_KEYS,
+  ssh_auth_failed: "hermes.wizard.ssh.errors.systemAuth",
+  ssh_key_not_found: "hermes.wizard.ssh.errors.keyNotFound",
+  ssh_host_key_failed: "hermes.wizard.ssh.errors.systemKeyChanged",
+  setup_invalid_request: "hermes.wizard.ssh.errors.systemInvalid",
+};
+
+/** Desktop 방식 — 별칭(추천)·호스트, 선택 사용자·포트·키 경로. 한 번 접속해 본 뒤에만 저장된다. */
+function SystemSshRegistration({
+  aliases,
+  onRegistered,
+  onCancel,
+}: RegistrationProps & { aliases: string[] }): JSX.Element {
+  const t = useT();
+  const { locale } = useLocale();
+  const [target, setTarget] = useState("");
+  const [user, setUser] = useState("");
+  const [port, setPort] = useState("");
+  const [keyPath, setKeyPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const add = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await post<{ host: { id: string; label: string } }>({
+        action: "ssh-system-add",
+        target: target.trim(),
+        user: user.trim(),
+        port: port.trim(),
+        keyPath: keyPath.trim(),
+      });
+      onRegistered(data.host);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const code = errorCode(error) ?? "";
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-bg p-4" data-ssh-system>
+      <p className="text-sm text-text-muted">{t("hermes.wizard.ssh.systemBody")}</p>
+      <label className="block space-y-1 text-sm">
+        <span className="font-semibold">{t("hermes.wizard.ssh.systemTarget")}</span>
+        <input
+          className={input}
+          name="ssh-system-target"
+          list="ssh-config-aliases"
+          placeholder={t("hermes.wizard.ssh.systemTargetPlaceholder")}
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+        />
+        <datalist id="ssh-config-aliases">
+          {aliases.map((a) => (
+            <option key={a} value={a} />
+          ))}
+        </datalist>
+      </label>
+      <div className="grid gap-2 sm:grid-cols-[10rem_6rem_1fr]">
+        <input
+          className={input}
+          name="ssh-system-user"
+          placeholder={t("hermes.wizard.ssh.systemUserPlaceholder")}
+          value={user}
+          onChange={(e) => setUser(e.target.value)}
+        />
+        <input
+          className={input}
+          name="ssh-system-port"
+          inputMode="numeric"
+          placeholder="22"
+          value={port}
+          onChange={(e) => setPort(e.target.value)}
+        />
+        <input
+          className={input}
+          name="ssh-system-key"
+          placeholder={t("hermes.wizard.ssh.systemKeyPlaceholder")}
+          value={keyPath}
+          onChange={(e) => setKeyPath(e.target.value)}
+        />
+      </div>
+      <p className="text-xs text-text-muted">{t("hermes.wizard.ssh.systemHint")}</p>
+      <div className="flex items-center gap-4">
+        <button className={button} disabled={busy || !target.trim()} onClick={() => void add()}>
+          {busy ? t("hermes.wizard.ssh.systemTesting") : t("hermes.wizard.ssh.systemAdd")}
+        </button>
+        {onCancel && (
+          <button className="text-sm text-text-muted underline" onClick={onCancel}>
+            {t("hermes.wizard.ssh.cancel")}
+          </button>
+        )}
+      </div>
+      {Boolean(error) && (
+        <p role="alert" className="text-sm text-danger">
+          {SYSTEM_ERROR_KEYS[code]
+            ? t(SYSTEM_ERROR_KEYS[code])
+            : setupError(setupCopy[locale], errorCode(error))}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ManagedKeyRegistration({ onRegistered, onCancel }: RegistrationProps): JSX.Element {
   const t = useT();
   const { locale } = useLocale();
   const [publicKey, setPublicKey] = useState<string | null>(null);

@@ -21,6 +21,8 @@ import {
   sshScanHost,
   sshRegisterHost,
   sshRemoveHost,
+  sshSystemAdd,
+  sshSystemInfo,
 } from "@/lib/hermes/setup/service";
 import type { HostTarget, SetupProvisionRequest } from "@/lib/hermes/setup/types";
 import { SetupPortConflictError } from "@/lib/hermes/setup/host";
@@ -127,6 +129,8 @@ export async function POST(req: NextRequest) {
     if (body.action === "ssh-scan") return response(await sshScanHost(userId, body));
     if (body.action === "ssh-register") return response(await sshRegisterHost(userId, body));
     if (body.action === "ssh-remove") return response(await sshRemoveHost(userId, body.hostId));
+    if (body.action === "ssh-system-info") return response(await sshSystemInfo(userId));
+    if (body.action === "ssh-system-add") return response(await sshSystemAdd(userId, body));
     if (body.mode !== "local" && body.mode !== "ssh") throw new Error("setup_invalid_request");
     const target: HostTarget =
       body.mode === "local"
