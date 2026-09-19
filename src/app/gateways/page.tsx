@@ -680,7 +680,8 @@ function GatewayManagementPageInner() {
                   />
                 )}
 
-                <div className="mt-5 flex gap-3">
+                {/* 삭제는 저장과 붙여 두지 않는다 — 되돌릴 수 없는 버튼이 먼저 눈에 들었다(2026-09-20). */}
+                <div className="mt-5 flex items-center justify-between gap-3">
                   <>
                     <button
                       type="button"
@@ -699,7 +700,7 @@ function GatewayManagementPageInner() {
                       type="button"
                       onClick={() => void handleDelete()}
                       disabled={deleting || !selectedGateway?.isOwner}
-                      className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-60"
+                      className="ml-auto rounded-lg border border-danger/50 px-4 py-2 text-sm font-semibold text-danger hover:bg-danger/10 disabled:opacity-60"
                     >
                       {deleting ? t("common.loading") : t("common.delete")}
                     </button>
