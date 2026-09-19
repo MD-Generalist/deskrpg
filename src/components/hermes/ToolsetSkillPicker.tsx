@@ -23,6 +23,8 @@ import {
   toggleSkill,
   toggleToolset,
 } from "./picker-model";
+import Modal from "@/components/ui/Modal";
+
 import ToolProviderPanel from "./ToolProviderPanel";
 
 export type ToolsetSkillPickerProps = {
@@ -213,27 +215,48 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
                   <button
                     type="button"
                     data-configure-tool={ts.name}
-                    onClick={() => setOpenTool((cur) => (cur === ts.name ? null : ts.name))}
+                    onClick={() => setOpenTool(ts.name)}
                     className="shrink-0 rounded bg-surface-raised px-2 py-1 text-xs font-semibold text-text hover:bg-surface-raised/80"
                   >
-                    {openTool === ts.name
-                      ? t("hermes.toolProviders.close")
-                      : t("hermes.toolProviders.configure")}
+                    {t("hermes.toolProviders.configure")}
                   </button>
                 )}
               </div>
-              {configurable && openTool === ts.name && (
-                <ToolProviderPanel
-                  profileBase={profileBase}
-                  toolset={ts.name}
-                  disabled={props.disabled}
-                  onSaved={() => setConfiguredNow((cur) => ({ ...cur, [ts.name]: true }))}
-                />
-              )}
             </div>
           );
         })}
       </fieldset>
+
+      {/* 도구별 제공자 설정은 목록 사이에 펼치지 않고 팝업으로 띄운다 — 제공자가 열 개 넘는 도구(TTS·웹)가
+          목록을 밀어내 어느 도구를 보던 중인지 잃게 했다. 한 번에 하나만 연다. */}
+      {openTool && (
+        <Modal
+          open
+          size="md"
+          onClose={() => setOpenTool(null)}
+          title={t("hermes.toolProviders.title", {
+            tool: toolsets.find((ts) => ts.name === openTool)?.label || openTool,
+          })}
+        >
+          <Modal.Body>
+            <ToolProviderPanel
+              profileBase={profileBase}
+              toolset={openTool}
+              disabled={props.disabled}
+              onSaved={() => setConfiguredNow((cur) => ({ ...cur, [openTool]: true }))}
+            />
+          </Modal.Body>
+          <Modal.Footer>
+            <button
+              type="button"
+              onClick={() => setOpenTool(null)}
+              className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold text-text hover:bg-surface-raised/80"
+            >
+              {t("hermes.toolProviders.close")}
+            </button>
+          </Modal.Footer>
+        </Modal>
+      )}
 
       <fieldset className="space-y-2 rounded border border-border p-3">
         <legend className="px-1 text-xs font-semibold text-text">

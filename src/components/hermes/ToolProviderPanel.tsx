@@ -40,10 +40,19 @@ async function readBody(res: Response): Promise<Body> {
   }
 }
 
-/** 처음 고를 행: 지금 쓰는 것 → 앱에서 고를 수 있는 첫 행. */
+/**
+ * 처음 고를 행: 지금 쓰는 것 → 이미 준비된 행(키 없이 되는 무료 행 등) → 앱에서 고를 수 있는 첫 행.
+ * Hermes 의 행 순서는 추천 순이지만 첫 행이 구독·설치 행이거나 키가 필요한 경우가 흔하다(웹 검색).
+ */
 export function defaultProviderChoice(payload: ToolProvidersPayload): string | null {
   if (payload.activeProvider) return payload.activeProvider;
-  return payload.providers.find((p) => p.setup !== "cli")?.name ?? null;
+  const selectable = payload.providers.filter((p) => p.setup !== "cli");
+  return (selectable.find((p) => p.status === "ready") ?? selectable[0])?.name ?? null;
+}
+
+/** 주소 같은 비밀이 아닌 값 — 가리지 않고, 비밀번호 관리자 표시만 유지한다. */
+export function isPlainEnvValue(key: string): boolean {
+  return /_(URL|BASE_URL|HOST|ENDPOINT)$/.test(key);
 }
 
 const STATUS_KEY: Record<ToolProviderRow["status"], string> = {
@@ -150,7 +159,7 @@ export default function ToolProviderPanel({
   if (!payload) return <p className="text-xs text-text-muted">{t("hermes.picker.loading")}</p>;
 
   return (
-    <div className="space-y-2 rounded border border-border bg-bg/40 p-3" data-tool-panel={toolset}>
+    <div className="space-y-3" data-tool-panel={toolset}>
       <p className="text-xs font-semibold text-text">{t("hermes.toolProviders.choose")}</p>
       <div className="space-y-1">
         {payload.providers.map((p) => (
@@ -214,13 +223,16 @@ export default function ToolProviderPanel({
               </span>
               <input
                 {...SECRET_INPUT_PROPS}
+                type={isPlainEnvValue(e.key) ? "text" : "password"}
                 data-env-key={e.key}
                 value={values[e.key] ?? ""}
                 disabled={disabled || saving}
                 placeholder={
                   e.isSet
                     ? t("hermes.toolProviders.keySetPlaceholder")
-                    : t("hermes.providerAuth.keyPlaceholder")
+                    : isPlainEnvValue(e.key)
+                      ? t("hermes.toolProviders.urlPlaceholder")
+                      : t("hermes.providerAuth.keyPlaceholder")
                 }
                 onChange={(ev) => setValues((prev) => ({ ...prev, [e.key]: ev.target.value }))}
                 className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"

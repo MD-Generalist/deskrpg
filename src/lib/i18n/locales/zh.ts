@@ -278,6 +278,8 @@ const zh: Record<string, string> = {
   "hermes.picker.searchSkills": "搜索技能",
   "hermes.picker.uncategorized": "其他",
   "hermes.picker.noSkills": "没有匹配的技能。",
+  "hermes.toolProviders.title": "{tool} — 提供商设置",
+  "hermes.toolProviders.urlPlaceholder": "请输入地址（例如 https://…）",
   "hermes.toolProviders.configure": "设置",
   "hermes.toolProviders.close": "关闭",
   "hermes.toolProviders.choose": "为此工具选择提供商",

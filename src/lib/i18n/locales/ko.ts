@@ -284,6 +284,8 @@ const ko: Record<string, string> = {
   "hermes.picker.searchSkills": "스킬 검색",
   "hermes.picker.uncategorized": "기타",
   "hermes.picker.noSkills": "조건에 맞는 스킬이 없습니다.",
+  "hermes.toolProviders.title": "{tool} — 제공자 설정",
+  "hermes.toolProviders.urlPlaceholder": "주소를 입력하세요 (예: https://…)",
   "hermes.toolProviders.configure": "설정",
   "hermes.toolProviders.close": "닫기",
   "hermes.toolProviders.choose": "이 도구의 제공자를 고르세요",
