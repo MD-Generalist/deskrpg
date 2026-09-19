@@ -424,8 +424,8 @@ function GatewayManagementPageInner() {
   }
 
   return (
-    <div className="theme-web min-h-screen bg-bg px-4 py-6 text-text sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="theme-web workspace-page">
+      <div className="workspace-page-inner">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div>
             <h1 className="text-3xl font-bold">{t("gateways.title")}</h1>

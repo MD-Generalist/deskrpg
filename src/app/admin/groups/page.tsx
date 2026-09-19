@@ -84,8 +84,8 @@ function AdminGroupsPageInner() {
   }
 
   return (
-    <div className="theme-web min-h-screen bg-bg px-4 py-8 text-text sm:px-8">
-      <div className="mx-auto max-w-3xl">
+    <div className="theme-web workspace-page">
+      <div className="workspace-page-inner">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">{t("admin.groups.title")}</h1>

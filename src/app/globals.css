@@ -162,8 +162,20 @@ body {
 .workspace-content > .min-h-screen {
   min-height: 100dvh;
 }
-.workspace-content > :is(.p-8, .p-6) {
-  padding: clamp(22px, 3vw, 48px);
+/*
+ * 워크스페이스 화면의 본문 틀. 여백과 최대 폭은 여기서만 정한다 — 화면마다 p-8·p-6·px-4 가
+ * 제각각이라 통일감이 없었다(2026-09-20 단테 지적). 새 화면은 이 두 클래스를 쓴다.
+ */
+.workspace-page {
+  min-height: 100dvh;
+  padding: clamp(20px, 2.6vw, 44px);
+  background: var(--bg);
+  color: var(--text);
+}
+.workspace-page-inner {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 1200px;
 }
 .workspace-content h1 {
   letter-spacing: -0.035em;
@@ -385,7 +397,7 @@ body {
     margin-top: 8px;
     padding: 0 6px;
   }
-  .workspace-content > :is(.p-8, .p-6) {
+  .workspace-page {
     padding: 20px 16px;
   }
   .auth-office {

@@ -106,8 +106,8 @@ function ProfilesPageContent() {
     if (wanted && selectedId) router.replace(employeeDetailHref(selectedId, wanted));
   }, [returnTo, router, searchParams, selectedId, wantsCreate]);
   return (
-    <div className="theme-web min-h-screen bg-bg text-text p-6 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-7">
+    <div className="theme-web workspace-page">
+      <div className="workspace-page-inner space-y-7">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold tracking-widest text-primary mb-2">HERMES</p>

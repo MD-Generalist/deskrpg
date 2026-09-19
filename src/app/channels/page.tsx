@@ -229,8 +229,8 @@ function ChannelsPageInner() {
   }
 
   return (
-    <div className="theme-web min-h-screen bg-bg text-text px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+    <div className="theme-web workspace-page">
+      <div className="workspace-page-inner">
         {/* Header */}
         <div className="mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div>
