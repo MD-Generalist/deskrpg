@@ -124,14 +124,12 @@ body {
   color: var(--text-muted);
   margin-top: 3px;
 }
+/* 마크 자체가 3D 미니어처라 뒤에 녹색 판을 깔지 않는다 — 건물이 그대로 보인다. */
 .workspace-brand-mark {
   display: grid;
   place-items: center;
-  background: var(--color-primary);
-  color: #f4f0dc;
-  width: 42px;
+  width: 44px;
   height: 44px;
-  border-radius: 13px;
 }
 .workspace-navigation {
   display: flex;
@@ -359,9 +357,8 @@ body {
     display: block;
   }
   .workspace-brand-mark {
-    width: 33px;
+    width: 34px;
     height: 34px;
-    border-radius: 10px;
   }
   .workspace-brand small {
     display: none;

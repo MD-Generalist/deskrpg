@@ -46,10 +46,10 @@ export default function WorkspaceShell({ children }: { children: ReactNode }) {
           onClick={guardNavigation}
         >
           <span className="workspace-brand-mark">
-            <DeskRpgMark size={25} />
+            <DeskRpgMark size={44} />
           </span>
           <span>
-            DeskRPG<small>AI COWORKERS AT WORK</small>
+            DeskRPG<small>AI COWORKING SPACE</small>
           </span>
         </Link>
         <nav className="workspace-navigation" aria-label="DeskRPG">
