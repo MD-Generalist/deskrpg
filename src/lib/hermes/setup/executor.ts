@@ -1,8 +1,8 @@
 import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { openSync, closeSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { openSync, closeSync, readFileSync, writeFileSync, unlinkSync, fstatSync } from "node:fs";
 import { chmodSync } from "node:fs";
 import path from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { managedSsh } from "./ssh-hosts";
 import { systemSsh, systemSshArgs } from "./system-ssh";
 import { isWindows } from "./platform";
@@ -156,7 +156,16 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
             stdinFile = path.join(tmpdir(), `${baseName}-stdin.in`);
             writeFileSync(stdinFile, options.input);
             // 토큰이 담길 수 있으므로 권한을 좁힌다
-            chmodSync(stdinFile, 0o600);
+            if (isWindows(process.platform)) {
+              // Windows: icacls로 명시적 ACL 설정 (chmod는 Windows에서 무효)
+              const username = userInfo().username;
+              execFileSync("icacls", [stdinFile, "/inheritance:r", `/grant:r`, `${username}:F`], {
+                stdio: "ignore",
+              });
+            } else {
+              // POSIX: chmod 사용
+              chmodSync(stdinFile, 0o600);
+            }
             stdinFd = openSync(stdinFile, "r");
           }
 
@@ -224,11 +233,18 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
         if (useFileStdio && stdoutFile) {
           try {
             if (stdoutFd !== undefined) {
+              // 파일 크기 상한 검사 (output_limit과 일치)
+              const stat = fstatSync(stdoutFd);
+              if (stat.size > 1024 * 1024) {
+                error = "output_limit";
+              }
               closeSync(stdoutFd);
               stdoutFd = undefined;
             }
-            const content = readFileSync(stdoutFile, "utf-8");
-            stdout = content;
+            if (!error) {
+              const content = readFileSync(stdoutFile, "utf-8");
+              stdout = content;
+            }
           } catch {
             // 파일 읽기 실패해도 계속 진행
           } finally {
@@ -296,16 +312,21 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       child.stderr.on("data", (data) => collect(data, "stderr"));
       child.on("error", () => finish("command_failed"));
       child.on("close", (code) => finish(undefined, code ?? 1));
-      child.stdin.on("error", () => {
-        /* early exit is handled by close */
-      });
+      // stdin이 파일 fd면 Node는 child.stdin을 null로 둔다
+      if (child.stdin) {
+        child.stdin.on("error", () => {
+          /* early exit is handled by close */
+        });
+      }
       options.signal?.addEventListener("abort", abort, { once: true });
       if (options.signal?.aborted) abort();
       // stdin이 파일이면 이미 파일에서 읽으므로 end() 호출 안 함
-      if (!useFileStdio || !stdinFd) {
-        child.stdin.end(options.input);
-      } else {
-        child.stdin.end();
+      if (child.stdin) {
+        if (useFileStdio && stdinFd !== undefined) {
+          child.stdin.end();
+        } else {
+          child.stdin.end(options.input);
+        }
       }
     });
   };
