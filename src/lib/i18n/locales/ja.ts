@@ -85,6 +85,26 @@ const ja: Record<string, string> = {
   "admin.users.temporaryPassword": "仮パスワード",
   "admin.users.temporaryPasswordNotice":
     "表示は一度だけです。本人に直接渡してください。次回のログインで変更が必要です。",
+  "gateChecklist.title": "この操作には準備が必要です",
+  "gateChecklist.step.gateway": "ゲートウェイ接続",
+  "gateChecklist.step.ownerKey": "リスナー所有者キー",
+  "gateChecklist.step.plugin": "DeskRPG プラグインのインストール",
+  "gateChecklist.step.version": "プラグインのバージョン",
+  "gateChecklist.hint.gateway":
+    "このオフィスにゲートウェイが接続されていません。まず接続画面で登録してください。",
+  "gateChecklist.hint.ownerKey":
+    "ゲートウェイに設定したキーがプラグインに拒否されました。プロフィールキーではなく、リスナー所有者キー（API_SERVER_KEY）が必要です。",
+  "gateChecklist.hint.plugin":
+    "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
+  "gateChecklist.hint.version":
+    "インストール済みのプラグインが {minVersion} より古いです。同じコマンドで更新し、Hermes API サーバーを再起動してください。",
+  "gateChecklist.openGateways": "接続画面を開く",
+  "gateChecklist.unreachable":
+    "ゲートウェイに接続できませんでした。Hermes API サーバーが起動しているか確認してください。",
+  "gateChecklist.timeout":
+    "ゲートウェイが時間内に応答しませんでした。しばらくしてからもう一度お試しください。",
+  "gateChecklist.retry": "再試行",
+  "gateChecklist.whatIsNeeded": "何が必要ですか？",
   "common.logout": "ログアウト",
   "common.language": "言語",
   "common.copy": "コピー",

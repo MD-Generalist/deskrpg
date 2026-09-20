@@ -83,6 +83,24 @@ const en: Record<string, string> = {
   "admin.users.temporaryPassword": "Temporary password",
   "admin.users.temporaryPasswordNotice":
     "Shown once. Hand it over directly — they must change it at the next sign-in.",
+  "gateChecklist.title": "This action needs some setup first",
+  "gateChecklist.step.gateway": "Gateway connected",
+  "gateChecklist.step.ownerKey": "Listener owner key",
+  "gateChecklist.step.plugin": "DeskRPG plugin installed",
+  "gateChecklist.step.version": "Plugin version",
+  "gateChecklist.hint.gateway":
+    "No gateway is bound to this office. Register one on the connection screen first.",
+  "gateChecklist.hint.ownerKey":
+    "The plugin rejected the key stored for this gateway. It must be the listener owner key (API_SERVER_KEY), not a profile key.",
+  "gateChecklist.hint.plugin": "Run this on the gateway host, then restart the Hermes API server.",
+  "gateChecklist.hint.version":
+    "The installed plugin is older than {minVersion}. Run the same command, then restart the Hermes API server.",
+  "gateChecklist.openGateways": "Open connection screen",
+  "gateChecklist.unreachable":
+    "The gateway could not be reached. Check that the Hermes API server is running.",
+  "gateChecklist.timeout": "The gateway did not answer in time. Try again in a moment.",
+  "gateChecklist.retry": "Try again",
+  "gateChecklist.whatIsNeeded": "What is needed?",
   "common.logout": "Logout",
   "common.language": "Language",
   "common.copy": "Copy",
