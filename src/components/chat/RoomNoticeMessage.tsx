@@ -31,8 +31,13 @@ export function cardNoticeText(
   return t(key, { title: notice.cardTitle });
 }
 
-/** 알려진 kind 인지 — 아니면 `content` 폴백으로 간다. */
-export function isKnownNotice(notice: RoomNotice | null | undefined): notice is RoomNotice {
+/**
+ * 여기서 문장을 만들 수 있는 kind 인지 — 아니면 `content` 폴백으로 간다.
+ * `card_proposal` 은 아직 전용 렌더러가 없어 폴백(제목 한 줄)으로 보인다.
+ */
+export function isKnownNotice(
+  notice: RoomNotice | null | undefined,
+): notice is Exclude<RoomNotice, { kind: "card_proposal" }> {
   return (
     !!notice &&
     (notice.kind === "card_done" ||

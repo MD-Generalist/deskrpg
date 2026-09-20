@@ -330,6 +330,7 @@ export const PLUGIN_EVENT_KINDS = [
   "artifact.created",
   "artifact.versioned",
   "artifact.deleted",
+  "card_proposal.created",
 ] as const;
 
 export type PluginEventKind = (typeof PLUGIN_EVENT_KINDS)[number];
@@ -343,6 +344,20 @@ export type TaskStatusEventPayload = {
   parent_count: number;
   title: string;
   assignee: string | null;
+};
+
+/**
+ * NPC 가 대화 중 발견한 "업무 카드로 남길 만한 요청". 카드가 **아니다** — Hermes 쪽 제안
+ * 레코드의 사본이고, 카드 등록 여부는 사용자가 방 알림에서 고른다.
+ * `body`·`acceptance` 는 없으면 **키 자체가 빠진다**(빈 문자열이 아니다).
+ */
+export type CardProposalEventPayload = {
+  proposal_id: string;
+  title: string;
+  summary: string;
+  body?: string;
+  acceptance?: string;
+  profile: string;
 };
 
 export type CronRunStartedPayload = {

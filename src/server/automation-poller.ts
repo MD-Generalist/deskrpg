@@ -323,7 +323,11 @@ async function pollBoardOnce(
       cursor: cursor ?? undefined,
       limit: deps.pageLimit,
       // 아티팩트는 게이트웨이 전역이라 사건 수신 보드에서만 받는다.
-      ...(row.isEventCarrier ? { include: "artifacts" } : {}),
+      // 제안 사건은 아티팩트와 같은 `artifact_events` 표·같은 커서(`a`)로 온다. 그래서 **두 토큰은 늘 함께**
+      // 켠다 — `artifacts` 만 켜면 아티팩트를 읽으며 커서가 지나가 그 사이의 제안이 오류도 로그도 없이
+      // 영영 오지 않는다. 제안도 게이트웨이 전역(보드·채널 컬럼이 없다)이라 수신 보드에만 붙인다.
+      // 구버전 플러그인은 모르는 토큰을 무시하므로 버전·capability 분기가 필요 없다.
+      ...(row.isEventCarrier ? { include: "artifacts,card_proposals" } : {}),
     });
 
     if (!res.ok) {

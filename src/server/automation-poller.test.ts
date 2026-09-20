@@ -117,6 +117,27 @@ test("첫 폴링(커서 없음)은 '지금' 토큰만 저장하고 아무것도 
   assert.equal(h.roomEmits.length, 0);
 });
 
+test("사건 조회는 아티팩트와 카드 제안을 함께 include 한다", async () => {
+  // 제안 사건은 아티팩트와 **같은 커서**에 실려 온다. include 에 켜 두지 않으면 플러그인이
+  // 걸러 버리고, 나중에 켜도 커서가 지나가 버려 영영 오지 않는다(조용히 죽는다).
+  const plugin = await startPlugin();
+  const { channel } = await seedBoundChannel(plugin);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  const includes = eventPolls(plugin).map((r) => decodeURIComponent(r.path));
+  assert.ok(includes.length > 0);
+  assert.ok(
+    includes.every((path) => /include=[^&]*\bartifacts\b/.test(path)),
+    "아티팩트를 include 한다",
+  );
+  assert.ok(
+    includes.every((path) => /include=[^&]*\bcard_proposals\b/.test(path)),
+    "카드 제안을 include 한다",
+  );
+});
+
 test("토큰 이후의 사건은 ingest 되고 커서가 전진한다; 다음 바퀴에서 다시 처리하지 않는다", async () => {
   const plugin = await startPlugin();
   const { channel, npc } = await seedBoundChannel(plugin);
@@ -648,6 +669,33 @@ test("보드가 둘이면 두 보드 모두에서 사건을 받아 온다", asyn
   );
   assert.ok(polledBoards.has(second), "둘째 보드를 폴링하지 않으면 그 카드는 실시간으로 안 옵니다");
   assert.equal(polledBoards.size, 2);
+});
+
+test("include 는 수신 보드에만, 그리고 아티팩트·카드 제안 두 토큰이 늘 함께 붙는다", async () => {
+  // 두 출처는 커서 `a` 를 공유한다 — 한쪽만 켜면 다른 쪽 사건을 지나친 채 커서가 전진해 조용히 사라진다.
+  // 그리고 둘 다 게이트웨이 전역이라 보드마다 붙이면 보드 수만큼 중복된다.
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const second = await addBoard(channel.id);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  const byBoard = new Map<string | null, Array<string | null>>();
+  for (const r of eventPolls(server)) {
+    const params = new URL(`http://x${r.path}`).searchParams;
+    const board = params.get("board");
+    byBoard.set(board, [...(byBoard.get(board) ?? []), params.get("include")]);
+  }
+  assert.equal(byBoard.size, 2);
+  for (const [board, includes] of byBoard) {
+    const expected = board === second ? null : "artifacts,card_proposals";
+    assert.deepEqual(
+      [...new Set(includes)],
+      [expected],
+      `보드 ${board} 의 include 가 ${JSON.stringify(includes)} 입니다`,
+    );
+  }
 });
 
 test("사건 수신 보드가 아닌 보드는 크론 사건을 버린다", async () => {

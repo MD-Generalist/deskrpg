@@ -50,6 +50,21 @@ export type RoomNotice =
       resolved?: { decision: string; by: string; at: string };
     }
   | {
+      /**
+       * NPC 가 제안한 업무 카드. 아직 카드가 아니다 — 사용자가 알림에서 등록 여부를 고르고,
+       * 고른 결과가 `resolved` 로 남는다(없으면 아직 미결).
+       */
+      kind: "card_proposal";
+      proposalId: string;
+      title: string;
+      summary: string;
+      body?: string;
+      acceptance?: string;
+      npcId: string;
+      npcName: string;
+      resolved?: { choice: "card" | "inline"; by: string; at: string; taskId?: string };
+    }
+  | {
       kind: "cron_result";
       jobId: string;
       jobName: string;
@@ -62,6 +77,7 @@ const ROOM_NOTICE_KINDS = new Set([
   "card_blocked",
   "card_review",
   "approval_requested",
+  "card_proposal",
   "cron_result",
 ]);
 
