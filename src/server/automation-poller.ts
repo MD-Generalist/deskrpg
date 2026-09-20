@@ -30,10 +30,12 @@ import { channelGatewayBindings, channelKanbanBoards, channels, db, nowForDb } f
 import { registerAutomationHooks, unregisterAutomationHooks } from "@/lib/automation-registry";
 import {
   ensureChannelBoard,
-  getChannelBoard,
+  ensureChannelCarrier,
+  listChannelBoards,
   resolveChannelBoard,
   syncBoardName,
   type ChannelBoardRow,
+  type ResolvedChannelBoard,
 } from "@/lib/kanban-boards";
 import { broadcastRoomMessage } from "./room-socket";
 import {
@@ -71,12 +73,16 @@ export const POLL_DEFAULTS = {
 export type PollOnceDeps = {
   resolveBoard: typeof resolveChannelBoard;
   ensureBoard: typeof ensureChannelBoard;
-  readRow: typeof getChannelBoard;
+  /** 그 채널에 붙은 보드 **전부**. 보드마다 커서가 따로라 한 바퀴에 모두 돈다. */
+  readRows: typeof listChannelBoards;
+  /** carrier 가 0개로 떨어진 채널을 되살린다 — 읽는 쪽이 고치는 자가 복구. */
+  ensureCarrier: typeof ensureChannelCarrier;
   /** 채널 이름과 마지막 수정 시각 — 보드 이름 동기화가 뒤처졌는지 판정한다(R2). */
   readChannel(channelId: string): Promise<{ name: string; updatedAt: Date | string | null } | null>;
   syncBoardName: typeof syncBoardName;
+  /** **연결 행 id** 로 쓴다. channel_id 로 쓰면 그 채널의 다른 보드 커서까지 덮어쓴다. */
   saveRow(
-    channelId: string,
+    boardLinkId: string,
     patch: { eventCursor?: string; lastError: string | null },
   ): Promise<void>;
   makeIngestDeps(ctx: { channelId: string; gatewayId: string; boardSlug: string }): IngestDeps;
@@ -85,12 +91,35 @@ export type PollOnceDeps = {
   maxPages: number;
 };
 
+/** 보드 하나의 결과. */
+export type BoardPollOutcome =
+  | {
+      ok: true;
+      boardSlug: string;
+      events: number;
+      pages: number;
+      cursor: string;
+      restarted: boolean;
+    }
+  | { ok: false; boardSlug: string; code: string; reason: string };
+
+/**
+ * 채널 한 바퀴의 결과. `events` 는 보드들의 합이고 `cursor` 는 **사건 수신 보드**의 것이다 —
+ * 채널 단위 결과를 기대하던 호출자가 뜻을 잃지 않게 한다. 보드별 결과는 `boards` 에 있다.
+ */
 export type PollOutcome =
-  | { ok: true; events: number; pages: number; cursor: string; restarted: boolean }
-  | { ok: false; code: string; reason: string };
+  | {
+      ok: true;
+      events: number;
+      pages: number;
+      cursor: string;
+      restarted: boolean;
+      boards?: BoardPollOutcome[];
+    }
+  | { ok: false; code: string; reason: string; boards?: BoardPollOutcome[] };
 
 async function saveBoardRow(
-  channelId: string,
+  boardLinkId: string,
   patch: { eventCursor?: string; lastError: string | null },
 ) {
   const now = nowForDb();
@@ -102,7 +131,7 @@ async function saveBoardRow(
       lastPolledAt: now,
       updatedAt: now,
     })
-    .where(eq(channelKanbanBoards.channelId, channelId));
+    .where(eq(channelKanbanBoards.id, boardLinkId));
 }
 
 async function readChannelNameAndUpdatedAt(
@@ -143,7 +172,8 @@ export function createDefaultPollDeps(
   return {
     resolveBoard: resolveChannelBoard,
     ensureBoard: ensureChannelBoard,
-    readRow: getChannelBoard,
+    readRows: listChannelBoards,
+    ensureCarrier: ensureChannelCarrier,
     readChannel: readChannelNameAndUpdatedAt,
     syncBoardName,
     saveRow: saveBoardRow,
@@ -164,6 +194,89 @@ export function createDefaultPollDeps(
  * 채널 하나를 한 바퀴 폴링한다. 어떤 경우에도 던지지 않는다 — 실패는 `last_error` 와
  * 반환값에만 남는다(E6).
  */
+/**
+ * 보드 하나를 한 바퀴 폴링한다. 던지지 않는다 — 실패는 `last_error` 와 반환값에만 남는다(E6).
+ *
+ * **사건 수신 보드가 아니면 크론 사건을 버린다.** 플러그인의 `/deskrpg/events` 는 커서를 보드별로
+ * 주면서도 크론은 게이트웨이 전역으로 늘 섞어 보내고 옵트아웃이 없다(`events.py` 의 `cron_tail`).
+ * 그래서 보드 N개를 각각 폴링하면 같은 크론 사건이 N번 들어온다. 아티팩트는 `include` 로 빼면
+ * 되지만 크론은 여기서 거르는 수밖에 없다. 버린 사건은 사건 수신 보드가 이미 받았거나 받는다.
+ */
+async function pollBoardOnce(
+  channelId: string,
+  row: ChannelBoardRow,
+  resolved: Extract<ResolvedChannelBoard, { ok: true }>,
+  deps: PollOnceDeps,
+): Promise<BoardPollOutcome> {
+  const boardSlug = row.boardSlug;
+  const gatewayId = resolved.binding.resource.id;
+  const ingestDeps = deps.makeIngestDeps({ channelId, gatewayId, boardSlug });
+  let cursor: string | null = row.eventCursor;
+  let restarted = false;
+  let pages = 0;
+  let events = 0;
+  const errors: string[] = [];
+
+  while (pages < deps.maxPages) {
+    pages += 1;
+    const res = await resolved.ownerClient.events.poll({
+      board: boardSlug,
+      cursor: cursor ?? undefined,
+      limit: deps.pageLimit,
+      // 아티팩트는 게이트웨이 전역이라 사건 수신 보드에서만 받는다.
+      ...(row.isEventCarrier ? { include: "artifacts" } : {}),
+    });
+
+    if (!res.ok) {
+      // E7. 플러그인이 커서를 모르면 "지금" 부터 다시 — 재생 없음.
+      if (res.failure.code === "unknown_cursor" && cursor !== null) {
+        cursor = null;
+        restarted = true;
+        continue;
+      }
+      await deps.saveRow(row.id, { lastError: res.failure.code });
+      return { ok: false, boardSlug, code: res.failure.code, reason: res.failure.message };
+    }
+
+    if (cursor === null) {
+      // 커서 없이 부른 응답은 토큰만 받는 것이다. 사건이 실려 와도 재생하지 않는다(R23).
+      cursor = res.data.cursor;
+      break;
+    }
+
+    cursor = res.data.cursor;
+    const usable = row.isEventCarrier
+      ? res.data.events
+      : res.data.events.filter((event: { kind: string }) => !event.kind.startsWith("cron."));
+    if (usable.length > 0) {
+      const outcome = await deps.ingest(channelId, usable, ingestDeps);
+      events += outcome.processed;
+      errors.push(...outcome.errors);
+    }
+    if (!res.data.has_more) break;
+  }
+
+  if (cursor === null) {
+    // 페이지 상한의 마지막 바퀴에서 unknown_cursor 가 났다 — 토큰 없이 끝났으니 다음 바퀴가 다시 받는다.
+    await deps.saveRow(row.id, { lastError: "cursor_unresolved" });
+    return {
+      ok: false,
+      boardSlug,
+      code: "cursor_unresolved",
+      reason: "page cap reached before a token",
+    };
+  }
+  await deps.saveRow(row.id, {
+    eventCursor: cursor,
+    lastError: errors.length > 0 ? `ingest_error: ${errors[0]}` : null,
+  });
+  return { ok: true, boardSlug, events, pages, cursor, restarted };
+}
+
+/**
+ * 채널 하나를 한 바퀴 폴링한다 — 그 채널에 붙은 **보드 전부**를 돈다. 어떤 경우에도 던지지
+ * 않는다(E6). 게이트·오너 클라이언트는 채널당 한 번만 만든다.
+ */
 export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Promise<PollOutcome> {
   try {
     const resolved = await deps.resolveBoard(channelId);
@@ -171,91 +284,67 @@ export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Pr
     const gatewayId = resolved.binding.resource.id;
 
     // 연결 행이 없거나, 게이트웨이가 바뀌었거나, 보드가 한 번도 확보된 적이 없으면(바인딩 때
-    // 게이트·생성 실패 — `board_name_synced_at` 이 비어 있다) 행부터 다시 세운다(R5). 게이트웨이가
-    // 바뀌면 커서는 이전 게이트웨이의 것이라 같이 버려진다(R4). 게이트 실패는 `ensureBoard` 가
-    // `last_error` 에 남기므로 여기서 다시 쓰지 않는다.
-    let row: ChannelBoardRow | null = await deps.readRow(channelId);
-    if (!row || row.gatewayId !== gatewayId || row.boardNameSyncedAt === null) {
+    // 게이트·생성 실패 — `board_name_synced_at` 이 비어 있다) 기본 보드부터 다시 세운다(R5).
+    // 게이트 실패는 `ensureBoard` 가 `last_error` 에 남기므로 여기서 다시 쓰지 않는다.
+    let rows = await deps.readRows(channelId);
+    const carrier = rows.find((row) => row.isEventCarrier) ?? rows[0];
+    if (!carrier || carrier.gatewayId !== gatewayId || carrier.boardNameSyncedAt === null) {
       const ensured = await deps.ensureBoard(channelId, resolved);
       if (!ensured.ok) return { ok: false, code: ensured.code, reason: ensured.reason };
-      row = ensured.row;
+      rows = await deps.readRows(channelId);
     }
 
     if (!resolved.pluginGate.ok) {
-      await deps.saveRow(channelId, { lastError: resolved.pluginGate.code });
+      for (const row of rows) await deps.saveRow(row.id, { lastError: resolved.pluginGate.code });
       return { ok: false, code: resolved.pluginGate.code, reason: resolved.pluginGate.reason };
     }
 
-    // R2. 채널 개명 뒤 이름 동기화가 실패해 남아 있으면 한 바퀴에 한 번 다시 맞춘다. 실패해도
-    // 사건 폴링은 계속하되 이유는 `last_error` 에 남긴다(다음 바퀴가 또 시도한다).
+    // carrier 가 0개로 떨어졌으면 여기서 되살린다 — 아니면 이 채널은 크론 사건을 아무도 안 받는다.
+    await deps.ensureCarrier(channelId);
+    rows = await deps.readRows(channelId);
+
+    // R2. 채널 개명 뒤 이름 동기화가 실패해 남아 있으면 한 바퀴에 한 번 다시 맞춘다. 채널 이름은
+    // **사건 수신 보드**(= 기본 보드)의 것이다 — 다른 보드는 프로젝트마다 제 이름을 갖는다.
     let syncError: string | null = null;
     const channel = await deps.readChannel(channelId);
-    if (channel && boardNameStale(row, channel.updatedAt)) {
+    const nameTarget = rows.find((row) => row.isEventCarrier);
+    if (channel && nameTarget && boardNameStale(nameTarget, channel.updatedAt)) {
       const synced = await deps.syncBoardName(channelId, channel.name, resolved);
       if (!synced.ok) syncError = `board_name_sync: ${synced.code}`;
     }
 
-    const boardSlug = resolved.boardSlug;
-    const ingestDeps = deps.makeIngestDeps({ channelId, gatewayId, boardSlug });
-    let cursor: string | null = row.eventCursor;
-    let restarted = false;
-    let pages = 0;
-    let events = 0;
-    const errors: string[] = [];
+    const boards: BoardPollOutcome[] = [];
+    for (const row of rows) boards.push(await pollBoardOnce(channelId, row, resolved, deps));
 
-    while (pages < deps.maxPages) {
-      pages += 1;
-      const res = await resolved.ownerClient.events.poll({
-        board: boardSlug,
-        cursor: cursor ?? undefined,
-        limit: deps.pageLimit,
-        include: "artifacts",
-      });
-
-      if (!res.ok) {
-        // E7. 플러그인이 커서를 모르면 "지금" 부터 다시 — 재생 없음.
-        if (res.failure.code === "unknown_cursor" && cursor !== null) {
-          cursor = null;
-          restarted = true;
-          continue;
-        }
-        await deps.saveRow(channelId, { lastError: res.failure.code });
-        return { ok: false, code: res.failure.code, reason: res.failure.message };
-      }
-
-      if (cursor === null) {
-        // 커서 없이 부른 응답은 토큰만 받는 것이다. 사건이 실려 와도 재생하지 않는다(R23).
-        cursor = res.data.cursor;
-        break;
-      }
-
-      cursor = res.data.cursor;
-      if (res.data.events.length > 0) {
-        const outcome = await deps.ingest(channelId, res.data.events, ingestDeps);
-        events += outcome.processed;
-        errors.push(...outcome.errors);
-      }
-      if (!res.data.has_more) break;
+    const carrierOutcome = boards.find((b) => b.boardSlug === nameTarget?.boardSlug) ?? boards[0];
+    const failed = boards.find((b) => !b.ok);
+    if (!carrierOutcome || (!carrierOutcome.ok && failed)) {
+      const first = failed as Extract<BoardPollOutcome, { ok: false }> | undefined;
+      return {
+        ok: false,
+        code: first?.code ?? "no_board",
+        reason: first?.reason ?? "channel has no board row",
+        boards,
+      };
+    }
+    if (!carrierOutcome.ok) {
+      return { ok: false, code: carrierOutcome.code, reason: carrierOutcome.reason, boards };
     }
 
-    if (cursor === null) {
-      // 페이지 상한의 마지막 바퀴에서 unknown_cursor 가 났다 — 토큰 없이 끝났으니 다음 바퀴가 다시 받는다.
-      await deps.saveRow(channelId, { lastError: "cursor_unresolved" });
-      return { ok: false, code: "cursor_unresolved", reason: "page cap reached before a token" };
+    if (syncError) {
+      await deps.saveRow(nameTarget?.id ?? "", { lastError: syncError }).catch(() => {});
     }
-    await deps.saveRow(channelId, {
-      eventCursor: cursor,
-      lastError: errors.length > 0 ? `ingest_error: ${errors[0]}` : syncError,
-    });
-    return { ok: true, events, pages, cursor, restarted };
+    return {
+      ok: true,
+      events: boards.reduce((sum, b) => sum + (b.ok ? b.events : 0), 0),
+      pages: boards.reduce((sum, b) => sum + (b.ok ? b.pages : 0), 0),
+      cursor: carrierOutcome.cursor,
+      restarted: boards.some((b) => b.ok && b.restarted),
+      boards,
+    };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(`[automation-poller] ${channelId} poll failed: ${reason}`);
-    try {
-      await deps.saveRow(channelId, { lastError: `internal_error: ${reason}` });
-    } catch {
-      // 행이 없거나 DB 가 죽었다 — 다음 바퀴가 다시 시도한다.
-    }
     return { ok: false, code: "internal_error", reason };
   }
 }

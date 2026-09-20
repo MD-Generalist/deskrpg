@@ -26,7 +26,13 @@ import { randomBytes } from "node:crypto";
 import { and, eq, ne } from "drizzle-orm";
 
 import { gateAutomationPlugin, type PluginGate } from "@/lib/automation-gate";
-import { channelKanbanBoards, channels, db, nowForDb } from "@/db";
+import { channelKanbanBoards, channelProjects, channels, db, nowForDb } from "@/db";
+
+/**
+ * 끝난 프로젝트의 상태. `project-registry` 의 것과 같은 값이며, 여기서 그 모듈을 import 하면
+ * 순환이 생겨(그쪽이 이 파일을 쓴다) 작은 사본을 둔다.
+ */
+const ARCHIVED_PROJECT_STATUSES: ReadonlySet<string> = new Set(["completed", "cancelled"]);
 import { decryptGatewayToken, getChannelGatewayBinding } from "@/lib/gateway-resources";
 import type { BoardMeta } from "@/lib/hermes/deskrpg-plugin-types";
 import { createOwnerPluginClient, type OwnerPluginClient } from "@/lib/hermes/plugin-client";
@@ -97,6 +103,47 @@ export async function listChannelBoards(channelId: string): Promise<ChannelBoard
     .from(channelKanbanBoards)
     .where(eq(channelKanbanBoards.channelId, channelId))
     .orderBy(channelKanbanBoards.createdAt);
+}
+
+/**
+ * 채널에 사건 수신 보드가 하나도 없으면 하나를 세운다. **읽는 쪽이 고치는 자가 복구**다.
+ *
+ * 부분 유니크 인덱스는 carrier 가 **둘**인 것은 막지만 **0개**인 것은 막지 못한다. 보관이
+ * carrier 를 옮기는 두 UPDATE 사이에 프로세스가 죽으면 그 채널은 크론 사건을 아무도 받지 않고,
+ * 화면은 멀쩡한데 카드만 안 움직이는 조용한 실패가 된다. 보상 로직은 "②가 실패했을 때" 만
+ * 막고 "①과 ② 사이에 죽었을 때" 는 못 막는다 — 그 경로는 이 함수만 막는다.
+ *
+ * 규칙은 0017 의 조건부 UPDATE 와 같다: **가장 오래된 보드 하나**. 다만 보관된 프로젝트의 보드는
+ * 후보에서 뺀다 — 끝난 일의 보드를 사건 수신 자리로 되살리면 보관의 뜻이 무너진다.
+ * 후보가 전부 보관됐으면 그래도 하나는 세운다(아무도 안 받는 것보다 낫다).
+ */
+export async function ensureChannelCarrier(channelId: string): Promise<ChannelBoardRow | null> {
+  const rows = await listChannelBoards(channelId);
+  if (rows.length === 0) return null;
+  const current = rows.find((row) => row.isEventCarrier);
+  if (current) return current;
+
+  const archivedLinkIds = new Set(
+    (
+      await db
+        .select({ boardLinkId: channelProjects.boardLinkId, status: channelProjects.status })
+        .from(channelProjects)
+        .where(eq(channelProjects.channelId, channelId))
+    )
+      .filter((row) => ARCHIVED_PROJECT_STATUSES.has(row.status))
+      .map((row) => row.boardLinkId),
+  );
+
+  const candidate = rows.find((row) => !archivedLinkIds.has(row.id)) ?? rows[0];
+  const [restored] = await db
+    .update(channelKanbanBoards)
+    .set({ isEventCarrier: true, updatedAt: nowForDb() })
+    .where(eq(channelKanbanBoards.id, candidate.id))
+    .returning();
+  console.warn(
+    `[kanban-boards] channel ${channelId} had no event carrier; restored ${candidate.boardSlug}`,
+  );
+  return restored ?? candidate;
 }
 
 /**

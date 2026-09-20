@@ -23,6 +23,7 @@ import type { BoardMeta } from "@/lib/hermes/deskrpg-plugin-types";
 import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
 import {
   ensureChannelBoard,
+  ensureChannelCarrier,
   listChannelBoards,
   newChannelBoardSlug,
   type ChannelBoardRow,
@@ -170,6 +171,8 @@ export async function listChannelProjects(
   channelId: string,
   client: OwnerPluginClient,
 ): Promise<ProjectView[]> {
+  // 읽는 쪽이 고친다 — carrier 가 0개로 떨어진 채널을 여기서 되살린다(§보관의 두 UPDATE 사이).
+  await ensureChannelCarrier(channelId);
   const boards = await listChannelBoards(channelId);
   if (boards.length === 0) return [];
 
@@ -391,14 +394,28 @@ export async function archiveChannelProject(
     const next = stillActive[0];
     const now = nowForDb();
     // 순서가 중요하다 — 부분 유니크가 carrier 둘을 거절하므로 먼저 내려놓고 올린다.
+    // 이 레포에서는 트랜잭션으로 묶을 수 없다: better-sqlite3 드라이버가 동기라
+    // `db.transaction` 이 async 콜백을 `Transaction function cannot return a promise` 로 거절한다.
+    // 그래서 두 겹으로 막는다.
+    //   1) 여기 보상 — 올리기가 실패하면 내려놓은 것을 되돌린다.
+    //   2) `ensureChannelCarrier` 자가 복구 — 두 UPDATE **사이에 죽은** 경우는 보상으로 못 막고
+    //      읽는 쪽이 고친다. carrier 0개는 부분 유니크가 막아 주지 않는다.
     await db
       .update(channelKanbanBoards)
       .set({ isEventCarrier: false, updatedAt: now })
       .where(eq(channelKanbanBoards.id, board.id));
-    await db
-      .update(channelKanbanBoards)
-      .set({ isEventCarrier: true, eventCursor: null, updatedAt: now })
-      .where(eq(channelKanbanBoards.id, next.id));
+    try {
+      await db
+        .update(channelKanbanBoards)
+        .set({ isEventCarrier: true, eventCursor: null, updatedAt: now })
+        .where(eq(channelKanbanBoards.id, next.id));
+    } catch (err) {
+      await db
+        .update(channelKanbanBoards)
+        .set({ isEventCarrier: true, updatedAt: nowForDb() })
+        .where(eq(channelKanbanBoards.id, board.id));
+      throw err;
+    }
     carrierMovedTo = next.boardSlug;
   }
 

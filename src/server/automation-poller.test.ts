@@ -586,3 +586,166 @@ test("타이머 레지스트리 — unbound 결과가 나오면 그 채널의 �
     poller.stopAll();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 다중 보드 (설계 2026-09-21 project-registry)
+// ---------------------------------------------------------------------------
+
+async function addBoard(channelId: string): Promise<string> {
+  const { ensureChannelBoard, newChannelBoardSlug } = await import("@/lib/kanban-boards");
+  const slug = newChannelBoardSlug(channelId);
+  const ensured = await ensureChannelBoard(channelId, undefined, slug);
+  assert.ok(ensured.ok, "둘째 보드 확보 실패");
+  return slug;
+}
+
+test("커서는 보드 행 id 로 저장한다 — 채널 단위로 쓰면 다른 보드를 덮는다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  await addBoard(channel.id);
+  const { pollChannelOnce } = await import("./automation-poller");
+
+  // 저장 호출을 가로채 **무엇을 키로 썼는지** 본다. 가짜 서버는 상태가 같으면 두 보드에 같은
+  // 커서 토큰을 주므로, 저장된 값만 봐서는 덮어쓰기를 구분할 수 없다.
+  const saved: string[] = [];
+  const base = await makeDeps();
+  const h = await makeDeps({
+    saveRow: async (boardLinkId, patch) => {
+      saved.push(boardLinkId);
+      return base.deps.saveRow(boardLinkId, patch);
+    },
+  });
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  const { listChannelBoards } = await import("@/lib/kanban-boards");
+  const rows = await listChannelBoards(channel.id);
+  const ids = new Set(rows.map((r) => r.id));
+  assert.equal(ids.size, 2);
+  for (const id of saved) {
+    assert.ok(
+      ids.has(id),
+      `연결 행 id 가 아닌 값(${id})으로 저장했습니다 — 채널 단위로 쓰면 다른 보드 커서를 덮습니다`,
+    );
+  }
+  assert.equal(
+    new Set(saved).size,
+    2,
+    "보드 둘을 돌았는데 저장 키가 하나뿐입니다 — 한 행에 두 보드의 커서가 겹쳐 쓰입니다",
+  );
+});
+
+test("보드가 둘이면 두 보드 모두에서 사건을 받아 온다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const second = await addBoard(channel.id);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  const polledBoards = new Set(
+    eventPolls(server).map((r) => new URL(`http://x${r.path}`).searchParams.get("board")),
+  );
+  assert.ok(polledBoards.has(second), "둘째 보드를 폴링하지 않으면 그 카드는 실시간으로 안 옵니다");
+  assert.equal(polledBoards.size, 2);
+});
+
+test("사건 수신 보드가 아닌 보드는 크론 사건을 버린다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  await addBoard(channel.id);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  // 크론 사건은 게이트웨이 전역이라 두 보드의 응답에 모두 실려 온다.
+  server.pushEvent({
+    kind: "cron.run.finished",
+    profile: "sophie",
+    job_id: "job-1",
+    payload: {
+      job_id: "job-1",
+      job_name: "정기 보고",
+      profile: "sophie",
+      status: "ok",
+      result_text: "끝",
+    },
+  });
+  const outcome = await pollChannelOnce(channel.id, h.deps);
+  assert.ok(outcome.ok);
+
+  const cronEmits = h.emitted.filter((e) => String(e.event).includes("cron"));
+  assert.equal(
+    cronEmits.length,
+    1,
+    `크론 사건이 ${cronEmits.length}번 소비됐습니다 — 보드 수만큼 중복되면 안 됩니다`,
+  );
+});
+
+test("사건 수신 보드가 0개인 채널은 폴링 한 바퀴에 복구된다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  await addBoard(channel.id);
+
+  const { db, channelKanbanBoards } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  await db
+    .update(channelKanbanBoards)
+    .set({ isEventCarrier: false })
+    .where(eq(channelKanbanBoards.channelId, channel.id));
+
+  const { listChannelBoards } = await import("@/lib/kanban-boards");
+  assert.equal(
+    (await listChannelBoards(channel.id)).filter((r) => r.isEventCarrier).length,
+    0,
+    "사전 조건: carrier 가 0개다",
+  );
+
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  const rows = await listChannelBoards(channel.id);
+  assert.equal(
+    rows.filter((r) => r.isEventCarrier).length,
+    1,
+    "carrier 0개가 복구되지 않으면 그 채널은 크론 사건을 아무도 받지 않습니다",
+  );
+  assert.equal(
+    rows.find((r) => r.isEventCarrier)?.boardSlug,
+    rows[0].boardSlug,
+    "가장 오래된 보드가 그 자리를 맡아야 합니다",
+  );
+});
+
+test("보관된 프로젝트의 보드는 사건 수신 자리 후보에서 빠진다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const second = await addBoard(channel.id);
+
+  const { db, channelKanbanBoards, channelProjects } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const { listChannelBoards, ensureChannelCarrier } = await import("@/lib/kanban-boards");
+
+  const rows = await listChannelBoards(channel.id);
+  const oldest = rows[0];
+  // 가장 오래된 보드를 보관 상태로 둔다 — 그러면 둘째 보드가 자리를 맡아야 한다.
+  await db.insert(channelProjects).values({
+    boardLinkId: oldest.id,
+    channelId: channel.id,
+    status: "completed",
+  });
+  await db
+    .update(channelKanbanBoards)
+    .set({ isEventCarrier: false })
+    .where(eq(channelKanbanBoards.channelId, channel.id));
+
+  await ensureChannelCarrier(channel.id);
+  const after = await listChannelBoards(channel.id);
+  assert.equal(after.filter((r) => r.isEventCarrier).length, 1);
+  assert.equal(
+    after.find((r) => r.isEventCarrier)?.boardSlug,
+    second,
+    "끝난 일의 보드를 사건 수신 자리로 되살리면 보관의 뜻이 무너집니다",
+  );
+});
