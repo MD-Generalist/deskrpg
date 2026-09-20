@@ -47,6 +47,7 @@ COPY --from=builder /app/server.js ./server.js
 # CommonJS modules required by server.js (not traced by Next.js standalone)
 COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatter.js
 COPY --from=builder /app/src/lib/meeting-discussion-state.ts ./src/lib/meeting-discussion-state.ts
+COPY --from=builder /app/src/lib/meeting-outcome.ts ./src/lib/meeting-outcome.ts
 COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
 COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
 COPY --from=builder /app/src/lib/path-alias.js ./src/lib/path-alias.js
