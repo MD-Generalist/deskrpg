@@ -7,6 +7,7 @@
  * 생성만으로는 DOM 을 건드리지 않으므로 node 에서 핸들러를 직접 검사할 수 있다.
  */
 import type { Socket } from "socket.io-client";
+import { isNpcCallRejected, npcCallErrorKey } from "../../lib/npc-call-errors";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { effectiveMapSpawn } from "../../lib/effective-map-spawn";
 import { RemoteNpcPresentation } from "../remote-npc-presentation";
@@ -1342,13 +1343,29 @@ export class OfficeSimulation {
   private ensureLocalNpcOwnership(npc: NpcController, reason?: string, roomId?: string) {
     if (!this.socket?.connected || !this.socket.id || !this.motionSnapshot.current) return false;
     if (this.npcOwnership.owner(npc.id) === this.socket.id) return true;
+    // 소유권을 낙관적으로 먼저 잡는다 — 걸음이 한 틱도 끊기지 않게 하려는 것이다.
+    // 그래서 **거절되면 반드시 되돌린다.** 예전에는 ack 조차 받지 않아 서버가 거절해도
+    // 클라이언트만 자기가 주인이라고 믿었고, 그 뒤로는 호출을 다시 보내지도 않았다.
+    const previousOwner = this.npcOwnership.owner(npc.id);
     this.takeNpcOwnership(npc.id, this.socket.id);
-    this.socket.emit("npc:call", {
-      channelId: this.channelId,
-      npcId: npc.id,
-      ...(reason ? { reason } : {}),
-      ...(roomId ? { roomId } : {}),
-    });
+    const npcId = npc.id;
+    this.socket.emit(
+      "npc:call",
+      {
+        channelId: this.channelId,
+        npcId,
+        ...(reason ? { reason } : {}),
+        ...(roomId ? { roomId } : {}),
+      },
+      (result: unknown) => {
+        if (this.disposed || !isNpcCallRejected(result)) return;
+        if (previousOwner) this.npcOwnership.claim(npcId, previousOwner);
+        else this.npcOwnership.clear(npcId);
+        EventBus.emit("toast:show", {
+          messageKey: npcCallErrorKey((result as { error?: unknown })?.error),
+        });
+      },
+    );
     return true;
   }
 

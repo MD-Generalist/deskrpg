@@ -1865,6 +1865,15 @@ const ja: Record<string, string> = {
     "接続が復旧し、再入室しました。メッセージをもう一度送ってください。",
   "game.room.error.invalid": "リクエストが正しくありません。",
   // チャットルーム（グループチャット）
+  // 직원 호출 거절 사유(src/lib/npc-call-errors.ts 의 표와 짝이다)
+  "game.npcCall.unknownNpc":
+    "その社員が見つかりません。画面を再読み込みしてもう一度お試しください。",
+  "game.npcCall.meetingReserved": "会議中の社員です。会議が終わってから呼んでください。",
+  "game.npcCall.alreadyClaimed":
+    "他のユーザーが呼んでいる社員です。しばらくしてからお試しください。",
+  "game.npcCall.forbidden":
+    "このオフィスの社員ではありません。画面を再読み込みしてもう一度お試しください。",
+  "game.npcCall.unavailable": "今は社員を呼べません。しばらくしてからお試しください。",
   "workspace.label": "WORKSPACE",
   "workspace.summary": "オンライン {players}人 · NPC {npcs}人",
   "workspace.spaces": "スペース",

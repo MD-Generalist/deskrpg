@@ -1846,6 +1846,13 @@ const ko: Record<string, string> = {
   "game.room.error.not_joined": "연결이 복구돼 다시 입장했습니다. 메시지를 한 번 더 보내 주세요.",
   "game.room.error.invalid": "요청이 올바르지 않습니다.",
   // 대화방(그룹 채팅)
+  // 직원 호출 거절 사유(src/lib/npc-call-errors.ts 의 표와 짝이다)
+  "game.npcCall.unknownNpc": "그 직원을 찾을 수 없습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.",
+  "game.npcCall.meetingReserved": "회의 중인 직원입니다. 회의가 끝난 뒤 불러 주세요.",
+  "game.npcCall.alreadyClaimed":
+    "다른 사용자가 부르고 있는 직원입니다. 잠시 후 다시 시도해 주세요.",
+  "game.npcCall.forbidden": "이 오피스의 직원이 아닙니다. 화면을 새로 고친 뒤 다시 시도해 주세요.",
+  "game.npcCall.unavailable": "지금은 직원을 부를 수 없습니다. 잠시 후 다시 시도해 주세요.",
   "workspace.label": "WORKSPACE",
   "workspace.summary": "온라인 {players}명 · NPC {npcs}명",
   "workspace.spaces": "공간",

@@ -197,3 +197,62 @@ test("dispose 는 이 시뮬레이션의 EventBus 리스너만 떼고 페이지 
   assert.equal(pageCount, 2);
   EventBus.off("dialog:open", page);
 });
+
+// 카드 "npc:call 거절이 사용자에게 도달하지 않는다".
+//
+// 소유권은 걸음이 끊기지 않게 낙관적으로 먼저 잡는다. 예전에는 ack 조차 받지 않아
+// 서버가 거절해도 **클라이언트만 자기가 주인이라고 믿었고**, 사용자에게는 아무 표시도
+// 없었다. 거절되면 소유권을 되돌리고 이유를 보여 줘야 한다.
+test("호출이 거절되면 낙관적 소유권을 되돌리고 이유를 보여 준다", async () => {
+  const sim = new OfficeSimulation() as Runtime;
+  const toasts: string[] = [];
+  const onToast = (data: { messageKey?: string }) => toasts.push(data.messageKey ?? "");
+  EventBus.on("toast:show", onToast);
+  try {
+    let ack: ((result: unknown) => void) | undefined;
+    sim["socket"] = {
+      connected: true,
+      id: "me",
+      emit: (_event: string, _payload: unknown, callback?: (result: unknown) => void) => {
+        ack = callback;
+      },
+    } as never;
+    sim["motionSnapshot"] = { current: {} } as never;
+
+    assert.equal(sim["ensureLocalNpcOwnership"]({ id: "n1" } as never), true);
+    assert.equal(sim["npcOwnership"].owner("n1"), "me", "걸음을 위해 먼저 잡는다");
+    assert.ok(ack, "ack 콜백 없이 emit 하고 있다 — 거절이 도달할 길이 없다");
+
+    ack({ ok: false, error: "meeting_reserved" });
+    assert.equal(sim["npcOwnership"].owner("n1"), undefined, "거절됐는데 소유권이 남아 있다");
+    assert.deepEqual(toasts, ["game.npcCall.meetingReserved"]);
+  } finally {
+    EventBus.off("toast:show", onToast);
+    sim.dispose();
+  }
+});
+
+test("호출이 받아들여지면 소유권과 화면은 그대로 둔다", async () => {
+  const sim = new OfficeSimulation() as Runtime;
+  const toasts: string[] = [];
+  const onToast = (data: { messageKey?: string }) => toasts.push(data.messageKey ?? "");
+  EventBus.on("toast:show", onToast);
+  try {
+    let ack: ((result: unknown) => void) | undefined;
+    sim["socket"] = {
+      connected: true,
+      id: "me",
+      emit: (_event: string, _payload: unknown, callback?: (result: unknown) => void) => {
+        ack = callback;
+      },
+    } as never;
+    sim["motionSnapshot"] = { current: {} } as never;
+    sim["ensureLocalNpcOwnership"]({ id: "n1" } as never);
+    ack!({ ok: true, revision: 7 });
+    assert.equal(sim["npcOwnership"].owner("n1"), "me");
+    assert.deepEqual(toasts, []);
+  } finally {
+    EventBus.off("toast:show", onToast);
+    sim.dispose();
+  }
+});
