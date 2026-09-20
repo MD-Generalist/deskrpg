@@ -2616,6 +2616,12 @@ const ko: Record<string, string> = {
   "notice.cronResult": "크론 결과 · {jobName}",
   "notice.cronFailed": "실패",
   "notice.openHistory": "이력 열기",
+  "notice.cardProposal.title": "업무 카드 제안",
+  "notice.cardProposal.registerCard": "이슈카드등록",
+  "notice.cardProposal.handleHere": "여기서 처리",
+  "notice.cardProposal.registered": "카드로 등록했습니다",
+  "notice.cardProposal.handledHere": "여기서 처리하기로 했습니다",
+  "notice.cardProposal.failed": "등록하지 못했습니다: {reason}",
   // Kanban (T8)
   "kanban.title": "칸반 보드",
   "kanban.open": "칸반",

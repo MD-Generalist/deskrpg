@@ -2542,6 +2542,12 @@ const zh: Record<string, string> = {
   "notice.cronResult": "定时任务结果 · {jobName}",
   "notice.cronFailed": "失败",
   "notice.openHistory": "打开历史",
+  "notice.cardProposal.title": "任务卡片建议",
+  "notice.cardProposal.registerCard": "登记卡片",
+  "notice.cardProposal.handleHere": "在此处理",
+  "notice.cardProposal.registered": "已登记为卡片",
+  "notice.cardProposal.handledHere": "已决定在此处理",
+  "notice.cardProposal.failed": "无法登记：{reason}",
   // Kanban (T8)
   "kanban.title": "看板",
   "kanban.open": "看板",

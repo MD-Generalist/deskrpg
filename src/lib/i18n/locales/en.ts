@@ -2626,6 +2626,12 @@ const en: Record<string, string> = {
   "notice.cronResult": "Cron result · {jobName}",
   "notice.cronFailed": "Failed",
   "notice.openHistory": "Open history",
+  "notice.cardProposal.title": "Task card proposal",
+  "notice.cardProposal.registerCard": "Register card",
+  "notice.cardProposal.handleHere": "Handle here",
+  "notice.cardProposal.registered": "Registered as a card",
+  "notice.cardProposal.handledHere": "Handled in this chat",
+  "notice.cardProposal.failed": "Could not register: {reason}",
   // Kanban (T8)
   "kanban.title": "Kanban board",
   "kanban.open": "Kanban",

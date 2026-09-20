@@ -5,6 +5,8 @@
  *
  * - `card_done` / `card_blocked` / `card_review`: 카드 제목 중심 문장 + "카드 열기"(칸반 모달을 그 카드로).
  * - `cron_result`: "크론 결과 · {jobName}" 헤더(실패 배지) + 본문 그대로 + "이력 열기".
+ * - `card_proposal`: 제안 본문 + 선택 버튼 둘(해소 전) / 결정 결과(해소 후). `content` 는
+ *   제목과 같으므로 다시 그리지 않는다.
  * - 모르는 kind: `content` 폴백 — 알림 자체를 삼키지 않는다.
  *
  * 발신자 이름은 `notice.npcName`(없으면 senderName) 을 쓴다. system 메시지의 `content` 앞에는
@@ -14,6 +16,7 @@ import type { RoomMessage, RoomNotice } from "@/lib/chat-rooms-policy";
 import { useT } from "@/lib/i18n";
 
 import MarkdownContent from "../ui/MarkdownContent";
+import CardProposalNotice from "./CardProposalNotice";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -33,18 +36,23 @@ export function cardNoticeText(
 
 /**
  * 여기서 문장을 만들 수 있는 kind 인지 — 아니면 `content` 폴백으로 간다.
- * `card_proposal` 은 아직 전용 렌더러가 없어 폴백(제목 한 줄)으로 보인다.
+ * 지원 목록을 `Extract` 로 양성적으로 적는다: 새 kind 가 유니온에 들어와도 여기서 빠지면
+ * 자동으로 폴백이 되고, `Exclude` 예외가 kind 마다 쌓이지 않는다.
  */
 export function isKnownNotice(
   notice: RoomNotice | null | undefined,
-): notice is Exclude<RoomNotice, { kind: "card_proposal" }> {
+): notice is Extract<
+  RoomNotice,
+  { kind: "card_done" | "card_blocked" | "card_review" | "cron_result" | "card_proposal" }
+> {
   return (
     !!notice &&
     (notice.kind === "card_done" ||
       notice.kind === "card_blocked" ||
       notice.kind === "card_review" ||
       notice.kind === "approval_requested" ||
-      notice.kind === "cron_result")
+      notice.kind === "cron_result" ||
+      notice.kind === "card_proposal")
   );
 }
 
@@ -53,6 +61,12 @@ export interface RoomNoticeMessageProps {
   onOpenCard?: (cardId: string, boardSlug: string) => void;
   onOpenCronJob?: (jobId: string) => void;
   onOpenApproval?: (approvalId: string) => void;
+  /** 제안 알림의 선택. 없으면 제안은 버튼 없이 본문만 보인다(읽기 전용). */
+  onResolveProposal?: (proposalId: string, choice: "card" | "inline") => void;
+  /** 그 제안이 지금 서버 호출 중인지. */
+  proposalPending?: boolean;
+  /** 그 제안의 마지막 실패 이유(코드). 버튼은 그대로 남는다. */
+  proposalError?: string | null;
 }
 
 export default function RoomNoticeMessage({
@@ -60,6 +74,9 @@ export default function RoomNoticeMessage({
   onOpenCard,
   onOpenCronJob,
   onOpenApproval,
+  onResolveProposal,
+  proposalPending = false,
+  proposalError = null,
 }: RoomNoticeMessageProps) {
   const t = useT();
   const notice = message.notice ?? null;
@@ -78,6 +95,22 @@ export default function RoomNoticeMessage({
   }
 
   const linkClass = "text-caption font-semibold text-primary hover:underline";
+
+  if (notice.kind === "card_proposal") {
+    return (
+      <div className="flex justify-start" data-room-notice={notice.kind}>
+        <div className="max-w-[85%] w-full px-3 py-2 rounded-lg text-body bg-surface-raised text-text-secondary border border-border">
+          {name && <div className="text-caption font-semibold text-npc mb-0.5">{name}</div>}
+          <CardProposalNotice
+            notice={notice}
+            onResolve={(choice) => onResolveProposal?.(notice.proposalId, choice)}
+            pending={proposalPending || !onResolveProposal}
+            error={proposalError}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (notice.kind === "cron_result") {
     const failed = notice.status === "error";

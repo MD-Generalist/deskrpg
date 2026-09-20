@@ -2645,6 +2645,12 @@ const ja: Record<string, string> = {
   "notice.cronResult": "クーロン結果 · {jobName}",
   "notice.cronFailed": "失敗",
   "notice.openHistory": "履歴を開く",
+  "notice.cardProposal.title": "業務カードの提案",
+  "notice.cardProposal.registerCard": "カードを登録",
+  "notice.cardProposal.handleHere": "ここで対応",
+  "notice.cardProposal.registered": "カードとして登録しました",
+  "notice.cardProposal.handledHere": "このチャットで対応します",
+  "notice.cardProposal.failed": "登録できませんでした: {reason}",
   // Kanban (T8)
   "kanban.title": "カンバンボード",
   "kanban.open": "カンバン",
