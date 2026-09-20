@@ -11,8 +11,10 @@ import { X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
 import type { CronDeliveryTarget } from "@/lib/hermes/deskrpg-plugin-types";
+import GateChecklistModal from "@/components/gateway/GateChecklistModal";
+import { classifyGateFailure, type GateBlocker } from "@/lib/gate-failure";
 
-import { cronApi, classifyCronError, type CronJobView } from "./cron-api";
+import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import {
   SCHEDULE_PRESETS,
   composeDeliver,
@@ -76,6 +78,8 @@ export default function CronEditorDialog({
     job ? formatModelSpec(job.provider ?? null, job.model ?? null) : "",
   );
   const [targets, setTargets] = useState<CronDeliveryTarget[]>([]);
+  const [targetsBlocker, setTargetsBlocker] = useState<GateBlocker | null>(null);
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -83,14 +87,31 @@ export default function CronEditorDialog({
   useEffect(() => {
     if (!npcId) return;
     let cancelled = false;
+    setTargetsBlocker(null);
     cronApi
       .listDeliveryTargets(channelId, npcId)
       .then((res) => {
-        if (!cancelled) setTargets(res.targets);
+        if (!cancelled) {
+          setTargets(res.targets);
+          setTargetsBlocker(null);
+        }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         // 목록을 못 받아도 local 은 항상 고를 수 있다 — 폼을 막지 않는다.
-        if (!cancelled) setTargets([]);
+        if (cancelled) return;
+        setTargets([]);
+        // 다만 "배달처가 없다"와 "게이트에 막혔다"는 다른 일이다. 전에는 구분 없이 삼켰다.
+        if (isCronApiError(err)) {
+          setTargetsBlocker(
+            classifyGateFailure({
+              status: err.status,
+              code: err.code,
+              message: err.message,
+              minVersion:
+                typeof err.details.minVersion === "string" ? err.details.minVersion : undefined,
+            }),
+          );
+        }
       });
     return () => {
       cancelled = true;
@@ -255,6 +276,15 @@ export default function CronEditorDialog({
                 </label>
               ))}
             </div>
+            {targetsBlocker && (
+              <button
+                type="button"
+                onClick={() => setChecklistOpen(true)}
+                className="mt-1 text-xs text-text-muted underline"
+              >
+                {t("gateChecklist.whatIsNeeded")}
+              </button>
+            )}
           </fieldset>
 
           <label className="block text-xs text-text-muted">
@@ -290,6 +320,10 @@ export default function CronEditorDialog({
           </button>
         </div>
       </div>
+      <GateChecklistModal
+        blocker={checklistOpen ? targetsBlocker : null}
+        onClose={() => setChecklistOpen(false)}
+      />
     </div>
   );
 }

@@ -13,8 +13,10 @@ import type {
   BlueprintField,
   CronDeliveryTarget,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import GateChecklistModal from "@/components/gateway/GateChecklistModal";
+import { classifyGateFailure, type GateBlocker } from "@/lib/gate-failure";
 
-import { cronApi, classifyCronError, type CronJobView } from "./cron-api";
+import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import { composeDeliver, parseDeliver } from "./cron-schedule";
 import { CronErrorNotice } from "./cron-notices";
 import type { CronEditorNpc } from "./CronEditorDialog";
@@ -122,6 +124,8 @@ export default function BlueprintGallery({
   const [npcId, setNpcId] = useState<string>(defaultNpcId ?? npcs[0]?.npcId ?? "");
   const [blueprints, setBlueprints] = useState<AutomationBlueprint[] | null>(null);
   const [targets, setTargets] = useState<CronDeliveryTarget[]>([]);
+  const [targetsBlocker, setTargetsBlocker] = useState<GateBlocker | null>(null);
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const [selected, setSelected] = useState<AutomationBlueprint | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -133,6 +137,7 @@ export default function BlueprintGallery({
     if (!npcId) return;
     let cancelled = false;
     setLoadError(null);
+    setTargetsBlocker(null);
     cronApi
       .listBlueprints(channelId, npcId)
       .then((res) => {
@@ -147,10 +152,26 @@ export default function BlueprintGallery({
     cronApi
       .listDeliveryTargets(channelId, npcId)
       .then((res) => {
-        if (!cancelled) setTargets(res.targets);
+        if (!cancelled) {
+          setTargets(res.targets);
+          setTargetsBlocker(null);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setTargets([]);
+      .catch((err: unknown) => {
+        // 목록을 못 받아도 local 은 항상 고를 수 있다 — 폼을 막지 않는다.
+        if (cancelled) return;
+        setTargets([]);
+        if (isCronApiError(err)) {
+          setTargetsBlocker(
+            classifyGateFailure({
+              status: err.status,
+              code: err.code,
+              message: err.message,
+              minVersion:
+                typeof err.details.minVersion === "string" ? err.details.minVersion : undefined,
+            }),
+          );
+        }
       });
     return () => {
       cancelled = true;
@@ -304,6 +325,15 @@ export default function BlueprintGallery({
                           </span>
                         </label>
                       ))}
+                      {targetsBlocker && (
+                        <button
+                          type="button"
+                          onClick={() => setChecklistOpen(true)}
+                          className="text-xs text-text-muted underline"
+                        >
+                          {t("gateChecklist.whatIsNeeded")}
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <FieldControl
@@ -357,6 +387,10 @@ export default function BlueprintGallery({
           </div>
         </div>
       </div>
+      <GateChecklistModal
+        blocker={checklistOpen ? targetsBlocker : null}
+        onClose={() => setChecklistOpen(false)}
+      />
     </div>
   );
 }
