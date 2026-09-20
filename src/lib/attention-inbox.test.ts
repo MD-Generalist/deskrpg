@@ -3,7 +3,12 @@ import test from "node:test";
 
 import { buildAttentionInbox } from "./attention-inbox";
 
-const card = (id: string, status: string, title = id) => ({ id, status, title });
+const card = (id: string, status: string, title = id, at: string | null = null) => ({
+  id,
+  status,
+  title,
+  at,
+});
 const T = (n: number) => `2026-09-21T00:00:0${n}.000Z`;
 
 const base = {
@@ -126,5 +131,30 @@ test("시각이 없는 줄은 시각이 있는 줄 뒤에 온다 — 순서가 �
   assert.deepEqual(
     rows.map((r) => r.id),
     ["j", "b1", "b2"],
+  );
+});
+
+test("카드에도 시각이 있으면 함께 줄 세운다 — 보드 응답의 created_at 을 쓴다", () => {
+  // `KanbanTask.created_at` 은 epoch 초로 온다. 호출자가 `taskTimeMs` 로 읽어 ISO 로 넘긴다.
+  const rows = buildAttentionInbox({
+    ...base,
+    cards: [card("late", "review", "늦은 검토", T(9)), card("early", "blocked", "이른 막힘", T(1))],
+    cronFailures: [{ messageId: "m", jobId: "j", jobName: "중간", createdAt: T(5) }],
+  });
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ["early", "j", "late"],
+    "시각이 있으면 종류와 무관하게 오래된 순이다",
+  );
+});
+
+test("시각을 못 읽은 카드만 뒤로 간다", () => {
+  const rows = buildAttentionInbox({
+    ...base,
+    cards: [card("unknown", "review", "시각 없음"), card("known", "review", "시각 있음", T(3))],
+  });
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ["known", "unknown"],
   );
 });

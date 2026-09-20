@@ -15,6 +15,7 @@ import { parseRoomNotice } from "@/lib/chat-rooms-policy";
 import { pluginFailureResponse } from "@/lib/cron-access";
 import { getUserId } from "@/lib/internal-rpc";
 import { countNeedsAttention } from "@/lib/needs-attention";
+import { taskTimeMs } from "@/lib/plugin-time";
 import { resolveKanbanChannelContext } from "@/lib/kanban-access";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
@@ -73,8 +74,18 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
     .where(and(eq(approvals.channelId, channelId), eq(approvals.status, "pending")));
   const targets = await approvalTargetsByApproval(pending.map((a) => a.id));
 
+  // 카드 시각은 **epoch 초**로 온다 — `Date.parse` 를 부르면 NaN 이라 경과 시간이 조용히
+  // 사라진다. 그 판정은 `taskTimeMs` 한 곳에만 둔다.
   const cards = board.data.columns.flatMap((column) =>
-    column.tasks.map((task) => ({ id: task.id, status: task.status, title: task.title })),
+    column.tasks.map((task) => {
+      const ms = taskTimeMs(task.created_at);
+      return {
+        id: task.id,
+        status: task.status,
+        title: task.title,
+        at: ms === null ? null : new Date(ms).toISOString(),
+      };
+    }),
   );
   const input: AttentionInboxInput = {
     cards,

@@ -14,7 +14,7 @@ export type AttentionRow = {
   /** 승인이면 approvalId, 카드면 taskId, 크론이면 jobId. */
   id: string;
   title: string;
-  /** 발생 시각. 카드에는 없어서 null 이 된다(플러그인이 목록에 `created_at` 을 싣지 않는다). */
+  /** 발생 시각(ISO). 플러그인이 못 준 카드만 null 이다. */
   at: string | null;
   requestedBy: string | null;
   /** 승인은 묶인 카드 수, 나머지는 1. */
@@ -22,7 +22,8 @@ export type AttentionRow = {
 };
 
 export type AttentionInboxInput = {
-  cards: readonly { id: string; status: string; title: string }[];
+  /** `at` 은 호출자가 `taskTimeMs` 로 읽어 ISO 로 바꾼 값. 못 읽으면 null. */
+  cards: readonly { id: string; status: string; title: string; at?: string | null }[];
   approvals: readonly {
     id: string;
     title: string;
@@ -60,7 +61,7 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
         kind: "blocked",
         id: card.id,
         title: card.title,
-        at: null,
+        at: card.at ?? null,
         requestedBy: null,
         count: 1,
       });
@@ -69,7 +70,7 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
         kind: "review",
         id: card.id,
         title: card.title,
-        at: null,
+        at: card.at ?? null,
         requestedBy: null,
         count: 1,
       });
@@ -84,8 +85,8 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
       count: 1,
     });
 
-  // 오래된 것이 위로 — 방치를 드러내는 것이 이 화면의 일이다. 시각이 없는 줄(카드)은
-  // 뒤로 보내고 id 로 갈라, 같은 입력에 늘 같은 순서가 나오게 한다.
+  // 오래된 것이 위로 — 방치를 드러내는 것이 이 화면의 일이다. 시각을 못 읽은 줄만 뒤로
+  // 보내고 id 로 갈라, 같은 입력에 늘 같은 순서가 나오게 한다.
   return rows.sort((a, b) => {
     if (a.at && b.at) return a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1;
     if (a.at) return -1;
