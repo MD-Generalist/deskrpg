@@ -248,7 +248,9 @@ import type {
   KanbanAttachment,
   KanbanBoard,
   KanbanComment,
+  KanbanLinksPage,
   KanbanProfileSummary,
+  KanbanRunsPage,
   KanbanTask,
   KanbanTaskAction,
   KanbanTaskDetail,
@@ -282,6 +284,12 @@ export type KanbanApi = {
     opts?: { includeArchived?: boolean },
   ): Promise<PluginResponse<KanbanBoard>>;
   getTask(board: string, id: string): Promise<PluginResponse<KanbanTaskDetail>>;
+  /** 묶음 조회 — capability `kanban_views` 가 있어야 한다(없으면 404). */
+  listLinks(board: string): Promise<PluginResponse<KanbanLinksPage>>;
+  listRuns(
+    board: string,
+    opts?: { from?: number; to?: number; limit?: number },
+  ): Promise<PluginResponse<KanbanRunsPage>>;
   createTask(
     board: string,
     body: CreateTaskBody,

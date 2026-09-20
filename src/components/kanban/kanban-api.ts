@@ -15,6 +15,8 @@ import type {
   KanbanComment,
   KanbanTask,
   KanbanTaskAction,
+  KanbanLinksPage,
+  KanbanRunsPage,
   KanbanTaskDetail,
   OrchestrationSettings,
   SwarmCreated,
@@ -174,6 +176,20 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
     board: (includeArchived: boolean) =>
       request<BoardResponse>(f, `${root}/board${includeArchived ? "?include_archived=true" : ""}`),
     taskDetail: (taskId: string) => request<KanbanTaskDetail>(f, task(taskId)),
+    /**
+     * 묶음 조회 — 보드 전체의 부모·자식 쌍. 플러그인에 `kanban_views` 가 없으면 404 로 실패한다.
+     * 화면은 그때 카드마다 `taskDetail()` 을 부르는 길로 내려앉는다.
+     */
+    links: () => request<KanbanLinksPage>(f, `${root}/links`),
+    /** 창 안의 실행 기록. `from`·`to` 는 epoch 초, 생략하면 플러그인이 최근 7일을 준다. */
+    runs: (opts?: { from?: number; to?: number; limit?: number }) => {
+      const qs = new URLSearchParams();
+      for (const key of ["from", "to", "limit"] as const) {
+        const value = opts?.[key];
+        if (typeof value === "number") qs.set(key, String(value));
+      }
+      return request<KanbanRunsPage>(f, `${root}/runs${qs.size > 0 ? `?${qs}` : ""}`);
+    },
     createTask: (body: Record<string, unknown>) =>
       request<CreateTaskResponse>(f, `${root}/tasks`, json("POST", body)),
     updateTask: (taskId: string, body: Record<string, unknown>) =>

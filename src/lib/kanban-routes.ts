@@ -200,6 +200,45 @@ export async function getBoard(req: NextRequest, channelId: string) {
   return NextResponse.json({ ...res.data, npcs });
 }
 
+/**
+ * `GET /api/channels/:id/kanban/links` — 보드 전체의 부모·자식 쌍.
+ *
+ * 플러그인에 묶음 조회가 없으면 404 가 그대로 올라간다. 화면은 그때 카드마다 상세를 부르는
+ * 길로 내려앉는다 — 여기서 빈 목록으로 덮으면 "링크가 없다" 와 "물어볼 수 없다" 가 같아진다.
+ */
+export async function listLinks(req: NextRequest, channelId: string) {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const res = await resolved.ctx.client.kanban.listLinks(resolved.ctx.boardSlug);
+  if (!res.ok) return pluginFailureResponse(res);
+  return NextResponse.json(res.data);
+}
+
+/**
+ * `GET /api/channels/:id/kanban/runs?from=&to=&limit=` — 창 안의 실행 기록.
+ *
+ * 쿼리는 그대로 넘긴다. 검증은 플러그인이 하고(400 `invalid_query`), 여기서 한 번 더 하면
+ * 두 곳의 규칙이 갈린다. 숫자가 아닌 값은 넘기지 않아 플러그인의 판정을 받게 한다.
+ */
+export async function listRuns(req: NextRequest, channelId: string) {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const q = req.nextUrl.searchParams;
+  const num = (key: string) => {
+    const raw = q.get(key);
+    if (raw === null || raw === "") return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : Number.NaN;
+  };
+  const res = await resolved.ctx.client.kanban.listRuns(resolved.ctx.boardSlug, {
+    from: num("from"),
+    to: num("to"),
+    limit: num("limit"),
+  });
+  if (!res.ok) return pluginFailureResponse(res);
+  return NextResponse.json(res.data);
+}
+
 export async function getTask(req: NextRequest, channelId: string, taskId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;

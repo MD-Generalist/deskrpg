@@ -31,6 +31,7 @@ import type {
   KanbanComment,
   KanbanEvent,
   KanbanRun,
+  KanbanTimelineRun,
   KanbanTaskDetail,
   KanbanTaskFull,
   KanbanTaskStatus,
@@ -176,7 +177,7 @@ export async function startFakePluginServer(
   let info: PluginInfo = {
     plugin: "deskrpg",
     version: "0.6.0",
-    capabilities: ["kanban", "cron", "events", "swarm"],
+    capabilities: ["kanban", "cron", "events", "swarm", "kanban_views"],
     timezone: "Asia/Seoul",
     kanban: { dispatcher_present: true, attachments: true },
     dashboard_url: null,
@@ -355,6 +356,65 @@ export async function startFakePluginServer(
       is_current: record.meta.slug === currentBoard,
       total: record.tasks.size,
     };
+  }
+
+  /** `GET /kanban/links` — 쌍만. 카드 본문은 싣지 않는다(카드의 정본은 보드 응답이다). */
+  function listLinks(board: BoardRecord, params: URLSearchParams): Reply {
+    const links = [...board.links]
+      .map((link) => {
+        const [parent_id, child_id] = link.split("|");
+        return { parent_id, child_id };
+      })
+      .sort((a, b) =>
+        a.parent_id === b.parent_id
+          ? a.child_id.localeCompare(b.child_id)
+          : a.parent_id.localeCompare(b.parent_id),
+      );
+    return { status: 200, body: { links, board: params.get("board") ?? "carrier" } };
+  }
+
+  /**
+   * `GET /kanban/runs` — 창 안의 실행 기록. 실제 플러그인과 같은 규칙을 지킨다:
+   * 겹치기만 하면 싣고, 상한에 걸리면 최근 것을 남기고 `truncated:true`, 응답은 시간순.
+   */
+  function listRuns(board: BoardRecord, params: URLSearchParams): Reply {
+    const slug = params.get("board") ?? "carrier";
+    const num = (key: string): number | null => {
+      const raw = params.get(key);
+      if (raw === null || raw === "") return null;
+      const value = Number(raw);
+      if (!Number.isInteger(value)) throw badRequest("invalid_query", key);
+      return value;
+    };
+    const now = Math.floor(Date.now() / 1000);
+    const to = num("to") ?? now;
+    const from = num("from") ?? to - 7 * 24 * 3600;
+    if (from > to) throw badRequest("invalid_query", "from > to");
+    const limitRaw = num("limit");
+    if (limitRaw !== null && limitRaw < 1) throw badRequest("invalid_query", "limit");
+    const limit = Math.min(limitRaw ?? 1000, 5000);
+
+    const rows: KanbanTimelineRun[] = [];
+    for (const record of board.tasks.values()) {
+      for (const run of record.runs) {
+        const started = Number(run.started_at ?? 0);
+        const ended = run.ended_at === undefined ? null : Number(run.ended_at);
+        if (started > to) continue;
+        if (ended !== null && ended < from) continue;
+        rows.push({
+          ...run,
+          task_id: record.task.id,
+          board: slug,
+          task_title: record.task.title,
+          ...(record.task.tenant ? { tenant: record.task.tenant } : {}),
+        });
+      }
+    }
+    rows.sort((a, b) => Number(a.started_at ?? 0) - Number(b.started_at ?? 0));
+    const truncated = rows.length > limit;
+    // 상한에 걸리면 최근 것을 남긴다 — 앞을 버린다.
+    const kept = truncated ? rows.slice(rows.length - limit) : rows;
+    return { status: 200, body: { runs: kept, board: slug, window: { from, to }, truncated } };
   }
 
   function renderBoard(board: BoardRecord, includeArchived: boolean): KanbanBoard {
@@ -1275,9 +1335,13 @@ export async function startFakePluginServer(
       return dispatch(boardOf(params), params);
     }
     if (pathname === "/deskrpg/kanban/links") {
+      if (method === "GET") return listLinks(boardOf(params), params);
       if (method === "POST") return mutateLink(boardOf(params), body, true);
       if (method === "DELETE") return mutateLink(boardOf(params), body, false);
       throw notFound();
+    }
+    if (pathname === "/deskrpg/kanban/runs" && method === "GET") {
+      return listRuns(boardOf(params), params);
     }
     if (pathname === "/deskrpg/kanban/swarm" && method === "POST") {
       return createSwarm(boardOf(params), body);

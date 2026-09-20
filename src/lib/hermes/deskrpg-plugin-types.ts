@@ -172,6 +172,39 @@ export type KanbanBoard = {
   now: PluginTime;
 };
 
+/**
+ * 타임라인용 실행 기록(`GET /kanban/runs`, capability `kanban_views`).
+ *
+ * 카드별 `runs[]`(`KanbanRun`)보다 넓다 — 어느 카드·어느 서브프로젝트·어느 보드의 실적인지가
+ * 응답만 보고 가려져야 카드 목록과 다시 조인하지 않는다. 카드가 지워진 실행도 남으므로
+ * `tenant`·`task_title` 은 없을 수 있다(일한 사실이 없어지지는 않는다).
+ */
+export type KanbanTimelineRun = KanbanRun & {
+  task_id: string;
+  board: string;
+  task_title?: string;
+  tenant?: string;
+  step_key?: string;
+};
+
+/** `GET /kanban/runs` 의 본문. `window` 는 epoch 초. */
+export type KanbanRunsPage = {
+  runs: KanbanTimelineRun[];
+  board: string;
+  window: { from: number; to: number };
+  /**
+   * 상한에 걸려 **최근 것만** 남았는가. 화면은 이걸 반드시 보여야 한다 — 잘린 창을 그대로
+   * 그리면 "그 시간대에 아무도 일하지 않았다" 로 읽힌다.
+   */
+  truncated: boolean;
+};
+
+/** `GET /kanban/links` 의 본문. 쌍만 온다 — 카드 본문의 정본은 보드 응답이다. */
+export type KanbanLinksPage = {
+  links: Array<{ parent_id: string; child_id: string }>;
+  board: string;
+};
+
 export type KanbanTaskDetail = {
   task: KanbanTaskFull;
   comments: KanbanComment[];

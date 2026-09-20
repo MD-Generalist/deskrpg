@@ -173,6 +173,38 @@ export function meetsAutomationContract(info: PluginInfo | null): AutomationCont
 }
 
 // ---------------------------------------------------------------------------
+// 프로젝트 뷰 기능 게이트 (묶음 조회)
+// ---------------------------------------------------------------------------
+
+/** 묶음 조회(`GET /kanban/links`·`/kanban/runs`)가 들어간 플러그인 버전. 안내 문구용이다. */
+export const KANBAN_VIEWS_MIN_VERSION = "0.11.0";
+
+/**
+ * 이 게이트웨이에서 묶음 조회를 쓸 수 있는가.
+ *
+ * 스웜과 같은 이유로 **버전을 보지 않는다** — capability 문자열이 가용성의 정본이다.
+ * 버전으로 판단하면 "0.11.0 인데 404" 라는 진단 불가능한 상태가 생긴다.
+ *
+ * 없으면 화면이 죽지 않고 내려앉는다. 하위 트리는 카드마다 상세를 부르는 길로 계속 돌고,
+ * 실적 타임라인만 안내로 대체된다 — 전체 최소 버전을 올려 칸반을 통째로 잠그지 않는다.
+ */
+export function supportsKanbanViews(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("kanban_views"));
+}
+
+export function kanbanViewsGate(
+  info: PluginInfo | null,
+): { ok: true } | { ok: false; minVersion: string; reason: string; missing: string[] } {
+  if (supportsKanbanViews(info)) return { ok: true };
+  return {
+    ok: false,
+    minVersion: KANBAN_VIEWS_MIN_VERSION,
+    reason: info ? "missing_capability" : "no_info",
+    missing: ["kanban_views"],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 스웜 기능 게이트
 // ---------------------------------------------------------------------------
 

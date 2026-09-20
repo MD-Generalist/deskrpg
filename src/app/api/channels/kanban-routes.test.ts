@@ -60,6 +60,7 @@ after(async () => {
 
 type Routes = {
   board: typeof import("./[id]/kanban/board/route");
+  runs: typeof import("./[id]/kanban/runs/route");
   tasks: typeof import("./[id]/kanban/tasks/route");
   task: typeof import("./[id]/kanban/tasks/[taskId]/route");
   comments: typeof import("./[id]/kanban/tasks/[taskId]/comments/route");
@@ -98,6 +99,7 @@ async function loadRoutes(): Promise<Routes> {
     taskAttachments: await import("./[id]/kanban/tasks/[taskId]/attachments/route"),
     attachment: await import("./[id]/kanban/attachments/[attachmentId]/route"),
     links: await import("./[id]/kanban/links/route"),
+    runs: await import("./[id]/kanban/runs/route"),
     dispatch: await import("./[id]/kanban/dispatch/route"),
     settings: await import("./[id]/kanban/settings/route"),
     status: await import("./[id]/automation/status/route"),
@@ -932,7 +934,7 @@ test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중
   const body = await res.json();
   assert.equal(body.pluginStatus, "plugin_ready");
   assert.equal(body.pluginVersion, "0.6.0");
-  assert.deepEqual(body.capabilities, ["kanban", "cron", "events", "swarm"]);
+  assert.deepEqual(body.capabilities, ["kanban", "cron", "events", "swarm", "kanban_views"]);
   assert.equal(body.timezone, "Asia/Seoul");
   assert.equal(body.boardSlug, seed.boardSlug);
   assert.equal(body.dispatcherPresent, true);
@@ -1159,4 +1161,84 @@ test("채널에 보드가 여럿이어도 사건 수신 보드는 하나뿐이�
     "사건 수신 보드가 하나가 아니면 크론 사건이 중복 소비됩니다",
   );
   assert.equal(rows.find((r) => r.isEventCarrier)?.boardSlug, seed.boardSlug);
+});
+
+// ---------------------------------------------------------------------------
+// 묶음 조회 (capability kanban_views) — 목록 트리·실적 타임라인이 쓴다
+// ---------------------------------------------------------------------------
+
+test("GET /kanban/links 는 보드 전체의 부모·자식 쌍을 준다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const parent = await createTask(routes, seed.ownerId, seed.channelId, { title: "부모" });
+  const child = await createTask(routes, seed.ownerId, seed.channelId, { title: "자식" });
+  const linked = await routes.links.POST(
+    req(seed.ownerId, "POST", `${base(seed.channelId)}/links`, {
+      parent_id: parent.body.task.id,
+      child_id: child.body.task.id,
+    }),
+    ctx(seed.channelId),
+  );
+  assert.equal(linked.status, 200, JSON.stringify(await linked.clone().json()));
+
+  const res = await routes.links.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/links`),
+    ctx(seed.channelId),
+  );
+  assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+  const body = await res.json();
+  assert.deepEqual(
+    body.links.map((l: { parent_id: string; child_id: string }) => [l.parent_id, l.child_id]),
+    [[parent.body.task.id, child.body.task.id]],
+  );
+});
+
+test("GET /kanban/runs 는 창과 잘림 여부를 함께 준다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+
+  const res = await routes.runs.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/runs?from=0&to=9999`),
+    ctx(seed.channelId),
+  );
+  assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+  const body = await res.json();
+  assert.deepEqual(body.window, { from: 0, to: 9999 });
+  // 잘렸는지를 화면이 알아야 한다 — 잘린 창을 그대로 그리면 "아무도 일하지 않았다" 로 읽힌다.
+  assert.equal(body.truncated, false);
+  assert.ok(Array.isArray(body.runs));
+});
+
+test("GET /kanban/runs 의 잘못된 쿼리는 플러그인 판정을 그대로 전달한다", async () => {
+  // 검증을 REST 계층에서 한 번 더 하면 두 곳의 규칙이 갈린다.
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+
+  const res = await routes.runs.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/runs?from=2000&to=1000`),
+    ctx(seed.channelId),
+  );
+  assert.equal(res.status, 400);
+});
+
+test("묶음 조회도 비멤버는 403", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const stranger = await seedUser("stranger-views");
+
+  for (const call of [
+    () =>
+      routes.links.GET(
+        req(stranger.id, "GET", `${base(seed.channelId)}/links`),
+        ctx(seed.channelId),
+      ),
+    () =>
+      routes.runs.GET(req(stranger.id, "GET", `${base(seed.channelId)}/runs`), ctx(seed.channelId)),
+  ]) {
+    assert.equal((await call()).status, 403);
+  }
 });

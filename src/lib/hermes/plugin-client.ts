@@ -334,6 +334,17 @@ export function createOwnerPluginClient(
         token,
       ),
     getTask: (board, id) => call(task(board, id), token),
+    listLinks: (board) => call(`/deskrpg/kanban/links${query({ board })}`, token),
+    listRuns: (board, opts) =>
+      call(
+        `/deskrpg/kanban/runs${query({
+          board,
+          from: opts?.from,
+          to: opts?.to,
+          limit: opts?.limit,
+        })}`,
+        token,
+      ),
     createTask: (board, body) =>
       call(`/deskrpg/kanban/tasks${query({ board })}`, token, { method: "POST", body }),
     updateTask: (board, id, body) => call(task(board, id), token, { method: "PATCH", body }),
