@@ -7,6 +7,13 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.920.5] - 2026-09-20
+
+### Fixed
+
+- Keep the password change form at a readable width — the shared page frame stretched its inputs across the full 1200px column.
+- Draw the sign-in clouds whole: the render framing cropped them top and bottom, and their lobes no longer read as separate spheres.
+
 ## [2026.920.4] - 2026-09-20
 
 ### Added
