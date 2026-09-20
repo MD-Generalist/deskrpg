@@ -3,23 +3,39 @@ import { isWindows } from "./platform";
 /** Kept in a TS constant so Next standalone output includes the helper. No filesystem asset lookup. */
 export const HOST_BOOTSTRAP = String.raw`
 import json, os, pathlib, signal, subprocess, sys
+WINDOWS = sys.platform == 'win32'
 child = None
 def terminate_owned(signum=None, frame=None):
     if child is not None:
-        try: os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError: pass
-        child.wait()
+        try:
+            if WINDOWS:
+                # 프로세스 그룹 신호가 없다. 트리를 taskkill 로 끊는다.
+                subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+            else:
+                os.killpg(child.pid, signal.SIGKILL)
+        except Exception: pass
+        try: child.wait(timeout=15)
+        except Exception: pass
     if signum is not None: raise SystemExit(1)
-for signum in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
-    signal.signal(signum, terminate_owned)
+# SIGHUP 은 Windows 에 없다. 있는 것만 등록한다.
+for name in ('SIGHUP', 'SIGTERM', 'SIGINT'):
+    signum = getattr(signal, name, None)
+    if signum is not None:
+        try: signal.signal(signum, terminate_owned)
+        except (ValueError, OSError): pass
 try:
     payload = json.load(sys.stdin)
-    root = pathlib.Path.home() / '.hermes' / 'hermes-agent'
-    python = next((root / folder / 'bin' / 'python' for folder in ('venv', '.venv') if (root / folder / 'bin' / 'python').is_file()), None)
+    # 상류 hermes_constants.py:51-57 과 같은 판정. Windows 는 %LOCALAPPDATA%\hermes 다.
+    root = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
+    root = root / 'hermes-agent'
+    folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
+    python = next((root / folder / folder_name / exe for folder in ('venv', '.venv') if (root / folder / folder_name / exe).is_file()), None)
     if python is None:
         print(json.dumps({'candidates': []} if payload['action'] == 'discover' else {'error': 'hermes_not_found'}))
     else:
-        child = subprocess.Popen([str(python), '-'], text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+        spawn = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {'start_new_session': True}
+        child = subprocess.Popen([str(python), '-'], text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **spawn)
         output, unused = child.communicate(payload['script'], timeout=payload['timeout'])
         terminate_owned()
         if child.returncode or len(output) > 262144:

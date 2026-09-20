@@ -1914,3 +1914,13 @@ test("win32 런처 본문은 Scripts\\python.exe 를 본다", () => {
 test("win32 런처는 시스템 패키지 사전 점검을 하지 않는다", () => {
   assert.ok(!HOST_LAUNCHER_PS.includes("system_packages_missing"));
 });
+
+test("HOST_BOOTSTRAP 은 win32 를 한 곳에서 가른다", () => {
+  assert.equal((HOST_BOOTSTRAP.match(/sys\.platform == 'win32'/g) ?? []).length, 1);
+});
+
+test("HOST_BOOTSTRAP 은 SIGHUP 을 조건 없이 등록하지 않는다", () => {
+  assert.ok(!/signal\.SIGHUP, signal\.SIGTERM/.test(HOST_BOOTSTRAP));
+  assert.ok(HOST_BOOTSTRAP.includes("taskkill"));
+  assert.ok(HOST_BOOTSTRAP.includes("CREATE_NEW_PROCESS_GROUP"));
+});
