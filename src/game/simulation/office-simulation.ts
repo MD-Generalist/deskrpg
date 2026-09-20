@@ -717,8 +717,12 @@ export class OfficeSimulation {
     this.eventScope.on(
       "npc:working-state",
       (payload: { npcIds: string[]; counts?: Record<string, number> }) => {
+        const previous = this.workingNpcs;
         this.workingNpcs = new Set(payload.npcIds);
         this.workingCounts = payload.counts ?? {};
+        for (const npcId of this.workingNpcs) {
+          if (!previous.has(npcId)) this.seatNpcForWork(npcId);
+        }
       },
     );
     // 대화 미리보기는 활동·인사 수명과 무관하다.
@@ -1424,6 +1428,16 @@ export class OfficeSimulation {
     if (!this.ensureLocalNpcOwnership(npc, payload.reason, payload.roomId)) return;
     if (npc.moveState !== "idle") return;
     npc.calledForRoom = payload.reason === "map-chat" ? (payload.roomId ?? null) : null;
+
+    // B-1. 업무 중인 직원도 **막지 않고** 부른다 — 실행은 Hermes 워커가 하므로 자리를 떠나도
+    // 카드는 계속 돈다. 다만 방해했는지 모른 채로 두지는 않는다. 개수까지 말하는 이유는
+    // 한 직원이 여러 장을 돌릴 수 있어서다(프로필별 상한은 기본 무제한).
+    const busyCount = this.workingCounts[npc.id] ?? 0;
+    if (busyCount > 0)
+      EventBus.emit("toast:show", {
+        messageKey: "game.calledWhileWorking",
+        params: { name: payload.npcName || npc.name, count: String(busyCount) },
+      });
 
     const dist = npc.distanceTo(this.player.x, this.player.y);
     if (dist < TILE_SIZE + 4) {
@@ -2254,6 +2268,29 @@ export class OfficeSimulation {
   // ===========================================================================
 
   /** 대기 중인 NPC 를 자리로 보낸다 — 타이머 만료와 채널 채팅 닫힘이 같은 경로를 쓴다. */
+  /**
+   * 카드가 돌기 시작한 직원을 **자기 지정석으로 돌려보낸다**(설계 2026-09-21 npc-working-state, C-1).
+   *
+   * 임자는 `mayDriveNpc` 가 정한다 — 소유자가 나이거나, 소유자가 없고 내가 앰비언트 리더일 때만
+   * 움직인다. 이 판정을 빼면 접속한 모두가 같은 NPC 를 따로 걷게 하고, 반대로 너무 좁히면
+   * 아무도 걷지 않는다(`src/game/AGENTS.md` 의 이동 소유권 불변식).
+   *
+   * 부름을 받아 와 있거나(`calledForRoom`) 이미 움직이는 중이면 건드리지 않는다 — 사용자가
+   * 부른 것이 자동 착석보다 우선이다. 좌석 점유는 `sendNpcHome` 이 타는 서버 경로가 정본이라
+   * 여기서 좌석을 직접 잡지 않는다.
+   */
+  private seatNpcForWork(npcId: string): void {
+    const npc = this.npcs.find((entry) => entry.id === npcId);
+    if (!npc) return;
+    if (npc.calledForRoom || npc.moveState !== "idle") return;
+    if (!this.mayDriveNpc(npc)) return;
+    const atHome =
+      Math.floor(npc.pixelX / TILE_SIZE) === npc.homeCol &&
+      Math.floor(npc.pixelY / TILE_SIZE) === npc.homeRow;
+    if (atHome) return;
+    this.sendNpcHome(npc);
+  }
+
   private sendNpcHome(npc: NpcController): void {
     if (!this.mayDriveNpc(npc)) return;
     if (this.motionSnapshot.current?.npcs.some((s) => s.npcId === npc.id && s.spatialTarget))

@@ -256,3 +256,199 @@ test("호출이 받아들여지면 소유권과 화면은 그대로 둔다", asy
     sim.dispose();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 일하는 직원 (설계 2026-09-21 npc-working-state, 결정 B-1·C-1)
+// ---------------------------------------------------------------------------
+
+test("카드가 돌기 시작하면 그 직원을 지정석으로 보낸다", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const sent: string[] = [];
+    sim["npcs"] = [
+      {
+        id: "n1",
+        pixelX: 500,
+        pixelY: 500,
+        homeCol: 2,
+        homeRow: 3,
+        moveState: "idle",
+        calledForRoom: null,
+      },
+    ] as never;
+    sim["mayDriveNpc"] = () => true;
+    sim["sendNpcHome"] = (npc: { id: string }) => sent.push(npc.id);
+
+    sim["seatNpcForWork"]("n1");
+    assert.deepEqual(sent, ["n1"], "일을 시작했는데 자리로 가지 않았습니다");
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("임자가 아니면 움직이지 않는다 — 모두가 같은 직원을 걷게 하면 안 된다", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const sent: string[] = [];
+    sim["npcs"] = [
+      {
+        id: "n1",
+        pixelX: 500,
+        pixelY: 500,
+        homeCol: 2,
+        homeRow: 3,
+        moveState: "idle",
+        calledForRoom: null,
+      },
+    ] as never;
+    sim["mayDriveNpc"] = () => false;
+    sim["sendNpcHome"] = (npc: { id: string }) => sent.push(npc.id);
+
+    sim["seatNpcForWork"]("n1");
+    assert.deepEqual(sent, [], "임자가 아닌데 걷게 했습니다");
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("부름을 받아 와 있는 직원은 자리로 돌려보내지 않는다 — 사용자가 부른 것이 우선이다", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const sent: string[] = [];
+    sim["npcs"] = [
+      {
+        id: "n1",
+        pixelX: 500,
+        pixelY: 500,
+        homeCol: 2,
+        homeRow: 3,
+        moveState: "idle",
+        calledForRoom: "room-1",
+      },
+    ] as never;
+    sim["mayDriveNpc"] = () => true;
+    sim["sendNpcHome"] = (npc: { id: string }) => sent.push(npc.id);
+
+    sim["seatNpcForWork"]("n1");
+    assert.deepEqual(sent, [], "부른 직원을 자리로 되돌려 보냈습니다");
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("이미 지정석에 있으면 다시 보내지 않는다", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const sent: string[] = [];
+    // TILE_SIZE 가 무엇이든 0,0 은 home 0,0 과 같은 칸이다.
+    sim["npcs"] = [
+      {
+        id: "n1",
+        pixelX: 0,
+        pixelY: 0,
+        homeCol: 0,
+        homeRow: 0,
+        moveState: "idle",
+        calledForRoom: null,
+      },
+    ] as never;
+    sim["mayDriveNpc"] = () => true;
+    sim["sendNpcHome"] = (npc: { id: string }) => sent.push(npc.id);
+
+    sim["seatNpcForWork"]("n1");
+    assert.deepEqual(sent, [], "제자리에 있는데 다시 걷게 했습니다");
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("새로 일을 시작한 직원만 자리로 보낸다 — 이미 일하던 직원은 다시 보내지 않는다", async () => {
+  setPendingChannelData({ channelId: "ch", mapData: legacyMap });
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    await withFetch({ npcs: [] }, async () => {
+      sim["boot"](pendingChannelData!);
+      await settle();
+    });
+    const seated: string[] = [];
+    sim["seatNpcForWork"] = (npcId: string) => seated.push(npcId);
+    sim["workingNpcs"] = new Set(["n1"]);
+
+    EventBus.emit("npc:working-state", { npcIds: ["n1", "n2"], counts: { n1: 1, n2: 2 } });
+    assert.deepEqual(seated, ["n2"], "이미 일하던 직원을 다시 자리로 보냈습니다");
+    assert.deepEqual(sim["workingCounts"], { n1: 1, n2: 2 });
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("업무 중인 직원을 부르면 막지 않고 그 사실을 알린다", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  const toasts: { key: string; params?: Record<string, string> }[] = [];
+  const onToast = (d: { messageKey?: string; params?: Record<string, string> }) =>
+    toasts.push({ key: d.messageKey ?? "", params: d.params });
+  EventBus.on("toast:show", onToast);
+  try {
+    sim["player"] = { x: 0, y: 0 } as never;
+    sim["motionSnapshot"] = { current: {} } as never;
+    sim["npcs"] = [
+      {
+        id: "n1",
+        name: "소피",
+        pixelX: 0,
+        pixelY: 0,
+        moveState: "idle",
+        calledForRoom: null,
+        distanceTo: () => 9999,
+        moveTo: () => true,
+      },
+    ] as never;
+    sim["workingCounts"] = { n1: 2 };
+    sim["ensureLocalNpcOwnership"] = () => true;
+    sim["npcTilePositions"] = new Set() as never;
+
+    sim["handleNpcCallToPlayer"]({ npcId: "n1", npcName: "소피" } as never);
+
+    const busy = toasts.find((t) => t.key === "game.calledWhileWorking");
+    assert.ok(busy, `작업 중을 알리지 않았습니다: ${toasts.map((t) => t.key).join(",")}`);
+    assert.equal(busy.params?.count, "2", "몇 건인지 말해야 합니다");
+  } finally {
+    EventBus.off("toast:show", onToast);
+    sim.dispose();
+  }
+});
+
+test("놀고 있는 직원을 부르면 작업 중 안내를 띄우지 않는다", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  const toasts: string[] = [];
+  const onToast = (d: { messageKey?: string }) => toasts.push(d.messageKey ?? "");
+  EventBus.on("toast:show", onToast);
+  try {
+    sim["player"] = { x: 0, y: 0 } as never;
+    sim["motionSnapshot"] = { current: {} } as never;
+    sim["npcs"] = [
+      {
+        id: "n1",
+        name: "소피",
+        pixelX: 0,
+        pixelY: 0,
+        moveState: "idle",
+        calledForRoom: null,
+        distanceTo: () => 9999,
+        moveTo: () => true,
+      },
+    ] as never;
+    sim["workingCounts"] = {};
+    sim["ensureLocalNpcOwnership"] = () => true;
+    sim["npcTilePositions"] = new Set() as never;
+
+    sim["handleNpcCallToPlayer"]({ npcId: "n1", npcName: "소피" } as never);
+    assert.ok(
+      !toasts.includes("game.calledWhileWorking"),
+      "일하지 않는 직원에게 작업 중 안내가 떴습니다",
+    );
+  } finally {
+    EventBus.off("toast:show", onToast);
+    sim.dispose();
+  }
+});

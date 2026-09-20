@@ -1801,6 +1801,7 @@ const ja: Record<string, string> = {
   "game.loadingEngine": "ゲームエンジン読み込み中...",
   "game.notMember": "このチャンネルのメンバーではありません",
   "game.loadFailed": "キャラクターの読み込みに失敗しました",
+  "game.calledWhileWorking": "{name} さんは現在 {count} 件を処理中です。作業は続きます。",
   "game.pressToTalk": "{name}をクリック、または / で会話",
   "game.menuSettings": "設定",
   "game.settings": "チャンネル設定",
