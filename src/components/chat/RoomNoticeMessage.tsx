@@ -38,6 +38,7 @@ export function isKnownNotice(notice: RoomNotice | null | undefined): notice is 
     (notice.kind === "card_done" ||
       notice.kind === "card_blocked" ||
       notice.kind === "card_review" ||
+      notice.kind === "approval_requested" ||
       notice.kind === "cron_result")
   );
 }
@@ -46,12 +47,14 @@ export interface RoomNoticeMessageProps {
   message: RoomMessage;
   onOpenCard?: (cardId: string, boardSlug: string) => void;
   onOpenCronJob?: (jobId: string) => void;
+  onOpenApproval?: (approvalId: string) => void;
 }
 
 export default function RoomNoticeMessage({
   message,
   onOpenCard,
   onOpenCronJob,
+  onOpenApproval,
 }: RoomNoticeMessageProps) {
   const t = useT();
   const notice = message.notice ?? null;
@@ -103,6 +106,39 @@ export default function RoomNoticeMessage({
             >
               {t("notice.openHistory")}
             </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (notice.kind === "approval_requested") {
+    // 결정되면 버튼 대신 결과를 그린다. **렌더러가 해소 상태를 읽어서**이지 클라이언트가
+    // 숨기는 것이 아니다 — 새로고침해도, 다른 탭에서도 같다.
+    return (
+      <div className="flex justify-start" data-room-notice={notice.kind}>
+        <div className="max-w-[85%] px-3 py-2 rounded-lg text-body bg-surface-raised text-text-secondary border border-border">
+          {name && <div className="text-caption font-semibold text-npc mb-0.5">{name}</div>}
+          <div className="break-words">
+            {t("notice.approvalRequested", {
+              title: notice.title,
+              count: notice.targetCount,
+            })}
+          </div>
+          {notice.resolved ? (
+            <div className="text-caption text-text-muted mt-1" data-approval-resolved>
+              {t(`notice.approval.${notice.resolved.decision}`)}
+            </div>
+          ) : (
+            onOpenApproval && (
+              <button
+                type="button"
+                className={`${linkClass} mt-1`}
+                onClick={() => onOpenApproval(notice.approvalId)}
+              >
+                {t("notice.openApproval")}
+              </button>
+            )
           )}
         </div>
       </div>

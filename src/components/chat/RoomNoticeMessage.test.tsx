@@ -163,6 +163,60 @@ test("card_review — 네 로케일 모두 검토 요청 문장 + 카드 열기 
   }
 });
 
+test("approval_requested — 결정 전에는 버튼, 결정 뒤에는 결과", async () => {
+  for (const locale of LOCALES) {
+    const opened: string[] = [];
+    const pending = await render(
+      <RoomNoticeMessage
+        message={message({
+          notice: {
+            kind: "approval_requested",
+            approvalId: "ap-1",
+            title: "계약 검토 묶음",
+            npcName: "소피",
+            targetCount: 3,
+          },
+        })}
+        onOpenApproval={(id) => opened.push(id)}
+      />,
+      locale,
+    );
+    assert.ok(
+      (pending.host.textContent ?? "").includes("계약 검토 묶음"),
+      `${locale}: 제목이 없다`,
+    );
+    const button = pending.host.querySelector("button");
+    assert.ok(button, `${locale}: 승인 열기 버튼이 없다`);
+    await act(async () => button!.click());
+    assert.deepEqual(opened, ["ap-1"]);
+    await pending.cleanup();
+
+    const resolved = await render(
+      <RoomNoticeMessage
+        message={message({
+          notice: {
+            kind: "approval_requested",
+            approvalId: "ap-1",
+            title: "계약 검토 묶음",
+            npcName: "소피",
+            targetCount: 3,
+            resolved: { decision: "approved", by: "u1", at: "2026-09-21T00:00:00.000Z" },
+          },
+        })}
+        onOpenApproval={() => assert.fail("결정된 알림에는 버튼이 없어야 한다")}
+      />,
+      locale,
+    );
+    assert.equal(
+      resolved.host.querySelector("button"),
+      null,
+      `${locale}: 결정 뒤에도 버튼이 남았다`,
+    );
+    assert.ok(resolved.host.querySelector("[data-approval-resolved]"), `${locale}: 결과 줄이 없다`);
+    await resolved.cleanup();
+  }
+});
+
 test("cron_result — 헤더에 잡 이름, 본문은 content 그대로, error 면 실패 배지, 이력 열기 (R30)", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];

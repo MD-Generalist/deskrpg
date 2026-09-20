@@ -40,6 +40,16 @@ export type RoomNotice =
       npcName: string;
     }
   | {
+      /** 실행 전 승인 요청(설계 2026-09-21 execution-approval-gate). 버튼은 렌더러가 그린다. */
+      kind: "approval_requested";
+      approvalId: string;
+      title: string;
+      npcName: string;
+      targetCount: number;
+      /** 결정되면 채워진다 — 버튼 대신 결과를 그린다. 클라이언트가 숨기는 것이 아니다. */
+      resolved?: { decision: string; by: string; at: string };
+    }
+  | {
       kind: "cron_result";
       jobId: string;
       jobName: string;
@@ -47,7 +57,13 @@ export type RoomNotice =
       status: "ok" | "error";
     };
 
-const ROOM_NOTICE_KINDS = new Set(["card_done", "card_blocked", "card_review", "cron_result"]);
+const ROOM_NOTICE_KINDS = new Set([
+  "card_done",
+  "card_blocked",
+  "card_review",
+  "approval_requested",
+  "cron_result",
+]);
 
 /** 저장된 JSON 문자열을 되읽는다. 깨진 값·모르는 kind 는 null — 메시지 자체는 살린다. */
 export function parseRoomNotice(raw: string | null | undefined): RoomNotice | null {
