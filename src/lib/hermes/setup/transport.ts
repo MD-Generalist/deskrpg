@@ -2,10 +2,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, access, rm, readFile, rename, writeFile, unlink } from "node:fs/promises";
-import { createServer } from "node:net";
+import { createServer, connect } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { assertSshHost, localExecutor, sshRoute } from "./executor";
+import { forwardArgs, tunnelArgs, usesControlMaster } from "./ssh-args";
 
 type Target = { hostId: string; remotePort: number };
 const SUFFIX = ".deskrpg-ssh.invalid";
@@ -49,22 +50,7 @@ async function forwardThroughMaster(
   await access(socket);
   const result = await localExecutor(
     "ssh",
-    [
-      "-F",
-      "/dev/null",
-      "-S",
-      socket,
-      "-O",
-      "forward",
-      "-o",
-      "BatchMode=yes",
-      "-o",
-      "StrictHostKeyChecking=yes",
-      "-L",
-      `127.0.0.1:${port}:127.0.0.1:${remotePort}`,
-      "--",
-      hostId,
-    ],
+    forwardArgs({ platform: process.platform, socket, hostId, localPort: port, remotePort }),
     { timeoutMs: 2000 },
   );
   if (result.code !== 0)
@@ -73,6 +59,25 @@ async function forwardThroughMaster(
         ? "port_conflict"
         : "ssh_connection_failed",
     );
+}
+
+/**
+ * no-mux(win32) 준비 확인. 제어 소켓이 성사를 알려 주지 않으므로 로컬 포트에 실제로 연결해 본다.
+ * `ExitOnForwardFailure=yes` 라 포워드가 실패하면 자식이 스스로 죽고, 그건 호출부가 본다.
+ */
+async function probeLocalPort(port: number) {
+  await new Promise<void>((resolve, reject) => {
+    const socket = connect({ port, host: "127.0.0.1" });
+    const done = (error?: Error) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      error ? reject(error) : resolve();
+    };
+    socket.setTimeout(1000);
+    socket.once("connect", () => done());
+    socket.once("timeout", () => done(new Error("ssh_connection_failed")));
+    socket.once("error", () => done(new Error("ssh_connection_failed")));
+  });
 }
 export async function ensureSshTunnel(
   hostId: string,
@@ -97,21 +102,15 @@ export async function ensureSshTunnel(
     const route = sshRoute(hostId);
     const child = (dependencies.spawnImpl ?? spawn)(
       "ssh",
-      [
-        ...route.args,
-        ...route.options.slice(0, -4),
-        "-M",
-        "-S",
+      tunnelArgs({
+        platform: process.platform,
+        routeArgs: route.args,
+        routeOptions: route.options,
+        dest: route.dest,
         socket,
-        "-o",
-        "ExitOnForwardFailure=yes",
-        "-o",
-        "ClearAllForwardings=yes",
-        "-N",
-        "-T",
-        "--",
-        route.dest,
-      ],
+        localPort: port,
+        remotePort,
+      }),
       { stdio: ["ignore", "ignore", "pipe"] },
     );
     ownedProcesses.add(child);
@@ -120,12 +119,11 @@ export async function ensureSshTunnel(
       bytes = 0;
     child.stderr!.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
-      if (
-        /REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(
-          chunk.toString(),
-        )
-      )
+      const text = chunk.toString();
+      if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(text))
         failure = "ssh_host_key_failed";
+      // no-mux 에서는 `-O forward` 의 stderr 가 아니라 이 자식이 포트 충돌 문장을 낸다.
+      if (/cannot listen|Address already in use|cannot bind/i.test(text)) failure = "port_conflict";
       if (bytes > 64 * 1024) {
         failure = "output_limit";
         child.kill("SIGKILL");
@@ -141,12 +139,15 @@ export async function ensureSshTunnel(
       exited = true;
       if (tunnels.get(key) === pending) tunnels.delete(key);
     });
+    const ready = usesControlMaster(process.platform)
+      ? () => (dependencies.forward ?? forwardThroughMaster)(socket, hostId, port, remotePort)
+      : () => probeLocalPort(port);
     try {
       const deadline = Date.now() + 12_000;
       while (Date.now() < deadline) {
         if (exited || failure) throw new Error(failure || "ssh_connection_failed");
         try {
-          await (dependencies.forward ?? forwardThroughMaster)(socket, hostId, port, remotePort);
+          await ready();
           if (exited || failure) throw new Error(failure || "ssh_connection_failed");
           return { url: `http://127.0.0.1:${port}`, child };
         } catch (error) {

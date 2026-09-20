@@ -98,6 +98,38 @@ test("owned tunnel deduplicates concurrent requests, reconnects after exit, fail
   await closeSshTunnels();
 });
 
+test("win32 은 제어 소켓 없이 로컬 포트 프로브로 준비를 확인한다", async () => {
+  const { EventEmitter } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  const { createServer } = await import("node:net");
+  const { ensureSshTunnel, closeSshTunnels } = await import("./transport");
+  process.env.DESKRPG_SETUP_SSH_HOSTS = "test-host";
+  const originalPlatform = process.platform;
+  Object.defineProperty(process, "platform", { value: "win32" });
+  const server = createServer((socket) => socket.end());
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  const port = (server.address() as { port: number }).port;
+  try {
+    let capturedArgs: string[] = [];
+    const spawnImpl = ((command: string, args: string[]) => {
+      capturedArgs = args;
+      const emitter = new EventEmitter();
+      return Object.assign(emitter, { stderr: new PassThrough(), kill: () => true });
+    }) as unknown as typeof import("node:child_process").spawn;
+    const url = await ensureSshTunnel("test-host", 8642, {
+      spawnImpl,
+      getPort: async () => port,
+    });
+    assert.equal(url, `http://127.0.0.1:${port}`);
+    assert.ok(!capturedArgs.includes("-M") && !capturedArgs.includes("-S"));
+    assert.ok(capturedArgs.join(" ").includes("ControlMaster=no"));
+  } finally {
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+    await closeSshTunnels();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("transport fetch refuses redirects even when caller requests follow", async () => {
   const { transportFetch } = await import("./transport");
   const originalFetch = globalThis.fetch;
