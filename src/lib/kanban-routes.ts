@@ -16,6 +16,8 @@ import { NextResponse } from "next/server";
 
 import { db, gatewayResources } from "@/db";
 import { schedulePollNow } from "@/lib/automation-poll-trigger";
+import { liveResolveDeps, proposalFailureResponse } from "@/lib/card-proposals-live";
+import { resolveProposal } from "@/lib/card-proposals";
 import { readWorkingSnapshot } from "@/lib/automation-registry";
 import {
   cronError,
@@ -768,5 +770,48 @@ export async function getAutomationStatus(req: NextRequest, channelId: string) {
     lastError: boardRow?.lastError ?? null,
     minVersion: AUTOMATION_MIN_PLUGIN_VERSION,
     working: readWorkingSnapshot(channelId),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 카드 제안 해소 (T7)
+// ---------------------------------------------------------------------------
+
+export type ProposalParams = { params: Promise<{ id: string; proposalId: string }> };
+
+/**
+ * `POST .../kanban/proposals/{proposalId}/resolve` — 본문 `{choice:"card"|"inline"}`.
+ *
+ * 판정은 `resolveProposal`(도메인)이, 배선은 `liveResolveDeps`(DB·플러그인)가 한다. 여기서
+ * 하는 일은 본문 파싱, 그 둘을 붙이기, 결과를 상태 코드로 옮기기, 그리고 카드가 생겼을 때의
+ * dispatch 한 번 + 즉시 폴링(R9·R24)뿐이다.
+ */
+export async function resolveCardProposal(req: NextRequest, channelId: string, proposalId: string) {
+  const body = await readJsonBody(req);
+  if (!body) return invalidBody("JSON body required");
+  const choice = body.choice;
+  if (choice !== "card" && choice !== "inline") {
+    return cronError(400, "invalid_field", "choice must be 'card' or 'inline'");
+  }
+
+  const { deps, gatedContext } = liveResolveDeps();
+  const outcome = await resolveProposal(
+    { channelId, userId: getUserId(req) ?? "", proposalId, choice },
+    deps,
+  );
+  if (!outcome.ok) return proposalFailureResponse(outcome);
+
+  if (outcome.choice === "inline") return NextResponse.json({ choice: "inline" });
+
+  // 카드가 생겼으니 카드 생성 라우트와 같은 뒤처리를 한다 — 관문은 이미 통과한 것을 쓴다.
+  const ctx = gatedContext();
+  if (ctx) {
+    await dispatchOnce(ctx);
+    schedulePollNow(channelId);
+  }
+  return NextResponse.json({
+    choice: "card",
+    taskId: outcome.taskId,
+    assigneeDropped: outcome.assigneeDropped,
   });
 }

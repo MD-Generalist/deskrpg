@@ -368,11 +368,29 @@ export type EventsApi = {
   }): Promise<PluginResponse<EventsPage>>;
 };
 
+/**
+ * 카드 제안(플러그인 `card_proposals` capability). 제안의 정본은 플러그인이고, DeskRPG 는
+ * 해소 표시와 그 되돌리기만 부른다 — 제안 목록·조회 라우트는 쓰지 않는다.
+ */
+export type CardProposalsApi = {
+  /** 200 `{resolved:true}` · 409 `card_proposal_already_resolved` · 404 · 400 `invalid_field`. */
+  resolve(
+    proposalId: string,
+    body: { choice: "card" | "inline"; task_id?: string },
+  ): Promise<PluginResponse<{ resolved: true }>>;
+  /**
+   * 200 `{resolved:false}` · 409 `card_proposal_not_unresolvable`(미해소이거나 카드가 이미
+   * 기록됐다) · 404. 본문 없음.
+   */
+  unresolve(proposalId: string): Promise<PluginResponse<{ resolved: false }>>;
+};
+
 export type OwnerPluginClient = {
   info(): Promise<PluginResponse<PluginInfo>>;
   kanban: KanbanApi;
   events: EventsApi;
   artifacts: ArtifactsApi;
+  cardProposals: CardProposalsApi;
 };
 
 export type CronApi = {

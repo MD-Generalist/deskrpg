@@ -100,6 +100,15 @@ export type FakePluginServer = {
    * 게이트웨이가 잠깐 안 닿는 순간(배포·재시작 겹침)을 흉내내는 데 쓴다.
    */
   failNext(pathPrefix: string, count?: number): void;
+  /**
+   * 카드 제안 하나를 미해소 상태로 심는다(플러그인의 `card_proposals` 표). 심지 않은 id 로
+   * resolve·unresolve 를 부르면 404 다.
+   */
+  seedCardProposal(proposalId: string): void;
+  /** 그 제안의 지금 상태 — 테스트가 "한 번만 해소됐는가" 를 본다. 없으면 null. */
+  cardProposal(
+    proposalId: string,
+  ): { resolvedChoice: string | null; resolvedTaskId: string | null } | null;
   /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
   seedAttachment(input: {
     board: string;
@@ -141,6 +150,13 @@ type Reply = {
   body: unknown;
   /** 있으면 JSON 대신 이 바이트를 이 헤더로 그대로 내보낸다(아티팩트 원시 콘텐츠). */
   raw?: { bytes: Buffer; headers: Record<string, string> };
+};
+
+/** 플러그인의 `card_proposals` 한 행 중 해소에 쓰이는 것만. */
+type CardProposalRecord = {
+  resolvedAt: string | null;
+  resolvedChoice: string | null;
+  resolvedTaskId: string | null;
 };
 
 type ArtifactVersionRecord = { meta: ArtifactVersion; bytes: Buffer };
@@ -199,6 +215,7 @@ export async function startFakePluginServer(
   let orchestration: OrchestrationSettings = defaultOrchestration(profileNames);
   let cron = new Map<string, CronState>();
   let artifacts = new Map<string, ArtifactRecord>();
+  let cardProposals = new Map<string, CardProposalRecord>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -212,6 +229,7 @@ export async function startFakePluginServer(
     cron = new Map();
     artifacts = new Map();
     faults.length = 0;
+    cardProposals = new Map();
     seq = 0;
   }
 
@@ -1264,6 +1282,45 @@ export async function startFakePluginServer(
     return { status: 200, body: { ok: true } };
   }
 
+  // ---- 카드 제안 ----------------------------------------------------------
+  //
+  // 플러그인의 판정을 그대로 흉내낸다: 404 는 없는 id, 409 는 단일 UPDATE 가 아무 행도
+  // 바꾸지 못한 것(이미 해소됨 / 되돌릴 수 없음). "한 번만 해소" 의 근거는 여기서도 그 한
+  // 번의 상태 전이 하나다.
+
+  function resolveCardProposal(proposalId: string, body: Record<string, unknown>): Reply {
+    const record = cardProposals.get(proposalId);
+    if (!record) throw new HttpError(404, { error: "card_proposal_not_found", detail: proposalId });
+    const choice = body.choice;
+    if (choice !== "card" && choice !== "inline") {
+      throw badRequest("invalid_field", "choice");
+    }
+    if (record.resolvedAt) {
+      throw new HttpError(409, {
+        error: "card_proposal_already_resolved",
+        detail: proposalId,
+      });
+    }
+    record.resolvedAt = nowIso();
+    record.resolvedChoice = choice;
+    if (typeof body.task_id === "string" && body.task_id) record.resolvedTaskId = body.task_id;
+    return { status: 200, body: { resolved: true } };
+  }
+
+  function unresolveCardProposal(proposalId: string): Reply {
+    const record = cardProposals.get(proposalId);
+    if (!record) throw new HttpError(404, { error: "card_proposal_not_found", detail: proposalId });
+    if (!record.resolvedAt || record.resolvedTaskId) {
+      throw new HttpError(409, {
+        error: "card_proposal_not_unresolvable",
+        detail: "해소되지 않았거나 카드가 이미 기록됐다",
+      });
+    }
+    record.resolvedAt = null;
+    record.resolvedChoice = null;
+    return { status: 200, body: { resolved: false } };
+  }
+
   // ---- 라우팅 -------------------------------------------------------------
 
   function routeOwner(req: ParsedRequest): Reply {
@@ -1295,6 +1352,15 @@ export async function startFakePluginServer(
     artifactMatch = /^\/deskrpg\/artifacts\/([^/]+)\/versions\/(\d+)\/content$/.exec(pathname);
     if (artifactMatch && method === "GET") {
       return artifactContent(decodeURIComponent(artifactMatch[1]), Number(artifactMatch[2]), req);
+    }
+
+    let proposalMatch = /^\/deskrpg\/card-proposals\/([^/]+)\/resolve$/.exec(pathname);
+    if (proposalMatch && method === "POST") {
+      return resolveCardProposal(decodeURIComponent(proposalMatch[1]), body);
+    }
+    proposalMatch = /^\/deskrpg\/card-proposals\/([^/]+)\/unresolve$/.exec(pathname);
+    if (proposalMatch && method === "POST") {
+      return unresolveCardProposal(decodeURIComponent(proposalMatch[1]));
     }
 
     if (pathname === "/deskrpg/kanban/boards") {
@@ -1585,6 +1651,19 @@ export async function startFakePluginServer(
     },
     seedArtifact,
     seedAttachment,
+    seedCardProposal: (proposalId) => {
+      cardProposals.set(proposalId, {
+        resolvedAt: null,
+        resolvedChoice: null,
+        resolvedTaskId: null,
+      });
+    },
+    cardProposal: (proposalId) => {
+      const record = cardProposals.get(proposalId);
+      return record
+        ? { resolvedChoice: record.resolvedChoice, resolvedTaskId: record.resolvedTaskId }
+        : null;
+    },
   };
 }
 

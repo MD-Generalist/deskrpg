@@ -255,6 +255,16 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
     }) => request<SwarmCreated>(f, `${root}/swarm`, json("POST", body)),
     blackboard: (taskId: string) =>
       request<{ blackboard: Record<string, unknown> }>(f, `${task(taskId)}/blackboard`),
+    /**
+     * 카드 제안 해소. 200 `{choice, taskId?, assigneeDropped?}`. 실패는 서버 코드를 그대로
+     * 실은 `KanbanApiError` — 409 `already_resolved` 를 화면이 가려 안내할 수 있다.
+     */
+    resolveProposal: (proposalId: string, choice: "card" | "inline") =>
+      request<{ choice: "card" | "inline"; taskId?: string; assigneeDropped?: boolean }>(
+        f,
+        `${root}/proposals/${encodeURIComponent(proposalId)}/resolve`,
+        json("POST", { choice }),
+      ),
     settings: () => request<BoardSettings>(f, `${root}/settings`),
     patchSettings: (body: {
       board?: { default_workdir: string };

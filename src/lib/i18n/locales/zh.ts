@@ -2548,6 +2548,9 @@ const zh: Record<string, string> = {
   "notice.cardProposal.registered": "已登记为卡片",
   "notice.cardProposal.handledHere": "已决定在此处理",
   "notice.cardProposal.failed": "无法登记：{reason}",
+  "notice.cardProposal.alreadyResolved": "该建议已处理 · 请在看板中查看",
+  "notice.cardProposal.assigneeDropped": "已在无负责人的情况下创建卡片",
+  "notice.cardProposal.inlineFollowUp": "这件事不做成卡片，请在这里直接处理。",
   // Kanban (T8)
   "kanban.title": "看板",
   "kanban.open": "看板",

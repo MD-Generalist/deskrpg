@@ -75,7 +75,11 @@ export default function CardProposalNotice({
               className="text-caption text-danger bg-danger-bg rounded px-1.5 py-0.5 mt-1 break-words"
               data-testid="card-proposal-error"
             >
-              {t("notice.cardProposal.failed", { reason: error })}
+              {/* 409 는 "왜" 가 중요하다 — 알림 쓰기가 실패해 미결로 남은 제안을 다시 누른
+                  경우다. 코드만 보이면 사용자는 무엇을 해야 할지 모른다. */}
+              {error === "already_resolved"
+                ? t("notice.cardProposal.alreadyResolved")
+                : t("notice.cardProposal.failed", { reason: error })}
             </div>
           )}
           <div className="flex gap-1.5 flex-wrap mt-1">

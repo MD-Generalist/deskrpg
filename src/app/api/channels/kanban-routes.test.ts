@@ -1250,3 +1250,225 @@ test("묶음 조회도 비멤버는 403", async () => {
     assert.equal((await call()).status, 403);
   }
 });
+
+// ---------------------------------------------------------------------------
+// 카드 제안 해소 (T7)
+// ---------------------------------------------------------------------------
+
+/** 제안 알림 한 줄을 그 채널의 사무실 방에 심고, 플러그인에도 같은 제안을 등록한다. */
+async function seedProposal(
+  seed: { channelId: string; ownerId: string; npcId: string },
+  proposalId = "cp_1",
+  overrides: Record<string, unknown> = {},
+) {
+  const { ensureOfficeRoom } = await import("@/lib/chat-rooms");
+  const { db, chatRoomMessages } = await import("@/db");
+  const room = await ensureOfficeRoom(seed.channelId, seed.ownerId);
+  const notice = {
+    kind: "card_proposal",
+    proposalId,
+    title: "청구서 정리",
+    summary: "세 단계짜리 일입니다",
+    body: "본문",
+    acceptance: "표로 정리",
+    npcId: seed.npcId,
+    npcName: "소피",
+    ...overrides,
+  };
+  const [row] = await db
+    .insert(chatRoomMessages)
+    .values({
+      roomId: room.id,
+      senderKind: "npc",
+      senderName: "소피",
+      content: "청구서 정리",
+      noticeJson: JSON.stringify(notice),
+    })
+    .returning();
+  server.seedCardProposal(proposalId);
+  return { messageId: row.id, roomId: room.id, proposalId };
+}
+
+async function readNotice(messageId: string) {
+  const { db, chatRoomMessages } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ noticeJson: chatRoomMessages.noticeJson })
+    .from(chatRoomMessages)
+    .where(eq(chatRoomMessages.id, messageId))
+    .limit(1);
+  const { parseRoomNotice } = await import("@/lib/chat-rooms-policy");
+  return parseRoomNotice(row.noticeJson);
+}
+
+function proposalCtx(id: string, proposalId: string) {
+  return { params: Promise.resolve({ id, proposalId }) };
+}
+
+function resolveReq(userId: string, channelId: string, proposalId: string, body: unknown) {
+  return req(
+    userId,
+    "POST",
+    `${base(channelId)}/proposals/${encodeURIComponent(proposalId)}/resolve`,
+    body,
+  );
+}
+
+test("제안 해소 — 비멤버 403, 로그인 없음 401, 잘못된 choice 400", async () => {
+  server.reset();
+  const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
+  const seed = await seedKanbanChannel();
+  const proposal = await seedProposal(seed);
+  const stranger = await seedUser("proposal-stranger");
+
+  const forbidden = await route.POST(
+    resolveReq(stranger.id, seed.channelId, proposal.proposalId, { choice: "card" }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(forbidden.status, 403);
+  assert.equal((await forbidden.json()).code, "not_a_member");
+
+  const anonymous = await route.POST(
+    new NextRequest(`${base(seed.channelId)}/proposals/${proposal.proposalId}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ choice: "card" }),
+    }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(anonymous.status, 401);
+
+  const bad = await route.POST(
+    resolveReq(seed.ownerId, seed.channelId, proposal.proposalId, { choice: "무엇" }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(bad.status, 400);
+  assert.equal((await bad.json()).code, "invalid_field");
+
+  // 어느 갈래도 플러그인의 제안을 건드리지 않았다.
+  assert.equal(server.cardProposal(proposal.proposalId)?.resolvedChoice, null);
+  const untouched = await readNotice(proposal.messageId);
+  assert.equal(untouched?.kind === "card_proposal" ? untouched.resolved : "gone", undefined);
+});
+
+test("제안 해소 — 카드 갈래는 카드를 만들고 알림에 결정을 쓴다, 둘째 호출은 409", async () => {
+  server.reset();
+  const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
+  const seed = await seedKanbanChannel();
+  const member = await seedUser("proposal-member");
+  await addMember(seed.channelId, member.id);
+  const proposal = await seedProposal(seed);
+
+  const before = server.requests().length;
+  const ok = await route.POST(
+    resolveReq(member.id, seed.channelId, proposal.proposalId, { choice: "card" }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(ok.status, 200, JSON.stringify(await ok.clone().json()));
+  const body = await ok.json();
+  assert.equal(body.choice, "card");
+  assert.equal(body.assigneeDropped, false);
+  assert.ok(body.taskId);
+
+  // 카드는 담당(profile_name)까지 붙어 만들어졌고, 완료 조건은 본문에 실렸다.
+  const created = server
+    .requests()
+    .slice(before)
+    .find((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks"));
+  const sent = created?.json as Record<string, unknown>;
+  assert.equal(sent.title, "청구서 정리");
+  assert.equal(sent.assignee, "sophie");
+  assert.match(String(sent.body), /본문[\s\S]*표로 정리/);
+
+  // 알림에 결정이 남는다 → 화면의 버튼이 사라지는 근거.
+  const notice = await readNotice(proposal.messageId);
+  assert.equal(notice?.kind, "card_proposal");
+  assert.deepEqual(
+    notice?.kind === "card_proposal" && notice.resolved
+      ? { choice: notice.resolved.choice, by: notice.resolved.by, taskId: notice.resolved.taskId }
+      : null,
+    { choice: "card", by: member.id, taskId: body.taskId },
+  );
+
+  // dispatch 한 번 + 즉시 폴링.
+  assert.equal(dispatchCalls(before).length, 1);
+  assert.deepEqual(polled, [seed.channelId]);
+
+  // 두 번째 해소는 409 — 카드는 하나뿐이다.
+  const again = await route.POST(
+    resolveReq(member.id, seed.channelId, proposal.proposalId, { choice: "card" }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(again.status, 409);
+  assert.equal((await again.json()).code, "already_resolved");
+  const tasks = server
+    .requests()
+    .slice(before)
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks"));
+  assert.equal(tasks.length, 1);
+});
+
+test("제안 해소 — inline 갈래는 카드를 만들지 않는다", async () => {
+  server.reset();
+  const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
+  const seed = await seedKanbanChannel();
+  const proposal = await seedProposal(seed, "cp_inline");
+
+  const before = server.requests().length;
+  const res = await route.POST(
+    resolveReq(seed.ownerId, seed.channelId, proposal.proposalId, { choice: "inline" }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { choice: "inline" });
+  assert.equal(
+    server
+      .requests()
+      .slice(before)
+      .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks")).length,
+    0,
+  );
+  const notice = await readNotice(proposal.messageId);
+  assert.equal(notice?.kind === "card_proposal" ? notice.resolved?.choice : null, "inline");
+});
+
+test("제안 해소 — 없는 제안은 404, 플러그인을 부르지 않는다", async () => {
+  server.reset();
+  const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
+  const seed = await seedKanbanChannel();
+  const before = server.requests().length;
+  const res = await route.POST(
+    resolveReq(seed.ownerId, seed.channelId, "cp_missing", { choice: "card" }),
+    proposalCtx(seed.channelId, "cp_missing"),
+  );
+  assert.equal(res.status, 404);
+  assert.equal((await res.json()).code, "card_proposal_not_found");
+  assert.equal(
+    server
+      .requests()
+      .slice(before)
+      .filter((r) => r.path.startsWith("/deskrpg/card-proposals")).length,
+    0,
+  );
+});
+
+test("제안 해소 — 제안한 직원이 퇴근했으면 담당 없이 만들고 그 사실을 알린다", async () => {
+  server.reset();
+  const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
+  const seed = await seedKanbanChannel();
+  const proposal = await seedProposal(seed, "cp_dropped");
+  const { setNpcActive } = await import("@/lib/npc-roster");
+  await setNpcActive(seed.npcId, false);
+
+  const before = server.requests().length;
+  const res = await route.POST(
+    resolveReq(seed.ownerId, seed.channelId, proposal.proposalId, { choice: "card" }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+  assert.equal((await res.json()).assigneeDropped, true);
+  const created = server
+    .requests()
+    .slice(before)
+    .find((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks"));
+  assert.equal((created?.json as Record<string, unknown>).assignee, undefined);
+});

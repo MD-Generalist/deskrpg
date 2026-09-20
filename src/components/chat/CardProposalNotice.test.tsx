@@ -140,3 +140,25 @@ test("네 로케일 모두 제 언어로 버튼 문구가 나온다", async () =
   }
   assert.equal(seen.size, LOCALES.length);
 });
+
+test("이미 처리된 제안(409)은 코드가 아니라 무엇을 할지 안내하고, 버튼은 남는다", async () => {
+  for (const locale of LOCALES) {
+    const { host, cleanup } = await render(
+      <CardProposalNotice
+        notice={base}
+        onResolve={() => {}}
+        pending={false}
+        error="already_resolved"
+      />,
+      locale,
+    );
+    // 버튼이 사라지면 사용자가 손쓸 방법이 없어진다.
+    assert.equal(host.querySelectorAll("button").length, 2);
+    const line = host.querySelector("[data-testid='card-proposal-error']");
+    assert.ok(line);
+    // 코드를 그대로 노출하지 않고, 번역 키가 새어 나오지도 않는다.
+    assert.doesNotMatch(line.textContent!, /already_resolved/);
+    assert.doesNotMatch(line.textContent!, /notice\.cardProposal/);
+    await cleanup();
+  }
+});

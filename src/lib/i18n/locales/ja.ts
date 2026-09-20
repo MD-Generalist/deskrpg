@@ -2651,6 +2651,10 @@ const ja: Record<string, string> = {
   "notice.cardProposal.registered": "カードとして登録しました",
   "notice.cardProposal.handledHere": "このチャットで対応します",
   "notice.cardProposal.failed": "登録できませんでした: {reason}",
+  "notice.cardProposal.alreadyResolved":
+    "この提案はすでに処理されました · かんばんで確認してください",
+  "notice.cardProposal.assigneeDropped": "担当者なしでカードを作成しました",
+  "notice.cardProposal.inlineFollowUp": "この件はカードにせず、ここで進めてください。",
   // Kanban (T8)
   "kanban.title": "カンバンボード",
   "kanban.open": "カンバン",

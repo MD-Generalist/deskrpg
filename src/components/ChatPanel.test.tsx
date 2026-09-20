@@ -739,3 +739,128 @@ test("닫힌 보드는 initialTaskId, 열린 보드는 focusRequest 로 지목�
   // 같은 카드를 다시 눌러도 새 요청이다 — seq 가 오른다.
   assert.equal(openCardTarget({ boardOpen: true, taskId: "t1", prev: open }).focusRequest?.seq, 2);
 });
+
+// ---------------------------------------------------------------------------
+// 카드 제안 해소 배선 (T7)
+// ---------------------------------------------------------------------------
+
+function proposalState(): RoomState {
+  return {
+    ...listState(),
+    view: "room",
+    messages: {
+      g1: [
+        {
+          id: "notice-proposal",
+          roomId: "g1",
+          senderKind: "npc",
+          senderId: "n1",
+          senderName: "소피",
+          content: "청구서 정리",
+          createdAt: "2026-09-21T00:00:00Z",
+          notice: {
+            kind: "card_proposal",
+            proposalId: "cp_1",
+            title: "청구서 정리",
+            summary: "세 단계짜리 일입니다",
+            npcId: "n1",
+            npcName: "소피",
+          },
+        },
+      ],
+    },
+  };
+}
+
+function proposalPanel(opts: { onRoomSend?: (message: string) => void } = {}) {
+  return (
+    <I18nProvider initialLocale="ko">
+      <ChatPanel
+        dialogNpc={null}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={proposalState()}
+        channelChatOpen
+        onRoomSend={opts.onRoomSend ?? (() => {})}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+        cron={{ channelId: "ch-1" }}
+      />
+    </I18nProvider>
+  );
+}
+
+test("제안 알림 — 등록 버튼이 해소 라우트를 부르고 성공하면 결정이 보인다", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ url: string; body: string }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), body: String(init?.body ?? "") });
+    return new Response(JSON.stringify({ choice: "card", taskId: "t-9", assigneeDropped: false }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    const el = await mount(proposalPanel());
+    const register = buttonByText(el, "이슈카드등록");
+    assert.equal(register.disabled, false);
+    await click(register);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/channels/ch-1/kanban/proposals/cp_1/resolve");
+    assert.deepEqual(JSON.parse(calls[0].body), { choice: "card" });
+    // 결정이 보이고 버튼은 사라진다 — 카드 번호까지.
+    assert.equal(el.querySelectorAll("[data-testid='card-proposal'] button").length, 0);
+    assert.match(el.querySelector("[data-testid='card-proposal-resolved']")!.textContent!, /t-9/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("제안 알림 — 여기서 처리는 같은 방에 그 직원을 지명한 후속 메시지를 보낸다", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent: string[] = [];
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ choice: "inline" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as typeof fetch;
+  try {
+    const el = await mount(proposalPanel({ onRoomSend: (message) => sent.push(message) }));
+    await click(buttonByText(el, "여기서 처리"));
+    assert.equal(sent.length, 1);
+    assert.match(sent[0], /^@\[소피\] /);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("제안 알림 — 서버가 409 로 거절하면 안내를 보이고 버튼을 남긴다", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ code: "already_resolved", message: "already" }), {
+      status: 409,
+      headers: { "content-type": "application/json" },
+    })) as typeof fetch;
+  try {
+    const el = await mount(proposalPanel());
+    await click(buttonByText(el, "이슈카드등록"));
+    const error = el.querySelector("[data-testid='card-proposal-error']");
+    assert.ok(error);
+    assert.doesNotMatch(error.textContent!, /already_resolved/);
+    // 버튼이 남아 다시 고를 수 있다.
+    assert.equal(el.querySelectorAll("[data-testid='card-proposal'] button").length, 2);
+    assert.equal(buttonByText(el, "이슈카드등록").disabled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

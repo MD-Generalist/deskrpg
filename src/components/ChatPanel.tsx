@@ -270,6 +270,82 @@ export default function ChatPanel({
     [roomState.currentRoomId, roomState.messages],
   );
 
+  // ---- 카드 제안 해소 (T7) ------------------------------------------------
+  //
+  // 버튼 유무의 정본은 알림의 `resolved` 이고, 그 정본은 서버에 있다. 다만 방 메시지가
+  // 갱신되는 소켓 경로가 없어(새 이벤트를 만들지 않는다) 성공 직후에는 이 화면이 기억한
+  // 결정을 알림에 얹어 그린다 — 새로고침하면 서버가 실어 준 값으로 대체된다.
+  const [proposalResolved, setProposalResolved] = useState<
+    Record<string, { choice: "card" | "inline"; taskId?: string }>
+  >({});
+  const [proposalCalls, setProposalCalls] = useState<
+    Record<string, { pending: boolean; error: string | null }>
+  >({});
+
+  const handleResolveProposal = useCallback(
+    async (proposalId: string, choice: "card" | "inline") => {
+      if (!cardsChannelId) return;
+      setProposalCalls((prev) => ({ ...prev, [proposalId]: { pending: true, error: null } }));
+      try {
+        const result = await createKanbanApi(cardsChannelId).resolveProposal(proposalId, choice);
+        setProposalResolved((prev) => ({
+          ...prev,
+          [proposalId]: { choice, ...(result.taskId ? { taskId: result.taskId } : {}) },
+        }));
+        setProposalCalls((prev) => ({ ...prev, [proposalId]: { pending: false, error: null } }));
+        // 담당이 떨어진 카드는 triage 로 들어간다 — 그 사실을 사용자에게 알린다.
+        if (result.assigneeDropped) cron?.onToast?.(t("notice.cardProposal.assigneeDropped"));
+        // 여기서 처리하기로 했으면 그 직원에게 후속 메시지를 보낸다 — 기존 방 전송 경로다.
+        if (choice === "inline") {
+          const notice = roomMessages.find(
+            (message) =>
+              message.notice?.kind === "card_proposal" && message.notice.proposalId === proposalId,
+          )?.notice;
+          const npcName = notice?.kind === "card_proposal" ? notice.npcName : "";
+          onRoomSend(
+            npcName
+              ? `@[${npcName}] ${t("notice.cardProposal.inlineFollowUp")}`
+              : t("notice.cardProposal.inlineFollowUp"),
+          );
+        }
+      } catch (err) {
+        // 실패는 버튼을 지우지 않는다 — 이유를 보이고 다시 고르게 둔다.
+        setProposalCalls((prev) => ({
+          ...prev,
+          [proposalId]: {
+            pending: false,
+            error: err instanceof KanbanApiError ? err.code : "unknown_error",
+          },
+        }));
+      }
+    },
+    [cardsChannelId, cron, onRoomSend, roomMessages, t],
+  );
+
+  /** 알림에 이 화면이 기억한 결정을 얹는다. 서버가 이미 `resolved` 를 실었으면 그것이 이긴다. */
+  const withLocalResolution = useCallback(
+    (message: RoomMessage): RoomMessage => {
+      const notice = message.notice;
+      if (notice?.kind !== "card_proposal" || notice.resolved) return message;
+      const local = proposalResolved[notice.proposalId];
+      if (!local) return message;
+      return {
+        ...message,
+        notice: {
+          ...notice,
+          // `by`·`at` 은 화면에 쓰이지 않는다 — 정본은 서버가 쓴 값이다.
+          resolved: {
+            choice: local.choice,
+            by: "",
+            at: "",
+            ...(local.taskId ? { taskId: local.taskId } : {}),
+          },
+        },
+      };
+    },
+    [proposalResolved],
+  );
+
   // Auto-scroll channel messages
   useEffect(() => {
     if (channelScrollRef.current) {
@@ -739,9 +815,20 @@ export default function ChatPanel({
                   return (
                     <RoomNoticeMessage
                       key={msg.id}
-                      message={msg}
+                      message={withLocalResolution(msg)}
                       onOpenCard={onOpenNoticeCard}
                       onOpenCronJob={onOpenNoticeCronJob}
+                      onResolveProposal={cardsChannelId ? handleResolveProposal : undefined}
+                      proposalPending={
+                        msg.notice?.kind === "card_proposal"
+                          ? (proposalCalls[msg.notice.proposalId]?.pending ?? false)
+                          : false
+                      }
+                      proposalError={
+                        msg.notice?.kind === "card_proposal"
+                          ? (proposalCalls[msg.notice.proposalId]?.error ?? null)
+                          : null
+                      }
                     />
                   );
                 }

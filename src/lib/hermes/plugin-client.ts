@@ -28,6 +28,7 @@ import { mapPluginFailure, type PluginFailure } from "./plugin-errors";
 
 import type {
   ArtifactsApi,
+  CardProposalsApi,
   CronApi,
   EventsApi,
   KanbanApi,
@@ -447,11 +448,22 @@ export function createOwnerPluginClient(
       }),
   };
 
+  const cardProposals: CardProposalsApi = {
+    resolve: (proposalId, body) =>
+      call(`/deskrpg/card-proposals/${seg(proposalId)}/resolve`, token, { method: "POST", body }),
+    unresolve: (proposalId) =>
+      call(`/deskrpg/card-proposals/${seg(proposalId)}/unresolve`, token, {
+        method: "POST",
+        body: {},
+      }),
+  };
+
   return {
     info: () => call("/deskrpg/info", token),
     kanban,
     events,
     artifacts,
+    cardProposals,
   };
 }
 
