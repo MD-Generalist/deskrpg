@@ -173,6 +173,18 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
           // stdout 파일
           stdoutFile = path.join(tmpdir(), `${baseName}-stdout.out`);
           stdoutFd = openSync(stdoutFile, "w");
+          // 토큰이 담길 수 있으므로 권한을 좁힌다
+          if (isWindows(process.platform)) {
+            // Windows: icacls로 명시적 ACL 설정 (chmod는 Windows에서 읽기 전용 속성만 건드려 무효)
+            // %TEMP% 상속 ACL을 차단하고 현재 사용자에게만 FullControl 권한 부여
+            const username = userInfo().username;
+            execFileSync("icacls", [stdoutFile, "/inheritance:r", `/grant:r`, `${username}:F`], {
+              stdio: "ignore",
+            });
+          } else {
+            // POSIX: chmod 사용 (유효)
+            chmodSync(stdoutFile, 0o600);
+          }
         } catch {
           if (stdinFd !== undefined) closeSync(stdinFd);
           if (stdoutFd !== undefined) closeSync(stdoutFd);
