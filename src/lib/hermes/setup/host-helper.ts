@@ -25,7 +25,9 @@ for name in ('SIGHUP', 'SIGTERM', 'SIGINT'):
         try: signal.signal(signum, terminate_owned)
         except (ValueError, OSError): pass
 try:
-    payload = json.load(sys.stdin)
+    # Windows 의 stdin 기본 인코딩은 ANSI 코드 페이지(예: cp949)라 UTF-8 로 보낸 한글 payload 가
+    # 깨진다. sys.stdin.buffer 로 바이트를 그대로 받아 UTF-8 로 직접 디코딩한다.
+    payload = json.loads(sys.stdin.buffer.read().decode('utf-8'))
     # 상류 hermes_constants.py:51-57 과 같은 판정. Windows 는 %LOCALAPPDATA%\hermes 다.
     root = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
     root = root / 'hermes-agent'
@@ -35,13 +37,16 @@ try:
         print(json.dumps({'candidates': []} if payload['action'] == 'discover' else {'error': 'hermes_not_found'}))
     else:
         spawn = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {'start_new_session': True}
-        child = subprocess.Popen([str(python), '-'], text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **spawn)
+        # encoding='utf-8' 를 명시한다 — 없으면 자식 stdin/stdout 도 같은 ANSI 코드 페이지로 인코딩되어
+        # HOST_HELPER 의 한글 주석(43K자)을 보내는 순간 깨진다.
+        child = subprocess.Popen([str(python), '-'], text=True, encoding='utf-8', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **spawn)
         output, unused = child.communicate(payload['script'], timeout=payload['timeout'])
         terminate_owned()
         if child.returncode or len(output) > 262144:
             print(json.dumps({'error': 'host_operation_failed'}))
         else:
-            sys.stdout.write(output)
+            sys.stdout.buffer.write(output.encode('utf-8'))
+            sys.stdout.buffer.flush()
 except Exception:
     terminate_owned()
     print(json.dumps({'error': 'host_operation_failed'}))

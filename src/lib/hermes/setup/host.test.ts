@@ -2014,3 +2014,17 @@ test("Windows 갈래도 같은 소유권 경고 코드만 쓴다", () => {
       `${code} 는 허용되지 않은 코드다`,
     );
 });
+
+test("HOST_BOOTSTRAP 은 UTF-8 이 아닌 로케일에서도 한글 payload 를 왕복한다", () => {
+  // Windows 의 기본 파이프 인코딩(예: cp949)을 POSIX 에서 재현한다: PYTHONUTF8=0 + LC_ALL/LANG=C 는
+  // 파이썬의 stdin/stdout 기본 인코딩을 ascii 로 강제한다(PEP 538/540 의 UTF-8 모드를 끈다).
+  const script = String.raw`print(__import__('json').dumps({'echo': '한글 확인 문자열'}))`;
+  const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
+    encoding: "utf8",
+    input: JSON.stringify({ action: "run", timeout: 5, script }),
+    env: { ...process.env, PYTHONUTF8: "0", LC_ALL: "C", LANG: "C" },
+    timeout: 8000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { echo: "한글 확인 문자열" });
+});
