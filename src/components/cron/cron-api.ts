@@ -1,3 +1,4 @@
+import { classifyGateFailure } from "@/lib/gate-failure";
 import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 /**
  * 브라우저 → `/api/channels/:id/cron/**` 호출. 하드 게이트: 브라우저는 Hermes 를 직접
@@ -208,12 +209,18 @@ export type CronErrorNotice =
 /** 오류를 세 부류로 접는다 — 업그레이드 안내 / 게이트웨이 연결 안내 / 코드·메시지 그대로. */
 export function classifyCronError(err: unknown): CronErrorNotice {
   if (isCronApiError(err)) {
-    if (err.status === 428 && err.code === "plugin_upgrade_required") {
-      const minVersion =
-        typeof err.details.minVersion === "string" ? err.details.minVersion : PLUGIN_MIN_VERSION;
-      return { kind: "upgrade", minVersion, command: PLUGIN_INSTALL_COMMAND };
+    const minVersion =
+      typeof err.details.minVersion === "string" ? err.details.minVersion : undefined;
+    const blocker = classifyGateFailure({
+      status: err.status,
+      code: err.code,
+      message: err.message,
+      minVersion,
+    });
+    if (blocker.kind === "plugin_upgrade_required") {
+      return { kind: "upgrade", minVersion: blocker.minVersion, command: blocker.command };
     }
-    if (err.status === 409 && err.code === "gateway_not_bound") return { kind: "gateway" };
+    if (blocker.kind === "gateway_not_bound") return { kind: "gateway" };
     return { kind: "other", code: err.code, message: err.message, status: err.status };
   }
   const message = err instanceof Error ? err.message : String(err);

@@ -1,3 +1,4 @@
+import { classifyGateFailure } from "@/lib/gate-failure";
 import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 /**
  * 칸반 화면의 순수 뷰모델 — React·fetch 를 모른다.
@@ -160,20 +161,25 @@ export function classifyBoardFailure(
   failure: KanbanFailure,
   fallbackMinVersion = "0.6.0",
 ): BoardBlocker {
-  if (failure.status === 428 || failure.code === "plugin_upgrade_required") {
+  // 판정은 `@/lib/gate-failure` 하나다 — 여기서는 보드 화면의 이름으로 옮기기만 한다.
+  const blocker = classifyGateFailure({
+    status: failure.status,
+    code: failure.code,
+    message: failure.message,
+    minVersion: failure.minVersion,
+  });
+
+  if (blocker.kind === "plugin_upgrade_required") {
     return {
       kind: "upgrade_required",
       minVersion: failure.minVersion || fallbackMinVersion,
-      command: PLUGIN_INSTALL_COMMAND,
+      command: blocker.command,
     };
   }
-  if (failure.code === "gateway_not_bound") return { kind: "gateway_not_bound" };
+  if (blocker.kind === "gateway_not_bound") return { kind: "gateway_not_bound" };
+  // 428 은 위에서 잡혔다. 503 은 보드가 열리지 않는 상태라 화면이 따로 다룬다.
   if (failure.status === 503) {
-    return {
-      kind: "board_unavailable",
-      code: failure.code,
-      reason: failure.message,
-    };
+    return { kind: "board_unavailable", code: failure.code, reason: failure.message };
   }
   return {
     kind: "other",
