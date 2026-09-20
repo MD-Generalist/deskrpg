@@ -3,7 +3,7 @@ import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { db, users, gatewayResources, nowForDb } from "@/db";
-import { upsertOwnedGatewayResource } from "@/lib/gateway-resources";
+import { decryptGatewayToken, upsertOwnedGatewayResource } from "@/lib/gateway-resources";
 import { registerHermesProfile } from "@/lib/hermes-profiles";
 import { isValidProfileName } from "../profile-name";
 import {
@@ -16,7 +16,13 @@ import {
   prepareHost,
 } from "./host";
 import { localExecutor, sshExecutor, getSshHosts, sshFailureCode, sshOptions } from "./executor";
-import { ensureSshTunnel, registerSshTransport, transportFetch } from "./transport";
+import {
+  ensureSshTunnel,
+  readSshTransportTarget,
+  registerSshTransport,
+  transportFetch,
+} from "./transport";
+import { classifyGatewayHost } from "./gateway-host-target";
 import {
   collectSetupWarnings,
   hermesInstallAllowed,
@@ -35,7 +41,8 @@ import {
   systemSshAvailable,
   validateSystemTarget,
 } from "./system-ssh";
-import { buildPluginInfoCacheUpdate } from "../plugin-cache-update";
+import { buildPluginCacheUpdate, buildPluginInfoCacheUpdate } from "../plugin-cache-update";
+import { probeDeskrpgPluginWithInfo } from "../plugin-capability";
 import { verifySetupGateway } from "./verify";
 import type {
   HostTarget,
@@ -470,6 +477,127 @@ export async function startSetup(
   });
   return job;
 }
+/**
+ * 이미 등록해 쓰고 있는 게이트웨이의 **플러그인만** 고정 버전으로 올린다.
+ *
+ * 마법사(`startSetup`)를 그대로 쓸 수 없다: 그 흐름은 끝에서 게이트웨이를 upsert 하며
+ * 표시 이름을 `Hermes · <host>` 로 덮어쓰고(`gateway-resources.ts:133`) 프로필을 다시
+ * 들여온다. 사용자가 붙인 이름과 공유 설정을 건드리지 않는 것이 이 경로의 계약이다.
+ *
+ * 그래서 파이프라인은 그대로 쓰되(`prepareHost`), 갱신에 필요 없는 단계는 `skipStep` 으로
+ * 닫고, 끝나면 **플러그인 캐시만** 새로 쓴다 — 토큰·주소·이름은 그대로 둔다.
+ */
+export async function startPluginUpdate(userId: string, gatewayId: string) {
+  const [gateway] = await db
+    .select()
+    .from(gatewayResources)
+    .where(eq(gatewayResources.id, gatewayId))
+    .limit(1);
+  // 남의 게이트웨이 호스트에서 명령을 돌리게 할 수는 없다 — 공유받은 사용자도 안 된다.
+  if (!gateway || gateway.ownerUserId !== userId) throw new Error("setup_not_found");
+
+  const kind = classifyGatewayHost(gateway.baseUrl);
+  let target: HostTarget;
+  let port: number;
+  if (kind.mode === "local") {
+    target = { mode: "local" };
+    port = kind.port;
+  } else if (kind.mode === "ssh") {
+    const ssh = await readSshTransportTarget(gateway.baseUrl);
+    if (!ssh) throw new Error("ssh_unknown_host");
+    target = { mode: "ssh", hostId: ssh.hostId };
+    port = ssh.remotePort;
+  } else {
+    // 컨테이너에서 본 `host.docker.internal` 처럼, 주소는 닿아도 그 호스트에서 명령을
+    // 돌릴 방법이 없는 경우다. 화면이 이유를 말하도록 전용 코드로 던진다.
+    throw new Error("plugin_update_unsupported_host");
+  }
+
+  const executor = await requireHost(userId, target);
+  const platform = hostPlatform(target);
+  const candidates = await discoverHost(executor, platform);
+  // 주소의 포트가 이 게이트웨이의 정체다 — 이름표(label)는 호스트마다 다를 수 있다.
+  const candidate = candidates.find((item) => item.port === port);
+  if (!candidate) throw new Error("plugin_update_candidate_not_found");
+
+  const jobs = store();
+  const targetKey = JSON.stringify(target);
+  const release = jobs.lock(targetKey);
+  let job;
+  try {
+    job = jobs.create(userId, targetKey, {});
+  } catch (error) {
+    release();
+    throw error;
+  }
+  const controller = new AbortController();
+  controllers.set(job.id, controller);
+  const step = (name: string) => {
+    if (jobs.cancelled(userId, job.id) || controller.signal.aborted)
+      throw new Error("setup_cancelled");
+    if (!STEPS.has(name)) return;
+    const prior = jobs.get(userId, job.id);
+    if (prior.steps.at(-1) !== name) jobs.update(userId, job.id, { steps: [...prior.steps, name] });
+  };
+
+  void (async () => {
+    try {
+      // 갱신에 없어야 할 단계를 닫는다. 프로필·키·포트·시간대는 이미 운영 중인 설정이고,
+      // 서비스 등록은 돌고 있는 게이트웨이에 다시 할 일이 아니다.
+      const skipStep = (name: string) =>
+        name === "setting_port" ||
+        name === "creating_profile" ||
+        name === "provisioning_keys" ||
+        name === "installing_service" ||
+        name === "configuring_api" ||
+        name === "setting_timezone";
+      await prepareHost(
+        executor,
+        candidate.id,
+        step,
+        controller.signal,
+        undefined,
+        undefined,
+        skipStep,
+        undefined,
+        platform,
+      );
+      // 새 버전이 실제로 서빙되는지 우리 주소로 확인한다(ssh 는 transportFetch 가 터널을 연다).
+      const probed = await probeDeskrpgPluginWithInfo({
+        fetchImpl: transportFetch,
+        baseUrl: gateway.baseUrl,
+        // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
+        token: decryptGatewayToken(gateway.tokenEncrypted),
+      });
+      await db
+        .update(gatewayResources)
+        .set({
+          ...buildPluginCacheUpdate(probed.capability),
+          ...buildPluginInfoCacheUpdate(probed.info),
+        })
+        .where(eq(gatewayResources.id, gatewayId));
+      if (probed.capability.status !== "plugin_ready") throw new Error("plugin_verify_failed");
+      jobs.update(userId, job.id, { status: "succeeded", gatewayId });
+    } catch (error) {
+      const code =
+        controller.signal.aborted || jobs.cancelled(userId, job.id)
+          ? "setup_cancelled"
+          : safeSetupError(error);
+      jobs.update(userId, job.id, {
+        status: code === "setup_cancelled" ? "cancelled" : "failed",
+        error: code,
+      });
+    } finally {
+      controllers.delete(job.id);
+      release();
+    }
+  })().catch(() => {
+    /* 잡에 실패를 남기지 못한 경우까지 여기서 삼킨다 — 호스트 출력은 절대 로그에 남기지 않는다. */
+  });
+
+  return job;
+}
+
 export function getSetupJob(userId: string, id: string) {
   return store().get(userId, id);
 }

@@ -419,6 +419,10 @@ const en: Record<string, string> = {
     "Hermes 0.21.1 or newer is required. Run hermes update on the server, then check again.",
   "hermes.wizard.error.pluginUpdateFailed":
     "The DeskRPG plugin could not be updated to the new version. Ask the administrator to check host network access and write permission on the plugin directory, then check again.",
+  "hermes.wizard.error.pluginUpdateUnsupportedHost":
+    "This app cannot run commands on the host where this gateway runs — container deployments are one such case. Register the host over SSH, or update the plugin on the host and then run Test connection.",
+  "hermes.wizard.error.pluginUpdateCandidateNotFound":
+    "No Hermes on that host uses this gateway\u2019s port. Check whether the gateway address changed or Hermes is stopped.",
   "hermes.wizard.error.serviceInstallFailed":
     "The gateway could not be registered as a service. Ask the administrator to run hermes gateway install on the host and read its output, then check again.",
   "hermes.wizard.error.timezoneInvalid":
@@ -2162,6 +2166,13 @@ const en: Record<string, string> = {
   "gateways.statusUntested": "Not tested yet",
   "gateways.createTitle": "Register gateway",
   "gateways.openDashboard": "Open Hermes dashboard",
+  "gateways.pluginVersion": "Plugin",
+  "gateways.pluginVersionPinned": "Version this app installs",
+  "gateways.pluginVersionUnknown": "not checked",
+  "gateways.pluginVersionOutdated":
+    "is out of date. Update it on the host, then run Test connection.",
+  "gateways.pluginVersionRecheck": "Run Test connection to check.",
+  "gateways.pluginVersionUpdateNow": "Update now",
   "gateways.editTitle": "Edit gateway",
   "gateways.createHelp":
     "Register a Hermes gateway that you own, then add the profiles you want to use.",
@@ -2366,6 +2377,8 @@ const en: Record<string, string> = {
   "errors.failedToCreateProject": "Failed to create project",
   "errors.failedToOpenTemplateForEditing": "Failed to open template for editing.",
   "errors.unauthorized": "You need to sign in to continue",
+  "errors.setupBadOrigin":
+    "Requests from another site are not accepted. Try again from this screen.",
   "errors.forbidden": "You do not have permission to do that",
   "errors.notFound": "Requested resource was not found",
   "errors.channelIdRequired": "Channel ID is required",

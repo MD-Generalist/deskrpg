@@ -2059,3 +2059,71 @@ test("HOST_BOOTSTRAP 은 UTF-8 이 아닌 로케일에서도 한글 payload 를 
     rmSync(temp, { recursive: true, force: true });
   }
 });
+
+test("플러그인만 갱신해도 게이트웨이를 재시작한다 — 새 코드는 재시작해야 서빙된다", async () => {
+  // 호스트는 이미 `restarting_gateway` 를 changes 에 넣어 준다(위 inspect 테스트). 그런데
+  // prepareHost 는 configure·timezone 이 돌 때만 재시작해서, 플러그인만 뒤처진 흔한 경우에
+  // 옛 코드가 계속 서빙됐다(Hermes CLI 도 설치 후 "Restart the gateway" 라고 말한다).
+  const stale = {
+    ...candidate,
+    pluginInstalled: true,
+    pluginEnabled: true,
+    pluginVersion: "0.5.0",
+    hasToken: true,
+  };
+  const f = fake([
+    {
+      candidate: stale,
+      pluginStatus: "plugin_ready",
+      changes: ["updating_plugin", "restarting_gateway"],
+    },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
+  assert.deepEqual(steps, [
+    "inspecting",
+    "updating_plugin",
+    "restarting_gateway",
+    "verifying_gateway",
+  ]);
+  assert.deepEqual(
+    f.calls.map((c) => JSON.parse(c.input!).action),
+    ["inspect", "install", "restart", "verify"],
+  );
+});
+
+test("재시작 조건이 여럿 참이어도 재시작은 한 번이다", async () => {
+  // 첫 설치 경로에서는 configure 와 호스트의 restarting_gateway 가 함께 참이 된다.
+  const stale = {
+    ...candidate,
+    pluginInstalled: true,
+    pluginEnabled: true,
+    pluginVersion: "0.5.0",
+    hasToken: true,
+  };
+  const f = fake([
+    {
+      candidate: stale,
+      pluginStatus: "plugin_ready",
+      changes: ["updating_plugin", "configuring_api", "restarting_gateway"],
+    },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
+  assert.equal(steps.filter((s) => s === "restarting_gateway").length, 1);
+  assert.equal(
+    f.calls.map((c) => JSON.parse(c.input!).action).filter((a) => a === "restart").length,
+    1,
+  );
+});

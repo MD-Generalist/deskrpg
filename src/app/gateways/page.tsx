@@ -10,11 +10,13 @@ import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide"
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 import { planGatewayDelete } from "./gateway-delete-plan";
 import { backLinkTarget } from "./return-target";
 import { employeesHref } from "@/components/workspace-navigation";
+import { describePluginVersion } from "@/lib/hermes/plugin-version-view";
+import { setupCopy, setupError, setupHostError, setupStep } from "@/components/gateway/setup-copy";
 
 type GatewayRow = {
   id: string;
@@ -29,6 +31,9 @@ type GatewayRow = {
   lastValidationError?: string | null;
   /** Hermes 대시보드 공개 주소 — 플러그인 0.7.1 이 알려 주고, 소유자에게만 내려온다. */
   dashboardUrl?: string | null;
+  /** 마지막 프로브가 본 설치본 버전. `/api/gateways` 가 캐시에서 내려준다. */
+  pluginVersion?: string | null;
+  pluginStatus?: string | null;
 };
 
 type GatewayShare = {
@@ -55,6 +60,87 @@ type GatewayTestState = {
   status: GatewayStatus;
   error?: string | null;
 };
+
+/**
+ * 이 게이트웨이에 깔린 플러그인 버전과 앱이 설치하는 버전을 나란히 보여 준다.
+ *
+ * 없던 것을 채우는 줄이다 — 예전에는 설치본 버전이 화면 어디에도 없어서, 플러그인을
+ * 올렸는지 확인하려면 API 를 직접 읽어야 했다. 값은 캐시에서 오고 캐시는 최대 1시간
+ * 낡을 수 있으므로(`shouldReprobePlugin`), 뒤처져 보이면 "연결 테스트" 를 눌러 다시
+ * 확인하라고 안내한다 — 그 버튼이 프로브 후 캐시를 갱신한다.
+ */
+function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpdated: () => void }) {
+  const t = useT();
+  const { locale } = useLocale();
+  const [busyStep, setBusyStep] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState("");
+  const view = describePluginVersion({
+    installed: gateway.pluginVersion,
+    pluginStatus: gateway.pluginStatus,
+  });
+
+  // 갱신은 호스트에서 명령을 돌리는 긴 작업이라 잡으로 돈다 — 마법사와 같은 잡 조회를 쓴다.
+  const runUpdate = async () => {
+    setUpdateError("");
+    setBusyStep("inspecting");
+    try {
+      const started = await fetch(`/api/gateways/${gateway.id}/plugin/update`, { method: "POST" });
+      const startedBody = await started.json().catch(() => ({}));
+      if (!started.ok) throw startedBody?.errorCode ?? "setup_failed";
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const res = await fetch(`/api/gateways/setup?job=${encodeURIComponent(startedBody.jobId)}`);
+        const body = await res.json().catch(() => ({}));
+        const job = body?.job;
+        if (!res.ok || !job) throw body?.errorCode ?? "setup_failed";
+        setBusyStep(job.steps?.at(-1) ?? null);
+        if (job.status === "succeeded") break;
+        if (job.status === "failed" || job.status === "cancelled")
+          throw job.error ?? "setup_failed";
+      }
+      onUpdated();
+    } catch (code) {
+      setUpdateError(setupHostError(locale, code) ?? setupError(setupCopy[locale], code));
+    } finally {
+      setBusyStep(null);
+    }
+  };
+
+  const tone =
+    view.state === "outdated"
+      ? "text-warning"
+      : view.state === "current"
+        ? "text-success"
+        : "text-text-muted";
+
+  return (
+    <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+      <span>
+        {t("gateways.pluginVersion")}:{" "}
+        <span className={`font-semibold ${tone}`} data-plugin-version={view.state}>
+          {view.installed ?? t("gateways.pluginVersionUnknown")}
+        </span>
+      </span>
+      <span className="text-text-dim">·</span>
+      <span>
+        {t("gateways.pluginVersionPinned")}: {view.pinned}
+      </span>
+      {view.state === "outdated" && <span>— {t("gateways.pluginVersionOutdated")}</span>}
+      {view.state === "unknown" && <span>— {t("gateways.pluginVersionRecheck")}</span>}
+      {view.state === "outdated" && gateway.isOwner && (
+        <button
+          type="button"
+          onClick={() => void runUpdate()}
+          disabled={busyStep !== null}
+          className="rounded-md bg-surface-raised px-2 py-0.5 text-[11px] font-medium hover:brightness-110 disabled:opacity-60"
+        >
+          {busyStep ? setupStep(setupCopy[locale], busyStep) : t("gateways.pluginVersionUpdateNow")}
+        </button>
+      )}
+      {updateError && <span className="text-danger">{updateError}</span>}
+    </p>
+  );
+}
 
 const EMPTY_TEST_STATE: GatewayTestState = { status: "idle" };
 
@@ -609,6 +695,13 @@ function GatewayManagementPageInner() {
                     </div>
                   )}
                 </div>
+
+                {selectedGateway && (
+                  <PluginVersionLine
+                    gateway={selectedGateway}
+                    onUpdated={() => void loadGateways({ autoSelect: false })}
+                  />
+                )}
 
                 <div className="grid gap-4">
                   <div>

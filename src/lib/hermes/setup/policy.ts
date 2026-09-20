@@ -99,6 +99,10 @@ const SAFE_CODES = new Set([
   "hermes_version_unsupported",
   "plugin_install_failed",
   "plugin_update_failed",
+  // 갱신 전용 — 주소는 닿지만 그 호스트에서 명령을 돌릴 수 없다(컨테이너에서 본 호스트 주소 등).
+  "plugin_update_unsupported_host",
+  "plugin_update_candidate_not_found",
+  "plugin_verify_failed",
   "service_install_failed",
   "timezone_invalid",
   "timezone_write_failed",
