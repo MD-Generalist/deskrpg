@@ -499,13 +499,11 @@ export async function prepareHost(
     Boolean(timezone) && !state.candidate.timezone && !skip("setting_timezone");
   if (configuring) await stage("configuring_api", "configure");
   if (settingTimezone) await stage("setting_timezone", "set-timezone", timezone);
-  // 플러그인을 건드렸으면 재시작해야 새 코드가 서빙된다 — Hermes CLI 도 설치 후 그렇게 말하고,
-  // 호스트도 `restarting_gateway` 를 changes 에 넣어 준다. 예전에는 configure·timezone 이 돌 때만
-  // 재시작해서, "플러그인만 뒤처진" 흔한 경우에 옛 코드가 그대로 남았다.
-  const restarting =
-    configuring ||
-    settingTimezone ||
-    (pluginStep !== null && state.changes.includes("restarting_gateway"));
+  // 재시작이 필요한지는 **호스트가 말해 준다**(`changes`). 여기서 "무엇을 했으니 필요하다" 를
+  // 따로 추론하면 호스트 판정과 어긋난다. 예전에는 configure·timezone 이 돌 때만 재시작해서,
+  // 플러그인만 뒤처진 흔한 경우(최소 버전은 넘지만 핀보다 낮음)에 새 코드가 설치만 되고
+  // 옛 코드가 계속 서빙됐다. 조건이 여럿 참이어도 재시작은 한 번이다.
+  const restarting = configuring || settingTimezone || state.changes.includes("restarting_gateway");
   if (restarting && !skip("restarting_gateway")) await stage("restarting_gateway", "restart");
   const verified = await stage("verifying_gateway", "verify");
   for (const warning of Array.isArray(verified.warnings) ? verified.warnings : [])

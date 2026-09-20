@@ -2096,3 +2096,34 @@ test("플러그인만 갱신해도 게이트웨이를 재시작한다 — 새 �
     ["inspect", "install", "restart", "verify"],
   );
 });
+
+test("재시작 조건이 여럿 참이어도 재시작은 한 번이다", async () => {
+  // 첫 설치 경로에서는 configure 와 호스트의 restarting_gateway 가 함께 참이 된다.
+  const stale = {
+    ...candidate,
+    pluginInstalled: true,
+    pluginEnabled: true,
+    pluginVersion: "0.5.0",
+    hasToken: true,
+  };
+  const f = fake([
+    {
+      candidate: stale,
+      pluginStatus: "plugin_ready",
+      changes: ["updating_plugin", "configuring_api", "restarting_gateway"],
+    },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
+  assert.equal(steps.filter((s) => s === "restarting_gateway").length, 1);
+  assert.equal(
+    f.calls.map((c) => JSON.parse(c.input!).action).filter((a) => a === "restart").length,
+    1,
+  );
+});
