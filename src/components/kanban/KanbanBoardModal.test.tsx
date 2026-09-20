@@ -1379,3 +1379,56 @@ test("기본 보드를 보고 있으면 ?board= 를 붙이지 않는다 — 옛 
     await f.cleanup();
   }
 });
+
+test("타임라인은 capability 가 있을 때만 켜지고, 열면 실행 기록을 조회한다", async () => {
+  const f = await mount((url) => {
+    if (url.includes("/automation/status"))
+      return json(status({ capabilities: ["kanban", "cron", "events", "kanban_views"] }));
+    if (url.includes("/kanban/runs"))
+      return json({
+        runs: [],
+        board: "deskrpg-ch-1",
+        window: { from: 0, to: 1 },
+        truncated: false,
+      });
+    if (url.includes("/kanban/board")) return json(board());
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    const button = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
+      (el) => el.getAttribute("aria-label") === "타임라인",
+    );
+    assert.ok(button, "capability 가 있는데 타임라인 버튼이 없다");
+    await act(async () => {
+      button.click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.ok(
+      f.calls.some((c) => c.includes("/kanban/runs")),
+      "타임라인을 열었는데 실행 기록을 조회하지 않았다",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("capability 가 없으면 타임라인 버튼을 두지 않는다", async () => {
+  // 눌러도 안 되는 버튼은 고장으로 읽힌다. 칸반 자체는 계속 돌아야 한다.
+  const f = await mount(happy);
+  try {
+    const button = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
+      (el) => el.getAttribute("aria-label") === "타임라인",
+    );
+    assert.equal(button, undefined);
+    assert.equal(
+      f.calls.some((c) => c.includes("/kanban/runs")),
+      false,
+    );
+    // 보드는 멀쩡히 그려진다.
+    assert.ok(f.host.querySelector('[data-column="todo"]'));
+  } finally {
+    await f.cleanup();
+  }
+});

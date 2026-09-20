@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, LayoutGrid, List } from "lucide-react";
+import { Archive, GanttChartSquare, LayoutGrid, List } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
 import type { GroupBy, ProjectViewState, SortField } from "@/lib/kanban-view-state";
@@ -14,6 +14,11 @@ export interface KanbanViewToolbarProps {
   assignees: readonly string[];
   onUpdate: (patch: Partial<ProjectViewState>) => void;
   onFilter: (patch: Partial<ProjectViewState["filter"]>) => void;
+  /**
+   * 플러그인에 `kanban_views` 가 있는가. 없으면 타임라인 버튼을 아예 두지 않는다 —
+   * 눌러도 안 되는 버튼은 고장으로 읽힌다.
+   */
+  timelineSupported: boolean;
 }
 
 /**
@@ -28,6 +33,7 @@ export default function KanbanViewToolbar({
   assignees,
   onUpdate,
   onFilter,
+  timelineSupported,
 }: KanbanViewToolbarProps) {
   const t = useT();
   const activeFilters =
@@ -54,6 +60,14 @@ export default function KanbanViewToolbar({
           onClick={() => onUpdate({ viewMode: "list" })}
           icon={<List className="h-3.5 w-3.5" />}
         />
+        {timelineSupported && (
+          <ModeButton
+            active={state.viewMode === "timeline"}
+            label={t("kanban.view.timeline")}
+            onClick={() => onUpdate({ viewMode: "timeline" })}
+            icon={<GanttChartSquare className="h-3.5 w-3.5" />}
+          />
+        )}
       </div>
 
       {state.viewMode === "list" && (

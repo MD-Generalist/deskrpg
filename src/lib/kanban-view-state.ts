@@ -20,7 +20,7 @@ import { taskTimeMs } from "@/lib/plugin-time";
 // 뷰 상태
 // ---------------------------------------------------------------------------
 
-export type ViewMode = "board" | "list";
+export type ViewMode = "board" | "list" | "timeline";
 export type GroupBy = "none" | "status" | "tenant" | "assignee" | "priority";
 export type SortField = "created" | "started" | "priority" | "title" | "status";
 export type SortDir = "asc" | "desc";
@@ -71,7 +71,7 @@ export function normalizeViewState(value: unknown): ProjectViewState {
     raw.filter && typeof raw.filter === "object" ? raw.filter : {}
   ) as Partial<ViewFilter>;
   return {
-    viewMode: raw.viewMode === "list" ? "list" : "board",
+    viewMode: raw.viewMode === "list" || raw.viewMode === "timeline" ? raw.viewMode : "board",
     groupBy: isGroupBy(raw.groupBy) ? raw.groupBy : DEFAULT_VIEW_STATE.groupBy,
     sortField: isSortField(raw.sortField) ? raw.sortField : DEFAULT_VIEW_STATE.sortField,
     sortDir: raw.sortDir === "asc" ? "asc" : "desc",

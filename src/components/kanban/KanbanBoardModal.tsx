@@ -4,13 +4,18 @@ import { AlertTriangle, KanbanSquare, Plus, RefreshCw, Settings, X } from "lucid
 
 import { useT } from "@/lib/i18n";
 import { ProjectPicker, useSelectedBoard, type ProjectOption } from "./ProjectPicker";
-import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
+import type {
+  KanbanRunsPage,
+  KanbanTask,
+  KanbanTaskStatus,
+} from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
 import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
 import KanbanListView from "./KanbanListView";
+import KanbanTimeline from "./KanbanTimeline";
 import KanbanViewToolbar from "./KanbanViewToolbar";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
@@ -18,6 +23,7 @@ import TaskEditorDialog from "./TaskEditorDialog";
 import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
 import { applyFilter } from "@/lib/kanban-view-state";
 import { useProjectViewState, useTaskGroups } from "./use-project-view-state";
+import { presetWindow, type WindowPreset } from "@/lib/timeline-layout";
 import {
   createKanbanApi,
   toFailure,
@@ -151,12 +157,21 @@ export default function KanbanBoardModal({
     toggleGroup: toggleViewGroup,
   } = useProjectViewState(channelId);
   const includeArchived = viewState.filter.includeArchived;
+  /**
+   * 묶음 조회가 되는가. capability 가 정본이다 — 버전으로 판단하면 "새 플러그인인데 404" 를
+   * 진단할 수 없다(`plugin-capability.ts` 의 스웜 게이트와 같은 이유).
+   */
+  const viewsSupported = status?.capabilities?.includes("kanban_views") ?? false;
   const [expandedTasks, setExpandedTasks] = useState<ReadonlySet<string>>(() => new Set());
   const [loadingChildren, setLoadingChildren] = useState<ReadonlySet<string>>(() => new Set());
   /** 펼친 카드의 링크. id 만 담는다 — 카드 본문은 언제나 보드 응답이 정본이다. */
   const [links, setLinks] = useState<
     ReadonlyMap<string, { parents: string[]; children: string[] }>
   >(() => new Map());
+  const [timelinePreset, setTimelinePreset] = useState<WindowPreset>("today");
+  const [runsPage, setRunsPage] = useState<KanbanRunsPage | null>(null);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const [runsError, setRunsError] = useState<string | null>(null);
   const mounted = useRef(true);
   const reloadSequence = useRef(0);
   const latestReloadRef = useRef<Promise<ReloadResult> | null>(null);
@@ -347,6 +362,43 @@ export default function KanbanBoardModal({
     },
     [api, links],
   );
+
+  /**
+   * 타임라인 창. **매 렌더마다 `Date.now()` 를 다시 읽지 않는다** — 그러면 막대가 미세하게
+   * 계속 흔들리고 `useMemo` 도 매번 깨진다. 뷰를 열거나 기간을 바꿀 때만 다시 잡는다.
+   */
+  const timelineWindow = useMemo(
+    () => presetWindow(timelinePreset, Date.now()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 창을 고정하려면 열 때의 시각만 쓴다.
+    [timelinePreset, viewState.viewMode],
+  );
+
+  useEffect(() => {
+    if (viewState.viewMode !== "timeline" || !viewsSupported || blocker) return;
+    let alive = true;
+    setRunsLoading(true);
+    setRunsError(null);
+    void api
+      .runs({
+        from: Math.floor(timelineWindow.fromMs / 1000),
+        to: Math.ceil(timelineWindow.toMs / 1000),
+      })
+      .then((page) => {
+        if (alive) setRunsPage(page);
+      })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        // 실패를 빈 타임라인으로 덮지 않는다 — "일한 적 없음" 과 "물어볼 수 없음" 은 다르다.
+        setRunsPage(null);
+        setRunsError(toFailure(err).message);
+      })
+      .finally(() => {
+        if (alive) setRunsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [api, blocker, timelineWindow, viewState.viewMode, viewsSupported, detailTick]);
 
   const byId = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
   const childrenOf = useMemo(() => resolveLinks(links, byId, "children"), [links, byId]);
@@ -734,6 +786,7 @@ export default function KanbanBoardModal({
             assignees={currentBoard?.assignees ?? []}
             onUpdate={updateView}
             onFilter={setViewFilter}
+            timelineSupported={viewsSupported}
           />
         )}
         <div className="flex flex-1 overflow-hidden">
@@ -755,6 +808,18 @@ export default function KanbanBoardModal({
                 onRetry={() => void reload()}
                 onConnectGateway={onConnectGateway}
                 onOpenChecklist={() => setChecklist(gateBlockerFromBoard(blocker))}
+              />
+            ) : viewState.viewMode === "timeline" ? (
+              <KanbanTimeline
+                runs={runsPage?.runs ?? []}
+                window={timelineWindow}
+                preset={timelinePreset}
+                onPresetChange={setTimelinePreset}
+                now={now}
+                truncated={runsPage?.truncated ?? false}
+                loading={runsLoading}
+                error={runsError}
+                onOpenTask={setSelectedTaskId}
               />
             ) : viewState.viewMode === "list" ? (
               <KanbanListView
