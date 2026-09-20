@@ -7,6 +7,31 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.921.2] - 2026-09-21
+
+### Fixed
+
+- Read kanban times as the epoch seconds the plugin actually sends. The UI parsed them as date strings, so against a real gateway the task drawer showed run history dated 1970, the elapsed badge on running cards never appeared, and sorting by created or started time silently did nothing. The test fake emitted ISO strings, which is why tests stayed green; it now emits epoch seconds like the plugin.
+- Retry a staff report whose call was rejected once that staff member's state changes, instead of never calling again. Rejections are logged to the console for diagnosis.
+- Show a rejected staff call to the user and roll back the optimistic ownership, and close two paths where a call ended silently with nothing happening.
+- Settle the return from a meeting on the server when no browser is driving the walk, so staff no longer stay in their meeting seats.
+- Keep every connected socket listening to the office room, so automation notices arrive without opening the room first.
+- Restart the gateway after a plugin-only update, and decide whether a restart is needed from the host's reported changes.
+
+### Added
+
+- View the same kanban board as a list: group by subproject (tenant), assignee, status or priority; filter by subproject, assignee or warnings; sort; per-group status progress bars; and expand a card's subtasks on demand. Filters apply to the board view too, so both views always show the same cards. The view is remembered per channel in the browser.
+- Have the assigned staff member walk over and report when a card reaches review, blocked or done, or when a cron run fails. The report stays in the office room when nobody is online.
+- Show the connected gateway's installed plugin version next to the pinned version, and update the plugin from the screen.
+- Record a structured outcome when a meeting ends (decisions, follow-up tasks with assignee and ordering, and whether the work should be tracked as a project) along with a summary status. A failed summary is now recorded as failed instead of being stored as an empty success, and can be retried from the stored transcript by the meeting host or channel owner.
+
+### Changed
+
+- Let a channel hold more than one kanban board. The board link table moves to a surrogate key (migration 0017 keeps existing rows and event cursors), the automation poller polls each board and saves cursors per board, and exactly one board per channel carries the gateway-wide cron and artifact events. Kanban REST routes accept `?board=`; omitting it keeps the previous meaning. A project picker appears in the board header when a channel has two or more boards. Creating a second board from the UI is not available yet.
+- Add project and subproject metadata tables and REST routes (status, lead, target date, colour, icon, originating meeting). Names and progress are not copied; they are read from the Hermes board.
+- Add approval records (migration 0018) and the batch entry point that creates cards as blocked until approved. Nothing in the UI calls it yet, and it requires a plugin newer than 0.10.2.
+- Add REST plumbing for bulk link and run-history queries behind a plugin capability gate; it stays dormant until the plugin provides those routes.
+
 ## [2026.921.1] - 2026-09-21
 
 ### Added

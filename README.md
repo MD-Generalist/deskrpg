@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.921.1` — Runs natively on Windows: the connection wizard finds or installs a local Hermes and reaches Linux hosts over SSH. Conversations show who is speaking with avatars, direct messages with staff appear in the conversation list, single-line links become preview cards, and files and images in chat can be downloaded. Staff no longer take the executive seat, clicking a kanban card opens its details again, and card attachments are listed with results. Earlier in 2026.920.x: password recovery without email, host connection over SSH or locally even without python3, and a 3D miniature logo.
+- Version: `v2026.921.2` — Fixes kanban run history showing 1970 dates and missing elapsed time. The same board can now be viewed as a list (group by subproject, assignee or status; filter, sort, progress, expandable subtasks), and staff walk over to report when a card reaches review, blocked or done. Calling staff and returning from meetings are more reliable, and the connected plugin's version can be checked and updated from the screen. Earlier in 2026.921.1: native Windows support, chat avatars, staff DMs in the conversation list, link previews and file downloads.
 
 ## What You Can Do
 

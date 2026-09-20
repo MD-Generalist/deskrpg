@@ -117,7 +117,7 @@ import {
   upsertLegacyNpcChunk,
 } from "./chat-response-state";
 
-const APP_VERSION = "2026.921.1";
+const APP_VERSION = "2026.921.2";
 const BUG_REPORT_BASE_URL = "https://github.com/dandacompany/deskrpg/issues/new";
 const SOURCE_CODE_URL = "https://github.com/dandacompany/deskrpg";
 const LICENSE_URL = `${SOURCE_CODE_URL}/blob/main/LICENSE.md`;
