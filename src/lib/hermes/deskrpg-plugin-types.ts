@@ -82,6 +82,13 @@ export type Diagnostic = {
   data: Record<string, unknown>;
 };
 
+/**
+ * 플러그인이 보내는 시각. **epoch 초(정수)가 정본**이고(플러그인 `docs/contracts.md`), 가짜
+ * 플러그인 서버는 ISO 문자열을 보낸다. 읽을 때는 `taskTimeMs()` 를 쓴다 — `Date.parse` 를
+ * 직접 부르면 정수에서 NaN 이 나와 시각이 조용히 사라진다.
+ */
+export type PluginTime = string | number;
+
 /** 보드 열에 실리는 카드 요약. */
 export type KanbanTask = {
   id: string;
@@ -91,15 +98,15 @@ export type KanbanTask = {
   assignee?: string;
   priority?: string;
   tenant?: string;
-  created_at?: string;
+  created_at?: PluginTime;
   latest_summary?: string;
   comment_count?: number;
   link_counts?: { parents: number; children: number };
   progress?: { done: number; total: number };
   warnings?: { count: number; highest_severity?: string };
-  started_at?: string;
+  started_at?: PluginTime;
   worker_pid?: number;
-  last_heartbeat_at?: string;
+  last_heartbeat_at?: PluginTime;
 };
 
 /** 카드 상세(`GET /kanban/tasks/{id}`)에서만 오는 필드까지 포함한 전체 모양. */
@@ -109,7 +116,7 @@ export type KanbanTaskFull = KanbanTask & {
   model_override?: string;
   provider_override?: string;
   reasoning_effort?: string;
-  completed_at?: string;
+  completed_at?: PluginTime;
   last_failure_error?: string;
   workspace_kind?: string;
   workspace_path?: string;
@@ -127,15 +134,15 @@ export type KanbanRun = {
   error?: string;
   metadata?: Record<string, unknown>;
   worker_pid?: number;
-  started_at?: string;
-  ended_at?: string;
+  started_at?: PluginTime;
+  ended_at?: PluginTime;
 };
 
 export type KanbanComment = {
   id: string;
   author: string;
   body: string;
-  created_at: string;
+  created_at: PluginTime;
 };
 
 /** 카드 상세에 실리는 카드별 이력. 통합 이벤트 스트림(`Event`)과는 다른 모양이다. */
@@ -143,7 +150,7 @@ export type KanbanEvent = {
   id: string;
   kind: string;
   payload: Record<string, unknown>;
-  created_at: string;
+  created_at: PluginTime;
 };
 
 export type KanbanAttachment = {
@@ -162,7 +169,7 @@ export type KanbanBoard = {
   tenants: string[];
   assignees: string[];
   latest_event_id: string | null;
-  now: string;
+  now: PluginTime;
 };
 
 export type KanbanTaskDetail = {

@@ -12,7 +12,9 @@ import {
   KANBAN_TASK_STATUSES,
   type KanbanTask,
   type KanbanTaskStatus,
+  type PluginTime,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import { taskTimeMs } from "@/lib/plugin-time";
 
 // ---------------------------------------------------------------------------
 // 뷰 상태
@@ -155,9 +157,9 @@ function compareTasks(a: KanbanTask, b: KanbanTask, field: SortField): number {
   }
 }
 
-function compareMaybeTime(a: string | undefined, b: string | undefined): number {
+function compareMaybeTime(a: PluginTime | undefined, b: PluginTime | undefined): number {
   // 둘 다 값이 있을 때만 불린다 — 없는 값의 자리는 `sortTasks` 가 따로 정한다.
-  return (a ? Date.parse(a) : 0) - (b ? Date.parse(b) : 0);
+  return (taskTimeMs(a) ?? 0) - (taskTimeMs(b) ?? 0);
 }
 
 /**
@@ -181,9 +183,9 @@ function statusIndex(status: string): number {
 function hasSortKey(task: KanbanTask, field: SortField): boolean {
   switch (field) {
     case "created":
-      return Boolean(task.created_at) && !Number.isNaN(Date.parse(task.created_at ?? ""));
+      return taskTimeMs(task.created_at) !== null;
     case "started":
-      return Boolean(task.started_at) && !Number.isNaN(Date.parse(task.started_at ?? ""));
+      return taskTimeMs(task.started_at) !== null;
     case "priority":
       return task.priority !== undefined && task.priority !== "";
     case "title":

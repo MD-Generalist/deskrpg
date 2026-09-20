@@ -11,7 +11,9 @@ import {
   type KanbanTaskStatus,
   type WorkerLog,
   type ArtifactSummary,
+  type PluginTime,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import { taskTimeMs } from "@/lib/plugin-time";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
 import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
@@ -235,7 +237,12 @@ export default function TaskDrawer({
   const linkCandidates = boardTasks.filter(
     (candidate) => candidate.id !== taskId && !(detail?.links.parents ?? []).includes(candidate.id),
   );
-  const formatDate = (iso?: string) => (iso ? new Date(iso).toLocaleString(locale) : "");
+  // epoch 초로 오는 값을 `new Date()` 에 그대로 넣으면 ms 로 읽혀 1970년이 찍힌다.
+  // 빈칸보다 나쁘다 — 틀린 날짜를 자신 있게 보여 준다.
+  const formatDate = (value?: PluginTime) => {
+    const ms = taskTimeMs(value);
+    return ms === null ? "" : new Date(ms).toLocaleString(locale);
+  };
 
   const handleDelete = async () => {
     if (!task) return;

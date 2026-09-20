@@ -1,4 +1,5 @@
 import { classifyGateFailure } from "@/lib/gate-failure";
+import { taskTimeMs } from "@/lib/plugin-time";
 import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 /**
  * 칸반 화면의 순수 뷰모델 — React·fetch 를 모른다.
@@ -92,13 +93,12 @@ export function elapsedSeconds(
   task: Pick<KanbanTask, "started_at" | "last_heartbeat_at">,
   now?: number,
 ): number | null {
-  if (!task.started_at) return null;
-  const started = Date.parse(task.started_at);
-  if (!Number.isFinite(started)) return null;
+  const started = taskTimeMs(task.started_at);
+  if (started === null) return null;
   let end = now;
   if (end === undefined) {
-    const heartbeat = task.last_heartbeat_at ? Date.parse(task.last_heartbeat_at) : NaN;
-    end = Number.isFinite(heartbeat) ? heartbeat : Date.now();
+    const heartbeat = taskTimeMs(task.last_heartbeat_at);
+    end = heartbeat ?? Date.now();
   }
   return Math.max(0, Math.floor((end - started) / 1000));
 }

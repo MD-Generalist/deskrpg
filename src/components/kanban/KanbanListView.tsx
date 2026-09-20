@@ -3,7 +3,8 @@
 import { AlertTriangle, ChevronDown, ChevronRight, GitBranch, MessageSquare } from "lucide-react";
 
 import { useLocale, useT } from "@/lib/i18n";
-import type { KanbanTask } from "@/lib/hermes/deskrpg-plugin-types";
+import type { KanbanTask, PluginTime } from "@/lib/hermes/deskrpg-plugin-types";
+import { taskTimeMs } from "@/lib/plugin-time";
 import {
   cardProgress,
   directChildCount,
@@ -295,10 +296,9 @@ const UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
  * `Intl.RelativeTimeFormat` 으로 "2일 전" 을 만든다. 로케일마다 문구를 네 벌 적지 않아도
  * 되고, 단수·복수 규칙도 플랫폼이 맡는다.
  */
-function relativeTime(iso: string | undefined, now: number, locale: string): string {
-  if (!iso) return "";
-  const at = Date.parse(iso);
-  if (Number.isNaN(at)) return "";
+function relativeTime(value: PluginTime | undefined, now: number, locale: string): string {
+  const at = taskTimeMs(value);
+  if (at === null) return "";
   const diff = at - now;
   const fmt = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   for (const [unit, ms] of UNITS) {

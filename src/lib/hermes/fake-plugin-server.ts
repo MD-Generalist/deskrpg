@@ -160,6 +160,7 @@ const notFound = (what = "not_found") => new HttpError(404, { error: what });
 const badRequest = (code: string, detail?: string) =>
   new HttpError(400, { error: code, ...(detail ? { detail } : {}) });
 
+/** 크론 잡·실행의 시각 — 계약상 Hermes 가 주는 ISO 문자열 그대로다(칸반과 다르다). */
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -304,15 +305,15 @@ export async function startFakePluginServer(
   }
 
   function recordTaskEvent(record: TaskRecord, kind: string, payload: Record<string, unknown>) {
-    record.events.push({ id: nextId("te"), kind, payload, created_at: nowIso() });
+    record.events.push({ id: nextId("te"), kind, payload, created_at: nowEpochSeconds() });
   }
 
   function setStatus(board: BoardRecord, record: TaskRecord, to: KanbanTaskStatus) {
     const from = record.task.status;
     if (from === to) return;
     record.task.status = to;
-    if (to === "running") record.task.started_at = nowIso();
-    if (to === "done") record.task.completed_at = nowIso();
+    if (to === "running") record.task.started_at = nowEpochSeconds();
+    if (to === "done") record.task.completed_at = nowEpochSeconds();
     const payload = {
       from,
       to,
@@ -374,7 +375,7 @@ export async function startFakePluginServer(
       tenants: [...tenants],
       assignees: [...assignees],
       latest_event_id: events.length > 0 ? events[events.length - 1].id : null,
-      now: nowIso(),
+      now: nowEpochSeconds(),
     };
   }
 
@@ -405,7 +406,7 @@ export async function startFakePluginServer(
       id,
       title,
       status: body.triage === true ? "triage" : "todo",
-      created_at: nowIso(),
+      created_at: nowEpochSeconds(),
       comment_count: 0,
       link_counts: { parents: parents.length, children: 0 },
       ...pick(body, [
@@ -574,7 +575,7 @@ export async function startFakePluginServer(
       id: nextId("cmt"),
       author: body.author,
       body: body.body,
-      created_at: nowIso(),
+      created_at: nowEpochSeconds(),
     };
     record.comments.push(comment);
     record.task.comment_count = record.comments.length;
@@ -622,7 +623,7 @@ export async function startFakePluginServer(
           id: nextId("cmt"),
           author: "reviewer",
           body: body.comment,
-          created_at: nowIso(),
+          created_at: nowEpochSeconds(),
         });
         record.task.comment_count = record.comments.length;
         setStatus(board, record, "todo");
@@ -634,7 +635,7 @@ export async function startFakePluginServer(
             id: nextId("cmt"),
             author: "operator",
             body: body.comment,
-            created_at: nowIso(),
+            created_at: nowEpochSeconds(),
           });
           record.task.comment_count = record.comments.length;
         }
@@ -644,7 +645,7 @@ export async function startFakePluginServer(
         const run = record.runs.find((r) => r.status === "running");
         if (run) {
           run.status = "terminated";
-          run.ended_at = nowIso();
+          run.ended_at = nowEpochSeconds();
           pushEvent({
             kind: "task.run.finished",
             board: board.meta.slug,
@@ -678,7 +679,7 @@ export async function startFakePluginServer(
         id: nextId("run"),
         profile,
         status: "running",
-        started_at: nowIso(),
+        started_at: nowEpochSeconds(),
         worker_pid: 40000 + record.runs.length,
       };
       record.runs.push(run);
@@ -979,6 +980,13 @@ export async function startFakePluginServer(
 
   // ---- 아티팩트(0.8.0+) -----------------------------------------------------
 
+  /**
+   * 칸반·아티팩트의 시각 — **실제 플러그인과 같은 epoch 초(정수)**(플러그인 `docs/contracts.md`).
+   *
+   * 예전에 칸반 쪽은 ISO 문자열을 냈다. 그래서 `Date.parse` 를 직접 부르던 화면 코드가 여기서는
+   * 멀쩡히 돌고 실제 게이트웨이에서만 시각이 사라졌다 — 가짜가 진짜보다 너그러우면 테스트가
+   * 결함을 덮는다. 크론만 ISO 이고(`nowIso`), 그것도 계약이 그렇게 정해서다.
+   */
   function nowEpochSeconds(): number {
     return Math.floor(Date.now() / 1000);
   }

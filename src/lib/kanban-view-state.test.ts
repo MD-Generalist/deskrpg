@@ -320,3 +320,27 @@ test("저장된 값이 살아 있으면 그대로 읽는다", () => {
   assert.equal(got.filter.includeArchived, true);
   assert.deepEqual(got.collapsedGroups, ["web"]);
 });
+
+test("만든 날짜 정렬은 플러그인이 보내는 epoch 초에서도 동작한다", () => {
+  // 정수 시각을 못 읽으면 전부 "값 없음" 으로 몰려 정렬이 조용히 입력 순서가 된다.
+  const tasks = [task("new", { created_at: 1758412800 }), task("old", { created_at: 1750000000 })];
+  assert.deepEqual(
+    sortTasks(tasks, "created", "asc").map((t) => t.id),
+    ["old", "new"],
+  );
+  assert.deepEqual(
+    sortTasks(tasks, "created", "desc").map((t) => t.id),
+    ["new", "old"],
+  );
+});
+
+test("epoch 초와 ISO 가 섞여 있어도 한 줄로 정렬된다", () => {
+  const tasks = [
+    task("iso-new", { created_at: "2025-09-21T00:00:00.000Z" }),
+    task("epoch-old", { created_at: 1750000000 }),
+  ];
+  assert.deepEqual(
+    sortTasks(tasks, "created", "asc").map((t) => t.id),
+    ["epoch-old", "iso-new"],
+  );
+});
