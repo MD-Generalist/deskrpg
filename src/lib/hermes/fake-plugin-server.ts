@@ -95,6 +95,11 @@ export type FakePluginServer = {
     body: string | Buffer;
     source_kind?: ArtifactSource;
   }): ArtifactSummary;
+  /**
+   * 다음 요청 `count` 건 중 경로가 `pathPrefix` 로 시작하는 것을 503 으로 돌려준다.
+   * 게이트웨이가 잠깐 안 닿는 순간(배포·재시작 겹침)을 흉내내는 데 쓴다.
+   */
+  failNext(pathPrefix: string, count?: number): void;
   /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
   seedAttachment(input: {
     board: string;
@@ -185,6 +190,8 @@ export async function startFakePluginServer(
   };
 
   const recorded: RecordedRequest[] = [];
+  /** 남은 일회성 장애 주입(경로 접두사 → 남은 실패 횟수). */
+  const faults: { prefix: string; remaining: number }[] = [];
   let boards = new Map<string, BoardRecord>();
   let currentBoard: string | null = null;
   let events: PluginEvent[] = [];
@@ -204,6 +211,7 @@ export async function startFakePluginServer(
     orchestration = defaultOrchestration(profileNames);
     cron = new Map();
     artifacts = new Map();
+    faults.length = 0;
     seq = 0;
   }
 
@@ -1511,9 +1519,13 @@ export async function startFakePluginServer(
         headers,
       };
 
+      const fault = faults.find((f) => f.remaining > 0 && url.pathname.startsWith(f.prefix));
       let reply: Reply;
       try {
-        reply = handle(parsed);
+        if (fault) {
+          fault.remaining -= 1;
+          reply = { status: 503, body: { error: "service_unavailable" } };
+        } else reply = handle(parsed);
       } catch (err) {
         reply =
           err instanceof HttpError
@@ -1553,6 +1565,9 @@ export async function startFakePluginServer(
     reset,
     setInfo: (patch) => {
       info = { ...info, ...patch, plugin: "deskrpg" };
+    },
+    failNext: (prefix, count = 1) => {
+      faults.push({ prefix, remaining: count });
     },
     lastRequest: () => recorded[recorded.length - 1] ?? null,
     requests: () => [...recorded],

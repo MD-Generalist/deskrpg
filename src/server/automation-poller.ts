@@ -210,13 +210,24 @@ export function createDefaultPollDeps(
  * 지우므로(`automation-events.ts` 의 `if (!payload.working) state.work.delete(npcId)`) 그 조건은
  * 한가한 채널에서도 늘 참이 되고, 아무 일도 없는 채널이 매 바퀴 보드를 조회하게 된다.
  * 프로세스가 죽으면 이 집합도 사라지므로 재시작마다 정확히 한 번 돈다.
+ *
+ * **보드를 다 읽은 바퀴에만 넣는다.** 재시작은 배포와 겹치는 일이 많아, 이 코드가 도는 바로 그 순간
+ * 게이트웨이가 잠깐 안 닿을 수 있다 — 읽기 전에 표시하면 그 채널은 프로세스가 사는 동안 다시
+ * 시도하지 않고, 되세우기가 존재하는 이유인 장면에서 조용히 실패한다.
  */
 const resyncedChannels = new Set<string>();
+/** 지금 되세우는 중인 채널. 같은 채널의 두 바퀴가 겹쳐 합성 사건을 두 번 만들지 않게 한다. */
+const resyncInFlight = new Set<string>();
 
 /** 테스트용 — 프로세스 수명 경계를 흉내낸다. */
 export function resetWorkingResyncForTests(channelId?: string) {
-  if (channelId === undefined) resyncedChannels.clear();
-  else resyncedChannels.delete(channelId);
+  if (channelId === undefined) {
+    resyncedChannels.clear();
+    resyncInFlight.clear();
+  } else {
+    resyncedChannels.delete(channelId);
+    resyncInFlight.delete(channelId);
+  }
 }
 
 /**
@@ -240,35 +251,44 @@ async function resyncWorkingFromBoards(
   resolved: Extract<ResolvedChannelBoard, { ok: true }>,
   deps: PollOnceDeps,
 ): Promise<void> {
-  if (resyncedChannels.has(channelId)) return;
-  resyncedChannels.add(channelId);
-
-  for (const row of rows) {
-    const view = await resolved.ownerClient.kanban.getBoard(row.boardSlug, {
-      includeArchived: false,
-    });
-    if (!view.ok) continue;
-    const events: PluginEvent[] = [];
-    for (const column of view.data.columns) {
-      for (const task of column.tasks) {
-        if (task.status !== "running" || !task.assignee) continue;
-        events.push({
-          id: `resync:${row.boardSlug}:${task.id}:${task.started_at ?? ""}`,
-          ts: Math.floor(Date.now() / 1000),
-          kind: "task.run.started",
-          board: row.boardSlug,
-          task_id: task.id,
-          payload: { assignee: task.assignee, title: task.title },
-        });
+  if (resyncedChannels.has(channelId) || resyncInFlight.has(channelId)) return;
+  resyncInFlight.add(channelId);
+  try {
+    let readAll = true;
+    for (const row of rows) {
+      const view = await resolved.ownerClient.kanban.getBoard(row.boardSlug, {
+        includeArchived: false,
+      });
+      if (!view.ok) {
+        // 이 바퀴는 실패로 끝난다 — 표시하지 않고 다음 바퀴에 다시 시도한다.
+        readAll = false;
+        continue;
       }
+      const events: PluginEvent[] = [];
+      for (const column of view.data.columns) {
+        for (const task of column.tasks) {
+          if (task.status !== "running" || !task.assignee) continue;
+          events.push({
+            id: `resync:${row.boardSlug}:${task.id}:${task.started_at ?? ""}`,
+            ts: Math.floor(Date.now() / 1000),
+            kind: "task.run.started",
+            board: row.boardSlug,
+            task_id: task.id,
+            payload: { assignee: task.assignee, title: task.title },
+          });
+        }
+      }
+      if (events.length === 0) continue;
+      const ingestDeps = deps.makeIngestDeps({
+        channelId,
+        gatewayId: resolved.binding.resource.id,
+        boardSlug: row.boardSlug,
+      });
+      await deps.ingest(channelId, events, ingestDeps);
     }
-    if (events.length === 0) continue;
-    const ingestDeps = deps.makeIngestDeps({
-      channelId,
-      gatewayId: resolved.binding.resource.id,
-      boardSlug: row.boardSlug,
-    });
-    await deps.ingest(channelId, events, ingestDeps);
+    if (readAll) resyncedChannels.add(channelId);
+  } finally {
+    resyncInFlight.delete(channelId);
   }
 }
 

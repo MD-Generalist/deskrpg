@@ -2498,7 +2498,12 @@ export class OfficeSimulation {
       const allowed =
         this.npcOwnership.mayRoam(npc.id, leader) &&
         ambientAllowed(
-          !!this.responsePhases[npc.id] || this.activityBubbles.has(npc.id),
+          // 일하는 중이면 산책을 나가지 않는다. 활동 말풍선만으로는 부족하다 — 조용히 오래 도는
+          // 실행에서는 `tool.progress` 가 없어, 앰비언트 일정(rest 60~100초)이 차는 순간
+          // 배지를 단 채 자리에서 일어난다(결정 C-1 "실행이 시작되면 자리로 가서 앉는다").
+          this.workingNpcs.has(npc.id) ||
+            !!this.responsePhases[npc.id] ||
+            this.activityBubbles.has(npc.id),
           this.dialogOpen,
           !!npc.calledForRoom,
         );
@@ -2511,6 +2516,10 @@ export class OfficeSimulation {
         npc.ambientTimer = 0;
         delete npc.ambientSchedule.seatTarget;
         delete npc.ambientSchedule.seatRest;
+        // 걷던 중에 일이 시작된 직원은 여기서 멈춘다. `seatNpcForWork` 는 `moveState !== "idle"`
+        // 이면 돌아서므로, 멈춘 자리에 배지만 단 채 서 있지 않도록 이 자리에서 다시 보낸다.
+        // 이 분기는 일하는 동안 매 틱 도니 아직 idle 이 아니어도 다음 틱에 다시 시도한다.
+        if (this.workingNpcs.has(npc.id)) this.seatNpcForWork(npc.id);
         continue;
       }
       if (npc.ambientPaused) continue;

@@ -452,3 +452,95 @@ test("놀고 있는 직원을 부르면 작업 중 안내를 띄우지 않는다
     sim.dispose();
   }
 });
+
+test("일하는 직원은 앰비언트 일정이 차도 산책을 나가지 않는다", async () => {
+  setPendingChannelData({ channelId: "ch", mapData: legacyMap });
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    await withFetch(
+      { npcs: [{ id: "n1", name: "Mina", positionX: 1, positionY: 1, direction: "down" }] },
+      async () => {
+        sim["boot"](pendingChannelData!);
+        await settle();
+      },
+    );
+    const npc = (sim["npcs"] as { id: string; moveState: string; ambientTimer: number }[])[0];
+    assert.ok(npc, "사전 조건: NPC 가 하나 있다");
+    const seated: string[] = [];
+    sim["seatNpcForWork"] = (id: string) => seated.push(id);
+    sim["mayDriveNpc"] = () => true;
+    // 테스트에는 소켓이 없어 앰비언트 리더가 아니다 — 그대로 두면 일하든 말든 산책이 막혀
+    // 이 테스트가 아무것도 구별하지 못한다.
+    (sim["npcOwnership"] as { mayRoam: (npcId: string, leader: boolean) => boolean }).mayRoam =
+      () => true;
+
+    sim["workingNpcs"] = new Set(["n1"]);
+    npc.ambientTimer = 99_999; // 일정이 넘치게 찼다
+    sim["updateNpcs"]();
+
+    assert.equal(npc.moveState, "idle", "일하는 중인데 자리에서 일어났습니다");
+    assert.equal(npc.ambientTimer, 0, "앰비언트 타이머가 리셋되지 않았습니다");
+    assert.deepEqual(seated, ["n1"], "일하는 직원을 자리로 다시 보내지 않았습니다");
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("산책 중에 일이 시작되면 멈추고 자리로 간다", async () => {
+  setPendingChannelData({ channelId: "ch", mapData: legacyMap });
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    await withFetch(
+      { npcs: [{ id: "n1", name: "Mina", positionX: 1, positionY: 1, direction: "down" }] },
+      async () => {
+        sim["boot"](pendingChannelData!);
+        await settle();
+      },
+    );
+    const npc = (sim["npcs"] as { id: string; moveState: string; stopStroll: () => void }[])[0];
+    let stopped = 0;
+    npc.stopStroll = () => {
+      stopped += 1;
+      npc.moveState = "idle";
+    };
+    npc.moveState = "strolling";
+    const seated: string[] = [];
+    sim["seatNpcForWork"] = (id: string) => seated.push(id);
+    sim["mayDriveNpc"] = () => true;
+    // 테스트에는 소켓이 없어 앰비언트 리더가 아니다 — 그대로 두면 일하든 말든 산책이 막혀
+    // 이 테스트가 아무것도 구별하지 못한다.
+    (sim["npcOwnership"] as { mayRoam: (npcId: string, leader: boolean) => boolean }).mayRoam =
+      () => true;
+
+    sim["workingNpcs"] = new Set(["n1"]);
+    sim["updateNpcs"]();
+
+    assert.equal(stopped, 1, "걷던 직원이 일을 시작했는데 멈추지 않았습니다");
+    assert.deepEqual(seated, ["n1"], "멈춘 자리에 배지만 단 채 서 있습니다");
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("일하지 않는 직원의 산책은 그대로 둔다", async () => {
+  setPendingChannelData({ channelId: "ch", mapData: legacyMap });
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    await withFetch(
+      { npcs: [{ id: "n1", name: "Mina", positionX: 1, positionY: 1, direction: "down" }] },
+      async () => {
+        sim["boot"](pendingChannelData!);
+        await settle();
+      },
+    );
+    const seated: string[] = [];
+    sim["seatNpcForWork"] = (id: string) => seated.push(id);
+    (sim["npcOwnership"] as { mayRoam: (npcId: string, leader: boolean) => boolean }).mayRoam =
+      () => true;
+    sim["workingNpcs"] = new Set();
+    sim["updateNpcs"]();
+    assert.deepEqual(seated, [], "일하지 않는 직원을 자리로 보냈습니다");
+  } finally {
+    sim.dispose();
+  }
+});

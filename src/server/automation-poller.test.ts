@@ -928,3 +928,44 @@ test("되세우기는 담당자 없는 running 카드를 건너뛴다", async ()
     "담당자가 없으면 누구를 일하는 중으로 만들지 정할 수 없습니다",
   );
 });
+
+test("보드 조회가 실패한 바퀴는 끝난 것으로 표시하지 않는다 — 다음 바퀴에 되세운다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const { getWorkingSnapshot } = await import("./automation-events");
+  const { channelBoardSlug } = await import("@/lib/kanban-boards");
+  const slug = channelBoardSlug(channel.id);
+  const h = await makeDeps();
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  await seedRunningCard(channel.id, slug, "재시작 때 돌고 있던 카드");
+  await simulateRestart(channel.id);
+
+  // 재시작은 배포와 겹치는 일이 많다 — 되세우기가 도는 바로 그 순간 게이트웨이가 안 닿는다.
+  server.failNext("/deskrpg/kanban/board");
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.deepEqual(
+    getWorkingSnapshot(channel.id),
+    [],
+    "사전 조건: 보드를 못 읽었으니 이 바퀴는 아무것도 못 세운다",
+  );
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const restored = getWorkingSnapshot(channel.id);
+  assert.equal(
+    restored.length,
+    1,
+    "실패한 바퀴를 '끝났다' 로 표시했습니다 — 그 채널은 프로세스가 사는 동안 다시 시도하지 않습니다",
+  );
+
+  // 성공한 뒤에는 다시 조회하지 않는다(한가한 채널이 매 바퀴 보드를 읽지 않게).
+  const after = server.requests().filter((r) => r.path.startsWith("/deskrpg/kanban/board")).length;
+  await pollChannelOnce(channel.id, h.deps);
+  await pollChannelOnce(channel.id, h.deps);
+  assert.equal(
+    server.requests().filter((r) => r.path.startsWith("/deskrpg/kanban/board")).length,
+    after,
+    "성공한 뒤에도 매 바퀴 보드를 조회합니다",
+  );
+});
