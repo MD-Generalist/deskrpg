@@ -132,7 +132,9 @@ export async function createApprovalBatch(
   // 멱등 키 덕에 Hermes 는 같은 카드를 돌려주지만, 여기서 무조건 새 승인을 만들면
   // **같은 카드를 가리키는 pending 승인이 하나 더** 생긴다. 사용자가 둘 중 하나를
   // 승인하면 카드는 풀리는데 나머지는 판단 모음에 영영 pending 으로 남는다.
-  const sourceJson = JSON.stringify(input.source);
+  // 필드를 명시해 직렬화한다. `JSON.stringify(input.source)` 는 **키 순서**를 따르므로,
+  // 호출자가 `{id, kind}` 순으로 만들면 같은 출처인데 문자열이 달라 새 승인이 생긴다.
+  const sourceJson = JSON.stringify({ kind: input.source.kind, id: input.source.id });
   const [existing] = await db
     .select({ id: approvals.id })
     .from(approvals)

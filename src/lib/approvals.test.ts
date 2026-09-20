@@ -300,3 +300,33 @@ test("다른 출처의 승인은 재사용하지 않는다", async () => {
     2,
   );
 });
+
+test("출처의 키 순서가 달라도 같은 승인으로 본다", () => {
+  // `sourceJson` 이 문자열 일치라, 직렬화를 필드 명시로 고정하지 않으면 여기서 갈린다.
+  const a = JSON.stringify({ kind: "meeting", id: "m1" });
+  const b = JSON.stringify({ kind: "meeting", id: "m1" } as const);
+  assert.equal(a, b);
+});
+
+test("호출자가 키 순서를 바꿔 줘도 승인이 하나다", async () => {
+  const { ctx, channelId } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const { db, approvals } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const base = { type: "task_execution", title: "키 순서", requestedBy: "sophie" };
+  await createApprovalBatch(ctx, {
+    ...base,
+    source: { kind: "meeting", id: "m-order" },
+    items: [{ title: "가", idempotencyKey: "meeting:m-order:0" }],
+  });
+  await createApprovalBatch(ctx, {
+    ...base,
+    // 같은 출처를 키 순서만 바꿔 넘긴다.
+    source: JSON.parse('{"id":"m-order","kind":"meeting"}'),
+    items: [{ title: "가", idempotencyKey: "meeting:m-order:0" }],
+  });
+  assert.equal(
+    (await db.select().from(approvals).where(eq(approvals.channelId, channelId))).length,
+    1,
+  );
+});
