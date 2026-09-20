@@ -103,6 +103,7 @@ test("win32 은 제어 소켓 없이 로컬 포트 프로브로 준비를 확인
   const { PassThrough } = await import("node:stream");
   const { createServer } = await import("node:net");
   const { ensureSshTunnel, closeSshTunnels } = await import("./transport");
+  const originalHosts = process.env.DESKRPG_SETUP_SSH_HOSTS;
   process.env.DESKRPG_SETUP_SSH_HOSTS = "test-host";
   const originalPlatform = process.platform;
   Object.defineProperty(process, "platform", { value: "win32" });
@@ -125,6 +126,8 @@ test("win32 은 제어 소켓 없이 로컬 포트 프로브로 준비를 확인
     assert.ok(capturedArgs.join(" ").includes("ControlMaster=no"));
   } finally {
     Object.defineProperty(process, "platform", { value: originalPlatform });
+    if (originalHosts === undefined) delete process.env.DESKRPG_SETUP_SSH_HOSTS;
+    else process.env.DESKRPG_SETUP_SSH_HOSTS = originalHosts;
     await closeSshTunnels();
     await new Promise((resolve) => server.close(resolve));
   }
