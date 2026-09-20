@@ -1939,3 +1939,23 @@ test("HOST_INSTALLER 는 win32 에서 pass_fds 를 쓰지 않는다", () => {
   assert.ok(HOST_INSTALLER.includes("pass_fds"));
   assert.ok(/if WINDOWS/.test(HOST_INSTALLER));
 });
+
+test("HOST_HELPER 는 Windows 서비스 갈래를 갖는다", () => {
+  assert.ok(HOST_HELPER.includes("Hermes_Gateway"));
+  assert.ok(HOST_HELPER.includes("schtasks"));
+  assert.ok(HOST_HELPER.includes("gateway-service"));
+});
+
+test("Windows 갈래도 같은 소유권 경고 코드만 쓴다", () => {
+  const codes = HOST_HELPER.match(/'(service_identity_\w+|managed_service_required)'/g) ?? [];
+  assert.ok(codes.length > 0);
+  for (const code of new Set(codes))
+    assert.ok(
+      [
+        "'service_identity_mismatch'",
+        "'service_identity_ambiguous'",
+        "'managed_service_required'",
+      ].includes(code),
+      `${code} 는 허용되지 않은 코드다`,
+    );
+});

@@ -317,7 +317,8 @@ export const HOST_HELPER = String.raw`
 import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, stat, subprocess, sys, tempfile, time, urllib.request, urllib.error
 import yaml
 WINDOWS = sys.platform == 'win32'
-ROOT = pathlib.Path.home() / '.hermes'
+# 상류 hermes_constants.py:51-57 과 같은 판정. Windows 는 %LOCALAPPDATA%\hermes 다.
+ROOT = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
 INSTALL = ROOT / 'hermes-agent'
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(INSTALL))
@@ -395,7 +396,12 @@ def settings(home):
     return cfg, env, token, port, external
 
 def run(argv, timeout=8, env=None):
-    return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=timeout, env=env)
+    # errors='replace': 한글 Windows 의 schtasks 는 코드 페이지 949 로 찍는다. 디코딩 예외로 판정을 잃지 않는다.
+    return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors='replace', timeout=timeout, env=env)
+def same_path(left, right):
+    # Windows 는 대소문자를 가리지 않고, 런처는 HERMES_HOME 철자를 그대로 보존한다(상류 _preserve_hermes_home_path).
+    try: return os.path.normcase(str(pathlib.Path(left).resolve())) == os.path.normcase(str(pathlib.Path(right).resolve()))
+    except OSError: return False
 def homes():
     result = [('default', ROOT)]
     profiles = ROOT / 'profiles'
@@ -481,6 +487,46 @@ def identity(name, home):
                 command = ['systemctl', '--user', 'restart', service]
                 pid = int(props.get('MainPID') or '0')
                 warning = None
+            else: warning = 'service_identity_mismatch'
+    elif WINDOWS:
+        # 상류 gateway_windows.py 의 이름 규약이다. 작업 이름은 프로필 이름을 접미사로 달고,
+        # 작업과 시작 프로그램 폴더 폴백은 둘 다 <HERMES_HOME>/gateway-service/<작업이름>.vbs 를 띄운다.
+        # 같은 자리의 .cmd 는 상류가 남기는 호환 잔재라 실제로 실행되는 물건이 아니다 — .vbs 를 본다.
+        task = 'Hermes_Gateway' + ('_' + name if name != 'default' else '')
+        service = task
+        stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', task)
+        launcher = next((base / 'gateway-service' / (stem + '.vbs') for base in (home, ROOT) if (base / 'gateway-service' / (stem + '.vbs')).is_file()), None)
+        registered = run(['schtasks', '/Query', '/TN', task, '/XML'])
+        definition = registered.stdout if registered.returncode == 0 else ''
+        startup = pathlib.Path(os.environ.get('APPDATA') or (pathlib.Path.home() / 'AppData' / 'Roaming')) / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs' / 'Startup' / (stem + '.vbs')
+        if not definition and startup.is_file(): definition = read(startup)
+        if definition and launcher is not None:
+            body = read(launcher)
+            pinned = re.search(r'^env\.Item\("HERMES_HOME"\) = "(.*)"$', body, re.M)
+            launched = re.search(r'^sh\.Run "(.*)", 0, False$', body, re.M)
+            cmdline = launched.group(1).replace('""', '"') if launched else ''
+            # list2cmdline 이 만든 인자열이다. 공백 없는 인자는 따옴표가 붙지 않는다.
+            head = re.match(r'"([^"]*)"|(\S+)', cmdline)
+            exe = pathlib.Path(head.group(1) or head.group(2)) if head else None
+            tail = ['-m', 'hermes_cli.main'] + (['--profile', name] if name != 'default' else []) + ['gateway', 'run']
+            valid = bool(pinned) and same_path(pinned.group(1).replace('""', '"'), str(home))
+            # 꼬리를 '포함' 이 아니라 '일치' 로 본다. 남는 인자가 하나라도 있으면 우리 게이트웨이가 아니다.
+            valid = valid and bool(head) and cmdline[head.end():].strip() == ' '.join(tail)
+            valid = valid and exe is not None and same_path(exe.parent, pathlib.Path(python).parent) and exe.name.lower() in ('python.exe', 'pythonw.exe', pathlib.Path(python).name.lower())
+            valid = valid and not re.search(r'API_SERVER_|GATEWAY_MULTIPLEX', body)
+            # 등록된 정의가 바로 이 런처를 wscript 로 띄우는가. 아니면 남의 작업이다.
+            valid = valid and 'wscript.exe' in definition.casefold() and str(launcher).casefold() in definition.casefold()
+            if valid:
+                try:
+                    from hermes_cli.gateway import get_running_pid
+                    pid = int(get_running_pid(home / 'gateway.pid', cleanup_stale=False) or 0)
+                except Exception: pid = 0
+                # 스케줄 작업이 있을 때만 재시작 경로가 있다. /End 뒤 /Run 이라야 바뀐 설정을 다시 읽는다.
+                # 시작 프로그램 폴더 폴백뿐이면 멈추는 방법이 없어 관리되는 서비스를 요구한다.
+                if registered.returncode == 0 and re.fullmatch(r'[A-Za-z0-9_-]+', task):
+                    command = ['cmd', '/c', 'schtasks /End /TN ' + task + ' & schtasks /Run /TN ' + task]
+                    warning = None
+                else: warning = 'managed_service_required'
             else: warning = 'service_identity_mismatch'
     digest = hashlib.sha256((str(INSTALL.resolve()) + '\0' + str(home) + '\0' + service + '\0' + definition).encode()).hexdigest()
     return {'id': digest, 'service': service, 'command': command, 'pid': pid, 'warning': warning}
