@@ -170,3 +170,13 @@ test("모델 확인 단계는 네 로케일 모두에서 원시 코드가 아닌
     assert.notEqual(label, setupCopy[locale].step);
   }
 });
+
+test("갱신 전용 오류도 네 언어에서 이유를 말한다 — 원시 코드를 화면에 내보내지 않는다", async () => {
+  for (const code of ["plugin_update_unsupported_host", "plugin_update_candidate_not_found"]) {
+    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+      const message = setupHostError(locale, code);
+      assert.ok(message && message.length > 20, `${locale}: ${code}`);
+      assert.ok(!message.includes(code));
+    }
+  }
+});

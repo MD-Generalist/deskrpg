@@ -242,6 +242,38 @@ function registry() {
     path.join(process.env.DESKRPG_HOME || path.join(os.homedir(), ".deskrpg"), "setup-transports"),
   );
 }
+/**
+ * 등록된 ssh 주소에서 **어느 호스트의 몇 번 포트인지**를 되찾는다. 터널을 열지 않는다 —
+ * 갱신처럼 "이 게이트웨이의 호스트에서 명령을 돌려야 하는" 동작이 대상을 정할 때 쓴다.
+ * 우리 주소가 아니거나 레지스트리에 없으면 null 이다.
+ */
+export async function readSshTransportTarget(
+  url: string,
+): Promise<{ hostId: string; remotePort: number } | null> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!parsed.hostname.endsWith(SUFFIX)) return null;
+  const id = parsed.hostname.slice(0, -SUFFIX.length);
+  if (!/^[a-f0-9]{64}$/.test(id)) return null;
+  const directory = path.join(
+    process.env.DESKRPG_HOME || path.join(os.homedir(), ".deskrpg"),
+    "setup-transports",
+  );
+  try {
+    const target = JSON.parse(await readFile(path.join(directory, `${id}.json`), "utf8"));
+    if (targetId({ hostId: target.hostId, remotePort: target.remotePort }) !== id) return null;
+    assertSshHost(target.hostId);
+    validatePort(target.remotePort);
+    return { hostId: target.hostId, remotePort: target.remotePort };
+  } catch {
+    return null;
+  }
+}
+
 export async function registerSshTransport(hostId: string, remotePort: number) {
   return registry().register(hostId, remotePort);
 }

@@ -430,6 +430,10 @@ const ja: Record<string, string> = {
     "Hermes 0.21.1以上が必要です。サーバーでhermes updateを実行してから再確認してください。",
   "hermes.wizard.error.pluginUpdateFailed":
     "DeskRPGプラグインを新しいバージョンに更新できませんでした。管理者がホストのネットワークとプラグインディレクトリの書き込み権限を確認してから再確認してください。",
+  "hermes.wizard.error.pluginUpdateUnsupportedHost":
+    "このゲートウェイが動くホストではアプリがコマンドを実行できません（コンテナ配備など）。ホストを SSH で登録するか、ホスト側でプラグインを更新してから接続テストを押してください。",
+  "hermes.wizard.error.pluginUpdateCandidateNotFound":
+    "このゲートウェイと同じポートを使う Hermes をホストで見つけられませんでした。アドレスの変更や Hermes の停止を確認してください。",
   "hermes.wizard.error.serviceInstallFailed":
     "ゲートウェイをサービスとして登録できませんでした。管理者がホストでhermes gateway installを実行し、結果を確認してから再確認してください。",
   "hermes.wizard.error.timezoneInvalid":
@@ -2178,6 +2182,7 @@ const ja: Record<string, string> = {
   "gateways.pluginVersionUnknown": "未確認",
   "gateways.pluginVersionOutdated": "が古いです。ホストで更新してから接続テストを押してください。",
   "gateways.pluginVersionRecheck": "接続テストを押すと確認します。",
+  "gateways.pluginVersionUpdateNow": "今すぐ更新",
   "gateways.editTitle": "ゲートウェイ編集",
   "gateways.createHelp":
     "自分の Hermes ゲートウェイを登録します。登録後、使用するプロファイルを追加してください。",
@@ -2385,6 +2390,8 @@ const ja: Record<string, string> = {
   "errors.failedToCreateProject": "プロジェクトの作成に失敗しました",
   "errors.failedToOpenTemplateForEditing": "編集用テンプレートを開けませんでした。",
   "errors.unauthorized": "続行するにはログインが必要です",
+  "errors.setupBadOrigin":
+    "他のサイトからのリクエストは受け付けません。この画面からやり直してください。",
   "errors.forbidden": "この操作を行う権限がありません",
   "errors.notFound": "要求されたリソースが見つかりません",
   "errors.channelIdRequired": "チャンネルIDが必要です",

@@ -399,6 +399,10 @@ const zh: Record<string, string> = {
     "需要Hermes 0.21.1或更高版本。请在服务器上执行hermes update，然后重新检查。",
   "hermes.wizard.error.pluginUpdateFailed":
     "未能将DeskRPG插件更新到新版本。请管理员检查主机网络和插件目录的写入权限，然后重新检查。",
+  "hermes.wizard.error.pluginUpdateUnsupportedHost":
+    "应用无法在此网关所在的主机上执行命令（容器部署即属此类）。请通过 SSH 注册该主机，或在主机上更新插件后点击连接测试。",
+  "hermes.wizard.error.pluginUpdateCandidateNotFound":
+    "未在该主机上找到使用此网关端口的 Hermes。请检查网关地址是否更改或 Hermes 是否已停止。",
   "hermes.wizard.error.serviceInstallFailed":
     "未能将网关注册为服务。请管理员在主机上执行hermes gateway install并查看输出，然后重新检查。",
   "hermes.wizard.error.timezoneInvalid":
@@ -2100,6 +2104,7 @@ const zh: Record<string, string> = {
   "gateways.pluginVersionUnknown": "未确认",
   "gateways.pluginVersionOutdated": "已过期。请在主机上更新后点击连接测试。",
   "gateways.pluginVersionRecheck": "点击连接测试进行确认。",
+  "gateways.pluginVersionUpdateNow": "立即更新",
   "gateways.editTitle": "编辑网关",
   "gateways.createHelp": "注册一个由你拥有的 Hermes 网关，然后添加要使用的配置文件。",
   "gateways.editHelp": "更新网关信息，或再次确认连接状态。",
@@ -2295,6 +2300,7 @@ const zh: Record<string, string> = {
   "errors.failedToCreateProject": "无法创建项目",
   "errors.failedToOpenTemplateForEditing": "无法打开模板进行编辑。",
   "errors.unauthorized": "请先登录后再继续",
+  "errors.setupBadOrigin": "不接受来自其他站点的请求。请在此页面重试。",
   "errors.forbidden": "你没有执行此操作的权限",
   "errors.notFound": "未找到请求的资源",
   "errors.channelIdRequired": "需要频道 ID",

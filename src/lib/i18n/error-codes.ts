@@ -90,6 +90,7 @@ export type ErrorCode =
   | "failed_to_create_project"
   | "failed_to_open_template_for_editing"
   | "unauthorized"
+  | "setup_bad_origin"
   | "forbidden"
   | "not_found"
   | "channel_id_required"
@@ -288,6 +289,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   failed_to_create_project: "errors.failedToCreateProject",
   failed_to_open_template_for_editing: "errors.failedToOpenTemplateForEditing",
   unauthorized: "errors.unauthorized",
+  setup_bad_origin: "errors.setupBadOrigin",
   forbidden: "errors.forbidden",
   not_found: "errors.notFound",
   channel_id_required: "errors.channelIdRequired",

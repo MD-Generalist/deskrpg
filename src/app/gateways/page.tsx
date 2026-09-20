@@ -10,12 +10,13 @@ import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide"
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 import { planGatewayDelete } from "./gateway-delete-plan";
 import { backLinkTarget } from "./return-target";
 import { employeesHref } from "@/components/workspace-navigation";
 import { describePluginVersion } from "@/lib/hermes/plugin-version-view";
+import { setupCopy, setupError, setupHostError, setupStep } from "@/components/gateway/setup-copy";
 
 type GatewayRow = {
   id: string;
@@ -68,12 +69,42 @@ type GatewayTestState = {
  * 낡을 수 있으므로(`shouldReprobePlugin`), 뒤처져 보이면 "연결 테스트" 를 눌러 다시
  * 확인하라고 안내한다 — 그 버튼이 프로브 후 캐시를 갱신한다.
  */
-function PluginVersionLine({ gateway }: { gateway: GatewayRow }) {
+function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpdated: () => void }) {
   const t = useT();
+  const { locale } = useLocale();
+  const [busyStep, setBusyStep] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState("");
   const view = describePluginVersion({
     installed: gateway.pluginVersion,
     pluginStatus: gateway.pluginStatus,
   });
+
+  // 갱신은 호스트에서 명령을 돌리는 긴 작업이라 잡으로 돈다 — 마법사와 같은 잡 조회를 쓴다.
+  const runUpdate = async () => {
+    setUpdateError("");
+    setBusyStep("inspecting");
+    try {
+      const started = await fetch(`/api/gateways/${gateway.id}/plugin/update`, { method: "POST" });
+      const startedBody = await started.json().catch(() => ({}));
+      if (!started.ok) throw startedBody?.errorCode ?? "setup_failed";
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const res = await fetch(`/api/gateways/setup?job=${encodeURIComponent(startedBody.jobId)}`);
+        const body = await res.json().catch(() => ({}));
+        const job = body?.job;
+        if (!res.ok || !job) throw body?.errorCode ?? "setup_failed";
+        setBusyStep(job.steps?.at(-1) ?? null);
+        if (job.status === "succeeded") break;
+        if (job.status === "failed" || job.status === "cancelled")
+          throw job.error ?? "setup_failed";
+      }
+      onUpdated();
+    } catch (code) {
+      setUpdateError(setupHostError(locale, code) ?? setupError(setupCopy[locale], code));
+    } finally {
+      setBusyStep(null);
+    }
+  };
 
   const tone =
     view.state === "outdated"
@@ -96,6 +127,17 @@ function PluginVersionLine({ gateway }: { gateway: GatewayRow }) {
       </span>
       {view.state === "outdated" && <span>— {t("gateways.pluginVersionOutdated")}</span>}
       {view.state === "unknown" && <span>— {t("gateways.pluginVersionRecheck")}</span>}
+      {view.state === "outdated" && gateway.isOwner && (
+        <button
+          type="button"
+          onClick={() => void runUpdate()}
+          disabled={busyStep !== null}
+          className="rounded-md bg-surface-raised px-2 py-0.5 text-[11px] font-medium hover:brightness-110 disabled:opacity-60"
+        >
+          {busyStep ? setupStep(setupCopy[locale], busyStep) : t("gateways.pluginVersionUpdateNow")}
+        </button>
+      )}
+      {updateError && <span className="text-danger">{updateError}</span>}
     </p>
   );
 }
@@ -654,7 +696,12 @@ function GatewayManagementPageInner() {
                   )}
                 </div>
 
-                {selectedGateway && <PluginVersionLine gateway={selectedGateway} />}
+                {selectedGateway && (
+                  <PluginVersionLine
+                    gateway={selectedGateway}
+                    onUpdated={() => void loadGateways({ autoSelect: false })}
+                  />
+                )}
 
                 <div className="grid gap-4">
                   <div>

@@ -419,6 +419,10 @@ const ko: Record<string, string> = {
     "Hermes 0.21.1 이상이 필요합니다. 서버에서 hermes update 를 실행해 올린 뒤 다시 확인하세요.",
   "hermes.wizard.error.pluginUpdateFailed":
     "DeskRPG 플러그인을 새 버전으로 갱신하지 못했습니다. 관리자가 호스트의 네트워크와 플러그인 디렉터리 쓰기 권한을 확인한 뒤 다시 확인하세요.",
+  "hermes.wizard.error.pluginUpdateUnsupportedHost":
+    "이 게이트웨이가 도는 호스트에서는 앱이 명령을 돌릴 수 없습니다. 컨테이너로 배포한 경우가 그렇습니다 — 호스트를 SSH 로 등록하거나, 호스트에서 직접 플러그인을 올린 뒤 연결 테스트를 누르세요.",
+  "hermes.wizard.error.pluginUpdateCandidateNotFound":
+    "이 게이트웨이와 같은 포트를 쓰는 Hermes 를 호스트에서 찾지 못했습니다. 게이트웨이 주소가 바뀌었거나 Hermes 가 멈춰 있는지 확인하세요.",
   "hermes.wizard.error.serviceInstallFailed":
     "게이트웨이를 서비스로 등록하지 못했습니다. 관리자가 호스트에서 hermes gateway install 을 직접 실행해 결과를 확인한 뒤 다시 확인하세요.",
   "hermes.wizard.error.timezoneInvalid":
@@ -2159,6 +2163,7 @@ const ko: Record<string, string> = {
   "gateways.pluginVersionOutdated":
     "뒤처져 있습니다. 호스트에서 플러그인을 올린 뒤 연결 테스트를 누르세요.",
   "gateways.pluginVersionRecheck": "연결 테스트를 누르면 확인합니다.",
+  "gateways.pluginVersionUpdateNow": "지금 갱신",
   "gateways.editTitle": "게이트웨이 수정",
   "gateways.createHelp":
     "나만의 Hermes 게이트웨이를 등록합니다. 등록한 뒤 사용할 프로필을 추가하세요.",
@@ -2362,6 +2367,8 @@ const ko: Record<string, string> = {
   "errors.failedToCreateProject": "프로젝트를 생성하지 못했습니다",
   "errors.failedToOpenTemplateForEditing": "편집용으로 템플릿을 여는 데 실패했습니다.",
   "errors.unauthorized": "로그인이 필요합니다",
+  "errors.setupBadOrigin":
+    "다른 사이트에서 보낸 요청은 처리하지 않습니다. 이 화면에서 다시 시도하세요.",
   "errors.forbidden": "이 작업을 수행할 권한이 없습니다",
   "errors.notFound": "요청한 리소스를 찾을 수 없습니다",
   "errors.channelIdRequired": "오피스 ID가 필요합니다",
