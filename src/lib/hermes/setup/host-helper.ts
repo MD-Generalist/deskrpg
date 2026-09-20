@@ -1,6 +1,12 @@
 import { isWindows } from "./platform";
 
 /** Kept in a TS constant so Next standalone output includes the helper. No filesystem asset lookup. */
+/**
+ * 호스트에서 가장 먼저 도는 파이썬. **ASCII 만 쓴다** — 이 문자열만은 stdin 이 아니라
+ * `python3 -c <코드>` 의 argv 로 넘어가고, 파이썬은 argv 를 로케일 인코딩으로 해석한다.
+ * 한글 주석 한 줄이면 C/POSIX 로케일 호스트에서 시작조차 못 한다(`host.test.ts` 가 막는다).
+ * 설명이 필요하면 이 TS 주석에 한글로 적고, 파이썬 안의 주석은 영문으로 둔다.
+ */
 export const HOST_BOOTSTRAP = String.raw`
 import json, os, pathlib, signal, subprocess, sys
 WINDOWS = sys.platform == 'win32'
@@ -9,7 +15,7 @@ def terminate_owned(signum=None, frame=None):
     if child is not None:
         try:
             if WINDOWS:
-                # 프로세스 그룹 신호가 없다. 트리를 taskkill 로 끊는다.
+                # No process-group signals on Windows. Kill the tree with taskkill.
                 subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
             else:
@@ -18,17 +24,17 @@ def terminate_owned(signum=None, frame=None):
         try: child.wait(timeout=15)
         except Exception: pass
     if signum is not None: raise SystemExit(1)
-# SIGHUP 은 Windows 에 없다. 있는 것만 등록한다.
+# SIGHUP does not exist on Windows. Register only the signals that exist.
 for name in ('SIGHUP', 'SIGTERM', 'SIGINT'):
     signum = getattr(signal, name, None)
     if signum is not None:
         try: signal.signal(signum, terminate_owned)
         except (ValueError, OSError): pass
 try:
-    # Windows 의 stdin 기본 인코딩은 ANSI 코드 페이지(예: cp949)라 UTF-8 로 보낸 한글 payload 가
-    # 깨진다. sys.stdin.buffer 로 바이트를 그대로 받아 UTF-8 로 직접 디코딩한다.
+    # On Windows stdin defaults to the ANSI code page (e.g. cp949), which mangles a
+    # UTF-8 payload. Read raw bytes from sys.stdin.buffer and decode as UTF-8 ourselves.
     payload = json.loads(sys.stdin.buffer.read().decode('utf-8'))
-    # 상류 hermes_constants.py:51-57 과 같은 판정. Windows 는 %LOCALAPPDATA%\hermes 다.
+    # Same rule as upstream hermes_constants.py:51-57. Windows uses %LOCALAPPDATA%\hermes.
     root = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
     root = root / 'hermes-agent'
     folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
@@ -37,8 +43,8 @@ try:
         print(json.dumps({'candidates': []} if payload['action'] == 'discover' else {'error': 'hermes_not_found'}))
     else:
         spawn = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {'start_new_session': True}
-        # encoding='utf-8' 를 명시한다 — 없으면 자식 stdin/stdout 도 같은 ANSI 코드 페이지로 인코딩되어
-        # HOST_HELPER 의 한글 주석(43K자)을 보내는 순간 깨진다.
+        # Pass encoding='utf-8' explicitly. Without it the child's stdin/stdout use the same ANSI
+        # code page and break as soon as HOST_HELPER (43K chars, non-ASCII comments) is sent.
         child = subprocess.Popen([str(python), '-'], text=True, encoding='utf-8', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **spawn)
         output, unused = child.communicate(payload['script'], timeout=payload['timeout'])
         terminate_owned()

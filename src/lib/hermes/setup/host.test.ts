@@ -2015,16 +2015,47 @@ test("Windows 갈래도 같은 소유권 경고 코드만 쓴다", () => {
     );
 });
 
+test("HOST_BOOTSTRAP 은 ASCII 만 담는다 — 명령줄 인자로 넘어가는 유일한 호스트 스크립트다", () => {
+  // 다른 호스트 스크립트(HELPER·INSTALLER)는 stdin 의 JSON payload 로 가지만, 부트스트랩만은
+  // `python3 -c <코드>` 의 **argv** 로 간다. 파이썬은 argv 를 로케일 인코딩으로 해석하므로,
+  // 한글 주석 한 줄만 있어도 C/POSIX 로케일 + UTF-8 모드 꺼짐인 호스트에서
+  // "Unable to decode the command from the command line" 으로 **시작조차 못 한다.**
+  // macOS 는 argv 를 늘 UTF-8 로 읽어 로컬에서는 드러나지 않는다 — 리눅스 CI 가 잡았다(2026-09-20).
+  const offenders = HOST_BOOTSTRAP.split("\n")
+    .map((line, index) => ({ line, number: index + 1 }))
+    .filter(({ line }) => /[^\x00-\x7f]/.test(line));
+  assert.deepEqual(
+    offenders.map(({ number, line }) => `${number}: ${line.trim()}`),
+    [],
+    "부트스트랩의 주석·문자열은 영문으로 쓴다",
+  );
+});
+
 test("HOST_BOOTSTRAP 은 UTF-8 이 아닌 로케일에서도 한글 payload 를 왕복한다", () => {
   // Windows 의 기본 파이프 인코딩(예: cp949)을 POSIX 에서 재현한다: PYTHONUTF8=0 + LC_ALL/LANG=C 는
   // 파이썬의 stdin/stdout 기본 인코딩을 ascii 로 강제한다(PEP 538/540 의 UTF-8 모드를 끈다).
-  const script = String.raw`print(__import__('json').dumps({'echo': '한글 확인 문자열'}))`;
-  const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
-    encoding: "utf8",
-    input: JSON.stringify({ action: "run", timeout: 5, script }),
-    env: { ...process.env, PYTHONUTF8: "0", LC_ALL: "C", LANG: "C" },
-    timeout: 8000,
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), { echo: "한글 확인 문자열" });
+  //
+  // 부트스트랩은 `~/.hermes/hermes-agent/venv` 의 파이썬으로 스크립트를 돌린다. 개발자 머신의
+  // 실제 Hermes 에 기대면 Hermes 가 없는 CI 에서 `hermes_not_found` 로 떨어지므로, 임시 HOME 에
+  // stdlib 만 든 venv 를 세워 어디서 돌든 같은 조건을 만든다.
+  const temp = mkdtempSync(join(tmpdir(), "deskrpg-bootstrap-locale-test-"));
+  try {
+    const venv = spawnSync(
+      "python3",
+      ["-m", "venv", "--without-pip", join(temp, ".hermes/hermes-agent/venv")],
+      { encoding: "utf8", timeout: 20000 },
+    );
+    assert.equal(venv.status, 0, venv.stderr);
+    const script = String.raw`print(__import__('json').dumps({'echo': '한글 확인 문자열'}))`;
+    const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
+      encoding: "utf8",
+      input: JSON.stringify({ action: "run", timeout: 5, script }),
+      env: { ...process.env, HOME: temp, PYTHONUTF8: "0", LC_ALL: "C", LANG: "C" },
+      timeout: 15000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), { echo: "한글 확인 문자열" });
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
 });

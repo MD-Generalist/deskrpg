@@ -301,7 +301,10 @@ export default function GatewaySetupWizard({
     }
     const started = Date.now();
     setElapsed(0);
-    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    // 내림이 아니라 반올림이다. 틱은 거의 정수 초에 오는데, setInterval(단조 시계)과
+    // Date.now(벽시계)가 어긋나 1초째 틱에서 차이가 999.x ms 로 읽히면 내림은 0 을 낸다 —
+    // 화면이 한 박자 늦고, CI 에서 "1초 경과" 단언이 간헐적으로 깨졌다(2026-09-20).
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
     // 단계가 끝나거나 화면을 떠나면 반드시 멈춘다 — 남으면 매초 리렌더가 샌다.
     return () => clearInterval(timer);
   }, [installingHermes]);
