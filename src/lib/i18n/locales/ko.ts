@@ -1898,6 +1898,7 @@ const ko: Record<string, string> = {
   // Chat
   "chat.title": "채팅",
   "chat.openChat": "채팅 열기",
+  "chat.download": "내려받기",
   "chat.placeholder": "메시지를 입력하세요...",
   "chat.mentionNoMatch": "해당하는 직원이 없습니다",
   "chat.tab": "채팅",

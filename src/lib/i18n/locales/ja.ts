@@ -1918,6 +1918,7 @@ const ja: Record<string, string> = {
   // Chat
   "chat.title": "チャット",
   "chat.openChat": "チャットを開く",
+  "chat.download": "ダウンロード",
   "chat.placeholder": "メッセージを入力...",
   "chat.mentionNoMatch": "該当する社員がいません",
   "chat.tab": "チャット",
