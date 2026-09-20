@@ -1,9 +1,10 @@
 // GET  /api/channels/:id/npcs/:npcId/panel-reads → {cards, cron} (채널 멤버)
 // POST /api/channels/:id/npcs/:npcId/panel-reads — {tab} → 204 (채널 멤버)
 //
-// 관문은 로그인 + 채널 멤버까지만 둔다. 보드까지 확보하는 `resolveKanbanChannelContext` 는
-// 배지 계산 안쪽(`loadAssignedCardIds`)에서 불리고, 거기서 막히면 카드 배지만 0 이 된다 —
-// 플러그인이 없는 설치에서도 크론 배지는 나와야 하기 때문이다.
+// 관문은 로그인 + 채널 멤버까지만 둔다. 게이트웨이·플러그인·보드는 배지 계산 안쪽
+// (`loadAssignedCardIds` → `resolveKanbanChannelContextForRead`)에서 보고, 거기서 막히면
+// 카드 배지만 0 이 된다 — 플러그인이 없는 설치에서도 크론 배지는 나와야 하기 때문이다.
+// 그 갈래는 보드를 **확보하지 않는다**: 배지 폴링이 Hermes 보드 생성을 반복하면 안 된다.
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 

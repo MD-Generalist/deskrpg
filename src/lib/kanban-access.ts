@@ -99,6 +99,27 @@ async function requireBoardRow(
   };
 }
 
+/**
+ * 읽기 전용 갈래 — **이미 있는** 연결 행만 쓴다. 없거나 `last_error` 가 남았거나 게이트웨이가
+ * 바뀌었으면 503 이고, 보드를 만들지도 다시 확보하지도 않는다.
+ *
+ * 배지 폴링처럼 사용자가 요청하지 않은 주기적 읽기가 Hermes 보드 생성을 반복 시도하면 안 된다.
+ */
+async function existingBoardRow(
+  channelId: string,
+  resolved: Extract<ResolvedChannelBoard, { ok: true }>,
+): Promise<{ ok: true; row: ChannelBoardRow } | { ok: false; response: NextResponse }> {
+  const gatewayId = resolved.binding.resource.id;
+  const existing = await getChannelBoard(channelId);
+  if (existing && existing.gatewayId === gatewayId && !existing.lastError) {
+    return { ok: true, row: existing };
+  }
+  return {
+    ok: false,
+    response: cronError(503, "board_unavailable", "Channel board is not ready"),
+  };
+}
+
 export async function resolveKanbanChannelContext(input: {
   userId: string | null;
   channelId: string;
@@ -108,6 +129,29 @@ export async function resolveKanbanChannelContext(input: {
    */
   boardSlug?: string;
 }): Promise<KanbanContextResult> {
+  return resolveContext(input, requireBoardRow);
+}
+
+/**
+ * 게이트(로그인·멤버·게이트웨이·플러그인)는 본 경로와 **똑같이** 태우고 보드만 확보하지 않는
+ * 갈래. 배지처럼 곁다리로 읽기만 하는 경로가 쓴다 — 권한 판정을 약하게 만들지 않으면서
+ * 원격 쓰기 부작용만 뗀다.
+ */
+export async function resolveKanbanChannelContextForRead(input: {
+  userId: string | null;
+  channelId: string;
+}): Promise<KanbanContextResult> {
+  return resolveContext(input, existingBoardRow);
+}
+
+async function resolveContext(
+  input: { userId: string | null; channelId: string; boardSlug?: string },
+  acquireBoard: (
+    channelId: string,
+    resolved: Extract<ResolvedChannelBoard, { ok: true }>,
+    requestedSlug?: string,
+  ) => Promise<{ ok: true; row: ChannelBoardRow } | { ok: false; response: NextResponse }>,
+): Promise<KanbanContextResult> {
   if (!input.userId) {
     return { ok: false, response: cronError(401, "unauthorized", "unauthorized") };
   }
@@ -126,7 +170,7 @@ export async function resolveKanbanChannelContext(input: {
   }
   const info = resolved.pluginGate.info;
 
-  const board = await requireBoardRow(input.channelId, resolved, input.boardSlug);
+  const board = await acquireBoard(input.channelId, resolved, input.boardSlug);
   if (!board.ok) return board;
 
   const gateway = resolved.binding.resource;

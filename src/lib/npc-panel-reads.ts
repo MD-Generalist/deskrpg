@@ -6,6 +6,10 @@
  * 확보가 모두 성공해야 하는 긴 사슬이라 플러그인이 없는 설치에서는 늘 실패하는데, 크론 알림은
  * DeskRPG 의 방 메시지라 그때도 멀쩡하다. 그래서 두 조회를 각각 감싸고, 실패한 쪽만 0 으로 둔다.
  *
+ * 보드 쪽은 **읽기 전용 갈래**(`resolveKanbanChannelContextForRead`)로 본다. 배지는 주기적으로
+ * 폴링되므로, 본 경로처럼 `ensureChannelBoard` 까지 타면 사용자가 요청하지 않은 Hermes 보드
+ * 생성이 반복 시도된다. 권한 관문(로그인·멤버·게이트웨이·플러그인)은 본 경로와 똑같다.
+ *
  * 카드 탭은 시각 워터마크를 쓸 수 없다 — `KanbanTask` 에 `updated_at` 이 없다. 그래서 본 카드
  * id 를 쌓고, 쓸 때마다 현재 담당 카드와 교집합으로 가지친다(`pruneSeenIds`).
  */
@@ -23,7 +27,7 @@ import {
 } from "@/db";
 import { assignedCards } from "@/components/kanban/npc-assigned-cards";
 import { parseRoomNotice } from "@/lib/chat-rooms-policy";
-import { resolveKanbanChannelContext } from "@/lib/kanban-access";
+import { resolveKanbanChannelContextForRead } from "@/lib/kanban-access";
 import { pruneSeenIds, unseenCardCount, unseenCronCount } from "@/lib/npc-panel-reads-count";
 
 export type PanelTab = "cron" | "cards";
@@ -140,7 +144,7 @@ async function npcProfileName(target: PanelTarget): Promise<string> {
 }
 
 async function loadAssignedCardIds(target: PanelTarget): Promise<string[]> {
-  const gate = await resolveKanbanChannelContext({
+  const gate = await resolveKanbanChannelContextForRead({
     userId: target.userId,
     channelId: target.channelId,
   });

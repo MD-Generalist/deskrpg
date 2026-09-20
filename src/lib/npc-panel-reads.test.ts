@@ -2,7 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 
-import { seedChannel, seedUser, setupThrowawaySqlite, authHeaders } from "@/test-setup/npc-seed";
+import {
+  authHeaders,
+  seedChannel,
+  seedGateway,
+  seedHermesProfile,
+  seedNpc,
+  seedUser,
+  setupThrowawaySqlite,
+} from "@/test-setup/npc-seed";
 import {
   PanelSourceError,
   readBadges,
@@ -151,4 +159,91 @@ test("모르는 tab 값은 400", async () => {
   const channel = await seedChannel(owner.id);
   const res = await POST(req(channel.id, owner.id, "POST", { tab: "무엇" }), ctx(channel.id));
   assert.equal(res.status, 400);
+});
+
+// --- 배지 조회는 보드를 확보하지 않는다 ---------------------------------------
+//
+// 배지는 주기적으로 폴링된다. 여기서 `resolveKanbanChannelContext`(본 경로)를 태우면
+// `requireBoardRow` → `ensureChannelBoard` 로 Hermes 에 보드 생성 요청이 반복해서 나간다 —
+// 사용자가 요청하지 않은 원격 쓰기다. 그래서 읽기 전용 갈래를 쓴다. 이 테스트는 가짜
+// 플러그인 서버가 받은 요청과 `channel_kanban_boards` 행으로 그것을 고정한다.
+test("배지 조회는 보드를 확보하지 않고, 연결이 없으면 카드 0 · 크론은 그대로 센다", async () => {
+  const { GET } = await loadRoute();
+  const { startFakePluginServer } = await import("@/lib/hermes/fake-plugin-server");
+  const { db, channelKanbanBoards, chatRoomMessages, chatRooms } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const { bindGatewayToChannel } = await import("@/lib/gateway-resources");
+
+  const server = await startFakePluginServer({
+    ownerToken: "gateway-owner-key-1234567890",
+    profileTokens: { sophie: "profile-key-1234567890" },
+  });
+  try {
+    const owner = await seedUser("panel-owner");
+    const gateway = await seedGateway(owner.id, server.baseUrl);
+    const channel = await seedChannel(owner.id);
+    await bindGatewayToChannel({
+      channelId: channel.id,
+      gatewayId: gateway.id,
+      boundByUserId: owner.id,
+    });
+    const profile = await seedHermesProfile(gateway.id, { profileName: "sophie" });
+    const npc = await seedNpc({ channelId: channel.id, hermesProfileId: profile.id });
+
+    // 바인딩이 만들어 둔 연결 행을 지운다 — "보드 연결이 없는 채널" 을 만든다.
+    await db.delete(channelKanbanBoards).where(eq(channelKanbanBoards.channelId, channel.id));
+
+    // 이 NPC 가 남긴 크론 결과 알림 하나.
+    const [room] = await db
+      .insert(chatRooms)
+      .values({
+        channelId: channel.id,
+        kind: "office",
+        name: "사무실",
+        replyPolicy: "mention",
+        createdBy: owner.id,
+      })
+      .returning();
+    await db.insert(chatRoomMessages).values({
+      roomId: room.id,
+      senderKind: "npc",
+      senderId: npc.id,
+      senderName: "sophie",
+      content: "결과",
+      noticeJson: JSON.stringify({
+        kind: "cron_result",
+        jobId: "j1",
+        jobName: "일일 보고",
+        npcName: "sophie",
+        status: "ok",
+      }),
+    });
+
+    const before = server.requests().length;
+    const res = await GET(
+      req(channel.id, owner.id, "GET"),
+      ctx(channel.id, npc.id) as ReturnType<typeof ctx>,
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { cards: 0, cron: 1 });
+
+    // 보드 생성 요청이 나가지 않았다.
+    const sent = server.requests().slice(before);
+    assert.deepEqual(
+      sent.filter((r) => r.method !== "GET").map((r) => `${r.method} ${r.path}`),
+      [],
+    );
+    assert.deepEqual(
+      sent.filter((r) => r.path.includes("kanban/boards")).map((r) => `${r.method} ${r.path}`),
+      [],
+    );
+    // 연결 행도 되살아나지 않았다.
+    const rows = await db
+      .select({ channelId: channelKanbanBoards.channelId })
+      .from(channelKanbanBoards)
+      .where(eq(channelKanbanBoards.channelId, channel.id));
+    assert.equal(rows.length, 0);
+  } finally {
+    await server.close();
+  }
 });
