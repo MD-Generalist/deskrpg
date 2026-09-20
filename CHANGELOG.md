@@ -7,6 +7,18 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.920.7] - 2026-09-20
+
+### Added
+
+- Explain what is missing when the gateway or plugin is not ready: kanban, cron and artifacts open a four-step checklist at the moment of failure, with the install command or a link to the connection screen. Plain errors (timeouts, 500s) show their cause instead of pretending setup is incomplete.
+
+### Fixed
+
+- Keep the "AI Coworking Space" subtitle on its own line under the DeskRPG title on the landing page — at some widths only "AI" stayed on the title line.
+- Stop the cron delivery-target preload and the task drawer's artifact section from swallowing gateway failures as "nothing here".
+- Refresh the README animations and home screenshot to the current UI; the capture pipeline follows seat assignment again.
+
 ## [2026.920.6] - 2026-09-20
 
 ### Fixed
