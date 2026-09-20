@@ -2681,6 +2681,7 @@ const ko: Record<string, string> = {
   "kanban.list.group.unset.assignee": "담당 없음",
   "kanban.list.group.unset.priority": "우선순위 없음",
   "kanban.view.timeline": "타임라인",
+  "kanban.view.timeline.hint": "타임라인 — 누가 언제 일했는가, 목표일, 의존 관계",
   "kanban.timeline.range": "기간",
   "kanban.timeline.range.today": "오늘",
   "kanban.timeline.range.week": "이번 주",

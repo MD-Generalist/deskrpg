@@ -2710,6 +2710,7 @@ const ja: Record<string, string> = {
   "kanban.list.group.unset.assignee": "担当なし",
   "kanban.list.group.unset.priority": "優先度なし",
   "kanban.view.timeline": "タイムライン",
+  "kanban.view.timeline.hint": "タイムライン — 誰がいつ働いたか、目標日、依存関係",
   "kanban.timeline.range": "期間",
   "kanban.timeline.range.today": "今日",
   "kanban.timeline.range.week": "今週",

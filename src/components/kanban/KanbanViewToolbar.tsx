@@ -66,6 +66,7 @@ export default function KanbanViewToolbar({
             label={t("kanban.view.timeline")}
             onClick={() => onUpdate({ viewMode: "timeline" })}
             icon={<GanttChartSquare className="h-3.5 w-3.5" />}
+            hint={t("kanban.view.timeline.hint")}
           />
         )}
       </div>
@@ -162,11 +163,17 @@ function ModeButton({
   label,
   onClick,
   icon,
+  hint,
 }: {
   active: boolean;
   label: string;
   onClick: () => void;
   icon: React.ReactNode;
+  /**
+   * 더 긴 설명. `title` 로만 쓰고 `aria-label` 은 짧은 이름을 유지한다 — 보조 기술이 읽는
+   * 이름은 화면에 보이는 글자와 같아야 한다. 간트를 찾는 사람이 이 설명에서 멈추게 하는 용도다.
+   */
+  hint?: string;
 }) {
   return (
     <button
@@ -174,7 +181,7 @@ function ModeButton({
       onClick={onClick}
       aria-pressed={active}
       aria-label={label}
-      title={label}
+      title={hint ?? label}
       className={`flex items-center gap-1 px-2 py-1 ${
         active ? "bg-primary text-white" : "bg-surface-raised text-text-secondary"
       }`}

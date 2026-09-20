@@ -2607,6 +2607,7 @@ const zh: Record<string, string> = {
   "kanban.list.group.unset.assignee": "未分配",
   "kanban.list.group.unset.priority": "无优先级",
   "kanban.view.timeline": "时间线",
+  "kanban.view.timeline.hint": "时间线 — 谁在何时工作、目标日、依赖关系",
   "kanban.timeline.range": "时间范围",
   "kanban.timeline.range.today": "今天",
   "kanban.timeline.range.week": "本周",

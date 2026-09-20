@@ -2692,6 +2692,7 @@ const en: Record<string, string> = {
   "kanban.list.group.unset.assignee": "Unassigned",
   "kanban.list.group.unset.priority": "No priority",
   "kanban.view.timeline": "Timeline",
+  "kanban.view.timeline.hint": "Timeline — who worked when, target date, dependencies",
   "kanban.timeline.range": "Range",
   "kanban.timeline.range.today": "Today",
   "kanban.timeline.range.week": "This week",
