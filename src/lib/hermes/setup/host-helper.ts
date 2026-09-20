@@ -202,8 +202,8 @@ PROVIDER = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
 RESERVED = {'hermes','test','tmp','root','sudo'}
 # 마법사가 새로 만들거나 키를 발급할 수 있는 이름에서 제외한다. 'default' 는 configure 가 다룬다.
 RESERVED_PROFILE = RESERVED | {'default'}
-PIN = '02991b63714a12b2f7c4bb618d063ef23e7c1a78'
-PLUGIN_VERSION = '0.10.1'
+PIN = 'b85c568ff9cdc327715b6c4c058d947571b09383'
+PLUGIN_VERSION = '0.10.2'
 HERMES_MIN = '0.21.1'
 SOURCE = 'https://github.com/dandacompany/deskrpg-hermes-plugin'
 TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
