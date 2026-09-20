@@ -2156,6 +2156,12 @@ const en: Record<string, string> = {
   "gateways.statusUntested": "Not tested yet",
   "gateways.createTitle": "Register gateway",
   "gateways.openDashboard": "Open Hermes dashboard",
+  "gateways.pluginVersion": "Plugin",
+  "gateways.pluginVersionPinned": "Version this app installs",
+  "gateways.pluginVersionUnknown": "not checked",
+  "gateways.pluginVersionOutdated":
+    "is out of date. Update it on the host, then run Test connection.",
+  "gateways.pluginVersionRecheck": "Run Test connection to check.",
   "gateways.editTitle": "Edit gateway",
   "gateways.createHelp":
     "Register a Hermes gateway that you own, then add the profiles you want to use.",

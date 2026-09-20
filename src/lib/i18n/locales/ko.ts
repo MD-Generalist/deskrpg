@@ -2153,6 +2153,12 @@ const ko: Record<string, string> = {
   "gateways.statusUntested": "아직 테스트하지 않음",
   "gateways.createTitle": "게이트웨이 등록",
   "gateways.openDashboard": "Hermes 대시보드 열기",
+  "gateways.pluginVersion": "플러그인",
+  "gateways.pluginVersionPinned": "이 앱이 설치하는 버전",
+  "gateways.pluginVersionUnknown": "확인되지 않음",
+  "gateways.pluginVersionOutdated":
+    "뒤처져 있습니다. 호스트에서 플러그인을 올린 뒤 연결 테스트를 누르세요.",
+  "gateways.pluginVersionRecheck": "연결 테스트를 누르면 확인합니다.",
   "gateways.editTitle": "게이트웨이 수정",
   "gateways.createHelp":
     "나만의 Hermes 게이트웨이를 등록합니다. 등록한 뒤 사용할 프로필을 추가하세요.",

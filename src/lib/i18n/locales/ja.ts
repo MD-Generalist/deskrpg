@@ -2173,6 +2173,11 @@ const ja: Record<string, string> = {
   "gateways.statusUntested": "未テスト",
   "gateways.createTitle": "ゲートウェイ登録",
   "gateways.openDashboard": "Hermes ダッシュボードを開く",
+  "gateways.pluginVersion": "プラグイン",
+  "gateways.pluginVersionPinned": "このアプリが入れるバージョン",
+  "gateways.pluginVersionUnknown": "未確認",
+  "gateways.pluginVersionOutdated": "が古いです。ホストで更新してから接続テストを押してください。",
+  "gateways.pluginVersionRecheck": "接続テストを押すと確認します。",
   "gateways.editTitle": "ゲートウェイ編集",
   "gateways.createHelp":
     "自分の Hermes ゲートウェイを登録します。登録後、使用するプロファイルを追加してください。",
