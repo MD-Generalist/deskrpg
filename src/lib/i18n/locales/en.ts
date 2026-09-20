@@ -613,6 +613,11 @@ const en: Record<string, string> = {
   "hermes.wizard.config.locked": "The config file can't be read, so this form is locked.",
   "hermes.wizard.config.save": "Save",
   "hermes.wizard.config.saving": "Saving…",
+  "hermes.wizard.config.baseUrlWarning":
+    "This employee still sends requests to {url}. Changing the provider leaves that address in place, so requests can go to the old endpoint.",
+  "hermes.wizard.config.baseUrlClear": "Remove this address when saving",
+  "hermes.wizard.config.baseUrlKeepHint":
+    "Leave it unchecked if you use a custom endpoint — the address stays as it is.",
   "hermes.wizard.config.saved": "Saved.",
   "hermes.wizard.config.loading": "Loading config…",
   "hermes.wizard.closeConfirmTitle": "What happens if you close now",

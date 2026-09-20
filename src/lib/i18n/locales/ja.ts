@@ -624,6 +624,11 @@ const ja: Record<string, string> = {
   "hermes.wizard.config.locked": "設定ファイルを読み込めないため、フォームをロックします。",
   "hermes.wizard.config.save": "保存",
   "hermes.wizard.config.saving": "保存中…",
+  "hermes.wizard.config.baseUrlWarning":
+    "この社員はまだ {url} にリクエストを送ります。プロバイダーを変えてもこのアドレスは残るため、古いエンドポイントに行くことがあります。",
+  "hermes.wizard.config.baseUrlClear": "保存時にこのアドレスを削除する",
+  "hermes.wizard.config.baseUrlKeepHint":
+    "カスタムエンドポイントを使っている場合はチェックしないでください。そのままアドレスが保持されます。",
   "hermes.wizard.config.saved": "保存しました。",
   "hermes.wizard.config.loading": "設定を読み込み中…",
   "hermes.wizard.closeConfirmTitle": "今閉じるとどうなるか",

@@ -580,6 +580,11 @@ const zh: Record<string, string> = {
   "hermes.wizard.config.locked": "无法读取设置文件，此表单已锁定。",
   "hermes.wizard.config.save": "保存",
   "hermes.wizard.config.saving": "保存中…",
+  "hermes.wizard.config.baseUrlWarning":
+    "该员工仍会把请求发送到 {url}。更换提供商不会改变这个地址，请求可能仍发往旧端点。",
+  "hermes.wizard.config.baseUrlClear": "保存时删除该地址",
+  "hermes.wizard.config.baseUrlKeepHint":
+    "如果你使用自定义端点，请不要勾选。保持不变时地址会保留。",
   "hermes.wizard.config.saved": "已保存。",
   "hermes.wizard.config.loading": "正在加载设置…",
   "hermes.wizard.closeConfirmTitle": "现在关闭会怎样",

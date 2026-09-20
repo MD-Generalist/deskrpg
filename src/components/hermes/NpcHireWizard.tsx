@@ -246,6 +246,13 @@ export default function NpcHireWizard({
   const [configLocked, setConfigLocked] = useState(false);
   const [model, setModel] = useState("");
   const [provider, setProvider] = useState("");
+  /**
+   * 그 프로필이 실제로 요청을 보내는 주소(`model.base_url`). 제공자를 바꿔도 이 값은 남아
+   * 이름표만 새 제공자이고 요청은 옛 엔드포인트로 간다(Hermes 런타임은 이 키만 읽는다).
+   * 말없이 지우지 않는다 — 커스텀 엔드포인트를 쓰는 사람에게는 그 주소가 정상이다.
+   */
+  const [baseUrl, setBaseUrl] = useState("");
+  const [clearBaseUrl, setClearBaseUrl] = useState(false);
   const [toolsetsText, setToolsetsText] = useState("");
   // 툴셋·스킬 체크리스트(플러그인 0.9.0+). null 이면 서버의 현재 상태가 기본값이다.
   // 사람이 건드렸을 때만 저장에 싣는다 — 안 건드린 채 저장해 현재 상태를 다시 쓰지 않는다.
@@ -567,6 +574,8 @@ export default function NpcHireWizard({
       const record = data as Record<string, unknown>;
       setModel(typeof record.model === "string" ? record.model : "");
       setProvider(typeof record.provider === "string" ? record.provider : "");
+      setBaseUrl(typeof record.baseUrl === "string" ? record.baseUrl : "");
+      setClearBaseUrl(false);
       setEffort(typeof record.reasoning_effort === "string" ? record.reasoning_effort : "");
       const toolsets = record.toolsets;
       setToolsetsText(
@@ -649,6 +658,8 @@ export default function NpcHireWizard({
       // 빈 문자열도 보낸다 — "지정 안 함" 으로 되돌리는 유일한 방법이다.
       // 조건을 걸면 한 번 고른 effort 를 화면에서 해제할 수 없어진다.
       if (catalog) patch.reasoning_effort = effort;
+      // 사용자가 확인한 경우에만 주소를 지운다(플러그인 0.10.1 의 신호).
+      if (clearBaseUrl && baseUrl) patch.clearBaseUrl = true;
 
       const res = await fetch(`${profileBase}/config`, {
         method: "PUT",
@@ -666,13 +677,19 @@ export default function NpcHireWizard({
         return;
       }
       setConfigSaved(true);
+      if (patch.clearBaseUrl) {
+        setBaseUrl("");
+        setClearBaseUrl(false);
+      }
     } catch {
       setConfigError(t("errors.connectionFailed"));
     } finally {
       setConfigSaving(false);
     }
   }, [
+    baseUrl,
     catalog,
+    clearBaseUrl,
     disabledSkills,
     effort,
     enabledToolsets,
@@ -1341,6 +1358,26 @@ export default function NpcHireWizard({
                 </p>
               )}
               <div className="flex gap-2">
+                {baseUrl && provider.trim() !== "custom" && (
+                  <div
+                    className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
+                    data-base-url-warning={baseUrl}
+                  >
+                    <p className="text-text">
+                      {t("hermes.wizard.config.baseUrlWarning", { url: baseUrl })}
+                    </p>
+                    <label className="flex items-start gap-2 text-text">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={clearBaseUrl}
+                        onChange={(e) => setClearBaseUrl(e.target.checked)}
+                      />
+                      <span>{t("hermes.wizard.config.baseUrlClear")}</span>
+                    </label>
+                    <p className="text-text-muted">{t("hermes.wizard.config.baseUrlKeepHint")}</p>
+                  </div>
+                )}
                 <button
                   type="button"
                   disabled={configSaving}

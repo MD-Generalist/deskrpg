@@ -838,3 +838,47 @@ test("③ 외형은 이 직원의 현재 외형으로 편집기를 열고, 저�
     globalThis.fetch = originalFetch;
   }
 });
+
+test("남은 요청 주소를 알리고, 확인해야만 지운다", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const routes = {
+      ...PROFILE_ROUTES(1),
+      "/config": {
+        model: "x",
+        provider: "openrouter",
+        toolsets: null,
+        reasoning_effort: null,
+        baseUrl: "https://old.example/v1",
+      },
+    };
+    const { root, el } = await mount(wizardWith(routes, calls));
+    await createAndOpenModel(el);
+    const warning = el.querySelector("[data-base-url-warning]");
+    assert.ok(warning, "남은 주소를 알리지 않는다");
+    assert.match(el.textContent ?? "", /https:\/\/old\.example\/v1/);
+
+    // 확인 없이 저장하면 주소를 건드리지 않는다 — 커스텀 엔드포인트를 말없이 지우지 않는다.
+    await act(async () => {
+      buttonByText(el, "저장").click();
+    });
+    const first = calls.filter((c) => c.method === "PUT" && c.url.includes("/config")).at(-1);
+    assert.equal((first?.body as Record<string, unknown>)?.clearBaseUrl, undefined);
+
+    const checkbox = [...el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].at(-1);
+    assert.ok(checkbox, "지우기 확인칸을 찾지 못했다");
+    await act(async () => {
+      checkbox.click();
+    });
+    await act(async () => {
+      buttonByText(el, "저장").click();
+    });
+    const second = calls.filter((c) => c.method === "PUT" && c.url.includes("/config")).at(-1);
+    assert.equal((second?.body as Record<string, unknown>)?.clearBaseUrl, true);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

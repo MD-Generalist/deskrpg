@@ -610,6 +610,11 @@ const ko: Record<string, string> = {
   "hermes.wizard.config.locked": "설정 파일을 읽을 수 없어 폼을 잠급니다.",
   "hermes.wizard.config.save": "저장",
   "hermes.wizard.config.saving": "저장하는 중…",
+  "hermes.wizard.config.baseUrlWarning":
+    "이 직원은 아직 {url} 로 요청을 보냅니다. 제공자를 바꿔도 이 주소는 그대로라, 요청이 옛 엔드포인트로 갈 수 있습니다.",
+  "hermes.wizard.config.baseUrlClear": "저장할 때 이 주소를 지웁니다",
+  "hermes.wizard.config.baseUrlKeepHint":
+    "커스텀 엔드포인트를 쓰고 있다면 체크하지 마세요. 그대로 두면 주소가 유지됩니다.",
   "hermes.wizard.config.saved": "저장했습니다.",
   "hermes.wizard.config.loading": "설정을 불러오는 중…",
   "hermes.wizard.closeConfirmTitle": "지금 닫으면 어떻게 되나요",
