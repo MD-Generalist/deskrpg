@@ -6,6 +6,7 @@
 // 지명 형식만은 회의와 **똑같이** 안내한다. 형식이 갈리면 파서가 둘이 되고, 그 순간
 // 한쪽에서만 통하는 지목이 생긴다.
 
+import { formatReportFormat } from "@/lib/report-format";
 import { formatUserContext, type UserContext } from "@/lib/user-context";
 
 export type ChatLine = { sender: string; content: string };
@@ -38,6 +39,10 @@ export function formatOpenChatMessage(
   } else {
     for (const line of recent) lines.push(`${line.sender}: ${line.content}`);
   }
+  lines.push("");
+
+  // 보고 형식은 대화 경로 셋(DM·오피스 전체·회의)이 같은 문자열을 쓴다 — report-format.ts.
+  lines.push(formatReportFormat());
   lines.push("");
 
   lines.push("[답하는 법]");
