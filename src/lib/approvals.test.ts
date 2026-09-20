@@ -200,3 +200,103 @@ test("멱등 키가 같으면 재시도해도 카드가 늘지 않는다", async
   if (!first.ok || !second.ok) return;
   assert.equal(first.taskIds[0], second.taskIds[0], "같은 카드를 돌려줘야 한다");
 });
+
+test("재시도해도 승인 레코드가 늘지 않는다 — 같은 출처의 pending 을 재사용한다", async () => {
+  // 카드 id 만 같은지 보면 이 결함이 보이지 않는다. 승인 수를 세야 한다.
+  const { ctx, channelId } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const { db, approvals, approvalTargets } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const input = {
+    type: "task_execution",
+    title: "재시도",
+    requestedBy: "sophie",
+    source: { kind: "meeting" as const, id: "m-retry" },
+    items: [{ title: "한 번만", idempotencyKey: "meeting:m-retry:0" }],
+  };
+  const first = await createApprovalBatch(ctx, input);
+  const second = await createApprovalBatch(ctx, input);
+  assert.ok(first.ok && second.ok);
+  if (!first.ok || !second.ok) return;
+  assert.equal(second.approvalId, first.approvalId, "같은 승인을 돌려줘야 한다");
+
+  const rows = await db.select().from(approvals).where(eq(approvals.channelId, channelId));
+  assert.equal(rows.length, 1, "승인이 두 벌 생기면 하나는 영영 pending 으로 남는다");
+  const targets = await db
+    .select()
+    .from(approvalTargets)
+    .where(eq(approvalTargets.approvalId, first.approvalId));
+  assert.equal(targets.length, 1);
+});
+
+test("첫 호출에서 일부만 성공하면, 재시도가 같은 승인에 나머지를 더한다", async () => {
+  const { ctx, channelId } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const { db, approvals, approvalTargets } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const source = { kind: "meeting" as const, id: "m-partial" };
+  const ghost = "00000000-0000-4000-8000-000000000000";
+
+  const first = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "부분 성공",
+    requestedBy: "sophie",
+    source,
+    items: [
+      { title: "되는 것", idempotencyKey: "meeting:m-partial:0" },
+      { title: "안 되는 것", npcId: ghost, idempotencyKey: "meeting:m-partial:1" },
+    ],
+  });
+  assert.ok(first.ok);
+  if (!first.ok) return;
+  assert.equal(first.failed?.length, 1);
+
+  // 사용자가 버튼을 다시 누른다 — 이번에는 담당을 빼고.
+  const second = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "부분 성공",
+    requestedBy: "sophie",
+    source,
+    items: [
+      { title: "되는 것", idempotencyKey: "meeting:m-partial:0" },
+      { title: "안 되는 것", idempotencyKey: "meeting:m-partial:1" },
+    ],
+  });
+  assert.ok(second.ok);
+  if (!second.ok) return;
+  assert.equal(second.approvalId, first.approvalId);
+  assert.equal(
+    (await db.select().from(approvals).where(eq(approvals.channelId, channelId))).length,
+    1,
+  );
+  const targets = await db
+    .select()
+    .from(approvalTargets)
+    .where(eq(approvalTargets.approvalId, first.approvalId));
+  assert.equal(targets.length, 2, "재시도로 붙은 카드가 같은 승인의 대상이 된다");
+});
+
+test("다른 출처의 승인은 재사용하지 않는다", async () => {
+  const { ctx, channelId } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const { db, approvals } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const base = { type: "task_execution", title: "다른 출처", requestedBy: "sophie" };
+  const a = await createApprovalBatch(ctx, {
+    ...base,
+    source: { kind: "meeting" as const, id: "m-a" },
+    items: [{ title: "가" }],
+  });
+  const b = await createApprovalBatch(ctx, {
+    ...base,
+    source: { kind: "meeting" as const, id: "m-b" },
+    items: [{ title: "나" }],
+  });
+  assert.ok(a.ok && b.ok);
+  if (!a.ok || !b.ok) return;
+  assert.notEqual(a.approvalId, b.approvalId);
+  assert.equal(
+    (await db.select().from(approvals).where(eq(approvals.channelId, channelId))).length,
+    2,
+  );
+});

@@ -128,17 +128,54 @@ export async function createApprovalBatch(
   const created = taskIds.filter((id): id is string => id !== null);
   if (created.length === 0) return { ok: false, errorCode: "no_tasks_created" };
 
-  const approvalId = randomUUID();
-  await db.insert(approvals).values({
-    id: approvalId,
-    channelId: ctx.channelId,
-    type: input.type,
-    status: "pending",
-    requestedBy: input.requestedBy,
-    title: input.title,
-    sourceJson: JSON.stringify(input.source),
-  });
-  await db.insert(approvalTargets).values(created.map((taskId) => ({ approvalId, taskId })));
+  // 재시도는 설계가 약속한 경로다 — 일부 실패하면 버튼이 남고 사용자가 다시 누른다.
+  // 멱등 키 덕에 Hermes 는 같은 카드를 돌려주지만, 여기서 무조건 새 승인을 만들면
+  // **같은 카드를 가리키는 pending 승인이 하나 더** 생긴다. 사용자가 둘 중 하나를
+  // 승인하면 카드는 풀리는데 나머지는 판단 모음에 영영 pending 으로 남는다.
+  const sourceJson = JSON.stringify(input.source);
+  const [existing] = await db
+    .select({ id: approvals.id })
+    .from(approvals)
+    .where(
+      and(
+        eq(approvals.channelId, ctx.channelId),
+        eq(approvals.type, input.type),
+        eq(approvals.status, "pending"),
+        eq(approvals.sourceJson, sourceJson),
+      ),
+    )
+    .limit(1);
+
+  let approvalId: string;
+  if (existing) {
+    approvalId = existing.id;
+    const already = new Set(await approvalTargetIds(approvalId));
+    // PK 가 중복 insert 를 막기는 하지만, 조용히 삼키지 않고 없는 것만 넣는다.
+    const missing = created.filter((taskId) => !already.has(taskId));
+    if (missing.length > 0)
+      await db.insert(approvalTargets).values(missing.map((taskId) => ({ approvalId, taskId })));
+  } else {
+    approvalId = randomUUID();
+    await db.insert(approvals).values({
+      id: approvalId,
+      channelId: ctx.channelId,
+      type: input.type,
+      status: "pending",
+      requestedBy: input.requestedBy,
+      title: input.title,
+      sourceJson,
+    });
+    try {
+      await db.insert(approvalTargets).values(created.map((taskId) => ({ approvalId, taskId })));
+    } catch (error) {
+      // 두 insert 를 한 트랜잭션으로 묶을 수 없다 — better-sqlite3 드라이버는 트랜잭션
+      // 콜백이 Promise 를 돌려주는 것을 거부한다("Transaction function cannot return a
+      // promise", 실측 2026-09-21). 그래서 보상 삭제로 같은 보장을 만든다: 대상 0행짜리
+      // `task_execution` 승인은 누를 것이 없는 소음이므로 남기지 않는다.
+      await db.delete(approvals).where(eq(approvals.id, approvalId));
+      throw error;
+    }
+  }
 
   return {
     ok: true,
