@@ -200,6 +200,27 @@ test("blocked 진입은 하위 카드여도 게시한다", async () => {
   );
 });
 
+test("review 진입은 하위 카드여도 게시한다 — 사람의 판단을 기다리는 자리다", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(
+    CHANNEL,
+    [
+      statusEvent({ to: "review", parent_count: 4, task_id: "child" }),
+      statusEvent({ to: "review", parent_count: 0, task_id: "root" }),
+    ],
+    h.deps,
+  );
+  assert.deepEqual(
+    h.posted.map((p) => [p.notice?.kind, (p.notice as { cardId: string }).cardId]),
+    [
+      ["card_review", "child"],
+      ["card_review", "root"],
+    ],
+  );
+  assert.equal(h.posted[0].senderKind, "npc");
+  assert.equal(h.posted[0].content, "보고서 초안", "content 는 로케일 무관 폴백 = 카드 제목");
+});
+
 test("담당 NPC 가 잠들었거나 채널에 없으면 시스템 메시지 — 본문 앞에 NPC 이름(R22)", async () => {
   for (const lookup of [SOPHIE_ASLEEP, SOPHIE_ABSENT]) {
     const h = harness({ npcs: { sophie: lookup } });

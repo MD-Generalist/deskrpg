@@ -2570,6 +2570,7 @@ const ja: Record<string, string> = {
   "cron.open": "クーロン",
   "notice.cardDone": "カードを完了しました: {title}",
   "notice.cardBlocked": "カードがブロックされました: {title}",
+  "notice.cardReview": "確認が必要です: {title}",
   "notice.openCard": "カードを開く",
   "notice.cronResult": "クーロン結果 · {jobName}",
   "notice.cronFailed": "失敗",

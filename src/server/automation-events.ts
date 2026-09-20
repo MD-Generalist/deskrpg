@@ -426,12 +426,16 @@ async function post(
 async function postNotice(channelId: string, event: PluginEvent, deps: IngestDeps) {
   if (event.kind === "task.status") {
     const p = event.payload as Partial<TaskStatusEventPayload>;
+    // `review` 는 사람의 판단을 기다리는 자리다 — `blocked` 와 같이 하위 카드여도 알린다.
+    // 알리지 않으면 NPC 가 멈춰 선 것을 사용자가 알 길이 없다.
     const kind =
       p.to === "blocked"
         ? "card_blocked"
-        : p.to === "done" && (p.parent_count ?? 0) === 0
-          ? "card_done"
-          : null;
+        : p.to === "review"
+          ? "card_review"
+          : p.to === "done" && (p.parent_count ?? 0) === 0
+            ? "card_done"
+            : null;
     if (!kind) return;
     const sender = await resolveSender(channelId, p.assignee ?? null, deps);
     const cardTitle = typeof p.title === "string" ? p.title : (event.task_id ?? "");

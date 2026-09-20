@@ -2543,6 +2543,7 @@ const ko: Record<string, string> = {
   "cron.open": "크론",
   "notice.cardDone": "카드를 완료했습니다: {title}",
   "notice.cardBlocked": "카드가 막혔습니다: {title}",
+  "notice.cardReview": "확인이 필요합니다: {title}",
   "notice.openCard": "카드 열기",
   "notice.cronResult": "크론 결과 · {jobName}",
   "notice.cronFailed": "실패",

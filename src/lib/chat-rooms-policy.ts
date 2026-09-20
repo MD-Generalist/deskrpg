@@ -33,7 +33,7 @@ export type RoomMessage = {
  */
 export type RoomNotice =
   | {
-      kind: "card_done" | "card_blocked";
+      kind: "card_done" | "card_blocked" | "card_review";
       cardId: string;
       cardTitle: string;
       boardSlug: string;
@@ -47,7 +47,7 @@ export type RoomNotice =
       status: "ok" | "error";
     };
 
-const ROOM_NOTICE_KINDS = new Set(["card_done", "card_blocked", "cron_result"]);
+const ROOM_NOTICE_KINDS = new Set(["card_done", "card_blocked", "card_review", "cron_result"]);
 
 /** 저장된 JSON 문자열을 되읽는다. 깨진 값·모르는 kind 는 null — 메시지 자체는 살린다. */
 export function parseRoomNotice(raw: string | null | undefined): RoomNotice | null {
