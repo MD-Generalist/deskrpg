@@ -116,7 +116,13 @@ import {
 } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { HOST_BOOTSTRAP, HOST_HELPER } from "./host-helper";
+import {
+  HOST_BOOTSTRAP,
+  HOST_HELPER,
+  HOST_LAUNCHER,
+  HOST_LAUNCHER_PS,
+  hostLaunch,
+} from "./host-helper";
 import { PLUGIN_PIN, PLUGIN_VERSION } from "./pin";
 const installedPython = ["venv", ".venv"]
   .map((name) => join(homedir(), ".hermes/hermes-agent", name, "bin/python"))
@@ -1871,4 +1877,154 @@ test("SSH 키 거절은 탐색에서도 ssh_auth_failed 로 올라간다 — hos
     }),
     /^Error: ssh_auth_failed$/,
   );
+});
+
+test("POSIX 는 sh -c 로 런처를 띄운다", () => {
+  const launch = hostLaunch("linux", "run", "CODE", '{"candidates": []}');
+  assert.equal(launch.command, "sh");
+  assert.deepEqual(launch.args, [
+    "-c",
+    HOST_LAUNCHER,
+    "deskrpg",
+    "run",
+    "CODE",
+    '{"candidates": []}',
+  ]);
+});
+
+test("win32 는 powershell 로 런처를 띄운다 — payload 는 argv 가 아니라 env 로 간다", () => {
+  const launch = hostLaunch("win32", "install", "CODE", "NONE");
+  assert.equal(launch.command, "powershell");
+  assert.deepEqual(launch.args, [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    HOST_LAUNCHER_PS,
+  ]);
+  // 회귀 방지: `powershell -Command <텍스트> a b c` 는 a·b·c 를 $args 에 바인딩하지 않는다
+  // (WinServer 실측, 2026-09-20) — mode·code·none 을 다시 argv 뒤에 붙이면 이 단언이 깨진다.
+  assert.deepEqual(launch.env, {
+    DESKRPG_HOST_MODE: "install",
+    DESKRPG_HOST_CODE: "CODE",
+    DESKRPG_HOST_NONE: "NONE",
+  });
+});
+
+test("win32 런처 본문은 $args 가 아니라 환경변수를 읽는다", () => {
+  // -Command 로는 $args 가 채워지지 않으므로, 이 셋을 다시 $args[...] 로 되돌리면 조용히 죽는다.
+  assert.ok(!/\$args\[/.test(HOST_LAUNCHER_PS));
+  assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_MODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_CODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_NONE"));
+});
+
+test("win32 런처는 읽은 뒤 자기 환경에서 페이로드 변수를 지운다 — 자식 파이썬에 물려주지 않는다", () => {
+  assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_MODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_CODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_NONE"));
+});
+
+test("win32 런처 본문은 Scripts\\python.exe 를 본다", () => {
+  assert.ok(HOST_LAUNCHER_PS.includes("Scripts\\python.exe"));
+  assert.ok(!HOST_LAUNCHER_PS.includes("bin/python"));
+});
+
+test("win32 런처는 시스템 패키지 사전 점검을 하지 않는다", () => {
+  assert.ok(!HOST_LAUNCHER_PS.includes("system_packages_missing"));
+});
+
+test("invoke·installHermesHost 는 launch.env 를 execute() 로 그대로 넘긴다", async () => {
+  let seenOptions: { env?: Record<string, string> } | undefined;
+  const execute: HostExecutor = async (_command, _args, options) => {
+    seenOptions = options;
+    return { code: 0, stdout: JSON.stringify({ candidates: [] }), stderr: "" };
+  };
+  await discoverHost(execute, "win32");
+  assert.deepEqual(seenOptions?.env, {
+    DESKRPG_HOST_MODE: "run",
+    DESKRPG_HOST_CODE: HOST_BOOTSTRAP,
+    DESKRPG_HOST_NONE: '{"candidates": []}',
+  });
+  // POSIX 는 지금처럼 env 를 전혀 쓰지 않는다 — argv 로만 넘긴다.
+  await discoverHost(execute, "linux");
+  assert.equal(seenOptions?.env, undefined);
+});
+
+test("installHermesHost 도 win32 에서 launch.env 를 execute() 로 넘긴다", async () => {
+  let seenOptions: { env?: Record<string, string> } | undefined;
+  const execute: HostExecutor = async (_command, _args, options) => {
+    seenOptions = options;
+    return {
+      code: 0,
+      stdout: JSON.stringify({ ok: true, installerDigest: "a".repeat(64) }),
+      stderr: "",
+    };
+  };
+  await installHermesHost(execute, undefined, "win32");
+  assert.deepEqual(seenOptions?.env, {
+    DESKRPG_HOST_MODE: "install",
+    DESKRPG_HOST_CODE: HOST_INSTALLER,
+    DESKRPG_HOST_NONE: "",
+  });
+});
+
+test("HOST_BOOTSTRAP 은 win32 를 한 곳에서 가른다", () => {
+  assert.equal((HOST_BOOTSTRAP.match(/sys\.platform == 'win32'/g) ?? []).length, 1);
+});
+
+test("HOST_BOOTSTRAP 은 SIGHUP 을 조건 없이 등록하지 않는다", () => {
+  assert.ok(!/signal\.SIGHUP, signal\.SIGTERM/.test(HOST_BOOTSTRAP));
+  assert.ok(HOST_BOOTSTRAP.includes("taskkill"));
+  assert.ok(HOST_BOOTSTRAP.includes("CREATE_NEW_PROCESS_GROUP"));
+});
+
+test("HOST_INSTALLER 는 두 설치 스크립트 URL 을 모두 안다", () => {
+  assert.ok(HOST_INSTALLER.includes("https://hermes-agent.nousresearch.com/install.sh"));
+  assert.ok(HOST_INSTALLER.includes("https://hermes-agent.nousresearch.com/install.ps1"));
+});
+
+test("HOST_INSTALLER 는 fcntl 을 조건 없이 import 하지 않는다", () => {
+  assert.ok(!/^\s*import fcntl\s*$/m.test(HOST_INSTALLER));
+  assert.ok(HOST_INSTALLER.includes("msvcrt"));
+});
+
+test("HOST_INSTALLER 는 win32 에서 pass_fds 를 쓰지 않는다", () => {
+  assert.ok(HOST_INSTALLER.includes("pass_fds"));
+  assert.ok(/if WINDOWS/.test(HOST_INSTALLER));
+});
+
+test("HOST_HELPER 는 Windows 서비스 갈래를 갖는다", () => {
+  assert.ok(HOST_HELPER.includes("Hermes_Gateway"));
+  assert.ok(HOST_HELPER.includes("schtasks"));
+  assert.ok(HOST_HELPER.includes("gateway-service"));
+});
+
+test("Windows 갈래도 같은 소유권 경고 코드만 쓴다", () => {
+  const codes = HOST_HELPER.match(/'(service_identity_\w+|managed_service_required)'/g) ?? [];
+  assert.ok(codes.length > 0);
+  for (const code of new Set(codes))
+    assert.ok(
+      [
+        "'service_identity_mismatch'",
+        "'service_identity_ambiguous'",
+        "'managed_service_required'",
+      ].includes(code),
+      `${code} 는 허용되지 않은 코드다`,
+    );
+});
+
+test("HOST_BOOTSTRAP 은 UTF-8 이 아닌 로케일에서도 한글 payload 를 왕복한다", () => {
+  // Windows 의 기본 파이프 인코딩(예: cp949)을 POSIX 에서 재현한다: PYTHONUTF8=0 + LC_ALL/LANG=C 는
+  // 파이썬의 stdin/stdout 기본 인코딩을 ascii 로 강제한다(PEP 538/540 의 UTF-8 모드를 끈다).
+  const script = String.raw`print(__import__('json').dumps({'echo': '한글 확인 문자열'}))`;
+  const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
+    encoding: "utf8",
+    input: JSON.stringify({ action: "run", timeout: 5, script }),
+    env: { ...process.env, PYTHONUTF8: "0", LC_ALL: "C", LANG: "C" },
+    timeout: 8000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { echo: "한글 확인 문자열" });
 });

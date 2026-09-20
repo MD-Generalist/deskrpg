@@ -88,5 +88,11 @@ export type CommandResult = { stdout: string; stderr: string; code: number };
 export type HostExecutor = (
   command: string,
   args: string[],
-  options?: { input?: string; timeoutMs?: number; signal?: AbortSignal },
+  /** `env` 는 argv 로 보낼 수 없는 값(Windows PowerShell 런처의 페이로드)을 자식 프로세스 환경에 얹는다. */
+  options?: {
+    input?: string;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    env?: Record<string, string>;
+  },
 ) => Promise<CommandResult>;

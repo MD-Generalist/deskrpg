@@ -9,6 +9,7 @@ const base: CapabilityProbe = {
   installAllowed: true,
   platform: "linux",
   hasSsh: true,
+  hasPowershell: false,
   inContainer: false,
   localHermesFound: true,
   hostLabel: "minipc",
@@ -70,4 +71,27 @@ test("등록한 호스트가 없어도 SSH 는 열린다 — 화면에서 등록
   const c = describeCapabilities({ ...base, sshHosts: [] });
   assert.equal(c.ssh, true);
   assert.equal(c.canInstallHermesSsh, true);
+});
+
+test("win32 는 powershell 이 있으면 로컬이 열린다", () => {
+  const c = describeCapabilities({
+    ...base,
+    platform: "win32",
+    hasPowershell: true,
+    localHermesFound: false,
+  });
+  assert.equal(c.local, true);
+  assert.equal(c.localReason, null);
+  assert.equal(c.canInstallHermes, true);
+});
+
+test("win32 에 powershell 이 없으면 로컬이 막힌다", () => {
+  const c = describeCapabilities({ ...base, platform: "win32", hasPowershell: false });
+  assert.equal(c.local, false);
+  assert.equal(c.localReason, "unsupported_platform");
+});
+
+test("비 win32 는 hasPowershell 을 보지 않는다", () => {
+  const c = describeCapabilities({ ...base, platform: "linux", hasPowershell: false });
+  assert.equal(c.local, true);
 });

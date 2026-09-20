@@ -1,4 +1,4 @@
-import { HOST_BOOTSTRAP, HOST_HELPER, HOST_INSTALLER, HOST_LAUNCHER } from "./host-helper";
+import { HOST_BOOTSTRAP, HOST_HELPER, HOST_INSTALLER, hostLaunch } from "./host-helper";
 import {
   packageManagerFor,
   parseSystemPackages,
@@ -196,6 +196,8 @@ async function invoke(
   candidateId?: string,
   signal?: AbortSignal,
   option?: string,
+  /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
+  platform: string = process.platform,
 ): Promise<RecordValue> {
   checkAbort(signal);
   if (candidateId !== undefined && !ID.test(candidateId)) throw new Error("invalid_candidate");
@@ -224,27 +226,25 @@ async function invoke(
   try {
     // 파이썬이 하나도 없으면 Hermes 도 없다 — 탐색은 빈 목록(→ 설치 제안), 그 밖은 hermes_not_found.
     const none = action === "discover" ? '{"candidates": []}' : '{"error": "hermes_not_found"}';
-    const result = await execute(
-      "sh",
-      ["-c", HOST_LAUNCHER, "deskrpg", "run", HOST_BOOTSTRAP, none],
-      {
-        input: JSON.stringify({
-          action,
-          timeout,
-          script:
-            HOST_HELPER +
-            "\nentry(" +
-            JSON.stringify(action) +
-            ", " +
-            (candidateId ? JSON.stringify(candidateId) : "None") +
-            ", " +
-            (option === undefined ? "None" : JSON.stringify(option)) +
-            ")\n",
-        }),
-        timeoutMs: (timeout + 5) * 1000,
-        signal,
-      },
-    );
+    const launch = hostLaunch(platform, "run", HOST_BOOTSTRAP, none);
+    const result = await execute(launch.command, launch.args, {
+      input: JSON.stringify({
+        action,
+        timeout,
+        script:
+          HOST_HELPER +
+          "\nentry(" +
+          JSON.stringify(action) +
+          ", " +
+          (candidateId ? JSON.stringify(candidateId) : "None") +
+          ", " +
+          (option === undefined ? "None" : JSON.stringify(option)) +
+          ")\n",
+      }),
+      timeoutMs: (timeout + 5) * 1000,
+      signal,
+      env: launch.env,
+    });
     checkAbort(signal);
     if (result.code !== 0 || result.stdout.length > 262144)
       throw new Error("host_operation_failed");
@@ -278,17 +278,17 @@ async function invoke(
 export async function installHermesHost(
   execute: HostExecutor,
   signal?: AbortSignal,
+  /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
+  platform: string = process.platform,
 ): Promise<{ installerDigest: string; milestones: string[] }> {
   checkAbort(signal);
   try {
-    const result = await execute(
-      "sh",
-      ["-c", HOST_LAUNCHER, "deskrpg", "install", HOST_INSTALLER],
-      {
-        timeoutMs: 600_000,
-        signal,
-      },
-    );
+    const launch = hostLaunch(platform, "install", HOST_INSTALLER);
+    const result = await execute(launch.command, launch.args, {
+      timeoutMs: 600_000,
+      signal,
+      env: launch.env,
+    });
     checkAbort(signal);
     if (result.code !== 0 || result.stdout.length > 65536) throw new Error("hermes_install_failed");
     const body = record(JSON.parse(result.stdout));
@@ -331,16 +331,22 @@ export async function checkModelHost(
   execute: HostExecutor,
   candidateId: string,
   signal?: AbortSignal,
+  /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
+  platform: string = process.platform,
 ): Promise<SetupModelState> {
   try {
-    const body = await invoke(execute, "check-model", candidateId, signal);
+    const body = await invoke(execute, "check-model", candidateId, signal, undefined, platform);
     return body.model === "ready" || body.model === "missing" ? body.model : "unknown";
   } catch {
     return "unknown";
   }
 }
-export async function discoverHost(execute: HostExecutor): Promise<SetupCandidate[]> {
-  const body = await invoke(execute, "discover");
+export async function discoverHost(
+  execute: HostExecutor,
+  /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
+  platform: string = process.platform,
+): Promise<SetupCandidate[]> {
+  const body = await invoke(execute, "discover", undefined, undefined, undefined, platform);
   if (!Array.isArray(body.candidates) || body.candidates.length > 256)
     throw new Error("host_operation_failed");
   return body.candidates.map(publicCandidate);
@@ -380,8 +386,10 @@ function inspection(body: RecordValue): SetupInspection {
 export async function inspectHost(
   execute: HostExecutor,
   candidateId: string,
+  /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
+  platform: string = process.platform,
 ): Promise<SetupInspection> {
-  return inspection(await invoke(execute, "inspect", candidateId));
+  return inspection(await invoke(execute, "inspect", candidateId, undefined, undefined, platform));
 }
 function assertProvisionRequest(provision: SetupProvisionRequest | undefined) {
   const created = provision?.createProfile;
@@ -411,6 +419,8 @@ export async function prepareHost(
   skipStep?: (step: string) => boolean,
   /** 화면이 제안을 명시적으로 수락했을 때만 온다. 후보 홈의 `.env` 에만 쓴다. */
   setPort?: number,
+  /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
+  platform: string = process.platform,
 ): Promise<PreparedHost> {
   const skip = (step: string) => skipStep?.(step) === true;
   // 서비스를 등록하면 유닛 정의가 생기고 후보 id(정의의 해시)가 바뀐다. 이후 단계는 새 id 를 써야 한다.
@@ -419,7 +429,7 @@ export async function prepareHost(
     checkAbort(signal);
     onStep(step);
     checkAbort(signal);
-    return invoke(execute, action, candidateId, signal, option);
+    return invoke(execute, action, candidateId, signal, option, platform);
   };
   const requestedKeys = assertProvisionRequest(provision);
   const warnings: string[] = [];
@@ -461,7 +471,9 @@ export async function prepareHost(
     onStep("provisioning_keys");
     for (const name of provisionKeys) {
       checkAbort(signal);
-      const result = record(await invoke(execute, "provision-key", candidateId, signal, name));
+      const result = record(
+        await invoke(execute, "provision-key", candidateId, signal, name, platform),
+      );
       if (result.provisioned === true) provisioned.push(name);
     }
   }

@@ -2,10 +2,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, access, rm, readFile, rename, writeFile, unlink } from "node:fs/promises";
-import { createServer } from "node:net";
+import { createServer, connect } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { assertSshHost, localExecutor, sshRoute } from "./executor";
+import { forwardArgs, tunnelArgs, usesControlMaster } from "./ssh-args";
 
 type Target = { hostId: string; remotePort: number };
 const SUFFIX = ".deskrpg-ssh.invalid";
@@ -49,22 +50,7 @@ async function forwardThroughMaster(
   await access(socket);
   const result = await localExecutor(
     "ssh",
-    [
-      "-F",
-      "/dev/null",
-      "-S",
-      socket,
-      "-O",
-      "forward",
-      "-o",
-      "BatchMode=yes",
-      "-o",
-      "StrictHostKeyChecking=yes",
-      "-L",
-      `127.0.0.1:${port}:127.0.0.1:${remotePort}`,
-      "--",
-      hostId,
-    ],
+    forwardArgs({ platform: process.platform, socket, hostId, localPort: port, remotePort }),
     { timeoutMs: 2000 },
   );
   if (result.code !== 0)
@@ -73,6 +59,25 @@ async function forwardThroughMaster(
         ? "port_conflict"
         : "ssh_connection_failed",
     );
+}
+
+/**
+ * no-mux(win32) 준비 확인. 제어 소켓이 성사를 알려 주지 않으므로 로컬 포트에 실제로 연결해 본다.
+ * `ExitOnForwardFailure=yes` 라 포워드가 실패하면 자식이 스스로 죽고, 그건 호출부가 본다.
+ */
+async function probeLocalPort(port: number) {
+  await new Promise<void>((resolve, reject) => {
+    const socket = connect({ port, host: "127.0.0.1" });
+    const done = (error?: Error) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      error ? reject(error) : resolve();
+    };
+    socket.setTimeout(1000);
+    socket.once("connect", () => done());
+    socket.once("timeout", () => done(new Error("ssh_connection_failed")));
+    socket.once("error", () => done(new Error("ssh_connection_failed")));
+  });
 }
 export async function ensureSshTunnel(
   hostId: string,
@@ -93,25 +98,23 @@ export async function ensureSshTunnel(
     const port = await (dependencies.getPort ?? freePort)();
     const controlDir = await mkdtemp(path.join(os.tmpdir(), "deskrpg-ssh-"));
     const socket = path.join(controlDir, "master");
-    // A private control socket acknowledges forward creation; a random open TCP port is not proof of ownership.
+    // POSIX: a private control socket acknowledges forward creation; a random open TCP port is not
+    // proof of ownership. win32 has no control socket, so `probeLocalPort` stands in — but a bare
+    // TCP connect succeeding is not proof either (TOCTOU: another local process can grab the port
+    // between `freePort` closing its probe socket and this child binding it). The extra settle wait
+    // after a successful probe (below) gives the child's own bind failure time to surface first.
     const route = sshRoute(hostId);
     const child = (dependencies.spawnImpl ?? spawn)(
       "ssh",
-      [
-        ...route.args,
-        ...route.options.slice(0, -4),
-        "-M",
-        "-S",
+      tunnelArgs({
+        platform: process.platform,
+        routeArgs: route.args,
+        routeOptions: route.options,
+        dest: route.dest,
         socket,
-        "-o",
-        "ExitOnForwardFailure=yes",
-        "-o",
-        "ClearAllForwardings=yes",
-        "-N",
-        "-T",
-        "--",
-        route.dest,
-      ],
+        localPort: port,
+        remotePort,
+      }),
       { stdio: ["ignore", "ignore", "pipe"] },
     );
     ownedProcesses.add(child);
@@ -120,12 +123,17 @@ export async function ensureSshTunnel(
       bytes = 0;
     child.stderr!.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
-      if (
-        /REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(
-          chunk.toString(),
-        )
-      )
+      const text = chunk.toString();
+      if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(text))
         failure = "ssh_host_key_failed";
+      // no-mux 에서는 `-O forward` 의 stderr 가 아니라 이 자식이 포트 충돌 문장을 낸다. POSIX 마스터도
+      // 같은 문장을 낼 수 있지만(예: 사용자 ssh_config 의 LocalForward 충돌) 거긴 forwardThroughMaster
+      // 가 이미 그 판정을 하므로 이 자식에서는 no-mux 에만 좁힌다 — 아니면 무해한 문장에도 즉시 실패한다.
+      if (
+        !usesControlMaster(process.platform) &&
+        /cannot listen|Address already in use|cannot bind/i.test(text)
+      )
+        failure = "port_conflict";
       if (bytes > 64 * 1024) {
         failure = "output_limit";
         child.kill("SIGKILL");
@@ -141,12 +149,20 @@ export async function ensureSshTunnel(
       exited = true;
       if (tunnels.get(key) === pending) tunnels.delete(key);
     });
+    const ready = usesControlMaster(process.platform)
+      ? () => (dependencies.forward ?? forwardThroughMaster)(socket, hostId, port, remotePort)
+      : () => probeLocalPort(port);
     try {
       const deadline = Date.now() + 12_000;
       while (Date.now() < deadline) {
         if (exited || failure) throw new Error(failure || "ssh_connection_failed");
         try {
-          await (dependencies.forward ?? forwardThroughMaster)(socket, hostId, port, remotePort);
+          await ready();
+          if (!usesControlMaster(process.platform)) {
+            // 프로브 성공은 다른 로컬 프로세스가 이 포트를 이미 잡았을 가능성을 배제하지 못한다
+            // (TOCTOU). 자식의 bind 실패가 stderr 로 드러날 시간을 짧게 준다.
+            await new Promise((r) => setTimeout(r, 75));
+          }
           if (exited || failure) throw new Error(failure || "ssh_connection_failed");
           return { url: `http://127.0.0.1:${port}`, child };
         } catch (error) {

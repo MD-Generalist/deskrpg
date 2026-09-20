@@ -687,6 +687,7 @@ const warningKeys: Record<string, string> = {
   profile_not_served: "hermes.wizard.warn.profileNotServed",
   model_provider_required: "hermes.wizard.warn.modelProviderRequired",
   linger_required: "hermes.wizard.warn.lingerRequired",
+  logon_required: "hermes.wizard.warn.logonRequired",
 };
 export function setupWarning(locale: Locale, code: unknown): string | undefined {
   if (typeof code !== "string") return undefined;

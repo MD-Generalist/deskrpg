@@ -503,6 +503,8 @@ const ja: Record<string, string> = {
     "このプロファイルはまだゲートウェイで配信されていません。ゲートウェイのmultiplexプロファイル許可リストに名前を追加してください。ウィザードは許可リストを変更しません。",
   "hermes.wizard.warn.lingerRequired":
     "このサーバーではログアウトや再起動で Hermes ゲートウェイが止まります。サーバーのターミナルで一度実行してください: sudo loginctl enable-linger $USER",
+  "hermes.wizard.warn.logonRequired":
+    "ゲートウェイは次回サインイン時に自動的に起動します。サインアウトすると停止します。",
   "hermes.wizard.warn.modelProviderRequired":
     "モデルプロバイダーがまだありません。サーバーでhermes modelを実行してモデルにログインしてください。それまでNPCは応答できません。",
   "hermes.wizard.hostReason.not_admin":

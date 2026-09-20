@@ -1,29 +1,52 @@
+import { isWindows } from "./platform";
+
 /** Kept in a TS constant so Next standalone output includes the helper. No filesystem asset lookup. */
 export const HOST_BOOTSTRAP = String.raw`
 import json, os, pathlib, signal, subprocess, sys
+WINDOWS = sys.platform == 'win32'
 child = None
 def terminate_owned(signum=None, frame=None):
     if child is not None:
-        try: os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError: pass
-        child.wait()
+        try:
+            if WINDOWS:
+                # 프로세스 그룹 신호가 없다. 트리를 taskkill 로 끊는다.
+                subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+            else:
+                os.killpg(child.pid, signal.SIGKILL)
+        except Exception: pass
+        try: child.wait(timeout=15)
+        except Exception: pass
     if signum is not None: raise SystemExit(1)
-for signum in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
-    signal.signal(signum, terminate_owned)
+# SIGHUP 은 Windows 에 없다. 있는 것만 등록한다.
+for name in ('SIGHUP', 'SIGTERM', 'SIGINT'):
+    signum = getattr(signal, name, None)
+    if signum is not None:
+        try: signal.signal(signum, terminate_owned)
+        except (ValueError, OSError): pass
 try:
-    payload = json.load(sys.stdin)
-    root = pathlib.Path.home() / '.hermes' / 'hermes-agent'
-    python = next((root / folder / 'bin' / 'python' for folder in ('venv', '.venv') if (root / folder / 'bin' / 'python').is_file()), None)
+    # Windows 의 stdin 기본 인코딩은 ANSI 코드 페이지(예: cp949)라 UTF-8 로 보낸 한글 payload 가
+    # 깨진다. sys.stdin.buffer 로 바이트를 그대로 받아 UTF-8 로 직접 디코딩한다.
+    payload = json.loads(sys.stdin.buffer.read().decode('utf-8'))
+    # 상류 hermes_constants.py:51-57 과 같은 판정. Windows 는 %LOCALAPPDATA%\hermes 다.
+    root = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
+    root = root / 'hermes-agent'
+    folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
+    python = next((root / folder / folder_name / exe for folder in ('venv', '.venv') if (root / folder / folder_name / exe).is_file()), None)
     if python is None:
         print(json.dumps({'candidates': []} if payload['action'] == 'discover' else {'error': 'hermes_not_found'}))
     else:
-        child = subprocess.Popen([str(python), '-'], text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+        spawn = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {'start_new_session': True}
+        # encoding='utf-8' 를 명시한다 — 없으면 자식 stdin/stdout 도 같은 ANSI 코드 페이지로 인코딩되어
+        # HOST_HELPER 의 한글 주석(43K자)을 보내는 순간 깨진다.
+        child = subprocess.Popen([str(python), '-'], text=True, encoding='utf-8', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **spawn)
         output, unused = child.communicate(payload['script'], timeout=payload['timeout'])
         terminate_owned()
         if child.returncode or len(output) > 262144:
             print(json.dumps({'error': 'host_operation_failed'}))
         else:
-            sys.stdout.write(output)
+            sys.stdout.buffer.write(output.encode('utf-8'))
+            sys.stdout.buffer.flush()
 except Exception:
     terminate_owned()
     print(json.dumps({'error': 'host_operation_failed'}))
@@ -81,14 +104,103 @@ exec "$py" -c "$code"
 `;
 
 /**
+ * `HOST_LAUNCHER` 의 Windows 짝. 하는 일은 같다 — 파이썬을 골라 본문을 `-c` 로 넘긴다.
+ *
+ * 인자는 argv 가 아니라 **환경변수**로 받는다: `DESKRPG_HOST_MODE` = run | install,
+ * `DESKRPG_HOST_CODE` = 파이썬 코드, `DESKRPG_HOST_NONE` = (run) 파이썬이 하나도 없을 때 찍을 JSON.
+ * `powershell -Command <텍스트> a b c` 는 `a b c` 를 `$args` 에 바인딩하지 않는다 — 남는 토큰이
+ * 명령 텍스트 뒤에 이어 붙어 그대로 PowerShell 소스로 파싱된다(WinServer 실측, 2026-09-20).
+ * `-File` 스크립트라면 `$args` 가 채워지지만, 임시 `.ps1` 파일은 정리·권한·경합을 새로 만든다 —
+ * 그래서 `hostLaunch` 가 `execute()` 의 spawn 환경으로 값을 실어 보낸다.
+ * 읽자마자 프로세스 환경에서 지운다 — 이 다음에 뜨는 파이썬 자식이 코드 본문을 물려받을 이유가 없다.
+ *
+ * 고르는 순서: Hermes venv 파이썬 → PATH 의 python → (install 만) uv 로 받은 파이썬.
+ * POSIX 판과 달리 시스템 패키지 사전 점검이 없다 — install.ps1 이 PortableGit·uv·Python·Node 를
+ * 스스로 받으므로 sudo 도 패키지 관리자도 필요 없다(상류 scripts/install.ps1 확인).
+ * Windows venv 의 파이썬은 `Scripts\python.exe` 다(상류 gateway_windows.py:1457,1475).
+ */
+export const HOST_LAUNCHER_PS = String.raw`
+$ErrorActionPreference = 'Stop'
+$mode = $env:DESKRPG_HOST_MODE
+$code = $env:DESKRPG_HOST_CODE
+$none = $env:DESKRPG_HOST_NONE
+Remove-Item Env:\DESKRPG_HOST_MODE -ErrorAction SilentlyContinue
+Remove-Item Env:\DESKRPG_HOST_CODE -ErrorAction SilentlyContinue
+Remove-Item Env:\DESKRPG_HOST_NONE -ErrorAction SilentlyContinue
+function Fail($c) { [Console]::Out.Write('{"error": "' + $c + '"}'); exit 0 }
+function Run($exe) { & $exe -c $code; exit $LASTEXITCODE }
+$home2 = $env:USERPROFILE
+if (-not $home2 -or -not (Test-Path -LiteralPath $home2 -PathType Container)) { Fail 'unsafe_host_path' }
+# 상류 hermes_constants.py:51-57 과 같은 판정이다. Windows 기본 홈은 ~/.hermes 가 아니다.
+$base = $env:LOCALAPPDATA
+if (-not $base) { $base = Join-Path (Join-Path $home2 'AppData') 'Local' }
+$root = Join-Path $base 'hermes'
+foreach ($f in @('venv', '.venv')) {
+  $p = Join-Path (Join-Path (Join-Path $root 'hermes-agent') $f) 'Scripts\python.exe'
+  if (Test-Path -LiteralPath $p -PathType Leaf) { Run $p }
+}
+$sys = Get-Command python -ErrorAction SilentlyContinue
+if ($sys) { Run $sys.Source }
+if ($mode -ne 'install') { [Console]::Out.Write($none); exit 0 }
+$item = Get-Item -LiteralPath $root -ErrorAction SilentlyContinue
+if ($item -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or -not $item.PSIsContainer)) { Fail 'unsafe_host_path' }
+New-Item -ItemType Directory -Force -Path (Join-Path $root 'bin') | Out-Null
+$uv = Join-Path $root 'bin\uv.exe'
+if (-not (Test-Path -LiteralPath $uv -PathType Leaf)) {
+  $tmp = Join-Path $root ('.deskrpg-uv-install.' + [Guid]::NewGuid().ToString('N') + '.ps1')
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -UseBasicParsing -Uri 'https://astral.sh/uv/install.ps1' -OutFile $tmp
+  } catch { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue; Fail 'hermes_installer_unavailable' }
+  $env:UV_UNMANAGED_INSTALL = Join-Path $root 'bin'
+  $env:UV_NO_MODIFY_PATH = '1'
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $tmp *> $null
+  Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+  if (-not (Test-Path -LiteralPath $uv -PathType Leaf)) { Fail 'python_bootstrap_failed' }
+}
+& $uv python install 3.12 *> $null
+if ($LASTEXITCODE -ne 0) { Fail 'python_bootstrap_failed' }
+$py = (& $uv python find 3.12 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not $py -or -not (Test-Path -LiteralPath $py -PathType Leaf)) { Fail 'python_bootstrap_failed' }
+Run $py
+`;
+
+/** 호스트에서 파이썬 런처를 띄울 명령. 셸은 플랫폼마다 다르고 인자 순서는 같다. */
+export function hostLaunch(
+  platform: string,
+  mode: "run" | "install",
+  code: string,
+  none = "",
+): { command: string; args: string[]; env?: Record<string, string> } {
+  if (isWindows(platform))
+    return {
+      command: "powershell",
+      // `-Command <텍스트> a b c` 는 a·b·c 를 $args 로 바인딩하지 않는다(위 HOST_LAUNCHER_PS 주석).
+      // 그래서 payload 는 argv 가 아니라 execute() 의 spawn 환경으로 보낸다.
+      args: [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        HOST_LAUNCHER_PS,
+      ],
+      env: { DESKRPG_HOST_MODE: mode, DESKRPG_HOST_CODE: code, DESKRPG_HOST_NONE: none },
+    };
+  return { command: "sh", args: ["-c", HOST_LAUNCHER, "deskrpg", mode, code, none] };
+}
+
+/**
  * Hermes 설치 전용 스크립트. 설치가 없을 때 돌아야 하므로 HOST_BOOTSTRAP(=Hermes venv 파이썬)을
  * 거치지 않고 HOST_LAUNCHER 가 고른 파이썬(시스템 python3, 없으면 uv 로 받은 파이썬)에서 실행된다. 표준 라이브러리만 쓴다.
  * 설치 스크립트는 파이프가 아니라 임시 파일로 내려받아 sha256 지문을 남기고 `bash <파일>` 로 실행한다.
  * 설치 출력은 저장도 반환도 하지 않는다 — 실패 분류용 마지막 8KiB 만 메모리에 둔다.
  */
 export const HOST_INSTALLER = String.raw`
-import hashlib, json, os, pathlib, subprocess, sys, tempfile, threading, urllib.request
-INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.sh'
+import hashlib, json, os, pathlib, stat, subprocess, sys, tempfile, threading, urllib.request
+WINDOWS = sys.platform == 'win32'
+INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.ps1' if WINDOWS else 'https://hermes-agent.nousresearch.com/install.sh'
+INSTALLER_SUFFIX = '.ps1' if WINDOWS else '.sh'
 MAX_INSTALLER_BYTES = 1048576
 INSTALL_TIMEOUT = 580
 TAIL = 8192
@@ -117,18 +229,41 @@ def out(value):
     sys.stdout.write(json.dumps(value))
     raise SystemExit(0)
 try:
-    ROOT = pathlib.Path.home() / '.hermes'
+    ROOT = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
     INSTALL = ROOT / 'hermes-agent'
     if ROOT.is_symlink() or (ROOT.exists() and not ROOT.is_dir()): out({'error': 'unsafe_host_path'})
     # 업그레이드·재설치는 이 경로의 범위가 아니다. 이미 있으면 절대 손대지 않는다.
     if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
     ROOT.mkdir(parents=True, exist_ok=True)
-    import fcntl
-    fd = os.open(str(ROOT / '.deskrpg-setup.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        os.close(fd)
-        out({'error': 'host_busy'})
+    lock_path = ROOT / '.deskrpg-setup.lock'
+    if WINDOWS:
+        # O_NOFOLLOW 가 없다. Path.is_symlink() 는 Windows 정션을 못 잡는다(CPython 의 os.stat 이
+        # 정션을 심링크로 보고하지 않는다) — 재해석 지점 비트를 직접 본다. 파일이 아직 없으면 통과시킨다.
+        try:
+            attrs = getattr(os.stat(lock_path, follow_symlinks=False), 'st_file_attributes', 0)
+        except FileNotFoundError:
+            attrs = 0
+        if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: out({'error': 'unsafe_host_path'})
+        import msvcrt
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+        # os.open 은 재해석 지점(심링크·정션)을 따라가 대상 파일의 핸들을 연다 — 그 핸들의 fstat 은
+        # 재해석 비트를 보고하지 않으므로, 227행 검사와 이 open 사이에 경로가 바꿔치기됐어도 이
+        # 재확인으로는 잡지 못한다. TOCTOU 창을 닫는 게 아니라, 드물게 남는 경로(핸들이 여전히
+        # 재해석 지점 자체를 가리키는 경우)만 방어한다.
+        if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+            os.close(fd)
+            out({'error': 'unsafe_host_path'})
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError:
+            os.close(fd)
+            out({'error': 'host_busy'})
+    else:
+        import fcntl; fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            out({'error': 'host_busy'})
     lock = os.fdopen(fd, 'w')
     # 잠금을 잡은 뒤 한 번 더 본다 — 경쟁하던 다른 설치가 방금 끝났을 수 있다.
     if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
@@ -140,12 +275,20 @@ try:
         out({'error': 'hermes_installer_unavailable'})
     if not body or len(body) > MAX_INSTALLER_BYTES: out({'error': 'hermes_installer_unavailable'})
     digest = hashlib.sha256(body).hexdigest()
-    handle, script = tempfile.mkstemp(prefix='.deskrpg-hermes-install-', suffix='.sh', dir=str(ROOT))
+    handle, script = tempfile.mkstemp(prefix='.deskrpg-hermes-install-', suffix=INSTALLER_SUFFIX, dir=str(ROOT))
     try:
         with os.fdopen(handle, 'wb') as stream:
             stream.write(body); stream.flush(); os.fsync(stream.fileno())
         env = {**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}
-        child = subprocess.Popen(['bash', script, '--skip-browser', '--skip-setup'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(ROOT), pass_fds=(lock.fileno(),))
+        if WINDOWS:
+            # 스위치 이름은 상류 scripts/install.ps1:15-60 실측이다. POSIX 의 --skip-browser 에
+            # 대응하는 이름은 -SkipBrowser 가 아니라 -SkipComputerUse 다.
+            argv = ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-SkipComputerUse', '-SkipSetup', '-NonInteractive']
+            extra = {}
+        else:
+            argv = ['bash', script, '--skip-browser', '--skip-setup']
+            extra = {'pass_fds': (lock.fileno(),)}
+        child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(ROOT), **extra)
         watchdog = threading.Timer(INSTALL_TIMEOUT, child.kill)
         watchdog.start()
         tail = b''
@@ -175,7 +318,8 @@ try:
         # git 은 설치 스크립트가 sudo 로 깔아 보려다 실패하면 이 문장을 남긴다(install.sh check_git 원문).
         if 'could not install git automatically' in diagnostic: out({'error': 'git_missing'})
         out({'error': 'hermes_install_failed'})
-    python = next((INSTALL / folder / 'bin' / 'python' for folder in ('venv', '.venv') if (INSTALL / folder / 'bin' / 'python').is_file()), None)
+    folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
+    python = next((INSTALL / folder / folder_name / exe for folder in ('venv', '.venv') if (INSTALL / folder / folder_name / exe).is_file()), None)
     if python is None: out({'error': 'hermes_install_failed'})
     probe = subprocess.run([str(python), '-m', 'hermes_cli.main', '--version'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
     if probe.returncode: out({'error': 'hermes_install_failed'})
@@ -188,9 +332,11 @@ except Exception:
 
 // Only fixed operations are accepted. Raw subprocess output, configuration, env and exceptions never leave here.
 export const HOST_HELPER = String.raw`
-import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, stat, subprocess, sys, tempfile, time, urllib.request, urllib.error
 import yaml
-ROOT = pathlib.Path.home() / '.hermes'
+WINDOWS = sys.platform == 'win32'
+# 상류 hermes_constants.py:51-57 과 같은 판정. Windows 는 %LOCALAPPDATA%\hermes 다.
+ROOT = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
 INSTALL = ROOT / 'hermes-agent'
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(INSTALL))
@@ -268,7 +414,23 @@ def settings(home):
     return cfg, env, token, port, external
 
 def run(argv, timeout=8, env=None):
-    return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=timeout, env=env)
+    # errors='replace': 한글 Windows 의 schtasks 는 코드 페이지 949 로 찍는다. 디코딩 예외로 판정을 잃지 않는다.
+    return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors='replace', timeout=timeout, env=env)
+def same_path(left, right):
+    # Windows 는 대소문자를 가리지 않고, 런처는 HERMES_HOME 철자를 그대로 보존한다(상류 _preserve_hermes_home_path).
+    try: return os.path.normcase(str(pathlib.Path(left).resolve())) == os.path.normcase(str(pathlib.Path(right).resolve()))
+    except OSError: return False
+def unxml(value):
+    # 상류 작업 XML 은 xml.sax.saxutils.escape 를 쓴다 — & < > 만 바뀌므로 되돌릴 것도 그 셋뿐이다.
+    return value.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+def launches(arguments, target):
+    # wscript.exe 는 스위치(//B, //Nologo)가 아닌 '첫' 인자를 실행한다. 진짜 실행되는 그 하나만 본다 —
+    # 뒤에 우리 런처 경로를 덧붙여 놓은 남의 작업이 통과하면 안 된다.
+    for token in re.finditer(r'"([^"]*)"|(\S+)', arguments):
+        value = unxml(token.group(1) or token.group(2) or '')
+        if value.startswith('//'): continue
+        return same_path(value, target)
+    return False
 def homes():
     result = [('default', ROOT)]
     profiles = ROOT / 'profiles'
@@ -354,6 +516,63 @@ def identity(name, home):
                 command = ['systemctl', '--user', 'restart', service]
                 pid = int(props.get('MainPID') or '0')
                 warning = None
+            else: warning = 'service_identity_mismatch'
+    elif WINDOWS:
+        # 상류 gateway_windows.py 의 이름 규약이다. 작업 이름은 프로필 이름을 접미사로 달고,
+        # 작업과 시작 프로그램 폴더 폴백은 둘 다 <HERMES_HOME>/gateway-service/<작업이름>.vbs 를 띄운다.
+        # 같은 자리의 .cmd 는 상류가 남기는 호환 잔재라 실제로 실행되는 물건이 아니다 — .vbs 를 본다.
+        task = 'Hermes_Gateway' + ('_' + name if name != 'default' else '')
+        service = task
+        stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', task)
+        launcher = next((base / 'gateway-service' / (stem + '.vbs') for base in (home, ROOT) if (base / 'gateway-service' / (stem + '.vbs')).is_file()), None)
+        registered = run(['schtasks', '/Query', '/TN', task, '/XML'])
+        definition = registered.stdout if registered.returncode == 0 else ''
+        startup = pathlib.Path(os.environ.get('APPDATA') or (pathlib.Path.home() / 'AppData' / 'Roaming')) / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs' / 'Startup' / (stem + '.vbs')
+        if not definition and startup.is_file(): definition = read(startup)
+        if definition and launcher is not None:
+            body = read(launcher)
+            pinned = re.search(r'^env\.Item\("HERMES_HOME"\) = "(.*)"$', body, re.M)
+            launched = re.search(r'^sh\.Run "(.*)", 0, False$', body, re.M)
+            cmdline = launched.group(1).replace('""', '"') if launched else ''
+            # list2cmdline 이 만든 인자열이다. 공백 없는 인자는 따옴표가 붙지 않는다.
+            head = re.match(r'"([^"]*)"|(\S+)', cmdline)
+            exe = pathlib.Path(head.group(1) or head.group(2)) if head else None
+            tail = ['-m', 'hermes_cli.main'] + (['--profile', name] if name != 'default' else []) + ['gateway', 'run']
+            valid = bool(pinned) and same_path(pinned.group(1).replace('""', '"'), str(home))
+            # 꼬리를 '포함' 이 아니라 '일치' 로 본다. 남는 인자가 하나라도 있으면 우리 게이트웨이가 아니다.
+            valid = valid and bool(head) and cmdline[head.end():].strip() == ' '.join(tail)
+            valid = valid and exe is not None and same_path(exe.parent, pathlib.Path(python).parent) and exe.name.lower() in ('python.exe', 'pythonw.exe', pathlib.Path(python).name.lower())
+            valid = valid and not re.search(r'API_SERVER_|GATEWAY_MULTIPLEX', body)
+            # 등록된 정의가 바로 이 런처를 wscript 로 띄우는가. 아니면 남의 작업이다.
+            if registered.returncode == 0:
+                # 작업 XML 은 실행 요소만 본다 — 상류 _build_scheduled_task_xml 의 <Actions><Exec>.
+                # <Description>·<Author> 처럼 실행과 무관한 자리에 우리 경로를 적어 둔 남의 작업은 통과하면 안 된다.
+                executable = re.search(r'<Command>\s*(.*?)\s*</Command>', definition, re.S | re.I)
+                arguments = re.search(r'<Arguments>\s*(.*?)\s*</Arguments>', definition, re.S | re.I)
+                valid = valid and executable is not None and pathlib.Path(unxml(executable.group(1))).name.lower() == 'wscript.exe'
+                valid = valid and arguments is not None and launches(arguments.group(1), launcher)
+            else:
+                # 시작 프로그램 폴더 폴백은 XML 이 아니다. 상류 _build_startup_launcher 가 적는
+                # target = "<런처>" 한 줄과, 그 줄을 실제로 넘기는 sh.Run 의 wscript 호출을 묶어서 본다.
+                chained = re.search(r'^target = "(.*)"$', definition, re.M)
+                chain = re.search(r'^sh\.Run "(.*)", 0, False$', definition, re.M)
+                chain = chain.group(1).replace('""', '"') if chain else ''
+                runner = re.match(r'"([^"]*)"|(\S+)', chain)
+                valid = valid and chained is not None and same_path(chained.group(1).replace('""', '"'), launcher)
+                valid = valid and runner is not None and pathlib.Path(runner.group(1) or runner.group(2)).name.lower() == 'wscript.exe'
+                valid = valid and runner is not None and launches(chain[runner.end():], launcher)
+            if valid:
+                try:
+                    # get_running_pid 는 gateway.status 에 있다. hermes_cli.gateway 는 모듈 수준에서 재노출하지 않는다.
+                    from gateway.status import get_running_pid
+                    pid = int(get_running_pid(home / 'gateway.pid', cleanup_stale=False) or 0)
+                except Exception: pid = 0
+                # 스케줄 작업이 있을 때만 재시작 경로가 있다. /End 뒤 /Run 이라야 바뀐 설정을 다시 읽는다.
+                # 시작 프로그램 폴더 폴백뿐이면 멈추는 방법이 없어 관리되는 서비스를 요구한다.
+                if registered.returncode == 0 and re.fullmatch(r'[A-Za-z0-9_-]+', task):
+                    command = ['cmd', '/c', 'schtasks /End /TN ' + task + ' & schtasks /Run /TN ' + task]
+                    warning = None
+                else: warning = 'managed_service_required'
             else: warning = 'service_identity_mismatch'
     digest = hashlib.sha256((str(INSTALL.resolve()) + '\0' + str(home) + '\0' + service + '\0' + definition).encode()).hexdigest()
     return {'id': digest, 'service': service, 'command': command, 'pid': pid, 'warning': warning}
@@ -559,7 +778,11 @@ def atomic(path, content):
 
 def bounded(argv, env):
     # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
-    child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
+    # Windows 는 pass_fds 를 지원하지 않는다. 잠금은 부모가 쥔 채로 두고 물려주지 않는다.
+    # 정상 경로에서는 보호 범위가 같다 — 부모가 항상 자식보다 오래 산다. 부모가 비정상
+    # 종료하면 Windows 는 핸들이 닫히며 잠금이 즉시 풀린다(POSIX 는 자식이 fd 를 쥐고 유지한다).
+    extra = {} if WINDOWS else {'pass_fds': (LOCK.fileno(),)}
+    child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), **extra)
     try:
         output = child.stdout.read(262145)
         if len(output) > 262144:
@@ -577,12 +800,36 @@ def main(action, candidate_id=None, option=None):
     if action in ('install','configure','restart','install-service','set-timezone','set-port','create-profile','provision-key'):
         # A host-wide advisory lock also protects against a retry from a restarted DeskRPG server.
         # Keep it inherited by the installer until the entire bounded action exits.
-        import fcntl
-        fd = os.open(str(ROOT / '.deskrpg-setup.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            fail('host_busy')
+        lock_path = ROOT / '.deskrpg-setup.lock'
+        if WINDOWS:
+            # O_NOFOLLOW 가 없다. Path.is_symlink() 는 Windows 정션을 못 잡는다(CPython 의 os.stat 이
+            # 정션을 심링크로 보고하지 않는다) — 재해석 지점 비트를 직접 본다. 파일이 아직 없으면 통과시킨다.
+            try:
+                attrs = getattr(os.stat(lock_path, follow_symlinks=False), 'st_file_attributes', 0)
+            except FileNotFoundError:
+                attrs = 0
+            if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: fail('unsafe_host_path')
+            import msvcrt
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+            # os.open 은 재해석 지점(심링크·정션)을 따라가 대상 파일의 핸들을 연다 — 그 핸들의 fstat 은
+            # 재해석 비트를 보고하지 않으므로, 위 검사와 이 open 사이에 경로가 바꿔치기됐어도 이
+            # 재확인으로는 잡지 못한다. TOCTOU 창을 닫는 게 아니라, 드물게 남는 경로(핸들이 여전히
+            # 재해석 지점 자체를 가리키는 경우)만 방어한다.
+            if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+                os.close(fd)
+                fail('unsafe_host_path')
+            try:
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            except OSError:
+                os.close(fd)
+                fail('host_busy')
+        else:
+            import fcntl
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                fail('host_busy')
         LOCK = os.fdopen(fd,'w')
     if action == 'discover':
         return discover()

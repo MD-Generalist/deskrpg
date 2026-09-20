@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   createManagedSsh,
   fingerprintOf,
+  globalKnownHostsLine,
   parseKeyscan,
   validateSshTarget,
   type ScanFn,
@@ -154,4 +155,9 @@ test("관리 호스트면 -F 로 관리 설정을 가리키고, 모르는 별칭
   const h = await ssh.register({ host: "a", port: 22, user: "u" }, [fingerprintOf(ED)]);
   assert.deepEqual(ssh.configArgs(h.id), ["-F", ssh.configPath]);
   assert.deepEqual(ssh.configArgs("legacy-alias"), []);
+});
+
+test("관리형 config 의 널 장치는 플랫폼을 따른다", () => {
+  assert.equal(globalKnownHostsLine("win32"), "  GlobalKnownHostsFile NUL");
+  assert.equal(globalKnownHostsLine("linux"), "  GlobalKnownHostsFile /dev/null");
 });

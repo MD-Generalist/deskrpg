@@ -492,6 +492,8 @@ const en: Record<string, string> = {
     "The gateway does not serve this profile yet. Add its name to the gateway's multiplex profile allowlist. This wizard never edits the allowlist.",
   "hermes.wizard.warn.lingerRequired":
     "On this server the Hermes gateway stops when you log out or reboot. Run this once in a terminal on the server: sudo loginctl enable-linger $USER",
+  "hermes.wizard.warn.logonRequired":
+    "The gateway starts automatically at your next sign-in. It stops when you sign out.",
   "hermes.wizard.warn.modelProviderRequired":
     "No model provider is configured yet. Run hermes model on the server to sign in to a model. Until then NPCs cannot reply.",
   "hermes.wizard.hostReason.not_admin":
