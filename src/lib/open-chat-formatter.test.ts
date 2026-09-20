@@ -65,3 +65,10 @@ test("부른 사람의 컨텍스트를 넘기면 첫 줄 바로 뒤에 [대화 �
   );
   assert.equal(formatOpenChatMessage({ displayName: "단비" }, [], [], "곽지호", null), without);
 });
+
+test("오피스 전체 대화 대본에도 보고 형식 규칙이 들어간다", () => {
+  const p = formatOpenChatMessage({ displayName: "단비" }, [], [], "곽지호");
+  assert.match(p, /\[보고 형식\]/);
+  assert.match(p, /!\[설명\]\(URL\)/);
+  assert.match(p, /한 줄에 URL 하나/);
+});

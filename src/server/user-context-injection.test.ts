@@ -16,6 +16,7 @@ import {
 } from "../test-setup/npc-seed";
 import oldMap from "../lib/fixtures/official-agency-v2.json";
 import { deriveChannelMotionLayout } from "./channel-motion-layout";
+import { formatReportFormat } from "../lib/report-format";
 setupThrowawaySqlite("user-context-injection");
 
 // 직원에게 가는 본문 앞머리의 "[대화 상대]" 한 줄(스펙 2026-09-18)을 실제 소켓으로 고정한다.
@@ -24,7 +25,10 @@ setupThrowawaySqlite("user-context-injection");
 // open-chat-runtime.test(런타임→prompt)가 나눠 고정한다.
 
 const deadlineMs = 10_000;
-const EXPECTED_HEADER = "[대화 상대] 이름: 곽지호 · 소개: 단테랩스 대표. 존댓말 선호.\n\n";
+// 대화 상대 한 줄 뒤에 보고 형식 규칙이 따라온다 — 둘 다 메시지 앞머리이고, SOUL 은 건드리지 않는다.
+const EXPECTED_HEADER =
+  "[대화 상대] 이름: 곽지호 · 소개: 단테랩스 대표. 존댓말 선호.\n\n" +
+  `${formatReportFormat()}\n\n`;
 
 const event = <T>(client: Socket, name: string) =>
   new Promise<T>((resolve, reject) => {
@@ -35,7 +39,7 @@ const event = <T>(client: Socket, name: string) =>
     });
   });
 
-test("DM·회의에서 게이트웨이로 나간 본문 앞머리에 [대화 상대] 가 있다", async (t) => {
+test("DM·회의에서 게이트웨이로 나간 본문 앞머리에 [대화 상대]·[보고 형식] 이 있다", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const { db, channels, characters, channelMembers, jsonForDb } = await import("../db");
   const { setupSocketHandlers, adapterRegistry } = await import("./socket-handlers");

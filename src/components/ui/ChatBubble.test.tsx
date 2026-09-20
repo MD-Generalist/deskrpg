@@ -6,13 +6,16 @@ import test from "node:test";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
+import { I18nProvider } from "@/lib/i18n/context";
+
 import ChatBubble from "./ChatBubble";
 
 async function mount(node: React.ReactElement): Promise<HTMLElement> {
   const el = document.createElement("div");
   document.body.appendChild(el);
   const root = createRoot(el);
-  await act(async () => root.render(node));
+  // NPC 말풍선은 마크다운을 그리고, 그 렌더러가 내려받기 라벨을 번역한다(`chat.download`).
+  await act(async () => root.render(<I18nProvider initialLocale="ko">{node}</I18nProvider>));
   return el;
 }
 

@@ -1902,6 +1902,8 @@ const en: Record<string, string> = {
   // Chat
   "chat.title": "Chat",
   "chat.openChat": "Open chat",
+  "chat.download": "Download",
+  "chat.imageUnavailable": "Image unavailable",
   "chat.placeholder": "Type a message...",
   "chat.mentionNoMatch": "No matching teammate",
   "chat.tab": "Chat",

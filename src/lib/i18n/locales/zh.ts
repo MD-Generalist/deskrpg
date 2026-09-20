@@ -1853,6 +1853,8 @@ const zh: Record<string, string> = {
   // Chat
   "chat.title": "聊天",
   "chat.openChat": "打开聊天",
+  "chat.download": "下载",
+  "chat.imageUnavailable": "无法加载图片",
   "chat.placeholder": "输入消息...",
   "chat.mentionNoMatch": "没有匹配的员工",
   "chat.tab": "聊天",
