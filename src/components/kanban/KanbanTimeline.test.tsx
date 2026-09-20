@@ -52,6 +52,8 @@ async function mount(props: Partial<React.ComponentProps<typeof KanbanTimeline>>
           loading={false}
           error={null}
           onOpenTask={(id) => opened.push(id)}
+          targetDate={null}
+          links={[]}
           {...props}
         />
       </I18nProvider>,

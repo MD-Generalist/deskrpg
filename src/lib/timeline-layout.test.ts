@@ -217,20 +217,25 @@ test("작업자를 모르는 실행도 버리지 않고 마지막 행에 둔다"
 // 창 프리셋·눈금
 // ---------------------------------------------------------------------------
 
-test("오늘 창은 자정부터 지금까지다", () => {
+test("오늘 창은 자정부터 오늘 끝까지다 — now 에서 끊으면 목표일 선이 영영 안 보인다", () => {
   const now = Date.parse("2026-09-21T14:30:00.000Z");
   const win = presetWindow("today", now);
-  assert.equal(win.toMs, now);
   const start = new Date(win.fromMs);
   assert.equal(start.getHours(), 0);
   assert.equal(start.getMinutes(), 0);
   assert.ok(win.fromMs <= now);
+  const end = new Date(win.toMs);
+  assert.equal(end.getHours(), 23);
+  assert.equal(end.getMinutes(), 59);
+  // 목표일은 그날 끝이라 `now` 로 끊으면 언제나 창 밖이 된다.
+  assert.ok(win.toMs > now);
 });
 
-test("이번 주 창은 7일이다", () => {
+test("이번 주 창은 7일이고 오늘 끝에서 닫힌다", () => {
   const now = Date.parse("2026-09-21T14:30:00.000Z");
   const win = presetWindow("week", now);
   assert.equal(win.toMs - win.fromMs, 7 * 24 * 3600_000);
+  assert.equal(new Date(win.toMs).getHours(), 23);
 });
 
 test("눈금은 창 길이에 따라 간격을 고르고 창 안에만 놓인다", () => {
@@ -350,4 +355,18 @@ test("한 카드가 여러 번 돌았으면 처음 시작과 마지막 끝으로
   // 부모의 끝은 두 번째 실행의 끝이다.
   assert.ok(edges[0].from.x > 0.2);
   assert.equal(edges[0].outOfOrder, false);
+});
+
+test("오늘이 목표일이면 오늘 창 안에 든다 — 이게 이 기능의 핵심 경우다", () => {
+  const now = Date.parse("2026-09-21T09:00:00");
+  const win = presetWindow("today", now);
+  const marker = targetMarker("2026-09-21", win, now);
+  assert.equal(marker.kind, "inWindow", "오늘 마감인데 선이 안 그려지면 기능이 없는 것과 같다");
+});
+
+test("내일 목표일은 창 밖이라 글로 말한다", () => {
+  const now = Date.parse("2026-09-21T09:00:00");
+  const win = presetWindow("today", now);
+  const marker = targetMarker("2026-09-22", win, now);
+  assert.equal(marker.kind, "outside");
 });

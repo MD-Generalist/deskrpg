@@ -1432,3 +1432,97 @@ test("capability 가 없으면 타임라인 버튼을 두지 않는다", async (
     await f.cleanup();
   }
 });
+
+test("타임라인이 목표일과 의존 화살표를 실제로 그린다 — 모달에서 값이 흘러야 한다", async () => {
+  // 조각은 각각 초록인데 조각 사이의 배선이 끊겨 목표일도 화살표도 화면에 없던 결함을 고정한다.
+  // 노드가 아니라 **값**으로 단언한다 — 선이 있는지가 아니라 그 선이 그 날짜인지를 본다.
+  const dayStart = Date.parse("2026-09-21T00:00:00");
+  const runStart = Math.floor((dayStart + 3600_000) / 1000);
+  const timelineBoard = board({
+    columns: [
+      {
+        name: "running",
+        tasks: [
+          { id: "parent", title: "부모", status: "done" },
+          { id: "child", title: "자식", status: "running" },
+        ],
+      },
+    ],
+  });
+  const f = await mount(
+    (url) => {
+      if (url.includes("/automation/status"))
+        return json(
+          status({
+            capabilities: ["kanban", "cron", "events", "kanban_views"],
+            boardSlug: "deskrpg-main",
+          }),
+        );
+      if (url.includes("/kanban/runs"))
+        return json({
+          runs: [
+            {
+              id: "r1",
+              status: "done",
+              task_id: "parent",
+              board: "deskrpg-main",
+              profile: "sophie",
+              task_title: "부모",
+              started_at: runStart,
+              ended_at: runStart + 600,
+              outcome: "completed",
+            },
+            {
+              id: "r2",
+              status: "done",
+              task_id: "child",
+              board: "deskrpg-main",
+              profile: "oliver",
+              task_title: "자식",
+              started_at: runStart + 1200,
+              ended_at: runStart + 1800,
+              outcome: "completed",
+            },
+          ],
+          board: "deskrpg-main",
+          window: { from: 0, to: 9_999_999_999 },
+          truncated: false,
+        });
+      if (url.includes("/kanban/links"))
+        return json({
+          links: [{ parent_id: "parent", child_id: "child" }],
+          board: "deskrpg-main",
+        });
+      if (url.includes("/kanban/board")) return json(timelineBoard);
+      return json({ code: "not_found", message: "no route" }, { status: 404 });
+    },
+    {
+      projects: [{ ...MAIN_PROJECT, boardSlug: "deskrpg-main", targetDate: "2026-09-21" }],
+    },
+  );
+  try {
+    const timelineButton = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
+      (el) => el.getAttribute("aria-label") === "타임라인",
+    );
+    assert.ok(timelineButton, "타임라인 버튼이 없다");
+    await act(async () => {
+      timelineButton.click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const target = f.host.querySelector("[data-timeline-target]");
+    assert.ok(target, "모달이 목표일을 계산했는데 화면에 세로선이 없다");
+    assert.ok(
+      (target.getAttribute("data-timeline-target") ?? "").startsWith("2026-09-2"),
+      `목표일 선이 다른 날짜다: ${target.getAttribute("data-timeline-target")}`,
+    );
+
+    const edge = f.host.querySelector("[data-timeline-edge]");
+    assert.ok(edge, "링크를 받아왔는데 화살표가 없다");
+    assert.equal(edge.getAttribute("data-timeline-edge"), "parent->child");
+  } finally {
+    await f.cleanup();
+  }
+});

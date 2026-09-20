@@ -166,13 +166,26 @@ function assignLanes(bars: PositionedBar[]): number {
 /** 창의 기본 범위 — "오늘" 과 "이번 주". 줌은 없다(요구가 생기면 그때 붙인다). */
 export type WindowPreset = "today" | "week";
 
+/**
+ * 창은 **오늘 끝까지**다. `now` 에서 끊지 않는다.
+ *
+ * 처음에는 `now` 에서 끊었는데, 그러면 목표일 세로선이 사실상 절대 그려지지 않는다 — 목표일은
+ * 그날 끝(23:59)이라 언제나 `now` 보다 뒤이기 때문이다. 오늘 마감인 일을 보려고 여는 화면에서
+ * 그 선이 없으면 기능이 없는 것과 같다(모달 배선 테스트가 이걸 잡았다).
+ *
+ * 남은 오늘은 막대 없는 빈 구간으로 남는데, 그것이 곧 "얼마 남았나" 를 보여 준다. 진행 중인
+ * 막대는 `now` 까지만 그려지므로(`layoutTimeline`) 없는 일을 그리지도 않는다.
+ */
 export function presetWindow(preset: WindowPreset, nowMs: number): TimelineWindow {
+  const end = new Date(nowMs);
+  end.setHours(23, 59, 59, 999);
+  const toMs = end.getTime();
   if (preset === "today") {
     const start = new Date(nowMs);
     start.setHours(0, 0, 0, 0);
-    return { fromMs: start.getTime(), toMs: nowMs };
+    return { fromMs: start.getTime(), toMs };
   }
-  return { fromMs: nowMs - 7 * 24 * 3600_000, toMs: nowMs };
+  return { fromMs: toMs - 7 * 24 * 3600_000, toMs };
 }
 
 /**

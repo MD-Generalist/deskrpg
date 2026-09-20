@@ -876,6 +876,8 @@ export default function KanbanBoardModal({
                   error={runsError}
                   onOpenTask={setSelectedTaskId}
                   header={<KanbanMetricsPanel metrics={metrics} />}
+                  targetDate={targetDate}
+                  links={boardLinks}
                 />
               </>
             ) : viewState.viewMode === "list" ? (

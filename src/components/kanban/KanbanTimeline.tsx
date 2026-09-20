@@ -62,12 +62,16 @@ export interface KanbanTimelineProps {
   /** 그림 위에 얹는 것(운영 지표 요약). 타임라인이 내용을 모른 채 자리만 준다. */
   header?: React.ReactNode;
   /**
-   * 이 보드가 속한 프로젝트의 목표일(`YYYY-MM-DD`). 없으면 세로선을 그리지 않는다 —
+   * 이 보드가 속한 프로젝트의 목표일(`YYYY-MM-DD`). `null` 이면 세로선을 그리지 않는다 —
    * 지금은 프로젝트를 만드는 화면이 없어 값이 없는 것이 기본이다.
+   *
+   * **선택 prop 이 아니다.** 처음에는 `?` 를 붙였는데, 모달이 값을 계산만 하고 넘기지 않아도
+   * 타입 검사가 조용했다 — 실제 화면에는 목표일도 화살표도 안 나오는데 컴포넌트 테스트는
+   * prop 을 직접 주니 초록이었다. 빠뜨리면 컴파일러가 잡게 필수로 둔다.
    */
-  targetDate?: string | null;
-  /** 부모·자식 쌍. 양쪽이 다 보일 때만 화살표가 된다. */
-  links?: readonly { parent_id: string; child_id: string }[];
+  targetDate: string | null;
+  /** 부모·자식 쌍. 양쪽이 다 보일 때만 화살표가 된다. 같은 이유로 필수다. */
+  links: readonly { parent_id: string; child_id: string }[];
 }
 
 export default function KanbanTimeline({
@@ -187,6 +191,7 @@ export default function KanbanTimeline({
                   className="stroke-danger"
                   strokeWidth={1.5}
                   strokeDasharray="4 3"
+                  data-timeline-target={new Date(target.atMs).toISOString()}
                 />
                 <title>{t("kanban.timeline.targetLine", { date: stamp(target.atMs) })}</title>
               </g>
@@ -334,6 +339,7 @@ function Arrow({
       x2={x2}
       y2={y2}
       className={edge.outOfOrder ? "stroke-danger" : "stroke-text-dim"}
+      data-timeline-edge={`${edge.parentTaskId}->${edge.childTaskId}`}
       strokeWidth={1}
       strokeDasharray={edge.outOfOrder ? "3 2" : undefined}
       opacity={0.6}
