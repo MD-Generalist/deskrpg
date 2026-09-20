@@ -103,3 +103,19 @@ test("미리보기가 없으면(204) 원래 밑줄 링크가 그대로 남는다
     globalThis.fetch = original;
   }
 });
+
+test("인라인 base64 그림은 지워지지 않고 그려지며 내려받기도 된다", () => {
+  const src = "data:image/png;base64,AAAA";
+  const host = render(`![차트](${src})`);
+  const img = host.querySelector("img");
+  assert.equal(img?.getAttribute("src"), src);
+  assert.equal(downloads(host).length, 1);
+  assert.equal(downloads(host)[0].getAttribute("download"), "image.png");
+});
+
+test("주소를 잃은 이미지는 빈 칸이 아니라 못 불러왔다고 말한다", () => {
+  // svg·file: 처럼 통과시키지 않는 주소는 react-markdown 이 빈 문자열로 지운다.
+  const host = render("![차트](data:image/svg+xml;base64,AAAA)");
+  assert.equal(host.querySelector("img"), null, "빈 src 로 깨진 아이콘을 남기지 않는다");
+  assert.match(host.textContent ?? "", /이미지를 불러오지 못했습니다/);
+});

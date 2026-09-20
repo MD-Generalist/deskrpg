@@ -7,6 +7,7 @@ import type { Components } from "react-markdown";
 import { Copy, Check, Download } from "lucide-react";
 
 import { chatFileLink } from "@/lib/chat-file-link";
+import { chatUrlTransform } from "@/lib/markdown-url";
 import { soleLinkUrl } from "@/lib/link-preview/promote";
 import { useT } from "@/lib/i18n";
 
@@ -146,7 +147,17 @@ function buildComponents(t: (key: string) => string): Components {
     ),
     td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
     img: ({ src, alt }) => {
-      const file = typeof src === "string" ? chatFileLink(src) : null;
+      // 주소를 잃은 이미지(`urlTransform` 이 지운 스킴)는 빈 칸으로 두지 않는다 —
+      // 깨진 아이콘만 남으면 사용자에게 무슨 일이 났는지 단서가 없다(2026-09-20 실측).
+      if (typeof src !== "string" || !src) {
+        return (
+          <span className="my-1 inline-block rounded bg-surface px-2 py-1 text-[11px] text-text-dim">
+            {t("chat.imageUnavailable")}
+            {alt ? ` — ${alt}` : ""}
+          </span>
+        );
+      }
+      const file = chatFileLink(src);
       return (
         <span className="inline-flex flex-col items-start">
           <img
@@ -168,7 +179,11 @@ export default function MarkdownContent({ content }: { content: string }) {
   const components = useMemo(() => buildComponents(t), [t]);
   return (
     <div className="markdown-chat">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={components}
+        urlTransform={chatUrlTransform}
+      >
         {content}
       </ReactMarkdown>
     </div>

@@ -42,3 +42,15 @@ test("http(s) 가 아니면 파일이 아니다", () => {
   assert.equal(chatFileLink("data:text/csv;base64,AAAA"), null);
   assert.equal(chatFileLink(undefined), null);
 });
+
+test("인라인 base64 이미지도 내려받을 수 있다 — 직원이 만든 그림은 파일이다", () => {
+  const link = chatFileLink("data:image/png;base64,AAAA");
+  assert.equal(link?.href, "data:image/png;base64,AAAA");
+  assert.equal(link?.filename, "image.png");
+  assert.equal(chatFileLink("data:image/jpeg;base64,AAAA")?.filename, "image.jpeg");
+});
+
+test("data:image/svg+xml 과 그 밖의 data: 는 파일로 보지 않는다", () => {
+  assert.equal(chatFileLink("data:image/svg+xml;base64,AAAA"), null);
+  assert.equal(chatFileLink("data:text/html;base64,AAAA"), null);
+});

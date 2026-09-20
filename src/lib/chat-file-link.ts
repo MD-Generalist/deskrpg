@@ -66,6 +66,12 @@ const ARTIFACT_CONTENT = /^\/api\/channels\/[^/]+\/artifacts\/[^/]+\/versions\/\
 /** 카드 첨부: `/api/channels/<id>/kanban/attachments/<id>` */
 const KANBAN_ATTACHMENT = /^\/api\/channels\/[^/]+\/kanban\/attachments\/[^/]+$/;
 
+/**
+ * 인라인 이미지 중 **래스터만**. `svg+xml` 은 스크립트를 품는 문서라 제외한다.
+ * `markdown-url.ts` 의 주소 정책과 이 파일의 내려받기 판정이 같은 목록을 본다.
+ */
+export const DATA_IMAGE_RASTER = /^data:image\/(png|jpe?g|gif|webp|avif|bmp);/i;
+
 export type ChatFileLink = {
   /** 다운로드에 쓸 주소. 결과물이면 `?download=1` 이 붙는다(Content-Disposition 을 서버가 준다). */
   href: string;
@@ -82,6 +88,13 @@ function extensionOf(pathname: string): string | null {
 
 export function chatFileLink(href: string | undefined | null): ChatFileLink | null {
   if (!href) return null;
+
+  // 직원이 만든 그림은 인라인 base64 로 오는 일이 잦다 — 그것도 사용자에게는 파일이다.
+  const inline = DATA_IMAGE_RASTER.exec(href);
+  if (inline) {
+    const ext = inline[1].toLowerCase() === "jpg" ? "jpeg" : inline[1].toLowerCase();
+    return { href, filename: `image.${ext}` };
+  }
 
   // 상대 경로는 우리 자신의 라우트다. `new URL` 에 기준을 줘서 쿼리·해시를 정확히 가른다.
   const base = "https://deskrpg.invalid";
