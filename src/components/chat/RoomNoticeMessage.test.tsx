@@ -123,6 +123,46 @@ test("card_blocked — 네 로케일 모두 막힘 문장 (R29)", async () => {
   }
 });
 
+const CARD_REVIEW_HINT: Record<string, string> = {
+  ko: "확인",
+  en: "review",
+  ja: "確認",
+  zh: "确认",
+};
+
+test("card_review — 네 로케일 모두 검토 요청 문장 + 카드 열기 링크", async () => {
+  for (const locale of LOCALES) {
+    const opened: string[] = [];
+    const { host, cleanup } = await render(
+      <RoomNoticeMessage
+        message={message({
+          notice: {
+            kind: "card_review",
+            cardId: "card-3",
+            cardTitle: "계약서 검토",
+            boardSlug: "deskrpg-ch",
+            npcName: "소피",
+          },
+        })}
+        onOpenCard={(cardId, boardSlug) => opened.push(`${cardId}@${boardSlug}`)}
+      />,
+      locale,
+    );
+    const text = host.textContent ?? "";
+    assert.ok(text.includes("계약서 검토"), `${locale}: 카드 제목이 없다`);
+    assert.ok(text.includes(CARD_REVIEW_HINT[locale]), `${locale}: 로케일 문장이 아니다 — ${text}`);
+    assert.equal(
+      host.querySelector("[data-room-notice]")?.getAttribute("data-room-notice"),
+      "card_review",
+    );
+    const button = host.querySelector("button");
+    assert.ok(button, `${locale}: 카드 열기 링크가 없다`);
+    await act(async () => button!.click());
+    assert.deepEqual(opened, ["card-3@deskrpg-ch"]);
+    await cleanup();
+  }
+});
+
 test("cron_result — 헤더에 잡 이름, 본문은 content 그대로, error 면 실패 배지, 이력 열기 (R30)", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];

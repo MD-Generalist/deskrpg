@@ -3,7 +3,7 @@
  * 구조화 알림 한 줄(R29·R30). 서버는 로케일을 모른 채 `notice` 만 싣고, 문장은 여기서 보는
  * 사람의 언어로 만든다.
  *
- * - `card_done` / `card_blocked`: 카드 제목 중심 문장 + "카드 열기"(칸반 모달을 그 카드로).
+ * - `card_done` / `card_blocked` / `card_review`: 카드 제목 중심 문장 + "카드 열기"(칸반 모달을 그 카드로).
  * - `cron_result`: "크론 결과 · {jobName}" 헤더(실패 배지) + 본문 그대로 + "이력 열기".
  * - 모르는 kind: `content` 폴백 — 알림 자체를 삼키지 않는다.
  *
@@ -19,19 +19,26 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 
 /** 카드 알림의 본문 문장. 순수 함수 — 테스트가 로케일별로 고정한다. */
 export function cardNoticeText(
-  notice: Extract<RoomNotice, { kind: "card_done" | "card_blocked" }>,
+  notice: Extract<RoomNotice, { kind: "card_done" | "card_blocked" | "card_review" }>,
   t: Translate,
 ): string {
-  return t(notice.kind === "card_done" ? "notice.cardDone" : "notice.cardBlocked", {
-    title: notice.cardTitle,
-  });
+  const key =
+    notice.kind === "card_done"
+      ? "notice.cardDone"
+      : notice.kind === "card_review"
+        ? "notice.cardReview"
+        : "notice.cardBlocked";
+  return t(key, { title: notice.cardTitle });
 }
 
 /** 알려진 kind 인지 — 아니면 `content` 폴백으로 간다. */
 export function isKnownNotice(notice: RoomNotice | null | undefined): notice is RoomNotice {
   return (
     !!notice &&
-    (notice.kind === "card_done" || notice.kind === "card_blocked" || notice.kind === "cron_result")
+    (notice.kind === "card_done" ||
+      notice.kind === "card_blocked" ||
+      notice.kind === "card_review" ||
+      notice.kind === "cron_result")
   );
 }
 

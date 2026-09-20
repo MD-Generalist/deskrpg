@@ -46,6 +46,14 @@ import type { Socket } from "socket.io-client";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
+import {
+  acknowledgedThrough,
+  decideReportCall,
+  reportAckKey,
+  reportsForChannel,
+  reportTarget,
+} from "./npc-report-dispatch";
+import type { ReportItem } from "@/game/report-queue";
 import { decideContextInvite } from "./context-invite-decision";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import {
@@ -286,6 +294,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // NPC dialog state — all managed here, ChatPanel is pure display
   const [npcActivityKey, setNpcActivityKey] = useState<string | null>(null);
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
+  // 보고 큐 — 사무실 알림에서 파생한다. 확인 지점만 브라우저에 남긴다(`reportAckKey`).
+  const [reportAck, setReportAck] = useState<string | null>(null);
+  const [reportingNpcId, setReportingNpcId] = useState<string | null>(null);
+  const calledReportsRef = useRef<string[]>([]);
   // 대화 목록에 올라가는 직원별 DM 한 줄. 방과 달리 서버가 밀어 주지 않으므로 필요할 때 묻는다.
   const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
   // Keep ref in sync so socket listeners can read current value without stale closure
@@ -2004,15 +2016,96 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, [socket, channelId]);
 
+  // 확인 지점을 브라우저에서 되읽는다. 없으면 null — 첫 방문에는 쌓인 것을 모두 보고한다.
+  useEffect(() => {
+    if (!channelId) return;
+    try {
+      setReportAck(window.localStorage.getItem(reportAckKey(channelId)));
+    } catch {
+      setReportAck(null);
+    }
+  }, [channelId]);
+
+  const acknowledgeReports = useCallback(
+    (item: ReportItem) => {
+      setReportAck((prev) => {
+        const next = acknowledgedThrough(prev, item);
+        if (channelId)
+          try {
+            window.localStorage.setItem(reportAckKey(channelId), next);
+          } catch {
+            // 사생활 보호 모드 등으로 막혀도 이 세션 동안은 상태로 유지된다.
+          }
+        return next;
+      });
+    },
+    [channelId],
+  );
+
+  const reportQueue = useMemo(
+    () =>
+      reportsForChannel({
+        rooms: roomState.rooms,
+        messages: roomState.messages,
+        npcs: rosterNpcs,
+        acknowledgedAt: reportAck,
+      }),
+    [roomState.rooms, roomState.messages, rosterNpcs, reportAck],
+  );
+
   // 방 알림 링크(R29·R30) → 해당 모달을 그 항목으로 연다.
-  const openNoticeCard = useCallback((cardId: string) => {
-    setKanbanFocus((prev) => nextKanbanFocus(prev, cardId));
-    setShowKanban(true);
-  }, []);
-  const openNoticeCronJob = useCallback((jobId: string) => {
-    setCronInitialJobId(jobId);
-    setShowCron(true);
-  }, []);
+  const openNoticeCard = useCallback(
+    (cardId: string) => {
+      setKanbanFocus((prev) => nextKanbanFocus(prev, cardId));
+      setShowKanban(true);
+      // 그 카드의 보고는 사용자가 본 것이다 — 앞선 것까지 확인 처리한다.
+      // `cardId` 가 없는 보고(크론 실패)와 섞이지 않도록 빈 id 는 맞추지 않는다.
+      const item = cardId ? reportQueue.find((report) => report.cardId === cardId) : undefined;
+      if (item) acknowledgeReports(item);
+    },
+    [reportQueue, acknowledgeReports],
+  );
+  /**
+   * 보고 호출 — **서버가 아니라 이 브라우저가 쏜다.** `npc:call` 은 `targetPlayerId` 를
+   * 소켓에서 정하므로 자동화 사건에는 걸어갈 대상이 없다. 아무도 접속하지 않았으면
+   * 이동이 생략되고 알림만 방에 남는 것이 옳다.
+   *
+   * 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다 — 큐는 그대로 남아 닫으면 이어진다.
+   */
+  useEffect(() => {
+    if (!socket || !channelId) return;
+    const next = decideReportCall({
+      queue: reportQueue,
+      activeNpcId: reportingNpcId,
+      calledMessageIds: calledReportsRef.current,
+      blocked: Boolean(dialogNpc) || showKanban || showCron,
+    });
+    if (!next) return;
+    calledReportsRef.current = [...calledReportsRef.current.slice(-49), next.messageId];
+    setReportingNpcId(next.npcId);
+    socket.emit("npc:call", { channelId, npcId: next.npcId }, (result: unknown) => {
+      // 거절(회의 중·다른 사용자 점유)은 조용히 넘긴다. 알림은 이미 방에 있고 배지도 남는다 —
+      // 걸어오지 못했다는 이유로 토스트를 띄우면 사용자가 할 수 있는 일이 없다.
+      if (isNpcCallRejected(result)) setReportingNpcId(null);
+    });
+  }, [socket, channelId, reportQueue, reportingNpcId, dialogNpc, showKanban, showCron]);
+
+  // 보고가 큐에서 빠지면(확인됨) 다음 사람에게 자리를 넘긴다.
+  useEffect(() => {
+    if (reportingNpcId && !reportQueue.some((item) => item.npcId === reportingNpcId))
+      setReportingNpcId(null);
+  }, [reportQueue, reportingNpcId]);
+
+  const openNoticeCronJob = useCallback(
+    (jobId: string) => {
+      setCronInitialJobId(jobId);
+      setShowCron(true);
+      // 크론 실패 보고도 여기서 닫힌다 — 그러지 않으면 배지가 영영 남는다.
+      const item = reportQueue.find((report) => report.jobId === jobId);
+      if (item) acknowledgeReports(item);
+    },
+    [reportQueue, acknowledgeReports],
+  );
   const closeKanban = useCallback(() => {
     setShowKanban(false);
     setKanbanFocus(null);
@@ -2597,6 +2690,27 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 NPC {rosterNpcs.filter((npc) => npc.active).length}
               </span>
             </span>
+            {reportQueue.length > 0 && (
+              <button
+                type="button"
+                data-testid="report-badge"
+                onClick={() => {
+                  const target = reportTarget(reportQueue[0]);
+                  if (target?.kind === "cron") openNoticeCronJob(target.jobId);
+                  else if (target?.kind === "card") openNoticeCard(target.cardId);
+                }}
+                className="flex items-center gap-1.5 rounded-md border border-border bg-danger-bg px-2.5 py-1 text-caption font-semibold text-danger hover:bg-surface-raised"
+                title={reportQueue[0].cardTitle}
+              >
+                <span className="h-2 w-2 rounded-full bg-danger" />
+                <span className="header-full-label">
+                  {t("notice.pendingReports", { count: reportQueue.length })}
+                </span>
+                <span className="header-mobile-label" aria-hidden="true">
+                  {reportQueue.length}
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Mode toggle */}
