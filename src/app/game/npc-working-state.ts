@@ -56,3 +56,19 @@ export function reduceNpcWorking(map: NpcWorkingMap, payload: NpcWorkingPayload)
 export function workingNpcIds(map: NpcWorkingMap): string[] {
   return Object.keys(map).filter((id) => map[id].working);
 }
+
+/**
+ * NPC 별로 **몇 건**을 돌리고 있는가(카드 + 크론).
+ *
+ * 서버는 이 숫자를 `sources` 로 이미 보내는데 맵은 id 목록으로 접어 버려, 한 직원이 카드를
+ * 두 장 돌려도 화면은 한 장처럼 보였다. Hermes 의 프로필별 동시 실행 상한은 설정하지 않으면
+ * 무제한이라(`kanban_db_dispatch.py`) 두 장 이상은 드문 일이 아니다.
+ */
+export function workingNpcCounts(map: NpcWorkingMap): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [id, payload] of Object.entries(map)) {
+    if (!payload.working) continue;
+    out[id] = payload.sources.runningCards + payload.sources.cronRuns;
+  }
+  return out;
+}

@@ -100,6 +100,7 @@ import {
   EMPTY_NPC_WORKING,
   parseNpcWorkingPayload,
   reduceNpcWorking,
+  workingNpcCounts,
   workingNpcIds,
   type NpcWorkingMap,
 } from "./npc-working-state";
@@ -328,7 +329,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, [chatResponses]);
   // 작업 중 목록도 같은 길로 맵에 넘긴다. 씬이 늦게 뜨면 `scene-ready` 에서 다시 보낸다.
   useEffect(() => {
-    const publish = () => EventBus.emit("npc:working-state", { npcIds: workingNpcIds(npcWorking) });
+    const publish = () =>
+      EventBus.emit("npc:working-state", {
+        npcIds: workingNpcIds(npcWorking),
+        counts: workingNpcCounts(npcWorking),
+      });
     publish();
     EventBus.on("scene-ready", publish);
     return () => {

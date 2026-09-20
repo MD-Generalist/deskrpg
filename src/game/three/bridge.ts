@@ -19,6 +19,8 @@ export type ActorSnapshot = {
   phase?: "idle" | "queued" | "thinking" | "streaming" | "done" | "attention";
   /** 칸반 카드 실행·크론 실행이 진행 중(R27). 대화 응답 표시가 없을 때만 그린다. */
   working?: boolean;
+  /** 진행 중인 건수(카드 + 크론). 2 이상일 때만 배지에 숫자가 붙는다. */
+  workingCount?: number;
 };
 export type MapSnapshot = {
   meetingSpace?: MeetingSpace;
@@ -104,6 +106,20 @@ export function actorIndicator(
   const phase = actorPresentationPhase(actor);
   if (phase === "queued" || phase === "thinking" || phase === "streaming") return phase;
   return actor.working ? "working" : null;
+}
+
+/**
+ * 표시 옆에 붙는 숫자. **2 이상일 때만** 붙는다 — 1건은 배지 자체가 이미 말하고 있어서
+ * 숫자를 붙이면 잡음만 는다. 한 직원이 여러 장을 돌릴 수 있는데(프로필별 상한은 기본 무제한)
+ * 지금까지 화면이 그것을 한 장처럼 보여 줬다.
+ */
+export function indicatorCountLabel(
+  indicator: ActorIndicator,
+  actor: Pick<ActorSnapshot, "workingCount">,
+): string {
+  if (indicator !== "working") return "";
+  const count = actor.workingCount ?? 0;
+  return count >= 2 ? String(count) : "";
 }
 
 /** Chat messages use user IDs; scene player IDs use socket IDs. Never match names. */

@@ -73,7 +73,7 @@ test("editor preview uses the same 32px channel contract, keeps furniture and ex
   assert.equal(JSON.stringify(map), before); // viewing cannot dirty/convert saved map data
 });
 
-import { overviewDistance } from "./bridge";
+import { actorIndicator, indicatorCountLabel, overviewDistance } from "./bridge";
 import { createEventScope } from "./event-scope";
 import { EventBus } from "../EventBus";
 test("map overview fits large and portrait maps without a fixed 85-unit ceiling", () => {
@@ -105,4 +105,27 @@ test("room sender user ID resolves to socket actor without name matching", async
   assert.equal(speechActorId(actors, "user-1"), "socket-1");
   assert.equal(speechActorId(actors, "npc-1"), "npc-1");
   assert.equal(speechActorId(actors, "unknown"), "unknown");
+});
+
+test("indicatorCountLabel — 2건 이상일 때만 숫자가 붙는다", () => {
+  assert.equal(indicatorCountLabel("working", { workingCount: 3 }), "3");
+  assert.equal(indicatorCountLabel("working", { workingCount: 2 }), "2");
+  assert.equal(
+    indicatorCountLabel("working", { workingCount: 1 }),
+    "",
+    "1건은 배지가 이미 말한다 — 숫자를 붙이면 잡음만 는다",
+  );
+  assert.equal(indicatorCountLabel("working", {}), "");
+});
+
+test("indicatorCountLabel — 작업 중이 아닌 표시에는 숫자를 붙이지 않는다", () => {
+  assert.equal(indicatorCountLabel("thinking", { workingCount: 5 }), "");
+  assert.equal(indicatorCountLabel(null, { workingCount: 5 }), "");
+});
+
+test("여러 장을 돌리는 직원은 대화 응답 중이면 응답 표시가 이긴다 — 개수는 가려진다", () => {
+  const actor = { phase: "thinking" as const, active: false, working: true, workingCount: 4 };
+  const kind = actorIndicator(actor);
+  assert.equal(kind, "thinking");
+  assert.equal(indicatorCountLabel(kind, actor), "");
 });

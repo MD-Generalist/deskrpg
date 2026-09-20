@@ -168,6 +168,8 @@ export class OfficeSimulation {
   private responsePhases: Record<string, "queued" | "thinking" | "streaming"> = {};
   /** 카드 실행·크론 실행 중인 NPC(R27). `npc:working-state` 로 통째로 갱신된다. */
   private workingNpcs = new Set<string>();
+  /** npcId → 진행 중인 건수. 한 직원이 여러 장을 돌릴 수 있어 개수까지 받는다. */
+  private workingCounts: Record<string, number> = {};
 
   // ---------------------------------------------------------------------------
   // 플레이어
@@ -413,6 +415,7 @@ export class OfficeSimulation {
         active: this.activityBubbles.has(npc.id),
         phase: this.responsePhases[npc.id],
         working: this.workingNpcs.has(npc.id),
+        workingCount: this.workingCounts[npc.id] ?? 0,
       };
     });
     if (this.playerReady && this.player)
@@ -708,11 +711,16 @@ export class OfficeSimulation {
         this.responsePhases = payload.phases;
       },
     );
-    // 작업 중 표시(R27) — GamePageClient 가 소켓의 `npc:working` 을 접어 id 목록으로 준다.
+    // 작업 중 표시(R27) — GamePageClient 가 소켓의 `npc:working` 을 id 목록 + 건수로 접어 준다.
     this.workingNpcs = new Set();
-    this.eventScope.on("npc:working-state", (payload: { npcIds: string[] }) => {
-      this.workingNpcs = new Set(payload.npcIds);
-    });
+    this.workingCounts = {};
+    this.eventScope.on(
+      "npc:working-state",
+      (payload: { npcIds: string[]; counts?: Record<string, number> }) => {
+        this.workingNpcs = new Set(payload.npcIds);
+        this.workingCounts = payload.counts ?? {};
+      },
+    );
     // 대화 미리보기는 활동·인사 수명과 무관하다.
     this.eventScope.on("chat:speech", (payload: { actorId: string; text: string }) => {
       this.speechPreviews.set(payload.actorId, payload.text, this.now);

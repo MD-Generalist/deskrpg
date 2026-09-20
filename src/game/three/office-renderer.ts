@@ -63,6 +63,7 @@ import {
   type ActorSnapshot,
   type OfficeBridge,
   type MapSnapshot,
+  indicatorCountLabel,
 } from "./bridge";
 import { getObjectDimensions, TILE_ID_TO_OBJECT, type MapObject } from "../../lib/object-types";
 
@@ -1540,7 +1541,8 @@ export class OfficeRenderer {
         name.textContent = actor.name;
         label.setAttribute("aria-label", actor.name);
         const message = actor.bubble || ((this.speech.get(actor.id) || 0) > time ? "···" : "");
-        const indicator = INDICATOR_GLYPH[actorIndicator(actor) ?? "none"];
+        const kind = actorIndicator(actor);
+        const indicator = INDICATOR_GLYPH[kind ?? "none"] + indicatorCountLabel(kind, actor);
         const text = [indicator, message].filter(Boolean).join(" ");
         const screen = new T.Vector3(seat?.x ?? p.x, 0, seat?.z ?? p.z).project(this.camera);
         if (

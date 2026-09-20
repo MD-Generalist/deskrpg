@@ -7,6 +7,7 @@ import {
   EMPTY_NPC_WORKING,
   parseNpcWorkingPayload,
   reduceNpcWorking,
+  workingNpcCounts,
   workingNpcIds,
 } from "./npc-working-state";
 
@@ -76,4 +77,22 @@ test("맵 표시 우선순위 — 대화 응답(queued/thinking/streaming)이 �
   assert.equal(actorIndicator({ phase: "attention", working: true }), "working");
   // 활동 말풍선(active) 은 thinking 으로 그려지므로 그쪽이 우선한다.
   assert.equal(actorIndicator({ active: true, working: true }), "thinking");
+});
+
+test("workingNpcCounts — 카드와 크론을 합쳐 NPC 별 건수를 준다", () => {
+  const map = {
+    a: { npcId: "a", working: true, sources: { runningCards: 2, cronRuns: 1 } },
+    b: { npcId: "b", working: true, sources: { runningCards: 1, cronRuns: 0 } },
+    c: { npcId: "c", working: false, sources: { runningCards: 0, cronRuns: 0 } },
+  };
+  assert.deepEqual(workingNpcCounts(map), { a: 3, b: 1 });
+});
+
+test("workingNpcCounts — 작업 중이 아닌 NPC 는 빠진다", () => {
+  assert.deepEqual(
+    workingNpcCounts({
+      x: { npcId: "x", working: false, sources: { runningCards: 0, cronRuns: 0 } },
+    }),
+    {},
+  );
 });
