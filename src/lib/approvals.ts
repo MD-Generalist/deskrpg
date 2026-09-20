@@ -170,6 +170,10 @@ export async function createApprovalBatch(
       requestedBy: input.requestedBy,
       title: input.title,
       sourceJson,
+      // 이 승인의 카드가 **어느 보드에 있는지**. 이것이 없으면 결정이 늘 채널 기본 보드로
+      // `unblock` 을 보내고, 카드가 다른 보드에 있으면 전부 `task_not_found` 로 실패하는데
+      // 승인은 이미 닫혀 있다 — 승인했는데 아무 일도 안 일어난다.
+      payloadJson: JSON.stringify({ boardSlug: board }),
     });
     try {
       await db.insert(approvalTargets).values(created.map((taskId) => ({ approvalId, taskId })));
@@ -269,5 +273,16 @@ async function announceApproval(
     requestEmitRoomMessage(room.id, message);
   } catch {
     // 알림 실패가 승인 생성을 실패시키지 않는다.
+  }
+}
+
+/** 이 승인의 카드가 있는 보드. 옛 행(`payload_json` 없음)은 채널 기본 보드로 읽는다. */
+export function approvalBoardSlug(payloadJson: string | null | undefined): string | null {
+  if (!payloadJson) return null;
+  try {
+    const parsed = JSON.parse(payloadJson) as { boardSlug?: unknown };
+    return typeof parsed.boardSlug === "string" && parsed.boardSlug ? parsed.boardSlug : null;
+  } catch {
+    return null;
   }
 }

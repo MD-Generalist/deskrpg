@@ -2,6 +2,10 @@
  * 승인 결정 REST 의 몸통. 라우트 파일은 얇게 두고 순서를 여기 한 곳에 고정한다
  * (`src/app/api/AGENTS.md`).
  *
+ * **왜 소유자 전용이 아닌가:** 결정은 채널 멤버면 누구나 한다. 멤버는 이미 카드를 직접
+ * `unblock` 할 수 있으므로(`kanban-routes.ts` 의 기존 동작) 여기서 좁혀도 권한이 실제로
+ * 줄지 않고, 승인을 기다리는 일만 늘어난다.
+ *
  * 관문 순서는 칸반과 같다 — `resolveKanbanChannelContext` 가 로그인 → 멤버 →
  * 게이트웨이 409 → 플러그인 428 → 보드 소속 404 → 보드 503 을 보장한다. 여기서
  * 우회 경로를 만들지 않는다.
@@ -14,7 +18,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { approvalTargets, approvals, db, nowForDb } from "@/db";
-import { approvalTargetIds } from "@/lib/approvals";
+import { approvalBoardSlug, approvalTargetIds } from "@/lib/approvals";
 import {
   decideTargets,
   nextApprovalStatus,
@@ -45,9 +49,28 @@ function readTargets(raw: unknown): TargetDecision[] | undefined | null {
 
 /** POST — 승인 하나를 결정하고, 승인된 카드를 `unblock` 한다. */
 export async function decideApproval(req: NextRequest, channelId: string, approvalId: string) {
+  const userId = getUserId(req);
+  if (!userId) return cronError(401, "unauthorized", "unauthorized");
+
+  // 승인을 **먼저** 읽는다. 카드가 어느 보드에 있는지 알아야 컨텍스트를 그 보드로 풀 수
+  // 있다. 기본 보드로 풀면 다른 보드의 카드에 `unblock` 이 닿지 않는다.
+  // 이 조회는 권한 검사 전이라 **결과를 응답에 싣지 않는다** — 존재 여부가 새지 않게
+  // 아래 멤버 검사를 통과한 뒤에만 404/409 를 가른다.
+  const [row] = await db
+    .select({
+      id: approvals.id,
+      status: approvals.status,
+      payloadJson: approvals.payloadJson,
+    })
+    .from(approvals)
+    .where(and(eq(approvals.id, approvalId), eq(approvals.channelId, channelId)))
+    .limit(1);
+
   const resolved = await resolveKanbanChannelContext({
-    userId: getUserId(req),
+    userId,
     channelId,
+    // 옛 행(payload 없음)은 채널 기본 보드다. 슬러그는 소속 검사(404)를 다시 거친다.
+    ...(row ? { boardSlug: approvalBoardSlug(row.payloadJson) ?? undefined } : {}),
   });
   if (!resolved.ok) return resolved.response;
   const ctx = resolved.ctx;
@@ -70,11 +93,6 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
 
   // 이 채널의 승인만. 남의 채널 승인 id 를 넣어도 존재 여부가 새지 않게 404 로 접는다.
-  const [row] = await db
-    .select({ id: approvals.id, status: approvals.status })
-    .from(approvals)
-    .where(and(eq(approvals.id, approvalId), eq(approvals.channelId, channelId)))
-    .limit(1);
   if (!row) return cronError(404, "approval_not_found", "approval not found");
   if (row.status !== "pending")
     return cronError(409, "approval_already_decided", "approval already decided");
@@ -112,6 +130,19 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
     if (!res.ok) failed.push({ task_id: taskId, code: res.failure.code || "unblock_failed" });
   }
 
+  // 풀 것이 있었는데 **하나도** 못 풀었으면 게이트웨이가 그 순간 안 닿은 것이다. 승인만
+  // 닫아 두면 사용자는 카드를 하나씩 손으로 풀어야 하고 다시 누를 pending 도 없다.
+  // 트랜잭션을 못 쓰니 보상으로 되돌린다. 일부만 실패한 경우는 되돌리지 않는다 — 이미
+  // 실행이 시작된 카드가 있고, 남은 것은 판단 모음의 막힌 카드 줄에 보인다.
+  if (plan.unblock.length > 0 && failed.length === plan.unblock.length) {
+    await db
+      .update(approvals)
+      .set({ status: "pending", decidedBy: null, decidedAt: null })
+      .where(eq(approvals.id, approvalId));
+    return cronError(502, "unblock_failed", "could not unblock any task", { failed });
+  }
+
+  // 댓글도 같은 `ctx.boardSlug` 로 간다 — 위에서 승인의 보드로 컨텍스트를 풀었기 때문이다.
   // 반려·수정 요청의 말은 카드 댓글로 남긴다 — 직원이 그 카드를 다시 집을 때 읽는다.
   // 빈 메모로는 댓글을 남기지 않는다(소음이다).
   if (note && decision !== "approve")

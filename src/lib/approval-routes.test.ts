@@ -265,3 +265,88 @@ test("항목별 결정 값이 모르는 것이면 400 — DB 에 쓰이기 전�
     .where(eq(approvalTargets.approvalId, batch.approvalId));
   assert.equal(rows[0].decision, null, "거절된 요청이 항목 결정을 쓰면 안 된다");
 });
+
+/** 둘째 보드를 만들고 그 슬러그를 돌려준다 — 다중 보드는 이미 출시본에 있다. */
+async function makeSecondBoard(ownerId: string, channelId: string): Promise<string> {
+  const routes = await import(`@/app/api/channels/[id]/projects/route`);
+  const res = await routes.POST(
+    new NextRequest(`http://localhost/api/channels/${channelId}/projects`, {
+      method: "POST",
+      headers: { ...authHeaders(ownerId), "content-type": "application/json" },
+      body: JSON.stringify({ name: "둘째 프로젝트" }),
+    }),
+    { params: Promise.resolve({ id: channelId }) } as never,
+  );
+  const body = (await res.json()) as { project?: { boardSlug: string }; code?: string };
+  assert.equal(res.status, 201, JSON.stringify(body));
+  return body.project!.boardSlug;
+}
+
+test("기본 보드가 아닌 곳의 카드도 승인하면 풀린다", async () => {
+  // 예전에는 결정이 늘 채널 기본 보드로 `unblock` 을 보내, 카드가 다른 보드에 있으면
+  // 전부 task_not_found 로 실패하는데 승인은 이미 닫혀 있었다 — 승인했는데 아무 일도
+  // 일어나지 않는 상태다.
+  const { ctx, ownerId, channelId } = await seedCtx();
+  const second = await makeSecondBoard(ownerId, channelId);
+  assert.notEqual(second, ctx.boardSlug, "둘째 보드가 기본 보드와 같으면 이 시험이 무의미하다");
+
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const batch = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "둘째 보드의 일",
+    requestedBy: "sophie",
+    source: { kind: "meeting", id: "m-board" },
+    boardSlug: second,
+    items: [{ title: "가" }],
+  });
+  assert.ok(batch.ok);
+  if (!batch.ok) return;
+
+  const { decideApproval } = await import("@/lib/approval-routes");
+  const res = await decideApproval(
+    post(ownerId, channelId, batch.approvalId, { decision: "approve" }),
+    channelId,
+    batch.approvalId,
+  );
+  const body = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(body));
+  assert.equal(body.failed, undefined, "그 보드로 갔으면 실패가 없어야 한다");
+  assert.deepEqual(body.unblocked, batch.taskIds);
+
+  const task = await ctx.client.kanban.getTask(second, batch.taskIds[0]!);
+  assert.ok(task.ok);
+  assert.notEqual(task.data.task.status, "blocked");
+});
+
+test("풀기가 전부 실패하면 승인을 되돌리고 502 — 다시 누를 수 있게", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const batch = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "게이트웨이가 안 닿는 순간",
+    requestedBy: "sophie",
+    source: { kind: "meeting", id: "m-down" },
+    items: [{ title: "가" }, { title: "나" }],
+  });
+  assert.ok(batch.ok);
+  if (!batch.ok) return;
+
+  // unblock 두 번을 모두 실패시킨다.
+  server.failNext("/deskrpg/kanban/tasks", 2);
+
+  const { decideApproval } = await import("@/lib/approval-routes");
+  const res = await decideApproval(
+    post(ownerId, channelId, batch.approvalId, { decision: "approve" }),
+    channelId,
+    batch.approvalId,
+  );
+  assert.equal(res.status, 502);
+  assert.equal((await res.json()).code, "unblock_failed");
+
+  const { pendingApprovalTaskIds } = await import("@/lib/approvals");
+  assert.equal(
+    (await pendingApprovalTaskIds(channelId)).size,
+    2,
+    "되돌리지 않으면 다시 누를 pending 이 없어 사용자가 카드를 손으로 풀어야 한다",
+  );
+});

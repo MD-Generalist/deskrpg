@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 
 import { approvals, chatRoomMessages, chatRooms, db } from "@/db";
 import { buildAttentionInbox, type AttentionInboxInput } from "@/lib/attention-inbox";
-import { approvalTargetsByApproval } from "@/lib/approvals";
+import { approvalBoardSlug, approvalTargetsByApproval } from "@/lib/approvals";
 import { parseRoomNotice } from "@/lib/chat-rooms-policy";
 import { pluginFailureResponse } from "@/lib/cron-access";
 import { getUserId } from "@/lib/internal-rpc";
@@ -60,33 +60,53 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
   if (!resolved.ok) return resolved.response;
   const ctx = resolved.ctx;
 
-  const board = await ctx.client.kanban.getBoard(ctx.boardSlug, {});
-  if (!board.ok) return pluginFailureResponse(board);
-
   const pending = await db
     .select({
       id: approvals.id,
       title: approvals.title,
       requestedBy: approvals.requestedBy,
       createdAt: approvals.createdAt,
+      payloadJson: approvals.payloadJson,
     })
     .from(approvals)
     .where(and(eq(approvals.channelId, channelId), eq(approvals.status, "pending")));
   const targets = await approvalTargetsByApproval(pending.map((a) => a.id));
 
+  // 기본 보드만 읽으면 **다른 보드의 승인 대기 카드가 줄에서 빠진다.** 대기 중인 승인이
+  // 가리키는 보드를 함께 읽는다. 한 보드가 실패하면 그 보드만 건너뛴다 — 한 보드 때문에
+  // 화면 전체가 비면 사용자가 아무것도 못 본다.
+  const slugs = new Set<string>([ctx.boardSlug]);
+  for (const a of pending) {
+    const slug = approvalBoardSlug(a.payloadJson);
+    if (slug) slugs.add(slug);
+  }
+  const cardsBySlug: { id: string; status: string; title: string; at: string | null }[] = [];
+  let anyBoardOk = false;
+  for (const slug of slugs) {
+    const board = await ctx.client.kanban.getBoard(slug, {});
+    if (!board.ok) {
+      // 기본 보드가 실패하면 화면에 이유를 보여야 한다 — 그것까지 감추지 않는다.
+      if (slug === ctx.boardSlug) return pluginFailureResponse(board);
+      continue;
+    }
+    anyBoardOk = true;
+    for (const column of board.data.columns)
+      for (const task of column.tasks) {
+        const ms = taskTimeMs(task.created_at);
+        cardsBySlug.push({
+          id: task.id,
+          status: task.status,
+          title: task.title,
+          at: ms === null ? null : new Date(ms).toISOString(),
+        });
+      }
+  }
+  if (!anyBoardOk)
+    return NextResponse.json({ rows: [], counts: countNeedsAttention([], new Set()) });
+
   // 카드 시각은 **epoch 초**로 온다 — `Date.parse` 를 부르면 NaN 이라 경과 시간이 조용히
-  // 사라진다. 그 판정은 `taskTimeMs` 한 곳에만 둔다.
-  const cards = board.data.columns.flatMap((column) =>
-    column.tasks.map((task) => {
-      const ms = taskTimeMs(task.created_at);
-      return {
-        id: task.id,
-        status: task.status,
-        title: task.title,
-        at: ms === null ? null : new Date(ms).toISOString(),
-      };
-    }),
-  );
+  // 사라진다. 그 판정은 `taskTimeMs` 한 곳에만 둔다(위 루프에서 읽었다).
+  const cards = cardsBySlug;
   const input: AttentionInboxInput = {
     cards,
     approvals: pending.map((a) => ({
