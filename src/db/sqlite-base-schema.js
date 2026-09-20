@@ -350,6 +350,15 @@ const SQLITE_BASE_SCHEMA = `
     );
     CREATE INDEX IF NOT EXISTS approval_targets_task_idx ON approval_targets(task_id);
 
+    CREATE TABLE IF NOT EXISTS npc_panel_reads (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
+      tab TEXT NOT NULL,
+      seen_at TEXT NOT NULL,
+      seen_ids TEXT,
+      PRIMARY KEY (user_id, npc_id, tab)
+    );
+
     CREATE TABLE IF NOT EXISTS meeting_minutes (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,

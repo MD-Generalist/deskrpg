@@ -697,3 +697,22 @@ export const approvalTargets = pgTable(
     index("approval_targets_task_idx").on(t.taskId),
   ],
 );
+
+// 직원 패널의 탭별 열람 상태. 카드·크론 정본은 Hermes 에 있고 여기엔 "어디까지 봤는가" 만 둔다.
+export const npcPanelReads = pgTable(
+  "npc_panel_reads",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    npcId: uuid("npc_id")
+      .notNull()
+      .references(() => npcs.id, { onDelete: "cascade" }),
+    tab: varchar("tab", { length: 8 }).notNull(), // "cron" | "cards"
+    seenAt: timestamp("seen_at", { withTimezone: true }).defaultNow().notNull(),
+    // 카드 탭용. KanbanTask 에 updated_at 이 없어 시각 워터마크를 쓸 수 없다.
+    // 읽을 때마다 현재 담당 카드와 교집합으로 가지쳐 크기를 담당 카드 수로 묶는다.
+    seenIds: text("seen_ids"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.npcId, t.tab] })],
+);

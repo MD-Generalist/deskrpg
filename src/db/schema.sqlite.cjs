@@ -739,6 +739,24 @@ const approvalTargets = sqliteTable(
   ],
 );
 
+// 직원 패널의 탭별 열람 상태. PG 쪽 npcPanelReads 와 컬럼 집합이 같아야 한다.
+const npcPanelReads = sqliteTable(
+  "npc_panel_reads",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    npcId: text("npc_id")
+      .notNull()
+      .references(() => npcs.id, { onDelete: "cascade" }),
+    tab: text("tab").notNull(), // "cron" | "cards"
+    seenAt: text("seen_at").notNull().$defaultFn(isoNow),
+    // 카드 탭용. KanbanTask 에 updated_at 이 없어 시각 워터마크를 쓸 수 없다.
+    seenIds: text("seen_ids"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.npcId, t.tab] })],
+);
+
 module.exports = {
   users,
   characters,
@@ -769,4 +787,5 @@ module.exports = {
   channelSubprojects,
   approvals,
   approvalTargets,
+  npcPanelReads,
 };

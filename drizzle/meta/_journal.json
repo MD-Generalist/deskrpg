@@ -134,6 +134,13 @@
       "when": 1789931163139,
       "tag": "0018_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789949358596,
+      "tag": "0019_npc_panel_reads",
+      "breakpoints": true
     }
   ]
 }
