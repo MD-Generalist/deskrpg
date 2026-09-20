@@ -94,6 +94,9 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   const spatialLastMotion = new Map<string, number>();
   const spatialMotionCredit = new Map<string, number>();
   const validatedPlayers = new Map<string, { x: number; y: number }>();
+  // 서버가 받아들이는 NPC 이동 상한(px/s). 캡처 런타임은 걸음이 빨라 상한도 같이 올린다
+  // — 클라이언트의 `captureWalkSpeed` 와 짝이다.
+  const NPC_SPEED_CAP = process.env.DESKRPG_CAPTURE_MODE === "1" ? 180 * 3 : 180;
   const consumeMotion = (key: string, separation: number, speed: number) => {
     const elapsed = Math.max(0, (now() - (spatialLastMotion.get(key) ?? now())) / 1000);
     const credit = Math.min(speed, (spatialMotionCredit.get(key) ?? 8) + elapsed * speed);
@@ -450,7 +453,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       if (npc.spatialTarget) {
         const destination = { x: payload.x as number, y: payload.y as number };
         if (
-          !consumeMotion(`${channelId}:${npc.npcId}`, distance(npc, destination), 180) ||
+          !consumeMotion(`${channelId}:${npc.npcId}`, distance(npc, destination), NPC_SPEED_CAP) ||
           (state.data.isWalkable &&
             !clearSegment(
               { x: npc.x / 32 - 0.5, y: npc.y / 32 - 0.5 },

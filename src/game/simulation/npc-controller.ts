@@ -25,6 +25,15 @@ export type NpcPathfinder = (
 export type NpcMoveState = "idle" | "moving-to-player" | "waiting" | "returning" | "strolling";
 
 /**
+ * README 캡처는 회의 장면을 9초 안에 담아야 하는데, 평소 걸음으로는 모이는 데만 16초가 걸린다
+ * (실측 2026-09-20). 캡처 런타임에서만 걸음을 빠르게 한다 — 서비스 값은 그대로다.
+ */
+export const CAPTURE_WALK_MULTIPLIER = 3;
+export function captureWalkSpeed(speed: number): number {
+  return process.env.NEXT_PUBLIC_README_CAPTURE === "1" ? speed * CAPTURE_WALK_MULTIPLIER : speed;
+}
+
+/**
  * NPC 한 명의 이동 상태 기계. 화면 요소는 없다 — `pixelX/pixelY` 가 충돌·권위 좌표이고,
  * `viewX/viewY` 는 렌더러에 내보내는 표시 좌표다(원격 구동 NPC 는 보간 표시가 따로 따라온다).
  */
@@ -58,7 +67,7 @@ export class NpcController {
   remoteWalkingUntil = 0;
   remotePresentation: RemoteNpcPresentation | null = null;
   motionLocallyDriven?: boolean;
-  moveSpeed = 150; // px/s (플레이어 120 보다 빠르다)
+  moveSpeed = captureWalkSpeed(150); // px/s (플레이어 120 보다 빠르다)
   pendingMessage: string | null = null;
   arrivalBubbleText: string | null = null;
   waitDurationMs = 10000;
@@ -410,7 +419,8 @@ export class NpcController {
 
     const moveAmount = Math.min(
       Math.hypot(cdx, cdy),
-      (this.moveState === "strolling" ? 55 : this.moveSpeed) * (Math.min(delta, 100) / 1000),
+      (this.moveState === "strolling" ? captureWalkSpeed(55) : this.moveSpeed) *
+        (Math.min(delta, 100) / 1000),
     );
     const angle = Math.atan2(cdy, cdx);
     const planned = trafficStep?.(
