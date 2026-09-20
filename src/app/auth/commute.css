@@ -147,8 +147,12 @@
   line-height: 1.12;
 }
 .commute-intro h1 span {
+  /* 서브타이틀은 늘 제목 아랫줄에 둔다 — 인라인이면 폭에 따라 "AI" 만 윗줄에 걸린다. */
+  display: block;
+  margin-top: 6px;
+  font-size: clamp(26px, 3vw, 40px);
   font-weight: 400;
-  letter-spacing: -2px;
+  letter-spacing: -1px;
   color: #688377;
 }
 .commute-subtitle {
