@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { I18nProvider } from "../../lib/i18n/context";
 import GatewaySetupWizard from "./GatewaySetupWizard";
+import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
 import type { SetupCandidate } from "../../lib/hermes/setup/types";
 
 const capabilities = {
@@ -651,7 +652,10 @@ test("서비스 등록과 플러그인 갱신 변경을 결과가 보이는 한�
   });
   try {
     assert.match(f.host.textContent!, /재부팅 후에도 계속 살아 있게 합니다/);
-    assert.match(f.host.textContent!, /DeskRPG 플러그인을 0\.6\.0 으로 올립니다/);
+    assert.match(
+      f.host.textContent!,
+      new RegExp(`DeskRPG 플러그인을 ${PLUGIN_VERSION.replace(/\./g, "\\.")} 으로 올립니다`),
+    );
     assert.doesNotMatch(f.host.textContent!, /installing_service|updating_plugin/);
   } finally {
     await f.cleanup();
@@ -666,7 +670,12 @@ test("플러그인 버전이 있으면 후보 목록과 검토 화면이 커밋�
   });
   try {
     assert.match(f.host.textContent!, /플러그인 버전: 0\.5\.2/);
-    assert.match(f.host.textContent!, /플러그인 고정 버전: 539ae43c0b5a \(0\.6\.0\)/);
+    assert.match(
+      f.host.textContent!,
+      new RegExp(
+        `플러그인 고정 버전: ${PLUGIN_PIN_SHORT} \\(${PLUGIN_VERSION.replace(/\./g, "\\.")}\\)`,
+      ),
+    );
   } finally {
     await f.cleanup();
   }

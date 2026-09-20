@@ -117,6 +117,7 @@ import {
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { HOST_BOOTSTRAP, HOST_HELPER } from "./host-helper";
+import { PLUGIN_PIN, PLUGIN_VERSION } from "./pin";
 const installedPython = ["venv", ".venv"]
   .map((name) => join(homedir(), ".hermes/hermes-agent", name, "bin/python"))
   .find(existsSync);
@@ -698,7 +699,7 @@ print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
   assert.ok(result.body.changes.includes("restarting_gateway"));
 });
 test("플러그인 버전이 같거나 높으면 갱신 단계가 들어가지 않는다", () => {
-  for (const version of ["0.6.0", "0.7.1"]) {
+  for (const version of [PLUGIN_VERSION, "99.0.0"]) {
     const result = fixture(
       String.raw`
 print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
@@ -738,7 +739,7 @@ print(json.dumps({'result':result,'argv':calls[0][-6:]}))
     "install",
     "https://github.com/dandacompany/deskrpg-hermes-plugin",
     "--ref",
-    "539ae43c0b5a626aefc87f524793ff265b8bfe52",
+    PLUGIN_PIN,
     "--force",
     "--enable",
   ]);

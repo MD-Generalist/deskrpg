@@ -7,6 +7,12 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.920.3] - 2026-09-20
+
+### Fixed
+
+- Install the published plugin (0.10.0) from the connection wizard — the pinned commit was still 0.6.0, so a Hermes installed from the wizard could not show in-app provider login or per-tool provider settings.
+
 ## [2026.920.2] - 2026-09-20
 
 ### Added
