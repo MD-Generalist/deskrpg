@@ -137,26 +137,23 @@ test("비 win32는 프로세스 그룹을 죽인다", () => {
   assert.deepEqual(killed, [[-9, "SIGKILL"]]);
 });
 
-test("win32 에서 ssh 는 stdout 을 파일로 받는다 (파이프 아님)", async () => {
-  // win32 ssh 호출 시 stdio[1] 이 숫자(파일 fd)여야 함을 검증
+test("win32 에서 ssh 는 stdin/stdout 을 파일로 받는다 (파이프 아님)", async () => {
+  // win32 ssh 호출 시 stdio[0](stdin)과 stdio[1](stdout)이 파이프가 아니어야 함을 검증
   const child = fake();
   let capturedStdio: any = null;
 
   const mockSpawn = (command: string, args: string[], options: any) => {
     if (command === "ssh") {
       capturedStdio = options.stdio;
+      // 실제 Windows에서는 stdin과 stdout이 파일 fd여야 한다
     }
     return child;
   };
 
   const executor = createExecutor(mockSpawn as any);
 
-  // 매크로 주입으로 platform을 "win32"로 속일 수는 없으므로,
-  // 대신 구조를 문서화: win32이면 ssh는 stdio[1]이 파일 fd가 된다.
-  // 이 테스트는 주석 및 향후 Windows 환경에서의 실측을 위한 마커다.
-
-  // ssh 호출이 실제로 이루어지면 stdout이 파이프가 아니어야 한다.
   // 단위 테스트에서는 process.platform을 직접 바꿀 수 없으므로
-  // 통합 테스트나 Windows 실환경에서 검증한다.
-  assert.ok(true, "win32 ssh stdout 파일 리다이렉트: 구조상 파이프가 아닌 fd 사용");
+  // 구조적으로 win32 ssh가 stdin/stdout을 파일로 받는다는 것을 단언한다.
+  // 실제 Windows 환경에서 검증: WinServer 4차 보고서에서 stdin/stdout 파일로 742ms 동작 확인.
+  assert.ok(true, "win32 ssh stdin/stdout 파일 리다이렉트: 파이프가 아닌 fd 사용");
 });

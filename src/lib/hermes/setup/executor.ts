@@ -1,5 +1,6 @@
 import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { openSync, closeSync, readFileSync, unlinkSync } from "node:fs";
+import { openSync, closeSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { chmodSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { managedSsh } from "./ssh-hosts";
@@ -136,19 +137,45 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       throw new Error("setup_invalid_request");
     if (options.signal?.aborted) throw new Error("setup_cancelled");
     return new Promise((resolve, reject) => {
-      // Windows ssh 는 stdout 파이프에서 멈추므로, 대신 임시 파일로 받는다.
-      const useFileStdout = isWindows(process.platform) && command === "ssh";
+      // Windows ssh 는 stdout/stdin 파이프에서 멈추므로, 대신 임시 파일로 받는다.
+      const useFileStdio = isWindows(process.platform) && command === "ssh";
+      let stdinFile: string | undefined;
+      let stdinFd: number | undefined;
       let stdoutFile: string | undefined;
       let stdoutFd: number | undefined;
 
-      if (useFileStdout) {
+      if (useFileStdio) {
         try {
           const pid = process.pid;
           const timestamp = Date.now();
           const random = Math.random().toString(36).slice(2, 8);
-          stdoutFile = path.join(tmpdir(), `deskrpg-${pid}-${timestamp}-${random}.out`);
+          const baseName = `deskrpg-${pid}-${timestamp}-${random}`;
+
+          // stdin 파일
+          if (options.input) {
+            stdinFile = path.join(tmpdir(), `${baseName}-stdin.in`);
+            writeFileSync(stdinFile, options.input);
+            // 토큰이 담길 수 있으므로 권한을 좁힌다
+            chmodSync(stdinFile, 0o600);
+            stdinFd = openSync(stdinFile, "r");
+          }
+
+          // stdout 파일
+          stdoutFile = path.join(tmpdir(), `${baseName}-stdout.out`);
           stdoutFd = openSync(stdoutFile, "w");
         } catch {
+          if (stdinFd !== undefined) closeSync(stdinFd);
+          if (stdoutFd !== undefined) closeSync(stdoutFd);
+          if (stdinFile) {
+            try {
+              unlinkSync(stdinFile);
+            } catch {}
+          }
+          if (stdoutFile) {
+            try {
+              unlinkSync(stdoutFile);
+            } catch {}
+          }
           reject(new Error("command_failed"));
           return;
         }
@@ -156,9 +183,10 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
 
       let child: ChildProcessWithoutNullStreams;
       try {
-        if (useFileStdout && stdoutFd !== undefined) {
+        if (useFileStdio && stdoutFd !== undefined) {
+          const stdio: any = [stdinFd !== undefined ? stdinFd : "pipe", stdoutFd, "pipe"];
           child = spawn(command, args, {
-            stdio: ["pipe", stdoutFd, "pipe"] as const,
+            stdio: stdio,
             shell: false,
             detached: process.platform !== "win32",
             ...(options.env ? { env: { ...process.env, ...options.env } } : {}),
@@ -167,13 +195,17 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
           child = spawnImpl(command, args, options.env);
         }
       } catch {
+        if (stdinFd !== undefined) closeSync(stdinFd);
         if (stdoutFd !== undefined) closeSync(stdoutFd);
+        if (stdinFile) {
+          try {
+            unlinkSync(stdinFile);
+          } catch {}
+        }
         if (stdoutFile) {
           try {
             unlinkSync(stdoutFile);
-          } catch {
-            // 삭제 실패는 무시
-          }
+          } catch {}
         }
         reject(new Error("command_failed"));
         return;
@@ -189,7 +221,7 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
         options.signal?.removeEventListener("abort", abort);
 
         // 파일에서 stdout 읽기
-        if (useFileStdout && stdoutFile) {
+        if (useFileStdio && stdoutFile) {
           try {
             if (stdoutFd !== undefined) {
               closeSync(stdoutFd);
@@ -202,6 +234,24 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
           } finally {
             try {
               unlinkSync(stdoutFile);
+            } catch {
+              // 삭제 실패는 무시
+            }
+          }
+        }
+
+        // stdin 파일 정리
+        if (useFileStdio && stdinFile) {
+          try {
+            if (stdinFd !== undefined) {
+              closeSync(stdinFd);
+              stdinFd = undefined;
+            }
+          } catch {
+            // close 실패는 무시
+          } finally {
+            try {
+              unlinkSync(stdinFile);
             } catch {
               // 삭제 실패는 무시
             }
@@ -239,8 +289,8 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
         if (stream === "stdout") stdout += value.toString();
         else stderr += value.toString();
       };
-      // useFileStdout이면 stdout은 파일로 가므로 리스너는 필요 없다
-      if (!useFileStdout) {
+      // useFileStdio이면 stdout은 파일로 가므로 리스너는 필요 없다
+      if (!useFileStdio) {
         child.stdout.on("data", (data) => collect(data, "stdout"));
       }
       child.stderr.on("data", (data) => collect(data, "stderr"));
@@ -251,7 +301,12 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       });
       options.signal?.addEventListener("abort", abort, { once: true });
       if (options.signal?.aborted) abort();
-      child.stdin.end(options.input);
+      // stdin이 파일이면 이미 파일에서 읽으므로 end() 호출 안 함
+      if (!useFileStdio || !stdinFd) {
+        child.stdin.end(options.input);
+      } else {
+        child.stdin.end();
+      }
     });
   };
 }
