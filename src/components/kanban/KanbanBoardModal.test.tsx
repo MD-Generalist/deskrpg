@@ -74,6 +74,13 @@ async function mount(
     artifactsRefreshTick?: number;
   } = {},
 ) {
+  // 보기 방식·필터는 채널별 localStorage 에 남는다. 한 테스트가 켠 "보관함 보기" 가 다음
+  // 테스트의 조회 URL 을 바꾸지 않도록 마운트마다 비운다.
+  try {
+    globalThis.localStorage?.clear();
+  } catch {
+    // 저장소가 없는 환경이면 지울 것도 없다.
+  }
   const original = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -622,7 +629,8 @@ test("R6: columns render in the fixed order and archived only after the toggle",
     );
     assert.equal(f.host.textContent?.includes("보관 카드"), false);
 
-    const toggle = f.host.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    // 툴바에 체크박스가 여럿이라(경고만·보관함) 첫 번째를 집으면 엉뚱한 것을 누른다.
+    const toggle = f.host.querySelector<HTMLInputElement>("input[data-kanban-archive-toggle]");
     assert.ok(toggle);
     await act(async () => {
       toggle.click();

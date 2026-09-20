@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Archive, KanbanSquare, Plus, RefreshCw, Settings, X } from "lucide-react";
+import { AlertTriangle, KanbanSquare, Plus, RefreshCw, Settings, X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
@@ -9,10 +9,13 @@ import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gat
 
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
+import KanbanListView from "./KanbanListView";
+import KanbanViewToolbar from "./KanbanViewToolbar";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
 import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
+import { useProjectViewState, useTaskGroups } from "./use-project-view-state";
 import {
   createKanbanApi,
   toFailure,
@@ -119,7 +122,6 @@ export default function KanbanBoardModal({
   const [blocker, setBlocker] = useState<BoardBlocker | null>(null);
   const [checklist, setChecklist] = useState<GateBlocker | null>(null);
   const [loading, setLoading] = useState(true);
-  const [includeArchived, setIncludeArchived] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
@@ -134,6 +136,19 @@ export default function KanbanBoardModal({
   const [detailTick, setDetailTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [move, setMove] = useState<MoveState>({ phase: "idle" });
+  const {
+    state: viewState,
+    update: updateView,
+    setFilter: setViewFilter,
+    toggleGroup: toggleViewGroup,
+  } = useProjectViewState(channelId);
+  const includeArchived = viewState.filter.includeArchived;
+  const [expandedTasks, setExpandedTasks] = useState<ReadonlySet<string>>(() => new Set());
+  const [loadingChildren, setLoadingChildren] = useState<ReadonlySet<string>>(() => new Set());
+  /** 펼친 카드의 링크. id 만 담는다 — 카드 본문은 언제나 보드 응답이 정본이다. */
+  const [links, setLinks] = useState<
+    ReadonlyMap<string, { parents: string[]; children: string[] }>
+  >(() => new Map());
   const mounted = useRef(true);
   const reloadSequence = useRef(0);
   const latestReloadRef = useRef<Promise<ReloadResult> | null>(null);
@@ -244,6 +259,54 @@ export default function KanbanBoardModal({
     [currentBoard, includeArchived],
   );
   const allTasks = useMemo(() => flattenTasks(columns), [columns]);
+  const listGroups = useTaskGroups(allTasks, viewState, {
+    tenants: currentBoard?.tenants,
+    assignees: currentBoard?.assignees,
+  });
+
+  /**
+   * 트리를 한 단 펼친다 — 펼친 카드만 상세를 부른다(설계 D1(a)).
+   *
+   * 보드 응답은 링크를 주지 않고 `link_counts` 만 준다. 전체 트리를 미리 받으려면 카드 수만큼
+   * 호출해야 하므로, 사용자가 실제로 연 가지만 불러온다. 받은 링크는 id 로만 들고 있고 카드
+   * 본문은 보드 응답에서 찾는다 — 사본을 두면 재조회 뒤 낡은 제목이 남는다.
+   */
+  const toggleExpand = useCallback(
+    (taskId: string) => {
+      setExpandedTasks((prev) => {
+        const next = new Set(prev);
+        if (next.has(taskId)) {
+          next.delete(taskId);
+          return next;
+        }
+        next.add(taskId);
+        return next;
+      });
+      if (links.has(taskId)) return;
+      setLoadingChildren((prev) => new Set(prev).add(taskId));
+      void api
+        .taskDetail(taskId)
+        .then((detail) => {
+          setLinks((prev) => new Map(prev).set(taskId, detail.links));
+        })
+        .catch(() => {
+          // 링크를 못 받으면 가지가 비어 보인다. 카드 본문은 이미 목록에 있으므로 화면을
+          // 막지 않고, 다음 펼침에서 다시 시도된다(캐시에 넣지 않았다).
+        })
+        .finally(() => {
+          setLoadingChildren((prev) => {
+            const next = new Set(prev);
+            next.delete(taskId);
+            return next;
+          });
+        });
+    },
+    [api, links],
+  );
+
+  const byId = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
+  const childrenOf = useMemo(() => resolveLinks(links, byId, "children"), [links, byId]);
+  const parentsOf = useMemo(() => resolveLinks(links, byId, "parents"), [links, byId]);
   const npcs = useMemo(() => currentBoard?.npcs ?? [], [currentBoard]);
   // 스웜 워커는 출근 중인 NPC 중에서만 고른다 — 서버가 잠든 NPC 를 400 으로 거절한다.
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
@@ -505,15 +568,6 @@ export default function KanbanBoardModal({
               <Plus className="w-3.5 h-3.5" />
               {t("kanban.newTask")}
             </button>
-            <label className="flex items-center gap-1 px-2 py-1 rounded-md bg-surface-raised text-text-secondary cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeArchived}
-                onChange={(e) => setIncludeArchived(e.target.checked)}
-              />
-              <Archive className="w-3.5 h-3.5" />
-              {t("kanban.includeArchived")}
-            </label>
             {swarmSupported ? (
               <button
                 type="button"
@@ -628,12 +682,25 @@ export default function KanbanBoardModal({
             ) : null}
           </div>
         ) : null}
+        {!blocker && (
+          <KanbanViewToolbar
+            state={viewState}
+            tenants={currentBoard?.tenants ?? []}
+            assignees={currentBoard?.assignees ?? []}
+            onUpdate={updateView}
+            onFilter={setViewFilter}
+          />
+        )}
         <div className="flex flex-1 overflow-hidden">
           <div
             ref={boardRootRef}
             data-kanban-board-root
             tabIndex={-1}
-            className="flex-1 overflow-x-auto overflow-y-hidden p-4"
+            className={
+              viewState.viewMode === "list"
+                ? "flex flex-1 flex-col overflow-hidden"
+                : "flex-1 overflow-x-auto overflow-y-hidden p-4"
+            }
           >
             {loading && !currentBoard && !blocker ? (
               <div className="text-xs text-text-dim">{t("common.loading")}</div>
@@ -643,6 +710,22 @@ export default function KanbanBoardModal({
                 onRetry={() => void reload()}
                 onConnectGateway={onConnectGateway}
                 onOpenChecklist={() => setChecklist(gateBlockerFromBoard(blocker))}
+              />
+            ) : viewState.viewMode === "list" ? (
+              <KanbanListView
+                groups={listGroups}
+                groupBy={viewState.groupBy}
+                npcs={npcs}
+                now={now}
+                selectedTaskId={selectedTaskId}
+                collapsedGroups={viewState.collapsedGroups}
+                onToggleGroup={toggleViewGroup}
+                onOpen={setSelectedTaskId}
+                childrenOf={childrenOf}
+                parentsOf={parentsOf}
+                expanded={expandedTasks}
+                loadingChildren={loadingChildren}
+                onToggleExpand={toggleExpand}
               />
             ) : (
               <div className="flex h-full gap-3">
@@ -726,6 +809,27 @@ export default function KanbanBoardModal({
 
 /** 보드 배너가 들고 있는 실패를 체크리스트가 아는 모양으로 옮긴다. 판정을 다시 하지 않는다 — */
 /** `board_unavailable` 이 들고 있던 code·message 를 `classifyGateFailure` 로 되돌릴 뿐이다. */
+/**
+ * 링크 id 를 보드 응답의 카드로 바꾼다.
+ *
+ * 지금 보이지 않는 카드(보관함을 접었을 때의 부모·자식)는 결과에서 빠진다 — 없는 카드를
+ * 그리려고 지어내지 않는다. 그렇게 부모를 잃은 자식은 목록에서 루트로 남는다.
+ */
+function resolveLinks(
+  links: ReadonlyMap<string, { parents: string[]; children: string[] }>,
+  byId: ReadonlyMap<string, KanbanTask>,
+  side: "parents" | "children",
+): Map<string, KanbanTask[]> {
+  const out = new Map<string, KanbanTask[]>();
+  for (const [taskId, link] of links) {
+    const resolved = link[side]
+      .map((id) => byId.get(id))
+      .filter((task): task is KanbanTask => task !== undefined);
+    if (resolved.length > 0) out.set(taskId, resolved);
+  }
+  return out;
+}
+
 function gateBlockerFromBoard(blocker: BoardBlocker): GateBlocker | null {
   if (blocker.kind === "gateway_not_bound") return { kind: "gateway_not_bound" };
   if (blocker.kind === "upgrade_required") {
