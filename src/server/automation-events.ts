@@ -14,7 +14,7 @@
  *  (b) 맵 상태 — NPC 에게 진행 중인 카드 실행·크론 실행이 하나라도 있으면 "작업 중"(R27).
  *      `npc:working` 은 값이 **바뀔 때만** 나간다.
  *  (c) 방 알림 — 카드의 blocked 진입(모두)·최상위 카드의 done 진입(R28), 이 채널 출처의
- *      크론 결과(R30). 담당 NPC 가 잠들었거나 빠졌으면 시스템 메시지로 올리되 NPC 이름을
+ *      크론 결과(R30), 그리고 NPC 가 대화 중 낸 카드 제안(`card_proposal.created`). 담당 NPC 가 잠들었거나 빠졌으면 시스템 메시지로 올리되 NPC 이름을
  *      앞에 붙인다(R22) — 놓치지 않는다.
  *
  * 같은 사건 ID 는 두 번 처리하지 않는다(채널별 최근 ID 집합, 크기 상한 tunable).
@@ -31,6 +31,7 @@ import { appendRoomMessage, ensureOfficeRoom, getChannelOwnerId } from "@/lib/ch
 import { findCronOrigin, resolveOriginForGateway } from "@/lib/cron-origins";
 import {
   PLUGIN_EVENT_KINDS,
+  type CardProposalEventPayload,
   type CronRunFinishedPayload,
   type CronRunStartedPayload,
   type PluginEvent,
@@ -261,6 +262,10 @@ async function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps
     deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.cron, { channelId, event });
     return;
   }
+  if (event.kind === "card_proposal.created") {
+    // 제안은 방 알림으로만 나간다(`postNotice`) — 새 소켓 이벤트를 만들지 않는다.
+    return;
+  }
   // 허용 목록 밖 — 채널 범위를 모르는 사건을 브라우저로 넘기지 않는다.
   console.warn(`[automation-events] ${channelId} dropped unknown event kind ${event.kind}`);
 }
@@ -452,6 +457,36 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
       },
       deps,
     );
+    return;
+  }
+
+  if (event.kind === "card_proposal.created") {
+    const p = event.payload as Partial<CardProposalEventPayload>;
+    const profile = profileOf(event);
+    if (!profile) return;
+    // 크론 사건과 같은 조회 — 이 채널의 NPC(잠든 NPC 포함) 것만 알린다.
+    const lookup = await deps.findNpcByProfile(channelId, profile);
+    if (!lookup?.npc) return;
+
+    const proposalId = typeof p.proposal_id === "string" ? p.proposal_id : "";
+    const title = typeof p.title === "string" ? p.title.trim() : "";
+    // 제목이 없으면 사용자가 무엇을 고르는지 알 수 없다 — 버린다(오류는 아니다).
+    if (!proposalId || !title) return;
+
+    const sender = await resolveSender(channelId, profile, deps);
+    const notice: Extract<RoomNotice, { kind: "card_proposal" }> = {
+      kind: "card_proposal",
+      proposalId,
+      title,
+      summary: typeof p.summary === "string" ? p.summary : "",
+      npcId: lookup.npc.id,
+      npcName: sender.npcName,
+    };
+    // `body`·`acceptance` 는 없으면 키 자체가 빠진다 — 빈 문자열로 만들지 않는다.
+    if (typeof p.body === "string" && p.body) notice.body = p.body;
+    if (typeof p.acceptance === "string" && p.acceptance) notice.acceptance = p.acceptance;
+
+    await post(channelId, sender, title, notice, deps);
     return;
   }
 

@@ -538,3 +538,85 @@ test("의존성이 던져도 다른 사건은 계속 처리하고 실패를 결�
   assert.deepEqual(result.errors.length, 2);
   assert.match(result.errors[0], /db down/);
 });
+
+// ---- card_proposal.created ------------------------------------------------
+// 제안은 카드가 아니다 — Hermes 가 정본이고 DeskRPG 는 방 알림 한 건만 남긴다.
+
+function proposalEvent(
+  payload: Record<string, unknown> = {},
+  profile: string | undefined = "sophie",
+) {
+  return ev({
+    kind: "card_proposal.created",
+    profile,
+    payload: {
+      proposal_id: "0123456789abcdef0123456789abcdef",
+      title: "주간 보고 정리",
+      summary: "금요일마다 모은다",
+      profile: profile ?? "sophie",
+      ...payload,
+    },
+  });
+}
+
+test("card_proposal.created 는 사무실 방 알림 1건을 만든다 — 소켓 이벤트는 없다", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(CHANNEL, [proposalEvent()], h.deps);
+
+  assert.equal(h.posted.length, 1);
+  const post = h.posted[0];
+  assert.equal(post.roomId, "office-room");
+  assert.equal(post.senderKind, "npc");
+  assert.equal(post.senderId, "npc-sophie");
+  assert.equal(post.content, "주간 보고 정리", "content 는 로케일 무관 폴백 = 제안 제목");
+  assert.deepEqual(post.notice, {
+    kind: "card_proposal",
+    proposalId: "0123456789abcdef0123456789abcdef",
+    title: "주간 보고 정리",
+    summary: "금요일마다 모은다",
+    npcId: "npc-sophie",
+    npcName: "소피",
+  });
+  assert.equal(post.notice?.kind === "card_proposal" && post.notice.resolved, undefined);
+  assert.equal(h.emitted.length, 0, "새 소켓 이벤트를 만들지 않는다");
+  assert.equal(h.roomEmits.length, 1, "저장한 메시지를 방 소켓으로 방송한다");
+});
+
+test("body·acceptance 는 있을 때만 알림에 싣는다", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(CHANNEL, [proposalEvent({ body: "본문", acceptance: "완료 조건" })], h.deps);
+  const notice = h.posted[0].notice;
+  assert.ok(notice?.kind === "card_proposal");
+  assert.equal(notice.body, "본문");
+  assert.equal(notice.acceptance, "완료 조건");
+});
+
+test("프로필이 이 채널의 NPC 가 아니면 제안 알림을 만들지 않는다 — 오류도 아니다", async () => {
+  const h = harness({ npcs: {} });
+  const result = await ingest(CHANNEL, [proposalEvent()], h.deps);
+  assert.equal(h.posted.length, 0);
+  assert.deepEqual(result.errors, []);
+});
+
+test("잠든 NPC 의 제안도 놓치지 않는다 — 시스템 메시지로 올린다", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ASLEEP } });
+  await ingest(CHANNEL, [proposalEvent()], h.deps);
+  assert.equal(h.posted.length, 1);
+  assert.equal(h.posted[0].senderKind, "system");
+  assert.equal(h.posted[0].content, "소피: 주간 보고 정리");
+  assert.equal(
+    h.posted[0].notice?.kind === "card_proposal" && h.posted[0].notice.npcId,
+    "npc-sophie",
+  );
+});
+
+test("proposal_id 나 제목이 없는 제안 사건은 버린다", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  const result = await ingest(
+    CHANNEL,
+    [proposalEvent({ proposal_id: undefined }), proposalEvent({ title: "" })],
+    h.deps,
+  );
+  assert.equal(h.posted.length, 0);
+  assert.deepEqual(result.errors, []);
+});
