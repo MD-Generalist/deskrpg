@@ -231,7 +231,10 @@ try:
         if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: out({'error': 'unsafe_host_path'})
         import msvcrt
         fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
-        # 검사와 open 사이에 교체됐을 수 있다 — 연 핸들의 속성을 한 번 더 봐 TOCTOU 창을 좁힌다.
+        # os.open 은 재해석 지점(심링크·정션)을 따라가 대상 파일의 핸들을 연다 — 그 핸들의 fstat 은
+        # 재해석 비트를 보고하지 않으므로, 227행 검사와 이 open 사이에 경로가 바꿔치기됐어도 이
+        # 재확인으로는 잡지 못한다. TOCTOU 창을 닫는 게 아니라, 드물게 남는 경로(핸들이 여전히
+        # 재해석 지점 자체를 가리키는 경우)만 방어한다.
         if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
             os.close(fd)
             out({'error': 'unsafe_host_path'})
@@ -792,7 +795,10 @@ def main(action, candidate_id=None, option=None):
             if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: fail('unsafe_host_path')
             import msvcrt
             fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
-            # 검사와 open 사이에 교체됐을 수 있다 — 연 핸들의 속성을 한 번 더 봐 TOCTOU 창을 좁힌다.
+            # os.open 은 재해석 지점(심링크·정션)을 따라가 대상 파일의 핸들을 연다 — 그 핸들의 fstat 은
+            # 재해석 비트를 보고하지 않으므로, 위 검사와 이 open 사이에 경로가 바꿔치기됐어도 이
+            # 재확인으로는 잡지 못한다. TOCTOU 창을 닫는 게 아니라, 드물게 남는 경로(핸들이 여전히
+            # 재해석 지점 자체를 가리키는 경우)만 방어한다.
             if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
                 os.close(fd)
                 fail('unsafe_host_path')
