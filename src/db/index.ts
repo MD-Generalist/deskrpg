@@ -105,6 +105,8 @@ export const approvalTargets = activeSchema.approvalTargets;
 export const chatRooms = activeSchema.chatRooms;
 export const chatRoomMembers = activeSchema.chatRoomMembers;
 export const chatRoomMessages = activeSchema.chatRoomMessages;
+// 직원 패널의 탭별 열람 상태(src/lib/npc-panel-reads.ts 가 읽고 쓴다).
+export const npcPanelReads = activeSchema.npcPanelReads;
 // DeskRPG 가 만든 Hermes cron 작업의 출처 장부(src/lib/cron-origins.ts 가 읽고 쓴다).
 export const cronJobOrigins = activeSchema.cronJobOrigins;
 
