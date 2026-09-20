@@ -182,7 +182,7 @@ export function hostLaunch(
  * 설치 출력은 저장도 반환도 하지 않는다 — 실패 분류용 마지막 8KiB 만 메모리에 둔다.
  */
 export const HOST_INSTALLER = String.raw`
-import hashlib, json, os, pathlib, subprocess, sys, tempfile, threading, urllib.request
+import hashlib, json, os, pathlib, stat, subprocess, sys, tempfile, threading, urllib.request
 WINDOWS = sys.platform == 'win32'
 INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.ps1' if WINDOWS else 'https://hermes-agent.nousresearch.com/install.sh'
 INSTALLER_SUFFIX = '.ps1' if WINDOWS else '.sh'
@@ -222,10 +222,19 @@ try:
     ROOT.mkdir(parents=True, exist_ok=True)
     lock_path = ROOT / '.deskrpg-setup.lock'
     if WINDOWS:
-        # O_NOFOLLOW 가 없다. 재해석 지점(심링크·정션)이면 거부한다.
-        if lock_path.is_symlink(): out({'error': 'unsafe_host_path'})
+        # O_NOFOLLOW 가 없다. Path.is_symlink() 는 Windows 정션을 못 잡는다(CPython 의 os.stat 이
+        # 정션을 심링크로 보고하지 않는다) — 재해석 지점 비트를 직접 본다. 파일이 아직 없으면 통과시킨다.
+        try:
+            attrs = getattr(os.stat(lock_path, follow_symlinks=False), 'st_file_attributes', 0)
+        except FileNotFoundError:
+            attrs = 0
+        if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: out({'error': 'unsafe_host_path'})
         import msvcrt
         fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+        # 검사와 open 사이에 교체됐을 수 있다 — 연 핸들의 속성을 한 번 더 봐 TOCTOU 창을 좁힌다.
+        if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+            os.close(fd)
+            out({'error': 'unsafe_host_path'})
         try:
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
         except OSError:
@@ -305,7 +314,7 @@ except Exception:
 
 // Only fixed operations are accepted. Raw subprocess output, configuration, env and exceptions never leave here.
 export const HOST_HELPER = String.raw`
-import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, stat, subprocess, sys, tempfile, time, urllib.request, urllib.error
 import yaml
 WINDOWS = sys.platform == 'win32'
 ROOT = pathlib.Path.home() / '.hermes'
@@ -700,10 +709,19 @@ def main(action, candidate_id=None, option=None):
         # Keep it inherited by the installer until the entire bounded action exits.
         lock_path = ROOT / '.deskrpg-setup.lock'
         if WINDOWS:
-            # O_NOFOLLOW 가 없다. 재해석 지점(심링크·정션)이면 거부한다.
-            if lock_path.is_symlink(): fail('unsafe_host_path')
+            # O_NOFOLLOW 가 없다. Path.is_symlink() 는 Windows 정션을 못 잡는다(CPython 의 os.stat 이
+            # 정션을 심링크로 보고하지 않는다) — 재해석 지점 비트를 직접 본다. 파일이 아직 없으면 통과시킨다.
+            try:
+                attrs = getattr(os.stat(lock_path, follow_symlinks=False), 'st_file_attributes', 0)
+            except FileNotFoundError:
+                attrs = 0
+            if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: fail('unsafe_host_path')
             import msvcrt
             fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+            # 검사와 open 사이에 교체됐을 수 있다 — 연 핸들의 속성을 한 번 더 봐 TOCTOU 창을 좁힌다.
+            if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+                os.close(fd)
+                fail('unsafe_host_path')
             try:
                 msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
             except OSError:
