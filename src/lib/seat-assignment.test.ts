@@ -47,21 +47,24 @@ test("서는 칸은 걸을 수 있고, 좌석·입구가 아니며, 8이웃이 �
 });
 
 test("빈 좌석을 번호 순으로 채우고, 만석이면 서는 칸에 세운다", () => {
-  const map = executive(); // 데스크 4석
+  const map = executive(); // 데스크 3석(대표석은 빠진다)
   const npcs = ["f", "a", "c", "b", "e", "d"].map((id) => ({ id }));
   const plan = planPlacements(npcs, map, []);
   assert.equal(plan.length, 6);
   assert.deepEqual(
-    plan.slice(0, 4).map((p) => [p.npcId, p.seated, seatNumberAt(map.seats, p.col, p.row)]),
+    plan.slice(0, 3).map((p) => [p.npcId, p.seated, seatNumberAt(map.seats, p.col, p.row)]),
     [
       ["a", true, 1],
       ["b", true, 2],
       ["c", true, 3],
-      ["d", true, 4],
     ],
   );
   assert.ok(
-    plan.slice(4).every((p) => !p.seated && seatNumberAt(map.seats, p.col, p.row) === null),
+    plan.slice(3).every((p) => !p.seated && seatNumberAt(map.seats, p.col, p.row) === null),
+  );
+  assert.ok(
+    plan.every((p) => map.reserved.every((tile) => tile.col !== p.col || tile.row !== p.row)),
+    "아무도 대표석에 두지 않는다",
   );
   assert.equal(new Set(plan.map((p) => `${p.col},${p.row}`)).size, 6, "같은 칸에 둘을 두지 않는다");
   assert.deepEqual(planPlacements(npcs, map, []), plan, "결정적이다");
@@ -75,5 +78,38 @@ test("이미 찬 좌석(휴면 포함)은 건너뛴다", () => {
 });
 
 test("좌석도 서는 칸도 없으면 계획에서 빠진다", () => {
-  assert.deepEqual(planPlacements([{ id: "x" }], { seats: [], standing: [] }, []), []);
+  assert.deepEqual(
+    planPlacements([{ id: "x" }], { seats: [], standing: [], reserved: [] }, []),
+    [],
+  );
+});
+
+test("대표석은 직원 지정석이 아니다 — executive_desk 뒤편 의자는 좌석 목록에서 빠지고 reserved 로 나온다", () => {
+  // 대표 책상이 있는 맵마다, 책상 바로 뒤(책상이 바라보는 쪽을 같이 보는) 의자가 대표석이다.
+  const expected = { executive: { col: 4, row: 5 }, agency: { col: 3, row: 12 } } as const;
+  for (const [id, boss] of Object.entries(expected)) {
+    const map = seatingMapFor({ mapData: buildOfficeEnvironment(id as keyof typeof expected) })!;
+    assert.deepEqual(map.reserved, [boss], `${id}: 대표석을 reserved 로 알린다`);
+    assert.equal(seatNumberAt(map.seats, boss.col, boss.row), null, `${id}: 대표석에 번호가 없다`);
+    assert.ok(
+      map.standing.every((tile) => tile.col !== boss.col || tile.row !== boss.row),
+      `${id}: 대표석은 서는 칸도 아니다`,
+    );
+  }
+  // 손님 의자(책상 앞)는 그대로 좌석이다 — 대표석만 뺀다.
+  const executiveMap = seatingMapFor({ mapData: buildOfficeEnvironment("executive") })!;
+  assert.ok(seatNumberAt(executiveMap.seats, 3, 8) !== null);
+  assert.ok(seatNumberAt(executiveMap.seats, 6, 8) !== null);
+});
+
+test("대표 책상이 없는 맵은 reserved 가 비고 좌석 수가 그대로다", () => {
+  for (const [id, count] of [
+    ["trading", 28],
+    ["tech", 16],
+    ["publishing", 13],
+  ] as const) {
+    const map = seatingMapFor({ mapData: buildOfficeEnvironment(id) })!;
+    assert.deepEqual(map.reserved, []);
+    assert.equal(map.seats.length, count);
+  }
 });

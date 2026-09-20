@@ -57,9 +57,31 @@ async function countActiveUnplaced(channelId: string): Promise<number> {
   return left.length;
 }
 
+/**
+ * 대표석에 앉아 있는 직원을 자리 없음으로 되돌린다 — 곧바로 아래 배치가 빈 좌석에 앉힌다.
+ *
+ * 대표석이 1번 자리이던 시절(2026.920.7 이전)에 배치된 직원이 대표 의자에 앉아 있다.
+ * 대표석은 이제 좌석 목록에 없어 사용자가 "자리 변경" 으로 옮길 수도 없으므로 시스템이 옮긴다.
+ */
+async function vacateReservedSeats(channelId: string, map: SeatingMap): Promise<void> {
+  for (const tile of map.reserved) {
+    await db
+      .update(npcs)
+      .set({ positionX: null, positionY: null, updatedAt: nowForDb() })
+      .where(
+        and(
+          eq(npcs.channelId, channelId),
+          eq(npcs.positionX, tile.col),
+          eq(npcs.positionY, tile.row),
+        ),
+      );
+  }
+}
+
 async function placeUnplacedNpcsInternal(channelId: string): Promise<PlacementResult> {
   const result: PlacementResult = { seated: 0, standing: 0, failed: 0 };
   const map = await loadSeatingMap(channelId);
+  if (map) await vacateReservedSeats(channelId, map);
 
   for (let attempt = 0; attempt < MAX_REPLANS; attempt += 1) {
     const roster = await db
@@ -104,12 +126,17 @@ async function placeUnplacedNpcsInternal(channelId: string): Promise<PlacementRe
   return { ...result, failed: left };
 }
 
-/** 서버 부팅 때 1회 — 이 기능 이전에 자리 없이 만들어진 직원을 이행한다. 멱등. */
+/**
+ * 서버 부팅 때 1회 — 자리 없이 만들어진 직원과 대표석에 앉은 직원을 이행한다. 멱등.
+ *
+ * 출근한 직원이 있는 채널을 모두 돈다. 대표석에 앉은 직원은 좌표가 있어 "미배치" 로는
+ * 걸러지지 않고, 어느 칸이 대표석인지는 채널 맵을 읽어야 알기 때문이다.
+ */
 export async function placeAllUnplacedNpcs(): Promise<PlacementResult & { channels: number }> {
   const rows = await db
     .selectDistinct({ channelId: npcs.channelId })
     .from(npcs)
-    .where(and(eq(npcs.active, true), isNull(npcs.positionX)));
+    .where(eq(npcs.active, true));
   const total = { seated: 0, standing: 0, failed: 0, channels: rows.length };
   for (const { channelId } of rows) {
     const one = await placeUnplacedNpcs(channelId);

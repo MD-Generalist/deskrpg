@@ -2,25 +2,45 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { OFFICE_ENVIRONMENTS, buildOfficeEnvironment } from "./office-environments";
-import { commonAreaSeats, deskSeats, furnitureSeats, isDeskSeatAnchor } from "./seating";
+import {
+  commonAreaSeats,
+  deskSeats,
+  executiveSeats,
+  furnitureSeats,
+  isDeskSeatAnchor,
+} from "./seating";
 import { projectTiledGeometry, type TiledGeometryMap } from "@/lib/tiled-geometry";
 import { deriveChannelMotionLayout } from "@/lib/channel-motion-layout";
 
+// 대표석(executive_desk 뒤편 의자)은 직원 지정석이 아니라 여기서 빠진다.
 const EXPECTED: Record<string, number> = {
   trading: 28,
-  agency: 15,
+  agency: 14,
   tech: 16,
-  executive: 4,
+  executive: 3,
   publishing: 13,
+};
+const EXECUTIVE: Record<string, number> = {
+  trading: 0,
+  agency: 1,
+  tech: 0,
+  executive: 1,
+  publishing: 0,
 };
 
 for (const env of OFFICE_ENVIRONMENTS) {
-  test(`${env.id}: 데스크 좌석은 공용 좌석을 뺀 나머지다`, () => {
+  test(`${env.id}: 데스크 좌석은 공용 좌석과 대표석을 뺀 나머지다`, () => {
     const map = buildOfficeEnvironment(env.id);
     const objects = projectTiledGeometry(map as unknown as TiledGeometryMap).objects;
     const desk = deskSeats(objects);
     assert.equal(desk.length, EXPECTED[env.id]);
-    assert.equal(desk.length, furnitureSeats(objects).length - commonAreaSeats(objects).length);
+    assert.equal(executiveSeats(objects).length, EXECUTIVE[env.id]);
+    assert.equal(
+      desk.length,
+      furnitureSeats(objects).length -
+        commonAreaSeats(objects).length -
+        executiveSeats(objects).length,
+    );
     for (const seat of desk) {
       const col = Math.floor(seat.anchorX ?? seat.x);
       const row = Math.floor(seat.anchorZ ?? seat.z);

@@ -8,7 +8,7 @@ import {
   type Walkable,
 } from "../game/navigation";
 import { isCreativeStudioMap, effectiveMapSpawn } from "./effective-map-spawn";
-import { deskSeats, furnitureSeats } from "../game/three/seating";
+import { deskSeats, executiveSeats, furnitureSeats } from "../game/three/seating";
 
 export const CHANNEL_TILE_SIZE = 32;
 export type ChannelMotionLayout = {
@@ -19,6 +19,8 @@ export type ChannelMotionLayout = {
   seats: Array<NavigationPoint & { id: string }>;
   /** 직원 지정자리 후보 — 설 수 있는 데스크 의자 타일, row→col 정렬. */
   deskSeatTiles: Array<{ col: number; row: number }>;
+  /** 대표석 타일 — 좌석이지만 직원에게 배정하지 않는다. 없는 맵은 빈 배열. */
+  executiveSeatTiles: Array<{ col: number; row: number }>;
   bounds: { width: number; height: number };
   /** Logical tile indices, matching the client simulation's navigation. */
   isWalkable: Walkable;
@@ -82,6 +84,12 @@ export function deriveChannelMotionLayout(
       deskTiles.set(`${col},${row}`, { col, row });
     }
     const deskSeatTiles = [...deskTiles.values()].sort((a, b) => a.row - b.row || a.col - b.col);
+    const executiveSeatTiles = executiveSeats(objects)
+      .map((seat) => ({
+        col: Math.floor(seat.anchorX ?? seat.x),
+        row: Math.floor(seat.anchorZ ?? seat.z),
+      }))
+      .sort((a, b) => a.row - b.row || a.col - b.col);
     // Historical profile assignments stay in the DB. Only v3 runtime homes are repaired.
     if (studio) {
       const occupied: NavigationPoint[] = [];
@@ -116,6 +124,7 @@ export function deriveChannelMotionLayout(
                 npcs: [],
                 seats: [],
                 deskSeatTiles: [],
+                executiveSeatTiles: [],
                 bounds: { width: cols * 32, height: rows * 32 },
                 isWalkable,
                 canStandAt,
@@ -136,6 +145,7 @@ export function deriveChannelMotionLayout(
       npcs,
       seats: [...seats.values()],
       deskSeatTiles,
+      executiveSeatTiles,
       bounds: { width: cols * 32, height: rows * 32 },
       isWalkable,
       canStandAt,

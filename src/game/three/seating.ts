@@ -166,8 +166,26 @@ export function sofaSeats(object: MapObject): Seat[] {
  */
 const seatCache = new WeakMap<
   MapObject[],
-  { length: number; seats: Seat[]; anchors: Set<string>; desk: Seat[]; deskAnchors: Set<string> }
+  {
+    length: number;
+    seats: Seat[];
+    anchors: Set<string>;
+    desk: Seat[];
+    deskAnchors: Set<string>;
+    executive: Seat[];
+  }
 >();
+
+/**
+ * 대표석 — `executive_desk` 뒤편 의자. 책상이 바라보는 쪽을 같이 보는 의자가 주인 자리이고,
+ * 맞은편(책상 앞) 의자는 손님 자리다. 대표석은 직원 지정석으로 내주지 않는다.
+ */
+function isExecutiveSeat(chair: MapObject, objects: MapObject[]) {
+  const table = adjacentTable(chair, objects);
+  return (
+    table?.type === "executive_desk" && tableSide(chair, table) === (table.direction ?? "down")
+  );
+}
 
 function anchorKey(col: number, row: number) {
   return `${col}:${row}`;
@@ -178,21 +196,29 @@ const seatIdentity = (seat: Seat) => `${seat.anchorX ?? seat.x}:${seat.anchorZ ?
 function seatIndex(objects: MapObject[]) {
   const cached = seatCache.get(objects);
   if (cached && cached.length === objects.length) return cached;
-  const seats = objects.flatMap((object) =>
-    object.type === "chair" ? [resolveSeat(object, objects)] : sofaSeats(object),
-  );
+  const executive: Seat[] = [];
+  const seats = objects.flatMap((object) => {
+    if (object.type !== "chair") return sofaSeats(object);
+    const seat = resolveSeat(object, objects);
+    if (isExecutiveSeat(object, objects)) executive.push(seat);
+    return [seat];
+  });
   const anchors = new Set(
     seats.map((seat) => anchorKey((seat.anchorX ?? seat.x) - 0.5, (seat.anchorZ ?? seat.z) - 0.5)),
   );
   // 데스크 좌석 = 전체에서 공용(회의 테이블·라운지)을 뺀 것. 자리 배정은 이것만 쓴다.
+  // 대표석도 뺀다 — 1번 자리가 대표석이라 첫 직원이 대표 의자에 앉던 것을 막는다.
   const common = new Set(commonAreaSeats(objects).map(seatIdentity));
-  const desk = seats.filter((seat) => !common.has(seatIdentity(seat)));
+  const reserved = new Set(executive.map(seatIdentity));
+  const desk = seats.filter(
+    (seat) => !common.has(seatIdentity(seat)) && !reserved.has(seatIdentity(seat)),
+  );
   const deskAnchors = new Set(
     desk.map((seat) =>
       anchorKey(Math.floor(seat.anchorX ?? seat.x), Math.floor(seat.anchorZ ?? seat.z)),
     ),
   );
-  const entry = { length: objects.length, seats, anchors, desk, deskAnchors };
+  const entry = { length: objects.length, seats, anchors, desk, deskAnchors, executive };
   seatCache.set(objects, entry);
   return entry;
 }
@@ -202,6 +228,11 @@ export function furnitureSeats(objects: MapObject[]) {
 }
 export function isSeatAnchor(objects: MapObject[], col: number, row: number) {
   return seatIndex(objects).anchors.has(anchorKey(col, row));
+}
+
+/** 대표석 — 좌석이지만 직원에게 배정하지 않는다. */
+export function executiveSeats(objects: MapObject[]) {
+  return seatIndex(objects).executive;
 }
 
 /** 개인 데스크 의자 — 직원의 지정자리 후보. */

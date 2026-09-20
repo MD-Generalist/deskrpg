@@ -13,7 +13,7 @@ import {
 } from "@/test-setup/npc-seed";
 
 setupThrowawaySqlite("npc-seating-test");
-const executiveMap = () => buildOfficeEnvironment("executive"); // 데스크 4석
+const executiveMap = () => buildOfficeEnvironment("executive"); // 데스크 3석(대표석 제외)
 
 async function positions(channelId: string) {
   const { selectChannelNpcs } = await import("./npc-projection");
@@ -25,13 +25,13 @@ test("자리 없는 직원을 번호 순으로 앉히고, 만석이면 세운다
   const { seatNumberAt } = await import("./seat-assignment");
   const { channelId } = await seedChannelWithProfiles({ unplaced: 6, mapData: executiveMap() });
 
-  assert.deepEqual(await placeUnplacedNpcs(channelId), { seated: 4, standing: 2, failed: 0 });
+  assert.deepEqual(await placeUnplacedNpcs(channelId), { seated: 3, standing: 3, failed: 0 });
   const seats = (await channelSeats(channelId))!;
   const rows = await positions(channelId);
   assert.ok(rows.every((r) => Number.isInteger(r.positionX) && Number.isInteger(r.positionY)));
   const numbers = rows.map((r) => seatNumberAt(seats, r.positionX, r.positionY));
-  assert.deepEqual(numbers.filter((n) => n !== null).sort(), [1, 2, 3, 4]);
-  assert.equal(numbers.filter((n) => n === null).length, 2);
+  assert.deepEqual(numbers.filter((n) => n !== null).sort(), [1, 2, 3]);
+  assert.equal(numbers.filter((n) => n === null).length, 3);
 
   assert.deepEqual(
     await placeUnplacedNpcs(channelId),
@@ -121,4 +121,25 @@ test("placeAllUnplacedNpcs 는 미배치 직원이 있는 채널을 모두 처�
   assert.ok(result.channels >= 2 && result.seated >= 2);
   for (const c of [a, b])
     assert.ok((await positions(c.channelId)).every((r) => r.positionX !== null));
+});
+
+test("대표석에 이미 앉아 있던 직원은 부팅 이행 때 다른 자리로 옮긴다", async () => {
+  const { placeAllUnplacedNpcs, channelSeats } = await import("./npc-seating");
+  const { seatNumberAt } = await import("./seat-assignment");
+  const { db, npcs } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  // 대표석이 1번 자리이던 시절에 배치된 직원을 재현한다: executive 맵의 (4,5).
+  const { channelId } = await seedChannelWithProfiles({ unplaced: 1, mapData: executiveMap() });
+  await db.update(npcs).set({ positionX: 4, positionY: 5 }).where(eq(npcs.channelId, channelId));
+
+  const result = await placeAllUnplacedNpcs();
+  assert.ok(result.seated >= 1, "대표석에서 내려와 빈 좌석에 앉는다");
+
+  const [row] = await positions(channelId);
+  assert.notDeepEqual([row.positionX, row.positionY], [4, 5]);
+  const seats = (await channelSeats(channelId))!;
+  assert.notEqual(seatNumberAt(seats, row.positionX, row.positionY), null, "데스크 좌석에 앉는다");
+
+  const again = await placeAllUnplacedNpcs();
+  assert.equal(again.seated + again.standing, 0, "멱등");
 });

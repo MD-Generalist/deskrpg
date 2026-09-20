@@ -11,7 +11,8 @@ import { effectiveMapSpawn } from "./effective-map-spawn";
  */
 export type Tile = { col: number; row: number };
 export type DeskSeat = Tile & { number: number };
-export type SeatingMap = { seats: DeskSeat[]; standing: Tile[] };
+/** `reserved` 는 대표석 — 번호도 없고 서는 칸도 아니다. 이미 앉은 직원은 이행 때 옮긴다. */
+export type SeatingMap = { seats: DeskSeat[]; standing: Tile[]; reserved: Tile[] };
 export type Placement = { npcId: string; col: number; row: number; seated: boolean };
 
 const key = (tile: Tile) => `${tile.col},${tile.row}`;
@@ -63,7 +64,11 @@ export function seatingMapFor(channel: {
       if (open(col, row)) strict.push({ col, row });
     }
   }
-  return { seats, standing: strict.length > 0 ? strict : relaxed };
+  return {
+    seats,
+    standing: strict.length > 0 ? strict : relaxed,
+    reserved: layout.executiveSeatTiles.map((tile) => ({ ...tile })),
+  };
 }
 
 export function seatNumberAt(

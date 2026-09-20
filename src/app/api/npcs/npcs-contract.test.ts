@@ -143,7 +143,7 @@ test("roster=1 은 좌석 번호를 싣는다 — 데스크 좌석이면 번호,
   const numbers = body.npcs.map((n) => (n as unknown as { seatNumber: number | null }).seatNumber);
   assert.deepEqual(
     numbers.filter((n): n is number => n !== null).sort((a, b) => a - b),
-    [1, 2, 3, 4],
+    [1, 2, 3], // executive 맵은 데스크 3석 — 대표석은 직원 지정석이 아니다
   );
-  assert.equal(numbers.filter((n) => n === null).length, 1);
+  assert.equal(numbers.filter((n) => n === null).length, 2);
 });
