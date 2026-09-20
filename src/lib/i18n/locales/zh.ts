@@ -2641,6 +2641,11 @@ const zh: Record<string, string> = {
   "kanban.metrics.samples": "{count} 个样本",
   "kanban.metrics.fewSamples": "{total} 条中 {count} 条",
   "kanban.metrics.noData": "暂无数据",
+  "kanban.timeline.noTarget": "未设目标日",
+  "kanban.timeline.target": "目标日 {date}",
+  "kanban.timeline.targetLine": "项目目标日 {date}",
+  "kanban.timeline.targetAhead": "目标日 {date}（剩余 {days} 天）",
+  "kanban.timeline.targetPast": "目标日 {date}（已超期 {days} 天）",
   "kanban.warning.noDispatcher":
     "没有运行中的调度器，卡片不会自动执行。请在网关主机上启用 Hermes 看板调度器。",
   "kanban.warning.lastError": "最近一次同步错误：{error}",

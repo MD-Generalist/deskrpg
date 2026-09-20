@@ -80,6 +80,11 @@ export type ProjectSummary = {
   name: string | null;
   status: string;
   isEventCarrier: boolean;
+  /**
+   * `YYYY-MM-DD` 또는 null. 서버(`project-registry.ts` 의 `ProjectView`)는 처음부터 보냈고
+   * 이 타입만 선택기용으로 좁혀져 있었다. 타임라인의 목표일 선이 이 값을 읽는다.
+   */
+  targetDate: string | null;
 };
 
 function base(channelId: string): string {

@@ -5,8 +5,10 @@ import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import {
   axisTicks,
   barDurationMs,
+  dependencyEdges,
   layoutTimeline,
   presetWindow,
+  targetMarker,
   toneOf,
   type TimelineWindow,
 } from "./timeline-layout";
@@ -255,4 +257,97 @@ test("소요는 창 안에서 보이는 만큼이다", () => {
     NOW,
   );
   assert.equal(barDurationMs(layout.rows[0].bars[0]), 500 * S);
+});
+
+// ---------------------------------------------------------------------------
+// 목표일
+// ---------------------------------------------------------------------------
+
+test("목표일이 없으면 표시가 없다", () => {
+  assert.deepEqual(targetMarker(null, WIN, NOW), { kind: "none" });
+  assert.deepEqual(targetMarker(undefined, WIN, NOW), { kind: "none" });
+  assert.deepEqual(targetMarker("날짜아님", WIN, NOW), { kind: "none" });
+});
+
+test("목표일은 그날 끝까지다 — 자정으로 잡으면 하루를 잃는다", () => {
+  const dayStart = Date.parse("2026-09-30T00:00:00");
+  const win = { fromMs: dayStart - 3600_000, toMs: dayStart + 48 * 3600_000 };
+  const marker = targetMarker("2026-09-30", win, dayStart);
+  assert.equal(marker.kind, "inWindow");
+  if (marker.kind !== "inWindow") return;
+  assert.ok(marker.atMs > dayStart + 23 * 3600_000, "30일 밤이어야 한다");
+  assert.ok(marker.atMs < dayStart + 24 * 3600_000);
+});
+
+test("창 밖 목표일은 선을 경계에 붙이지 않고 방향과 남은 일수를 말한다", () => {
+  const now = Date.parse("2026-09-21T00:00:00");
+  const win = { fromMs: now - 3600_000, toMs: now };
+  const marker = targetMarker("2026-09-30", win, now);
+  assert.equal(marker.kind, "outside");
+  if (marker.kind !== "outside") return;
+  assert.equal(marker.side, "after");
+  assert.equal(marker.daysFromNow, 10, "9월 30일 밤까지면 10일 뒤로 올림된다");
+});
+
+test("지난 목표일은 음수 일수로 나온다 — 화면이 지났다고 말할 수 있어야 한다", () => {
+  const now = Date.parse("2026-09-21T12:00:00");
+  const win = { fromMs: now - 3600_000, toMs: now };
+  const marker = targetMarker("2026-09-10", win, now);
+  assert.equal(marker.kind, "outside");
+  if (marker.kind !== "outside") return;
+  assert.equal(marker.side, "before");
+  assert.ok(marker.daysFromNow < 0);
+});
+
+// ---------------------------------------------------------------------------
+// 의존 화살표
+// ---------------------------------------------------------------------------
+
+test("양쪽 카드가 다 보일 때만 화살표를 만든다", () => {
+  const layout = layoutTimeline(
+    [
+      run({ task_id: "parent", started_at: 1_100, ended_at: 1_200, profile: "a" }),
+      run({ task_id: "child", started_at: 1_300, ended_at: 1_400, profile: "b" }),
+    ],
+    WIN,
+    NOW,
+  );
+  const edges = dependencyEdges(layout.rows, [
+    { parent_id: "parent", child_id: "child" },
+    // 자식이 창에 없다 — 허공으로 들어가는 화살표를 만들지 않는다.
+    { parent_id: "parent", child_id: "ghost" },
+  ]);
+  assert.equal(edges.length, 1);
+  assert.equal(edges[0].childTaskId, "child");
+  assert.equal(edges[0].outOfOrder, false);
+});
+
+test("자식이 부모보다 먼저 시작했으면 숨기지 않고 드러낸다", () => {
+  const layout = layoutTimeline(
+    [
+      run({ task_id: "parent", started_at: 1_300, ended_at: 1_900, profile: "a" }),
+      run({ task_id: "child", started_at: 1_100, ended_at: 1_200, profile: "b" }),
+    ],
+    WIN,
+    NOW,
+  );
+  const edges = dependencyEdges(layout.rows, [{ parent_id: "parent", child_id: "child" }]);
+  assert.equal(edges[0].outOfOrder, true);
+});
+
+test("한 카드가 여러 번 돌았으면 처음 시작과 마지막 끝으로 잇는다", () => {
+  const layout = layoutTimeline(
+    [
+      run({ task_id: "parent", started_at: 1_100, ended_at: 1_200, profile: "a" }),
+      run({ task_id: "parent", started_at: 1_300, ended_at: 1_500, profile: "a" }),
+      run({ task_id: "child", started_at: 1_700, ended_at: 1_800, profile: "b" }),
+    ],
+    WIN,
+    NOW,
+  );
+  const edges = dependencyEdges(layout.rows, [{ parent_id: "parent", child_id: "child" }]);
+  assert.equal(edges.length, 1);
+  // 부모의 끝은 두 번째 실행의 끝이다.
+  assert.ok(edges[0].from.x > 0.2);
+  assert.equal(edges[0].outOfOrder, false);
 });

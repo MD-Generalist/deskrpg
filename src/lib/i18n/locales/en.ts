@@ -2728,6 +2728,11 @@ const en: Record<string, string> = {
   "kanban.metrics.samples": "{count} samples",
   "kanban.metrics.fewSamples": "{count} of {total}",
   "kanban.metrics.noData": "No data",
+  "kanban.timeline.noTarget": "No target date",
+  "kanban.timeline.target": "Target {date}",
+  "kanban.timeline.targetLine": "Project target date {date}",
+  "kanban.timeline.targetAhead": "Target {date} ({days} days left)",
+  "kanban.timeline.targetPast": "Target {date} ({days} days overdue)",
   "kanban.warning.noDispatcher":
     "No dispatcher is running, so cards will not start automatically. Enable the Hermes kanban dispatcher on the gateway host.",
   "kanban.warning.lastError": "Last sync error: {error}",

@@ -2746,6 +2746,11 @@ const ja: Record<string, string> = {
   "kanban.metrics.samples": "標本 {count} 件",
   "kanban.metrics.fewSamples": "{total} 件中 {count} 件",
   "kanban.metrics.noData": "データなし",
+  "kanban.timeline.noTarget": "目標日 未設定",
+  "kanban.timeline.target": "目標日 {date}",
+  "kanban.timeline.targetLine": "プロジェクト目標日 {date}",
+  "kanban.timeline.targetAhead": "目標日 {date}（残り {days} 日）",
+  "kanban.timeline.targetPast": "目標日 {date}（{days} 日超過）",
   "kanban.warning.noDispatcher":
     "ディスパッチャーがないため、カードは自動的に実行されません。ゲートウェイホストで Hermes カンバンディスパッチャーを有効にしてください。",
   "kanban.warning.lastError": "最後の同期エラー: {error}",

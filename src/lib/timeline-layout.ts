@@ -206,3 +206,125 @@ export function axisTicks(win: TimelineWindow, maxTicks = 8): number[] {
 export function barDurationMs(bar: PositionedBar): number {
   return bar.endMs - bar.startMs;
 }
+
+// ---------------------------------------------------------------------------
+// 목표일 (D3(c) — 계획 막대 대신 프로젝트 목표일 하나)
+// ---------------------------------------------------------------------------
+
+export type TargetMarker =
+  | { kind: "none" }
+  /** 창 안에 있어 세로선을 그릴 수 있다. `x` 는 0~1 비율. */
+  | { kind: "inWindow"; atMs: number; x: number }
+  /**
+   * 목표일이 창 밖이다. **선을 창 경계에 붙이지 않는다** — 그러면 목표일이 그 시각인 것처럼
+   * 보인다. 대신 방향과 남은 일수를 글로 말한다.
+   */
+  | { kind: "outside"; atMs: number; side: "before" | "after"; daysFromNow: number };
+
+/**
+ * 프로젝트 목표일을 창 기준으로 해석한다.
+ *
+ * `targetDate` 는 `YYYY-MM-DD` 날짜다(`project-registry.ts` 의 `toIsoDate`). 그날 **끝**까지를
+ * 목표로 본다 — 9월 30일이 목표면 30일 23:59 까지가 기한이고, 00:00 으로 잡으면 하루를 잃는다.
+ */
+export function targetMarker(
+  targetDate: string | null | undefined,
+  win: TimelineWindow,
+  nowMs: number,
+): TargetMarker {
+  if (!targetDate) return { kind: "none" };
+  const dayStart = Date.parse(`${targetDate.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(dayStart)) return { kind: "none" };
+  const atMs = dayStart + 24 * 3600_000 - 1;
+  const span = Math.max(1, win.toMs - win.fromMs);
+  if (atMs >= win.fromMs && atMs <= win.toMs) {
+    return { kind: "inWindow", atMs, x: (atMs - win.fromMs) / span };
+  }
+  return {
+    kind: "outside",
+    atMs,
+    side: atMs < win.fromMs ? "before" : "after",
+    // 지난 목표일은 음수로 나온다 — 화면이 "지났다" 를 말할 수 있어야 한다.
+    daysFromNow: Math.ceil((atMs - nowMs) / (24 * 3600_000)),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 의존 화살표 (부모 링크가 곧 실행 순서다)
+// ---------------------------------------------------------------------------
+
+export type DependencyEdge = {
+  parentTaskId: string;
+  childTaskId: string;
+  /** 부모의 마지막 막대 끝과 자식의 첫 막대 시작. 둘 다 창 안에 보일 때만 만든다. */
+  from: { x: number; row: number; lane: number };
+  to: { x: number; row: number; lane: number };
+  /**
+   * 자식이 부모보다 먼저 시작했는가. Hermes 는 부모가 끝나야 자식을 집게 하므로 정상적으로는
+   * 생기지 않는다. 생겼다면 볼 만한 사실이라 숨기지 않는다.
+   */
+  outOfOrder: boolean;
+};
+
+/**
+ * 부모→자식 링크를 화살표로 바꾼다.
+ *
+ * **양쪽 카드가 모두 창 안에 그려져 있을 때만** 만든다. 한쪽이 없으면 화살표가 허공에서
+ * 나오거나 허공으로 들어가는데, 그건 없는 관계를 암시한다.
+ */
+export function dependencyEdges(
+  rows: readonly ActorRow[],
+  links: readonly { parent_id: string; child_id: string }[],
+): DependencyEdge[] {
+  type Anchor = {
+    row: number;
+    lane: number;
+    startX: number;
+    endX: number;
+    startMs: number;
+    endMs: number;
+  };
+  const anchors = new Map<string, Anchor>();
+  rows.forEach((row, rowIndex) => {
+    for (const bar of row.bars) {
+      const existing = anchors.get(bar.run.task_id);
+      if (!existing) {
+        anchors.set(bar.run.task_id, {
+          row: rowIndex,
+          lane: bar.lane,
+          startX: bar.x,
+          endX: bar.x + bar.width,
+          startMs: bar.startMs,
+          endMs: bar.endMs,
+        });
+        continue;
+      }
+      // 한 카드가 여러 번 돌았으면 처음 시작과 마지막 끝으로 잇는다.
+      if (bar.startMs < existing.startMs) {
+        existing.startMs = bar.startMs;
+        existing.startX = bar.x;
+        existing.row = rowIndex;
+        existing.lane = bar.lane;
+      }
+      if (bar.endMs > existing.endMs) {
+        existing.endMs = bar.endMs;
+        existing.endX = bar.x + bar.width;
+      }
+    }
+  });
+
+  const edges: DependencyEdge[] = [];
+  for (const link of links) {
+    const parent = anchors.get(link.parent_id);
+    const child = anchors.get(link.child_id);
+    if (!parent || !child) continue;
+    edges.push({
+      parentTaskId: link.parent_id,
+      childTaskId: link.child_id,
+      from: { x: parent.endX, row: parent.row, lane: parent.lane },
+      to: { x: child.startX, row: child.row, lane: child.lane },
+      outOfOrder: child.startMs < parent.endMs,
+    });
+  }
+  return edges;
+}

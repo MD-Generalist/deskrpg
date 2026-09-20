@@ -7,7 +7,9 @@ import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import {
   axisTicks,
   barDurationMs,
+  dependencyEdges,
   layoutTimeline,
+  targetMarker,
   type PositionedBar,
   type RunTone,
   type TimelineWindow,
@@ -59,6 +61,13 @@ export interface KanbanTimelineProps {
   onOpenTask: (taskId: string) => void;
   /** 그림 위에 얹는 것(운영 지표 요약). 타임라인이 내용을 모른 채 자리만 준다. */
   header?: React.ReactNode;
+  /**
+   * 이 보드가 속한 프로젝트의 목표일(`YYYY-MM-DD`). 없으면 세로선을 그리지 않는다 —
+   * 지금은 프로젝트를 만드는 화면이 없어 값이 없는 것이 기본이다.
+   */
+  targetDate?: string | null;
+  /** 부모·자식 쌍. 양쪽이 다 보일 때만 화살표가 된다. */
+  links?: readonly { parent_id: string; child_id: string }[];
 }
 
 export default function KanbanTimeline({
@@ -72,11 +81,15 @@ export default function KanbanTimeline({
   error,
   onOpenTask,
   header,
+  targetDate,
+  links,
 }: KanbanTimelineProps) {
   const t = useT();
   const { locale } = useLocale();
   const layout = useMemo(() => layoutTimeline(runs, win, now), [runs, win, now]);
   const ticks = useMemo(() => axisTicks(win), [win]);
+  const target = useMemo(() => targetMarker(targetDate, win, now), [targetDate, win, now]);
+  const edges = useMemo(() => dependencyEdges(layout.rows, links ?? []), [layout.rows, links]);
 
   const clock = (ms: number) =>
     new Date(ms).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
@@ -118,6 +131,7 @@ export default function KanbanTimeline({
           {stamp(win.fromMs)} — {stamp(win.toMs)}
         </span>
         {loading && <span className="text-text-dim">{t("common.loading")}</span>}
+        <TargetChip target={target} />
       </div>
 
       {truncated && (
@@ -162,6 +176,29 @@ export default function KanbanTimeline({
                 </g>
               );
             })}
+
+            {target.kind === "inWindow" && (
+              <g>
+                <line
+                  x1={ROW_LABEL_WIDTH + target.x * PLOT_WIDTH}
+                  y1={AXIS_HEIGHT - 6}
+                  x2={ROW_LABEL_WIDTH + target.x * PLOT_WIDTH}
+                  y2={height}
+                  className="stroke-danger"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                />
+                <title>{t("kanban.timeline.targetLine", { date: stamp(target.atMs) })}</title>
+              </g>
+            )}
+
+            {edges.map((edge) => (
+              <Arrow
+                key={`${edge.parentTaskId}->${edge.childTaskId}`}
+                edge={edge}
+                rowTops={rowTops}
+              />
+            ))}
 
             {layout.rows.map((row, rowIndex) => (
               <g key={row.profile ?? "__unknown__"}>
@@ -247,6 +284,60 @@ export default function KanbanTimeline({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * 목표일 칩. 창 안이면 세로선이 이미 있으니 날짜만, 창 밖이면 **남은 일수와 방향**을 쓴다 —
+ * 선을 창 경계에 붙이면 목표일이 그 시각인 것처럼 보인다.
+ */
+function TargetChip({ target }: { target: ReturnType<typeof targetMarker> }) {
+  const t = useT();
+  const { locale } = useLocale();
+  if (target.kind === "none") {
+    // 프로젝트를 만드는 화면이 아직 없어 목표일이 비는 것이 기본이다. 조용히 말한다.
+    return <span className="text-text-dim">{t("kanban.timeline.noTarget")}</span>;
+  }
+  const date = new Date(target.atMs).toLocaleDateString(locale);
+  if (target.kind === "inWindow") {
+    return <span className="text-danger">{t("kanban.timeline.target", { date })}</span>;
+  }
+  const overdue = target.daysFromNow < 0;
+  return (
+    <span className={overdue ? "text-danger" : "text-text-secondary"}>
+      {overdue
+        ? t("kanban.timeline.targetPast", { date, days: Math.abs(target.daysFromNow) })
+        : t("kanban.timeline.targetAhead", { date, days: target.daysFromNow })}
+    </span>
+  );
+}
+
+/**
+ * 의존 화살표. 부모 링크가 곧 실행 순서라(Hermes 는 부모가 끝나야 자식을 집는다) 부모의 끝에서
+ * 자식의 시작으로 그린다. 순서가 뒤집힌 것은 점선으로 드러낸다 — 정상적으로는 생기지 않는다.
+ */
+function Arrow({
+  edge,
+  rowTops,
+}: {
+  edge: ReturnType<typeof dependencyEdges>[number];
+  rowTops: readonly number[];
+}) {
+  const y1 = rowTops[edge.from.row] + edge.from.lane * (LANE_HEIGHT + LANE_GAP) + LANE_HEIGHT / 2;
+  const y2 = rowTops[edge.to.row] + edge.to.lane * (LANE_HEIGHT + LANE_GAP) + LANE_HEIGHT / 2;
+  const x1 = ROW_LABEL_WIDTH + edge.from.x * PLOT_WIDTH;
+  const x2 = ROW_LABEL_WIDTH + edge.to.x * PLOT_WIDTH;
+  return (
+    <line
+      x1={x1}
+      y1={y1}
+      x2={x2}
+      y2={y2}
+      className={edge.outOfOrder ? "stroke-danger" : "stroke-text-dim"}
+      strokeWidth={1}
+      strokeDasharray={edge.outOfOrder ? "3 2" : undefined}
+      opacity={0.6}
+    />
   );
 }
 

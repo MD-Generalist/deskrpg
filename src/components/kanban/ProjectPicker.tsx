@@ -22,6 +22,11 @@ export type ProjectOption = {
   name: string | null;
   status: string;
   isEventCarrier: boolean;
+  /**
+   * `YYYY-MM-DD` 또는 null. 선택기는 쓰지 않지만 같은 응답에서 오고, 타임라인의 목표일 선이
+   * 이 값을 읽는다. 서버(`ProjectView`)는 처음부터 보내고 있었다.
+   */
+  targetDate?: string | null;
 };
 
 const STORAGE_PREFIX = "deskrpg:kanban:board:";

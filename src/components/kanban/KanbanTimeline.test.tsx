@@ -165,3 +165,82 @@ test("아주 짧은 실행도 보이는 폭을 갖는다", async () => {
   const width = Number(host.querySelector("svg rect")?.getAttribute("width"));
   assert.ok(width >= 2, `폭이 ${width} 로 사실상 보이지 않는다`);
 });
+
+test("목표일이 없으면 세로선을 그리지 않고 미정이라고 쓴다", async () => {
+  // 프로젝트를 만드는 화면이 아직 없어 값이 없는 것이 기본이다. 없는 기한을 그려 넣지 않는다.
+  const { host } = await mount({ targetDate: null });
+  assert.ok(host.textContent?.includes("No target date"));
+  assert.equal(host.querySelector("line.stroke-danger"), null);
+});
+
+test("목표일이 창 안이면 세로선을 그린다", async () => {
+  // 목표일은 **로컬 날짜**의 끝이다. 창은 절대 시각이므로, 그날을 덮는 창을 만들어야 한다 —
+  // UTC 로 잡은 창은 타임존에 따라 그날 끝을 놓친다(이 테스트가 처음 그렇게 틀렸다).
+  const dayStart = Date.parse("2026-09-21T00:00:00");
+  const { host } = await mount({
+    targetDate: "2026-09-21",
+    window: { fromMs: dayStart, toMs: dayStart + 24 * 3600_000 },
+    // 막대가 없으면 그림 자체를 그리지 않는다(빈 안내로 대체) — 비교 대상이 없는 기한선은
+    // 아무것도 말하지 않는다. 그래서 창 안에 실행 하나를 둔다.
+    runs: [
+      run({
+        started_at: Math.floor((dayStart + 3600_000) / 1000),
+        ended_at: Math.floor((dayStart + 7200_000) / 1000),
+      }),
+    ],
+  });
+  const line = host.querySelector("line.stroke-danger");
+  assert.ok(line, "창 안 목표일인데 선이 없다");
+  assert.ok(host.textContent?.includes("Target"));
+});
+
+test("목표일이 창 밖이면 선 대신 남은 일수를 쓴다", async () => {
+  // 선을 창 경계에 붙이면 목표일이 그 시각인 것처럼 보인다.
+  const { host } = await mount({ targetDate: "2026-10-15" });
+  assert.equal(host.querySelector("line.stroke-danger"), null);
+  assert.ok(host.textContent?.includes("days left"));
+});
+
+test("지난 목표일은 지났다고 쓴다", async () => {
+  const { host } = await mount({ targetDate: "2026-09-01" });
+  assert.ok(host.textContent?.includes("overdue"));
+});
+
+test("양쪽 카드가 다 보이는 링크만 화살표가 된다", async () => {
+  const parent = run({ task_id: "p", profile: "a" });
+  const child = run({
+    task_id: "c",
+    profile: "b",
+    started_at: Math.floor(Date.parse("2026-09-21T02:00:00.000Z") / 1000),
+    ended_at: Math.floor(Date.parse("2026-09-21T02:10:00.000Z") / 1000),
+  });
+  const { host } = await mount({
+    runs: [parent, child],
+    links: [
+      { parent_id: "p", child_id: "c" },
+      { parent_id: "p", child_id: "ghost" },
+    ],
+  });
+  const arrows = [...host.querySelectorAll("line")].filter((l) =>
+    l.getAttribute("class")?.includes("stroke-text-dim"),
+  );
+  assert.equal(arrows.length, 1, "허공으로 들어가는 화살표를 만들면 없는 관계를 암시한다");
+});
+
+test("순서가 뒤집힌 링크는 점선으로 드러낸다", async () => {
+  const parent = run({
+    task_id: "p",
+    profile: "a",
+    started_at: Math.floor(Date.parse("2026-09-21T03:00:00.000Z") / 1000),
+    ended_at: Math.floor(Date.parse("2026-09-21T04:00:00.000Z") / 1000),
+  });
+  const child = run({ task_id: "c", profile: "b" });
+  const { host } = await mount({
+    runs: [parent, child],
+    links: [{ parent_id: "p", child_id: "c" }],
+  });
+  const dashed = [...host.querySelectorAll("line")].filter(
+    (l) => l.getAttribute("stroke-dasharray") === "3 2",
+  );
+  assert.equal(dashed.length, 1);
+});

@@ -174,6 +174,9 @@ export default function KanbanBoardModal({
   const [runsPage, setRunsPage] = useState<KanbanRunsPage | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
+  const [boardLinks, setBoardLinks] = useState<readonly { parent_id: string; child_id: string }[]>(
+    [],
+  );
   const mounted = useRef(true);
   const reloadSequence = useRef(0);
   const latestReloadRef = useRef<Promise<ReloadResult> | null>(null);
@@ -410,6 +413,19 @@ export default function KanbanBoardModal({
    * `blocked` 는 전부 오류 차단으로 읽히는데, 그게 안전한 쪽으로 틀리는 선택이다 — 승인을
    * 두 번 요구하는 것보다 낫다.
    */
+  /**
+   * 이 보드가 속한 프로젝트의 목표일. `boardSlug` 로 맞춘다 — 채널에 보드가 여러 개일 수 있고,
+   * 프로젝트 하나가 보드 하나를 갖는다.
+   *
+   * 지금은 프로젝트를 만드는 화면이 없어 **값이 없는 것이 기본**이다. 그때 타임라인은 세로선을
+   * 그리지 않고 "목표일 미정" 만 쓴다 — 없는 기한을 그려 넣지 않는다.
+   */
+  const targetDate = useMemo(() => {
+    const slug = status?.boardSlug;
+    if (!slug) return null;
+    return projects.find((project) => project.boardSlug === slug)?.targetDate ?? null;
+  }, [projects, status?.boardSlug]);
+
   const metrics = useMemo(
     () =>
       computeOperationalMetrics(
@@ -420,6 +436,23 @@ export default function KanbanBoardModal({
       ),
     [runsPage, allTasks, timelineWindow],
   );
+
+  useEffect(() => {
+    if (viewState.viewMode !== "timeline" || !viewsSupported || blocker) return;
+    let alive = true;
+    void api
+      .links()
+      .then((page) => {
+        if (alive) setBoardLinks(page.links);
+      })
+      .catch(() => {
+        // 링크를 못 받으면 화살표만 없다. 막대는 그대로 그려지므로 화면을 막지 않는다.
+        if (alive) setBoardLinks([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [api, blocker, viewState.viewMode, viewsSupported, detailTick]);
 
   const byId = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
   const childrenOf = useMemo(() => resolveLinks(links, byId, "children"), [links, byId]);

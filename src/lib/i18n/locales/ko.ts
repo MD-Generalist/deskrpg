@@ -2717,6 +2717,11 @@ const ko: Record<string, string> = {
   "kanban.metrics.samples": "표본 {count}건",
   "kanban.metrics.fewSamples": "{total}건 중 {count}건",
   "kanban.metrics.noData": "자료 없음",
+  "kanban.timeline.noTarget": "목표일 미정",
+  "kanban.timeline.target": "목표일 {date}",
+  "kanban.timeline.targetLine": "프로젝트 목표일 {date}",
+  "kanban.timeline.targetAhead": "목표일 {date} ({days}일 남음)",
+  "kanban.timeline.targetPast": "목표일 {date} ({days}일 지남)",
   "kanban.warning.noDispatcher":
     "디스패처가 없어 카드가 자동으로 실행되지 않습니다. 게이트웨이 호스트에서 Hermes 칸반 디스패처를 켜세요.",
   "kanban.warning.lastError": "마지막 동기화 오류: {error}",
