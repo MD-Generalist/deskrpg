@@ -778,8 +778,9 @@ def atomic(path, content):
 
 def bounded(argv, env):
     # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
-    # Windows 는 pass_fds 를 지원하지 않는다. 잠금은 부모가 쥔 채로 두고 물려주지 않는다
-    # (부모가 자식보다 오래 살므로 보호 범위는 같다).
+    # Windows 는 pass_fds 를 지원하지 않는다. 잠금은 부모가 쥔 채로 두고 물려주지 않는다.
+    # 정상 경로에서는 보호 범위가 같다 — 부모가 항상 자식보다 오래 산다. 부모가 비정상
+    # 종료하면 Windows 는 핸들이 닫히며 잠금이 즉시 풀린다(POSIX 는 자식이 fd 를 쥐고 유지한다).
     extra = {} if WINDOWS else {'pass_fds': (LOCK.fileno(),)}
     child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), **extra)
     try:

@@ -229,9 +229,31 @@ test("executor 소스: 정리는 removeStdioDir 로 디렉터리째 한 번만 �
   assert.equal(removals.length, 1, "createExecutor 안의 rmSync 는 removeStdioDir 하나뿐");
   assert.match(
     body,
-    /const removeStdioDir = \(\) => \{[\s\S]*?rmSync\(dir, \{ recursive: true, force: true \}\)/,
+    /const removeStdioDir = \(\): boolean => \{[\s\S]*?rmSync\(stdioDir, \{ recursive: true, force: true \}\)/,
   );
   // finish() 가 유일한 종결 경로이고, 그 안에서 지운다 — 리스너 등록 순서와 무관하다.
   const finish = body.slice(body.indexOf("const finish ="), body.indexOf("const abort ="));
   assert.ok(finish.includes("removeStdioDir()"), "finish() 안에서 정리해야 한다");
+});
+
+test("executor 소스: 오류 경로는 자식을 죽인 뒤에 임시 파일을 지운다", () => {
+  // 타임아웃·취소·output_limit 에서는 ssh.exe 가 살아서 stdin.in·stdout.out 핸들을 쥐고 있다.
+  // 먼저 지우려 들면 Windows 에서 공유 위반으로 실패하고, 토큰이 실린 payload 가 %TEMP% 에 남는다.
+  const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
+  const body = source.slice(source.indexOf("export function createExecutor"));
+  const finish = body.slice(body.indexOf("const finish ="), body.indexOf("const abort ="));
+  const errorBranch = finish.slice(finish.indexOf("if (error) {"));
+  const kill = errorBranch.indexOf("killProcessTree(");
+  const cleanup = errorBranch.indexOf("removeStdioDir()");
+  assert.ok(kill >= 0 && cleanup >= 0, "오류 경로에 kill 과 정리가 둘 다 있어야 한다");
+  assert.ok(kill < cleanup, "정리는 killProcessTree 뒤여야 한다");
+  assert.ok(cleanup < errorBranch.indexOf("reject("), "정리는 reject 전에 시도해야 한다");
+  // 자식이 죽는 데 시간이 걸리므로 첫 시도가 실패하면 한 틱 뒤에 다시 시도한다.
+  assert.match(
+    errorBranch,
+    /if \(!removeStdioDir\(\)\) setTimeout\(removeStdioDir, 0\)\.unref\(\)/,
+  );
+  // 성공 경로는 자식이 이미 죽어 있으므로 그대로 한 번만 지운다.
+  const successBranch = finish.slice(finish.indexOf("} else {"));
+  assert.match(successBranch, /removeStdioDir\(\);\s*resolve\(/);
 });

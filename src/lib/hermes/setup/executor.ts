@@ -190,15 +190,20 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       let stdinFd: number | undefined;
       let stdoutFile: string | undefined;
       let stdoutFd: number | undefined;
-      /** 임시 파일 정리는 디렉터리째 한 번. 두 번 불려도 안전하다. */
-      const removeStdioDir = () => {
-        if (!stdioDir) return;
-        const dir = stdioDir;
-        stdioDir = undefined;
+      /**
+       * 임시 파일 정리는 디렉터리째. 두 번 불려도 안전하고, 실패하면 `false` 를 돌려준다.
+       * Windows 에서 자식이 아직 살아 `stdin.in`·`stdout.out` 핸들을 쥐고 있으면 삭제가
+       * 공유 위반으로 실패하므로, 지워질 때까지 `stdioDir` 을 비우지 않고 재시도에 맡긴다.
+       */
+      const removeStdioDir = (): boolean => {
+        if (!stdioDir) return true;
         try {
-          rmSync(dir, { recursive: true, force: true });
+          rmSync(stdioDir, { recursive: true, force: true });
+          stdioDir = undefined;
+          return true;
         } catch {
-          // 삭제 실패는 오류 경로를 바꾸지 않는다.
+          // 삭제 실패는 오류 경로를 바꾸지 않는다. 호출자가 kill 뒤 다시 시도한다.
+          return false;
         }
       };
 
@@ -262,7 +267,8 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
             if (stdoutFd !== undefined) {
               // 파일 크기 상한 검사 (output_limit과 일치)
               const stat = fstatSync(stdoutFd);
-              if (stat.size > 1024 * 1024) {
+              // 앞선 오류(command_timeout 등)를 덮어쓰지 않는다 — 사용자가 보는 원인이 뒤바뀐다.
+              if (!error && stat.size > 1024 * 1024) {
                 error = "output_limit";
               }
               closeSync(stdoutFd);
@@ -283,10 +289,10 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
           }
           stdinFd = undefined;
         }
-        // 정리는 디렉터리째 한 번. finish() 는 단 하나의 종결 경로이고 아래 try/catch 가
-        // 동기 예외까지 여기로 모으므로, 리스너 등록 순서와 무관하게 지워진다.
-        removeStdioDir();
-
+        // finish() 는 단 하나의 종결 경로이고 아래 try/catch 가 동기 예외까지 여기로 모으므로,
+        // 리스너 등록 순서와 무관하게 정리를 **시도**한다. 성공은 보장되지 않는다 — 자식이
+        // 살아서 핸들을 쥐고 있으면 Windows 에서 삭제가 실패한다. 그래서 오류 경로에서는
+        // 먼저 자식을 죽이고, 그 뒤에 지운다.
         if (error) {
           // Include helper-owned installers, not just their parent Python process.
           try {
@@ -301,8 +307,14 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
           } catch {
             child.kill("SIGKILL");
           }
+          // 자식이 죽는 데 시간이 걸리므로, 지금 실패하면 한 틱 뒤에 한 번 더 시도한다.
+          // 남으면 게이트웨이·프로필 토큰이 실린 payload 가 %TEMP% 에 남는다.
+          if (!removeStdioDir()) setTimeout(removeStdioDir, 0).unref();
           reject(new Error(error));
-        } else resolve({ stdout, stderr, code });
+        } else {
+          removeStdioDir();
+          resolve({ stdout, stderr, code });
+        }
       };
       const abort = () => finish("setup_cancelled");
       const timer = setTimeout(
