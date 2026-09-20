@@ -53,6 +53,7 @@ COPY --from=builder /app/src/lib/path-alias.js ./src/lib/path-alias.js
 COPY --from=builder /app/src/lib/startup-check.js ./src/lib/startup-check.js
 COPY --from=builder /app/src/lib/runtime-env-bootstrap.js ./src/lib/runtime-env-bootstrap.js
 COPY --from=builder /app/src/lib/npc-chat-history.ts ./src/lib/npc-chat-history.ts
+COPY --from=builder /app/src/lib/dm-threads.ts ./src/lib/dm-threads.ts
 COPY --from=builder /app/src/lib/npc-activity.ts ./src/lib/npc-activity.ts
 COPY --from=builder /app/src/lib/npc-prompt-layers.ts ./src/lib/npc-prompt-layers.ts
 COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-access.ts

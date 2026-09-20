@@ -59,6 +59,7 @@ import ConversationWorkspace from "@/components/conversation/ConversationWorkspa
 import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
 import { useMeetingEntry } from "@/components/meeting-room/use-meeting-entry";
 import "@/components/meeting-room/meeting-mode.css";
+import { buildDmThreadEntries, needsCallBeforeDmSend, type DmThread } from "@/lib/dm-threads";
 import WorkspaceNavigator, {
   type NavigatorNpc,
   type NpcNavigatorAction,
@@ -284,6 +285,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // NPC dialog state — all managed here, ChatPanel is pure display
   const [npcActivityKey, setNpcActivityKey] = useState<string | null>(null);
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
+  // 대화 목록에 올라가는 직원별 DM 한 줄. 방과 달리 서버가 밀어 주지 않으므로 필요할 때 묻는다.
+  const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
   // Keep ref in sync so socket listeners can read current value without stale closure
   useEffect(() => {
     dialogNpcRef.current = dialogNpc;
@@ -590,6 +593,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         if (openNpc) {
           socketInstance?.emit("npc:history", { npcId: openNpc.npcId });
         }
+        // 목록도 같은 이유로 여기서 묻는다 — 이력의 주인이 정해진 뒤여야 내 DM 이 온다.
+        socketInstance?.emit("npc:dm-threads");
+      });
+      socketInstance.on("npc:dm-threads", ({ threads }: { threads: DmThread[] }) => {
+        setDmThreads(Array.isArray(threads) ? threads : []);
       });
       socketInstance.on("disconnect", (reason: string) => {
         npcMotionSnapshotRef.current = null;
@@ -1266,6 +1274,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const handleDialogClose = useCallback(() => {
     resetDialog();
     EventBus.emit("dialog:close");
+    // 닫고 나면 목록이 보인다 — 방금 주고받은 것이 미리보기에 반영되도록 다시 묻는다.
+    socketRef.current?.emit("npc:dm-threads");
   }, [resetDialog]);
 
   const closeRosterMenus = useCallback(() => {
@@ -1428,6 +1438,22 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       }
 
       if (socket.id) EventBus.emit("chat:speech", { actorId: socket.id, text: displayMessage });
+      // 목록에서 연 DM 은 그 직원을 부르지 않은 상태다 — **보내는 시점에** 부른다(단테 지시).
+      // 이미 곁에 있거나 오는 중이면 씬이 재호출을 무시하므로 그때는 쏘지 않는다.
+      if (channelId && needsCallBeforeDmSend(npcMoveStatesRef.current[dialogNpc.npcId])) {
+        // reason 을 싣지 않는다 — 서버가 아는 값은 "map-chat"(방 화면을 여는 후처리)뿐이고,
+        // 모르는 값은 조용히 버려진다. DM 은 이미 열려 있으므로 평범한 호출이 맞다.
+        socket.emit("npc:call", { channelId, npcId: dialogNpc.npcId });
+      }
+      // 목록 미리보기를 서버 왕복 없이 먼저 맞춘다 — 목록은 닫을 때 다시 묻는다.
+      setDmThreads((previous) => [
+        {
+          npcId: dialogNpc.npcId,
+          lastMessage: { role: "player" as const, content: message },
+          lastAt: Date.now(),
+        },
+        ...previous.filter((thread) => thread.npcId !== dialogNpc.npcId),
+      ]);
       socket.emit("npc:chat", {
         npcId: dialogNpc.npcId,
         message,
@@ -1438,7 +1464,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         files: filePayloads,
       });
     },
-    [socket, dialogNpc, characterId, showToastNotification, t],
+    [socket, channelId, dialogNpc, characterId, showToastNotification, t],
   );
 
   const handleRoomSend = useCallback(
@@ -2215,6 +2241,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   });
 
+  // 목록에 그릴 DM 줄. 이름·출근 여부는 출근부가 정본이고, 명단에 없는 직원의 줄은 빠진다.
+  const dmThreadEntries = buildDmThreadEntries(
+    dmThreads,
+    rosterNpcs.map((npc) => ({ id: npc.id, name: npc.name, active: npc.active })),
+  );
+
   const handleNavigatorNpcAction = (npcId: string, action: NpcNavigatorAction) => {
     if (action === "call") handleCallNpcById(npcId);
     else if (action === "return") handleReturnNpc(npcId);
@@ -2299,6 +2331,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             workspaceName={channel?.name || "DeskRPG"}
             rooms={roomState.rooms}
             currentRoomId={dialogNpc ? null : roomState.currentRoomId}
+            dmThreads={dmThreadEntries}
+            onSelectDm={handleSelectNpc}
             players={channelPlayers.map((player) => ({
               id: player.id,
               name: player.name,

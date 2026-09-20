@@ -328,3 +328,49 @@ test("player:join sends the npc:working snapshot and reports channel activity to
   assert.match(disconnect, /notifyChannelActivity\(/, "disconnect 가 폴러에 알리지 않습니다.");
   assert.match(src, /startAutomationPollers\(/, "setupSocketHandlers 가 폴러를 켜지 않습니다.");
 });
+
+// DM 을 대화 목록에 올린 배선(카드: "직원과의 DM 이 대화 목록에 없다").
+//
+// 서버가 목록을 돌려줘도 클라이언트에 리스너가 없으면 목록은 영원히 비어 있고, 테스트는
+// 초록인 채로 결함이 되살아난다 — 이 파일이 이미 C1 에서 겪은 모양이다.
+test("npc:dm-threads 는 서버 핸들러와 맵 클라이언트 리스너가 함께 있다", () => {
+  const events = socketEventsIn(...HANDLER_FILES);
+  assert.ok(
+    events.includes("npc:dm-threads"),
+    '"npc:dm-threads" 핸들러가 없습니다 — 대화 목록에 DM 줄을 채울 데이터가 오지 않습니다.',
+  );
+  const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
+  assert.ok(
+    /socketInstance\.on\(\s*"npc:dm-threads"/.test(client),
+    "서버가 npc:dm-threads 를 돌려주지만 맵 클라이언트에 리스너가 없습니다 — 죽은 배선입니다.",
+  );
+  assert.ok(
+    /emit\(\s*"npc:dm-threads"/.test(client),
+    "클라이언트가 npc:dm-threads 를 요청하지 않습니다 — 목록이 비어 있게 됩니다.",
+  );
+});
+
+// 단테 지시: 목록에서 여는 것만으로는 호출하지 않고 **보내는 시점에** 호출한다.
+// 이 두 줄이 갈라지면 (a) 열자마자 직원이 걸어오거나 (b) 보내도 아무도 오지 않는다.
+test("DM 은 열 때가 아니라 보낼 때 직원을 호출한다", () => {
+  const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
+  const openHandler = client.slice(
+    client.indexOf("const handleSelectNpc = useCallback"),
+    client.indexOf("const handleDialogSend = useCallback"),
+  );
+  assert.ok(openHandler.length > 0, "handleSelectNpc / handleDialogSend 를 찾지 못했습니다");
+  assert.equal(
+    /npc:call|approach-and-interact/.test(openHandler),
+    false,
+    "DM 을 여는 것만으로 직원을 호출하고 있습니다 — 여는 것은 읽기뿐이어야 합니다.",
+  );
+  const sendHandler = client.slice(
+    client.indexOf("const handleDialogSend = useCallback"),
+    client.indexOf("const handleRoomSend = useCallback"),
+  );
+  assert.match(
+    sendHandler,
+    /needsCallBeforeDmSend[\s\S]*"npc:call"/,
+    "DM 을 보낼 때 직원을 호출하지 않습니다 — 목록에서 연 대화는 아무도 대답하지 않습니다.",
+  );
+});

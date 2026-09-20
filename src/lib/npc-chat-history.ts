@@ -6,6 +6,8 @@
 
 import { and, asc, eq } from "drizzle-orm";
 
+import { summarizeDmThreads, type DmThread, type DmThreadRow } from "./dm-threads";
+
 export type NpcHistoryRole = "player" | "npc";
 
 export type NpcHistoryMessage = {
@@ -105,7 +107,8 @@ type ChatDb = {
   insert: (table: unknown) => { values: (row: unknown) => Promise<unknown> };
   select: (fields?: unknown) => {
     from: (table: unknown) => {
-      where: (cond: unknown) => { orderBy: (order: unknown) => Promise<StoredChatMessage[]> };
+      // 뽑는 열이 호출마다 달라서(이력 / 목록) 행 모양은 호출 쪽에서 좁힌다.
+      where: (cond: unknown) => { orderBy: (...order: unknown[]) => Promise<unknown[]> };
     };
   };
   delete: (table: unknown) => { where: (cond: unknown) => Promise<unknown> };
@@ -160,7 +163,34 @@ export async function loadNpcChatHistory(
     .from(chatMessages)
     .where(ownerCondition(chatMessages, input.characterId, input.npcId))
     .orderBy(asc(chatMessages.createdAt as never));
-  return toHistoryMessages(rows);
+  return toHistoryMessages(rows as StoredChatMessage[]);
+}
+
+/**
+ * 이 캐릭터가 대화한 직원들의 **마지막 발화 한 줄씩** 을 뽑는다 — 대화 목록의 DM 줄이다.
+ *
+ * 한 캐릭터의 DM 행을 모두 읽어 JS 에서 접는다. 정렬을 `(npcId, createdAt)` 로 두어
+ * `idx_chat_messages_lookup` 를 그대로 타고, 접는 규칙은 `summarizeDmThreads` 가 갖는다.
+ * 행 수는 한 사람이 직원들과 나눈 대화 전체이므로 `loadNpcChatHistory`(한 직원 전체)와
+ * 같은 자리수다 — 목록을 열 때 한 번 돈다. 더 커지면 그때 집계 질의로 바꾼다.
+ */
+export async function loadDmThreads(
+  db: unknown,
+  schema: unknown,
+  input: { characterId: string },
+): Promise<DmThread[]> {
+  const { chatMessages } = asChatSchema(schema);
+  const rows = await asChatDb(db)
+    .select({
+      npcId: chatMessages.npcId,
+      role: chatMessages.role,
+      content: chatMessages.content,
+      createdAt: chatMessages.createdAt,
+    })
+    .from(chatMessages)
+    .where(eq(chatMessages.characterId as never, input.characterId))
+    .orderBy(asc(chatMessages.npcId as never), asc(chatMessages.createdAt as never));
+  return summarizeDmThreads(rows as DmThreadRow[]);
 }
 
 export async function clearNpcChatHistory(

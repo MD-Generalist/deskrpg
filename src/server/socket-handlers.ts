@@ -39,6 +39,7 @@ import {
   appendNpcChatMessage,
   characterBelongsToUser,
   clearNpcChatHistory,
+  loadDmThreads,
   loadNpcChatHistory,
   npcHistoryKey,
   pickHistoryCharacterId,
@@ -1636,6 +1637,25 @@ export function setupSocketHandlers(io: Server) {
         npcId,
         responses: dmResponseTrackers.get(scope)?.snapshot() ?? [],
       });
+    });
+
+    // 대화 목록의 DM 줄. 직원마다 마지막 발화 한 줄씩만 돌려준다 — 목록을 그리는 데
+    // 필요한 것이 그뿐이고, 이름·출근 여부는 클라이언트가 이미 아는 출근부에서 붙인다.
+    // 이력과 같은 규칙으로 주인을 정한다: join 전이면 빈 목록이다.
+    socket.on("npc:dm-threads", async () => {
+      const characterId = myCharacterIdOf(socket);
+      if (!characterId) {
+        socket.emit("npc:dm-threads", { threads: [] });
+        return;
+      }
+      try {
+        const threads = await loadDmThreads(db, { chatMessages }, { characterId });
+        socket.emit("npc:dm-threads", { threads });
+      } catch (err) {
+        // 목록을 못 그리는 것이지 대화가 사라진 것은 아니다 — 조용히 넘기지 않고 남긴다.
+        console.error("[chat-history] failed to load dm threads", { characterId }, err);
+        socket.emit("npc:dm-threads", { threads: [] });
+      }
     });
 
     socket.on("npc:reset-chat", async ({ npcId }: { npcId: string }) => {

@@ -1850,6 +1850,7 @@ const en: Record<string, string> = {
   "workspace.summary": "{players} online · {npcs} NPCs",
   "workspace.spaces": "Spaces",
   "workspace.conversations": "Conversations",
+  "workspace.dmLabel": "Chat with {name}",
   "workspace.people": "People",
   "workspace.status.available": "Available to chat",
   "workspace.status.offline": "Offline",

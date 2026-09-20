@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { sortRooms, type RoomSummary } from "@/lib/chat-rooms-policy";
+import type { DmThreadEntry } from "@/lib/dm-threads";
 import { useT } from "@/lib/i18n";
 import type { RosterNpc } from "../NpcRoster";
 import ParticipantRow from "./ParticipantRow";
@@ -28,11 +29,18 @@ type Props = {
   workspaceName: string;
   rooms: RoomSummary[];
   currentRoomId: string | null;
+  /**
+   * 직원과의 1:1 대화. 방이 아니라 `chat_messages` 의 (캐릭터, 직원) 쌍이라 `rooms` 에 없고,
+   * 목록에 입구가 없으면 맵에서 그 직원을 다시 찾아야만 이어 말할 수 있었다.
+   */
+  dmThreads?: DmThreadEntry[];
   players: NavigatorPlayer[];
   npcs: NavigatorNpc[];
   selectedNpcId?: string | null;
   isOwner: boolean;
   onSelectRoom: (roomId: string) => void;
+  /** 목록에서 DM 을 연다. **여는 것만으로 직원을 호출하지 않는다** — 호출은 보낼 때다. */
+  onSelectDm?: (npcId: string, npcName: string) => void;
   onSelectNpc: (npcId: string, npcName: string) => void;
   onSelectPlayer: (playerId: string) => void;
   onCompose: (presetNpcIds: string[]) => void;
@@ -148,6 +156,33 @@ export default function WorkspaceNavigator(props: Props) {
                     {room.lastMessage.senderName}: {room.lastMessage.content}
                   </span>
                 )}
+              </button>
+            ))}
+            {(props.dmThreads ?? []).map((thread) => (
+              <button
+                type="button"
+                key={`dm-${thread.npcId}`}
+                onClick={() => props.onSelectDm?.(thread.npcId, thread.npcName)}
+                aria-current={thread.npcId === props.selectedNpcId ? "page" : undefined}
+                aria-label={t("workspace.dmLabel", { name: thread.npcName })}
+                className={`w-full rounded-lg px-3 py-2 text-left ${
+                  thread.npcId === props.selectedNpcId
+                    ? "bg-surface-raised"
+                    : "hover:bg-surface-raised/70"
+                }`}
+              >
+                <span className="block truncate text-sm font-medium text-text">
+                  {thread.npcName}
+                  {!thread.active && (
+                    <span className="ml-1 text-[11px] font-normal text-text-dim">
+                      · {t("workspace.status.resting")}
+                    </span>
+                  )}
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-text-dim">
+                  {thread.lastMessage.role === "player" ? t("game.you") : thread.npcName}:{" "}
+                  {thread.lastMessage.content}
+                </span>
               </button>
             ))}
           </div>

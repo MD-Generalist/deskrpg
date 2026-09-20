@@ -1802,6 +1802,7 @@ const zh: Record<string, string> = {
   "workspace.summary": "{players} 人在线 · {npcs} 名 NPC",
   "workspace.spaces": "空间",
   "workspace.conversations": "对话",
+  "workspace.dmLabel": "与{name}的对话",
   "workspace.people": "一起工作的人",
   "workspace.status.available": "可以对话",
   "workspace.status.offline": "离线",

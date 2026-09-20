@@ -6,6 +6,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { I18nProvider } from "@/lib/i18n";
 import type { RoomSummary } from "@/lib/chat-rooms-policy";
+import type { DmThreadEntry } from "@/lib/dm-threads";
 import WorkspaceNavigator, { type NavigatorNpc } from "./WorkspaceNavigator";
 
 const rooms: RoomSummary[] = [
@@ -57,7 +58,11 @@ const npcs: NavigatorNpc[] = [
   },
 ];
 
-async function mount(isOwner = true, customNpcs: NavigatorNpc[] = npcs) {
+async function mount(
+  isOwner = true,
+  customNpcs: NavigatorNpc[] = npcs,
+  dmThreads: DmThreadEntry[] = [],
+) {
   const selected: string[] = [];
   const actions: string[] = [];
   const element = document.createElement("div");
@@ -74,6 +79,8 @@ async function mount(isOwner = true, customNpcs: NavigatorNpc[] = npcs) {
           npcs={customNpcs}
           isOwner={isOwner}
           onSelectRoom={(id) => selected.push(`room:${id}`)}
+          dmThreads={dmThreads}
+          onSelectDm={(id) => selected.push(`dm:${id}`)}
           onSelectNpc={(id) => selected.push(`npc:${id}`)}
           onSelectPlayer={(id) => selected.push(`player:${id}`)}
           onCompose={() => actions.push("compose")}
@@ -178,4 +185,51 @@ test("the owner menu keeps 자리 이동 and drops the removed place action", as
     labels.some((label) => label.includes("자리 지정")),
     false,
   );
+});
+
+// 이 카드의 결함: 기록은 남는데 **목록에 입구가 없어서** 이어서 말하려면 맵에서 그 직원을
+// 다시 찾아 눌러야 했다. 목록에 줄이 생기고, 그 줄이 DM 을 여는 경로여야 한다.
+const dmThreads: DmThreadEntry[] = [
+  {
+    npcId: "sophie",
+    npcName: "소피",
+    active: true,
+    lastMessage: { role: "npc", content: "표지 시안 올렸어요" },
+    lastAt: Date.parse("2026-09-19T05:00:00Z"),
+  },
+  {
+    npcId: "leo",
+    npcName: "레오",
+    active: false,
+    lastMessage: { role: "player", content: "내일 이야기해요" },
+    lastAt: Date.parse("2026-09-18T05:00:00Z"),
+  },
+];
+
+test("직원과의 DM 이 대화 목록에 줄로 남고, 그 줄로 다시 열 수 있다", async () => {
+  const { element, selected } = await mount(true, npcs, dmThreads);
+  const text = element.textContent ?? "";
+  assert.match(text, /소피[\s\S]*표지 시안 올렸어요/);
+  // 보낸 쪽이 나면 미리보기도 "나:" 로 보인다 — 방 목록과 같은 규칙이다.
+  assert.match(text, /나: 내일 이야기해요/);
+
+  await act(async () => button(element, "소피 대화").click());
+  assert.deepEqual(selected, ["dm:sophie"]);
+});
+
+test("퇴근한 직원의 대화도 목록에 남는다 — 쉬는 중이라고 알리기만 한다", async () => {
+  const { element } = await mount(true, npcs, dmThreads);
+  const row = [...element.querySelectorAll("button")].find((node) =>
+    (node.getAttribute("aria-label") ?? "").includes("레오 대화"),
+  );
+  assert.ok(row, "퇴근한 직원의 DM 줄이 없다");
+  assert.match(row.textContent ?? "", /쉬는 중/);
+});
+
+test("대화 이력이 없으면 DM 줄도 없다", async () => {
+  const { element } = await mount(true, npcs, []);
+  const rows = [...element.querySelectorAll("button")].filter((node) =>
+    /\S 대화$/.test(node.getAttribute("aria-label") ?? ""),
+  );
+  assert.deepEqual(rows, []);
 });

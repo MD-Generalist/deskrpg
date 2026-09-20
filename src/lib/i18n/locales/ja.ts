@@ -1867,6 +1867,7 @@ const ja: Record<string, string> = {
   "workspace.summary": "オンライン {players}人 · NPC {npcs}人",
   "workspace.spaces": "スペース",
   "workspace.conversations": "会話",
+  "workspace.dmLabel": "{name} との会話",
   "workspace.people": "一緒に働く人",
   "workspace.status.available": "会話できます",
   "workspace.status.offline": "オフライン",

@@ -1848,6 +1848,7 @@ const ko: Record<string, string> = {
   "workspace.summary": "온라인 {players}명 · NPC {npcs}명",
   "workspace.spaces": "공간",
   "workspace.conversations": "대화",
+  "workspace.dmLabel": "{name} 대화",
   "workspace.people": "함께하는 사람",
   "workspace.status.available": "대화 가능",
   "workspace.status.offline": "오프라인",
