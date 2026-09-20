@@ -1431,7 +1431,7 @@ test("delayed v2 invalidation cannot overwrite fresh v3 clients after reset", as
 // 다시 접속하면 소유권은 새 소켓으로 **이미** 넘어온다. 그래서 새 탭에서 호출을 누르면
 // "내가 이미 주인" 분기로 들어가고, 예전에는 broadcast 만 하고 조용히 return 해서
 // `npc:come-to-player` 가 나가지 않았다 — 아무도 움직이지 않고 오류도 없었다.
-// (2026-09-20 Jane VPS 에서 sophie 가 이 상태였다. 퇴근→출근이 유일한 회피법이었다.)
+// (2026-09-20 실측: 한 직원이 이 상태였다. 퇴근→출근이 유일한 회피법이었다.)
 test("같은 소켓의 재호출은 come-to-player 를 재발행한다", async () => {
   const h = await harness();
   try {
