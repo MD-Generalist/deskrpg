@@ -5,6 +5,7 @@ const CHANNEL_ID = "kanban-e2e-channel";
 const CHARACTER_ID = "kanban-e2e-character";
 const TASK_ID = "kanban-e2e-task";
 const DEV_JWT_SECRET = "deskrpg-dev-jwt-secret-do-not-use-in-production";
+const BASE_URL = process.env.DESKRPG_E2E_BASE_URL ?? "http://localhost:3000";
 
 type TaskStatus =
   | "triage"
@@ -69,7 +70,9 @@ async function installFixture(context: BrowserContext, state: FixtureState) {
     .setExpirationTime("1h")
     .sign(new TextEncoder().encode(DEV_JWT_SECRET));
   await context.addCookies([
-    { name: "token", value: token, url: "http://localhost:3000", httpOnly: true, sameSite: "Lax" },
+    // 쿠키는 테스트가 실제로 여는 주소에 심는다 — 3000 으로 박아 두면 다른 포트의 서버에서는
+    // 로그인이 안 돼 "인증 확인 중" 에서 멈춘다.
+    { name: "token", value: token, url: BASE_URL, httpOnly: true, sameSite: "Lax" },
   ]);
 
   await context.route("**/socket.io/**", (route) => route.abort());
@@ -78,6 +81,16 @@ async function installFixture(context: BrowserContext, state: FixtureState) {
     const url = new URL(request.url());
     const path = url.pathname;
 
+    // 게임 화면은 "나" 를 URL 이 아니라 여기서 읽는다. 비어 있으면 캐릭터 화면으로 튕긴다.
+    if (path === "/api/characters/me") {
+      return json(route, {
+        character: {
+          id: CHARACTER_ID,
+          name: "E2E Character",
+          appearance: { officeLookId: "office-jun", bodyType: "male" },
+        },
+      });
+    }
     if (path === "/api/characters") {
       return json(route, {
         characters: [
@@ -123,6 +136,9 @@ async function installFixture(context: BrowserContext, state: FixtureState) {
         working: [],
       });
     }
+    // 카드 상세는 그 카드의 결과물도 읽는다. 목록이 없는 응답이면 드로어가 통째로 죽는다.
+    if (path.endsWith("/artifacts"))
+      return json(route, { artifacts: [], cursor: "", has_more: false });
     if (path.endsWith("/kanban/board")) {
       state.boardReads += 1;
       return json(route, board(state, url.searchParams.get("include_archived") === "true"));
@@ -157,6 +173,8 @@ async function installFixture(context: BrowserContext, state: FixtureState) {
 }
 
 async function openBoard(page: Page) {
+  // 페이지가 죽으면 뒤의 단계는 "요소를 못 찾음" 으로만 보인다 — 원인을 그대로 드러낸다.
+  page.on("pageerror", (error) => console.error(`[pageerror] ${error.stack ?? error.message}`));
   await page.goto(`/game?channelId=${CHANNEL_ID}&characterId=${CHARACTER_ID}`);
   await page.getByRole("button", { name: "칸반 보드" }).click();
   await expect(page.getByRole("dialog", { name: "칸반 보드" })).toBeVisible();

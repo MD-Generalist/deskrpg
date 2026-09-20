@@ -25,8 +25,6 @@ import {
   markLockedColumns,
   markMoveTarget,
   restoreKanbanMoveFocus,
-  tryReleasePointerCapture,
-  trySetPointerCapture,
   type KanbanMoveCancelReason,
   type KanbanMoveInteractionHandler,
 } from "./kanban-card-move";
@@ -77,7 +75,6 @@ export default function KanbanCard({
   const cardRef = useRef<HTMLElement>(null);
   const grabRef = useRef<{ x: number; y: number; width: number } | null>(null);
   const [preview, setPreview] = useState<KanbanDragPreviewState | null>(null);
-  const suppressClickRef = useRef(false);
   const focusFallbackRef = useRef<HTMLElement | null>(null);
   const moveRoot = useCallback(
     () =>
@@ -197,6 +194,49 @@ export default function KanbanCard({
       : null;
   };
 
+  /**
+   * 드래그로 끝난 포인터는 뒤이어 click 을 낳는다. 그 click 을 한 번만, 어디로 가든 삼킨다.
+   *
+   * 캡처를 끌기 시작 시점에 걸기 때문에 이 click 은 카드가 아니라 **포인터 아래 요소**로 간다.
+   * 카드에서만 막으면 보드 밖에 떨어뜨렸을 때 모달 배경이 click 을 받아 칸반이 닫힌다
+   * (e2e 로 확인). 상세가 열리는 이중 동작(R2)도 같은 자리에서 막힌다.
+   * click 은 pointerup 과 같은 태스크에서 나오므로 타이머로 거두면 다음 탭은 건드리지 않는다.
+   */
+  const swallowDragClick = () => {
+    const swallow = (event: MouseEvent) => {
+      event.stopPropagation();
+      event.preventDefault();
+    };
+    window.addEventListener("click", swallow, { capture: true, once: true });
+    window.setTimeout(() => window.removeEventListener("click", swallow, true), 0);
+  };
+
+  const pressListenersRef = useRef<{
+    move: (event: PointerEvent) => void;
+    up: (event: PointerEvent) => void;
+    cancel: (event: PointerEvent) => void;
+  } | null>(null);
+  const stopListening = () => {
+    const listeners = pressListenersRef.current;
+    if (!listeners) return;
+    window.removeEventListener("pointermove", listeners.move);
+    window.removeEventListener("pointerup", listeners.up);
+    window.removeEventListener("pointercancel", listeners.cancel);
+    pressListenersRef.current = null;
+  };
+  const listenWhilePressed = () => {
+    stopListening();
+    const listeners = {
+      move: (event: PointerEvent) => pressHandlersRef.current.move(event),
+      up: (event: PointerEvent) => pressHandlersRef.current.up(event),
+      cancel: (event: PointerEvent) => pressHandlersRef.current.cancel(event),
+    };
+    pressListenersRef.current = listeners;
+    window.addEventListener("pointermove", listeners.move, { passive: false });
+    window.addEventListener("pointerup", listeners.up);
+    window.addEventListener("pointercancel", listeners.cancel);
+  };
+
   const onMovePointerDown = (event: React.PointerEvent<HTMLElement>) => {
     if (moveDisabled || event.button !== 0) return;
     pointerRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
@@ -204,10 +244,14 @@ export default function KanbanCard({
     grabRef.current = rect
       ? { x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width }
       : { x: 0, y: 0, width: 0 };
-    trySetPointerCapture(event.currentTarget, event.pointerId);
+    // 포인터를 캡처하지 않는다. 캡처된 포인터의 click 은 안쪽 상세 버튼이 아니라 이 article 로
+    // 재지정돼, 카드를 그냥 눌렀을 때 드로어가 열리지 않는다(실제 브라우저에서 확인).
+    // 끌기 시작 때 캡처하는 것도 안 된다 — 6px 판정 전에 포인터가 카드 밖으로 나가면 move 가
+    // 카드에 오지 않아 끌기가 시작조차 안 된다. 누른 동안만 창에서 move/up 을 듣는다.
+    listenWhilePressed();
   };
 
-  const onMovePointerMove = (event: React.PointerEvent<HTMLElement>) => {
+  const onMovePointerMove = (event: PointerEvent) => {
     const pointer = pointerRef.current;
     if (!pointer || pointer.id !== event.pointerId) return;
     if (!movingRef.current && Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) < 6)
@@ -226,7 +270,7 @@ export default function KanbanCard({
         subtitle: assignee ?? t("kanban.card.unassigned"),
       });
     }
-    autoScrollKanbanBoard(event.currentTarget, event.clientX);
+    if (cardRef.current) autoScrollKanbanBoard(cardRef.current, event.clientX);
     const column = columnAtPoint(event.clientX, event.clientY);
     if (column?.dataset.column === task.status) {
       targetRef.current = null;
@@ -241,15 +285,13 @@ export default function KanbanCard({
     }
   };
 
-  const onMovePointerUp = (event: React.PointerEvent<HTMLElement>) => {
+  const onMovePointerUp = (event: PointerEvent) => {
     const pointer = pointerRef.current;
     if (!pointer || pointer.id !== event.pointerId) return;
-    tryReleasePointerCapture(event.currentTarget, event.pointerId);
+    stopListening();
     pointerRef.current = null;
     if (!movingRef.current) return;
-    // 드래그로 끝난 포인터는 뒤이어 click 을 낳는다. 그 click 이 상세를 열면
-    // "옮겼는데 드로어가 뜨는" 이중 동작이 된다(R2).
-    suppressClickRef.current = true;
+    swallowDragClick();
     const column = columnAtPoint(event.clientX, event.clientY);
     const target = columnStatus(column ?? document.createElement("div"));
     if (!column || !target) return cancel("outside");
@@ -260,12 +302,30 @@ export default function KanbanCard({
     finish();
   };
 
-  const onMovePointerCancel = (event: React.PointerEvent<HTMLElement>) => {
-    if (movingRef.current) suppressClickRef.current = true;
-    tryReleasePointerCapture(event.currentTarget, event.pointerId);
+  const onMovePointerCancel = (event: PointerEvent) => {
+    const pointer = pointerRef.current;
+    if (!pointer || pointer.id !== event.pointerId) return;
+    if (movingRef.current) swallowDragClick();
+    stopListening();
     pointerRef.current = null;
     cancel("pointer-cancel");
   };
+
+  // 창 리스너는 한 번 걸리면 그대로 남으므로, 늘 최신 렌더의 핸들러를 부르게 ref 로 잇는다.
+  const pressHandlersRef = useRef({
+    move: onMovePointerMove,
+    up: onMovePointerUp,
+    cancel: onMovePointerCancel,
+  });
+  // 누른 채로 카드가 사라지면(보드 새로고침·이동 확정) 창 리스너가 남지 않게 거둔다.
+  useEffect(() => stopListening, []);
+  useEffect(() => {
+    pressHandlersRef.current = {
+      move: onMovePointerMove,
+      up: onMovePointerUp,
+      cancel: onMovePointerCancel,
+    };
+  });
 
   const onMoveKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (moveDisabled) return;
@@ -323,9 +383,6 @@ export default function KanbanCard({
       data-task-id={task.id}
       data-card-dragging={isMoving ? "true" : undefined}
       onPointerDown={onMovePointerDown}
-      onPointerMove={onMovePointerMove}
-      onPointerUp={onMovePointerUp}
-      onPointerCancel={onMovePointerCancel}
       className={`group/card relative w-full rounded-lg border text-xs transition-colors ${
         moveDisabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
       } ${isMoving ? "opacity-40" : ""} ${
@@ -337,13 +394,7 @@ export default function KanbanCard({
       <button
         type="button"
         data-card-detail={task.id}
-        onClick={() => {
-          if (suppressClickRef.current) {
-            suppressClickRef.current = false;
-            return;
-          }
-          onOpen(task.id);
-        }}
+        onClick={() => onOpen(task.id)}
         className="w-full p-2.5 pr-9 text-left"
       >
         <div className="font-semibold text-text leading-snug break-words">{task.title}</div>
