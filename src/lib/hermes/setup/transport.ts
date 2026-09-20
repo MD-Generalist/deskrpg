@@ -71,7 +71,8 @@ async function probeLocalPort(port: number) {
     const done = (error?: Error) => {
       socket.removeAllListeners();
       socket.destroy();
-      error ? reject(error) : resolve();
+      if (error) reject(error);
+      else resolve();
     };
     socket.setTimeout(1000);
     socket.once("connect", () => done());
