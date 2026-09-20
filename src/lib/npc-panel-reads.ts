@@ -25,7 +25,7 @@ import {
   npcPanelReads,
   npcs,
 } from "@/db";
-import { assignedCards } from "@/components/kanban/npc-assigned-cards";
+import { assignedCards } from "@/lib/npc-assigned-cards";
 import { parseRoomNotice } from "@/lib/chat-rooms-policy";
 import { resolveKanbanChannelContextForRead } from "@/lib/kanban-access";
 import { pruneSeenIds, unseenCardCount, unseenCronCount } from "@/lib/npc-panel-reads-count";

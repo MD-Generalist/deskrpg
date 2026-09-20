@@ -562,8 +562,6 @@ export default function ChatPanel({
             {cron && npcTab === "cards" ? (
               <div className="flex-1 min-h-0">
                 <NpcCardsTab
-                  channelId={cron.channelId}
-                  npcId={dialogNpc!.npcId}
                   npcProfile={cardsNpcProfile}
                   board={cardsBoard}
                   error={cardsError}

@@ -19,4 +19,4 @@ function ensureNpcPanelReads(sqlite) {
   sqlite.exec(NPC_PANEL_READS_TABLE);
 }
 
-module.exports = { NPC_PANEL_READS_TABLE, ensureNpcPanelReads };
+module.exports = { ensureNpcPanelReads };
