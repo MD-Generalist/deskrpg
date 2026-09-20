@@ -1,6 +1,7 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { managedSsh } from "./ssh-hosts";
 import { systemSsh, systemSshArgs } from "./system-ssh";
+import { isWindows } from "./platform";
 import type { HostExecutor } from "./types";
 
 export const SSH_OPTIONS = [
@@ -78,6 +79,35 @@ export function quoteShellArg(value: string) {
   if (value.includes("\0")) throw new Error("setup_invalid_request");
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
+
+/**
+ * 자식과 그 손자까지 끊는다. 설치 스크립트는 자식을 더 낳으므로 직계만 죽이면 남는다.
+ *
+ * POSIX 는 프로세스 그룹(`spawn` 이 `detached: true` 로 만든다)을 통째로 죽인다.
+ * Windows 는 프로세스 그룹 신호가 없어 `taskkill /T` 로 트리를 끊는다. 정리 실패가 오류 경로를
+ * 바꾸면 안 되므로 taskkill 이 없거나 실패하면 직계라도 죽이고 넘어간다.
+ */
+export function killProcessTree(
+  pid: number,
+  platform: string,
+  kill: (pid: number, signal: string) => void,
+  run: (command: string, args: string[]) => void,
+): void {
+  if (isWindows(platform)) {
+    try {
+      run("taskkill", ["/PID", String(pid), "/T", "/F"]);
+    } catch {
+      try {
+        kill(pid, "SIGKILL");
+      } catch {
+        // 이미 죽었다.
+      }
+    }
+    return;
+  }
+  kill(-pid, "SIGKILL");
+}
+
 export type SpawnCommand = (command: string, args: string[]) => ChildProcessWithoutNullStreams;
 const spawnCommand: SpawnCommand = (command, args) =>
   spawn(command, args, { stdio: "pipe", shell: false, detached: process.platform !== "win32" });
@@ -111,7 +141,13 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
         if (error) {
           // Include helper-owned installers, not just their parent Python process.
           try {
-            if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL");
+            if (child.pid)
+              killProcessTree(
+                child.pid,
+                process.platform,
+                (pid, signal) => process.kill(pid, signal as NodeJS.Signals),
+                (command, args) => execFileSync(command, args, { stdio: "ignore" }),
+              );
             else child.kill("SIGKILL");
           } catch {
             child.kill("SIGKILL");

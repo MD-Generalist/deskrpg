@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { createExecutor, getSshHosts, sshExecutor, quoteShellArg } from "./executor";
+import {
+  createExecutor,
+  getSshHosts,
+  sshExecutor,
+  quoteShellArg,
+  killProcessTree,
+} from "./executor";
 function fake() {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
@@ -94,4 +100,39 @@ test("oversized output is rejected and normal output stays internal", async () =
   other.stdout.emit("data", Buffer.from("answer"));
   other.emit("close", 0);
   assert.deepEqual(await normal, { stdout: "answer", stderr: "", code: 0 });
+});
+
+test("win32는 taskkill로 트리를 끊는다", () => {
+  const runs: [string, string[]][] = [];
+  killProcessTree(
+    4242,
+    "win32",
+    () => assert.fail("직계만 죽이면 안 된다"),
+    (c: string, a: string[]) => runs.push([c, a]),
+  );
+  assert.deepEqual(runs, [["taskkill", ["/PID", "4242", "/T", "/F"]]]);
+});
+
+test("win32에서 taskkill이 실패하면 직계라도 죽인다", () => {
+  const killed: number[] = [];
+  killProcessTree(
+    7,
+    "win32",
+    (pid: number) => killed.push(pid),
+    () => {
+      throw new Error("taskkill missing");
+    },
+  );
+  assert.deepEqual(killed, [7]);
+});
+
+test("비 win32는 프로세스 그룹을 죽인다", () => {
+  const killed: [number, string][] = [];
+  killProcessTree(
+    9,
+    "linux",
+    (pid: number, signal: string) => killed.push([pid, signal]),
+    () => assert.fail("taskkill을 쓰면 안 된다"),
+  );
+  assert.deepEqual(killed, [[-9, "SIGKILL"]]);
 });
