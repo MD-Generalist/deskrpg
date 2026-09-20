@@ -15,6 +15,7 @@ import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
 import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
+import { applyFilter } from "@/lib/kanban-view-state";
 import { useProjectViewState, useTaskGroups } from "./use-project-view-state";
 import {
   createKanbanApi,
@@ -263,6 +264,22 @@ export default function KanbanBoardModal({
     tenants: currentBoard?.tenants,
     assignees: currentBoard?.assignees,
   });
+
+  /**
+   * 보드 열에 **목록과 같은 필터**를 먹인다.
+   *
+   * 필터가 목록에만 걸리면 같은 보드의 두 표현이 서로 다른 카드 수를 보인다. 서브프로젝트를
+   * 골랐는데 보드는 그대로인 것은 조용한 실패다 — 화면은 "필터 1개" 라고 말하면서 아무것도
+   * 하지 않는다.
+   *
+   * 열 자체는 아홉 개 그대로 두고 카드만 뺀다. 빈 열을 없애면 상태 집합이 필터에 따라
+   * 달라지는데, 열을 발명하지도 없애지도 않는 것이 이 화면의 규칙이다.
+   */
+  const visibleColumns = useMemo(
+    () =>
+      columns.map((column) => ({ ...column, tasks: applyFilter(column.tasks, viewState.filter) })),
+    [columns, viewState.filter],
+  );
 
   /**
    * 트리를 한 단 펼친다 — 펼친 카드만 상세를 부른다(설계 D1(a)).
@@ -729,7 +746,7 @@ export default function KanbanBoardModal({
               />
             ) : (
               <div className="flex h-full gap-3">
-                {columns.map((column) => (
+                {visibleColumns.map((column) => (
                   <KanbanColumn
                     key={column.name}
                     name={column.name}

@@ -1229,3 +1229,67 @@ test("보드 위 결과물 모달: Escape 한 번은 결과물 모달만 닫고,
     globalThis.fetch = original;
   }
 });
+
+test("서브프로젝트 필터는 보드와 목록 양쪽에 같게 걸린다", async () => {
+  const tenantBoard = board({
+    columns: [
+      {
+        name: "todo",
+        tasks: [
+          { id: "t-web", title: "웹 카드", status: "todo", tenant: "web" },
+          { id: "t-api", title: "API 카드", status: "todo", tenant: "api" },
+        ],
+      },
+    ],
+    tenants: ["web", "api"],
+  });
+  const f = await mount((url) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) return json(tenantBoard);
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    assert.ok(f.host.textContent?.includes("웹 카드"));
+    assert.ok(f.host.textContent?.includes("API 카드"));
+
+    // 툴바의 서브프로젝트 선택에서 web 만 남긴다.
+    const tenantSelect = Array.from(f.host.querySelectorAll<HTMLSelectElement>("select")).find(
+      (el) => el.getAttribute("aria-label") === "서브프로젝트",
+    );
+    assert.ok(tenantSelect, "서브프로젝트 필터가 없다");
+    await act(async () => {
+      tenantSelect.value = "web";
+      tenantSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    assert.ok(f.host.textContent?.includes("웹 카드"), "고른 서브프로젝트 카드가 사라졌다");
+    assert.equal(
+      f.host.textContent?.includes("API 카드"),
+      false,
+      "보드 뷰에서 필터가 아무 일도 하지 않는다 — 화면은 필터가 걸렸다고 말한다",
+    );
+    const todoColumn = f.host.querySelector<HTMLElement>('[data-column="todo"]');
+    assert.ok(todoColumn);
+    assert.ok(
+      /(^|\D)1(\D|$)/.test(todoColumn.textContent ?? ""),
+      `열 머리 개수가 거른 뒤 수가 아니다: ${todoColumn.textContent?.slice(0, 40)}`,
+    );
+
+    // 같은 필터로 목록 뷰로 바꾸면 같은 카드 집합이어야 한다.
+    const listButton = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
+      (el) => el.getAttribute("aria-label") === "목록",
+    );
+    assert.ok(listButton);
+    await act(async () => {
+      listButton.click();
+    });
+    assert.ok(f.host.textContent?.includes("웹 카드"));
+    assert.equal(
+      f.host.textContent?.includes("API 카드"),
+      false,
+      "두 표현이 다른 카드를 보이면 같은 데이터라고 할 수 없다",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
