@@ -106,6 +106,13 @@ export type ErrorCode =
   | "failed_to_summarize"
   | "summarizer_unavailable"
   | "already_registered"
+  | "nothing_to_register"
+  | "invalid_followup_index"
+  | "invalid_followup_after"
+  | "invalid_tenant_slug"
+  | "tenant_slug_underivable"
+  | "partially_registered"
+  | "failed_to_register_meeting"
   | "failed_to_fetch_channel"
   | "failed_to_update_channel"
   | "failed_to_delete_channel"
@@ -311,6 +318,13 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   failed_to_summarize: "errors.failedToSummarize",
   summarizer_unavailable: "errors.summarizerUnavailable",
   already_registered: "errors.alreadyRegistered",
+  nothing_to_register: "errors.nothingToRegister",
+  invalid_followup_index: "errors.invalidFollowupIndex",
+  invalid_followup_after: "errors.invalidFollowupAfter",
+  invalid_tenant_slug: "errors.invalidTenantSlug",
+  tenant_slug_underivable: "errors.tenantSlugUnderivable",
+  partially_registered: "errors.partiallyRegistered",
+  failed_to_register_meeting: "errors.failedToRegisterMeeting",
   failed_to_fetch_channel: "errors.failedToFetchChannel",
   failed_to_update_channel: "errors.failedToUpdateChannel",
   failed_to_delete_channel: "errors.failedToDeleteChannel",

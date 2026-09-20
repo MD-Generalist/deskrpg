@@ -131,3 +131,23 @@ test("실패한 요약을 다시 시키면 새 결과로 패널이 바뀐다", a
   assert.equal(el.querySelector("[data-outcome-retry]"), null);
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 1);
 });
+
+test("칸반 관문이 {code} 모양으로 거절해도 HTTP 상태가 아니라 그 코드를 읽는다", async () => {
+  stubFetch({
+    "GET /api/meetings/m1": () => ({
+      status: 200,
+      body: { minutes: { outcome, summaryStatus: "ok" }, canManage: true },
+    }),
+    "POST /api/meetings/m1/register": () => ({
+      status: 409,
+      body: { code: "gateway_not_bound", message: "no gateway" },
+    }),
+  });
+  const el = await mount();
+  await act(async () => (el.querySelector("[data-outcome-register]") as HTMLElement).click());
+  await act(async () => {});
+  const shown = el.querySelector("[data-outcome-error]")?.textContent ?? "";
+  assert.ok(shown.length > 0, "오류가 보여야 한다");
+  assert.ok(!/HTTP 409/.test(shown), `상태 코드가 아니라 사유를 보여야 한다: ${shown}`);
+  assert.ok(Boolean(el.querySelector("[data-outcome-register]")), "버튼은 남는다");
+});

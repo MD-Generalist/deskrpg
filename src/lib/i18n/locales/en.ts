@@ -2417,6 +2417,15 @@ const en: Record<string, string> = {
   "errors.failedToSummarize": "Failed to summarize the meeting",
   "errors.summarizerUnavailable": "The summarizer is unavailable right now. Try again shortly",
   "errors.alreadyRegistered": "This meeting has already been registered",
+  "errors.nothingToRegister": "There are no follow-up tasks to register",
+  "errors.invalidFollowupIndex":
+    "That item is not in the meeting outcome. Reopen the minutes and try again",
+  "errors.invalidFollowupAfter": "A task that must finish first is missing from this registration",
+  "errors.invalidTenantSlug": "The subproject identifier is not valid",
+  "errors.tenantSlugUnderivable":
+    "A subproject identifier cannot be made from this name. Include a letter or a number",
+  "errors.partiallyRegistered": "Only some tasks were registered. Press again to register the rest",
+  "errors.failedToRegisterMeeting": "Failed to register the meeting outcome",
   "errors.failedToFetchChannel": "Failed to fetch channel",
   "errors.failedToUpdateChannel": "Failed to update channel",
   "errors.failedToDeleteChannel": "Failed to delete channel",

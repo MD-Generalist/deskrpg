@@ -2411,6 +2411,15 @@ const ko: Record<string, string> = {
   "errors.failedToSummarize": "회의 요약을 만들지 못했습니다",
   "errors.summarizerUnavailable": "지금은 요약을 돌릴 수 없습니다. 잠시 뒤 다시 시도해 주세요",
   "errors.alreadyRegistered": "이미 등록된 회의입니다",
+  "errors.nothingToRegister": "등록할 후속 업무가 없습니다",
+  "errors.invalidFollowupIndex": "회의 결과에 없는 항목입니다. 회의록을 다시 열어 주세요",
+  "errors.invalidFollowupAfter": "먼저 끝나야 하는 업무가 이번 등록에 빠져 있습니다",
+  "errors.invalidTenantSlug": "서브프로젝트 식별자 형식이 올바르지 않습니다",
+  "errors.tenantSlugUnderivable":
+    "이 이름으로는 서브프로젝트 식별자를 만들 수 없습니다. 글자나 숫자를 넣어 주세요",
+  "errors.partiallyRegistered":
+    "일부 업무만 등록됐습니다. 다시 누르면 남은 업무만 이어서 등록합니다",
+  "errors.failedToRegisterMeeting": "회의 결과를 등록하지 못했습니다",
   "errors.failedToFetchChannel": "오피스 정보를 불러오지 못했습니다",
   "errors.failedToUpdateChannel": "오피스을 수정하지 못했습니다",
   "errors.failedToDeleteChannel": "오피스을 삭제하지 못했습니다",

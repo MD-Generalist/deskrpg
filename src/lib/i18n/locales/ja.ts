@@ -2438,6 +2438,15 @@ const ja: Record<string, string> = {
   "errors.failedToSummarize": "会議の要約を作成できませんでした",
   "errors.summarizerUnavailable": "現在は要約を実行できません。しばらくしてから再試行してください",
   "errors.alreadyRegistered": "この会議はすでに登録されています",
+  "errors.nothingToRegister": "登録する後続タスクがありません",
+  "errors.invalidFollowupIndex": "会議結果にない項目です。議事録を開き直してください",
+  "errors.invalidFollowupAfter": "先に完了が必要なタスクが今回の登録に含まれていません",
+  "errors.invalidTenantSlug": "サブプロジェクト識別子の形式が正しくありません",
+  "errors.tenantSlugUnderivable":
+    "この名前からはサブプロジェクト識別子を作成できません。文字か数字を含めてください",
+  "errors.partiallyRegistered":
+    "一部のタスクのみ登録されました。もう一度押すと残りを続けて登録します",
+  "errors.failedToRegisterMeeting": "会議結果を登録できませんでした",
   "errors.failedToFetchChannel": "チャンネルの取得に失敗しました",
   "errors.failedToUpdateChannel": "チャンネルの更新に失敗しました",
   "errors.failedToDeleteChannel": "チャンネルの削除に失敗しました",

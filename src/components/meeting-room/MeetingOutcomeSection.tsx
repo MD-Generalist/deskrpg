@@ -34,8 +34,9 @@ export type MeetingOutcomeSectionProps = {
 
 async function readError(res: Response): Promise<string> {
   try {
-    const data = (await res.json()) as { errorCode?: string; error?: string };
-    return data.errorCode || data.error || `HTTP ${res.status}`;
+    // 회의 라우트는 `{errorCode}`, 칸반 관문(게이트웨이 없음·플러그인 구버전·남의 보드)은 `{code}` 로 답한다.
+    const data = (await res.json()) as { errorCode?: string; code?: string; error?: string };
+    return data.errorCode || data.code || data.error || `HTTP ${res.status}`;
   } catch {
     return `HTTP ${res.status}`;
   }
