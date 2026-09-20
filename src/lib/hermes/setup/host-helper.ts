@@ -402,6 +402,12 @@ def same_path(left, right):
     # Windows 는 대소문자를 가리지 않고, 런처는 HERMES_HOME 철자를 그대로 보존한다(상류 _preserve_hermes_home_path).
     try: return os.path.normcase(str(pathlib.Path(left).resolve())) == os.path.normcase(str(pathlib.Path(right).resolve()))
     except OSError: return False
+def unxml(value):
+    # 상류 작업 XML 은 xml.sax.saxutils.escape 를 쓴다 — & < > 만 바뀌므로 되돌릴 것도 그 셋뿐이다.
+    return value.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+def launches(arguments, target):
+    # 인자 목록이 정말 그 파일을 가리키는지 본다. 문서 어딘가에 경로가 적혀 있다고 통과시키지 않는다.
+    return any(same_path(unxml(token.group(1) or token.group(2) or ''), target) for token in re.finditer(r'"([^"]*)"|(\S+)', arguments))
 def homes():
     result = [('default', ROOT)]
     profiles = ROOT / 'profiles'
@@ -515,10 +521,23 @@ def identity(name, home):
             valid = valid and exe is not None and same_path(exe.parent, pathlib.Path(python).parent) and exe.name.lower() in ('python.exe', 'pythonw.exe', pathlib.Path(python).name.lower())
             valid = valid and not re.search(r'API_SERVER_|GATEWAY_MULTIPLEX', body)
             # 등록된 정의가 바로 이 런처를 wscript 로 띄우는가. 아니면 남의 작업이다.
-            valid = valid and 'wscript.exe' in definition.casefold() and str(launcher).casefold() in definition.casefold()
+            if registered.returncode == 0:
+                # 작업 XML 은 실행 요소만 본다 — 상류 _build_scheduled_task_xml 의 <Actions><Exec>.
+                # <Description>·<Author> 처럼 실행과 무관한 자리에 우리 경로를 적어 둔 남의 작업은 통과하면 안 된다.
+                executable = re.search(r'<Command>\s*(.*?)\s*</Command>', definition, re.S | re.I)
+                arguments = re.search(r'<Arguments>\s*(.*?)\s*</Arguments>', definition, re.S | re.I)
+                valid = valid and executable is not None and pathlib.Path(unxml(executable.group(1))).name.lower() == 'wscript.exe'
+                valid = valid and arguments is not None and launches(arguments.group(1), launcher)
+            else:
+                # 시작 프로그램 폴더 폴백은 XML 이 아니다. 상류 _build_startup_launcher 가 적는
+                # target = "<런처>" 한 줄과 그것을 넘기는 wscript 호출만 본다.
+                chained = re.search(r'^target = "(.*)"$', definition, re.M)
+                valid = valid and chained is not None and same_path(chained.group(1).replace('""', '"'), launcher)
+                valid = valid and re.search(r'^sh\.Run ".*wscript\.exe.*", 0, False$', definition, re.M | re.I) is not None
             if valid:
                 try:
-                    from hermes_cli.gateway import get_running_pid
+                    # get_running_pid 는 gateway.status 에 있다. hermes_cli.gateway 는 모듈 수준에서 재노출하지 않는다.
+                    from gateway.status import get_running_pid
                     pid = int(get_running_pid(home / 'gateway.pid', cleanup_stale=False) or 0)
                 except Exception: pid = 0
                 # 스케줄 작업이 있을 때만 재시작 경로가 있다. /End 뒤 /Run 이라야 바뀐 설정을 다시 읽는다.
