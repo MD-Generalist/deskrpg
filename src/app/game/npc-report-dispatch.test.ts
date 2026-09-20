@@ -3,7 +3,14 @@ import test from "node:test";
 
 import type { ReportItem } from "@/game/report-queue";
 
-import { acknowledgedThrough, decideReportCall, reportAckKey } from "./npc-report-dispatch";
+import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
+
+import {
+  acknowledgedThrough,
+  decideReportCall,
+  reportAckKey,
+  reportsForChannel,
+} from "./npc-report-dispatch";
 
 const item = (messageId: string, npcId: string, createdAt: string): ReportItem => ({
   messageId,
@@ -74,4 +81,68 @@ test("확인 지점은 그 보고까지 포함해 앞선 것을 모두 덮는다
 test("확인 지점 저장 키는 채널마다 다르다", () => {
   assert.equal(reportAckKey("ch-1"), "deskrpg.reportAck.ch-1");
   assert.notEqual(reportAckKey("ch-1"), reportAckKey("ch-2"));
+});
+
+const room = (id: string, kind: "office" | "group"): RoomSummary => ({
+  id,
+  kind,
+  name: id,
+  replyPolicy: "mention",
+  createdBy: "u",
+  lastMessageAt: null,
+  members: [],
+});
+
+const notice = (id: string, npcId: string): RoomMessage => ({
+  id,
+  roomId: "office",
+  senderKind: "npc",
+  senderId: npcId,
+  senderName: "소피",
+  content: "카드",
+  createdAt: "2026-09-21T00:00:01.000Z",
+  notice: {
+    kind: "card_review",
+    cardId: `c-${id}`,
+    cardTitle: "계약서",
+    boardSlug: "b",
+    npcName: "소피",
+  },
+});
+
+test("사무실 방이 아직 없으면 빈 큐다 — 접속 직후 목록이 오기 전", () => {
+  assert.deepEqual(
+    reportsForChannel({
+      rooms: [room("g", "group")],
+      messages: { g: [notice("a", "npc-1")] },
+      npcs: [{ id: "npc-1", active: true }],
+      acknowledgedAt: null,
+    }),
+    [],
+  );
+});
+
+test("사무실 방의 알림만 본다 — 그룹 방 알림은 보고가 아니다", () => {
+  const queue = reportsForChannel({
+    rooms: [room("office", "office"), room("g", "group")],
+    messages: { office: [notice("a", "npc-1")], g: [notice("b", "npc-1")] },
+    npcs: [{ id: "npc-1", active: true }],
+    acknowledgedAt: null,
+  });
+  assert.deepEqual(
+    queue.map((item) => item.messageId),
+    ["a"],
+  );
+});
+
+test("잠든 NPC 의 보고는 큐에 넣지 않는다 — 걸어올 수 없다", () => {
+  assert.deepEqual(
+    reportsForChannel({
+      rooms: [room("office", "office")],
+      messages: { office: [notice("a", "npc-1")] },
+      npcs: [{ id: "npc-1", active: false }],
+      acknowledgedAt: null,
+    }),
+    [],
+  );
 });

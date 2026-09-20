@@ -46,8 +46,13 @@ import type { Socket } from "socket.io-client";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
-import { acknowledgedThrough, decideReportCall, reportAckKey } from "./npc-report-dispatch";
-import { pendingReports, type ReportItem } from "@/game/report-queue";
+import {
+  acknowledgedThrough,
+  decideReportCall,
+  reportAckKey,
+  reportsForChannel,
+} from "./npc-report-dispatch";
+import type { ReportItem } from "@/game/report-queue";
 import { decideContextInvite } from "./context-invite-decision";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import {
@@ -2036,18 +2041,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     [channelId],
   );
 
-  const officeRoomId = useMemo(
-    () => roomState.rooms.find((room) => room.kind === "office")?.id ?? null,
-    [roomState.rooms],
-  );
   const reportQueue = useMemo(
     () =>
-      pendingReports(
-        (officeRoomId && roomState.messages[officeRoomId]) || [],
-        reportAck,
-        rosterNpcs.filter((npc) => npc.active).map((npc) => npc.id),
-      ),
-    [officeRoomId, roomState.messages, reportAck, rosterNpcs],
+      reportsForChannel({
+        rooms: roomState.rooms,
+        messages: roomState.messages,
+        npcs: rosterNpcs,
+        acknowledgedAt: reportAck,
+      }),
+    [roomState.rooms, roomState.messages, rosterNpcs, reportAck],
   );
 
   // 방 알림 링크(R29·R30) → 해당 모달을 그 항목으로 연다.

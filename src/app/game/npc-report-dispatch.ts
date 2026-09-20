@@ -4,7 +4,28 @@
  * 호출 자체는 기존 `npc:call` 을 그대로 쓴다(새 이벤트를 만들지 않는다). 여기서는 언제
  * 쏘지 **않을지**가 본질이다 — 대화 중에 끼어들지 않고, 걸어오는 중에 다시 부르지 않는다.
  */
-import { nextReporter, type ReportItem } from "@/game/report-queue";
+import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
+
+import { nextReporter, pendingReports, type ReportItem } from "@/game/report-queue";
+
+/**
+ * 방 상태와 로스터에서 이번 채널의 보고 큐를 뽑는다. 화면이 갖고 있는 모양 그대로 받아
+ * 컴포넌트 안에 판정이 남지 않게 한다 — 사무실 방이 아직 없으면 빈 큐다.
+ */
+export function reportsForChannel(input: {
+  rooms: readonly RoomSummary[];
+  messages: Readonly<Record<string, RoomMessage[]>>;
+  npcs: readonly { id: string; active: boolean }[];
+  acknowledgedAt: string | null;
+}): ReportItem[] {
+  const officeId = input.rooms.find((room) => room.kind === "office")?.id ?? null;
+  if (!officeId) return [];
+  return pendingReports(
+    input.messages[officeId] ?? [],
+    input.acknowledgedAt,
+    input.npcs.filter((npc) => npc.active).map((npc) => npc.id),
+  );
+}
 
 export function decideReportCall(input: {
   queue: readonly ReportItem[];
