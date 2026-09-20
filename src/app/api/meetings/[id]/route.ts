@@ -3,7 +3,11 @@ import { meetingMinutes, channelMembers, channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import { resolveMeetingMinutesAccess, resolveMeetingMinutesOwnerAccess } from "../meeting-access";
+import {
+  canManageMeetingMinutes,
+  resolveMeetingMinutesAccess,
+  resolveMeetingMinutesOwnerAccess,
+} from "../meeting-access";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -54,7 +58,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
-    return NextResponse.json({ minutes: normalizeMeetingMinutesRecord(row) });
+    const [channel] = await db
+      .select({ ownerId: channels.ownerId })
+      .from(channels)
+      .where(eq(channels.id, row.channelId))
+      .limit(1);
+    return NextResponse.json({
+      minutes: normalizeMeetingMinutesRecord(row),
+      // 등록·요약 재시도 버튼을 그릴지는 서버가 정한다. 라우트도 같은 함수로 다시 막는다.
+      canManage: canManageMeetingMinutes({
+        userId,
+        ownerId: channel?.ownerId ?? null,
+        minutes: { initiatorId: row.initiatorId },
+      }),
+    });
   } catch (err) {
     console.error("Failed to fetch meeting:", err);
     return NextResponse.json(

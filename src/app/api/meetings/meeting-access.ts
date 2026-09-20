@@ -70,3 +70,16 @@ export async function resolveMeetingMinutesOwnerAccess(args: {
 
   return { ok: true };
 }
+
+/**
+ * 회의 결과를 등록하거나 요약을 다시 시킬 수 있는가. 회의를 제어하던 기준
+ * (`canControlMeeting` — 주재자 또는 채널 소유자)과 같다.
+ */
+export function canManageMeetingMinutes(args: {
+  userId: string;
+  ownerId: string | null;
+  minutes: { initiatorId: string | null };
+}): boolean {
+  if (args.ownerId && args.ownerId === args.userId) return true;
+  return Boolean(args.minutes.initiatorId) && args.minutes.initiatorId === args.userId;
+}

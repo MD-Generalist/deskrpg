@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveMeetingMinutesAccess, resolveMeetingMinutesOwnerAccess } from "./meeting-access";
+import {
+  canManageMeetingMinutes,
+  resolveMeetingMinutesAccess,
+  resolveMeetingMinutesOwnerAccess,
+} from "./meeting-access";
 
 test("meeting minutes access allows owners and members", async () => {
   const access = await resolveMeetingMinutesAccess({
@@ -88,4 +92,16 @@ test("meeting minutes owner access allows only the channel owner", async () => {
     errorCode: "not_channel_owner",
     error: "Only the channel owner can delete meeting minutes",
   });
+});
+
+test("canManageMeetingMinutes: 채널 소유자와 회의 주재자만 참이다", () => {
+  const minutes = { initiatorId: "host" };
+  assert.equal(canManageMeetingMinutes({ userId: "owner", ownerId: "owner", minutes }), true);
+  assert.equal(canManageMeetingMinutes({ userId: "host", ownerId: "owner", minutes }), true);
+  assert.equal(canManageMeetingMinutes({ userId: "member", ownerId: "owner", minutes }), false);
+  // 주재자가 지워진(탈퇴한) 회의록은 소유자만 다룬다.
+  assert.equal(
+    canManageMeetingMinutes({ userId: "member", ownerId: "owner", minutes: { initiatorId: null } }),
+    false,
+  );
 });

@@ -2050,6 +2050,28 @@ const en: Record<string, string> = {
   "meeting.keyTopics": "Key Topics",
   "meeting.conclusions": "Conclusions",
   "meeting.noSummary": "Summary not available",
+  "meeting.outcome.summaryFailed":
+    "The meeting summary could not be generated. The full transcript is saved.",
+  "meeting.outcome.retry": "Retry summary",
+  "meeting.outcome.retrying": "Summarizing…",
+  "meeting.outcome.decisions": "Decisions",
+  "meeting.outcome.followUps": "{count} follow-up tasks",
+  "meeting.outcome.recommended":
+    "These tasks build on each other, so tracking them as a project is recommended",
+  "meeting.outcome.include": "Include when registering",
+  "meeting.outcome.title": "Task title",
+  "meeting.outcome.assignee": "Assignee",
+  "meeting.outcome.unassigned": "Unassigned",
+  "meeting.outcome.suggestedAssignee":
+    "Assignee named in the meeting: {name} (not found among this channel's staff)",
+  "meeting.outcome.after": "Must finish first: {titles}",
+  "meeting.outcome.subproject": "Subproject name",
+  "meeting.outcome.subprojectPlaceholder": "Leave empty to register without grouping",
+  "meeting.outcome.register": "Register {count} to the project",
+  "meeting.outcome.registering": "Registering…",
+  "meeting.outcome.registerHint":
+    "Registering creates the cards. Work starts only after you approve it.",
+  "meeting.outcome.registered": "Registered as {count} cards",
   "meeting.totalTurns": "Total Turns",
   "meeting.participantCount": "Participants",
   "meeting.duration": "{min}m {sec}s",
