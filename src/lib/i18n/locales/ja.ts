@@ -2571,6 +2571,7 @@ const ja: Record<string, string> = {
   "notice.cardDone": "カードを完了しました: {title}",
   "notice.cardBlocked": "カードがブロックされました: {title}",
   "notice.cardReview": "確認が必要です: {title}",
+  "notice.pendingReports": "報告 {count}件",
   "notice.openCard": "カードを開く",
   "notice.cronResult": "クーロン結果 · {jobName}",
   "notice.cronFailed": "失敗",

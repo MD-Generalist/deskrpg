@@ -2551,6 +2551,7 @@ const en: Record<string, string> = {
   "notice.cardDone": "Finished a card: {title}",
   "notice.cardBlocked": "A card is blocked: {title}",
   "notice.cardReview": "A card needs your review: {title}",
+  "notice.pendingReports": "{count} report(s)",
   "notice.openCard": "Open card",
   "notice.cronResult": "Cron result · {jobName}",
   "notice.cronFailed": "Failed",

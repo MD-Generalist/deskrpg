@@ -2473,6 +2473,7 @@ const zh: Record<string, string> = {
   "notice.cardDone": "已完成卡片:{title}",
   "notice.cardBlocked": "卡片被阻塞:{title}",
   "notice.cardReview": "卡片需要您确认:{title}",
+  "notice.pendingReports": "{count} 条汇报",
   "notice.openCard": "打开卡片",
   "notice.cronResult": "定时任务结果 · {jobName}",
   "notice.cronFailed": "失败",
