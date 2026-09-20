@@ -456,6 +456,8 @@ export function createOwnerPluginClient(
         method: "POST",
         body: {},
       }),
+    recordTask: (proposalId, body) =>
+      call(`/deskrpg/card-proposals/${seg(proposalId)}/task`, token, { method: "POST", body }),
   };
 
   return {

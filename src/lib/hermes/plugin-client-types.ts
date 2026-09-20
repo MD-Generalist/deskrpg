@@ -383,6 +383,16 @@ export type CardProposalsApi = {
    * 기록됐다) · 404. 본문 없음.
    */
   unresolve(proposalId: string): Promise<PluginResponse<{ resolved: false }>>;
+  /**
+   * 해소된 제안에 카드 id 를 **한 번** 기록한다 — 그 뒤로는 `unresolve` 가 409 로 막힌다.
+   * 해소(`resolve`)가 카드 생성보다 먼저 일어나므로 `task_id` 는 이 경로로만 채워진다.
+   * 200 `{recorded:true}` · 409 `card_proposal_task_not_recordable`(미해소이거나 이미 기록됨)
+   * · 404 · 400 `invalid_field`. 덮어쓰기 불가.
+   */
+  recordTask(
+    proposalId: string,
+    body: { task_id: string },
+  ): Promise<PluginResponse<{ recorded: true }>>;
 };
 
 export type OwnerPluginClient = {

@@ -33,6 +33,8 @@ type Stub = ResolveDeps<Ctx> & {
   /** 되돌리기가 실제로 성공한 횟수. */
   rollbacksDone: number;
   tasks: ProposalTaskInput[];
+  /** `recordTask` 가 받은 `(proposalId, taskId)` 쌍. */
+  recordedTasks: Array<{ proposalId: string; taskId: string }>;
   order: string[];
   resolvedWrites: NonNullable<CardProposalNotice["resolved"]>[];
 };
@@ -48,6 +50,7 @@ function stubDeps(over: {
   unresolve?: () => Promise<void>;
   assignee?: ProposalAssigneeResult;
   createTask?: () => Promise<{ task: { id: string } }>;
+  recordTask?: () => Promise<void>;
   writeResolved?: () => Promise<void>;
 }): Stub {
   const stub: Stub = {
@@ -56,6 +59,7 @@ function stubDeps(over: {
     rollbacks: 0,
     rollbacksDone: 0,
     tasks: [],
+    recordedTasks: [],
     order: [],
     resolvedWrites: [],
     now: () => new Date("2026-09-21T00:00:00.000Z"),
@@ -90,6 +94,11 @@ function stubDeps(over: {
       if (over.createTask) return await over.createTask();
       return { task: { id: "t1" } };
     },
+    recordTask: async ({ proposalId, taskId }) => {
+      stub.recordedTasks.push({ proposalId, taskId });
+      stub.order.push("recordTask");
+      if (over.recordTask) await over.recordTask();
+    },
     writeResolved: async ({ resolved }) => {
       stub.noticeUpdates += 1;
       stub.order.push("writeResolved");
@@ -112,6 +121,8 @@ test("card 선택은 카드를 만들고 taskId 를 돌려준다", async () => {
   assert.deepEqual(deps.resolvedWrites, [
     { choice: "card", by: "u1", at: "2026-09-21T00:00:00.000Z", taskId: "t1" },
   ]);
+  // 만든 카드 id 가 제안에 기록된다 — 플러그인의 "되돌릴 수 없다" 가드가 이걸로 살아난다.
+  assert.deepEqual(deps.recordedTasks, [{ proposalId: "p1", taskId: "t1" }]);
   // 관문 → 해소 표시 → 담당 → 카드 → 알림. 이 순서가 규칙이다.
   assert.deepEqual(deps.order, [
     "gate",
@@ -119,6 +130,7 @@ test("card 선택은 카드를 만들고 taskId 를 돌려준다", async () => {
     "markResolved",
     "resolveAssignee",
     "createTask",
+    "recordTask",
     "writeResolved",
   ]);
 });
@@ -177,12 +189,25 @@ test("담당이 퇴근했으면 담당 없이 만들고 그 사실을 알린다"
   assert.deepEqual(deps.tasks, [{ title: "청구서 정리", body: "본문", acceptance: "표로 정리" }]);
 });
 
+test("카드 id 기록이 실패해도 흐름은 온전하다 — 빠지는 것은 이중 방어뿐이다", async () => {
+  const deps = stubDeps({
+    recordTask: async () => {
+      throw new ProposalStepError(409, "card_proposal_task_not_recordable");
+    },
+  });
+  const out = await resolveProposal(CARD, deps);
+  assert.deepEqual(out, { ok: true, choice: "card", taskId: "t1", assigneeDropped: false });
+  assert.equal(deps.noticeUpdates, 1); // notice_json.resolved 는 정상으로 쓰인다
+  assert.equal(deps.rollbacks, 0);
+});
+
 test("inline 선택은 카드를 만들지 않는다", async () => {
   const deps = stubDeps({});
   const out = await resolveProposal({ ...CARD, choice: "inline" }, deps);
   assert.deepEqual(out, { ok: true, choice: "inline" });
   assert.equal(deps.createTaskCalls, 0);
   assert.deepEqual(deps.order, ["gate", "loadProposal", "markResolved", "writeResolved"]);
+  assert.deepEqual(deps.recordedTasks, []); // 카드가 없으니 기록할 것도 없다
   assert.deepEqual(deps.resolvedWrites, [
     { choice: "inline", by: "u1", at: "2026-09-21T00:00:00.000Z" },
   ]);

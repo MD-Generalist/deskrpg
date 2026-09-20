@@ -144,6 +144,16 @@ export function liveResolveDeps(): {
       return { task: { id: res.data.task.id } };
     },
 
+    /**
+     * 만든 카드 id 를 제안에 기록한다 — 플러그인의 "카드가 기록된 제안은 되돌릴 수 없다"
+     * 가드가 이 호출로만 살아난다(해소가 카드 생성보다 먼저이므로 `resolve` 에는 실을 수 없다).
+     * 실패는 `ProposalStepError` 로 던지고, 흐름을 막을지는 도메인 로직이 정한다(막지 않는다).
+     */
+    recordTask: async ({ ctx, proposalId, taskId }) => {
+      const res = await ctx.client.cardProposals.recordTask(proposalId, { task_id: taskId });
+      if (!res.ok) throwPluginFailure(res);
+    },
+
     writeResolved: writeProposalResolved,
   };
   return { deps, gatedContext: () => gated };

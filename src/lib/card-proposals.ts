@@ -82,6 +82,13 @@ export type ResolveDeps<Ctx = unknown> = {
   resolveAssignee(input: { ctx: Ctx; npcId: string }): Promise<ProposalAssigneeResult>;
   /** 카드 생성. 실패는 throw — `ProposalStepError` 면 status·code 가 그대로 올라간다. */
   createTask(input: { ctx: Ctx; task: ProposalTaskInput }): Promise<{ task: { id: string } }>;
+  /**
+   * 만든 카드 id 를 제안에 기록한다(`POST /deskrpg/card-proposals/:id/task`). 해소가 카드
+   * 생성보다 먼저 일어나므로 플러그인의 "카드가 기록된 제안은 되돌릴 수 없다" 가드는 이 호출로만
+   * 살아난다. **실패는 치명적이지 않다** — 빠지는 것은 이중 방어뿐이라 흐름을 막지 않고 로그만
+   * 남긴다. 실패를 알리고 싶으면 throw 하면 된다(호출부가 잡아 로그한다).
+   */
+  recordTask(input: { ctx: Ctx; proposalId: string; taskId: string }): Promise<void>;
   /** 알림의 `resolved` 를 쓴다. 실패는 throw. */
   writeResolved(input: {
     record: ProposalRecord;
@@ -198,6 +205,18 @@ export async function resolveProposal<Ctx>(
         };
       }
       return { ok: false, ...failure };
+    }
+
+    // 카드 id 를 제안에 기록한다 — 이게 플러그인의 "되돌릴 수 없다" 가드를 살린다.
+    // 실패해도 흐름을 막지 않는다: 카드는 이미 있고 제안도 해소됐으며 빠지는 것은 이중 방어뿐이다.
+    // 다만 조용히 삼키지는 않는다 — 가드가 빠진 제안이 있다는 사실은 로그에 남아야 한다.
+    try {
+      await deps.recordTask({ ctx, proposalId: input.proposalId, taskId });
+    } catch (error) {
+      const failure = asStepFailure(error);
+      console.warn(
+        `[card-proposals] recordTask(${input.proposalId}, ${taskId}) failed: ${failure.code}: ${failure.message}`,
+      );
     }
   }
 

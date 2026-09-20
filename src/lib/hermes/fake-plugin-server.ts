@@ -1321,6 +1321,22 @@ export async function startFakePluginServer(
     return { status: 200, body: { resolved: false } };
   }
 
+  function recordCardProposalTask(proposalId: string, body: Record<string, unknown>): Reply {
+    const record = cardProposals.get(proposalId);
+    if (!record) throw new HttpError(404, { error: "card_proposal_not_found", detail: proposalId });
+    const taskId = body.task_id;
+    if (typeof taskId !== "string" || !taskId) throw badRequest("invalid_field", "task_id");
+    // 해소된 제안에 딱 한 번만 — 덮어쓰기도 미해소 기록도 없다.
+    if (!record.resolvedAt || record.resolvedTaskId) {
+      throw new HttpError(409, {
+        error: "card_proposal_task_not_recordable",
+        detail: "해소되지 않았거나 카드가 이미 기록됐다",
+      });
+    }
+    record.resolvedTaskId = taskId;
+    return { status: 200, body: { recorded: true } };
+  }
+
   // ---- 라우팅 -------------------------------------------------------------
 
   function routeOwner(req: ParsedRequest): Reply {
@@ -1361,6 +1377,10 @@ export async function startFakePluginServer(
     proposalMatch = /^\/deskrpg\/card-proposals\/([^/]+)\/unresolve$/.exec(pathname);
     if (proposalMatch && method === "POST") {
       return unresolveCardProposal(decodeURIComponent(proposalMatch[1]));
+    }
+    proposalMatch = /^\/deskrpg\/card-proposals\/([^/]+)\/task$/.exec(pathname);
+    if (proposalMatch && method === "POST") {
+      return recordCardProposalTask(decodeURIComponent(proposalMatch[1]), body);
     }
 
     if (pathname === "/deskrpg/kanban/boards") {
