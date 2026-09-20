@@ -19,8 +19,8 @@ function tempHome() {
 
 test("config 별칭 — 와일드카드·부정 패턴은 빼고 순서를 지킨다", () => {
   assert.deepEqual(
-    parseSshConfigHosts("Host DanteServer nas\n  User dante\nHost *\nhost !bad web-1 *.x\n"),
-    ["DanteServer", "nas", "web-1"],
+    parseSshConfigHosts("Host my-server nas\n  User deploy\nHost *\nhost !bad web-1 *.x\n"),
+    ["my-server", "nas", "web-1"],
   );
 });
 
@@ -55,12 +55,12 @@ test("대상 검증 — 옵션 주입·제어문자·메타데이터 주소를 �
     writeFileSync(path.join(home, ".ssh", "id_ed25519"), "x");
     assert.deepEqual(
       validateSystemTarget(
-        { target: "DanteServer", user: "dante", port: "2222", keyPath: "~/.ssh/id_ed25519" },
+        { target: "my-server", user: "deploy", port: "2222", keyPath: "~/.ssh/id_ed25519" },
         home,
       ),
       {
-        target: "DanteServer",
-        user: "dante",
+        target: "my-server",
+        user: "deploy",
         port: 2222,
         keyPath: path.join(home, ".ssh", "id_ed25519"),
       },
@@ -92,12 +92,12 @@ test("시스템 호스트 인자는 -F 없이 선택값만 싣고, 목록은 060
   const home = tempHome();
   try {
     const store = createSystemSsh(home);
-    const host = await store.add({ target: "DanteServer", port: 2222, user: "dante" });
+    const host = await store.add({ target: "my-server", port: 2222, user: "deploy" });
     assert.match(host.id, /^s-[a-f0-9]{10}$/);
-    assert.equal(host.label, "dante@DanteServer:2222");
-    assert.deepEqual(systemSshArgs(host), ["-p", "2222", "-l", "dante"]);
+    assert.equal(host.label, "deploy@my-server:2222");
+    assert.deepEqual(systemSshArgs(host), ["-p", "2222", "-l", "deploy"]);
     assert.deepEqual(systemSshArgs({ ...host, port: undefined, user: undefined }), []);
-    assert.equal(store.get(host.id)?.target, "DanteServer");
+    assert.equal(store.get(host.id)?.target, "my-server");
     assert.equal(statSync(path.join(home, "ssh", "system-hosts.json")).mode & 0o777, 0o600);
     await store.remove(host.id);
     assert.equal(store.list().length, 0);

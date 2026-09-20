@@ -528,7 +528,7 @@ const en: Record<string, string> = {
   "hermes.wizard.ssh.systemBody":
     "Same as the Hermes desktop app. Connects with this DeskRPG server account's ~/.ssh/config, ssh-agent and key files. New host keys are recorded; changed keys are refused.",
   "hermes.wizard.ssh.systemTarget": "Host or ~/.ssh/config alias",
-  "hermes.wizard.ssh.systemTargetPlaceholder": "e.g. DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "e.g. my-server, minipc.local",
   "hermes.wizard.ssh.systemUserPlaceholder": "User (optional)",
   "hermes.wizard.ssh.systemKeyPlaceholder": "Key file path (optional, e.g. ~/.ssh/id_ed25519)",
   "hermes.wizard.ssh.systemHint":

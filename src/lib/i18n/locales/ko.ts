@@ -527,7 +527,7 @@ const ko: Record<string, string> = {
   "hermes.wizard.ssh.systemBody":
     "Hermes 데스크톱 앱과 같은 방식입니다. 이 DeskRPG 서버 계정의 ~/.ssh/config·ssh-agent·키 파일로 접속합니다. 처음 보는 호스트 키는 기록하고, 바뀐 키는 거절합니다.",
   "hermes.wizard.ssh.systemTarget": "호스트 또는 ~/.ssh/config 별칭",
-  "hermes.wizard.ssh.systemTargetPlaceholder": "예: DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "예: my-server, minipc.local",
   "hermes.wizard.ssh.systemUserPlaceholder": "사용자(선택)",
   "hermes.wizard.ssh.systemKeyPlaceholder": "키 파일 경로(선택, 예: ~/.ssh/id_ed25519)",
   "hermes.wizard.ssh.systemHint":

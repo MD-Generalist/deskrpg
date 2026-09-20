@@ -13,8 +13,8 @@ test.after(() => rmSync(home, { recursive: true, force: true }));
 test("시스템 호스트는 -F 없이 목적지를 별칭으로, 호스트 키는 accept-new 로 부른다", async () => {
   const { systemSsh } = await import("./system-ssh");
   const { getSshHosts, sshExecutor } = await import("./executor");
-  const host = await systemSsh().add({ target: "DanteServer", user: "dante" });
-  assert.deepEqual(getSshHosts(), [{ id: host.id, label: "dante@DanteServer", kind: "system" }]);
+  const host = await systemSsh().add({ target: "my-server", user: "deploy" });
+  assert.deepEqual(getSshHosts(), [{ id: host.id, label: "deploy@my-server", kind: "system" }]);
   let recorded: string[] = [];
   await sshExecutor(host.id, async (_command, args) => {
     recorded = args;
@@ -23,8 +23,8 @@ test("시스템 호스트는 -F 없이 목적지를 별칭으로, 호스트 키�
   assert.ok(!recorded.includes("-F"));
   assert.ok(recorded.includes("StrictHostKeyChecking=accept-new"));
   assert.ok(!recorded.includes("StrictHostKeyChecking=yes"));
-  assert.deepEqual(recorded.slice(0, 2), ["-l", "dante"]);
-  assert.equal(recorded[recorded.indexOf("--") + 1], "DanteServer");
+  assert.deepEqual(recorded.slice(0, 2), ["-l", "deploy"]);
+  assert.equal(recorded[recorded.indexOf("--") + 1], "my-server");
 });
 
 test("시스템 호스트의 키 거절은 ssh_auth_failed 로 올라간다", async () => {
@@ -33,7 +33,7 @@ test("시스템 호스트의 키 거절은 ssh_auth_failed 로 올라간다", as
   const host = await systemSsh().add({ target: "nas" });
   const run = sshExecutor(host.id, async () => ({
     stdout: "",
-    stderr: "dante@nas: Permission denied (publickey).",
+    stderr: "deploy@nas: Permission denied (publickey).",
     code: 255,
   }));
   await assert.rejects(run("true", []), /^Error: ssh_auth_failed$/);

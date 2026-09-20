@@ -539,7 +539,7 @@ const ja: Record<string, string> = {
   "hermes.wizard.ssh.systemBody":
     "Hermesデスクトップアプリと同じ方式です。このDeskRPGサーバーアカウントの~/.ssh/config・ssh-agent・鍵ファイルで接続します。初めてのホスト鍵は記録し、変わった鍵は拒否します。",
   "hermes.wizard.ssh.systemTarget": "ホストまたは~/.ssh/configのエイリアス",
-  "hermes.wizard.ssh.systemTargetPlaceholder": "例: DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "例: my-server, minipc.local",
   "hermes.wizard.ssh.systemUserPlaceholder": "ユーザー（任意）",
   "hermes.wizard.ssh.systemKeyPlaceholder": "鍵ファイルのパス（任意、例: ~/.ssh/id_ed25519）",
   "hermes.wizard.ssh.systemHint":

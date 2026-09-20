@@ -503,7 +503,7 @@ const zh: Record<string, string> = {
   "hermes.wizard.ssh.systemBody":
     "与Hermes桌面应用相同。使用此DeskRPG服务器账户的~/.ssh/config、ssh-agent和密钥文件连接。首次见到的主机密钥会被记录，变更的密钥会被拒绝。",
   "hermes.wizard.ssh.systemTarget": "主机或~/.ssh/config别名",
-  "hermes.wizard.ssh.systemTargetPlaceholder": "例如：DanteServer, minipc.local",
+  "hermes.wizard.ssh.systemTargetPlaceholder": "例如：my-server, minipc.local",
   "hermes.wizard.ssh.systemUserPlaceholder": "用户（可选）",
   "hermes.wizard.ssh.systemKeyPlaceholder": "密钥文件路径（可选，例如 ~/.ssh/id_ed25519）",
   "hermes.wizard.ssh.systemHint":
