@@ -68,7 +68,7 @@ function AccountPasswordPageInner() {
 
   return (
     <div className="theme-web workspace-page">
-      <div className="workspace-page-inner max-w-lg">
+      <div className="workspace-page-inner workspace-page-inner--narrow">
         <h1 className="text-3xl font-bold">{t("account.password.title")}</h1>
         <p className="mt-1 text-text-muted">{t("account.password.description")}</p>
 
