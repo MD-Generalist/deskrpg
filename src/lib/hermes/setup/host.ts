@@ -243,6 +243,7 @@ async function invoke(
       }),
       timeoutMs: (timeout + 5) * 1000,
       signal,
+      env: launch.env,
     });
     checkAbort(signal);
     if (result.code !== 0 || result.stdout.length > 262144)
@@ -286,6 +287,7 @@ export async function installHermesHost(
     const result = await execute(launch.command, launch.args, {
       timeoutMs: 600_000,
       signal,
+      env: launch.env,
     });
     checkAbort(signal);
     if (result.code !== 0 || result.stdout.length > 65536) throw new Error("hermes_install_failed");

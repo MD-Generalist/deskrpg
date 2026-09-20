@@ -101,7 +101,14 @@ exec "$py" -c "$code"
 /**
  * `HOST_LAUNCHER` 의 Windows 짝. 하는 일은 같다 — 파이썬을 골라 본문을 `-c` 로 넘긴다.
  *
- * 인자: $args[0] = run | install, $args[1] = 파이썬 코드, $args[2] = (run) 파이썬이 하나도 없을 때 찍을 JSON.
+ * 인자는 argv 가 아니라 **환경변수**로 받는다: `DESKRPG_HOST_MODE` = run | install,
+ * `DESKRPG_HOST_CODE` = 파이썬 코드, `DESKRPG_HOST_NONE` = (run) 파이썬이 하나도 없을 때 찍을 JSON.
+ * `powershell -Command <텍스트> a b c` 는 `a b c` 를 `$args` 에 바인딩하지 않는다 — 남는 토큰이
+ * 명령 텍스트 뒤에 이어 붙어 그대로 PowerShell 소스로 파싱된다(WinServer 실측, 2026-09-20).
+ * `-File` 스크립트라면 `$args` 가 채워지지만, 임시 `.ps1` 파일은 정리·권한·경합을 새로 만든다 —
+ * 그래서 `hostLaunch` 가 `execute()` 의 spawn 환경으로 값을 실어 보낸다.
+ * 읽자마자 프로세스 환경에서 지운다 — 이 다음에 뜨는 파이썬 자식이 코드 본문을 물려받을 이유가 없다.
+ *
  * 고르는 순서: Hermes venv 파이썬 → PATH 의 python → (install 만) uv 로 받은 파이썬.
  * POSIX 판과 달리 시스템 패키지 사전 점검이 없다 — install.ps1 이 PortableGit·uv·Python·Node 를
  * 스스로 받으므로 sudo 도 패키지 관리자도 필요 없다(상류 scripts/install.ps1 확인).
@@ -109,9 +116,12 @@ exec "$py" -c "$code"
  */
 export const HOST_LAUNCHER_PS = String.raw`
 $ErrorActionPreference = 'Stop'
-$mode = $args[0]
-$code = $args[1]
-$none = $args[2]
+$mode = $env:DESKRPG_HOST_MODE
+$code = $env:DESKRPG_HOST_CODE
+$none = $env:DESKRPG_HOST_NONE
+Remove-Item Env:\DESKRPG_HOST_MODE -ErrorAction SilentlyContinue
+Remove-Item Env:\DESKRPG_HOST_CODE -ErrorAction SilentlyContinue
+Remove-Item Env:\DESKRPG_HOST_NONE -ErrorAction SilentlyContinue
 function Fail($c) { [Console]::Out.Write('{"error": "' + $c + '"}'); exit 0 }
 function Run($exe) { & $exe -c $code; exit $LASTEXITCODE }
 $home2 = $env:USERPROFILE
@@ -156,10 +166,12 @@ export function hostLaunch(
   mode: "run" | "install",
   code: string,
   none = "",
-): { command: string; args: string[] } {
+): { command: string; args: string[]; env?: Record<string, string> } {
   if (isWindows(platform))
     return {
       command: "powershell",
+      // `-Command <텍스트> a b c` 는 a·b·c 를 $args 로 바인딩하지 않는다(위 HOST_LAUNCHER_PS 주석).
+      // 그래서 payload 는 argv 가 아니라 execute() 의 spawn 환경으로 보낸다.
       args: [
         "-NoProfile",
         "-NonInteractive",
@@ -167,10 +179,8 @@ export function hostLaunch(
         "Bypass",
         "-Command",
         HOST_LAUNCHER_PS,
-        mode,
-        code,
-        none,
       ],
+      env: { DESKRPG_HOST_MODE: mode, DESKRPG_HOST_CODE: code, DESKRPG_HOST_NONE: none },
     };
   return { command: "sh", args: ["-c", HOST_LAUNCHER, "deskrpg", mode, code, none] };
 }

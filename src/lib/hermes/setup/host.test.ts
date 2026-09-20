@@ -1892,18 +1892,38 @@ test("POSIX 는 sh -c 로 런처를 띄운다", () => {
   ]);
 });
 
-test("win32 는 powershell 로 런처를 띄운다", () => {
-  const launch = hostLaunch("win32", "install", "CODE");
+test("win32 는 powershell 로 런처를 띄운다 — payload 는 argv 가 아니라 env 로 간다", () => {
+  const launch = hostLaunch("win32", "install", "CODE", "NONE");
   assert.equal(launch.command, "powershell");
-  assert.deepEqual(launch.args.slice(0, 4), [
+  assert.deepEqual(launch.args, [
     "-NoProfile",
     "-NonInteractive",
     "-ExecutionPolicy",
     "Bypass",
+    "-Command",
+    HOST_LAUNCHER_PS,
   ]);
-  assert.equal(launch.args[4], "-Command");
-  assert.equal(launch.args[5], HOST_LAUNCHER_PS);
-  assert.deepEqual(launch.args.slice(6), ["install", "CODE", ""]);
+  // 회귀 방지: `powershell -Command <텍스트> a b c` 는 a·b·c 를 $args 에 바인딩하지 않는다
+  // (WinServer 실측, 2026-09-20) — mode·code·none 을 다시 argv 뒤에 붙이면 이 단언이 깨진다.
+  assert.deepEqual(launch.env, {
+    DESKRPG_HOST_MODE: "install",
+    DESKRPG_HOST_CODE: "CODE",
+    DESKRPG_HOST_NONE: "NONE",
+  });
+});
+
+test("win32 런처 본문은 $args 가 아니라 환경변수를 읽는다", () => {
+  // -Command 로는 $args 가 채워지지 않으므로, 이 셋을 다시 $args[...] 로 되돌리면 조용히 죽는다.
+  assert.ok(!/\$args\[/.test(HOST_LAUNCHER_PS));
+  assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_MODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_CODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_NONE"));
+});
+
+test("win32 런처는 읽은 뒤 자기 환경에서 페이로드 변수를 지운다 — 자식 파이썬에 물려주지 않는다", () => {
+  assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_MODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_CODE"));
+  assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_NONE"));
 });
 
 test("win32 런처 본문은 Scripts\\python.exe 를 본다", () => {
@@ -1913,6 +1933,41 @@ test("win32 런처 본문은 Scripts\\python.exe 를 본다", () => {
 
 test("win32 런처는 시스템 패키지 사전 점검을 하지 않는다", () => {
   assert.ok(!HOST_LAUNCHER_PS.includes("system_packages_missing"));
+});
+
+test("invoke·installHermesHost 는 launch.env 를 execute() 로 그대로 넘긴다", async () => {
+  let seenOptions: { env?: Record<string, string> } | undefined;
+  const execute: HostExecutor = async (_command, _args, options) => {
+    seenOptions = options;
+    return { code: 0, stdout: JSON.stringify({ candidates: [] }), stderr: "" };
+  };
+  await discoverHost(execute, "win32");
+  assert.deepEqual(seenOptions?.env, {
+    DESKRPG_HOST_MODE: "run",
+    DESKRPG_HOST_CODE: HOST_BOOTSTRAP,
+    DESKRPG_HOST_NONE: '{"candidates": []}',
+  });
+  // POSIX 는 지금처럼 env 를 전혀 쓰지 않는다 — argv 로만 넘긴다.
+  await discoverHost(execute, "linux");
+  assert.equal(seenOptions?.env, undefined);
+});
+
+test("installHermesHost 도 win32 에서 launch.env 를 execute() 로 넘긴다", async () => {
+  let seenOptions: { env?: Record<string, string> } | undefined;
+  const execute: HostExecutor = async (_command, _args, options) => {
+    seenOptions = options;
+    return {
+      code: 0,
+      stdout: JSON.stringify({ ok: true, installerDigest: "a".repeat(64) }),
+      stderr: "",
+    };
+  };
+  await installHermesHost(execute, undefined, "win32");
+  assert.deepEqual(seenOptions?.env, {
+    DESKRPG_HOST_MODE: "install",
+    DESKRPG_HOST_CODE: HOST_INSTALLER,
+    DESKRPG_HOST_NONE: "",
+  });
 });
 
 test("HOST_BOOTSTRAP 은 win32 를 한 곳에서 가른다", () => {

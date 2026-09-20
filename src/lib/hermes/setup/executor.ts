@@ -108,9 +108,20 @@ export function killProcessTree(
   kill(-pid, "SIGKILL");
 }
 
-export type SpawnCommand = (command: string, args: string[]) => ChildProcessWithoutNullStreams;
-const spawnCommand: SpawnCommand = (command, args) =>
-  spawn(command, args, { stdio: "pipe", shell: false, detached: process.platform !== "win32" });
+export type SpawnCommand = (
+  command: string,
+  args: string[],
+  /** 부모 환경에 얹을 값. argv 에 실을 수 없는 페이로드(Windows PowerShell 런처)를 위해서만 쓴다. */
+  env?: Record<string, string>,
+) => ChildProcessWithoutNullStreams;
+const spawnCommand: SpawnCommand = (command, args, env) =>
+  spawn(command, args, {
+    stdio: "pipe",
+    shell: false,
+    detached: process.platform !== "win32",
+    // 넘길 게 없으면 필드 자체를 생략한다 — node 의 기본 동작(부모 환경 상속)을 그대로 둔다.
+    ...(env ? { env: { ...process.env, ...env } } : {}),
+  });
 /** Only server-authored commands may reach this adapter. Input carries helper payloads/secrets outside argv. */
 export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExecutor {
   return async (command, args, options = {}) => {
@@ -124,7 +135,7 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
     return new Promise((resolve, reject) => {
       let child: ChildProcessWithoutNullStreams;
       try {
-        child = spawnImpl(command, args);
+        child = spawnImpl(command, args, options.env);
       } catch {
         reject(new Error("command_failed"));
         return;
