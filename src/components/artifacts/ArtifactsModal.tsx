@@ -4,6 +4,9 @@ import { AlertTriangle, Package, X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
 import type { ArtifactSummary } from "@/lib/hermes/deskrpg-plugin-types";
+import GateChecklistModal from "@/components/gateway/GateChecklistModal";
+import { useGateBlocker } from "@/components/gateway/useGateBlocker";
+import { isSetupBlocker } from "@/lib/gate-failure";
 
 import ArtifactList, { type ArtifactFilter, type ArtifactListNpc } from "./ArtifactList";
 import ArtifactViewer, { type ArtifactViewerHandle } from "./ArtifactViewer";
@@ -51,6 +54,8 @@ export default function ArtifactsModal({
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ArtifactsApiError | null>(null);
+  const gateBlocker = useGateBlocker();
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(initialArtifactId);
   const [viewerReload, setViewerReload] = useState(0);
   const sequence = useRef(0);
@@ -84,16 +89,20 @@ export default function ArtifactsModal({
         setError(null);
       } catch (err) {
         if (mine !== sequence.current) return;
-        setError(
+        const apiErr =
           err instanceof ArtifactsApiError
             ? err
-            : new ArtifactsApiError(0, "unknown", err instanceof Error ? err.message : String(err)),
-        );
+            : new ArtifactsApiError(0, "unknown", err instanceof Error ? err.message : String(err));
+        setError(apiErr);
+        gateBlocker.showFromError(apiErr);
       } finally {
         if (mine === sequence.current) setLoading(false);
       }
     },
-    [api, filter, initialTaskId],
+    // gateBlocker 는 useGateBlocker() 가 매 렌더 새 객체를 주므로 통째로 넣으면 load 가 매번
+    // 새로 만들어져 재조회 루프가 된다. showFromError 는 안정적이라 그것만 싣는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [api, filter, initialTaskId, gateBlocker.showFromError],
   );
 
   useEffect(() => {
@@ -175,6 +184,15 @@ export default function ArtifactsModal({
                   ? t("artifacts.gate.gateway")
                   : t("artifacts.gate.upgrade", { minVersion: error?.minVersion ?? "0.8.0" })}
               </div>
+              {gateBlocker.blocker && isSetupBlocker(gateBlocker.blocker) && (
+                <button
+                  type="button"
+                  onClick={() => setChecklistOpen(true)}
+                  className="mt-2 underline"
+                >
+                  {t("gateChecklist.whatIsNeeded")}
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -185,6 +203,15 @@ export default function ArtifactsModal({
                 <span className="break-words">
                   {t("artifacts.error")} — {error.message}
                 </span>
+                {gateBlocker.blocker && isSetupBlocker(gateBlocker.blocker) && (
+                  <button
+                    type="button"
+                    onClick={() => setChecklistOpen(true)}
+                    className="underline"
+                  >
+                    {t("gateChecklist.whatIsNeeded")}
+                  </button>
+                )}
                 <button type="button" className="ml-auto underline" onClick={() => void load()}>
                   {t("common.retry")}
                 </button>
@@ -231,6 +258,10 @@ export default function ArtifactsModal({
           </>
         )}
       </div>
+      <GateChecklistModal
+        blocker={checklistOpen ? gateBlocker.blocker : null}
+        onClose={() => setChecklistOpen(false)}
+      />
     </div>
   );
 }

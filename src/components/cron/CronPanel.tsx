@@ -15,8 +15,10 @@ import type { Socket } from "socket.io-client";
 
 import { useLocale, useT } from "@/lib/i18n";
 import type { CronRun } from "@/lib/hermes/deskrpg-plugin-types";
+import GateChecklistModal from "@/components/gateway/GateChecklistModal";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
-import { cronApi, classifyCronError, type CronJobView } from "./cron-api";
+import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import {
   formatLocalDateTime,
   jobScheduleDisplay,
@@ -101,6 +103,7 @@ export default function CronPanel({
   const [inlineToast, setInlineToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [checklistBlocker, setChecklistBlocker] = useState<GateBlocker | null>(null);
 
   const toast = useCallback(
     (message: string) => {
@@ -283,6 +286,32 @@ export default function CronPanel({
     return reason ? t(`cron.readOnly.${reason}`) : null;
   };
 
+  // 배너는 `CronErrorNotice` 가 그대로 그린다 — 여기서는 그 옆에 체크리스트를 여는 버튼만
+  // 붙인다. `isSetupBlocker` 가 참인 넷(gateway_not_bound·plugin_absent·plugin_unauthorized·
+  // plugin_upgrade_required)일 때만 보인다 — 평범한 500·네트워크 오류에 "설정이 더 필요하다"고
+  // 말하면 거짓 신호가 된다. `CronEditorDialog`·`BlueprintGallery` 의 배달처 프리로드와 같은 기준.
+  const gateChecklistTrigger = (err: unknown) => {
+    if (!isCronApiError(err)) return null;
+    const minVersion =
+      typeof err.details.minVersion === "string" ? err.details.minVersion : undefined;
+    const blocker = classifyGateFailure({
+      status: err.status,
+      code: err.code,
+      message: err.message,
+      minVersion,
+    });
+    if (!isSetupBlocker(blocker)) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => setChecklistBlocker(blocker)}
+        className="ml-2 underline text-xs text-text-muted"
+      >
+        {t("gateChecklist.whatIsNeeded")}
+      </button>
+    );
+  };
+
   const iconBtn =
     "inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-surface hover:bg-surface-raised text-text disabled:opacity-40 disabled:cursor-not-allowed";
 
@@ -377,7 +406,12 @@ export default function CronPanel({
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
-        {loadError !== null && <CronErrorNotice notice={classifyCronError(loadError)} />}
+        {loadError !== null && (
+          <div>
+            <CronErrorNotice notice={classifyCronError(loadError)} />
+            {gateChecklistTrigger(loadError)}
+          </div>
+        )}
         {partialErrors.length > 0 && (
           <div
             data-testid="cron-partial-errors"
@@ -554,7 +588,12 @@ export default function CronPanel({
                 {readOnlyText(selected)}
               </p>
             )}
-            {actionError !== null && <CronErrorNotice notice={classifyCronError(actionError)} />}
+            {actionError !== null && (
+              <div>
+                <CronErrorNotice notice={classifyCronError(actionError)} />
+                {gateChecklistTrigger(actionError)}
+              </div>
+            )}
 
             {detailTab === "detail" ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
@@ -603,7 +642,10 @@ export default function CronPanel({
             ) : runs === null && runsError === null ? (
               <p className="text-text-dim">{t("common.loading")}</p>
             ) : runsError !== null ? (
-              <CronErrorNotice notice={classifyCronError(runsError)} />
+              <div>
+                <CronErrorNotice notice={classifyCronError(runsError)} />
+                {gateChecklistTrigger(runsError)}
+              </div>
             ) : runs && runs.length === 0 ? (
               <p className="text-text-dim">{t("cron.runs.empty")}</p>
             ) : (
@@ -666,6 +708,7 @@ export default function CronPanel({
           onClose={() => setGallery(false)}
         />
       )}
+      <GateChecklistModal blocker={checklistBlocker} onClose={() => setChecklistBlocker(null)} />
     </div>
   );
 }

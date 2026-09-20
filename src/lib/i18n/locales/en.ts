@@ -83,6 +83,24 @@ const en: Record<string, string> = {
   "admin.users.temporaryPassword": "Temporary password",
   "admin.users.temporaryPasswordNotice":
     "Shown once. Hand it over directly — they must change it at the next sign-in.",
+  "gateChecklist.title": "This action needs some setup first",
+  "gateChecklist.step.gateway": "Gateway connected",
+  "gateChecklist.step.ownerKey": "Listener owner key",
+  "gateChecklist.step.plugin": "DeskRPG plugin installed",
+  "gateChecklist.step.version": "Plugin version",
+  "gateChecklist.hint.gateway":
+    "No gateway is bound to this office. Register one on the connection screen first.",
+  "gateChecklist.hint.ownerKey":
+    "The plugin rejected the key stored for this gateway. It must be the listener owner key (API_SERVER_KEY), not a profile key.",
+  "gateChecklist.hint.plugin": "Run this on the gateway host, then restart the Hermes API server.",
+  "gateChecklist.hint.version":
+    "The installed plugin is older than {minVersion}. Run the same command, then restart the Hermes API server.",
+  "gateChecklist.openGateways": "Open connection screen",
+  "gateChecklist.unreachable":
+    "The gateway could not be reached. Check that the Hermes API server is running.",
+  "gateChecklist.timeout": "The gateway did not answer in time. Try again in a moment.",
+  "gateChecklist.retry": "Try again",
+  "gateChecklist.whatIsNeeded": "What is needed?",
   "common.logout": "Logout",
   "common.language": "Language",
   "common.copy": "Copy",
@@ -2104,7 +2122,7 @@ const en: Record<string, string> = {
   "gateways.onboarding.title": "No gateway yet — start here",
   "gateways.onboarding.intro":
     "DeskRPG does not ship an AI agent runtime. The brain behind every NPC is a Hermes Agent you host yourself; DeskRPG only connects to its gateway.",
-  "gateways.onboarding.step1Title": "1. Install Hermes Agent and start its API server",
+  "gateways.onboarding.step1Title": "Install Hermes Agent and start its API server",
   "gateways.onboarding.step1Body":
     "Follow the official repository, sign in to a model provider, then run the API server. Skip this and there is no gateway to register.",
   "gateways.onboarding.step2Title": "2. Get the gateway address and the listener owner key",
@@ -2112,10 +2130,10 @@ const en: Record<string, string> = {
     "The form below needs the API server address (for example {example}) and an auth key.",
   "gateways.onboarding.step2OwnerKeyWarning":
     "Use the listener owner key (API_SERVER_KEY). A profile-only key blocks Kanban, cron and the event stream.",
-  "gateways.onboarding.step3Title": "3. Install the DeskRPG plugin for Kanban and cron",
+  "gateways.onboarding.step3Title": "Install the DeskRPG plugin for Kanban and cron",
   "gateways.onboarding.step3Body":
     "Run the command below on the gateway host, then restart the Hermes API server.",
-  "gateways.onboarding.step4Title": "4. The gateway can wait",
+  "gateways.onboarding.step4Title": "The gateway can wait",
   "gateways.onboarding.step4Body":
     "If Hermes is not running yet, you can still create a character and a channel first, and register the gateway here once it is ready.",
   "gateways.onboarding.step4CharacterLink": "Create a character",
@@ -2123,6 +2141,7 @@ const en: Record<string, string> = {
   "gateways.onboarding.quickStart": "Quick start — build my office",
   "gateways.onboarding.quickStartHint":
     "Creates a character and a channel with defaults, then takes you straight in.",
+  "gateways.onboarding.manualSetup": "Set it up manually",
   "quickStart.failed": "Quick start failed. Please try again in a moment.",
   "gateways.owner": "Owner",
   "gateways.shared": "Shared",

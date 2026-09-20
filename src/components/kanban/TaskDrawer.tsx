@@ -12,6 +12,8 @@ import {
   type WorkerLog,
   type ArtifactSummary,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import GateChecklistModal from "@/components/gateway/GateChecklistModal";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { KindIcon } from "../artifacts/ArtifactList";
 import { ArtifactsApiError } from "../artifacts/artifacts-api";
@@ -109,6 +111,8 @@ export default function TaskDrawer({
   // 결과물 섹션 — null 은 읽는 중, "hidden" 은 428(taskId 필터 미지원)이라 섹션을 숨긴다.
   const [cardArtifacts, setCardArtifacts] = useState<ArtifactSummary[] | "hidden" | null>(null);
   const [cardArtifactsError, setCardArtifactsError] = useState(false);
+  const [cardArtifactsBlocker, setCardArtifactsBlocker] = useState<GateBlocker | null>(null);
+  const [artifactsChecklistOpen, setArtifactsChecklistOpen] = useState(false);
   const [artifactsReload, setArtifactsReload] = useState(0);
 
   const {
@@ -149,11 +153,22 @@ export default function TaskDrawer({
         if (cancelled) return;
         setCardArtifacts(items);
         setCardArtifactsError(false);
+        setCardArtifactsBlocker(null);
       },
       (err: unknown) => {
         if (cancelled) return;
-        if (err instanceof ArtifactsApiError && err.status === 428) setCardArtifacts("hidden");
-        else setCardArtifactsError(true);
+        if (err instanceof ArtifactsApiError && err.status === 428) {
+          // 플러그인이 낮으면 결과물 기능 자체가 없다 — 섹션을 숨긴다(기존 동작).
+          setCardArtifacts("hidden");
+          return;
+        }
+        setCardArtifactsError(true);
+        // 원인을 버리지 않는다 — 전에는 401·404·503·504 가 한 줄로 뭉개졌다.
+        setCardArtifactsBlocker(
+          err instanceof ArtifactsApiError
+            ? classifyGateFailure({ status: err.status, code: err.code, message: err.message })
+            : null,
+        );
       },
     );
     return () => {
@@ -785,7 +800,18 @@ export default function TaskDrawer({
             {artifacts && cardArtifacts !== "hidden" && (
               <Section title={t("artifacts.card.title")}>
                 {cardArtifactsError && cardArtifacts === null ? (
-                  <div className="text-danger">{t("artifacts.error")}</div>
+                  <div className="text-danger">
+                    {t("artifacts.error")}
+                    {cardArtifactsBlocker && isSetupBlocker(cardArtifactsBlocker) && (
+                      <button
+                        type="button"
+                        onClick={() => setArtifactsChecklistOpen(true)}
+                        className="ml-2 underline"
+                      >
+                        {t("gateChecklist.whatIsNeeded")}
+                      </button>
+                    )}
+                  </div>
                 ) : cardArtifacts === null ? (
                   <Empty>{t("common.loading")}</Empty>
                 ) : cardArtifacts.length === 0 ? (
@@ -828,6 +854,10 @@ export default function TaskDrawer({
           </>
         )}
       </div>
+      <GateChecklistModal
+        blocker={artifactsChecklistOpen ? cardArtifactsBlocker : null}
+        onClose={() => setArtifactsChecklistOpen(false)}
+      />
     </aside>
   );
 }

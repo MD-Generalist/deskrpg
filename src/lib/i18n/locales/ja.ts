@@ -85,6 +85,26 @@ const ja: Record<string, string> = {
   "admin.users.temporaryPassword": "仮パスワード",
   "admin.users.temporaryPasswordNotice":
     "表示は一度だけです。本人に直接渡してください。次回のログインで変更が必要です。",
+  "gateChecklist.title": "この操作には準備が必要です",
+  "gateChecklist.step.gateway": "ゲートウェイ接続",
+  "gateChecklist.step.ownerKey": "リスナー所有者キー",
+  "gateChecklist.step.plugin": "DeskRPG プラグインのインストール",
+  "gateChecklist.step.version": "プラグインのバージョン",
+  "gateChecklist.hint.gateway":
+    "このオフィスにゲートウェイが接続されていません。まず接続画面で登録してください。",
+  "gateChecklist.hint.ownerKey":
+    "ゲートウェイに設定したキーがプラグインに拒否されました。プロフィールキーではなく、リスナー所有者キー（API_SERVER_KEY）が必要です。",
+  "gateChecklist.hint.plugin":
+    "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
+  "gateChecklist.hint.version":
+    "インストール済みのプラグインが {minVersion} より古いです。同じコマンドで更新し、Hermes API サーバーを再起動してください。",
+  "gateChecklist.openGateways": "接続画面を開く",
+  "gateChecklist.unreachable":
+    "ゲートウェイに接続できませんでした。Hermes API サーバーが起動しているか確認してください。",
+  "gateChecklist.timeout":
+    "ゲートウェイが時間内に応答しませんでした。しばらくしてからもう一度お試しください。",
+  "gateChecklist.retry": "再試行",
+  "gateChecklist.whatIsNeeded": "何が必要ですか？",
   "common.logout": "ログアウト",
   "common.language": "言語",
   "common.copy": "コピー",
@@ -2119,7 +2139,7 @@ const ja: Record<string, string> = {
   "gateways.onboarding.title": "ゲートウェイがまだありません — ここから始めます",
   "gateways.onboarding.intro":
     "DeskRPG は AI エージェントのランタイムを内蔵していません。NPC を動かす頭脳は自分で起動する Hermes Agent であり、DeskRPG はそのゲートウェイに接続するだけです。",
-  "gateways.onboarding.step1Title": "1. Hermes Agent をインストールして API サーバーを起動します",
+  "gateways.onboarding.step1Title": "Hermes Agent をインストールして API サーバーを起動します",
   "gateways.onboarding.step1Body":
     "公式リポジトリの手順でインストールし、モデルプロバイダーにログインしてから API サーバーを実行してください。これを省くと登録できるゲートウェイがありません。",
   "gateways.onboarding.step2Title": "2. ゲートウェイのアドレスとリスナー所有者キーを用意します",
@@ -2127,10 +2147,10 @@ const ja: Record<string, string> = {
     "下のフォームには API サーバーのアドレス（例: {example}）と認証キーが必要です。",
   "gateways.onboarding.step2OwnerKeyWarning":
     "必ずリスナー所有者キー（API_SERVER_KEY）を入力してください。プロフィールキーだけではカンバン・cron・イベントストリームが使えません。",
-  "gateways.onboarding.step3Title": "3. カンバンと cron を使うには DeskRPG プラグインを入れます",
+  "gateways.onboarding.step3Title": "カンバンと cron を使うには DeskRPG プラグインを入れます",
   "gateways.onboarding.step3Body":
     "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
-  "gateways.onboarding.step4Title": "4. ゲートウェイは後回しでも構いません",
+  "gateways.onboarding.step4Title": "ゲートウェイは後回しでも構いません",
   "gateways.onboarding.step4Body":
     "Hermes をまだ起動できていなければ、先にキャラクターとチャンネルを作っても構いません。準備ができたらこの画面で登録できます。",
   "gateways.onboarding.step4CharacterLink": "キャラクターを作成",
@@ -2138,6 +2158,7 @@ const ja: Record<string, string> = {
   "gateways.onboarding.quickStart": "クイックスタートでオフィスを作る",
   "gateways.onboarding.quickStartHint":
     "キャラクターとチャンネルを既定値で作成し、そのまま入室します。",
+  "gateways.onboarding.manualSetup": "手動でセットアップする",
   "quickStart.failed": "クイックスタートに失敗しました。しばらくしてからもう一度お試しください。",
   "gateways.owner": "所有",
   "gateways.shared": "共有",

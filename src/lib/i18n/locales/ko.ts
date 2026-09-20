@@ -84,6 +84,25 @@ const ko: Record<string, string> = {
   "admin.users.temporaryPassword": "임시 비밀번호",
   "admin.users.temporaryPasswordNotice":
     "이 값은 지금 한 번만 보입니다. 본인에게 직접 전달하세요. 다음 로그인에서 변경해야 합니다.",
+  "gateChecklist.title": "이 동작에는 준비가 필요합니다",
+  "gateChecklist.step.gateway": "게이트웨이 연결",
+  "gateChecklist.step.ownerKey": "리스너 소유자 키",
+  "gateChecklist.step.plugin": "DeskRPG 플러그인 설치",
+  "gateChecklist.step.version": "플러그인 버전",
+  "gateChecklist.hint.gateway":
+    "이 오피스에 연결된 게이트웨이가 없습니다. 연결 화면에서 먼저 등록하세요.",
+  "gateChecklist.hint.ownerKey":
+    "게이트웨이에 넣은 키를 플러그인이 거부했습니다. 프로필 키가 아니라 리스너 소유자 키(API_SERVER_KEY)여야 합니다.",
+  "gateChecklist.hint.plugin":
+    "게이트웨이 호스트에서 아래 명령을 실행한 뒤 Hermes API 서버를 다시 시작하세요.",
+  "gateChecklist.hint.version":
+    "설치된 플러그인이 {minVersion} 보다 낮습니다. 같은 명령으로 올린 뒤 Hermes API 서버를 다시 시작하세요.",
+  "gateChecklist.openGateways": "연결 화면 열기",
+  "gateChecklist.unreachable":
+    "게이트웨이에 닿지 못했습니다. Hermes API 서버가 떠 있는지 확인하세요.",
+  "gateChecklist.timeout": "게이트웨이가 제때 답하지 않았습니다. 잠시 후 다시 시도하세요.",
+  "gateChecklist.retry": "다시 시도",
+  "gateChecklist.whatIsNeeded": "무엇이 필요한가요?",
   "common.logout": "로그아웃",
   "common.language": "언어",
   "common.copy": "복사",
@@ -2101,7 +2120,7 @@ const ko: Record<string, string> = {
   "gateways.onboarding.title": "아직 게이트웨이가 없습니다 — 여기서 시작하세요",
   "gateways.onboarding.intro":
     "DeskRPG 는 AI 에이전트 런타임을 내장하지 않습니다. NPC 를 움직이는 두뇌는 여러분이 직접 띄우는 Hermes Agent 이고, DeskRPG 는 그 게이트웨이에 접속할 뿐입니다.",
-  "gateways.onboarding.step1Title": "1. Hermes Agent 를 설치하고 API 서버를 띄웁니다",
+  "gateways.onboarding.step1Title": "Hermes Agent 를 설치하고 API 서버를 띄웁니다",
   "gateways.onboarding.step1Body":
     "공식 저장소의 안내대로 설치한 뒤, 모델 제공자에 로그인하고 API 서버를 실행하세요. 이 단계를 건너뛰면 등록할 게이트웨이가 없습니다.",
   "gateways.onboarding.step2Title": "2. 게이트웨이 주소와 리스너 소유자 키를 준비합니다",
@@ -2109,16 +2128,17 @@ const ko: Record<string, string> = {
     "아래 폼에는 API 서버 주소(예: {example})와 인증 키가 필요합니다.",
   "gateways.onboarding.step2OwnerKeyWarning":
     "반드시 리스너 소유자 키(API_SERVER_KEY)를 넣으세요. 프로필 키만으로는 칸반·크론·사건 스트림이 막힙니다.",
-  "gateways.onboarding.step3Title": "3. 칸반·크론을 쓰려면 DeskRPG 플러그인을 설치합니다",
+  "gateways.onboarding.step3Title": "칸반·크론을 쓰려면 DeskRPG 플러그인을 설치합니다",
   "gateways.onboarding.step3Body":
     "게이트웨이 호스트에서 아래 명령을 실행한 뒤 Hermes API 서버를 다시 시작하세요.",
-  "gateways.onboarding.step4Title": "4. 게이트웨이는 나중에 연결해도 됩니다",
+  "gateways.onboarding.step4Title": "게이트웨이는 나중에 연결해도 됩니다",
   "gateways.onboarding.step4Body":
     "아직 Hermes 를 띄우지 못했다면 캐릭터와 오피스을 먼저 만들어 두어도 됩니다. 게이트웨이는 준비된 뒤에 이 화면에서 등록하면 됩니다.",
   "gateways.onboarding.step4CharacterLink": "캐릭터 만들기",
   "gateways.onboarding.step4ChannelLink": "오피스 만들기",
   "gateways.onboarding.quickStart": "빠른 시작으로 오피스 만들기",
   "gateways.onboarding.quickStartHint": "캐릭터와 오피스을 기본값으로 만들어 바로 들어갑니다.",
+  "gateways.onboarding.manualSetup": "수동으로 설치하기",
   "quickStart.failed": "빠른 시작에 실패했습니다. 잠시 후 다시 시도해 주세요.",
   "gateways.owner": "소유",
   "gateways.shared": "공유됨",

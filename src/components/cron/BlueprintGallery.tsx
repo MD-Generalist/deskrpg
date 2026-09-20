@@ -13,8 +13,10 @@ import type {
   BlueprintField,
   CronDeliveryTarget,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import GateChecklistModal from "@/components/gateway/GateChecklistModal";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
-import { cronApi, classifyCronError, type CronJobView } from "./cron-api";
+import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import { composeDeliver, parseDeliver } from "./cron-schedule";
 import { CronErrorNotice } from "./cron-notices";
 import type { CronEditorNpc } from "./CronEditorDialog";
@@ -38,6 +40,17 @@ export function initialBlueprintValues(blueprint: AutomationBlueprint): Record<s
       field.name === DELIVER_FIELD && (seeded === "" || seeded === "origin") ? "local" : seeded;
   }
   return out;
+}
+
+/** CronApiError 를 체크리스트가 아는 GateBlocker 로 옮긴다. 판정은 classifyGateFailure 하나다. */
+function blockerFromCronError(err: unknown): GateBlocker | null {
+  if (!isCronApiError(err)) return null;
+  return classifyGateFailure({
+    status: err.status,
+    code: err.code,
+    message: err.message,
+    minVersion: typeof err.details.minVersion === "string" ? err.details.minVersion : undefined,
+  });
 }
 
 /** 필수(optional 아님) 필드가 비어 있으면 그 이름들. */
@@ -122,6 +135,8 @@ export default function BlueprintGallery({
   const [npcId, setNpcId] = useState<string>(defaultNpcId ?? npcs[0]?.npcId ?? "");
   const [blueprints, setBlueprints] = useState<AutomationBlueprint[] | null>(null);
   const [targets, setTargets] = useState<CronDeliveryTarget[]>([]);
+  const [targetsBlocker, setTargetsBlocker] = useState<GateBlocker | null>(null);
+  const [checklistBlocker, setChecklistBlocker] = useState<GateBlocker | null>(null);
   const [selected, setSelected] = useState<AutomationBlueprint | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -133,6 +148,7 @@ export default function BlueprintGallery({
     if (!npcId) return;
     let cancelled = false;
     setLoadError(null);
+    setTargetsBlocker(null);
     cronApi
       .listBlueprints(channelId, npcId)
       .then((res) => {
@@ -147,15 +163,25 @@ export default function BlueprintGallery({
     cronApi
       .listDeliveryTargets(channelId, npcId)
       .then((res) => {
-        if (!cancelled) setTargets(res.targets);
+        if (!cancelled) {
+          setTargets(res.targets);
+          setTargetsBlocker(null);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setTargets([]);
+      .catch((err: unknown) => {
+        // 목록을 못 받아도 local 은 항상 고를 수 있다 — 폼을 막지 않는다.
+        if (cancelled) return;
+        setTargets([]);
+        const blocker = blockerFromCronError(err);
+        if (blocker && isSetupBlocker(blocker)) setTargetsBlocker(blocker);
       });
     return () => {
       cancelled = true;
     };
   }, [channelId, npcId]);
+
+  const loadBlocker = useMemo(() => blockerFromCronError(loadError), [loadError]);
+  const submitBlocker = useMemo(() => blockerFromCronError(submitError), [submitError]);
 
   const select = (blueprint: AutomationBlueprint) => {
     setSelected(blueprint);
@@ -234,7 +260,20 @@ export default function BlueprintGallery({
             </select>
           </label>
 
-          {loadError !== null && <CronErrorNotice notice={classifyCronError(loadError)} />}
+          {loadError !== null && (
+            <div>
+              <CronErrorNotice notice={classifyCronError(loadError)} />
+              {loadBlocker && isSetupBlocker(loadBlocker) && (
+                <button
+                  type="button"
+                  onClick={() => setChecklistBlocker(loadBlocker)}
+                  className="text-xs text-text-muted underline"
+                >
+                  {t("gateChecklist.whatIsNeeded")}
+                </button>
+              )}
+            </div>
+          )}
 
           {!selected ? (
             blueprints === null ? (
@@ -304,6 +343,15 @@ export default function BlueprintGallery({
                           </span>
                         </label>
                       ))}
+                      {targetsBlocker && (
+                        <button
+                          type="button"
+                          onClick={() => setChecklistBlocker(targetsBlocker)}
+                          className="text-xs text-text-muted underline"
+                        >
+                          {t("gateChecklist.whatIsNeeded")}
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <FieldControl
@@ -318,7 +366,20 @@ export default function BlueprintGallery({
                   )}
                 </div>
               ))}
-              {submitError !== null && <CronErrorNotice notice={classifyCronError(submitError)} />}
+              {submitError !== null && (
+                <div>
+                  <CronErrorNotice notice={classifyCronError(submitError)} />
+                  {submitBlocker && isSetupBlocker(submitBlocker) && (
+                    <button
+                      type="button"
+                      onClick={() => setChecklistBlocker(submitBlocker)}
+                      className="text-xs text-text-muted underline"
+                    >
+                      {t("gateChecklist.whatIsNeeded")}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -357,6 +418,7 @@ export default function BlueprintGallery({
           </div>
         </div>
       </div>
+      <GateChecklistModal blocker={checklistBlocker} onClose={() => setChecklistBlocker(null)} />
     </div>
   );
 }

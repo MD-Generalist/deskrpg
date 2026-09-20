@@ -4,6 +4,8 @@ import { AlertTriangle, Archive, KanbanSquare, Plus, RefreshCw, Settings, X } fr
 
 import { useT } from "@/lib/i18n";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
+import GateChecklistModal from "@/components/gateway/GateChecklistModal";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
@@ -115,6 +117,7 @@ export default function KanbanBoardModal({
   const [board, setBoard] = useState<BoardResponse | null>(null);
   const [boardChannelId, setBoardChannelId] = useState<string | null>(null);
   const [blocker, setBlocker] = useState<BoardBlocker | null>(null);
+  const [checklist, setChecklist] = useState<GateBlocker | null>(null);
   const [loading, setLoading] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId);
@@ -639,6 +642,7 @@ export default function KanbanBoardModal({
                 blocker={blocker}
                 onRetry={() => void reload()}
                 onConnectGateway={onConnectGateway}
+                onOpenChecklist={() => setChecklist(gateBlockerFromBoard(blocker))}
               />
             ) : (
               <div className="flex h-full gap-3">
@@ -714,20 +718,46 @@ export default function KanbanBoardModal({
           onClose={() => setShowSwarm(false)}
         />
       ) : null}
+
+      <GateChecklistModal blocker={checklist} onClose={() => setChecklist(null)} />
     </div>
   );
+}
+
+/** 보드 배너가 들고 있는 실패를 체크리스트가 아는 모양으로 옮긴다. 판정을 다시 하지 않는다 — */
+/** `board_unavailable` 이 들고 있던 code·message 를 `classifyGateFailure` 로 되돌릴 뿐이다. */
+function gateBlockerFromBoard(blocker: BoardBlocker): GateBlocker | null {
+  if (blocker.kind === "gateway_not_bound") return { kind: "gateway_not_bound" };
+  if (blocker.kind === "upgrade_required") {
+    return {
+      kind: "plugin_upgrade_required",
+      minVersion: blocker.minVersion,
+      command: blocker.command,
+    };
+  }
+  if (blocker.kind === "board_unavailable") {
+    return classifyGateFailure({ status: 503, code: blocker.code, message: blocker.reason });
+  }
+  return classifyGateFailure({
+    status: blocker.status,
+    code: blocker.code,
+    message: blocker.message,
+  });
 }
 
 function Blocker({
   blocker,
   onRetry,
   onConnectGateway,
+  onOpenChecklist,
 }: {
   blocker: BoardBlocker;
   onRetry: () => void;
   onConnectGateway?: () => void;
+  onOpenChecklist: () => void;
 }) {
   const t = useT();
+  const gateBlocker = gateBlockerFromBoard(blocker);
   const title =
     blocker.kind === "upgrade_required"
       ? t("kanban.blocker.upgradeTitle")
@@ -770,15 +800,24 @@ function Blocker({
         </p>
       )}
       {(blocker.kind !== "gateway_not_bound" || onConnectGateway) && (
-        <button
-          type="button"
-          onClick={blocker.kind === "gateway_not_bound" ? onConnectGateway : onRetry}
-          className="mt-3 px-3 py-1.5 rounded-lg bg-surface-raised text-text-secondary hover:brightness-125"
-        >
-          {t(
-            blocker.kind === "gateway_not_bound" ? "kanban.blocker.connectGateway" : "common.retry",
+        <>
+          <button
+            type="button"
+            onClick={blocker.kind === "gateway_not_bound" ? onConnectGateway : onRetry}
+            className="mt-3 px-3 py-1.5 rounded-lg bg-surface-raised text-text-secondary hover:brightness-125"
+          >
+            {t(
+              blocker.kind === "gateway_not_bound"
+                ? "kanban.blocker.connectGateway"
+                : "common.retry",
+            )}
+          </button>
+          {gateBlocker && isSetupBlocker(gateBlocker) && (
+            <button type="button" onClick={onOpenChecklist} className="ml-2 underline">
+              {t("gateChecklist.whatIsNeeded")}
+            </button>
           )}
-        </button>
+        </>
       )}
     </div>
   );
