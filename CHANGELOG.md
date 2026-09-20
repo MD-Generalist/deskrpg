@@ -7,6 +7,16 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.920.4] - 2026-09-20
+
+### Added
+
+- Recover a password without email: a system administrator resets one from the group member list, `deskrpg reset-password <loginId>` unlocks a locked-out administrator from the host, and the owner changes it from the account screen. A temporary password appears once in the response and is never stored in the database or logs.
+
+### Changed
+
+- Sign-in screen speaks the same brand as the app: "AI Coworking Space" instead of "for Hermes", the 3D miniature mark beside the wordmark, a smaller sun and slow-drifting clouds rendered from the same three.js pipeline.
+
 ## [2026.920.3] - 2026-09-20
 
 ### Fixed
