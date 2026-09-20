@@ -2076,6 +2076,7 @@ const zh: Record<string, string> = {
   "gateways.onboarding.step4ChannelLink": "创建频道",
   "gateways.onboarding.quickStart": "快速开始，创建我的办公室",
   "gateways.onboarding.quickStartHint": "使用默认值创建角色和频道，然后直接进入。",
+  "gateways.onboarding.manualSetup": "手动安装",
   "quickStart.failed": "快速开始失败，请稍后重试。",
   "gateways.owner": "所有者",
   "gateways.shared": "共享",

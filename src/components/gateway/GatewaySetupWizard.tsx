@@ -1118,6 +1118,11 @@ export default function GatewaySetupWizard({
                 autoComplete={type === "password" ? "new-password" : "off"}
                 onChange={(event) => (setter as (value: string) => void)(event.target.value)}
               />
+              {type === "password" && (
+                <p className="mt-1 text-xs text-text-muted">
+                  {t("gateways.onboarding.step2OwnerKeyWarning")}
+                </p>
+              )}
             </label>
           ))}
           <button

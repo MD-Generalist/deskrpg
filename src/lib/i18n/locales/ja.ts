@@ -2153,6 +2153,7 @@ const ja: Record<string, string> = {
   "gateways.onboarding.quickStart": "クイックスタートでオフィスを作る",
   "gateways.onboarding.quickStartHint":
     "キャラクターとチャンネルを既定値で作成し、そのまま入室します。",
+  "gateways.onboarding.manualSetup": "手動でセットアップする",
   "quickStart.failed": "クイックスタートに失敗しました。しばらくしてからもう一度お試しください。",
   "gateways.owner": "所有",
   "gateways.shared": "共有",

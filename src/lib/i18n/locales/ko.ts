@@ -2133,6 +2133,7 @@ const ko: Record<string, string> = {
   "gateways.onboarding.step4ChannelLink": "오피스 만들기",
   "gateways.onboarding.quickStart": "빠른 시작으로 오피스 만들기",
   "gateways.onboarding.quickStartHint": "캐릭터와 오피스을 기본값으로 만들어 바로 들어갑니다.",
+  "gateways.onboarding.manualSetup": "수동으로 설치하기",
   "quickStart.failed": "빠른 시작에 실패했습니다. 잠시 후 다시 시도해 주세요.",
   "gateways.owner": "소유",
   "gateways.shared": "공유됨",

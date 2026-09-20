@@ -2136,6 +2136,7 @@ const en: Record<string, string> = {
   "gateways.onboarding.quickStart": "Quick start — build my office",
   "gateways.onboarding.quickStartHint":
     "Creates a character and a channel with defaults, then takes you straight in.",
+  "gateways.onboarding.manualSetup": "Set it up manually",
   "quickStart.failed": "Quick start failed. Please try again in a moment.",
   "gateways.owner": "Owner",
   "gateways.shared": "Shared",
