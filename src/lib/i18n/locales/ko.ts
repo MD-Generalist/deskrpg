@@ -473,6 +473,8 @@ const ko: Record<string, string> = {
     "이 프로필은 아직 게이트웨이가 서빙하지 않습니다. 게이트웨이의 multiplex 프로필 허용 목록에 이름을 넣어야 합니다. 마법사는 허용 목록을 고치지 않습니다.",
   "hermes.wizard.warn.lingerRequired":
     "이 서버에서는 로그아웃하거나 재부팅하면 Hermes 게이트웨이가 멈춥니다. 서버 터미널에서 한 번 실행하세요: sudo loginctl enable-linger $USER",
+  "hermes.wizard.warn.logonRequired":
+    "게이트웨이는 다음 로그인 때 자동으로 시작합니다. 로그아웃하면 멈춥니다.",
   "hermes.wizard.warn.modelProviderRequired":
     "모델 제공자가 아직 없습니다. 서버에서 hermes model 을 실행해 모델에 로그인하세요. 그전까지 NPC 는 대답하지 못합니다.",
   "hermes.wizard.hostReason.not_admin":

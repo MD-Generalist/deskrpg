@@ -11,6 +11,7 @@ import {
   validateTimezone,
   validateSetupPort,
   collectSetupWarnings,
+  SETUP_WARNING_CODES,
 } from "./policy";
 
 test("호스트 실행은 system_admin 이면 기본으로 열리고, 운영자가 0 으로 끌 수 있다", () => {
@@ -182,4 +183,8 @@ test("수락한 포트는 1024~65535 정수만 통과한다", () => {
 test("포트 쓰기 실패는 화이트리스트 코드로 그대로 나간다", () => {
   assert.equal(safeSetupError(new Error("port_write_failed")), "port_write_failed");
   assert.equal(safeSetupError(new Error("port_write_failed /home/op/.env")), "setup_failed");
+});
+test("logon_required 는 실패가 아니라 경고다", () => {
+  assert.ok(SETUP_WARNING_CODES.has("logon_required"));
+  assert.equal(safeSetupError(new Error("logon_required")), "setup_failed");
 });

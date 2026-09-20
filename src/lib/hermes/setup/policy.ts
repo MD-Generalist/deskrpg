@@ -168,6 +168,8 @@ export const SETUP_WARNING_CODES = new Set([
   "profile_not_served",
   "model_provider_required",
   "linger_required",
+  // Windows 스케줄 작업은 로그아웃 뒤 계속 도는 것이 아니라 다음 로그온에 뜬다.
+  "logon_required",
 ]);
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** 호스트와 같은 규칙. 예약어에는 `default` 가 포함된다 — 소유자 키는 configure 가 다룬다. */

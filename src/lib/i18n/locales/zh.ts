@@ -455,6 +455,7 @@ const zh: Record<string, string> = {
     "网关尚未提供此配置文件。请将其名称加入网关的multiplex配置文件允许列表。此向导不会修改允许列表。",
   "hermes.wizard.warn.lingerRequired":
     "在此服务器上，注销或重启后 Hermes 网关会停止。请在服务器终端运行一次：sudo loginctl enable-linger $USER",
+  "hermes.wizard.warn.logonRequired": "网关将在您下次登录时自动启动。注销后会停止。",
   "hermes.wizard.warn.modelProviderRequired":
     "尚未配置模型提供商。请在服务器上运行hermes model登录模型。在此之前NPC无法回复。",
   "hermes.wizard.hostReason.not_admin":

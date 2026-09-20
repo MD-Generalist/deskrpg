@@ -390,11 +390,17 @@ export async function startSetup(
         hostPlatform(target),
       );
       // SSH 대상은 로그아웃·재부팅 뒤에도 게이트웨이가 살아야 한다 — Linger 가 꺼져 있으면 안내만 한다.
+      // Windows 로컬은 의미가 다르다: 스케줄 작업은 다음 로그온에 뜬다.
+      const windowsLocal = target.mode === "local" && process.platform === "win32";
       const lingerOff =
         target.mode === "ssh" && (await checkLingerHost(boundedExecutor)) === "disabled";
+      const extraWarnings = [
+        ...(lingerOff ? ["linger_required"] : []),
+        ...(windowsLocal ? ["logon_required"] : []),
+      ];
       jobs.update(userId, job.id, {
         warnings: collectSetupWarnings(
-          [...(prepared.warnings ?? []), ...(lingerOff ? ["linger_required"] : [])],
+          [...(prepared.warnings ?? []), ...extraWarnings],
           Boolean(installHermes),
           modelState,
         ),
