@@ -648,3 +648,52 @@ export const channelSubprojects = pgTable(
     uniqueIndex("channel_subprojects_project_tenant_idx").on(table.projectId, table.tenantSlug),
   ],
 );
+
+/**
+ * 실행 전 승인 관문의 레코드(설계 2026-09-21 execution-approval-gate).
+ *
+ * 하드 게이트 1 에 걸리지 않는다 — `approval_targets.task_id` 는 Hermes 카드를 **가리키기만**
+ * 하고 제목·본문·상태를 복제하지 않는다. `channel_kanban_boards` 와 같은 성격이다.
+ */
+export const approvals = pgTable(
+  "approvals",
+  {
+    id: uuid("id").primaryKey(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    // "task_execution" | "project_registration" | … — 덩어리 1 이 같은 표를 type 만 달리해 쓴다.
+    type: varchar("type", { length: 32 }).notNull(),
+    // "pending" | "approved" | "rejected" | "revision_requested" | "cancelled"
+    status: varchar("status", { length: 24 }).notNull(),
+    /** 요청한 프로필 이름(직원). 사용자 id 가 아니다. */
+    requestedBy: varchar("requested_by", { length: 64 }).notNull(),
+    /** 로케일 무관 요약. 문장은 보는 사람의 언어로 화면이 만든다. */
+    title: text("title").notNull(),
+    /** {kind:"meeting"|"manual"|"chat_proposal", id} — 승인이 필요한지를 가른 출처. */
+    sourceJson: text("source_json").notNull(),
+    payloadJson: text("payload_json"),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decisionNote: text("decision_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("approvals_channel_status_idx").on(t.channelId, t.status)],
+);
+
+export const approvalTargets = pgTable(
+  "approval_targets",
+  {
+    approvalId: uuid("approval_id")
+      .notNull()
+      .references(() => approvals.id, { onDelete: "cascade" }),
+    /** Hermes 카드 id. FK 가 아니다 — 정본은 Hermes 다. */
+    taskId: varchar("task_id", { length: 64 }).notNull(),
+    /** 부분 승인용. null 이면 승인 전체의 결정을 따른다. */
+    decision: varchar("decision", { length: 16 }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.approvalId, t.taskId] }),
+    index("approval_targets_task_idx").on(t.taskId),
+  ],
+);

@@ -325,6 +325,31 @@ const SQLITE_BASE_SCHEMA = `
     CREATE INDEX IF NOT EXISTS idx_cron_job_origins_channel_id ON cron_job_origins(channel_id);
     CREATE UNIQUE INDEX IF NOT EXISTS cron_job_origins_gateway_profile_job_idx ON cron_job_origins(gateway_id, profile_name, job_id);
 
+    CREATE TABLE IF NOT EXISTS approvals (
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_by TEXT NOT NULL,
+      title TEXT NOT NULL,
+      source_json TEXT NOT NULL,
+      payload_json TEXT,
+      decided_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      decided_at TEXT,
+      decision_note TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS approvals_channel_status_idx ON approvals(channel_id, status);
+
+    -- task_id 는 Hermes 카드를 가리키기만 한다 — FK 가 아니고 사본도 아니다(하드 게이트 1).
+    CREATE TABLE IF NOT EXISTS approval_targets (
+      approval_id TEXT NOT NULL REFERENCES approvals(id) ON DELETE CASCADE,
+      task_id TEXT NOT NULL,
+      decision TEXT,
+      PRIMARY KEY (approval_id, task_id)
+    );
+    CREATE INDEX IF NOT EXISTS approval_targets_task_idx ON approval_targets(task_id);
+
     CREATE TABLE IF NOT EXISTS meeting_minutes (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,

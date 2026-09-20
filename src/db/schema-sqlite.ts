@@ -731,3 +731,47 @@ export const channelSubprojects = sqliteTable(
     uniqueIndex("channel_subprojects_project_tenant_idx").on(table.projectId, table.tenantSlug),
   ],
 );
+
+/**
+ * 실행 전 승인 관문의 레코드. PG 쪽 approvals·approvalTargets 와 컬럼 집합이 같아야 한다.
+ * 시각은 SQLite 관례대로 ISO 문자열이다.
+ */
+export const approvals = sqliteTable(
+  "approvals",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    status: text("status").notNull(),
+    requestedBy: text("requested_by").notNull(),
+    title: text("title").notNull(),
+    sourceJson: text("source_json").notNull(),
+    payloadJson: text("payload_json"),
+    decidedBy: text("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: text("decided_at"),
+    decisionNote: text("decision_note"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [index("approvals_channel_status_idx").on(t.channelId, t.status)],
+);
+
+export const approvalTargets = sqliteTable(
+  "approval_targets",
+  {
+    approvalId: text("approval_id")
+      .notNull()
+      .references(() => approvals.id, { onDelete: "cascade" }),
+    taskId: text("task_id").notNull(),
+    decision: text("decision"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.approvalId, t.taskId] }),
+    index("approval_targets_task_idx").on(t.taskId),
+  ],
+);

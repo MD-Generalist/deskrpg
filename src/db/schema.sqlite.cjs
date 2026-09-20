@@ -699,32 +699,75 @@ const channelSubprojects = sqliteTable(
   ],
 );
 
-module.exports = {
-  users,
-  characters,
-  groups,
-  channels,
-  gatewayResources,
-  gatewayShares,
-  hermesProfiles,
-  providerResources,
-  providerShares,
-  channelGatewayBindings,
-  channelKanbanBoards,
-  cronJobOrigins,
-  groupMembers,
-  groupInvites,
-  groupJoinRequests,
-  groupPermissions,
-  userPermissionOverrides,
-  channelMembers,
-  npcs,
-  npcSessions,
-  chatMessages,
-  chatRooms,
-  chatRoomMembers,
-  chatRoomMessages,
-  meetingMinutes,
-  channelProjects,
-  channelSubprojects,
-};
+const approvals = sqliteTable(
+  "approvals",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    status: text("status").notNull(),
+    requestedBy: text("requested_by").notNull(),
+    title: text("title").notNull(),
+    sourceJson: text("source_json").notNull(),
+    payloadJson: text("payload_json"),
+    decidedBy: text("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: text("decided_at"),
+    decisionNote: text("decision_note"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [index("approvals_channel_status_idx").on(t.channelId, t.status)],
+);
+
+const approvalTargets = sqliteTable(
+  "approval_targets",
+  {
+    approvalId: text("approval_id")
+      .notNull()
+      .references(() => approvals.id, { onDelete: "cascade" }),
+    taskId: text("task_id").notNull(),
+    decision: text("decision"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.approvalId, t.taskId] }),
+    index("approval_targets_task_idx").on(t.taskId),
+  ],
+);
+
+(approvalTargets,
+  (module.exports = {
+    users,
+    characters,
+    groups,
+    channels,
+    gatewayResources,
+    gatewayShares,
+    hermesProfiles,
+    providerResources,
+    providerShares,
+    channelGatewayBindings,
+    channelKanbanBoards,
+    cronJobOrigins,
+    groupMembers,
+    groupInvites,
+    groupJoinRequests,
+    groupPermissions,
+    userPermissionOverrides,
+    channelMembers,
+    npcs,
+    npcSessions,
+    chatMessages,
+    chatRooms,
+    chatRoomMembers,
+    chatRoomMessages,
+    meetingMinutes,
+    channelProjects,
+    channelSubprojects,
+    approvals,
+    approvalTargets,
+  }));

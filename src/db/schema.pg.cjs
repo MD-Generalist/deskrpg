@@ -650,32 +650,71 @@ const channelSubprojects = pgTable(
   ],
 );
 
-module.exports = {
-  users,
-  characters,
-  groups,
-  channels,
-  gatewayResources,
-  gatewayShares,
-  hermesProfiles,
-  providerResources,
-  providerShares,
-  channelGatewayBindings,
-  channelKanbanBoards,
-  cronJobOrigins,
-  groupMembers,
-  groupInvites,
-  groupJoinRequests,
-  groupPermissions,
-  userPermissionOverrides,
-  channelMembers,
-  npcs,
-  npcSessions,
-  chatMessages,
-  chatRooms,
-  chatRoomMembers,
-  chatRoomMessages,
-  meetingMinutes,
-  channelProjects,
-  channelSubprojects,
-};
+const approvals = pgTable(
+  "approvals",
+  {
+    id: uuid("id").primaryKey(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 32 }).notNull(),
+    status: varchar("status", { length: 24 }).notNull(),
+    requestedBy: varchar("requested_by", { length: 64 }).notNull(),
+    title: text("title").notNull(),
+    sourceJson: text("source_json").notNull(),
+    payloadJson: text("payload_json"),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decisionNote: text("decision_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("approvals_channel_status_idx").on(t.channelId, t.status)],
+);
+
+const approvalTargets = pgTable(
+  "approval_targets",
+  {
+    approvalId: uuid("approval_id")
+      .notNull()
+      .references(() => approvals.id, { onDelete: "cascade" }),
+    taskId: varchar("task_id", { length: 64 }).notNull(),
+    decision: varchar("decision", { length: 16 }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.approvalId, t.taskId] }),
+    index("approval_targets_task_idx").on(t.taskId),
+  ],
+);
+
+(approvalTargets,
+  (module.exports = {
+    users,
+    characters,
+    groups,
+    channels,
+    gatewayResources,
+    gatewayShares,
+    hermesProfiles,
+    providerResources,
+    providerShares,
+    channelGatewayBindings,
+    channelKanbanBoards,
+    cronJobOrigins,
+    groupMembers,
+    groupInvites,
+    groupJoinRequests,
+    groupPermissions,
+    userPermissionOverrides,
+    channelMembers,
+    npcs,
+    npcSessions,
+    chatMessages,
+    chatRooms,
+    chatRoomMembers,
+    chatRoomMessages,
+    meetingMinutes,
+    channelProjects,
+    channelSubprojects,
+    approvals,
+    approvalTargets,
+  }));
