@@ -177,6 +177,10 @@ body {
   width: 100%;
   max-width: 1200px;
 }
+/* 비밀번호 3칸이 1200px 로 벌어지지 않게. 유틸리티(max-w-lg)는 이 규칙에 밀린다(2026-09-20 실측). */
+.workspace-page-inner--narrow {
+  max-width: 560px;
+}
 .workspace-content h1 {
   letter-spacing: -0.035em;
   font-size: clamp(24px, 2.3vw, 32px);
