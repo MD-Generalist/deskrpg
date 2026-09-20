@@ -35,7 +35,10 @@ test("og 태그가 있는 페이지는 미리보기로 돌아오고 이미지는
     `<meta property="og:title" content="제목"><meta property="og:image" content="/a.png">`,
   );
   try {
-    const got = await buildLinkPreview(`${s.origin}/p`, { isAllowedUrl: allowAll });
+    const got = await buildLinkPreview(`${s.origin}/p`, {
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    });
     assert.equal(got?.title, "제목");
     assert.equal(got?.image, proxiedImageUrl(`${s.origin}/a.png`));
     assert.ok(got?.image?.startsWith("/api/link-preview/image?"), "이미지는 직접 물리지 않는다");
@@ -48,8 +51,14 @@ test("같은 주소를 두 번 물어도 남의 서버는 한 번만 부른다",
   clearLinkPreviewCache();
   const s = await serve(`<title>한 번만</title>`);
   try {
-    await buildLinkPreview(`${s.origin}/p`, { isAllowedUrl: allowAll });
-    await buildLinkPreview(`${s.origin}/p`, { isAllowedUrl: allowAll });
+    await buildLinkPreview(`${s.origin}/p`, {
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    });
+    await buildLinkPreview(`${s.origin}/p`, {
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    });
     assert.equal(s.hits, 1);
   } finally {
     s.close();
@@ -60,11 +69,15 @@ test("실패도 캐시한다 — 죽은 주소를 화면마다 다시 두드리�
   clearLinkPreviewCache();
   const first = await buildLinkPreview("http://169.254.169.254/latest/meta-data/", {
     isAllowedUrl: allowAll,
+    isAllowedAddress: () => true,
   });
   assert.equal(first, null);
   // 가드가 거부하는 주소라 두 번째도 null 이고, 어느 쪽도 요청을 보내지 않는다.
   assert.equal(
-    await buildLinkPreview("http://169.254.169.254/latest/meta-data/", { isAllowedUrl: allowAll }),
+    await buildLinkPreview("http://169.254.169.254/latest/meta-data/", {
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    }),
     null,
   );
 });
@@ -72,6 +85,10 @@ test("실패도 캐시한다 — 죽은 주소를 화면마다 다시 두드리�
 test("가드가 거부하는 주소는 조회하지 않는다", async () => {
   clearLinkPreviewCache();
   for (const bad of ["file:///etc/passwd", "http://localhost/", "https://a:b@example.com/"]) {
-    assert.equal(await buildLinkPreview(bad, { isAllowedUrl: allowAll }), null, bad);
+    assert.equal(
+      await buildLinkPreview(bad, { isAllowedUrl: allowAll, isAllowedAddress: () => true }),
+      null,
+      bad,
+    );
   }
 });

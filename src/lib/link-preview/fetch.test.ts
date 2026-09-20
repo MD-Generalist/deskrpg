@@ -36,6 +36,7 @@ test("본문을 받아 오고 최종 주소를 함께 준다", async () => {
       accept: "text/html",
       maxBytes: 1024,
       isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
     });
     assert.equal(got?.body, "<title>안녕</title>");
     assert.equal(got?.url.toString(), `${s.origin}/p`);
@@ -51,6 +52,7 @@ test("상한을 넘는 본문은 잘라서 준다 — 무한 스트림에 매달
       accept: "text/html",
       maxBytes: 100,
       isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
     });
     assert.equal(got?.body.length, 100);
   } finally {
@@ -66,6 +68,7 @@ test("content-type 이 맞지 않으면 버린다", async () => {
         accept: "text/html",
         maxBytes: 1024,
         isAllowedUrl: allowAll,
+        isAllowedAddress: () => true,
       }),
       null,
     );
@@ -83,6 +86,7 @@ test("리다이렉트를 직접 따라가고 홉마다 주소를 다시 검사�
       accept: "text/html",
       maxBytes: 1024,
       isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
     });
     assert.equal(got?.url.pathname, "/b");
     assert.deepEqual(s.hits, ["/a", "/b"]);
@@ -102,6 +106,7 @@ test("사설망으로 리다이렉트하면 거기서 멈춘다 — 이 가드�
         accept: "text/html",
         maxBytes: 1024,
         isAllowedUrl: allowAll,
+        isAllowedAddress: () => true,
       }),
       null,
     );
@@ -119,6 +124,7 @@ test("리다이렉트가 너무 길면 포기한다", async () => {
         accept: "text/html",
         maxBytes: 1024,
         isAllowedUrl: allowAll,
+        isAllowedAddress: () => true,
       }),
       null,
     );
@@ -139,6 +145,22 @@ test("가드가 거부한 주소에는 요청 자체를 보내지 않는다", as
       }),
       null,
     );
+    assert.deepEqual(s.hits, []);
+  } finally {
+    s.close();
+  }
+});
+
+test("연결 직전의 주소 검사가 기본값이면 루프백에는 붙지 못한다 — rebinding 을 여기서 막는다", async () => {
+  const s = await serve(() => ({ body: "<title>x</title>" }));
+  try {
+    // 주소 정책만 기본값으로 둔다(URL 정책은 열어 둔다) — 소켓이 물 IP 에서 걸린다.
+    const got = await fetchGuarded(new URL(`${s.origin}/p`), {
+      accept: "text/html",
+      maxBytes: 1024,
+      isAllowedUrl: async () => true,
+    });
+    assert.equal(got, null);
     assert.deepEqual(s.hits, []);
   } finally {
     s.close();

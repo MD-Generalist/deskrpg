@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { isBlockedAddress, normalizePreviewUrl, parsePreviewTarget } from "./guard";
+import {
+  isBlockedAddress,
+  isSafeImageType,
+  normalizePreviewUrl,
+  parsePreviewTarget,
+} from "./guard";
 
 test("사설·루프백·링크로컬·CGNAT 주소는 막는다", () => {
   for (const ip of [
@@ -63,4 +68,19 @@ test("정규화는 모양만 본다 — 사설 주소도 모양이 맞으면 통
   // 포트는 모양이 아니라 목적지 판정이다 — parsePreviewTarget 이 막는다.
   assert.ok(normalizePreviewUrl("https://example.com:8080/"));
   assert.equal(parsePreviewTarget("https://example.com:8080/"), null);
+});
+
+test("프록시가 되돌려 줄 수 있는 이미지 타입은 래스터뿐이다 — svg 는 스크립트를 품는다", () => {
+  for (const ok of ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]) {
+    assert.equal(isSafeImageType(ok), true, ok);
+  }
+  for (const bad of [
+    "image/svg+xml",
+    "image/svg+xml; charset=utf-8",
+    "text/html",
+    "application/xml",
+    "",
+  ]) {
+    assert.equal(isSafeImageType(bad), false, bad);
+  }
 });

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getUserId } from "@/lib/internal-rpc";
 import { fetchGuarded } from "@/lib/link-preview/fetch";
-import { normalizePreviewUrl } from "@/lib/link-preview/guard";
+import { isSafeImageType, normalizePreviewUrl } from "@/lib/link-preview/guard";
 
 export const runtime = "nodejs";
 
@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
 
   const fetched = await fetchGuarded(target, { accept: "image/", maxBytes: IMAGE_MAX_BYTES });
   if (!fetched) return new NextResponse(null, { status: 204 });
+  // SVG 는 이미지가 아니라 스크립트를 품는 문서다 — 우리 출처에서 열리면 XSS 가 된다.
+  if (!isSafeImageType(fetched.contentType)) return new NextResponse(null, { status: 204 });
 
   return new NextResponse(new Uint8Array(fetched.bytes), {
     headers: {
@@ -33,6 +35,8 @@ export async function GET(req: NextRequest) {
       // 남이 준 바이트다. 스크립트로 해석될 여지를 남기지 않는다.
       "content-disposition": "inline",
       "x-content-type-options": "nosniff",
+      // 되돌려 준 바이트가 어떤 이유로든 문서로 해석되더라도 아무것도 못 하게 한다.
+      "content-security-policy": "default-src 'none'; sandbox",
     },
   });
 }

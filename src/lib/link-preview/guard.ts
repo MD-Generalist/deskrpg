@@ -14,8 +14,6 @@
  * 있으면 뚫린다 — 1 만 있으면 `internal.example.com` 이 10.x 로 풀리고, 2 만 있으면
  * `file://`·비표준 포트가 그대로 나간다.
  */
-import { lookup } from "node:dns/promises";
-
 const ALLOWED_PORTS = new Set(["", "80", "443"]);
 
 /** 점 넷짜리 IPv4 문자열이면 옥텟 배열, 아니면 null. */
@@ -98,14 +96,24 @@ export function parsePreviewTarget(raw: string): URL | null {
   return url;
 }
 
-/** 이름 해석 결과 전부가 공인 주소인가. 해석이 실패하면 막는다. */
-export async function resolvesToPublicAddress(hostname: string): Promise<boolean> {
-  let records: Array<{ address: string }>;
-  try {
-    records = await lookup(hostname, { all: true, verbatim: true });
-  } catch {
-    return false;
-  }
-  if (records.length === 0) return false;
-  return records.every((r) => !isBlockedAddress(r.address));
+/**
+ * 프록시가 브라우저로 되돌려도 되는 이미지 타입인가.
+ *
+ * `image/*` 를 전부 통과시키면 **SVG** 가 함께 들어온다. SVG 는 이미지가 아니라 문서다 —
+ * `<script>` 를 품고, 우리 출처(`/api/link-preview/image`)에서 열리므로 우리 쿠키·DOM 에
+ * 닿는 XSS 가 된다. 미리보기 썸네일에 벡터가 필요하지도 않으므로 래스터만 통과시킨다.
+ */
+const SAFE_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/bmp",
+]);
+
+export function isSafeImageType(contentType: string): boolean {
+  const base = contentType.split(";")[0].trim().toLowerCase();
+  return SAFE_IMAGE_TYPES.has(base);
 }

@@ -39,7 +39,7 @@ function remember(key: string, value: LinkPreview | null): LinkPreview | null {
 
 export async function buildLinkPreview(
   rawUrl: string,
-  options?: Pick<FetchGuardedOptions, "isAllowedUrl">,
+  options?: Pick<FetchGuardedOptions, "isAllowedUrl" | "isAllowedAddress">,
 ): Promise<LinkPreview | null> {
   // 주소가 어디를 가리키는지는 `fetchGuarded` 가 홉마다 본다 — 여기서는 모양만 본다.
   const target = normalizePreviewUrl(rawUrl);
@@ -53,6 +53,7 @@ export async function buildLinkPreview(
     accept: "text/html",
     maxBytes: HTML_MAX_BYTES,
     isAllowedUrl: options?.isAllowedUrl,
+    isAllowedAddress: options?.isAllowedAddress,
   });
   if (!fetched) return remember(key, null);
 

@@ -33,16 +33,17 @@ export function formatOpenChatMessage(
     lines.push("");
   }
 
+  // 보고 형식은 대화 경로 셋(DM·오피스 전체·회의)이 같은 문자열을 쓴다 — report-format.ts.
+  // 최근 대화 **앞**에 둔다: 대본을 [최근 대화]~[답하는 법] 로 잘라 읽는 곳이 있다.
+  lines.push(formatReportFormat());
+  lines.push("");
+
   lines.push("[최근 대화]");
   if (recent.length === 0) {
     lines.push("(아직 오간 말이 없습니다)");
   } else {
     for (const line of recent) lines.push(`${line.sender}: ${line.content}`);
   }
-  lines.push("");
-
-  // 보고 형식은 대화 경로 셋(DM·오피스 전체·회의)이 같은 문자열을 쓴다 — report-format.ts.
-  lines.push(formatReportFormat());
   lines.push("");
 
   lines.push("[답하는 법]");
