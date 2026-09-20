@@ -127,7 +127,7 @@ export default function NpcDialog({
             maxLength={500}
             autoFocus
             showFileUpload
-            accentColor="amber"
+            accent="npc"
             placeholder={t("chat.npcPlaceholder", { name: npcName })}
             disabledPlaceholder={t("chat.responding")}
           />

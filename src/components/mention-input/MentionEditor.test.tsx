@@ -128,3 +128,44 @@ test("clear() 는 편집기를 비운다", async () => {
   await act(async () => ref.current?.clear());
   assert.equal(ed.textContent, "");
 });
+
+test("선택된 후보는 하드코딩 흰 글자가 아니라 브랜드 토큰으로 칠해진다", async () => {
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        candidates={[{ id: "a", name: "noah" }]}
+        value=""
+        onChange={() => {}}
+        onSubmit={() => {}}
+      />
+    </I18nProvider>,
+  );
+  await typeText(editor(el), "@no");
+  const option = el.querySelector('[role="option"]');
+  assert.ok(option, "후보가 하나여도 드롭다운 항목이 있어야 한다");
+  assert.equal(option?.getAttribute("aria-selected"), "true", "후보가 하나면 선택 상태다");
+  const cls = option?.className ?? "";
+  assert.equal(/\btext-white\b/.test(cls), false, `선택 항목에 text-white 가 남아 있다: ${cls}`);
+  assert.ok(/\btext-text\b/.test(cls), `선택 항목 글자색이 브랜드 토큰이 아니다: ${cls}`);
+  assert.equal(/-\$\{|undefined/.test(cls), false, `조립 클래스 흔적이 있다: ${cls}`);
+});
+
+test("멘션 칩은 조립 클래스 없이 브랜드 토큰으로 칠해진다", async () => {
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor candidates={candidates} value="" onChange={() => {}} onSubmit={() => {}} />
+    </I18nProvider>,
+  );
+  const ed = editor(el);
+  await typeText(ed, "@소");
+  await act(async () => {
+    (el.querySelector('[role="option"]') as HTMLElement).click();
+  });
+  const cls = ed.querySelector("[data-mention-id]")?.className ?? "";
+  assert.ok(/\btext-text\b/.test(cls), `칩 글자색이 브랜드 토큰이 아니다: ${cls}`);
+  assert.equal(
+    /-500\/|amber|indigo/.test(cls),
+    false,
+    `칩에 조립 팔레트 클래스가 남아 있다: ${cls}`,
+  );
+});

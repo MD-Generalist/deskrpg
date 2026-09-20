@@ -1179,7 +1179,7 @@ export default function MeetingRoom({
                     joinState === "joining" ? "meeting.joining" : "meeting.disconnected",
                   )}
                   cooldown={cooldown}
-                  accentColor="indigo"
+                  accent="meeting"
                   mentionCandidates={
                     displayedNpcs.length
                       ? displayedNpcs.map((n) => ({ id: n.id, name: n.name }))

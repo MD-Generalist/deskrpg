@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 
+import { accentClasses, type ChatAccent } from "@/components/chat-accent";
 import { useT } from "@/lib/i18n";
 import {
   filterCandidates,
@@ -32,7 +33,7 @@ type Props = {
   placeholder?: string;
   disabled?: boolean;
   autoFocus?: boolean;
-  accentColor?: string;
+  accent?: ChatAccent;
 };
 
 const CHIP_ATTR = "data-mention-id";
@@ -83,12 +84,12 @@ function textBeforeCaret(root: HTMLElement): { node: Text; offset: number; befor
   return null;
 }
 
-function makeChip(c: MentionCandidate, accent: string): HTMLElement {
+function makeChip(c: MentionCandidate, chipClass: string): HTMLElement {
   const chip = document.createElement("span");
   chip.setAttribute(CHIP_ATTR, c.id);
   chip.setAttribute("data-mention-name", c.name);
   chip.setAttribute("contenteditable", "false");
-  chip.className = `inline-block align-baseline rounded px-1.5 py-0.5 mx-0.5 text-sm font-semibold bg-${accent}-500/25 text-${accent}-200 select-none`;
+  chip.className = `inline-block align-baseline rounded px-1.5 py-0.5 mx-0.5 text-sm font-semibold ${chipClass} select-none`;
   chip.textContent = `@${c.name}`;
   return chip;
 }
@@ -117,10 +118,11 @@ function placeCaretIn(node: Text, offset: number) {
  * 직렬화하므로 서버의 `parseAllMentions` 는 손대지 않는다.
  */
 const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEditor(
-  { candidates, onChange, onSubmit, placeholder, disabled, autoFocus, accentColor = "amber" },
+  { candidates, onChange, onSubmit, placeholder, disabled, autoFocus, accent = "npc" },
   ref,
 ) {
   const t = useT();
+  const accentTheme = accentClasses(accent);
   const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState<{ start: number; query: string } | null>(null);
   // 쿼리가 든 텍스트 노드 — DOM 이라 React 상태가 아니라 ref 로 든다(칩 삽입 시 직접 고친다).
@@ -165,7 +167,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
       const end = caret && caret.node === node ? caret.offset : text.length;
       const before = text.slice(0, start);
       const after = text.slice(end);
-      const chip = makeChip(c, accentColor);
+      const chip = makeChip(c, accentTheme.chip);
       const space = document.createTextNode(after.startsWith(" ") ? after : ` ${after}`);
       node.textContent = before;
       node.after(chip, space);
@@ -174,7 +176,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
       setQuery(null);
       sync();
     },
-    [query, accentColor, sync],
+    [query, accentTheme.chip, sync],
   );
 
   const clear = useCallback(() => {
@@ -250,7 +252,9 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => insertChip(c)}
                 className={`cursor-pointer px-3 py-1.5 text-sm ${
-                  i === index ? `bg-${accentColor}-500/20 text-white` : "text-text hover:bg-white/5"
+                  i === index
+                    ? `${accentTheme.option} font-medium`
+                    : "text-text hover:bg-surface-raised"
                 }`}
               >
                 {c.name}
@@ -276,7 +280,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
         }}
         onBlur={() => setQuery(null)}
         className={`min-h-[36px] max-h-[120px] overflow-y-auto whitespace-pre-wrap break-words bg-surface text-text px-3 py-2 rounded-lg border focus:outline-none text-sm leading-5 ${
-          disabled ? "border-border text-text-dim" : `border-border focus:border-${accentColor}-500`
+          disabled ? "border-border text-text-dim" : `border-border ${accentTheme.focusBorder}`
         } ${empty ? "before:content-[attr(data-placeholder)] before:text-text-dim before:pointer-events-none" : ""}`}
       />
     </div>

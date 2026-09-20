@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { accentClasses, type ChatAccent } from "./chat-accent";
 import { useT } from "@/lib/i18n";
 import MentionEditor, { type MentionEditorHandle } from "./mention-input/MentionEditor";
 import type { MentionCandidate } from "./mention-input/mention-model";
@@ -16,7 +17,8 @@ interface ChatInputProps {
   maxLength?: number;
   autoFocus?: boolean;
   showFileUpload?: boolean;
-  accentColor?: string; // tailwind color class for button, e.g. "amber" or "indigo"
+  /** 강조색. 미리 정의된 브랜드 토큰 클래스만 고를 수 있다 — `chat-accent.ts` 참조. */
+  accent?: ChatAccent;
   /**
    * 있으면 textarea 대신 `@` 멘션 편집기를 쓴다. 후보는 서버가 응답하는 집합과 같아야 한다
    * (채널 채팅: 출근 중 NPC, 회의: 참가 NPC). 전송값은 `@[이름]` 으로 직렬화된다.
@@ -37,7 +39,7 @@ export default function ChatInput({
   maxLength = 500,
   autoFocus = false,
   showFileUpload = false,
-  accentColor = "amber",
+  accent = "npc",
   mentionCandidates,
   scope,
 }: ChatInputProps) {
@@ -125,8 +127,9 @@ export default function ChatInput({
 
   const canSend = (draft.trim() || files.length > 0) && !cooldown && !disabled;
 
+  const accentTheme = accentClasses(accent);
   const btnColor = canSend
-    ? `bg-${accentColor}-500 hover:bg-${accentColor}-600 text-black`
+    ? accentTheme.sendButton
     : "bg-surface-raised text-text-dim cursor-not-allowed";
   const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
   const resolvedDisabledPlaceholder = disabledPlaceholder ?? t("chat.responding");
@@ -209,7 +212,7 @@ export default function ChatInput({
             }
             disabled={disabled}
             autoFocus={autoFocus}
-            accentColor={accentColor}
+            accent={accent}
           />
         ) : (
           <textarea
@@ -229,9 +232,7 @@ export default function ChatInput({
             rows={1}
             readOnly={disabled}
             className={`flex-1 bg-surface text-text px-3 py-2 rounded-lg border focus:outline-none text-sm min-w-0 resize-none overflow-hidden leading-5 ${
-              disabled
-                ? "border-border text-text-dim"
-                : `border-border focus:border-${accentColor}-500`
+              disabled ? "border-border text-text-dim" : `border-border ${accentTheme.focusBorder}`
             }`}
             style={{ maxHeight: "120px" }}
           />
