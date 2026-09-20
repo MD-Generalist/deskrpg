@@ -51,6 +51,7 @@ import {
   decideReportCall,
   reportAckKey,
   reportsForChannel,
+  reportTarget,
 } from "./npc-report-dispatch";
 import type { ReportItem } from "@/game/report-queue";
 import { decideContextInvite } from "./context-invite-decision";
@@ -2058,7 +2059,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       setKanbanFocus((prev) => nextKanbanFocus(prev, cardId));
       setShowKanban(true);
       // 그 카드의 보고는 사용자가 본 것이다 — 앞선 것까지 확인 처리한다.
-      const item = reportQueue.find((report) => report.cardId === cardId);
+      // `cardId` 가 없는 보고(크론 실패)와 섞이지 않도록 빈 id 는 맞추지 않는다.
+      const item = cardId ? reportQueue.find((report) => report.cardId === cardId) : undefined;
       if (item) acknowledgeReports(item);
     },
     [reportQueue, acknowledgeReports],
@@ -2094,10 +2096,16 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       setReportingNpcId(null);
   }, [reportQueue, reportingNpcId]);
 
-  const openNoticeCronJob = useCallback((jobId: string) => {
-    setCronInitialJobId(jobId);
-    setShowCron(true);
-  }, []);
+  const openNoticeCronJob = useCallback(
+    (jobId: string) => {
+      setCronInitialJobId(jobId);
+      setShowCron(true);
+      // 크론 실패 보고도 여기서 닫힌다 — 그러지 않으면 배지가 영영 남는다.
+      const item = reportQueue.find((report) => report.jobId === jobId);
+      if (item) acknowledgeReports(item);
+    },
+    [reportQueue, acknowledgeReports],
+  );
   const closeKanban = useCallback(() => {
     setShowKanban(false);
     setKanbanFocus(null);
@@ -2686,7 +2694,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               <button
                 type="button"
                 data-testid="report-badge"
-                onClick={() => openNoticeCard(reportQueue[0].cardId ?? "")}
+                onClick={() => {
+                  const target = reportTarget(reportQueue[0]);
+                  if (target?.kind === "cron") openNoticeCronJob(target.jobId);
+                  else if (target?.kind === "card") openNoticeCard(target.cardId);
+                }}
                 className="flex items-center gap-1.5 rounded-md border border-border bg-danger-bg px-2.5 py-1 text-caption font-semibold text-danger hover:bg-surface-raised"
                 title={reportQueue[0].cardTitle}
               >

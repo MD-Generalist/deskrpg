@@ -20,6 +20,8 @@ export type ReportItem = {
   /** 카드 보고만 값이 있다. 크론 실패는 열 카드가 없다. */
   cardId: string | null;
   boardSlug: string | null;
+  /** 크론 실패만 값이 있다 — 이 보고를 열 곳은 카드가 아니라 크론 이력이다. */
+  jobId: string | null;
   cardTitle: string;
   createdAt: string;
 };
@@ -67,6 +69,7 @@ export function pendingReports(
       kind,
       cardId: isCard ? ((notice as { cardId: string }).cardId ?? null) : null,
       boardSlug: isCard ? ((notice as { boardSlug: string }).boardSlug ?? null) : null,
+      jobId: isCard ? null : ((notice as { jobId: string }).jobId ?? null),
       cardTitle: isCard
         ? (notice as { cardTitle: string }).cardTitle
         : (notice as { jobName: string }).jobName,

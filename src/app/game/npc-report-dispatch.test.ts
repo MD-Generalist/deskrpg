@@ -10,6 +10,7 @@ import {
   decideReportCall,
   reportAckKey,
   reportsForChannel,
+  reportTarget,
 } from "./npc-report-dispatch";
 
 const item = (messageId: string, npcId: string, createdAt: string): ReportItem => ({
@@ -19,6 +20,7 @@ const item = (messageId: string, npcId: string, createdAt: string): ReportItem =
   kind: "card_review",
   cardId: `c-${messageId}`,
   boardSlug: "b",
+  jobId: null,
   cardTitle: messageId,
   createdAt,
 });
@@ -144,5 +146,63 @@ test("잠든 NPC 의 보고는 큐에 넣지 않는다 — 걸어올 수 없다"
       acknowledgedAt: null,
     }),
     [],
+  );
+});
+
+test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이 큐 전체를 막지 않는다", () => {
+  // sophie 의 호출이 거절되면 activeNpcId 가 비고, 그 항목은 calledMessageIds 에 남는다.
+  // 예전에는 여기서 큐가 멈춰 noah 가 영영 걸어오지 못했다.
+  const next = decideReportCall({
+    queue: [A, B],
+    activeNpcId: null,
+    calledMessageIds: ["a"],
+    blocked: false,
+  });
+  assert.equal(next?.messageId, "b");
+  assert.equal(
+    decideReportCall({
+      queue: [A, B],
+      activeNpcId: null,
+      calledMessageIds: ["a", "b"],
+      blocked: false,
+    }),
+    null,
+    "전부 호출했으면 더 부르지 않는다",
+  );
+});
+
+test("보고 중인 직원이 있으면 그 사람이 우선이고 재호출은 하지 않는다", () => {
+  assert.equal(
+    decideReportCall({
+      queue: [A, B],
+      activeNpcId: "npc-2",
+      calledMessageIds: [],
+      blocked: false,
+    })?.messageId,
+    "b",
+    "보고 중인 쪽을 먼저 돌려준다",
+  );
+  assert.equal(
+    decideReportCall({
+      queue: [A, B],
+      activeNpcId: "npc-1",
+      calledMessageIds: ["a"],
+      blocked: false,
+    }),
+    null,
+    "보고 중인 직원을 이미 불렀으면 다시 부르지 않는다 — 걸어오는 중이다",
+  );
+});
+
+test("보고를 열 곳은 종류로 갈린다 — 크론 실패는 카드가 아니다", () => {
+  assert.deepEqual(reportTarget(A), { kind: "card", cardId: "c-a" });
+  assert.deepEqual(
+    reportTarget({ ...A, kind: "cron_failed", cardId: null, boardSlug: null, jobId: "job-7" }),
+    { kind: "cron", jobId: "job-7" },
+  );
+  assert.equal(
+    reportTarget({ ...A, cardId: null, jobId: null }),
+    null,
+    "열 곳이 없으면 null — 빈 id 로 엉뚱한 모달을 열지 않는다",
   );
 });

@@ -27,6 +27,20 @@ export function reportsForChannel(input: {
   );
 }
 
+/**
+ * 이 보고를 열면 어디로 가는가. 카드 보고는 칸반, 크론 실패는 크론 이력이다.
+ *
+ * 컴포넌트 안에서 `cardId ?? ""` 로 얼버무렸다가 크론 실패 보고가 **어떤 방법으로도
+ * 확인되지 않아** 배지가 영구히 남았다. 갈라지는 지점을 여기 두고 테스트로 고정한다.
+ */
+export function reportTarget(
+  item: ReportItem,
+): { kind: "card"; cardId: string } | { kind: "cron"; jobId: string } | null {
+  if (item.jobId) return { kind: "cron", jobId: item.jobId };
+  if (item.cardId) return { kind: "card", cardId: item.cardId };
+  return null;
+}
+
 export function decideReportCall(input: {
   queue: readonly ReportItem[];
   /** 지금 보고하러 오는 중이거나 말하는 중인 NPC. */
@@ -37,9 +51,13 @@ export function decideReportCall(input: {
   blocked: boolean;
 }): ReportItem | null {
   if (input.blocked) return null;
-  const next = nextReporter(input.queue, input.activeNpcId);
-  if (!next) return null;
-  return input.calledMessageIds.includes(next.messageId) ? null : next;
+  const active = nextReporter(input.queue, input.activeNpcId);
+  // 보고 중인 직원이 있으면 그 사람이 우선이다. 이미 불렀으면 걸어오는 중이니 재호출하지 않는다.
+  if (input.activeNpcId && active && active.npcId === input.activeNpcId)
+    return input.calledMessageIds.includes(active.messageId) ? null : active;
+  // 맨 앞이 거절됐다고 큐 전체가 멈추면 안 된다 — 회의 중인 직원 하나가 나머지 보고를
+  // 영영 막는다(head-of-line blocking). 이미 호출한 것은 건너뛰고 다음 후보를 고른다.
+  return input.queue.find((item) => !input.calledMessageIds.includes(item.messageId)) ?? null;
 }
 
 /**

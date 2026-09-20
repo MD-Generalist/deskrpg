@@ -112,6 +112,7 @@ test("보고 항목은 카드로 이동할 값을 함께 싣는다", () => {
   );
   assert.deepEqual(item, {
     messageId: "a",
+    jobId: null,
     npcId: "npc-1",
     npcName: "소피",
     kind: "card_review",
@@ -120,6 +121,35 @@ test("보고 항목은 카드로 이동할 값을 함께 싣는다", () => {
     cardTitle: "제목 a",
     createdAt: "2026-09-21T00:00:01.000Z",
   });
+});
+
+test("크론 실패 보고는 열어야 할 곳이 카드가 아니라 크론 이력이다", () => {
+  const [item] = pendingReports(
+    [
+      msg({
+        id: "cron",
+        createdAt: "2026-09-21T00:00:01.000Z",
+        notice: {
+          kind: "cron_result",
+          jobId: "job-7",
+          jobName: "야간 집계",
+          npcName: "소피",
+          status: "error",
+        },
+      }),
+    ],
+    null,
+    present,
+  );
+  assert.equal(item.kind, "cron_failed");
+  assert.equal(item.cardId, null, "열 카드가 없다");
+  assert.equal(item.jobId, "job-7", "대신 크론 이력으로 갈 값을 싣는다");
+  assert.equal(item.cardTitle, "야간 집계");
+});
+
+test("카드 보고에는 jobId 가 없다", () => {
+  const [item] = pendingReports([card("a", "card_review", "2026-09-21T00:00:01.000Z")], null, present);
+  assert.equal(item.jobId, null);
 });
 
 test("한 번에 한 명 — 이미 보고 중인 NPC 가 있으면 그 사람을 계속 돌려준다", () => {
