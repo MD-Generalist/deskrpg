@@ -1357,39 +1357,40 @@ export default function NpcHireWizard({
                       })}
                 </p>
               )}
-              <div className="flex gap-2">
-                {baseUrl && provider.trim() !== "custom" && (
-                  <div
-                    className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
-                    data-base-url-warning={baseUrl}
-                  >
-                    <p className="text-text">
-                      {t("hermes.wizard.config.baseUrlWarning", { url: baseUrl })}
-                    </p>
-                    <label className="flex items-start gap-2 text-text">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5"
-                        checked={clearBaseUrl}
-                        onChange={(e) => setClearBaseUrl(e.target.checked)}
-                      />
-                      <span>{t("hermes.wizard.config.baseUrlClear")}</span>
-                    </label>
-                    <p className="text-text-muted">{t("hermes.wizard.config.baseUrlKeepHint")}</p>
-                  </div>
-                )}
+              {/* 경고는 버튼 줄 밖에 둔다 — 같은 flex 줄에 넣으면 버튼이 눌려 글자가 세로로 꺾인다. */}
+              {baseUrl && provider.trim() !== "custom" && (
+                <div
+                  className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
+                  data-base-url-warning={baseUrl}
+                >
+                  <p className="text-text">
+                    {t("hermes.wizard.config.baseUrlWarning", { url: baseUrl })}
+                  </p>
+                  <label className="flex items-start gap-2 text-text">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={clearBaseUrl}
+                      onChange={(e) => setClearBaseUrl(e.target.checked)}
+                    />
+                    <span>{t("hermes.wizard.config.baseUrlClear")}</span>
+                  </label>
+                  <p className="text-text-muted">{t("hermes.wizard.config.baseUrlKeepHint")}</p>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2" data-config-actions>
                 <button
                   type="button"
                   disabled={configSaving}
                   onClick={() => void handleSaveConfig()}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
                 >
                   {configSaving ? t("hermes.wizard.config.saving") : t("hermes.wizard.config.save")}
                 </button>
                 <button
                   type="button"
                   onClick={() => onDone(created ? { profileName: created.name } : undefined)}
-                  className="rounded bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
+                  className="shrink-0 whitespace-nowrap rounded bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
                 >
                   {t("hermes.wizard.finish")}
                 </button>

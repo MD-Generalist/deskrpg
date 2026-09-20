@@ -858,6 +858,13 @@ test("남은 요청 주소를 알리고, 확인해야만 지운다", async () =>
     const warning = el.querySelector("[data-base-url-warning]");
     assert.ok(warning, "남은 주소를 알리지 않는다");
     assert.match(el.textContent ?? "", /https:\/\/old\.example\/v1/);
+    // 경고는 버튼 줄 밖이어야 한다 — 같은 flex 줄에 들어가면 저장·완료 버튼이 눌려
+    // 글자가 세로로 꺾인다(2026-09-20 실제로 그렇게 나갔다).
+    const actions = el.querySelector("[data-config-actions]");
+    assert.ok(actions, "버튼 줄을 찾지 못했다");
+    assert.equal(actions.contains(warning), false, "경고가 버튼 줄 안에 있다");
+    for (const button of actions.querySelectorAll("button"))
+      assert.match(button.className, /whitespace-nowrap/, "버튼 글자가 줄바꿈될 수 있다");
 
     // 확인 없이 저장하면 주소를 건드리지 않는다 — 커스텀 엔드포인트를 말없이 지우지 않는다.
     await act(async () => {
