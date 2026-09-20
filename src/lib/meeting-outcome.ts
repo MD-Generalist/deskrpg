@@ -31,6 +31,19 @@ export type MeetingOutcome = {
   decisions: string[];
   followUps: MeetingFollowUp[];
   project: { recommended: boolean; name: string | null; reason: string | null } | null;
+  /**
+   * 등록 결과. 카드 내용의 사본이 아니라 **연결**이다 — 어느 보드·서브프로젝트에 어떤 카드가
+   * 생겼는지만 적는다. 이 값이 있으면 제안은 해소된 것이고 요약을 다시 만들지 않는다.
+   */
+  registered?: MeetingOutcomeRegistered | null;
+};
+
+export type MeetingOutcomeRegistered = {
+  boardSlug: string;
+  tenant: string | null;
+  taskIds: string[];
+  by: string;
+  at: string;
 };
 
 export type MeetingSummaryStatus = "ok" | "failed" | "skipped";

@@ -73,7 +73,8 @@ import {
   emitMeetingNpcStream,
   registerMeetingSocketHandlers,
 } from "./meeting-socket";
-import { registerMeetingDiscussionHandlers } from "./meeting-discussion";
+import { registerMeetingDiscussionHandlers, resolveNpcAdapter } from "./meeting-discussion";
+import { createResummarizer } from "./meeting-resummarize";
 import { registerRoomHandlers } from "./room-socket";
 import { normalizeOfficeAppearance } from "@/game/three/office-appearance";
 import { AUTOMATION_SOCKET_EVENTS, getWorkingSnapshot } from "./automation-events";
@@ -92,6 +93,7 @@ import {
   type OutcomeParticipant,
   type ParsedMeetingOutcome,
 } from "@/lib/meeting-outcome";
+import { registerMeetingHooks } from "@/lib/meeting-registry";
 import { prefixReportFormat } from "@/lib/report-format";
 import { prefixUserContext, type UserContext } from "@/lib/user-context";
 import { AdapterRegistry } from "../lib/adapters/types.js";
@@ -1100,6 +1102,15 @@ export function setupSocketHandlers(io: Server) {
     return null;
   };
   registerMapRefreshHandler(refreshChannelMap);
+
+  // 회의록의 "요약 다시 시도" 라우트가 어댑터에 닿는 길(`meeting-registry.ts`).
+  registerMeetingHooks({
+    resummarize: createResummarizer({
+      getNpcConfigsForChannel,
+      resolveAdapter: (npc, ctx) => resolveNpcAdapter(npc, { ...ctx, adapterRegistry }),
+      generateMeetingSummary,
+    }),
+  });
 
   // 묶인 채널의 자동화 사건 폴러. 뜨지 못해도 채팅·이동은 되어야 하므로 실패는 로그만.
   void startAutomationPollers(io).catch((err: unknown) => {
