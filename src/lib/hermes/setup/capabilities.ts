@@ -18,6 +18,8 @@ export type CapabilityProbe = {
   installAllowed: boolean;
   platform: string;
   hasSsh: boolean;
+  /** win32 에서만 본다 — 호스트 명령을 띄울 PowerShell 이 있는가. */
+  hasPowershell: boolean;
   inContainer: boolean;
   /** 이 서버 사용자 홈에 Hermes 가 설치돼 있는가. */
   localHermesFound: boolean;
@@ -29,7 +31,10 @@ export function describeCapabilities(p: CapabilityProbe): SetupCapabilities {
   const gate: LocalReason | null =
     p.role !== "system_admin" ? "not_admin" : p.switchedOff ? "disabled" : null;
   let localReason: LocalReason | null = gate;
-  if (!localReason && p.platform === "win32") localReason = "unsupported_platform";
+  // 예전에는 win32 자체를 막았다. Hermes 가 Windows 를 정식 지원하게 되면서(install.ps1,
+  // hermes_cli/gateway_windows.py) 막을 이유가 없어졌다. 이제 없는 것은 PowerShell 뿐이다.
+  if (!localReason && p.platform === "win32" && !p.hasPowershell)
+    localReason = "unsupported_platform";
   // python3 는 이유가 아니다 — 없으면 설치가 uv 로 사용자 홈에 파이썬을 받는다(HOST_LAUNCHER).
   // 컨테이너 안에 Hermes 가 있으면(이미지에 넣었다면) 그대로 쓴다. 없으면 설치를 권하지 않는다 —
   // 컨테이너는 재배포 때 새로 만들어지고, 호스트에서 도는 Hermes 와도 별개다.

@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEFAULT_PATHEXT, hasCommandIn, isWindows, nullDevicePath } from "./platform";
+import path from "node:path";
+
+import {
+  DEFAULT_PATHEXT,
+  hasCommandIn,
+  hermesRootPath,
+  isWindows,
+  nullDevicePath,
+  venvPythonPath,
+} from "./platform";
 
 const winEnv = {
   PATH: "C:\\WINDOWS\\system32;C:\\WINDOWS\\System32\\OpenSSH\\",
@@ -56,4 +65,21 @@ test("널 장치 이름은 플랫폼마다 다르다", () => {
   assert.equal(nullDevicePath("darwin"), "/dev/null");
   assert.equal(isWindows("win32"), true);
   assert.equal(isWindows("linux"), false);
+});
+
+test("Hermes 홈은 Windows 에서 LOCALAPPDATA 아래다", () => {
+  assert.equal(
+    hermesRootPath("win32", { LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" }, "C:\\Users\\u"),
+    path.join("C:\\Users\\u\\AppData\\Local", "hermes"),
+  );
+  assert.equal(
+    hermesRootPath("win32", {}, "C:\\Users\\u"),
+    path.join("C:\\Users\\u", "AppData", "Local", "hermes"),
+  );
+  assert.equal(hermesRootPath("linux", {}, "/home/u"), path.join("/home/u", ".hermes"));
+});
+
+test("venv 파이썬 자리는 플랫폼을 따른다", () => {
+  assert.equal(venvPythonPath("win32", "/v"), path.join("/v", "Scripts", "python.exe"));
+  assert.equal(venvPythonPath("darwin", "/v"), path.join("/v", "bin", "python"));
 });

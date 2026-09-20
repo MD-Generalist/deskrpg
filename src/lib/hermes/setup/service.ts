@@ -26,6 +26,7 @@ import {
 } from "./policy";
 import { SetupJobStore } from "./store";
 import { describeCapabilities } from "./capabilities";
+import { hasCommandIn, hermesRootPath, venvPythonPath } from "./platform";
 import { managedSsh } from "./ssh-hosts";
 import {
   readSshConfigHosts,
@@ -83,17 +84,15 @@ async function role(userId: string) {
   return user?.role;
 }
 function hasCommand(command: string) {
-  return (process.env.PATH ?? "")
-    .split(path.delimiter)
-    .filter(Boolean)
-    .some((directory) => {
-      try {
-        accessSync(path.join(directory, command), constants.X_OK);
-        return true;
-      } catch {
-        return false;
-      }
-    });
+  return hasCommandIn(
+    command,
+    process.env as Record<string, string | undefined>,
+    process.platform,
+    (candidate) => {
+      accessSync(candidate, constants.X_OK);
+      return true;
+    },
+  );
 }
 /** 이 프로세스가 컨테이너 안에서 도는가. 판정 실패는 "아니다" — 막는 쪽으로 틀리지 않게. */
 function inContainer() {
@@ -104,10 +103,15 @@ function inContainer() {
     return false;
   }
 }
-/** 호스트 도우미(HOST_BOOTSTRAP)와 같은 기준 — `~/.hermes/hermes-agent/{venv,.venv}/bin/python`. */
+/** 호스트 도우미(HOST_BOOTSTRAP)와 같은 기준 — Hermes 홈 아래 `hermes-agent/{venv,.venv}` 의 venv 파이썬. */
 function localHermesFound() {
-  const root = path.join(homedir(), ".hermes", "hermes-agent");
-  return ["venv", ".venv"].some((folder) => existsSync(path.join(root, folder, "bin", "python")));
+  const root = path.join(
+    hermesRootPath(process.platform, process.env as Record<string, string | undefined>, homedir()),
+    "hermes-agent",
+  );
+  return ["venv", ".venv"].some((folder) =>
+    existsSync(venvPythonPath(process.platform, path.join(root, folder))),
+  );
 }
 export async function setupCapabilities(userId: string): Promise<SetupCapabilities> {
   const systemRole = await role(userId);
@@ -118,6 +122,7 @@ export async function setupCapabilities(userId: string): Promise<SetupCapabiliti
     installAllowed: hermesInstallAllowed(process.env, systemRole, "local"),
     platform: process.platform,
     hasSsh: hasCommand("ssh"),
+    hasPowershell: process.platform !== "win32" || hasCommand("powershell"),
     inContainer: inContainer(),
     localHermesFound: localHermesFound(),
     hostLabel: hostname(),

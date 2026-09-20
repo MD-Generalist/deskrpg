@@ -19,6 +19,13 @@ import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { nullDevicePath } from "./platform";
+
+/** 관리형 config 의 전역 known_hosts 줄. Windows 에 `/dev/null` 은 없다. */
+export function globalKnownHostsLine(platform: string): string {
+  return `  GlobalKnownHostsFile ${nullDevicePath(platform)}`;
+}
+
 export type SshTarget = { host: string; port: number; user: string };
 export type ManagedHost = SshTarget & {
   id: string;
@@ -167,7 +174,7 @@ export function createManagedSsh(
         "  IdentitiesOnly yes",
         `  HostKeyAlias ${h.id}`,
         `  UserKnownHostsFile ${knownPath}`,
-        "  GlobalKnownHostsFile /dev/null",
+        globalKnownHostsLine(process.platform),
         "  StrictHostKeyChecking yes",
         "  PasswordAuthentication no",
         "  KbdInteractiveAuthentication no",
