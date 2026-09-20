@@ -1,4 +1,10 @@
-import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import {
+  spawn,
+  execFileSync,
+  type ChildProcess,
+  type ChildProcessWithoutNullStreams,
+  type StdioOptions,
+} from "node:child_process";
 import { openSync, closeSync, readFileSync, writeFileSync, rmSync, fstatSync } from "node:fs";
 import { chmodSync, mkdtempSync } from "node:fs";
 import path from "node:path";
@@ -217,18 +223,19 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
         }
       }
 
-      let child: ChildProcessWithoutNullStreams;
+      // 파일 갈래에서는 stdin(파일 fd)·stdout(파일 fd)이 파이프가 아니라 `null` 이다.
+      // `ChildProcessWithoutNullStreams` 로 캐스트하면 그 null 가능성이 타입에서 지워져
+      // 검사가 역참조를 놓친다 — 이 작업에서 실제로 결함 하나를 그렇게 통과시켰다.
+      let child: ChildProcess;
       try {
         if (useFileStdio && stdoutFd !== undefined) {
-          const stdio: any = [stdinFd !== undefined ? stdinFd : "pipe", stdoutFd, "pipe"];
-          // 주의: stdio[0]이 파이프가 아니면 child.stdin은 null이 된다.
-          // 파일 갈래에서는 아래에서 child.stdin을 null 체크로 가둔다.
+          const stdio: StdioOptions = [stdinFd !== undefined ? stdinFd : "pipe", stdoutFd, "pipe"];
           child = spawn(command, args, {
-            stdio: stdio,
+            stdio,
             shell: false,
             detached: process.platform !== "win32",
             ...(options.env ? { env: { ...process.env, ...options.env } } : {}),
-          }) as ChildProcessWithoutNullStreams;
+          });
         } else {
           child = spawnImpl(command, args, options.env);
         }
@@ -314,9 +321,9 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       try {
         // useFileStdio이면 stdout은 파일로 가므로 리스너는 필요 없다
         if (!useFileStdio) {
-          child.stdout.on("data", (data) => collect(data, "stdout"));
+          child.stdout?.on("data", (data) => collect(data, "stdout"));
         }
-        child.stderr.on("data", (data) => collect(data, "stderr"));
+        child.stderr?.on("data", (data) => collect(data, "stderr"));
         child.on("error", () => finish("command_failed"));
         child.on("close", (code) => finish(undefined, code ?? 1));
         // stdin이 파일 fd면 Node는 child.stdin을 null로 둔다

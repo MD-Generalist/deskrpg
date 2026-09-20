@@ -141,25 +141,24 @@ test("비 win32는 프로세스 그룹을 죽인다", () => {
   assert.deepEqual(killed, [[-9, "SIGKILL"]]);
 });
 
-test("win32 에서 ssh 는 stdin/stdout 을 파일로 받는다 (파이프 아님)", async () => {
-  // win32 ssh 호출 시 stdio[0](stdin)과 stdio[1](stdout)이 파이프가 아니어야 함을 검증
-  const child = fake();
-  let capturedStdio: any = null;
-
-  const mockSpawn = (command: string, args: string[], options: any) => {
-    if (command === "ssh") {
-      capturedStdio = options.stdio;
-      // 실제 Windows에서는 stdin과 stdout이 파일 fd여야 한다
-    }
-    return child;
-  };
-
-  const executor = createExecutor(mockSpawn as any);
-
-  // 단위 테스트에서는 process.platform을 직접 바꿀 수 없으므로
-  // 구조적으로 win32 ssh가 stdin/stdout을 파일로 받는다는 것을 단언한다.
-  // 실제 Windows 환경에서 검증: WinServer 4차 보고서에서 stdin/stdout 파일로 742ms 동작 확인.
-  assert.ok(true, "win32 ssh stdin/stdout 파일 리다이렉트: 파이프가 아닌 fd 사용");
+test("executor 소스: win32 ssh 는 stdin/stdout 을 파일 fd 로 받고, 타입이 null 을 숨기지 않는다", () => {
+  // process.platform 을 바꿀 수 없어 이 갈래는 macOS 에서 실행되지 않는다. 구조로 고정한다.
+  // 실기 동작은 WinServer 에서 확인했다(stdin/stdout 파일, SSH discover 849ms).
+  const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
+  assert.match(
+    source,
+    /const stdio: StdioOptions = \[\s*stdinFd !== undefined \? stdinFd : "pipe",\s*stdoutFd,/,
+    "파일 갈래의 stdio 는 파이프가 아니라 파일 fd 여야 한다",
+  );
+  // 캐스트로 null 가능성을 지우면 타입 검사가 역참조를 놓친다 — 실제로 결함 하나가 그렇게 통과했다.
+  assert.equal(
+    source.includes("as ChildProcessWithoutNullStreams"),
+    false,
+    "spawn 결과를 non-null 스트림 타입으로 캐스트하면 안 된다",
+  );
+  assert.match(source, /let child: ChildProcess;/);
+  assert.match(source, /child\.stdout\?\.on\(/, "stdout 은 null 일 수 있다");
+  assert.match(source, /child\.stderr\?\.on\(/, "stderr 은 null 일 수 있다");
 });
 
 // --- 임시 stdio 는 파일 단위가 아니라 전용 디렉터리 단위로 보호한다 ---
