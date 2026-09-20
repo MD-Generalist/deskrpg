@@ -1799,6 +1799,12 @@ const zh: Record<string, string> = {
   "game.room.error.not_joined": "连接已恢复并重新加入，请再发送一次消息。",
   "game.room.error.invalid": "请求无效。",
   // 聊天室（群聊）
+  // 직원 호출 거절 사유(src/lib/npc-call-errors.ts 의 표와 짝이다)
+  "game.npcCall.unknownNpc": "找不到该员工。请刷新页面后重试。",
+  "game.npcCall.meetingReserved": "该员工正在开会。会议结束后再呼叫。",
+  "game.npcCall.alreadyClaimed": "其他用户正在呼叫该员工。请稍后重试。",
+  "game.npcCall.forbidden": "该员工不属于这个办公室。请刷新页面后重试。",
+  "game.npcCall.unavailable": "当前无法呼叫员工。请稍后重试。",
   "workspace.label": "WORKSPACE",
   "workspace.summary": "{players} 人在线 · {npcs} 名 NPC",
   "workspace.spaces": "空间",

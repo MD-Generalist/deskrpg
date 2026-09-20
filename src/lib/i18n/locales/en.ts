@@ -1848,6 +1848,12 @@ const en: Record<string, string> = {
   "game.room.error.not_joined": "Reconnected and rejoined. Please send the message once more.",
   "game.room.error.invalid": "That request wasn't valid.",
   // Chat rooms (group chat)
+  // 직원 호출 거절 사유(src/lib/npc-call-errors.ts 의 표와 짝이다)
+  "game.npcCall.unknownNpc": "That employee is no longer here. Refresh the page and try again.",
+  "game.npcCall.meetingReserved": "That employee is in a meeting. Call them once it ends.",
+  "game.npcCall.alreadyClaimed": "Another user is calling that employee. Try again in a moment.",
+  "game.npcCall.forbidden": "That employee is not in this office. Refresh the page and try again.",
+  "game.npcCall.unavailable": "Can't call that employee right now. Try again in a moment.",
   "workspace.label": "WORKSPACE",
   "workspace.summary": "{players} online · {npcs} NPCs",
   "workspace.spaces": "Spaces",

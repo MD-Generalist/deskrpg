@@ -232,15 +232,12 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       for (const npc of state.npcs.values()) {
         if (npc.ownerSocketId !== socketId) continue;
         if (npc.spatialTarget) {
-          npc.ownerSocketId = leader(state.channelId);
-          npc.moving = false;
-          dependencies.onSpatialBlocked?.(
-            state.channelId,
-            npc.npcId,
-            "driver_disconnected",
-            npc.spatialTarget.generation,
-          );
-          changed(state, npc);
+          const heir = leader(state.channelId);
+          if (heir) {
+            npc.ownerSocketId = heir;
+            npc.moving = true;
+            changed(state, npc);
+          } else settleDriverlessSpatial(state, npc, state.channelId);
           continue;
         }
         npc.ownerSocketId = leader(state.channelId);
@@ -303,6 +300,64 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         state.reservations.delete(id);
         changed(state);
       }
+  };
+  /**
+   * 구동할 브라우저가 없는 회의 이동을 **결과만 정산한다.**
+   *
+   * 회의 이동(`spatial.move`)은 서버가 목표만 박고 걸음은 소유 브라우저가 진행시킨다 —
+   * 이 파일 머리말대로 서버는 경로를 돌리지 않는다. 그래서 구동자가 사라지면 걸음이 멈추고,
+   * 재개 루프는 phase `returning` 만 보기 때문에 회의 이동(`called`)은 영구히 굳었다.
+   * 혼자 쓰는 사용자가 나가면 항상 이 상태가 됐고, 회의석이 점유된 채 남아 다음 회의도
+   * 열 수 없었다.
+   *
+   * 보는 사람이 없는 걸음을 재생할 이유는 없다. 목표 좌표로 옮기고 예약을 도착으로 확정해
+   * 회의 세션까지 진행시킨다(`onSpatialArrival`). 사용자가 돌아오면 NPC 는 이미 자기 자리에 있다.
+   */
+  const settleSpatial = (
+    state: Channel,
+    npc: NpcMotion,
+    channelId: string,
+    at: { x: number; y: number },
+  ) => {
+    const target = npc.spatialTarget;
+    npc.x = at.x;
+    npc.y = at.y;
+    npc.spatialTarget = null;
+    npc.continuation = null;
+    npc.moving = false;
+    npc.ownerSocketId = null;
+    npc.phase = "idle";
+    state.excursions.delete(npc.npcId);
+    for (const reservation of state.reservations.values())
+      if (reservation.actorId === npc.npcId) {
+        reservation.x = at.x;
+        reservation.y = at.y;
+        reservation.arrived = true;
+        reservation.spatial = false;
+        reservation.expires = now() + 60_000;
+      }
+    changed(state, npc);
+    if (target) dependencies.onSpatialArrival?.(channelId, npc.npcId, target.generation);
+  };
+  /**
+   * 구동자가 사라진 회의 이동을 어떻게 끝낼지 정한다.
+   *
+   * - **자리로 돌아가는 중**이면 목표(원래 좌석이나 대체 설 자리)로 정산한다.
+   * - **회의로 들어가던 중**이면 회의는 사용자 없이 진행할 수 없으니 세션은 막되
+   *   (`driver_disconnected`), NPC 를 걸음 도중에 굳혀 두지 않고 **제자리로** 정산하고
+   *   회의석 예약을 놓아준다. 그러지 않으면 다음 회의도 열리지 않는다.
+   */
+  const settleDriverlessSpatial = (state: Channel, npc: NpcMotion, channelId: string) => {
+    const target = npc.spatialTarget;
+    if (!target) return;
+    if (target.returning) {
+      settleSpatial(state, npc, channelId, target);
+      return;
+    }
+    const generation = target.generation;
+    releaseActor(state, npc.npcId);
+    settleSpatial(state, npc, channelId, { x: npc.homeX, y: npc.homeY });
+    dependencies.onSpatialBlocked?.(channelId, npc.npcId, "driver_disconnected", generation);
   };
   const validPoint = (state: Channel, x: unknown, y: unknown): boolean =>
     typeof x === "number" &&
@@ -389,12 +444,29 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       const npc = state.npcs.get(String(payload.npcId));
       if (!npc) return { error: "unknown_npc" };
       if (npc.spatialTarget) return { error: "meeting_reserved" };
-      if (npc.ownerSocketId && npc.ownerSocketId !== socket.id && npc.phase !== "ambient")
+      // 남의 소유권을 넘겨받을 수 있는 상태는 둘이다.
+      //
+      // - `ambient`: 소유권이 "대화 중" 이 아니라 산책 걸음을 돌리는 드라이버다(기존 규칙).
+      // - `returning`: 자리로 돌아가는 중 — 아무도 대화하고 있지 않다. 특히 재접속 유예가
+      //   끝나면 `prune` 이 소유권을 남은 leader 에게 넘기고 phase 를 `returning` 으로 두는데,
+      //   그 leader 를 소유자로 대접하면 **아무도 부르지 않은 직원을 아무도 부를 수 없다.**
+      //
+      // 다만 귀가 가로채기는 **사람이 누른 호출** 에만 허용한다. 방 런타임이 대화 차례마다
+      // 자동으로 쏘는 호출(`reason: "map-chat"`)까지 허용하면 남이 자리로 보낸 NPC 를 대화가
+      // 계속 끌어당긴다 — 그 규칙은 "legacy room intent … preserves competing ownership"
+      // 테스트가 지키고 있다.
+      const roomTurn = payload.reason === "map-chat";
+      if (
+        npc.ownerSocketId &&
+        npc.ownerSocketId !== socket.id &&
+        npc.phase !== "ambient" &&
+        !(npc.phase === "returning" && !roomTurn)
+      )
         return { error: "already_claimed" };
-      if (npc.ownerSocketId === socket.id) {
-        broadcast(channelId, state);
-        return;
-      }
+      // 내가 이미 주인이어도 **재호출**로 다룬다. 예전에는 여기서 broadcast 만 하고 조용히
+      // 돌아섰고, `npc:come-to-player` 가 나가지 않아 아무도 움직이지 않았다 — 오류도 없다.
+      // 같은 신분으로 다시 접속하면 소유권이 새 소켓으로 넘어오므로(`rebindOwner`), 탭을
+      // 새로 열고 호출하는 흔한 흐름이 정확히 이 분기였다. 아래 한 경로로 합친다.
       releaseActor(state, npc.npcId);
       state.excursions.delete(npc.npcId);
       Object.assign(npc, {
@@ -708,6 +780,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       }
       const currentLeader = leader(channelId);
       for (const npc of state.npcs.values()) {
+        // 회의 이동이 남아 있는 NPC 도 재개 대상이다. 예전에는 phase `returning` 만 봐서,
+        // phase 가 `called` 인 회의 복귀는 재입장해도 영구히 재개되지 않았다.
+        if (npc.spatialTarget && !npc.ownerSocketId && currentLeader) {
+          npc.ownerSocketId = currentLeader;
+          npc.moving = true;
+          changed(state, npc);
+          continue;
+        }
         if (npc.phase === "returning" && !npc.ownerSocketId && currentLeader) {
           npc.ownerSocketId = currentLeader;
           npc.moving = true;
@@ -819,11 +899,14 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     }
     for (const npc of state.npcs.values()) {
       if (npc.ownerSocketId === socket.id && npc.spatialTarget && !replacement) {
-        const generation = npc.spatialTarget.generation;
-        npc.ownerSocketId = next;
-        npc.moving = false;
-        dependencies.onSpatialBlocked?.(channelId, npc.npcId, "driver_disconnected", generation);
-        changed(state, npc);
+        if (next) {
+          // 다른 브라우저가 남아 있다 — 걸음을 넘기고 계속 간다. 세션을 죽일 이유가 없다.
+          npc.ownerSocketId = next;
+          npc.moving = true;
+          changed(state, npc);
+          continue;
+        }
+        settleDriverlessSpatial(state, npc, channelId);
         continue;
       }
       if (npc.ownerSocketId === socket.id && !key) {
@@ -1049,8 +1132,17 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         npc = state.npcs.get(actorId);
       const owner = leader(channelId);
       if (!isCurrent(state)) return false;
-      if (!npc || !owner || (npc.ownerSocketId && !npc.spatialTarget && npc.phase !== "ambient"))
+      if (!npc || (npc.ownerSocketId && !npc.spatialTarget && npc.phase !== "ambient"))
         return false;
+      if (!owner) {
+        // 구동할 브라우저가 하나도 없다(자동화·크론이 끝낸 회의, 또는 마지막 사용자가 떠난 뒤).
+        // 예전에는 여기서 false 를 돌려줘 복귀가 `return_unavailable` 로 죽었고 NPC 는
+        // 회의석에 남았다. 걸음을 볼 사람이 없으니 결과만 정산한다.
+        npc.spatialTarget = { ...target, generation, returning };
+        settleSpatial(state, npc, channelId, target);
+        broadcast(channelId, state);
+        return true;
+      }
       npc.ownerSocketId = owner;
       npc.phase = "called";
       npc.moving = true;

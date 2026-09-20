@@ -60,6 +60,7 @@ import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
 import { useMeetingEntry } from "@/components/meeting-room/use-meeting-entry";
 import "@/components/meeting-room/meeting-mode.css";
 import { buildDmThreadEntries, needsCallBeforeDmSend, type DmThread } from "@/lib/dm-threads";
+import { isNpcCallRejected, npcCallErrorKey } from "@/lib/npc-call-errors";
 import WorkspaceNavigator, {
   type NavigatorNpc,
   type NpcNavigatorAction,
@@ -966,12 +967,21 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               ?.ownerSocketId !== data.targetPlayerId
           ) {
             if (data.targetPlayerId === socketInstance?.id)
-              socketInstance?.emit("npc:call", {
-                channelId,
-                npcId: data.npcId,
-                ...(data.reason ? { reason: data.reason } : {}),
-                ...(data.roomId ? { roomId: data.roomId } : {}),
-              });
+              socketInstance?.emit(
+                "npc:call",
+                {
+                  channelId,
+                  npcId: data.npcId,
+                  ...(data.reason ? { reason: data.reason } : {}),
+                  ...(data.roomId ? { roomId: data.roomId } : {}),
+                },
+                // 사람이 누른 호출이 아니라 방 런타임의 의사표시를 따라가는 확인 호출이다 —
+                // 토스트를 띄우면 대화 차례마다 경고가 뜬다. 다만 조용히 버리지는 않는다.
+                (result: unknown) => {
+                  if (isNpcCallRejected(result))
+                    console.warn("[npc-call] intent claim rejected", data.npcId, result);
+                },
+              );
             return;
           }
           EventBus.emit("npc:movement-owner", { npcId: data.npcId, ownerId: data.targetPlayerId });
@@ -1285,11 +1295,19 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const handleCallNpcById = useCallback(
     (npcId: string) => {
       if (!socket) return;
-      socket.emit("npc:call", { channelId, npcId });
+      // 서버는 호출을 거절할 수 있다(회의 중·다른 사용자 점유·목록 불일치). 예전에는 ack 를
+      // 받지 않아 **클릭이 먹지 않은 것처럼** 보였고, 사용자는 원인을 알 방법이 없었다.
+      socket.emit("npc:call", { channelId, npcId }, (result: unknown) => {
+        if (!isNpcCallRejected(result)) return;
+        showToastNotification(
+          `npc-call-${npcId}`,
+          t(npcCallErrorKey((result as { error?: unknown })?.error)),
+        );
+      });
       setContextMenu(null);
       closeRosterMenus();
     },
-    [socket, channelId, closeRosterMenus],
+    [socket, channelId, closeRosterMenus, showToastNotification, t],
   );
 
   const handleTalkNpcById = useCallback(
@@ -1443,7 +1461,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       if (channelId && needsCallBeforeDmSend(npcMoveStatesRef.current[dialogNpc.npcId])) {
         // reason 을 싣지 않는다 — 서버가 아는 값은 "map-chat"(방 화면을 여는 후처리)뿐이고,
         // 모르는 값은 조용히 버려진다. DM 은 이미 열려 있으므로 평범한 호출이 맞다.
-        socket.emit("npc:call", { channelId, npcId: dialogNpc.npcId });
+        socket.emit("npc:call", { channelId, npcId: dialogNpc.npcId }, (result: unknown) => {
+          if (!isNpcCallRejected(result)) return;
+          showToastNotification(
+            `npc-call-${dialogNpc.npcId}`,
+            t(npcCallErrorKey((result as { error?: unknown })?.error)),
+          );
+        });
       }
       // 목록 미리보기를 서버 왕복 없이 먼저 맞춘다 — 목록은 닫을 때 다시 묻는다.
       setDmThreads((previous) => [
@@ -1494,7 +1518,16 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               .filter((npcId) => !present.has(npcId))
           : mapChatParticipantsRef.current.recallTargets(currentRoomId, present);
       for (const npcId of targets) {
-        socket.emit("npc:call", { channelId, npcId, reason: "map-chat", roomId: currentRoomId });
+        socket.emit(
+          "npc:call",
+          { channelId, npcId, reason: "map-chat", roomId: currentRoomId },
+          // 대화를 다시 시작하며 자동으로 부르는 경로다. `already_claimed`(다른 사용자가
+          // 대화 중)는 여기서 정상이라 토스트를 띄우지 않는다 — 대신 흔적은 남긴다.
+          (result: unknown) => {
+            if (isNpcCallRejected(result))
+              console.warn("[npc-call] room recall rejected", npcId, result);
+          },
+        );
       }
     },
     [socket, channelId, currentRoomId, roomState.rooms, showToastNotification, t],
