@@ -572,6 +572,24 @@ test("미디어 탭을 누르면 목록 요청에 category=media 가 붙는다",
   assert.ok(calls.includes("GET /api/channels/ch-1/artifacts?category=media&limit=50"));
 });
 
+test("게이트 실패면 체크리스트를 여는 버튼이 보이고, 누르면 체크리스트가 뜬다", async () => {
+  mockFetch({
+    [LIST]: { status: 404, json: { code: "plugin_absent", message: "not installed" } },
+  });
+  await render();
+  assert.ok(queryText("무엇이 필요한가요?"));
+  await click(byText("무엇이 필요한가요?"));
+  assert.ok(queryText("DeskRPG 플러그인 설치"));
+});
+
+test("평범한 오류(코드 없음)에는 체크리스트 버튼이 뜨지 않는다", async () => {
+  mockFetch({
+    [LIST]: { status: 500, json: { code: "internal_error", message: "boom" } },
+  });
+  await render();
+  assert.equal(queryText("무엇이 필요한가요?"), undefined);
+});
+
 test("미디어 탭 격자는 이미지는 썸네일로, 오디오·비디오는 아이콘 타일로 그린다", async () => {
   const img = summary({
     id: "img1",
