@@ -72,7 +72,9 @@ export default function GatewayOnboardingGuide() {
       </a>
 
       <div className="mt-4">
-        <div className="flex flex-wrap gap-2">
+        <p className="text-sm font-semibold">{t("gateways.onboarding.step4Title")}</p>
+        <p className="mt-1 text-sm text-text-muted">{t("gateways.onboarding.step4Body")}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={quickStart}
