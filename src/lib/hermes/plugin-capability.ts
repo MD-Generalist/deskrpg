@@ -210,6 +210,8 @@ export function kanbanViewsGate(
 
 /** 스웜이 들어간 플러그인 버전. `AUTOMATION_MIN_VERSION` 과 **따로** 둔다. */
 export const SWARM_MIN_VERSION = "0.7.0";
+/** 실행 전 승인 관문에 필요한 플러그인 버전 — 안내 문구에만 쓴다(판정은 capability). */
+const INITIAL_STATUS_MIN_VERSION = "0.11.0";
 
 /**
  * 이 게이트웨이에서 스웜을 쓸 수 있는가.
@@ -221,6 +223,29 @@ export const SWARM_MIN_VERSION = "0.7.0";
  */
 export function supportsSwarm(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("swarm"));
+}
+
+/**
+ * 실행 전 승인 관문을 켤 수 있는가 — 플러그인이 카드 생성에 `initial_status` 를 받는가.
+ *
+ * 스웜과 같은 이유로 **버전을 보지 않는다.** 플러그인은 Hermes 빌드의 `create_task` 가
+ * 그 인자를 받을 때만 capability 에 붙인다. 없는데 관문을 켜면 카드가 `running` 으로
+ * 생겨 **승인 없이 실행된다** — 그래서 fail-closed 로 둔다.
+ */
+export function supportsInitialStatus(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("initial_status"));
+}
+
+export function initialStatusGate(
+  info: PluginInfo | null,
+): { ok: true } | { ok: false; minVersion: string; reason: string; missing: string[] } {
+  if (supportsInitialStatus(info)) return { ok: true };
+  return {
+    ok: false,
+    minVersion: INITIAL_STATUS_MIN_VERSION,
+    reason: info ? "missing_capability" : "no_info",
+    missing: ["initial_status"],
+  };
 }
 
 export function swarmGate(

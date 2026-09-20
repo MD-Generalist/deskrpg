@@ -51,7 +51,14 @@ describe("owner client — info", () => {
     const info = unwrap(await owner().info());
     assert.equal(info.plugin, "deskrpg");
     assert.equal(info.version, "0.6.0");
-    assert.deepEqual(info.capabilities, ["kanban", "cron", "events", "swarm", "kanban_views"]);
+    assert.deepEqual(info.capabilities, [
+      "kanban",
+      "cron",
+      "events",
+      "swarm",
+      "kanban_views",
+      "initial_status",
+    ]);
     assert.equal(info.timezone, "Asia/Seoul");
     assert.deepEqual(info.kanban, { dispatcher_present: true, attachments: true });
     assert.equal(server.lastRequest()?.auth, `Bearer ${OWNER}`);
