@@ -81,6 +81,9 @@ import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
 import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
+import { CRON_SOCKET_EVENT } from "@/components/cron/CronPanel";
+import type { PanelBadgeCounts } from "@/components/ChatPanel";
+import { openCardTarget, type OpenCardTarget } from "@/components/kanban/open-card-target";
 import CronModal from "@/components/cron/CronModal";
 import ArtifactsModal from "@/components/artifacts/ArtifactsModal";
 import type { SourceTarget } from "@/components/artifacts/artifact-view-model";
@@ -89,12 +92,10 @@ import type { TaskDrawerArtifacts } from "@/components/kanban/TaskDrawer";
 import {
   INITIAL_ARTIFACTS_MODAL,
   nextArtifactChips,
-  nextKanbanFocus,
   planSourceNavigation,
   reduceArtifactsModal,
   type ArtifactChip,
   type ArtifactSocketEvent,
-  type KanbanFocusRequest,
 } from "./artifact-entry";
 import {
   EMPTY_NPC_WORKING,
@@ -254,9 +255,18 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, []);
   const [kanbanRefreshTick, setKanbanRefreshTick] = useState(0);
-  // 방 알림의 "카드 열기"(R29)·결과물의 "출처로 이동" — 이 카드의 상세를 편다. 보드가 이미
-  // 열려 있어도 `seq` 가 올라 선택이 옮겨 간다(`nextKanbanFocus`).
-  const [kanbanFocus, setKanbanFocus] = useState<KanbanFocusRequest | null>(null);
+  // 직원 대화창 탭의 미확인 배지(T6)와 그 재계산 신호(`cron:event` 마다 오른다).
+  const [panelBadges, setPanelBadges] = useState<PanelBadgeCounts | null>(null);
+  const [panelBadgeTick, setPanelBadgeTick] = useState(0);
+  // 카드를 누른 **그 순간** 보드가 열려 있었는지 — 콜백을 다시 만들지 않고 보기 위해 ref 로 둔다.
+  const showKanbanRef = useRef(showKanban);
+  useEffect(() => {
+    showKanbanRef.current = showKanban;
+  }, [showKanban]);
+  // 방 알림의 "카드 열기"(R29)·결과물의 "출처로 이동"·직원 대화창의 카드 탭(T6) — 이 카드의
+  // 상세를 편다. 누를 당시 보드가 닫혀 있었으면 `initialTaskId`(마운트 때 읽힌다), 열려 있었으면
+  // `focusRequest` 의 `seq` 를 올린다(`openCardTarget`).
+  const [kanbanCard, setKanbanCard] = useState<OpenCardTarget | null>(null);
   // 채널 크론 화면(T10, R15). "이력 열기"(R30) 는 그 잡의 실행 이력으로 연다.
   const [showCron, setShowCron] = useState(false);
   const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
@@ -1981,6 +1991,58 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, [socket, channelId]);
 
   /**
+   * 직원 대화창 탭의 미확인 배지(T6) — 대화창을 열 때와 기존 `kanban:event`·`cron:event` 가
+   * 올 때만 다시 센다. **폴링하지 않는다**: 이 조회는 서버에서 Hermes 보드를 읽는다.
+   */
+  useEffect(() => {
+    if (!socket || !channelId) return;
+    const bump = () => setPanelBadgeTick((n) => n + 1);
+    socket.on(CRON_SOCKET_EVENT, bump);
+    return () => {
+      socket.off(CRON_SOCKET_EVENT, bump);
+    };
+  }, [socket, channelId]);
+  useEffect(() => {
+    if (!channelId || !dialogNpcId) {
+      setPanelBadges(null);
+      return;
+    }
+    let alive = true;
+    fetch(
+      `/api/channels/${encodeURIComponent(channelId)}/npcs/${encodeURIComponent(dialogNpcId)}/panel-reads`,
+    )
+      .then((res) => (res.ok ? (res.json() as Promise<PanelBadgeCounts>) : null))
+      .then((badges) => {
+        if (alive) setPanelBadges(badges);
+      })
+      .catch(() => {
+        // 배지는 "모르면 없다" 가 정답이다 — 실패를 화면에 올리지 않는다.
+        if (alive) setPanelBadges(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [channelId, dialogNpcId, kanbanRefreshTick, panelBadgeTick]);
+  /** 탭을 열었다 — 그 배지를 먼저 0 으로 만들고(사용자가 기다리지 않게) 기록을 보낸다. */
+  const markPanelTabSeen = useCallback(
+    (tab: "cron" | "cards") => {
+      if (!channelId || !dialogNpcId) return;
+      setPanelBadges((prev) => (prev ? { ...prev, [tab]: 0 } : prev));
+      void fetch(
+        `/api/channels/${encodeURIComponent(channelId)}/npcs/${encodeURIComponent(dialogNpcId)}/panel-reads`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tab }),
+        },
+      ).catch(() => {
+        // 기록에 실패하면 다음 조회에서 배지가 되살아난다 — 조용히 넘긴다.
+      });
+    },
+    [channelId, dialogNpcId],
+  );
+
+  /**
    * 결과물 사건(`artifact:event`) — 이 채널 것만 모달 상태로 접고(마지막 사건은 삭제·새 버전
    * 반영용), 열린 NPC 대화에서 저장된 것이면 "결과물 저장됨" 칩을 더한다.
    */
@@ -2063,7 +2125,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // 방 알림 링크(R29·R30) → 해당 모달을 그 항목으로 연다.
   const openNoticeCard = useCallback(
     (cardId: string) => {
-      setKanbanFocus((prev) => nextKanbanFocus(prev, cardId));
+      setKanbanCard((prev) =>
+        openCardTarget({ boardOpen: showKanbanRef.current, taskId: cardId, prev }),
+      );
       setShowKanban(true);
       // 그 카드의 보고는 사용자가 본 것이다 — 앞선 것까지 확인 처리한다.
       // `cardId` 가 없는 보고(크론 실패)와 섞이지 않도록 빈 id 는 맞추지 않는다.
@@ -2153,7 +2217,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
   const closeKanban = useCallback(() => {
     setShowKanban(false);
-    setKanbanFocus(null);
+    setKanbanCard(null);
   }, []);
   const closeCron = useCallback(() => {
     setShowCron(false);
@@ -2484,6 +2548,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         cron={channelId ? { channelId, socket, onToast: cronToast } : null}
         onOpenNoticeCard={openNoticeCard}
         onOpenNoticeCronJob={openNoticeCronJob}
+        badges={panelBadges}
+        onMarkSeen={markPanelTabSeen}
+        onOpenAssignedCard={openNoticeCard}
         npcArtifactChips={npcArtifactChips}
         onOpenArtifact={openArtifact}
       />
@@ -3133,8 +3200,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         <KanbanBoardModal
           channelId={channelId}
           refreshTick={kanbanRefreshTick}
-          initialTaskId={kanbanFocus?.taskId ?? null}
-          focusRequest={kanbanFocus}
+          initialTaskId={kanbanCard?.initialTaskId ?? null}
+          focusRequest={kanbanCard?.focusRequest ?? null}
           artifacts={kanbanArtifacts}
           artifactsRefreshTick={artifactsModal.eventSeq}
           covered={artifactsModal.show}

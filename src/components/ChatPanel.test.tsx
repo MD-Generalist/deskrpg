@@ -10,6 +10,8 @@ import { I18nProvider } from "@/lib/i18n";
 import type { RoomState } from "@/app/game/room-state";
 import type { RoomSummary } from "@/lib/chat-rooms-policy";
 import ChatPanel from "./ChatPanel";
+import { tabFor } from "./chat/npc-tab-state";
+import { openCardTarget } from "./kanban/open-card-target";
 
 function room(id: string, kind: RoomSummary["kind"], name: string): RoomSummary {
   return {
@@ -589,4 +591,151 @@ test("avatarFor 가 없으면 아바타를 그리지 않는다 — 기존 화면
   const el = await mount(node);
   assert.equal(el.querySelector("[data-chat-avatar]"), null);
   assert.equal(el.querySelector("[data-room-avatars]"), null);
+});
+
+// ---------------------------------------------------------------------------
+// T6 — 카드 탭 배선과 배지
+// ---------------------------------------------------------------------------
+
+function cardsPanel(
+  extra: Partial<React.ComponentProps<typeof ChatPanel>> = {},
+): React.ReactElement {
+  return (
+    <I18nProvider initialLocale="ko">
+      <ChatPanel
+        dialogNpc={{ npcId: "npc-a", npcName: "소피" }}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={dmState()}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+        cron={{ channelId: "ch1" }}
+        {...extra}
+      />
+    </I18nProvider>
+  );
+}
+
+/** 이 블록의 테스트는 탭 줄만 본다 — 탭을 열면 나가는 조회는 빈 응답으로 막는다. */
+async function withStubbedFetch<T>(run: () => Promise<T>): Promise<T> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ columns: [], npcs: [], jobs: [] }), {
+      status: 200,
+    })) as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+test("탭이 셋이다", async () => {
+  const el = await mount(cardsPanel());
+  assert.equal(el.querySelectorAll('[data-testid="npc-dialog-tabs"] [role="tab"]').length, 3);
+});
+
+test("미확인 개수가 배지로 보이고 0 이면 배지가 없다", async () => {
+  const el = await mount(cardsPanel({ badges: { cards: 3, cron: 0 } }));
+  assert.equal(el.querySelector('[data-badge="cards"]')?.textContent, "3");
+  assert.equal(el.querySelector('[data-badge="cron"]'), null);
+});
+
+test("탭을 열면 그 탭의 열람이 기록된다 — 대화 탭은 기록하지 않는다", async () => {
+  await withStubbedFetch(async () => {
+    const posted: string[] = [];
+    const el = await mount(cardsPanel({ onMarkSeen: (tab) => posted.push(tab) }));
+    await click(el.querySelector('[role="tab"][data-tab="cards"]')!);
+    assert.deepEqual(posted, ["cards"]);
+    await click(el.querySelector('[role="tab"][data-tab="chat"]')!);
+    assert.deepEqual(posted, ["cards"]);
+  });
+});
+
+test("카드 탭은 보드를 조회해 담당 카드를 그리고, 누르면 그 카드를 지목한다", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    urls.push(typeof input === "string" ? input : input.toString());
+    return new Response(
+      JSON.stringify({
+        columns: [
+          {
+            status: "todo",
+            tasks: [
+              { id: "t1", title: "주간 보고서", status: "todo", assignee: "sophie" },
+              { id: "t2", title: "남의 것", status: "todo", assignee: "noah" },
+            ],
+          },
+        ],
+        npcs: [{ npcId: "npc-a", npcName: "소피", profileName: "sophie", active: true }],
+      }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+  try {
+    const opened: string[] = [];
+    const el = await mount(cardsPanel({ onOpenAssignedCard: (taskId) => opened.push(taskId) }));
+    await click(el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.deepEqual(urls, ["/api/channels/ch1/kanban/board"]);
+    const cards = el.querySelectorAll('[data-testid="npc-cards-tab"] [data-card-id]');
+    assert.equal(cards.length, 1, "담당 카드만 보여야 한다");
+    await click(cards[0]);
+    assert.deepEqual(opened, ["t1"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("보드 조회가 막히면 서버가 준 코드를 그대로 카드 탭에 넘긴다", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ code: "board_unavailable", message: "not ready" }), {
+      status: 503,
+    })) as typeof fetch;
+  try {
+    const el = await mount(cardsPanel());
+    await click(el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const alert = el.querySelector('[data-testid="cards-error"]');
+    assert.ok(alert, "게이트 안내가 보이지 않는다");
+    // `board_unavailable` 전용 문구 — 일반 폴백("알 수 없는 오류")으로 떨어지면 안 된다.
+    assert.match(alert.textContent ?? "", /보드/);
+    assert.equal(el.querySelector('[data-testid="cards-empty"]'), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("직원을 바꾸면 탭이 chat 으로 돌아간다", () => {
+  // 기존 동작(탭 선택이 npcId 로 묶여 있다)을 깨지 않는다.
+  assert.equal(tabFor({ npcId: "n1", tab: "cards" }, "n2"), "chat");
+  assert.equal(tabFor({ npcId: "n1", tab: "cards" }, "n1"), "cards");
+});
+
+test("닫힌 보드는 initialTaskId, 열린 보드는 focusRequest 로 지목한다", () => {
+  const closed = openCardTarget({ boardOpen: false, taskId: "t1" });
+  assert.equal(closed.initialTaskId, "t1");
+  assert.equal(closed.focusRequest, null);
+  const open = openCardTarget({ boardOpen: true, taskId: "t1", prev: closed });
+  assert.equal(open.initialTaskId, null);
+  assert.equal(open.focusRequest?.taskId, "t1");
+  // 같은 카드를 다시 눌러도 새 요청이다 — seq 가 오른다.
+  assert.equal(openCardTarget({ boardOpen: true, taskId: "t1", prev: open }).focusRequest?.seq, 2);
 });

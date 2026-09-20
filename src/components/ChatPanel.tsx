@@ -24,8 +24,14 @@ import ResponseProgress from "./chat/ResponseProgress";
 import { ConversationSessionStore } from "@/app/game/conversation-session";
 import CronPanel, { type CronEventSource } from "./cron/CronPanel";
 import RoomNoticeMessage from "./chat/RoomNoticeMessage";
+import NpcCardsTab from "./chat/NpcCardsTab";
+import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state";
+import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
 
 /** NPC 대화창의 크론 탭(T9)에 필요한 것. 배선(GamePageClient)이 넘긴다 — 없으면 탭이 없다. */
+/** 직원 대화창 탭의 미확인 개수(`GET .../panel-reads`). */
+export type PanelBadgeCounts = { cards: number; cron: number };
+
 export type ChatPanelCronContext = {
   channelId: string;
   socket?: CronEventSource | null;
@@ -78,6 +84,12 @@ interface ChatPanelProps {
   cron?: ChatPanelCronContext | null;
   /** 방 알림의 "카드 열기"(R29) — 칸반 모달을 그 카드로 연다. 없으면 링크가 없다. */
   onOpenNoticeCard?: (cardId: string, boardSlug: string) => void;
+  /** 탭별 미확인 개수. 0 이면 배지를 그리지 않는다. 없으면 배지가 없다. */
+  badges?: PanelBadgeCounts | null;
+  /** 크론·카드 탭을 골랐다 — 열람 기록(`POST .../panel-reads`)은 배선이 한다. */
+  onMarkSeen?: (tab: "cron" | "cards") => void;
+  /** 카드 탭에서 카드를 눌렀다 — 칸반을 그 카드로 지목한다. 없으면 누를 수 없다. */
+  onOpenAssignedCard?: (taskId: string) => void;
   /** 방 알림의 "이력 열기"(R30) — 채널 크론 화면을 그 잡으로 연다. 없으면 링크가 없다. */
   onOpenNoticeCronJob?: (jobId: string) => void;
   /** 이 대화에서 NPC 가 저장한 결과물 — 마지막 답변 아래 칩으로 그린다. */
@@ -147,6 +159,9 @@ export default function ChatPanel({
   cron = null,
   onOpenNoticeCard,
   onOpenNoticeCronJob,
+  badges = null,
+  onMarkSeen,
+  onOpenAssignedCard,
   npcArtifactChips = [],
   onOpenArtifact,
   avatarFor,
@@ -154,13 +169,50 @@ export default function ChatPanel({
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
   // NPC DM 의 탭 — 어느 NPC 의 선택인지 같이 기억해, 다른 NPC 로 바뀌면 대화 탭으로 돌아간다
   // (effect 로 되돌리지 않는다 — 렌더 중 파생).
-  const [npcTabState, setNpcTabState] = useState<{ npcId: string | null; tab: "chat" | "cron" }>({
-    npcId: null,
-    tab: "chat",
-  });
+  const [npcTabState, setNpcTabState] = useState<NpcTabState>({ npcId: null, tab: "chat" });
   const dialogNpcId = dialogNpc?.npcId ?? null;
-  const npcTab = npcTabState.npcId === dialogNpcId ? npcTabState.tab : "chat";
-  const setNpcTab = (tab: "chat" | "cron") => setNpcTabState({ npcId: dialogNpcId, tab });
+  const npcTab = tabFor(npcTabState, dialogNpcId);
+  const setNpcTab = (tab: NpcPanelTab) => {
+    setNpcTabState({ npcId: dialogNpcId, tab });
+    if (tab !== "chat") onMarkSeen?.(tab);
+  };
+  // 카드 탭의 보드 — 탭을 열 때 한 번 읽는다. 실패하면 **서버가 준 코드를 그대로** 들고 가야
+  // `NpcCardsTab` 이 428·409·503 전용 안내를 고를 수 있다(감싸거나 바꾸지 않는다).
+  // 결과에 조회 키를 함께 담아, 직원·채널이 바뀌면 옛 결과를 렌더 중에 버린다(effect 로
+  // 되돌리지 않는다 — 한 프레임 동안 남의 카드가 보이는 일이 없다).
+  const [cardsFetch, setCardsFetch] = useState<{
+    key: string;
+    board: BoardResponse | null;
+    error: string | null;
+  } | null>(null);
+  const cardsChannelId = cron?.channelId ?? null;
+  const cardsKey =
+    npcTab === "cards" && cardsChannelId && dialogNpcId ? `${cardsChannelId}:${dialogNpcId}` : null;
+  useEffect(() => {
+    if (!cardsKey || !cardsChannelId) return;
+    let alive = true;
+    createKanbanApi(cardsChannelId)
+      .board(false)
+      .then((board) => {
+        if (alive) setCardsFetch({ key: cardsKey, board, error: null });
+      })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setCardsFetch({
+          key: cardsKey,
+          board: null,
+          error: err instanceof KanbanApiError ? err.code : "unknown_error",
+        });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [cardsKey, cardsChannelId]);
+  const cardsLoaded = cardsFetch?.key === cardsKey ? cardsFetch : null;
+  const cardsBoard = cardsLoaded?.board ?? null;
+  const cardsError = cardsLoaded?.error ?? null;
+  const cardsNpcProfile =
+    cardsBoard?.npcs.find((npc) => npc.npcId === dialogNpcId)?.profileName ?? "";
   const width = controlledWidth ?? internalWidth;
   const setWidth = useCallback(
     (next: number) => {
@@ -477,25 +529,48 @@ export default function ChatPanel({
                 data-testid="npc-dialog-tabs"
                 className="flex border-b border-border bg-surface/60 text-xs"
               >
-                {(["chat", "cron"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    role="tab"
-                    aria-selected={npcTab === tab}
-                    onClick={() => setNpcTab(tab)}
-                    className={`px-3 py-1.5 ${
-                      npcTab === tab
-                        ? "text-text border-b-2 border-primary"
-                        : "text-text-muted hover:text-text"
-                    }`}
-                  >
-                    {t(`cron.tab.${tab}`)}
-                  </button>
-                ))}
+                {(["chat", "cron", "cards"] as const).map((tab) => {
+                  const unseen = tab === "chat" ? 0 : (badges?.[tab] ?? 0);
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      data-tab={tab}
+                      aria-selected={npcTab === tab}
+                      onClick={() => setNpcTab(tab)}
+                      className={`px-3 py-1.5 ${
+                        npcTab === tab
+                          ? "text-text border-b-2 border-primary"
+                          : "text-text-muted hover:text-text"
+                      }`}
+                    >
+                      {t(`cron.tab.${tab}`)}
+                      {unseen > 0 && (
+                        <span
+                          data-badge={tab}
+                          className="ml-1 inline-block min-w-[1.1rem] rounded-full bg-primary/20 px-1 text-center text-[10px] leading-4 text-primary"
+                        >
+                          {unseen}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
-            {cron && npcTab === "cron" ? (
+            {cron && npcTab === "cards" ? (
+              <div className="flex-1 min-h-0">
+                <NpcCardsTab
+                  channelId={cron.channelId}
+                  npcId={dialogNpc!.npcId}
+                  npcProfile={cardsNpcProfile}
+                  board={cardsBoard}
+                  error={cardsError}
+                  onOpenCard={(taskId) => onOpenAssignedCard?.(taskId)}
+                />
+              </div>
+            ) : cron && npcTab === "cron" ? (
               <div className="flex-1 min-h-0">
                 <CronPanel
                   channelId={cron.channelId}
