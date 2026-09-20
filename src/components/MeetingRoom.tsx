@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import ChatInput from "./ChatInput";
+import MeetingOutcomeSection from "./meeting-room/MeetingOutcomeSection";
 import MinutesModal from "./MinutesModal";
 import { useLocale, useT } from "@/lib/i18n";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
@@ -1390,6 +1391,17 @@ export default function MeetingRoom({
                   )}
                 </div>
 
+                {/* 결정·후속 업무와 "프로젝트로 등록할까요?" — 회의록이 저장됐을 때만 */}
+                {lastMeetingResult.minutesId && (
+                  <MeetingOutcomeSection
+                    minutesId={lastMeetingResult.minutesId}
+                    npcs={npcs}
+                    onSummaryChanged={(summary) =>
+                      setLastMeetingResult((prev) => (prev ? { ...prev, ...summary } : prev))
+                    }
+                  />
+                )}
+
                 {/* Divider */}
                 <div className="border-t border-border" />
 
@@ -1544,7 +1556,11 @@ export default function MeetingRoom({
       </fieldset>
 
       {showMinutesModal && (
-        <MinutesModal channelId={channelId} onClose={() => setShowMinutesModal(false)} />
+        <MinutesModal
+          channelId={channelId}
+          npcs={npcs}
+          onClose={() => setShowMinutesModal(false)}
+        />
       )}
     </div>
   );

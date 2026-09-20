@@ -14,6 +14,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
+import MeetingOutcomeSection from "./meeting-room/MeetingOutcomeSection";
 
 interface MeetingMinutesItem {
   id: string;
@@ -32,10 +33,12 @@ interface MeetingMinutesDetail extends MeetingMinutesItem {
 
 interface MinutesModalProps {
   channelId: string;
+  /** 후속 업무의 담당으로 고를 수 있는 채널 직원. */
+  npcs: Array<{ id: string; name: string }>;
   onClose: () => void;
 }
 
-export default function MinutesModal({ channelId, onClose }: MinutesModalProps) {
+export default function MinutesModal({ channelId, npcs, onClose }: MinutesModalProps) {
   const t = useT();
   const { locale } = useLocale();
   const [items, setItems] = useState<MeetingMinutesItem[]>([]);
@@ -264,6 +267,17 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                     <div className="text-text-secondary leading-relaxed">{detail.conclusions}</div>
                   </div>
                 )}
+
+                {/* 결정·후속 업무와 등록 제안. 종료 화면을 닫았어도 여기서 다시 열린다. */}
+                <div className="mb-3">
+                  <MeetingOutcomeSection
+                    minutesId={detail.id}
+                    npcs={npcs}
+                    onSummaryChanged={(summary) =>
+                      setDetail((prev) => (prev ? { ...prev, ...summary } : prev))
+                    }
+                  />
+                </div>
 
                 <div className="mb-3">
                   <button
