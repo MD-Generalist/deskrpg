@@ -203,6 +203,12 @@ export type CreateTaskBody = {
   provider_override?: string;
   reasoning_effort?: string;
   project_id?: string;
+  /**
+   * 생성 시점에만 지정할 수 있는 상태. 플러그인이 `{"running","blocked"}` 만 받는다.
+   * `blocked` 는 Hermes 에서 sticky 라 사람이 풀 때까지 디스패치되지 않는다 —
+   * 실행 전 승인 관문이 쓰는 자리다(`triage` 는 게이트웨이가 자동 분해해 쓸 수 없다).
+   */
+  initial_status?: "running" | "blocked";
 };
 
 /** `PATCH /kanban/tasks/{id}` — 부분 갱신. */

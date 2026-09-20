@@ -2395,6 +2395,9 @@ const ko: Record<string, string> = {
   "errors.unauthorized": "로그인이 필요합니다",
   "errors.setupBadOrigin":
     "다른 사이트에서 보낸 요청은 처리하지 않습니다. 이 화면에서 다시 시도하세요.",
+  "errors.assigneeNotInChannel": "담당으로 지정한 직원이 이 채널에서 일하고 있지 않습니다.",
+  "errors.noTasksCreated": "과업을 하나도 만들지 못해 승인 요청을 올리지 않았습니다.",
+  "errors.parentFailed": "선행 과업을 만들지 못해 이 과업도 만들지 않았습니다.",
   "errors.forbidden": "이 작업을 수행할 권한이 없습니다",
   "errors.notFound": "요청한 리소스를 찾을 수 없습니다",
   "errors.channelIdRequired": "오피스 ID가 필요합니다",

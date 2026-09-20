@@ -2401,6 +2401,9 @@ const en: Record<string, string> = {
   "errors.unauthorized": "You need to sign in to continue",
   "errors.setupBadOrigin":
     "Requests from another site are not accepted. Try again from this screen.",
+  "errors.assigneeNotInChannel": "That employee is not working in this channel.",
+  "errors.noTasksCreated": "No task could be created, so no approval was requested.",
+  "errors.parentFailed": "A prerequisite task could not be created, so this one was skipped.",
   "errors.forbidden": "You do not have permission to do that",
   "errors.notFound": "Requested resource was not found",
   "errors.channelIdRequired": "Channel ID is required",

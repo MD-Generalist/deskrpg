@@ -2422,6 +2422,9 @@ const ja: Record<string, string> = {
   "errors.unauthorized": "続行するにはログインが必要です",
   "errors.setupBadOrigin":
     "他のサイトからのリクエストは受け付けません。この画面からやり直してください。",
+  "errors.assigneeNotInChannel": "担当に指定した社員はこのチャンネルで勤務していません。",
+  "errors.noTasksCreated": "タスクを一つも作成できなかったため、承認依頼は作成されませんでした。",
+  "errors.parentFailed": "先行タスクを作成できなかったため、このタスクも作成されませんでした。",
   "errors.forbidden": "この操作を行う権限がありません",
   "errors.notFound": "要求されたリソースが見つかりません",
   "errors.channelIdRequired": "チャンネルIDが必要です",

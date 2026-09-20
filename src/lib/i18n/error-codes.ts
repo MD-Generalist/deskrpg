@@ -91,6 +91,9 @@ export type ErrorCode =
   | "failed_to_open_template_for_editing"
   | "unauthorized"
   | "setup_bad_origin"
+  | "assignee_not_in_channel"
+  | "no_tasks_created"
+  | "parent_failed"
   | "forbidden"
   | "not_found"
   | "channel_id_required"
@@ -293,6 +296,9 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   failed_to_open_template_for_editing: "errors.failedToOpenTemplateForEditing",
   unauthorized: "errors.unauthorized",
   setup_bad_origin: "errors.setupBadOrigin",
+  assignee_not_in_channel: "errors.assigneeNotInChannel",
+  no_tasks_created: "errors.noTasksCreated",
+  parent_failed: "errors.parentFailed",
   forbidden: "errors.forbidden",
   not_found: "errors.notFound",
   channel_id_required: "errors.channelIdRequired",

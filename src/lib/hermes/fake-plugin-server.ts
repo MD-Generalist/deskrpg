@@ -402,10 +402,31 @@ export async function startFakePluginServer(
       : [];
     for (const parent of parents) if (!board.tasks.has(parent)) throw notFound("unknown_parent");
 
+    // 플러그인이 `{"running","blocked"}` 만 받는다. 모르는 값을 그냥 흘리면 이 필드를 쓰는
+    // 테스트가 아무것도 증명하지 못한다 — 실제 플러그인에서 겪은 함정이다.
+    const initialStatus = body.initial_status;
+    if (initialStatus !== undefined && initialStatus !== "running" && initialStatus !== "blocked")
+      throw badRequest("invalid_field");
+
+    // Hermes: 같은 키를 가진 **보관되지 않은** 카드가 있으면 새로 만들지 않고 그것을 돌려준다
+    // (`kanban_db.py` 의 `idempotency_key`). 이게 없으면 재시도가 카드를 늘린다.
+    const idempotencyKey = typeof body.idempotency_key === "string" ? body.idempotency_key : null;
+    if (idempotencyKey) {
+      for (const existing of board.tasks.values()) {
+        // `idempotency_key` 는 응답 계약(`KanbanTaskFull`)에 없는 내부 값이다 — 가짜 서버가
+        // 재시도를 알아보려고만 들고 있으므로 계약 타입을 넓히지 않는다.
+        const stored = (existing.task as { idempotency_key?: string }).idempotency_key;
+        if (stored === idempotencyKey && existing.task.status !== "archived")
+          return { status: 201, body: { task: existing.task } };
+      }
+    }
+
     const task: KanbanTaskFull = {
       id,
       title,
-      status: body.triage === true ? "triage" : "todo",
+      status: body.triage === true ? "triage" : initialStatus === "blocked" ? "blocked" : "todo",
+      // 플러그인은 칸반 시각을 **epoch 초**로 보낸다. ISO 로 두면 화면의 시각 처리가
+      // 가짜 서버에서만 통과하고 실제 게이트웨이에서 깨진다.
       created_at: nowEpochSeconds(),
       comment_count: 0,
       link_counts: { parents: parents.length, children: 0 },
@@ -419,6 +440,7 @@ export async function startFakePluginServer(
         "model_override",
         "provider_override",
         "reasoning_effort",
+        "idempotency_key",
       ]),
     };
     const record: TaskRecord = { task, comments: [], events: [], runs: [] };
