@@ -126,6 +126,13 @@ async function harness(
     now?: () => number;
     load?: (id: string) => Promise<CoordinationChannel>;
     onSpatialPlayerArrival?: (channelId: string, userId: string, socketId: string) => void;
+    onSpatialArrival?: (channelId: string, actorId: string, generation: number) => void;
+    onSpatialBlocked?: (
+      channelId: string,
+      actorId: string,
+      reason: string,
+      generation: number,
+    ) => void;
   } = {},
 ) {
   const http = createServer();
@@ -149,6 +156,8 @@ async function harness(
     },
     now: options.now,
     onSpatialPlayerArrival: options.onSpatialPlayerArrival,
+    onSpatialArrival: options.onSpatialArrival,
+    onSpatialBlocked: options.onSpatialBlocked,
   });
   io.on("connection", (socket) => {
     servers.set(socket.id, socket);
@@ -1500,6 +1509,154 @@ test("유예가 끝난 뒤 남은 소유권은 다른 사용자의 호출을 막
     assert.equal((await ack(c, "npc:call", { npcId: "nope" })).error, "unknown_npc");
     assert.equal(c.latest.npcs[0].ownerSocketId, b.socket.id, "다른 사람에게도 같은 사실이 보인다");
     assert.equal(c.latest.npcs[0].phase, "called");
+  } finally {
+    await h.close();
+  }
+});
+
+// 카드 "회의가 끝나도 NPC 가 회의석에 남는다".
+//
+// 회의 복귀 걸음은 소유 브라우저가 구동한다(서버는 `phase="called"` + `spatialTarget` 만 박는다).
+// 혼자 쓰는 사용자가 나가면 구동자가 0이 되어, 예전에는 주인 없음·정지·`spatialTarget` 잔존으로
+// 굳었다 — 회의석이 점유된 채 남고 재입장으로도 재개되지 않았다(재개 루프는 phase `returning`
+// 만 본다). 보는 사람이 없는 걸음은 재생할 이유가 없으므로 **서버가 결과를 정산한다.**
+test("복귀 구동자가 사라지고 아무도 없으면 서버가 목표로 정산한다", async () => {
+  const arrivals: { actorId: string; generation: number }[] = [];
+  const blocked: string[] = [];
+  const h = await harness({
+    onSpatialArrival: (_channelId, actorId, generation) => arrivals.push({ actorId, generation }),
+    onSpatialBlocked: (_channelId, actorId, reason) => blocked.push(`${actorId}:${reason}`),
+  });
+  try {
+    const a = await h.connect();
+    const meeting = { x: 128, y: 128, seatId: "128:128" };
+    const desk = { x: 32, y: 32, seatId: "32:32" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 1, meeting, false), true);
+    await ack(a, "npc:position-update", { npcId: "n1", x: 128, y: 128, direction: "down" });
+    await ack(a, "npc:arrived", { npcId: "n1", generation: 1 });
+    // 회의 종료 — 자리로 돌아가는 중이다.
+    await h.coord.spatial.release("a", "n1");
+    assert.equal(await h.coord.spatial.reserve("a", "n1", desk), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 2, desk, true), true);
+    arrivals.length = 0;
+
+    // 유일한 사용자가 맵을 떠난다(단테가 겪은 바로 그 순간).
+    const server = h.servers.get(a.socket.id!)!;
+    await server.leave("a");
+    await h.coord.left(server, "a");
+
+    assert.deepEqual(
+      arrivals,
+      [{ actorId: "n1", generation: 2 }],
+      "정산이 회의 세션에 도착으로 보고돼야 회의석이 풀린다",
+    );
+    assert.deepEqual(blocked, [], "구동자가 없다는 이유로 세션을 죽이지 않는다");
+
+    // 재입장해서 본 상태 = Acceptance (a).
+    const back = await h.connect();
+    const npc = back.latest.npcs.find((entry) => entry.npcId === "n1")!;
+    assert.deepEqual([npc.x, npc.y], [desk.x, desk.y], "NPC 가 자기 자리에 있어야 한다");
+    assert.equal(npc.spatialTarget ?? null, null, "회의 이동이 남아 있으면 다음 회의가 막힌다");
+    assert.equal(npc.moving, false);
+    assert.equal(npc.phase, "idle");
+    assert.equal(npc.ownerSocketId, null);
+  } finally {
+    await h.close();
+  }
+});
+
+test("남은 멤버가 있으면 복귀 걸음을 넘겨받아 계속 걷는다", async () => {
+  const blocked: string[] = [];
+  const h = await harness({
+    onSpatialBlocked: (_channelId, actorId, reason) => blocked.push(`${actorId}:${reason}`),
+  });
+  try {
+    const a = await h.connect();
+    const b = await h.connect();
+    const desk = { x: 32, y: 32, seatId: "32:32" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", desk), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 1, desk, true), true);
+    // 스냅샷을 흘려보낸 뒤 **실제** 구동자를 읽는다 — 접속 시점 스냅샷에는 주인이 없어서,
+    // 이걸 빼먹으면 엉뚱한 쪽을 끊고도 테스트가 통과한다(실측).
+    assert.equal((await ack(b, "npc:call", { npcId: "nope" })).error, "unknown_npc");
+    const driverId = b.latest.npcs[0].ownerSocketId;
+    assert.ok(driverId, "회의 이동에는 구동자가 있어야 한다");
+    const driver = driverId === a.socket.id ? a : b;
+    const survivor = driver === a ? b : a;
+
+    const server = h.servers.get(driver.socket.id!)!;
+    await server.leave("a");
+    await h.coord.left(server, "a");
+
+    assert.equal((await ack(survivor, "npc:call", { npcId: "nope" })).error, "unknown_npc");
+    const npc = survivor.latest.npcs[0];
+    assert.equal(npc.ownerSocketId, survivor.socket.id, "남은 브라우저가 이어받아야 한다");
+    assert.equal(npc.moving, true, "넘겨받았으면 계속 걸어야 한다");
+    assert.ok(npc.spatialTarget, "회의 복귀 목표가 유지돼야 한다");
+    assert.deepEqual(blocked, [], "승계가 되는데 세션을 죽이면 회의가 blocked 로 남는다");
+  } finally {
+    await h.close();
+  }
+});
+
+test("구동할 브라우저가 아예 없으면 회의 복귀 이동은 즉시 정산된다", async () => {
+  const arrivals: string[] = [];
+  const h = await harness({
+    onSpatialArrival: (_channelId, actorId) => arrivals.push(actorId),
+  });
+  try {
+    // 채널을 한 번 띄운 뒤 아무도 남지 않은 상태에서 회의가 종료되는 경로(크론·자동화).
+    const a = await h.connect();
+    const desk = { x: 32, y: 32, seatId: "32:32" };
+    const server = h.servers.get(a.socket.id!)!;
+    await server.leave("a");
+    await h.coord.left(server, "a");
+
+    assert.equal(
+      await h.coord.spatial.move("a", "n1", 7, desk, true),
+      true,
+      "구동자가 없다는 이유로 복귀가 실패하면 NPC 가 회의석에 남는다",
+    );
+    assert.deepEqual(arrivals, ["n1"]);
+    const back = await h.connect();
+    const npc = back.latest.npcs.find((entry) => entry.npcId === "n1")!;
+    assert.deepEqual([npc.x, npc.y], [desk.x, desk.y]);
+    assert.equal(npc.spatialTarget ?? null, null);
+  } finally {
+    await h.close();
+  }
+});
+
+// 회의로 **들어가던** 중에 구동자가 사라진 경우는 다르다. 회의는 사용자 없이 진행할 수 없으니
+// 세션은 막혀야 하지만(`driver_disconnected`), NPC 를 걸음 도중에 굳혀 두고 회의석 예약을
+// 붙잡아 두면 다음 회의도 열 수 없다 — 회의석을 비우고 제자리로 정산한다.
+test("회의로 가던 중 구동자가 사라지면 회의석을 비우고 제자리로 정산한다", async () => {
+  const blocked: string[] = [];
+  const h = await harness({
+    onSpatialBlocked: (_channelId, actorId, reason) => blocked.push(`${actorId}:${reason}`),
+  });
+  try {
+    const a = await h.connect();
+    const meeting = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 3, meeting, false), true);
+    const home = { x: a.latest.npcs[0].homeX, y: a.latest.npcs[0].homeY };
+
+    const server = h.servers.get(a.socket.id!)!;
+    await server.leave("a");
+    await h.coord.left(server, "a");
+
+    assert.deepEqual(blocked, ["n1:driver_disconnected"], "회의는 사용자 없이 진행할 수 없다");
+    const back = await h.connect();
+    const npc = back.latest.npcs.find((entry) => entry.npcId === "n1")!;
+    assert.equal(npc.spatialTarget ?? null, null, "회의 이동이 남으면 다음 회의가 막힌다");
+    assert.deepEqual([npc.x, npc.y], [home.x, home.y], "제자리로 정산한다");
+    assert.equal(
+      back.latest.seats.some((seat) => seat.seatId === meeting.seatId),
+      false,
+      "회의석 예약이 남아 있으면 좌석 수 계산이 어긋난다",
+    );
   } finally {
     await h.close();
   }

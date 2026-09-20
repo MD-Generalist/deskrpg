@@ -222,3 +222,60 @@ test("복귀 중 정체는 timeout blocked가 되어 재시도할 수 있고 옛
   assert.equal(c.snapshot("a")?.phase, "assembling");
   c.arrived("a", "n1", retry!);
 });
+
+// 카드 "회의가 끝나도 NPC 가 회의석에 남는다" Acceptance (c).
+//
+// 원래 좌석이 점유돼 있으면 `returnTarget` 이 가장 가까운 설 자리를 내준다. 그 강등이 실제로
+// **회의석을 떠나는 이동**으로 이어지는지, 그리고 세션이 idle 로 닫히는지를 고정한다.
+// 여기서 막히면(`return_space_full`) NPC 는 회의석에 그대로 남는다.
+test("원래 좌석이 점유돼 있으면 설 자리로 강등해 회의석을 떠난다", async () => {
+  const moves: Array<{ actorId: string; x: number; y: number; seatId: string | null }> = [];
+  const occupied = new Set<string>();
+  const published: string[] = [];
+  const standing = { seatId: null, x: 144, y: 16 };
+  const coordinator = createMeetingSpatialCoordinator({
+    layout: async () => ({
+      spaceId: "meeting",
+      targets: [{ seatId: "80:80", x: 80, y: 80 }],
+    }),
+    capture: async () => ({ x: 16, y: 16, seatId: "16:16" }),
+    reserve: async (_channel, _actorId, target) => {
+      const key = `${target.x}:${target.y}`;
+      if (occupied.has(key)) return false;
+      occupied.add(key);
+      return true;
+    },
+    move: async (_channel, actorId, _generation, target) => {
+      moves.push({ actorId, x: target.x, y: target.y, seatId: target.seatId });
+      return true;
+    },
+    release: async (_channel, actorId) => {
+      // 회의석 예약을 놓아준다 — 실제 좌석 정본과 같은 동작.
+      occupied.delete("80:80");
+      void actorId;
+    },
+    // 원래 좌석(16:16)은 그사이 누가 차지했다 → 가장 가까운 설 자리로 강등된다.
+    returnTarget: async () => standing,
+    publish: (state) => published.push(state.phase),
+  });
+  const generation = await coordinator.start("a", "u1", ["n1"]);
+  assert.ok(generation);
+  coordinator.arrived("a", "n1", generation);
+  assert.equal(coordinator.snapshot("a")?.phase, "ready");
+
+  await coordinator.cancel("a");
+  const returnMove = moves.at(-1)!;
+  assert.deepEqual(
+    [returnMove.x, returnMove.y],
+    [standing.x, standing.y],
+    "강등된 설 자리로 이동하지 않으면 회의석에 남는다",
+  );
+  assert.equal(returnMove.seatId, null, "좌석이 아니라 서 있기다");
+
+  const participant = coordinator.snapshot("a")?.participants.find((p) => p.actorId === "n1");
+  assert.equal(participant?.state, "returning");
+  assert.equal(coordinator.snapshot("a")?.failure, null, "강등은 실패가 아니다");
+  coordinator.arrived("a", "n1", coordinator.snapshot("a")!.generation);
+  assert.equal(coordinator.snapshot("a")?.phase, "idle", "복귀가 끝나면 회의가 닫힌다");
+  assert.ok(published.includes("returning"));
+});

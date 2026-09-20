@@ -752,7 +752,10 @@ export function registerMeetingDiscussionHandlers({
 
           activeBrokers.delete(channelId);
           discussionInitiators.delete(channelId);
-          void deps.spatial?.cancel(channelId);
+          // 복귀 정산이 실패하면 NPC 가 회의석에 남는다 — 조용히 버리지 않고 남긴다.
+          void deps.spatial?.cancel(channelId).catch((error) => {
+            console.error("[meeting] 회의 종료 후 복귀 정산 실패", { channelId }, error);
+          });
         },
         onError: (error) => {
           io.to(getMeetingRoomId(channelId)).emit("meeting:error", { error });
@@ -816,7 +819,10 @@ export function registerMeetingDiscussionHandlers({
       console.error("[meeting] Broker error:", error);
       activeBrokers.delete(channelId);
       discussionInitiators.delete(channelId);
-      void deps.spatial?.cancel(channelId);
+      // 오류로 끝난 회의도 복귀는 해야 한다. 정산이 실패하면 회의석이 점유된 채 남는다.
+      void deps.spatial?.cancel(channelId).catch((error) => {
+        console.error("[meeting] 오류 종료 후 복귀 정산 실패", { channelId }, error);
+      });
       io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
         error: "Meeting ended due to error",
       });
