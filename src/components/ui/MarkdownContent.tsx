@@ -7,7 +7,10 @@ import type { Components } from "react-markdown";
 import { Copy, Check, Download } from "lucide-react";
 
 import { chatFileLink } from "@/lib/chat-file-link";
+import { soleLinkUrl } from "@/lib/link-preview/promote";
 import { useT } from "@/lib/i18n";
+
+import LinkPreviewCard from "./LinkPreviewCard";
 
 // ─── Code block with copy button ────────────────────────────────────
 
@@ -89,7 +92,12 @@ function buildComponents(t: (key: string) => string): Components {
     h6: ({ children }) => (
       <h6 className="text-xs font-medium mt-1 mb-0.5 text-text-muted">{children}</h6>
     ),
-    p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+    p: ({ children, node }) => {
+      const paragraph = <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>;
+      // 한 줄에 링크만 있는 문단만 카드로 승격한다 — 판정은 promote.ts, 실패 시 이 문단 그대로.
+      const url = soleLinkUrl(node);
+      return url ? <LinkPreviewCard url={url} fallback={paragraph} /> : paragraph;
+    },
     strong: ({ children }) => <strong className="font-bold">{children}</strong>,
     em: ({ children }) => <em className="italic">{children}</em>,
     del: ({ children }) => <del className="line-through opacity-60">{children}</del>,
