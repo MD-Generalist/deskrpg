@@ -389,12 +389,29 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       const npc = state.npcs.get(String(payload.npcId));
       if (!npc) return { error: "unknown_npc" };
       if (npc.spatialTarget) return { error: "meeting_reserved" };
-      if (npc.ownerSocketId && npc.ownerSocketId !== socket.id && npc.phase !== "ambient")
+      // 남의 소유권을 넘겨받을 수 있는 상태는 둘이다.
+      //
+      // - `ambient`: 소유권이 "대화 중" 이 아니라 산책 걸음을 돌리는 드라이버다(기존 규칙).
+      // - `returning`: 자리로 돌아가는 중 — 아무도 대화하고 있지 않다. 특히 재접속 유예가
+      //   끝나면 `prune` 이 소유권을 남은 leader 에게 넘기고 phase 를 `returning` 으로 두는데,
+      //   그 leader 를 소유자로 대접하면 **아무도 부르지 않은 직원을 아무도 부를 수 없다.**
+      //
+      // 다만 귀가 가로채기는 **사람이 누른 호출** 에만 허용한다. 방 런타임이 대화 차례마다
+      // 자동으로 쏘는 호출(`reason: "map-chat"`)까지 허용하면 남이 자리로 보낸 NPC 를 대화가
+      // 계속 끌어당긴다 — 그 규칙은 "legacy room intent … preserves competing ownership"
+      // 테스트가 지키고 있다.
+      const roomTurn = payload.reason === "map-chat";
+      if (
+        npc.ownerSocketId &&
+        npc.ownerSocketId !== socket.id &&
+        npc.phase !== "ambient" &&
+        !(npc.phase === "returning" && !roomTurn)
+      )
         return { error: "already_claimed" };
-      if (npc.ownerSocketId === socket.id) {
-        broadcast(channelId, state);
-        return;
-      }
+      // 내가 이미 주인이어도 **재호출**로 다룬다. 예전에는 여기서 broadcast 만 하고 조용히
+      // 돌아섰고, `npc:come-to-player` 가 나가지 않아 아무도 움직이지 않았다 — 오류도 없다.
+      // 같은 신분으로 다시 접속하면 소유권이 새 소켓으로 넘어오므로(`rebindOwner`), 탭을
+      // 새로 열고 호출하는 흔한 흐름이 정확히 이 분기였다. 아래 한 경로로 합친다.
       releaseActor(state, npc.npcId);
       state.excursions.delete(npc.npcId);
       Object.assign(npc, {

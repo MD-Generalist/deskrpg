@@ -410,11 +410,12 @@ test("late join retains waiting, public-seat rest and returning coordinates; hom
     assert.equal(late.latest.seats[0].actorId, "n2");
     assert.equal(late.latest.npcs[2].homeX, 96);
     assert.equal((await ack(a, "npc:call", { npcId: "n3" })).ok, true);
-    assert.equal(
-      a.latest.npcs[2].phase,
-      "returning",
-      "duplicate owner call is idempotent during return",
-    );
+    // 2026-09-20: 예전에는 귀가 중 재호출이 무동작이었다("idempotent"). 그러나 `npc:arrived`
+    // 가 `not_at_home` 으로 계속 거절되면(바로 위가 그 상태다) 그 직원은 `returning` 에
+    // 갇히고, 호출이 무동작이라 영구히 부를 수 없게 된다 — 카드 `…70uRM` 의 결함 그대로다.
+    // 이제 재호출은 귀가를 끊고 다시 부른다.
+    assert.equal(a.latest.npcs[2].phase, "called", "귀가 중 재호출은 다시 부르는 것이다");
+    await ack(a, "npc:return-home", { npcId: "n3", homeX: 250, homeY: 200 });
     await ack(a, "npc:position-update", { npcId: "n3", x: 100, y: 32, direction: "down" });
     assert.equal(
       (await ack(a, "npc:arrived", { npcId: "n3" })).error,
@@ -1410,6 +1411,95 @@ test("delayed v2 invalidation cannot overwrite fresh v3 clients after reset", as
       "new epoch revision must exceed all old geometry revisions",
     );
     assert.equal((await h.coord.occupancy("a"))[0].x, 320);
+  } finally {
+    await h.close();
+  }
+});
+
+// 카드 "직원 호출이 아무 반응 없이 죽는다 — NPC 소유권 해제 경로가 귀가 도착뿐".
+//
+// 위 "same authenticated character reclaims a waiting NPC" 가 보여 주듯, 같은 신분으로
+// 다시 접속하면 소유권은 새 소켓으로 **이미** 넘어온다. 그래서 새 탭에서 호출을 누르면
+// "내가 이미 주인" 분기로 들어가고, 예전에는 broadcast 만 하고 조용히 return 해서
+// `npc:come-to-player` 가 나가지 않았다 — 아무도 움직이지 않고 오류도 없었다.
+// (2026-09-20 Jane VPS 에서 sophie 가 이 상태였다. 퇴근→출근이 유일한 회피법이었다.)
+test("같은 소켓의 재호출은 come-to-player 를 재발행한다", async () => {
+  const h = await harness();
+  try {
+    const identity = { userId: "u1", characterId: "c1" };
+    const a = await h.connect("a", identity);
+    await ack(a, "npc:call", { npcId: "n1" });
+    await ack(a, "npc:position-update", { npcId: "n1", x: 128, y: 128, direction: "left" });
+    await ack(a, "npc:arrived", { npcId: "n1" });
+    assert.equal(a.latest.npcs[0].phase, "waiting");
+
+    // 새 탭(같은 신분) — 소유권은 이 소켓으로 넘어와 있다.
+    const server = h.servers.get(a.socket.id!)!;
+    await server.leave("a");
+    await h.coord.left(server, "a");
+    const b = await h.connect("a", identity);
+    assert.equal(b.latest.npcs[0].ownerSocketId, b.socket.id, "소유권이 새 탭으로 넘어와야 한다");
+
+    const called = new Promise<{ npcId: string; targetPlayerId: string }>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("come-to-player 가 오지 않았다")), 2000);
+      b.socket.once("npc:come-to-player", (payload: { npcId: string; targetPlayerId: string }) => {
+        clearTimeout(timeout);
+        resolve(payload);
+      });
+    });
+    assert.equal((await ack(b, "npc:call", { npcId: "n1" })).ok, true);
+    const payload = await called;
+    assert.equal(payload.npcId, "n1");
+    assert.equal(payload.targetPlayerId, b.socket.id, "부른 사람에게 오라고 해야 한다");
+    assert.equal(b.latest.npcs[0].phase, "called");
+  } finally {
+    await h.close();
+  }
+});
+
+// Direction 2 의 최소선: 재접속 유예가 끝나면 소유권은 반드시 비워지고, **다음 호출이**
+// 그것을 회수해야 한다. 유예 만료 후 `prune` 은 소유권을 그 채널의 leader 에게 넘기고 phase 를
+// `returning` 으로 둔다 — 그 leader 는 그 직원을 부른 사람이 아니라 애니메이션을 돌릴 드라이버다.
+// 그 상태가 다른 사용자의 호출을 `already_claimed` 로 막으면, 부를 수 있는 직원이 부를 수 없게 된다.
+test("유예가 끝난 뒤 남은 소유권은 다른 사용자의 호출을 막지 않는다", async () => {
+  let time = 0;
+  const h = await harness({ now: () => time });
+  try {
+    const a = await h.connect("a", { userId: "u1", characterId: "c1" });
+    const b = await h.connect("a", { userId: "u2", characterId: "c2" });
+    const c = await h.connect("a", { userId: "u3", characterId: "c3" });
+    await ack(a, "npc:call", { npcId: "n1" });
+    const oldId = a.socket.id!;
+    const server = h.servers.get(oldId)!;
+    await server.leave("a");
+    await h.coord.left(server, "a");
+    assert.equal(
+      (await ack(b, "npc:call", { npcId: "n1" })).error,
+      "already_claimed",
+      "유예 중에는 지켜진다",
+    );
+
+    time = 30_001;
+    // 유예가 끝났다. leader 가 c 든 b 든, **부른 사람** 은 b 다.
+    const called = new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("come-to-player 가 오지 않았다")), 2000);
+      b.socket.once("npc:come-to-player", (payload: { targetPlayerId: string }) => {
+        clearTimeout(timeout);
+        resolve(payload.targetPlayerId);
+      });
+    });
+    assert.equal(
+      (await ack(b, "npc:call", { npcId: "n1" })).ok,
+      true,
+      "유예가 끝났는데도 남은 소유권이 호출을 막고 있다",
+    );
+    assert.equal(await called, b.socket.id);
+    assert.equal(b.latest.npcs[0].ownerSocketId, b.socket.id);
+    assert.equal(b.latest.npcs[0].phase, "called");
+    // 부작용 없는 ack 한 번으로 c 에게 밀린 순서 패킷을 흘려보낸다(이 파일의 기존 관용구).
+    assert.equal((await ack(c, "npc:call", { npcId: "nope" })).error, "unknown_npc");
+    assert.equal(c.latest.npcs[0].ownerSocketId, b.socket.id, "다른 사람에게도 같은 사실이 보인다");
+    assert.equal(c.latest.npcs[0].phase, "called");
   } finally {
     await h.close();
   }
