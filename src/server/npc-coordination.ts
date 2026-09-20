@@ -455,6 +455,11 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       // 자동으로 쏘는 호출(`reason: "map-chat"`)까지 허용하면 남이 자리로 보낸 NPC 를 대화가
       // 계속 끌어당긴다 — 그 규칙은 "legacy room intent … preserves competing ownership"
       // 테스트가 지키고 있다.
+      //
+      // **이 구분은 보안 경계가 아니다.** `reason` 은 클라이언트가 주는 값이라 빼고 보내면
+      // 사람이 누른 호출로 취급된다. 지금은 같은 채널 멤버가 어차피 호출 버튼으로 할 수 있는
+      // 일이라 얻을 것이 없지만, 호출에 권한 차등이 생기면 이 한 줄로는 막지 못한다 —
+      // 그때는 서버가 아는 사실(방 런타임이 시작한 호출인지)로 갈라야 한다.
       const roomTurn = payload.reason === "map-chat";
       if (
         npc.ownerSocketId &&
