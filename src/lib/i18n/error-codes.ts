@@ -100,6 +100,9 @@ export type ErrorCode =
   | "gateway_pairing_required"
   | "failed_to_fetch_meetings"
   | "failed_to_fetch_meeting"
+  | "failed_to_summarize"
+  | "summarizer_unavailable"
+  | "already_registered"
   | "failed_to_fetch_channel"
   | "failed_to_update_channel"
   | "failed_to_delete_channel"
@@ -299,6 +302,9 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   gateway_pairing_required: "errors.gatewayPairingRequired",
   failed_to_fetch_meetings: "errors.failedToFetchMeetings",
   failed_to_fetch_meeting: "errors.failedToFetchMeeting",
+  failed_to_summarize: "errors.failedToSummarize",
+  summarizer_unavailable: "errors.summarizerUnavailable",
+  already_registered: "errors.alreadyRegistered",
   failed_to_fetch_channel: "errors.failedToFetchChannel",
   failed_to_update_channel: "errors.failedToUpdateChannel",
   failed_to_delete_channel: "errors.failedToDeleteChannel",

@@ -8,6 +8,11 @@
 export const TENANT_SLUG_MAX = 64;
 export const TENANT_SLUG_PATTERN = /^[\p{Ll}\p{Lo}\p{N}][\p{Ll}\p{Lo}\p{N}_-]{0,63}$/u;
 
+/**
+ * 글자·숫자가 하나도 없는 이름(공백만, 기호만)은 **빈 문자열**을 돌려준다. 빈 슬러그는 유효하지
+ * 않다(`isTenantSlug("") === false`) — 부르는 쪽은 저장하지 말고 "이 이름으로는 슬러그를 만들 수
+ * 없다" 고 안내해야 한다. 빈 값이 DB 까지 가면 이름이 다른 서브프로젝트 둘이 유니크에서 부딪힌다.
+ */
 export function tenantSlugFromName(name: string): string {
   return name
     .trim()
