@@ -137,6 +137,34 @@ export function applyFilter(tasks: readonly KanbanTask[], filter: ViewFilter): K
   });
 }
 
+/** 지금 걸린 필터가 있는가. 없으면 거를 것도 없다 — 빈 필터가 카드를 지우면 안 된다. */
+export function hasActiveFilter(filter: ViewFilter): boolean {
+  return (
+    filter.tenants.length > 0 ||
+    filter.assignees.length > 0 ||
+    filter.statuses.length > 0 ||
+    filter.warningsOnly
+  );
+}
+
+/**
+ * 실행 기록을 **보이는 카드**로 거른다. 필터가 없으면 그대로 돌려준다.
+ *
+ * 필터가 보드·목록에만 먹고 타임라인에는 안 먹으면, 서브프로젝트를 골라도 타임라인은 그대로다 —
+ * 화면이 무언가 했다고 말하면서 아무것도 하지 않는 조용한 실패다(보드 뷰에서 같은 결함을
+ * 한 번 겪었다).
+ *
+ * 필터가 없을 때 거르지 않는 것이 중요하다. 카드가 지워진 실행도 기록에 남는데(플러그인이
+ * LEFT JOIN 으로 일부러 남긴다), 보이는 카드로 교집합을 잡으면 그것들이 조용히 사라진다.
+ */
+export function filterRunsByVisibleTasks<T extends { task_id: string }>(
+  runs: readonly T[],
+  visibleTaskIds: ReadonlySet<string> | null,
+): readonly T[] {
+  if (visibleTaskIds === null) return runs;
+  return runs.filter((run) => visibleTaskIds.has(run.task_id));
+}
+
 // ---------------------------------------------------------------------------
 // 정렬
 // ---------------------------------------------------------------------------

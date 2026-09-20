@@ -1526,3 +1526,91 @@ test("타임라인이 목표일과 의존 화살표를 실제로 그린다 — �
     await f.cleanup();
   }
 });
+
+test("서브프로젝트 필터는 타임라인에도 먹는다", async () => {
+  // 필터가 보드·목록에만 먹으면 조용한 실패다 — 보드 뷰에서 같은 결함을 한 번 겪었다.
+  const runStart = Math.floor(Date.now() / 1000) - 600;
+  const f = await mount((url) => {
+    if (url.includes("/automation/status"))
+      return json(status({ capabilities: ["kanban", "cron", "events", "kanban_views"] }));
+    if (url.includes("/kanban/runs"))
+      return json({
+        runs: [
+          {
+            id: "r-web",
+            status: "done",
+            task_id: "t-web",
+            board: "deskrpg-ch-1",
+            profile: "sophie",
+            task_title: "웹 카드",
+            started_at: runStart,
+            ended_at: runStart + 60,
+            outcome: "completed",
+          },
+          {
+            id: "r-api",
+            status: "done",
+            task_id: "t-api",
+            board: "deskrpg-ch-1",
+            profile: "oliver",
+            task_title: "API 카드",
+            started_at: runStart,
+            ended_at: runStart + 60,
+            outcome: "completed",
+          },
+        ],
+        board: "deskrpg-ch-1",
+        window: { from: 0, to: 9_999_999_999 },
+        truncated: false,
+      });
+    if (url.includes("/kanban/links")) return json({ links: [], board: "deskrpg-ch-1" });
+    if (url.includes("/kanban/board"))
+      return json(
+        board({
+          columns: [
+            {
+              name: "done",
+              tasks: [
+                { id: "t-web", title: "웹 카드", status: "done", tenant: "web" },
+                { id: "t-api", title: "API 카드", status: "done", tenant: "api" },
+              ],
+            },
+          ],
+          tenants: ["web", "api"],
+        }),
+      );
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    const timelineButton = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
+      (el) => el.getAttribute("aria-label") === "타임라인",
+    );
+    assert.ok(timelineButton);
+    await act(async () => {
+      timelineButton.click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.ok(f.host.textContent?.includes("sophie"), "타임라인에 막대가 없다");
+    assert.ok(f.host.textContent?.includes("oliver"));
+
+    const tenantSelect = Array.from(f.host.querySelectorAll<HTMLSelectElement>("select")).find(
+      (el) => el.getAttribute("aria-label") === "서브프로젝트",
+    );
+    assert.ok(tenantSelect, "타임라인 뷰에 서브프로젝트 필터가 보이는데 잡히지 않는다");
+    await act(async () => {
+      tenantSelect.value = "web";
+      tenantSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    assert.ok(f.host.textContent?.includes("sophie"), "고른 서브프로젝트의 작업자가 사라졌다");
+    assert.equal(
+      f.host.textContent?.includes("oliver"),
+      false,
+      "타임라인에서 필터가 아무 일도 하지 않는다 — 화면은 필터가 걸렸다고 말한다",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});

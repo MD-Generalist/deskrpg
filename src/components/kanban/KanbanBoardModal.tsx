@@ -22,7 +22,7 @@ import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
 import TaskEditorDialog from "./TaskEditorDialog";
 import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
-import { applyFilter } from "@/lib/kanban-view-state";
+import { applyFilter, filterRunsByVisibleTasks, hasActiveFilter } from "@/lib/kanban-view-state";
 import { useProjectViewState, useTaskGroups } from "./use-project-view-state";
 import { presetWindow, type WindowPreset } from "@/lib/timeline-layout";
 import { computeOperationalMetrics } from "@/lib/kanban-metrics";
@@ -406,6 +406,20 @@ export default function KanbanBoardModal({
   }, [api, blocker, timelineWindow, viewState.viewMode, viewsSupported, detailTick]);
 
   /**
+   * 타임라인과 지표가 보는 실행 기록. 필터가 걸려 있으면 **보이는 카드의 것만** 남긴다 —
+   * 필터가 보드·목록에만 먹고 타임라인에는 안 먹으면 조용한 실패가 된다(보드에서 한 번 겪었다).
+   *
+   * 필터가 없으면 거르지 않는다. 카드가 지워진 실행도 기록에 남는데(플러그인이 일부러 남긴다),
+   * 교집합을 잡으면 그것들이 사라진다.
+   */
+  const visibleRuns = useMemo(() => {
+    const runs = runsPage?.runs ?? [];
+    if (!hasActiveFilter(viewState.filter)) return runs;
+    const ids = new Set(applyFilter(allTasks, viewState.filter).map((task) => task.id));
+    return filterRunsByVisibleTasks(runs, ids);
+  }, [runsPage, allTasks, viewState.filter]);
+
+  /**
    * 운영 지표. 타임라인과 **같은 실행 기록·같은 창**에서 계산한다 — 두 화면이 다른 수를
    * 말하면 둘 다 신뢰를 잃는다.
    *
@@ -429,12 +443,12 @@ export default function KanbanBoardModal({
   const metrics = useMemo(
     () =>
       computeOperationalMetrics(
-        runsPage?.runs ?? [],
+        visibleRuns,
         allTasks,
         PENDING_APPROVALS_UNAVAILABLE,
         timelineWindow,
       ),
-    [runsPage, allTasks, timelineWindow],
+    [visibleRuns, allTasks, timelineWindow],
   );
 
   useEffect(() => {
@@ -866,7 +880,7 @@ export default function KanbanBoardModal({
             ) : viewState.viewMode === "timeline" ? (
               <>
                 <KanbanTimeline
-                  runs={runsPage?.runs ?? []}
+                  runs={visibleRuns}
                   window={timelineWindow}
                   preset={timelinePreset}
                   onPresetChange={setTimelinePreset}

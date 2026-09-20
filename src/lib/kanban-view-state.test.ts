@@ -5,6 +5,8 @@ import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-t
 import {
   applyFilter,
   cardProgress,
+  filterRunsByVisibleTasks,
+  hasActiveFilter,
   DEFAULT_VIEW_STATE,
   directChildCount,
   groupTasks,
@@ -343,4 +345,28 @@ test("epoch 초와 ISO 가 섞여 있어도 한 줄로 정렬된다", () => {
     sortTasks(tasks, "created", "asc").map((t) => t.id),
     ["epoch-old", "iso-new"],
   );
+});
+
+test("필터가 없으면 실행 기록을 거르지 않는다 — 카드가 지워진 실행이 사라지면 안 된다", () => {
+  const runs = [{ task_id: "gone" }, { task_id: "a" }];
+  assert.equal(hasActiveFilter(DEFAULT_VIEW_STATE.filter), false);
+  assert.deepEqual(filterRunsByVisibleTasks(runs, null), runs);
+});
+
+test("필터가 걸리면 보이는 카드의 실행만 남는다", () => {
+  const runs = [{ task_id: "web" }, { task_id: "api" }];
+  assert.deepEqual(filterRunsByVisibleTasks(runs, new Set(["web"])), [{ task_id: "web" }]);
+});
+
+test("보관함 보기만 켠 것은 거르는 필터가 아니다", () => {
+  // 그건 서버 조회 범위이고, 응답에 없는 것을 한 번 더 거를 이유가 없다.
+  assert.equal(hasActiveFilter({ ...DEFAULT_VIEW_STATE.filter, includeArchived: true }), false);
+});
+
+test("테넌트·담당·상태·경고 필터는 모두 활성으로 센다", () => {
+  const base = DEFAULT_VIEW_STATE.filter;
+  assert.equal(hasActiveFilter({ ...base, tenants: ["web"] }), true);
+  assert.equal(hasActiveFilter({ ...base, assignees: ["sophie"] }), true);
+  assert.equal(hasActiveFilter({ ...base, statuses: ["todo"] }), true);
+  assert.equal(hasActiveFilter({ ...base, warningsOnly: true }), true);
 });
