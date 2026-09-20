@@ -1,3 +1,5 @@
+import { isWindows } from "./platform";
+
 /** Kept in a TS constant so Next standalone output includes the helper. No filesystem asset lookup. */
 export const HOST_BOOTSTRAP = String.raw`
 import json, os, pathlib, signal, subprocess, sys
@@ -79,6 +81,83 @@ py=$("$uv" python find 3.12 2>/dev/null) || fail python_bootstrap_failed
 [ -x "$py" ] || fail python_bootstrap_failed
 exec "$py" -c "$code"
 `;
+
+/**
+ * `HOST_LAUNCHER` 의 Windows 짝. 하는 일은 같다 — 파이썬을 골라 본문을 `-c` 로 넘긴다.
+ *
+ * 인자: $args[0] = run | install, $args[1] = 파이썬 코드, $args[2] = (run) 파이썬이 하나도 없을 때 찍을 JSON.
+ * 고르는 순서: Hermes venv 파이썬 → PATH 의 python → (install 만) uv 로 받은 파이썬.
+ * POSIX 판과 달리 시스템 패키지 사전 점검이 없다 — install.ps1 이 PortableGit·uv·Python·Node 를
+ * 스스로 받으므로 sudo 도 패키지 관리자도 필요 없다(상류 scripts/install.ps1 확인).
+ * Windows venv 의 파이썬은 `Scripts\python.exe` 다(상류 gateway_windows.py:1457,1475).
+ */
+export const HOST_LAUNCHER_PS = String.raw`
+$ErrorActionPreference = 'Stop'
+$mode = $args[0]
+$code = $args[1]
+$none = $args[2]
+function Fail($c) { [Console]::Out.Write('{"error": "' + $c + '"}'); exit 0 }
+function Run($exe) { & $exe -c $code; exit $LASTEXITCODE }
+$home2 = $env:USERPROFILE
+if (-not $home2 -or -not (Test-Path -LiteralPath $home2 -PathType Container)) { Fail 'unsafe_host_path' }
+# 상류 hermes_constants.py:51-57 과 같은 판정이다. Windows 기본 홈은 ~/.hermes 가 아니다.
+$base = $env:LOCALAPPDATA
+if (-not $base) { $base = Join-Path (Join-Path $home2 'AppData') 'Local' }
+$root = Join-Path $base 'hermes'
+foreach ($f in @('venv', '.venv')) {
+  $p = Join-Path (Join-Path (Join-Path $root 'hermes-agent') $f) 'Scripts\python.exe'
+  if (Test-Path -LiteralPath $p -PathType Leaf) { Run $p }
+}
+$sys = Get-Command python -ErrorAction SilentlyContinue
+if ($sys) { Run $sys.Source }
+if ($mode -ne 'install') { [Console]::Out.Write($none); exit 0 }
+$item = Get-Item -LiteralPath $root -ErrorAction SilentlyContinue
+if ($item -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or -not $item.PSIsContainer)) { Fail 'unsafe_host_path' }
+New-Item -ItemType Directory -Force -Path (Join-Path $root 'bin') | Out-Null
+$uv = Join-Path $root 'bin\uv.exe'
+if (-not (Test-Path -LiteralPath $uv -PathType Leaf)) {
+  $tmp = Join-Path $root ('.deskrpg-uv-install.' + [Guid]::NewGuid().ToString('N') + '.ps1')
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -UseBasicParsing -Uri 'https://astral.sh/uv/install.ps1' -OutFile $tmp
+  } catch { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue; Fail 'hermes_installer_unavailable' }
+  $env:UV_UNMANAGED_INSTALL = Join-Path $root 'bin'
+  $env:UV_NO_MODIFY_PATH = '1'
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $tmp *> $null
+  Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+  if (-not (Test-Path -LiteralPath $uv -PathType Leaf)) { Fail 'python_bootstrap_failed' }
+}
+& $uv python install 3.12 *> $null
+if ($LASTEXITCODE -ne 0) { Fail 'python_bootstrap_failed' }
+$py = (& $uv python find 3.12 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not $py -or -not (Test-Path -LiteralPath $py -PathType Leaf)) { Fail 'python_bootstrap_failed' }
+Run $py
+`;
+
+/** 호스트에서 파이썬 런처를 띄울 명령. 셸은 플랫폼마다 다르고 인자 순서는 같다. */
+export function hostLaunch(
+  platform: string,
+  mode: "run" | "install",
+  code: string,
+  none = "",
+): { command: string; args: string[] } {
+  if (isWindows(platform))
+    return {
+      command: "powershell",
+      args: [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        HOST_LAUNCHER_PS,
+        mode,
+        code,
+        none,
+      ],
+    };
+  return { command: "sh", args: ["-c", HOST_LAUNCHER, "deskrpg", mode, code, none] };
+}
 
 /**
  * Hermes 설치 전용 스크립트. 설치가 없을 때 돌아야 하므로 HOST_BOOTSTRAP(=Hermes venv 파이썬)을

@@ -198,11 +198,15 @@ async function requireHost(userId: string, target: HostTarget) {
   if (target.mode === "ssh" && target.hostId) return sshExecutor(target.hostId);
   throw new Error("setup_invalid_request");
 }
+/** SSH 대상은 언제나 리눅스다 — 로컬 실행에서만 이 서버가 도는 실제 플랫폼을 쓴다. */
+function hostPlatform(target: HostTarget): string {
+  return target.mode === "ssh" ? "linux" : process.platform;
+}
 export async function discoverSetupHost(userId: string, target: HostTarget) {
-  return discoverHost(await requireHost(userId, target));
+  return discoverHost(await requireHost(userId, target), hostPlatform(target));
 }
 export async function inspectSetupHost(userId: string, target: HostTarget, candidateId: string) {
-  return inspectHost(await requireHost(userId, target), candidateId);
+  return inspectHost(await requireHost(userId, target), candidateId, hostPlatform(target));
 }
 /**
  * 모델 자격 증명만 확인한다. 잡을 만들지 않고 즉시 답한다.
@@ -213,7 +217,12 @@ export async function checkSetupModel(
   target: HostTarget,
   candidateId: string,
 ): Promise<SetupModelState> {
-  return checkModelHost(await requireHost(userId, target), candidateId);
+  return checkModelHost(
+    await requireHost(userId, target),
+    candidateId,
+    undefined,
+    hostPlatform(target),
+  );
 }
 
 function assertPrepared(value: PreparedHost) {
@@ -319,6 +328,7 @@ export async function startSetup(
           const { installerDigest, milestones } = await installHermesHost(
             executor,
             controller.signal,
+            hostPlatform(target),
           );
           jobs.update(userId, job.id, {
             installerDigest,
@@ -328,7 +338,7 @@ export async function startSetup(
           checkCancelled();
         }
         // 설치 뒤에는 후보가 새로 생긴다 — 클라이언트가 알 수 없으므로 서버가 다시 찾는다.
-        const candidates = await discoverHost(executor);
+        const candidates = await discoverHost(executor, hostPlatform(target));
         const fresh = candidates.find((item) => item.label === "Hermes default");
         if (!fresh) throw new Error("hermes_install_failed");
         selectedCandidateId = fresh.id;
@@ -347,6 +357,7 @@ export async function startSetup(
         provision,
         done,
         setPort,
+        hostPlatform(target),
       );
       const collected = collectSetupWarnings(prepared.warnings, Boolean(installHermes));
       if (collected.length) jobs.update(userId, job.id, { warnings: collected });
@@ -376,6 +387,7 @@ export async function startSetup(
         boundedExecutor,
         selectedCandidateId,
         controller.signal,
+        hostPlatform(target),
       );
       // SSH 대상은 로그아웃·재부팅 뒤에도 게이트웨이가 살아야 한다 — Linger 가 꺼져 있으면 안내만 한다.
       const lingerOff =

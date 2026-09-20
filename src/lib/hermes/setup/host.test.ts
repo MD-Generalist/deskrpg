@@ -116,7 +116,13 @@ import {
 } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { HOST_BOOTSTRAP, HOST_HELPER } from "./host-helper";
+import {
+  HOST_BOOTSTRAP,
+  HOST_HELPER,
+  HOST_LAUNCHER,
+  HOST_LAUNCHER_PS,
+  hostLaunch,
+} from "./host-helper";
 import { PLUGIN_PIN, PLUGIN_VERSION } from "./pin";
 const installedPython = ["venv", ".venv"]
   .map((name) => join(homedir(), ".hermes/hermes-agent", name, "bin/python"))
@@ -1871,4 +1877,40 @@ test("SSH 키 거절은 탐색에서도 ssh_auth_failed 로 올라간다 — hos
     }),
     /^Error: ssh_auth_failed$/,
   );
+});
+
+test("POSIX 는 sh -c 로 런처를 띄운다", () => {
+  const launch = hostLaunch("linux", "run", "CODE", '{"candidates": []}');
+  assert.equal(launch.command, "sh");
+  assert.deepEqual(launch.args, [
+    "-c",
+    HOST_LAUNCHER,
+    "deskrpg",
+    "run",
+    "CODE",
+    '{"candidates": []}',
+  ]);
+});
+
+test("win32 는 powershell 로 런처를 띄운다", () => {
+  const launch = hostLaunch("win32", "install", "CODE");
+  assert.equal(launch.command, "powershell");
+  assert.deepEqual(launch.args.slice(0, 4), [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+  ]);
+  assert.equal(launch.args[4], "-Command");
+  assert.equal(launch.args[5], HOST_LAUNCHER_PS);
+  assert.deepEqual(launch.args.slice(6), ["install", "CODE", ""]);
+});
+
+test("win32 런처 본문은 Scripts\\python.exe 를 본다", () => {
+  assert.ok(HOST_LAUNCHER_PS.includes("Scripts\\python.exe"));
+  assert.ok(!HOST_LAUNCHER_PS.includes("bin/python"));
+});
+
+test("win32 런처는 시스템 패키지 사전 점검을 하지 않는다", () => {
+  assert.ok(!HOST_LAUNCHER_PS.includes("system_packages_missing"));
 });
