@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import os from "node:os";
+import path from "node:path";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import {
@@ -9,6 +12,7 @@ import {
   sshExecutor,
   quoteShellArg,
   killProcessTree,
+  secureStdioDir,
 } from "./executor";
 function fake() {
   const child = Object.assign(new EventEmitter(), {
@@ -156,4 +160,77 @@ test("win32 에서 ssh 는 stdin/stdout 을 파일로 받는다 (파이프 아�
   // 구조적으로 win32 ssh가 stdin/stdout을 파일로 받는다는 것을 단언한다.
   // 실제 Windows 환경에서 검증: WinServer 4차 보고서에서 stdin/stdout 파일로 742ms 동작 확인.
   assert.ok(true, "win32 ssh stdin/stdout 파일 리다이렉트: 파이프가 아닌 fd 사용");
+});
+
+// --- 임시 stdio 는 파일 단위가 아니라 전용 디렉터리 단위로 보호한다 ---
+
+test("secureStdioDir: win32 는 빈 디렉터리에 ACL 을 한 번 건다", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-test-"));
+  const calls: string[] = [];
+  const result = secureStdioDir(
+    "win32",
+    () => dir,
+    (d) => {
+      calls.push(d);
+      // 권한을 좁히는 시점에 디렉터리는 비어 있어야 한다 — 토큰 파일이 먼저 생기면 안 된다.
+      assert.deepEqual(readdirSync(d), []);
+    },
+  );
+  assert.equal(result, dir);
+  assert.deepEqual(calls, [dir], "디렉터리에 정확히 한 번");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("secureStdioDir: ACL 실패는 fail-closed — 던지고 디렉터리를 남기지 않는다", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-fail-"));
+  assert.throws(() =>
+    secureStdioDir(
+      "win32",
+      () => dir,
+      () => {
+        throw new Error("icacls_failed");
+      },
+    ),
+  );
+  assert.equal(existsSync(dir), false, "실패하면 디렉터리를 지운다");
+});
+
+test("secureStdioDir: posix 는 icacls 를 부르지 않고 0700 으로 좁힌다", () => {
+  let hardened = false;
+  const dir = secureStdioDir(
+    "linux",
+    () => mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-posix-")),
+    () => {
+      hardened = true;
+    },
+  );
+  assert.equal(hardened, false);
+  assert.equal(statSync(dir).mode & 0o777, 0o700);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("executor 소스: 파일 단위 icacls 도, 파일 단위 삭제도 남아 있지 않다", () => {
+  const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
+  const icacls = source.match(/execFileSync\("icacls",[\s\S]*?\)/g) ?? [];
+  assert.equal(icacls.length, 1, "icacls 호출은 디렉터리용 하나뿐이어야 한다");
+  assert.match(icacls[0], /\[dir,/, "icacls 대상은 디렉터리여야 한다");
+  assert.ok(
+    !/stdinFile|stdoutFile/.test(icacls[0]),
+    "stdin/stdout 파일에 직접 icacls 를 걸면 안 된다",
+  );
+  assert.equal(source.includes("unlinkSync"), false, "파일 단위 삭제가 남아 있으면 안 된다");
+});
+
+test("executor 소스: 정리는 removeStdioDir 로 디렉터리째 한 번만 한다", () => {
+  const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
+  const body = source.slice(source.indexOf("export function createExecutor"));
+  const removals = body.match(/rmSync\(/g) ?? [];
+  assert.equal(removals.length, 1, "createExecutor 안의 rmSync 는 removeStdioDir 하나뿐");
+  assert.match(
+    body,
+    /const removeStdioDir = \(\) => \{[\s\S]*?rmSync\(dir, \{ recursive: true, force: true \}\)/,
+  );
+  // finish() 가 유일한 종결 경로이고, 그 안에서 지운다 — 리스너 등록 순서와 무관하다.
+  const finish = body.slice(body.indexOf("const finish ="), body.indexOf("const abort ="));
+  assert.ok(finish.includes("removeStdioDir()"), "finish() 안에서 정리해야 한다");
 });

@@ -1,6 +1,6 @@
 import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { openSync, closeSync, readFileSync, writeFileSync, unlinkSync, fstatSync } from "node:fs";
-import { chmodSync } from "node:fs";
+import { openSync, closeSync, readFileSync, writeFileSync, rmSync, fstatSync } from "node:fs";
+import { chmodSync, mkdtempSync } from "node:fs";
 import path from "node:path";
 import { tmpdir, userInfo } from "node:os";
 import { managedSsh } from "./ssh-hosts";
@@ -112,6 +112,40 @@ export function killProcessTree(
   kill(-pid, "SIGKILL");
 }
 
+/**
+ * Windows ssh 갈래가 쓸 임시 stdin/stdout 파일을 담을 **전용 디렉터리**를 만들고, 아직 비어 있을 때
+ * 권한을 좁힌다. 파일에는 게이트웨이·프로필 토큰이 평문으로 놓이므로, 파일이 생긴 뒤에 좁히면
+ * 그 사이에 `%TEMP%` 에서 상속된 ACL(그룹 Modify 포함)로 노출된다.
+ *
+ * Windows: `icacls <dir> /inheritance:r /grant:r <user>:F`. icacls 는 디렉터리에 (OI)(CI) 를 기본
+ * 적용하므로 **이 안에 새로 만들어지는 파일이 이 ACL 을 상속한다는 가정**에 기대고 있다 — 이 함수의
+ * 핵심 전제이며 Windows 실기에서 아직 확인되지 않았다(macOS/Linux 에서는 검증 불가).
+ * Node 의 `chmodSync` 는 Windows 에서 읽기 전용 속성만 건드려 무효라 쓰지 않는다.
+ * 실패하면 던져서 작업을 중단한다(fail-closed) — 좁혀지지 않은 채로 토큰을 쓰지 않는다.
+ */
+export function secureStdioDir(
+  platform: string,
+  make: () => string = () => mkdtempSync(path.join(tmpdir(), "deskrpg-ssh-")),
+  harden: (dir: string) => void = (dir) =>
+    execFileSync("icacls", [dir, "/inheritance:r", "/grant:r", `${userInfo().username}:F`], {
+      stdio: "ignore",
+    }),
+): string {
+  const dir = make();
+  try {
+    if (isWindows(platform)) harden(dir);
+    else chmodSync(dir, 0o700);
+  } catch (error) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // 정리 실패가 fail-closed 를 막으면 안 된다.
+    }
+    throw error;
+  }
+  return dir;
+}
+
 export type SpawnCommand = (
   command: string,
   args: string[],
@@ -139,65 +173,39 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
     return new Promise((resolve, reject) => {
       // Windows ssh 는 stdout/stdin 파이프에서 멈추므로, 대신 임시 파일로 받는다.
       const useFileStdio = isWindows(process.platform) && command === "ssh";
+      let stdioDir: string | undefined;
       let stdinFile: string | undefined;
       let stdinFd: number | undefined;
       let stdoutFile: string | undefined;
       let stdoutFd: number | undefined;
+      /** 임시 파일 정리는 디렉터리째 한 번. 두 번 불려도 안전하다. */
+      const removeStdioDir = () => {
+        if (!stdioDir) return;
+        const dir = stdioDir;
+        stdioDir = undefined;
+        try {
+          rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // 삭제 실패는 오류 경로를 바꾸지 않는다.
+        }
+      };
 
       if (useFileStdio) {
         try {
-          const pid = process.pid;
-          const timestamp = Date.now();
-          const random = Math.random().toString(36).slice(2, 8);
-          const baseName = `deskrpg-${pid}-${timestamp}-${random}`;
-
-          // stdin 파일
+          // 토큰이 오가는 파일들이므로, 파일을 만들기 **전에** 빈 전용 디렉터리에 권한을 좁힌다.
+          // 파일마다 좁히면 payload 를 쓴 뒤·자식이 쓰기 시작한 뒤에야 좁아져 틈이 남는다.
+          stdioDir = secureStdioDir(process.platform);
           if (options.input) {
-            stdinFile = path.join(tmpdir(), `${baseName}-stdin.in`);
+            stdinFile = path.join(stdioDir, "stdin.in");
             writeFileSync(stdinFile, options.input);
-            // 토큰이 담길 수 있으므로 권한을 좁힌다
-            if (isWindows(process.platform)) {
-              // Windows: icacls로 명시적 ACL 설정 (chmod는 Windows에서 읽기 전용 속성만 건드려 무효)
-              // %TEMP% 상속 ACL을 차단하고 현재 사용자에게만 FullControl 권한 부여
-              const username = userInfo().username;
-              execFileSync("icacls", [stdinFile, "/inheritance:r", `/grant:r`, `${username}:F`], {
-                stdio: "ignore",
-              });
-            } else {
-              // POSIX: chmod 사용 (유효)
-              chmodSync(stdinFile, 0o600);
-            }
             stdinFd = openSync(stdinFile, "r");
           }
-
-          // stdout 파일
-          stdoutFile = path.join(tmpdir(), `${baseName}-stdout.out`);
+          stdoutFile = path.join(stdioDir, "stdout.out");
           stdoutFd = openSync(stdoutFile, "w");
-          // 토큰이 담길 수 있으므로 권한을 좁힌다
-          if (isWindows(process.platform)) {
-            // Windows: icacls로 명시적 ACL 설정 (chmod는 Windows에서 읽기 전용 속성만 건드려 무효)
-            // %TEMP% 상속 ACL을 차단하고 현재 사용자에게만 FullControl 권한 부여
-            const username = userInfo().username;
-            execFileSync("icacls", [stdoutFile, "/inheritance:r", `/grant:r`, `${username}:F`], {
-              stdio: "ignore",
-            });
-          } else {
-            // POSIX: chmod 사용 (유효)
-            chmodSync(stdoutFile, 0o600);
-          }
         } catch {
           if (stdinFd !== undefined) closeSync(stdinFd);
           if (stdoutFd !== undefined) closeSync(stdoutFd);
-          if (stdinFile) {
-            try {
-              unlinkSync(stdinFile);
-            } catch {}
-          }
-          if (stdoutFile) {
-            try {
-              unlinkSync(stdoutFile);
-            } catch {}
-          }
+          removeStdioDir();
           reject(new Error("command_failed"));
           return;
         }
@@ -208,7 +216,7 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
         if (useFileStdio && stdoutFd !== undefined) {
           const stdio: any = [stdinFd !== undefined ? stdinFd : "pipe", stdoutFd, "pipe"];
           // 주의: stdio[0]이 파이프가 아니면 child.stdin은 null이 된다.
-          // 파일 갈래에서는 :318-327에서 child.stdin을 null 체크로 가둔다.
+          // 파일 갈래에서는 아래에서 child.stdin을 null 체크로 가둔다.
           child = spawn(command, args, {
             stdio: stdio,
             shell: false,
@@ -221,16 +229,7 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       } catch {
         if (stdinFd !== undefined) closeSync(stdinFd);
         if (stdoutFd !== undefined) closeSync(stdoutFd);
-        if (stdinFile) {
-          try {
-            unlinkSync(stdinFile);
-          } catch {}
-        }
-        if (stdoutFile) {
-          try {
-            unlinkSync(stdoutFile);
-          } catch {}
-        }
+        removeStdioDir();
         reject(new Error("command_failed"));
         return;
       }
@@ -257,37 +256,23 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
               stdoutFd = undefined;
             }
             if (!error) {
-              const content = readFileSync(stdoutFile, "utf-8");
-              stdout = content;
+              stdout = readFileSync(stdoutFile, "utf-8");
             }
           } catch {
             // 파일 읽기 실패해도 계속 진행
-          } finally {
-            try {
-              unlinkSync(stdoutFile);
-            } catch {
-              // 삭제 실패는 무시
-            }
           }
         }
-
-        // stdin 파일 정리
-        if (useFileStdio && stdinFile) {
+        if (useFileStdio && stdinFd !== undefined) {
           try {
-            if (stdinFd !== undefined) {
-              closeSync(stdinFd);
-              stdinFd = undefined;
-            }
+            closeSync(stdinFd);
           } catch {
             // close 실패는 무시
-          } finally {
-            try {
-              unlinkSync(stdinFile);
-            } catch {
-              // 삭제 실패는 무시
-            }
           }
+          stdinFd = undefined;
         }
+        // 정리는 디렉터리째 한 번. finish() 는 단 하나의 종결 경로이고 아래 try/catch 가
+        // 동기 예외까지 여기로 모으므로, 리스너 등록 순서와 무관하게 지워진다.
+        removeStdioDir();
 
         if (error) {
           // Include helper-owned installers, not just their parent Python process.
@@ -320,30 +305,33 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
         if (stream === "stdout") stdout += value.toString();
         else stderr += value.toString();
       };
-      // useFileStdio이면 stdout은 파일로 가므로 리스너는 필요 없다
-      if (!useFileStdio) {
-        child.stdout.on("data", (data) => collect(data, "stdout"));
-      }
-      child.stderr.on("data", (data) => collect(data, "stderr"));
-      child.on("error", () => finish("command_failed"));
-      // 주의: finish()가 임시 파일을 정리한다. 이 리스너 등록 순서가 중요하다 —
-      // close 이벤트가 다른 에러(stdin 역참조 등)보다 먼저 finish()를 호출하면 정리가 보장된다.
-      child.on("close", (code) => finish(undefined, code ?? 1));
-      // stdin이 파일 fd면 Node는 child.stdin을 null로 둔다
-      if (child.stdin) {
-        child.stdin.on("error", () => {
-          /* early exit is handled by close */
-        });
-      }
-      options.signal?.addEventListener("abort", abort, { once: true });
-      if (options.signal?.aborted) abort();
-      // stdin이 파일이면 이미 파일에서 읽으므로 end() 호출 안 함
-      if (child.stdin) {
-        if (useFileStdio && stdinFd !== undefined) {
-          child.stdin.end();
-        } else {
-          child.stdin.end(options.input);
+      try {
+        // useFileStdio이면 stdout은 파일로 가므로 리스너는 필요 없다
+        if (!useFileStdio) {
+          child.stdout.on("data", (data) => collect(data, "stdout"));
         }
+        child.stderr.on("data", (data) => collect(data, "stderr"));
+        child.on("error", () => finish("command_failed"));
+        child.on("close", (code) => finish(undefined, code ?? 1));
+        // stdin이 파일 fd면 Node는 child.stdin을 null로 둔다
+        if (child.stdin) {
+          child.stdin.on("error", () => {
+            /* early exit is handled by close */
+          });
+        }
+        options.signal?.addEventListener("abort", abort, { once: true });
+        if (options.signal?.aborted) abort();
+        // stdin이 파일이면 이미 파일에서 읽으므로 end() 호출 안 함
+        if (child.stdin) {
+          if (useFileStdio && stdinFd !== undefined) {
+            child.stdin.end();
+          } else {
+            child.stdin.end(options.input);
+          }
+        }
+      } catch {
+        // 리스너 등록 중 동기 예외가 나도 finish() 가 임시 디렉터리를 지운다.
+        finish("command_failed");
       }
     });
   };
