@@ -84,6 +84,7 @@ import {
   invalidateRoomRuntimesForChannel,
 } from "./room-runtime";
 import * as chatRooms from "@/lib/chat-rooms";
+import { prefixReportFormat } from "@/lib/report-format";
 import { prefixUserContext, type UserContext } from "@/lib/user-context";
 import { AdapterRegistry } from "../lib/adapters/types.js";
 import { ClaudeAdapter } from "../lib/adapters/claude-adapter.js";
@@ -508,8 +509,9 @@ async function streamNpcResponse(
   const { _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
   const responseEvent = emitEvent || "npc:response";
   const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
-  // 대화 상대 한 줄은 메시지 앞머리에 붙인다 — 시스템 프롬프트(instructions)는 건드리지 않는다.
-  const prompt = prefixUserContext(message, userContextOf(socket));
+  // 대화 상대 한 줄과 보고 형식 규칙은 메시지 앞머리에 붙인다 — 시스템 프롬프트(instructions)는
+  // 건드리지 않는다. 순서는 "누구와 말하는가" → "어떻게 보고하는가" → 실제 본문이다.
+  const prompt = prefixUserContext(prefixReportFormat(message), userContextOf(socket));
 
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
 
@@ -664,8 +666,11 @@ async function streamMeetingNpcResponse(
   if (dispatchKind === "openclaw" && !agentId) return;
 
   const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
-  // 발언한 사람의 이름·소개를 앞머리에 붙인다(회의 상대는 발언자다).
-  const prompt = prefixUserContext(`${senderName}: ${userMessage}`, userContext);
+  // 발언한 사람의 이름·소개와 보고 형식을 앞머리에 붙인다(회의 상대는 발언자다).
+  const prompt = prefixUserContext(
+    prefixReportFormat(`${senderName}: ${userMessage}`),
+    userContext,
+  );
 
   let hermesAdapter: Awaited<ReturnType<typeof createHermesAdapterForNpc>> = null;
   let hermesContextKey = "";
