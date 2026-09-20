@@ -120,3 +120,36 @@ test("보드 미준비(board_unavailable)는 칸반이 쓰는 보드 미확보 �
     cleanup();
   }
 });
+
+test("조회가 끝나기 전에는 빈 상태도 오류도 그리지 않는다 — 확정 안 된 것을 단정하지 않는다", () => {
+  const { container, cleanup } = render(<NpcCardsTab {...props} board={null} error={null} />);
+  try {
+    assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
+    assert.equal(container.querySelector("[data-testid='cards-error']"), null);
+    assert.ok(container.querySelector("[data-testid='cards-loading']"), "스켈레톤이 없다");
+  } finally {
+    cleanup();
+  }
+});
+
+test("프로필을 모르면 담당 없는 카드를 이 직원 것으로 잡지 않는다", () => {
+  const board: KanbanBoard = {
+    ...boardWithTwoMine,
+    columns: [
+      {
+        name: "todo",
+        tasks: [{ id: "u", title: "담당 없는 카드", status: "todo", assignee: "" }],
+      },
+    ],
+  };
+  const { container, cleanup } = render(
+    <NpcCardsTab {...props} npcProfile="" board={board} error={null} />,
+  );
+  try {
+    assert.equal(container.querySelectorAll("[data-card-id]").length, 0);
+    // 담당 기준을 모르는 것도 확정되지 않은 상태다 — "담당 카드 없음" 이라고 말하지 않는다.
+    assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
+  } finally {
+    cleanup();
+  }
+});

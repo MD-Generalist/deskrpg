@@ -7,6 +7,10 @@
  * 여기는 `assignedCards` 로 고른 결과를 그리기만 한다 — DB·네트워크 없이 테스트되고 클라이언트
  * 번들 경계를 넘지 않는다.
  *
+ * **확정되지 않은 상태를 빈 목록으로 단정하지 않는다.** 조회가 끝나기 전(`board`·`error` 가
+ * 둘 다 `null`)과 담당 기준을 모를 때(`npcProfile` 이 빈 문자열 — 보드 응답에 이 NPC 의 프로필이
+ * 없다)는 스켈레톤만 둔다. "담당 카드 없음" 은 **확정된 사실일 때만** 하는 말이다.
+ *
  * **빈 상태와 오류를 구분한다.** 게이트에 막힌 것(플러그인 없음·업그레이드 필요·게이트웨이
  * 미연결 등)을 "담당 카드 없음" 으로 보이면 사용자가 원인을 알 수 없다. 오류 문구는 크론·칸반이
  * 이미 쓰는 `@/lib/gate-failure` 분류와 `wizard-error-codes` 메시지를 그대로 재사용한다.
@@ -23,7 +27,7 @@ import { failureLine } from "@/components/kanban/kanban-view-model";
 export interface NpcCardsTabProps {
   channelId: string;
   npcId: string;
-  /** 담당자 판정 기준 — Hermes 프로필 이름(`KanbanTask.assignee`). */
+  /** 담당자 판정 기준 — Hermes 프로필 이름(`KanbanTask.assignee`). 모르면 빈 문자열. */
   npcProfile: string;
   /** 이미 조회된 보드. 조회가 아직 안 끝났으면 `null`. */
   board: KanbanBoard | null;
@@ -39,13 +43,25 @@ export default function NpcCardsTab({
   onOpenCard,
 }: NpcCardsTabProps) {
   const t = useT();
-  const cards = useMemo(() => (board ? assignedCards(board, npcProfile) : []), [board, npcProfile]);
+  // 프로필을 모르면 아예 고르지 않는다 — `assignee === ""` 인 카드가 "이 직원 담당" 으로
+  // 잡히면 남의 카드를 보이게 된다.
+  const cards = useMemo(
+    () => (board && npcProfile ? assignedCards(board, npcProfile) : []),
+    [board, npcProfile],
+  );
+  /** 담당 목록을 말할 수 있는가 — 조회가 끝났고 담당 기준도 아는가. */
+  const settled = board !== null && npcProfile !== "";
 
   return (
     <div data-testid="npc-cards-tab" className="flex flex-col min-h-0 h-full bg-bg text-text">
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
         {error !== null ? (
           <CardsErrorNotice code={error} />
+        ) : !settled ? (
+          <div data-testid="cards-loading" aria-busy="true" className="space-y-1 py-2">
+            <div className="h-9 rounded-lg bg-surface" />
+            <div className="h-9 rounded-lg bg-surface" />
+          </div>
         ) : cards.length === 0 ? (
           <p data-testid="cards-empty" className="text-sm text-text-dim py-4 text-center">
             {t("cards.empty")}

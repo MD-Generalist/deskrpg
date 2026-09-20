@@ -2123,6 +2123,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
 
   // 방 알림 링크(R29·R30) → 해당 모달을 그 항목으로 연다.
+  //
+  // `showKanbanRef` 는 effect 에서 갱신되므로, **같은 tick 에 보드를 닫고** 이걸 부르면 아직
+  // `true` 로 읽혀 `focusRequest` 로 간다 — 그 사이 모달이 언마운트되면 지목이 사라진다.
+  // 지금 부르는 곳(방 알림·카드 탭·`openArtifactSource`)은 모두 보드를 닫지 않으므로
+  // (kanban 분기는 `closeKanban: false` — `artifact-entry.ts:145`) 그 경로가 없다.
+  // 닫고 여는 호출자를 새로 만들려면 `boardOpen` 을 인자로 받도록 바꿔야 한다.
   const openNoticeCard = useCallback(
     (cardId: string) => {
       setKanbanCard((prev) =>
