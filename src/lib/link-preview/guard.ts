@@ -14,14 +14,112 @@
  * 있으면 뚫린다 — 1 만 있으면 `internal.example.com` 이 10.x 로 풀리고, 2 만 있으면
  * `file://`·비표준 포트가 그대로 나간다.
  */
+import { isIPv4, isIPv6 } from "node:net";
+
 const ALLOWED_PORTS = new Set(["", "80", "443"]);
 
 /** 점 넷짜리 IPv4 문자열이면 옥텟 배열, 아니면 null. */
 function ipv4Octets(host: string): number[] | null {
-  const parts = host.split(".");
-  if (parts.length !== 4) return null;
-  const nums = parts.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : NaN));
-  return nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) ? nums : null;
+  if (!isIPv4(host)) return null;
+  return host.split(".").map(Number);
+}
+
+/**
+ * IPv6 문자열을 16바이트로 펼친다. 파싱할 수 없으면 null.
+ *
+ * 문자열 정규식으로 IPv6 를 판정하면 반드시 뚫린다 — WHATWG URL 파서가
+ * `[::ffff:127.0.0.1]` 을 **16진 표기** `[::ffff:7f00:1]` 로 정규화하기 때문이다
+ * (2026-09-20 실측: 그 형태로 루프백·사설망·169.254 가 전부 통과했다). 표기를 비교하지 말고
+ * 바이트로 펼쳐서 판정한다.
+ */
+function ipv6Bytes(host: string): Uint8Array | null {
+  if (!isIPv6(host)) return null;
+  let text = host;
+  // 끝에 점 넷 IPv4 가 붙은 형태(`::ffff:127.0.0.1`)는 16진 두 그룹으로 바꿔 둔다.
+  const tail = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(text);
+  if (tail) {
+    const v4 = ipv4Octets(tail[1]);
+    if (!v4) return null;
+    const hex = `${((v4[0] << 8) | v4[1]).toString(16)}:${((v4[2] << 8) | v4[3]).toString(16)}`;
+    text = text.slice(0, tail.index) + hex;
+  }
+  const [left, right, ...extra] = text.split("::");
+  if (extra.length > 0) return null;
+  const head = left ? left.split(":") : [];
+  const tailGroups = right === undefined ? [] : right ? right.split(":") : [];
+  const fill = 8 - head.length - tailGroups.length;
+  if (right === undefined ? head.length !== 8 : fill < 0) return null;
+  const groups = right === undefined ? head : [...head, ...Array(fill).fill("0"), ...tailGroups];
+
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < 8; i++) {
+    const value = Number.parseInt(groups[i] || "0", 16);
+    if (!Number.isInteger(value) || value < 0 || value > 0xffff) return null;
+    bytes[i * 2] = value >> 8;
+    bytes[i * 2 + 1] = value & 0xff;
+  }
+  return bytes;
+}
+
+/** IPv4 는 차단 목록으로 판정한다 — 공인 대역이 훨씬 넓어 목록이 짧다. */
+function isBlockedIpv4(octets: number[]): boolean {
+  const [a, b, c] = octets;
+  if (a === 0 || a === 127 || a === 10) return true; // 이 호스트 · 루프백 · 사설
+  if (a === 172 && b >= 16 && b <= 31) return true; // 사설
+  if (a === 192 && b === 168) return true; // 사설
+  if (a === 169 && b === 254) return true; // 링크로컬(클라우드 메타데이터)
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // IETF 프로토콜 할당 · 문서용
+  if (a === 198 && (b === 18 || b === 19)) return true; // 벤치마크
+  if (a === 198 && b === 51 && c === 100) return true; // 문서용
+  if (a === 203 && b === 0 && c === 113) return true; // 문서용
+  if (a >= 224) return true; // 멀티캐스트 · 예약 · 브로드캐스트
+  return false;
+}
+
+/** 앞 `bits` 비트가 접두사와 같은가. */
+function hasPrefix(bytes: Uint8Array, prefix: number[], bits: number): boolean {
+  for (let i = 0; i < bits; i++) {
+    const bit = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
+    const want = (prefix[i >> 3] >> (7 - (i & 7))) & 1;
+    if (bit !== want) return false;
+  }
+  return true;
+}
+
+/** 안에 IPv4 를 품는 IPv6 대역이면 그 IPv4 를, 아니면 null. */
+function embeddedIpv4(bytes: Uint8Array): number[] | null {
+  const last4 = [bytes[12], bytes[13], bytes[14], bytes[15]];
+  // ::ffff:0:0/96 (IPv4-mapped) · ::/96 (IPv4-compatible) · ::ffff:0:0:0/96 (IPv4-translated)
+  const first10Zero = bytes.slice(0, 10).every((b) => b === 0);
+  if (
+    first10Zero &&
+    ((bytes[10] === 0xff && bytes[11] === 0xff) || (bytes[10] === 0 && bytes[11] === 0))
+  ) {
+    return last4;
+  }
+  if (bytes.slice(0, 8).every((b) => b === 0) && bytes[8] === 0xff && bytes[9] === 0xff)
+    return last4;
+  // 64:ff9b::/96 · 64:ff9b:1::/48 (NAT64)
+  if (bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b)
+    return last4;
+  // 2002::/16 (6to4) — 안쪽 v4 가 진짜 목적지다.
+  if (bytes[0] === 0x20 && bytes[1] === 0x02) return [bytes[2], bytes[3], bytes[4], bytes[5]];
+  return null;
+}
+
+/**
+ * IPv6 는 **허용 목록**으로 판정한다 — 차단 목록은 새 표기가 나올 때마다 뚫린다.
+ * 글로벌 유니캐스트(`2000::/3`)만 통과시키고, 그 안에서도 v4 를 품거나 특수 용도인
+ * 대역은 따로 쳐낸다.
+ */
+function isBlockedIpv6(bytes: Uint8Array): boolean {
+  const v4 = embeddedIpv4(bytes);
+  if (v4) return isBlockedIpv4(v4);
+  if (!hasPrefix(bytes, [0x20], 3)) return true; // 2000::/3 밖은 전부 차단
+  if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00) return true; // 2001::/32 Teredo
+  if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8) return true; // 2001:db8::/32 문서용
+  return false;
 }
 
 /**
@@ -31,29 +129,18 @@ function ipv4Octets(host: string): number[] | null {
 export function isBlockedAddress(address: string): boolean {
   let host = address.trim().toLowerCase();
   if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
+  // 스코프 식별자(`fe80::1%en0`)는 주소가 아니다 — 떼고 본다.
+  const percent = host.indexOf("%");
+  if (percent !== -1) host = host.slice(0, percent);
   if (!host) return true;
 
-  const mapped = /^::ffff:(.+)$/.exec(host);
-  if (mapped) return isBlockedAddress(mapped[1]);
-
   const v4 = ipv4Octets(host);
-  if (v4) {
-    const [a, b] = v4;
-    if (a === 0 || a === 127 || a === 10) return true; // 이 호스트 · 루프백 · 사설
-    if (a === 172 && b >= 16 && b <= 31) return true; // 사설
-    if (a === 192 && b === 168) return true; // 사설
-    if (a === 169 && b === 254) return true; // 링크로컬(클라우드 메타데이터)
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-    if (a >= 224) return true; // 멀티캐스트·예약
-    return false;
-  }
+  if (v4) return isBlockedIpv4(v4);
 
-  if (!host.includes(":")) return true; // IPv4 도 IPv6 도 아니다 — 해석되지 않은 이름
-  if (host === "::" || host === "::1") return true;
-  if (/^f[cd][0-9a-f]{2}:/.test(host)) return true; // fc00::/7 유니크 로컬
-  if (/^fe[89ab][0-9a-f]:/.test(host)) return true; // fe80::/10 링크로컬
-  if (host.startsWith("ff")) return true; // 멀티캐스트
-  return false;
+  const bytes = ipv6Bytes(host);
+  if (bytes) return isBlockedIpv6(bytes);
+
+  return true; // IPv4 도 IPv6 도 아니다 — 해석되지 않은 이름
 }
 
 /**
@@ -90,8 +177,10 @@ export function parsePreviewTarget(raw: string): URL | null {
   if (!host) return null;
   // 이름이 아니라 주소로 왔으면 지금 판정한다. `localhost` 는 해석을 기다릴 필요가 없다.
   if (host === "localhost" || host.endsWith(".localhost")) return null;
-  if (host.startsWith("[") || ipv4Octets(host) || host.includes(":")) {
-    if (isBlockedAddress(host)) return null;
+  // 이름이 아니라 주소로 왔으면 지금 판정한다(IPv6 리터럴은 대괄호가 벗겨져 온다).
+  const literal = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (isIPv4(literal) || isIPv6(literal)) {
+    if (isBlockedAddress(literal)) return null;
   }
   return url;
 }

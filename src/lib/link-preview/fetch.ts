@@ -46,6 +46,8 @@ export async function isAllowedPreviewUrl(url: URL): Promise<boolean> {
 
 type Hop = {
   status: number;
+  /** `identity` 를 요청했는데도 압축해 보내는 서버가 있다 — 그런 응답은 버린다. */
+  encoding: string;
   location: string | null;
   contentType: string;
   message: IncomingMessage;
@@ -102,10 +104,14 @@ function openHop(url: URL, isAllowedAddress: (address: string) => boolean): Prom
           "user-agent": "DeskRPG-LinkPreview/1.0 (+https://deskrpg.com)",
           accept: "text/html,image/*;q=0.9,*/*;q=0.5",
           "accept-language": "ko,en;q=0.8",
+          // 압축을 받지 않는다. 우리는 바이트 상한을 **받은 그대로** 센다 — 압축된 본문을
+          // 받으면 512KB 상한이 압축 전 기준이 되어 gzip 폭탄에 의미가 없어진다.
+          "accept-encoding": "identity",
         },
       },
       (res) => {
         done({
+          encoding: (res.headers["content-encoding"] ?? "").toString().toLowerCase(),
           status: res.statusCode ?? 0,
           location: (res.headers.location as string | undefined) ?? null,
           contentType: (res.headers["content-type"] ?? "").toString().toLowerCase(),
@@ -172,7 +178,13 @@ export async function fetchGuarded(
       continue;
     }
 
-    if (res.status < 200 || res.status >= 300 || !res.contentType.startsWith(options.accept)) {
+    const compressed = res.encoding !== "" && res.encoding !== "identity";
+    if (
+      compressed ||
+      res.status < 200 ||
+      res.status >= 300 ||
+      !res.contentType.startsWith(options.accept)
+    ) {
       res.message.destroy();
       return null;
     }

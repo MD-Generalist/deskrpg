@@ -166,3 +166,40 @@ test("연결 직전의 주소 검사가 기본값이면 루프백에는 붙지 �
     s.close();
   }
 });
+
+test("IPv4-mapped IPv6 로 리다이렉트해도 거기서 멈춘다 — 홉마다 같은 판정을 한다", async () => {
+  const s = await serve(() => ({ status: 302, headers: { location: "http://[::ffff:7f00:1]/" } }));
+  try {
+    // URL 정책은 기본값(진짜 가드)으로 두고 첫 홉만 연다 — 둘째 홉에서 걸려야 한다.
+    const got = await fetchGuarded(new URL(`${s.origin}/a`), {
+      accept: "text/html",
+      maxBytes: 1024,
+      isAllowedUrl: allowAll,
+      isAllowedAddress: (a) => a === "127.0.0.1",
+    });
+    assert.equal(got, null);
+    assert.deepEqual(s.hits, ["/a"]);
+  } finally {
+    s.close();
+  }
+});
+
+test("압축된 응답은 받지 않는다 — 상한이 압축 전 바이트면 상한이 아니다", async () => {
+  const s = await serve(() => ({
+    headers: { "content-encoding": "gzip" },
+    body: "not really gzip",
+  }));
+  try {
+    assert.equal(
+      await fetchGuarded(new URL(`${s.origin}/z`), {
+        accept: "text/html",
+        maxBytes: 1024,
+        isAllowedUrl: allowAll,
+        isAllowedAddress: () => true,
+      }),
+      null,
+    );
+  } finally {
+    s.close();
+  }
+});

@@ -84,3 +84,54 @@ test("프록시가 되돌려 줄 수 있는 이미지 타입은 래스터뿐이�
     assert.equal(isSafeImageType(bad), false, bad);
   }
 });
+
+// dev1 이 `a3c93fd7` 에서 실측한 우회(2026-09-20). URL 파서가 `[::ffff:127.0.0.1]` 을 16진
+// 표기 `[::ffff:7f00:1]` 로 정규화해, 표기를 정규식으로 보던 판정이 전부 통과했다.
+// 리눅스 듀얼스택 소켓은 `::ffff:a.b.c.d` 연결을 IPv4 `a.b.c.d` 로 보낸다.
+test("URL 파서가 정규화한 IPv4-mapped IPv6 로는 내부망에 닿을 수 없다", () => {
+  for (const raw of [
+    "http://[::ffff:127.0.0.1]/",
+    "http://[::ffff:169.254.169.254]/latest/meta-data/",
+    "http://[::ffff:10.0.0.1]/",
+    "http://[::127.0.0.1]/",
+    "http://[64:ff9b::127.0.0.1]/",
+    "http://[2002:7f00:1::]/",
+  ]) {
+    assert.equal(parsePreviewTarget(raw), null, `${raw} → ${new URL(raw).hostname}`);
+  }
+});
+
+test("정규화된 16진 표기 자체도 막는다 — DNS·리다이렉트가 이 형태로 돌려줄 수 있다", () => {
+  for (const address of [
+    "::ffff:7f00:1", // 127.0.0.1
+    "::ffff:a9fe:a9fe", // 169.254.169.254
+    "::ffff:a00:1", // 10.0.0.1
+    "::ffff:c0a8:1", // 192.168.0.1
+    "64:ff9b::7f00:1", // NAT64 로 감싼 루프백
+    "2002:a00:1::", // 6to4 로 감싼 10.0.0.1
+    "::1",
+    "fe80::1",
+    "fc00::1",
+    "fe80::1%en0", // 스코프 식별자가 붙어도
+    "2001:db8::1", // 문서용
+    "2001::1", // Teredo
+  ]) {
+    assert.equal(isBlockedAddress(address), true, address);
+  }
+});
+
+test("글로벌 유니캐스트만 통과한다 — IPv6 는 허용 목록으로 판정한다", () => {
+  for (const address of ["2606:4700::1111", "2001:4860:4860::8888", "::ffff:8.8.8.8"]) {
+    assert.equal(isBlockedAddress(address), false, address);
+  }
+  // 2000::/3 밖은 정체를 몰라도 막는다.
+  for (const address of ["3ffe::1", "0100::1", "ff02::1"]) {
+    assert.equal(isBlockedAddress(address), address !== "3ffe::1", address);
+  }
+});
+
+test("IP 가 아닌 문자열은 막는다 — 모르는 것을 통과시키지 않는다", () => {
+  for (const junk of ["example.com", "", "::ffff:999.1.1.1", "1:2:3", "not-an-ip"]) {
+    assert.equal(isBlockedAddress(junk), true, JSON.stringify(junk));
+  }
+});
