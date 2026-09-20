@@ -25,27 +25,55 @@ const item = (messageId: string, npcId: string, createdAt: string): ReportItem =
   createdAt,
 });
 
+const sent = (messageId: string, signature = "idle:none") => ({
+  messageId,
+  outcome: "sent" as const,
+  signature,
+});
+const rejected = (messageId: string, signature: string) => ({
+  messageId,
+  outcome: "rejected" as const,
+  signature,
+});
+
 const A = item("a", "npc-1", "2026-09-21T00:00:01.000Z");
 const B = item("b", "npc-2", "2026-09-21T00:00:02.000Z");
 
 test("큐가 비어 있으면 아무도 부르지 않는다", () => {
   assert.equal(
-    decideReportCall({ queue: [], activeNpcId: null, calledMessageIds: [], blocked: false }),
+    decideReportCall({
+      queue: [],
+      activeNpcId: null,
+      attempts: [],
+      signatures: {},
+      blocked: false,
+    }),
     null,
   );
 });
 
 test("맨 앞 보고의 NPC 를 부른다", () => {
   assert.equal(
-    decideReportCall({ queue: [A, B], activeNpcId: null, calledMessageIds: [], blocked: false })
-      ?.messageId,
+    decideReportCall({
+      queue: [A, B],
+      activeNpcId: null,
+      attempts: [],
+      signatures: {},
+      blocked: false,
+    })?.messageId,
     "a",
   );
 });
 
 test("대화창·모달이 열려 있으면 부르지 않는다 — 큐는 남는다", () => {
   assert.equal(
-    decideReportCall({ queue: [A, B], activeNpcId: null, calledMessageIds: [], blocked: true }),
+    decideReportCall({
+      queue: [A, B],
+      activeNpcId: null,
+      attempts: [],
+      signatures: {},
+      blocked: true,
+    }),
     null,
   );
 });
@@ -55,7 +83,8 @@ test("이미 호출을 쏜 보고는 다시 부르지 않는다 — 걸어오는
     decideReportCall({
       queue: [A, B],
       activeNpcId: "npc-1",
-      calledMessageIds: ["a"],
+      attempts: [sent("a")],
+      signatures: {},
       blocked: false,
     }),
     null,
@@ -64,8 +93,13 @@ test("이미 호출을 쏜 보고는 다시 부르지 않는다 — 걸어오는
 
 test("보고 중인 NPC 의 보고가 끝나 큐에서 빠지면 다음 사람을 부른다", () => {
   assert.equal(
-    decideReportCall({ queue: [B], activeNpcId: "npc-1", calledMessageIds: ["a"], blocked: false })
-      ?.messageId,
+    decideReportCall({
+      queue: [B],
+      activeNpcId: "npc-1",
+      attempts: [sent("a")],
+      signatures: {},
+      blocked: false,
+    })?.messageId,
     "b",
   );
 });
@@ -155,7 +189,8 @@ test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이
   const next = decideReportCall({
     queue: [A, B],
     activeNpcId: null,
-    calledMessageIds: ["a"],
+    attempts: [sent("a")],
+    signatures: {},
     blocked: false,
   });
   assert.equal(next?.messageId, "b");
@@ -163,7 +198,8 @@ test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이
     decideReportCall({
       queue: [A, B],
       activeNpcId: null,
-      calledMessageIds: ["a", "b"],
+      attempts: [sent("a"), sent("b")],
+      signatures: {},
       blocked: false,
     }),
     null,
@@ -176,7 +212,8 @@ test("보고 중인 직원이 있으면 그 사람이 우선이고 재호출은 
     decideReportCall({
       queue: [A, B],
       activeNpcId: "npc-2",
-      calledMessageIds: [],
+      attempts: [],
+      signatures: {},
       blocked: false,
     })?.messageId,
     "b",
@@ -186,7 +223,8 @@ test("보고 중인 직원이 있으면 그 사람이 우선이고 재호출은 
     decideReportCall({
       queue: [A, B],
       activeNpcId: "npc-1",
-      calledMessageIds: ["a"],
+      attempts: [sent("a")],
+      signatures: {},
       blocked: false,
     }),
     null,
@@ -204,5 +242,74 @@ test("보고를 열 곳은 종류로 갈린다 — 크론 실패는 카드가 �
     reportTarget({ ...A, cardId: null, jobId: null }),
     null,
     "열 곳이 없으면 null — 빈 id 로 엉뚱한 모달을 열지 않는다",
+  );
+});
+
+test("거절된 보고는 그 직원의 상태가 그대로인 동안 다시 부르지 않는다", () => {
+  assert.equal(
+    decideReportCall({
+      queue: [A],
+      activeNpcId: null,
+      attempts: [rejected("a", "idle:sock-1")],
+      signatures: { "npc-1": "idle:sock-1" },
+      blocked: false,
+    }),
+    null,
+    "상태가 같으면 결과도 같다 — 매 렌더마다 호출이 나가면 안 된다",
+  );
+});
+
+test("거절된 보고는 그 직원의 상태가 바뀌면 다시 후보가 된다", () => {
+  // 실측 시나리오: 이긴 탭이 떠나며 소유권이 이 탭으로 넘어온다(`idle:sock-1` → `idle:mine`).
+  // 예전에는 여기서 영영 다시 부르지 않아, 새로고침해야만 직원이 걸어왔다.
+  assert.equal(
+    decideReportCall({
+      queue: [A],
+      activeNpcId: null,
+      attempts: [rejected("a", "idle:sock-1")],
+      signatures: { "npc-1": "idle:mine" },
+      blocked: false,
+    })?.messageId,
+    "a",
+  );
+});
+
+test("미확인 보고가 전부 같은 직원 것이어도 상태가 바뀌면 되살아난다", () => {
+  // 큐 전진만으로는 못 구하던 경우 — 실측에서 소피의 보고 둘이 함께 막혀 있었다.
+  const same = { ...B, npcId: "npc-1" };
+  assert.equal(
+    decideReportCall({
+      queue: [A, same],
+      activeNpcId: null,
+      attempts: [rejected("a", "idle:sock-1"), rejected("b", "idle:sock-1")],
+      signatures: { "npc-1": "idle:sock-1" },
+      blocked: false,
+    }),
+    null,
+  );
+  assert.equal(
+    decideReportCall({
+      queue: [A, same],
+      activeNpcId: null,
+      attempts: [rejected("a", "idle:sock-1"), rejected("b", "idle:sock-1")],
+      signatures: { "npc-1": "idle:mine" },
+      blocked: false,
+    })?.messageId,
+    "a",
+    "되살아나면 발생 순서대로 맨 앞부터",
+  );
+});
+
+test("응답을 기다리는 중인 보고(sent)는 상태가 바뀌어도 다시 부르지 않는다", () => {
+  assert.equal(
+    decideReportCall({
+      queue: [A],
+      activeNpcId: null,
+      attempts: [sent("a", "idle:sock-1")],
+      signatures: { "npc-1": "walking:mine" },
+      blocked: false,
+    }),
+    null,
+    "낙관적 표시는 같은 보고를 두 번 쏘는 것을 막는 장치다 — 결과가 오기 전에는 유지한다",
   );
 });

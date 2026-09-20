@@ -52,6 +52,8 @@ import {
   reportAckKey,
   reportsForChannel,
   reportTarget,
+  npcSignature,
+  type ReportAttempt,
 } from "./npc-report-dispatch";
 import type { ReportItem } from "@/game/report-queue";
 import { decideContextInvite } from "./context-invite-decision";
@@ -297,7 +299,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // 보고 큐 — 사무실 알림에서 파생한다. 확인 지점만 브라우저에 남긴다(`reportAckKey`).
   const [reportAck, setReportAck] = useState<string | null>(null);
   const [reportingNpcId, setReportingNpcId] = useState<string | null>(null);
-  const calledReportsRef = useRef<string[]>([]);
+  const reportAttemptsRef = useRef<ReportAttempt[]>([]);
   // 대화 목록에 올라가는 직원별 DM 한 줄. 방과 달리 서버가 밀어 주지 않으므로 필요할 때 묻는다.
   const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
   // Keep ref in sync so socket listeners can read current value without stale closure
@@ -2072,23 +2074,61 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
    *
    * 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다 — 큐는 그대로 남아 닫으면 이어진다.
    */
+  const reportSignatures = useMemo(() => {
+    const snapshot = npcMotionSnapshotRef.current;
+    const out: Record<string, string> = {};
+    for (const npc of rosterNpcs) {
+      const motion = npcMotionUi(snapshot, npc.id, npcMoveStates[npc.id], npcCallers[npc.id]);
+      out[npc.id] = npcSignature(motion.phase, motion.caller, socket?.id);
+    }
+    return out;
+  }, [rosterNpcs, npcMoveStates, npcCallers, socket?.id]);
+
   useEffect(() => {
     if (!socket || !channelId) return;
     const next = decideReportCall({
       queue: reportQueue,
       activeNpcId: reportingNpcId,
-      calledMessageIds: calledReportsRef.current,
+      attempts: reportAttemptsRef.current,
+      signatures: reportSignatures,
       blocked: Boolean(dialogNpc) || showKanban || showCron,
     });
     if (!next) return;
-    calledReportsRef.current = [...calledReportsRef.current.slice(-49), next.messageId];
+    const signature = reportSignatures[next.npcId] ?? "unknown:none";
+    const record = (outcome: ReportAttempt["outcome"]) => {
+      reportAttemptsRef.current = [
+        ...reportAttemptsRef.current.filter((a) => a.messageId !== next.messageId).slice(-49),
+        { messageId: next.messageId, outcome, signature },
+      ];
+    };
+    record("sent");
     setReportingNpcId(next.npcId);
     socket.emit("npc:call", { channelId, npcId: next.npcId }, (result: unknown) => {
-      // 거절(회의 중·다른 사용자 점유)은 조용히 넘긴다. 알림은 이미 방에 있고 배지도 남는다 —
-      // 걸어오지 못했다는 이유로 토스트를 띄우면 사용자가 할 수 있는 일이 없다.
-      if (isNpcCallRejected(result)) setReportingNpcId(null);
+      // 거절(회의 중·다른 사용자 점유)은 **사용자에게는** 조용히 넘긴다 — 알림도 배지도
+      // 남아 있고, 걸어오지 못했다는 토스트로는 사용자가 할 수 있는 일이 없다. 다만
+      // 흔적까지 지우면 안 된다: 예전에는 이 줄이 없어 거절 코드를 아무도 볼 수 없었고,
+      // "직원이 안 온다" 의 원인을 코드 추론으로만 좁혀야 했다.
+      if (!isNpcCallRejected(result)) return;
+      console.debug("[report] npc:call rejected", {
+        npcId: next.npcId,
+        messageId: next.messageId,
+        signature,
+        error: (result as { error?: unknown })?.error,
+      });
+      // 거절을 기록해 둔다. 그 직원의 상태가 바뀌면 `decideReportCall` 이 다시 후보로 올린다.
+      record("rejected");
+      setReportingNpcId(null);
     });
-  }, [socket, channelId, reportQueue, reportingNpcId, dialogNpc, showKanban, showCron]);
+  }, [
+    socket,
+    channelId,
+    reportQueue,
+    reportingNpcId,
+    reportSignatures,
+    dialogNpc,
+    showKanban,
+    showCron,
+  ]);
 
   // 보고가 큐에서 빠지면(확인됨) 다음 사람에게 자리를 넘긴다.
   useEffect(() => {

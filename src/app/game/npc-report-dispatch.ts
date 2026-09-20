@@ -41,23 +41,59 @@ export function reportTarget(
   return null;
 }
 
+/**
+ * 호출 한 번의 결과. `signature` 는 **그 시점 그 직원의 관찰 가능한 상태**다(아래 참조).
+ *
+ * - `sent` — 쏘았고 아직 거절을 받지 않았다. 같은 보고를 두 번 쏘는 것을 막는 낙관적 표시다.
+ * - `rejected` — 거절됐다. 그 직원의 상태가 **그대로인 동안은** 다시 쏘지 않는다.
+ */
+export type ReportAttempt = {
+  messageId: string;
+  outcome: "sent" | "rejected";
+  signature: string;
+};
+
+/**
+ * 재시도 신호가 되는 직원 상태. 모션 스냅샷의 `phase` 와 "주인이 나인가" 를 합친다.
+ *
+ * 시간 기반 재시도를 쓰지 않는 이유: 회의가 한 시간이면 그동안 호출이 계속 헛나간다.
+ * 상태가 바뀌는 순간이 곧 "이제 될지도 모른다" 는 유일한 근거다.
+ */
+export function npcSignature(
+  phase: string | undefined,
+  ownerSocketId: string | undefined,
+  mySocketId: string | undefined,
+): string {
+  const owner = !ownerSocketId ? "none" : ownerSocketId === mySocketId ? "mine" : "other";
+  return `${phase ?? "unknown"}:${owner}`;
+}
+
 export function decideReportCall(input: {
   queue: readonly ReportItem[];
   /** 지금 보고하러 오는 중이거나 말하는 중인 NPC. */
   activeNpcId: string | null;
-  /** 이미 호출을 쏜 보고들. 재호출을 막는다. */
-  calledMessageIds: readonly string[];
+  /** 이 보고들에 무엇을 했고 어떻게 됐는지. */
+  attempts: readonly ReportAttempt[];
+  /** 지금 각 직원의 상태 서명. 거절 당시와 다르면 다시 부를 수 있다. */
+  signatures: Readonly<Record<string, string>>;
   /** 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다. 큐는 그대로 남는다. */
   blocked: boolean;
 }): ReportItem | null {
   if (input.blocked) return null;
+  const callable = (item: ReportItem): boolean => {
+    const attempt = input.attempts.find((a) => a.messageId === item.messageId);
+    if (!attempt) return true;
+    // 결과를 기다리는 중이면 다시 쏘지 않는다.
+    if (attempt.outcome === "sent") return false;
+    // 거절 — 그 직원의 상태가 바뀌었을 때만 다시 후보가 된다.
+    return (input.signatures[item.npcId] ?? "unknown:none") !== attempt.signature;
+  };
   const active = nextReporter(input.queue, input.activeNpcId);
-  // 보고 중인 직원이 있으면 그 사람이 우선이다. 이미 불렀으면 걸어오는 중이니 재호출하지 않는다.
+  // 보고 중인 직원이 있으면 그 사람이 우선이다.
   if (input.activeNpcId && active && active.npcId === input.activeNpcId)
-    return input.calledMessageIds.includes(active.messageId) ? null : active;
-  // 맨 앞이 거절됐다고 큐 전체가 멈추면 안 된다 — 회의 중인 직원 하나가 나머지 보고를
-  // 영영 막는다(head-of-line blocking). 이미 호출한 것은 건너뛰고 다음 후보를 고른다.
-  return input.queue.find((item) => !input.calledMessageIds.includes(item.messageId)) ?? null;
+    return callable(active) ? active : null;
+  // 맨 앞이 막아도 큐 전체가 멈추면 안 된다(head-of-line blocking). 다음 후보로 넘어간다.
+  return input.queue.find(callable) ?? null;
 }
 
 /**
