@@ -2060,16 +2060,16 @@ const zh: Record<string, string> = {
   "gateways.onboarding.title": "还没有网关 — 从这里开始",
   "gateways.onboarding.intro":
     "DeskRPG 不内置 AI 智能体运行时。驱动 NPC 的大脑是你自己部署的 Hermes Agent，DeskRPG 只负责连接它的网关。",
-  "gateways.onboarding.step1Title": "1. 安装 Hermes Agent 并启动 API 服务器",
+  "gateways.onboarding.step1Title": "安装 Hermes Agent 并启动 API 服务器",
   "gateways.onboarding.step1Body":
     "按官方仓库的说明安装，登录模型提供商，然后运行 API 服务器。跳过这一步就没有可注册的网关。",
   "gateways.onboarding.step2Title": "2. 准备网关地址和监听器所有者密钥",
   "gateways.onboarding.step2Body": "下面的表单需要 API 服务器地址（例如 {example}）和认证密钥。",
   "gateways.onboarding.step2OwnerKeyWarning":
     "请务必填写监听器所有者密钥（API_SERVER_KEY）。仅有配置文件密钥会导致看板、定时任务和事件流不可用。",
-  "gateways.onboarding.step3Title": "3. 要使用看板和定时任务，需安装 DeskRPG 插件",
+  "gateways.onboarding.step3Title": "要使用看板和定时任务，需安装 DeskRPG 插件",
   "gateways.onboarding.step3Body": "在网关主机上执行下面的命令，然后重启 Hermes API 服务器。",
-  "gateways.onboarding.step4Title": "4. 网关可以稍后再连",
+  "gateways.onboarding.step4Title": "网关可以稍后再连",
   "gateways.onboarding.step4Body":
     "如果还没启动 Hermes，可以先创建角色和频道，准备好之后再回到本页面注册网关。",
   "gateways.onboarding.step4CharacterLink": "创建角色",

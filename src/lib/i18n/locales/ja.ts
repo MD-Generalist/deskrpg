@@ -2134,7 +2134,7 @@ const ja: Record<string, string> = {
   "gateways.onboarding.title": "ゲートウェイがまだありません — ここから始めます",
   "gateways.onboarding.intro":
     "DeskRPG は AI エージェントのランタイムを内蔵していません。NPC を動かす頭脳は自分で起動する Hermes Agent であり、DeskRPG はそのゲートウェイに接続するだけです。",
-  "gateways.onboarding.step1Title": "1. Hermes Agent をインストールして API サーバーを起動します",
+  "gateways.onboarding.step1Title": "Hermes Agent をインストールして API サーバーを起動します",
   "gateways.onboarding.step1Body":
     "公式リポジトリの手順でインストールし、モデルプロバイダーにログインしてから API サーバーを実行してください。これを省くと登録できるゲートウェイがありません。",
   "gateways.onboarding.step2Title": "2. ゲートウェイのアドレスとリスナー所有者キーを用意します",
@@ -2142,10 +2142,10 @@ const ja: Record<string, string> = {
     "下のフォームには API サーバーのアドレス（例: {example}）と認証キーが必要です。",
   "gateways.onboarding.step2OwnerKeyWarning":
     "必ずリスナー所有者キー（API_SERVER_KEY）を入力してください。プロフィールキーだけではカンバン・cron・イベントストリームが使えません。",
-  "gateways.onboarding.step3Title": "3. カンバンと cron を使うには DeskRPG プラグインを入れます",
+  "gateways.onboarding.step3Title": "カンバンと cron を使うには DeskRPG プラグインを入れます",
   "gateways.onboarding.step3Body":
     "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
-  "gateways.onboarding.step4Title": "4. ゲートウェイは後回しでも構いません",
+  "gateways.onboarding.step4Title": "ゲートウェイは後回しでも構いません",
   "gateways.onboarding.step4Body":
     "Hermes をまだ起動できていなければ、先にキャラクターとチャンネルを作っても構いません。準備ができたらこの画面で登録できます。",
   "gateways.onboarding.step4CharacterLink": "キャラクターを作成",
