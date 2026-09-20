@@ -211,9 +211,11 @@ test("secureStdioDir: posix 는 icacls 를 부르지 않고 0700 으로 좁힌�
 
 test("executor 소스: 파일 단위 icacls 도, 파일 단위 삭제도 남아 있지 않다", () => {
   const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
-  const icacls = source.match(/execFileSync\("icacls",[\s\S]*?\)/g) ?? [];
+  const icacls = source.match(/execFileSync\(\s*"icacls",\s*\[[^\]]*\]/g) ?? [];
   assert.equal(icacls.length, 1, "icacls 호출은 디렉터리용 하나뿐이어야 한다");
   assert.match(icacls[0], /\[dir,/, "icacls 대상은 디렉터리여야 한다");
+  // (OI)(CI) 가 없으면 디렉터리만 좁혀지고 그 안의 토큰 파일은 SYSTEM·Administrators 를 상속받는다.
+  assert.match(icacls[0], /:\(OI\)\(CI\)F/, "파일로 상속되려면 (OI)(CI) 를 명시해야 한다");
   assert.ok(
     !/stdinFile|stdoutFile/.test(icacls[0]),
     "stdin/stdout 파일에 직접 icacls 를 걸면 안 된다",

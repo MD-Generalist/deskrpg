@@ -117,9 +117,11 @@ export function killProcessTree(
  * 권한을 좁힌다. 파일에는 게이트웨이·프로필 토큰이 평문으로 놓이므로, 파일이 생긴 뒤에 좁히면
  * 그 사이에 `%TEMP%` 에서 상속된 ACL(그룹 Modify 포함)로 노출된다.
  *
- * Windows: `icacls <dir> /inheritance:r /grant:r <user>:F`. icacls 는 디렉터리에 (OI)(CI) 를 기본
- * 적용하므로 **이 안에 새로 만들어지는 파일이 이 ACL 을 상속한다는 가정**에 기대고 있다 — 이 함수의
- * 핵심 전제이며 Windows 실기에서 아직 확인되지 않았다(macOS/Linux 에서는 검증 불가).
+ * Windows: `icacls <dir> /inheritance:r /grant:r <user>:(OI)(CI)F`. **`(OI)(CI)` 를 명시해야
+ * 이 안에 새로 만들어지는 파일이 이 ACL 을 상속한다** — icacls 는 디렉터리라고 해서 상속 플래그를
+ * 기본으로 붙이지 않는다. 빼고 `<user>:F` 만 주면 디렉터리 자체는 좁혀지지만 그 안의 파일은
+ * SYSTEM·BUILTIN\Administrators 를 상속받아 그룹에 노출된다(2026-09-20 WinServer 실측:
+ * `:F` 는 파일에 SYSTEM·Administrators·S-1-5-5-*, `:(OI)(CI)F` 는 사용자 단독 inherited=True).
  * Node 의 `chmodSync` 는 Windows 에서 읽기 전용 속성만 건드려 무효라 쓰지 않는다.
  * 실패하면 던져서 작업을 중단한다(fail-closed) — 좁혀지지 않은 채로 토큰을 쓰지 않는다.
  */
@@ -127,9 +129,13 @@ export function secureStdioDir(
   platform: string,
   make: () => string = () => mkdtempSync(path.join(tmpdir(), "deskrpg-ssh-")),
   harden: (dir: string) => void = (dir) =>
-    execFileSync("icacls", [dir, "/inheritance:r", "/grant:r", `${userInfo().username}:F`], {
-      stdio: "ignore",
-    }),
+    execFileSync(
+      "icacls",
+      [dir, "/inheritance:r", "/grant:r", `${userInfo().username}:(OI)(CI)F`],
+      {
+        stdio: "ignore",
+      },
+    ),
 ): string {
   const dir = make();
   try {
