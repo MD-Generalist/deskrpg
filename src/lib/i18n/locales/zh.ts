@@ -75,7 +75,7 @@ const zh: Record<string, string> = {
   "common.copied": "已复制",
 
   // Auth
-  "auth.title": "DeskRPG for Hermes",
+  "auth.title": "DeskRPG — AI Coworking Space",
   "auth.morningGreeting": "新的一天，一起去上班",
   "auth.morningCaption": "AI 同事在我们的小小办公室等你",
   "auth.subtitle": "与AI员工一起的虚拟办公室",

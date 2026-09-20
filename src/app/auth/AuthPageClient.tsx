@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import DeskRpgMark from "@/components/DeskRpgMark";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import { ArrowUpRight, Sun } from "lucide-react";
 import "./commute.css";
@@ -93,10 +94,16 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
       className={`theme-web commute-home ${isComingSoon ? "commute-home--soon" : "commute-home--login"}`}
     >
       <div className="commute-sun" aria-hidden="true" />
+      <div className="commute-clouds" aria-hidden="true">
+        <span className="commute-cloud" />
+        <span className="commute-cloud" />
+        <span className="commute-cloud" />
+      </div>
       <CommuteCityScene />
       <header className="commute-header">
         <Link href="/" className="commute-brand">
-          DeskRPG <span>for Hermes</span>
+          <DeskRpgMark size={30} />
+          DeskRPG <span>AI Coworking Space</span>
         </Link>
       </header>
 
@@ -114,7 +121,7 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
               <Sun size={14} aria-hidden="true" /> {t("auth.morningGreeting")}
             </p>
             <h1>
-              DeskRPG <span>for Hermes</span>
+              DeskRPG <span>AI Coworking Space</span>
             </h1>
             <p className="commute-subtitle">{t("auth.heroSubtitle")}</p>
           </div>

@@ -75,7 +75,7 @@ const en: Record<string, string> = {
   "common.copied": "Copied",
 
   // Auth
-  "auth.title": "DeskRPG for Hermes",
+  "auth.title": "DeskRPG — AI Coworking Space",
   "auth.morningGreeting": "A NEW DAY AT YOUR LITTLE OFFICE",
   "auth.morningCaption": "A little world. A brighter workday.",
   "auth.subtitle": "Virtual Office with AI Employees",

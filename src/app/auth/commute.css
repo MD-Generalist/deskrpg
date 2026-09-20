@@ -12,6 +12,10 @@
   padding: 28px 4%;
 }
 .commute-brand {
+  /* 3D 미니어처 마크 + 워드마크 + 태그라인. 사이드바 브랜드와 같은 구성이다. */
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-size: 17px;
   font-weight: 750;
   letter-spacing: -0.6px;
@@ -25,13 +29,80 @@
 }
 .commute-sun {
   position: absolute;
-  width: 170px;
-  height: 170px;
+  /* 화면을 누르지 않을 만큼만. 예전 170px 은 도시보다 커 보였다(2026-09-20 단테 지적). */
+  width: 104px;
+  height: 104px;
   border-radius: 50%;
   background: #fff5ce;
+  top: 13%;
+  right: 14%;
+  box-shadow: 0 0 70px 30px #ffedbc4d;
+}
+/*
+ * 아침 하늘의 구름 — 모델은 `src/game/three/sky-clouds.ts`, 그림은
+ * `npx tsx scripts/sky/render-clouds.ts` 가 굽는다. CSS 도형으로 만들면 타원이 겹쳐 보인다.
+ */
+.commute-clouds {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 44%;
+  overflow: hidden;
+  pointer-events: none;
+}
+.commute-cloud {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-size: contain;
+  /* 아주 느리게 흐른다 — 눈에 띄게 움직이면 로그인 화면이 산만해진다. */
+  animation: commute-drift linear infinite;
+}
+.commute-cloud:nth-child(1) {
   top: 12%;
-  right: 12%;
-  box-shadow: 0 0 90px 45px #ffedbc55;
+  width: 300px;
+  height: 120px;
+  background-image: url("/assets/brand/cloud-1.png");
+  opacity: 0.92;
+  animation-duration: 420s;
+}
+.commute-cloud:nth-child(2) {
+  top: 33%;
+  width: 208px;
+  height: 84px;
+  background-image: url("/assets/brand/cloud-2.png");
+  opacity: 0.78;
+  animation-duration: 560s;
+  animation-delay: -180s;
+}
+.commute-cloud:nth-child(3) {
+  top: 4%;
+  width: 250px;
+  height: 100px;
+  background-image: url("/assets/brand/cloud-3.png");
+  opacity: 0.66;
+  animation-duration: 680s;
+  animation-delay: -420s;
+}
+@keyframes commute-drift {
+  from {
+    transform: translateX(-38vw);
+  }
+  to {
+    transform: translateX(132vw);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .commute-cloud {
+    animation: none;
+  }
+  .commute-cloud:nth-child(1) {
+    transform: translateX(8vw);
+  }
+  .commute-cloud:nth-child(2) {
+    transform: translateX(52vw);
+  }
+  .commute-cloud:nth-child(3) {
+    transform: translateX(88vw);
+  }
 }
 .commute-canvas {
   position: absolute;
@@ -217,8 +288,8 @@
     inset: 310px -25% 10px;
   }
   .commute-sun {
-    width: 100px;
-    height: 100px;
+    width: 74px;
+    height: 74px;
     right: -20px;
     top: 240px;
   }
