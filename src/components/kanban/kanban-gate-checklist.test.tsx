@@ -120,6 +120,40 @@ test("보드 차단 배너의 board_unavailable(503+plugin_absent) 도 체크리
   }
 });
 
+test("보드 차단 배너의 평범한 실패(403 not_a_member)는 체크리스트 버튼을 띄우지 않는다", async () => {
+  const f = await mountBoard((url) => {
+    if (url.includes("/automation/status")) {
+      return json({
+        pluginStatus: "ready",
+        pluginVersion: "0.6.0",
+        capabilities: ["kanban"],
+        timezone: "Asia/Seoul",
+        boardSlug: "deskrpg-ch-1",
+        dispatcherPresent: true,
+        attachments: true,
+        lastPolledAt: null,
+        lastError: null,
+        minVersion: "0.6.0",
+        working: [],
+      });
+    }
+    if (url.includes("/kanban/board")) {
+      return json({ code: "not_a_member", message: "채널 멤버가 아닙니다" }, { status: 403 });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    const blocker = f.host.querySelector<HTMLElement>("[data-blocker]");
+    assert.equal(blocker?.dataset.blocker, "other");
+    const checklistButton = Array.from(f.host.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "무엇이 필요한가요?",
+    );
+    assert.equal(checklistButton, undefined);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // TaskDrawer 결과물 섹션
 // ---------------------------------------------------------------------------
@@ -202,6 +236,24 @@ test("결과물 섹션의 409(gateway_not_bound) 는 한 줄로 뭉개지지 않
   try {
     await view.click("무엇이 필요한가요?");
     assert.match(view.host.textContent ?? "", /게이트웨이 연결/);
+  } finally {
+    await view.cleanup();
+  }
+});
+
+test("결과물 섹션의 평범한 실패(500 internal_error)는 체크리스트 버튼을 띄우지 않는다", async () => {
+  const view = await mountDrawer({
+    list: async () => {
+      throw new ArtifactsApiError(500, "internal_error", "서버 오류");
+    },
+    open: () => {},
+  });
+  try {
+    assert.match(view.host.textContent ?? "", /결과물/);
+    const checklistButton = Array.from(view.host.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "무엇이 필요한가요?",
+    );
+    assert.equal(checklistButton, undefined);
   } finally {
     await view.cleanup();
   }

@@ -17,8 +17,6 @@ import { CopyCommand } from "../CopyCommand";
  * 적도 없다. 그 사람에게 빈 등록 폼만 주면 막다른 길이다 — DeskRPG 는 에이전트 런타임을
  * 내장하지 않는다는 사실부터 말해 주어야 한다.
  */
-export const GATEWAY_EXAMPLE_BASE_URL = "http://127.0.0.1:8642";
-
 const TOAST_MS = 3000;
 
 export default function GatewayOnboardingGuide() {

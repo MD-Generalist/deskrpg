@@ -13,7 +13,7 @@ import {
   type ArtifactSummary,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
-import { classifyGateFailure, type GateBlocker } from "@/lib/gate-failure";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { KindIcon } from "../artifacts/ArtifactList";
 import { ArtifactsApiError } from "../artifacts/artifacts-api";
@@ -802,7 +802,7 @@ export default function TaskDrawer({
                 {cardArtifactsError && cardArtifacts === null ? (
                   <div className="text-danger">
                     {t("artifacts.error")}
-                    {cardArtifactsBlocker && (
+                    {cardArtifactsBlocker && isSetupBlocker(cardArtifactsBlocker) && (
                       <button
                         type="button"
                         onClick={() => setArtifactsChecklistOpen(true)}

@@ -5,7 +5,7 @@ import { AlertTriangle, Archive, KanbanSquare, Plus, RefreshCw, Settings, X } fr
 import { useT } from "@/lib/i18n";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
-import { classifyGateFailure, type GateBlocker } from "@/lib/gate-failure";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
@@ -757,6 +757,7 @@ function Blocker({
   onOpenChecklist: () => void;
 }) {
   const t = useT();
+  const gateBlocker = gateBlockerFromBoard(blocker);
   const title =
     blocker.kind === "upgrade_required"
       ? t("kanban.blocker.upgradeTitle")
@@ -811,9 +812,11 @@ function Blocker({
                 : "common.retry",
             )}
           </button>
-          <button type="button" onClick={onOpenChecklist} className="ml-2 underline">
-            {t("gateChecklist.whatIsNeeded")}
-          </button>
+          {gateBlocker && isSetupBlocker(gateBlocker) && (
+            <button type="button" onClick={onOpenChecklist} className="ml-2 underline">
+              {t("gateChecklist.whatIsNeeded")}
+            </button>
+          )}
         </>
       )}
     </div>
