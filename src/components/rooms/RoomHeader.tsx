@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useT } from "@/lib/i18n";
 import type { RoomSummary } from "@/lib/chat-rooms-policy";
+import RosterAvatar from "../RosterAvatar";
 
 interface RoomHeaderProps {
   room: RoomSummary;
@@ -14,7 +15,16 @@ interface RoomHeaderProps {
   onRename: (name: string) => void;
   onLeave: () => void;
   onDelete: () => void;
+  /** 참여자 외형 조회 — 있으면 방 이름 옆에 아바타를 겹쳐 쌓는다. */
+  avatarFor?: (who: { kind: "npc" | "user"; id?: string | null; name: string }) => unknown;
+  /** 방이 멤버를 따로 두지 않을 때(오피스 전체) 보여 줄 사람들 — 접속한 사람과 출근한 직원. */
+  fallbackParticipants?: Participant[];
 }
+
+type Participant = { kind: "npc" | "user"; id: string; name: string };
+
+/** 헤더에 그리는 아바타 수. 넘치면 `+N` 으로 접는다. */
+const MAX_HEADER_AVATARS = 5;
 
 export default function RoomHeader({
   room,
@@ -25,6 +35,8 @@ export default function RoomHeader({
   onRename,
   onLeave,
   onDelete,
+  avatarFor,
+  fallbackParticipants = [],
 }: RoomHeaderProps) {
   const t = useT();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -34,6 +46,9 @@ export default function RoomHeader({
   // office 는 채널 그 자체다 — 초대·나가기·삭제가 성립하지 않는다.
   const isOffice = room.kind === "office";
   const memberLine = room.members.map((member) => member.name).join(", ");
+  const participants: Participant[] = room.members.length > 0 ? room.members : fallbackParticipants;
+  const shown = participants.slice(0, MAX_HEADER_AVATARS);
+  const hidden = participants.length - shown.length;
 
   const commitRename = () => {
     const next = draft.trim();
@@ -72,6 +87,28 @@ export default function RoomHeader({
         ) : (
           <span className="flex-1 min-w-0 truncate text-sm font-bold text-text-secondary">
             {isOffice ? t("room.office") : room.name}
+          </span>
+        )}
+        {avatarFor && shown.length > 0 && !renaming && (
+          <span
+            data-room-avatars
+            className="flex shrink-0 items-center"
+            title={participants.map((who) => who.name).join(", ")}
+          >
+            {shown.map((who, index) => (
+              <span
+                key={`${who.kind}:${who.id}`}
+                data-room-avatar
+                className={`rounded-full ring-2 ring-bg ${index > 0 ? "-ml-2" : ""}`}
+              >
+                <RosterAvatar appearance={avatarFor(who)} size={22} />
+              </span>
+            ))}
+            {hidden > 0 && (
+              <span data-room-avatar-more className="ml-1 text-[11px] text-text-muted">
+                +{hidden}
+              </span>
+            )}
           </span>
         )}
         <button

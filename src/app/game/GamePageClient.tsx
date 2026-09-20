@@ -64,6 +64,7 @@ import WorkspaceNavigator, {
   type NpcNavigatorAction,
 } from "@/components/conversation/WorkspaceNavigator";
 import type { RosterNpc } from "@/components/NpcRoster";
+import { createAvatarLookup } from "./avatar-lookup";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
@@ -1536,6 +1537,20 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
 
   /** `@` 로 지명할 수 있는 NPC — office 는 출근 중 전원, group 은 그중 방 멤버만. */
+  // 대화창 아바타 — 직원은 명부에서, 사람은 접속자 목록에서 외형을 찾는다.
+  const avatarFor = useMemo(
+    () =>
+      createAvatarLookup(
+        rosterNpcs,
+        channelPlayers.map((player) => ({
+          userId: player.id === "__self__" ? roomState.viewerUserId : player.userId,
+          name: player.name,
+          appearance: player.appearance,
+        })),
+      ),
+    [rosterNpcs, channelPlayers, roomState.viewerUserId],
+  );
+
   const mentionCandidatesFor = useCallback(
     (roomId: string | null) => {
       const active = rosterNpcs
@@ -2260,6 +2275,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         onRoomRename={handleRoomRename}
         onRoomDelete={handleRoomDelete}
         currentPlayerName={character?.name}
+        avatarFor={avatarFor}
         npcMoveState={dialogMotion.phase}
         onReturnNpc={dialogNpc && dialogMotion.caller === socket?.id ? handleReturnNpc : undefined}
         cron={channelId ? { channelId, socket, onToast: cronToast } : null}

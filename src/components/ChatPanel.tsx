@@ -5,6 +5,7 @@ import { Pencil, UserMinus, RotateCcw, Undo2 } from "lucide-react";
 import type { NpcChatMessage } from "./NpcDialog";
 import ChatInput from "./ChatInput";
 import ChatBubble from "./ui/ChatBubble";
+import RosterAvatar from "./RosterAvatar";
 import RoomList from "./rooms/RoomList";
 import RoomHeader from "./rooms/RoomHeader";
 import RoomComposer from "./rooms/RoomComposer";
@@ -12,6 +13,8 @@ import SystemMessage from "./rooms/SystemMessage";
 import { candidatesForInvite } from "./rooms/compose-candidates";
 import type { RoomAction, RoomState } from "@/app/game/room-state";
 import type { ChatResponse } from "@/lib/chat-response";
+import type { RoomMessage } from "@/lib/chat-rooms-policy";
+import type { AvatarLookup } from "@/app/game/avatar-lookup";
 import {
   isActiveChatResponse,
   responsesForSource,
@@ -81,6 +84,24 @@ interface ChatPanelProps {
   npcArtifactChips?: Array<{ artifactId: string; title: string }>;
   /** 결과물 칩을 누르면 결과물 모달을 그 결과물로 연다. 없으면 칩이 없다. */
   onOpenArtifact?: (artifactId: string) => void;
+  /**
+   * 발화자의 외형을 찾아 준다 — 말풍선·헤더의 원형 아바타에 쓴다. 메시지마다 외형을 싣지
+   * 않고 조회 함수를 받는다(외형은 채널 명부에 이미 있다). 못 찾으면 `null`(기본 표시).
+   * 없으면 아바타를 그리지 않는다.
+   */
+  avatarFor?: AvatarLookup;
+}
+
+/**
+ * 바로 앞 메시지와 같은 발화자인가 — 아바타·이름을 되풀이하지 않기 위해 본다.
+ * 알림·시스템 메시지는 흐름을 끊으므로 그 뒤의 말풍선은 다시 아바타를 단다.
+ */
+function sameSpeaker(previous: RoomMessage | undefined, current: RoomMessage): boolean {
+  if (!previous || previous.notice || previous.senderKind === "system") return false;
+  if (previous.senderKind !== current.senderKind) return false;
+  return previous.senderId && current.senderId
+    ? previous.senderId === current.senderId
+    : previous.senderName === current.senderName;
 }
 
 const MIN_WIDTH = 250;
@@ -128,6 +149,7 @@ export default function ChatPanel({
   onOpenNoticeCronJob,
   npcArtifactChips = [],
   onOpenArtifact,
+  avatarFor,
 }: ChatPanelProps) {
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
   // NPC DM 의 탭 — 어느 NPC 의 선택인지 같이 기억해, 다른 NPC 로 바뀌면 대화 탭으로 돌아간다
@@ -307,6 +329,14 @@ export default function ChatPanel({
         {!inNpcDialog && !inNpcSelect && roomState.view === "room" && currentRoom ? (
           <RoomHeader
             room={currentRoom}
+            avatarFor={avatarFor}
+            fallbackParticipants={[
+              ...onlinePlayers.map((player) => ({ kind: "user" as const, ...player })),
+              ...mentionCandidatesFor(currentRoom.id).map((npc) => ({
+                kind: "npc" as const,
+                ...npc,
+              })),
+            ]}
             canManage={!!roomState.viewerUserId && currentRoom.createdBy === roomState.viewerUserId}
             onBack={backFromRoom}
             onClose={() => (isWorkspace ? backFromRoom() : setManualOpen(false))}
@@ -335,7 +365,19 @@ export default function ChatPanel({
             >
               &#9664;
             </button>
-            <span className="text-sm font-bold text-text-secondary">
+            <span className="flex items-center gap-2 text-sm font-bold text-text-secondary">
+              {inNpcDialog && avatarFor && (
+                <span data-chat-header-avatar>
+                  <RosterAvatar
+                    appearance={avatarFor({
+                      kind: "npc",
+                      id: dialogNpc.npcId,
+                      name: dialogNpc.npcName,
+                    })}
+                    size={24}
+                  />
+                </span>
+              )}
               {inNpcDialog
                 ? dialogNpc.npcName
                 : inNpcSelect
@@ -487,10 +529,21 @@ export default function ChatPanel({
                           responses={npcResponses.filter(
                             (response) => response.requestId === msg.responseRequestId,
                           )}
+                          avatarFor={avatarFor}
                         />
                       ) : (
                         <ChatBubble
                           sender={msg.role === "player" ? "player" : "npc"}
+                          avatar={
+                            avatarFor && dialogNpc
+                              ? avatarFor({
+                                  kind: "npc",
+                                  id: dialogNpc.npcId,
+                                  name: dialogNpc.npcName,
+                                })
+                              : undefined
+                          }
+                          continued={i > 0 && npcMessages[i - 1].role === msg.role}
                           streaming={
                             msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
                           }
@@ -607,7 +660,7 @@ export default function ChatPanel({
                   {t("room.empty")}
                 </div>
               )}
-              {roomMessages.map((msg) => {
+              {roomMessages.map((msg, index) => {
                 // 구조화 알림(R29·R30)은 발신자 종류와 무관하게 알림 렌더러가 그린다.
                 if (msg.notice) {
                   return (
@@ -628,6 +681,16 @@ export default function ChatPanel({
                     <ChatBubble
                       sender={isMe ? "player" : "npc"}
                       name={!isMe ? msg.senderName : undefined}
+                      avatar={
+                        avatarFor
+                          ? avatarFor({
+                              kind: msg.senderKind,
+                              id: msg.senderId,
+                              name: msg.senderName,
+                            })
+                          : undefined
+                      }
+                      continued={sameSpeaker(roomMessages[index - 1], msg)}
                     >
                       {msg.content}
                     </ChatBubble>

@@ -450,3 +450,143 @@ test("칩이 없거나 onOpenArtifact 가 없으면 칩을 그리지 않는다",
     false,
   );
 });
+
+// ── 아바타 ────────────────────────────────────────────────────────────────────
+
+function avatarPanel(roomState: RoomState, extra: Record<string, unknown> = {}) {
+  const asked: Array<{ kind: string; id?: string | null; name: string }> = [];
+  const node = (
+    <I18nProvider>
+      <ChatPanel
+        dialogNpc={null}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={roomState}
+        channelChatOpen
+        currentPlayerName="단테"
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+        avatarFor={(who) => {
+          asked.push(who);
+          return null;
+        }}
+        {...extra}
+      />
+    </I18nProvider>
+  );
+  return { node, asked };
+}
+
+function roomMessage(id: string, kind: "user" | "npc", senderId: string, senderName: string) {
+  return {
+    id,
+    roomId: "g1",
+    senderKind: kind,
+    senderId,
+    senderName,
+    content: `${senderName} 의 말 ${id}`,
+    createdAt: "2026-09-20T00:00:00.000Z",
+  };
+}
+
+test("방 말풍선 — 상대에게만 아바타, 같은 발화자가 이어 말하면 자리만 남긴다", async () => {
+  const state: RoomState = {
+    rooms: [room("g1", "group", "기획팀")],
+    viewerUserId: "u1",
+    currentRoomId: "g1",
+    view: "room",
+    messages: {
+      g1: [
+        roomMessage("m1", "npc", "npc-noah", "noah"),
+        roomMessage("m2", "npc", "npc-noah", "noah"),
+        roomMessage("m3", "user", "u1", "단테"),
+        roomMessage("m4", "npc", "npc-sophie", "sophie"),
+      ],
+    },
+  };
+  const { node, asked } = avatarPanel(state);
+  const el = await mount(node);
+  const slots = [...el.querySelectorAll("[data-chat-avatar]")].map((n) =>
+    n.getAttribute("data-chat-avatar"),
+  );
+  assert.deepEqual(
+    slots,
+    ["shown", "spacer", "shown"],
+    "noah·(noah 이어서)·sophie — 내 말에는 없다",
+  );
+  assert.ok(
+    asked.some((who) => who.kind === "npc" && who.id === "npc-noah"),
+    "발화자 id 로 외형을 묻는다",
+  );
+});
+
+test("NPC DM — 헤더 이름 앞과 상대 말풍선에 아바타가 붙는다", async () => {
+  const state: RoomState = {
+    rooms: [room("office", "office", "오피스")],
+    viewerUserId: "u1",
+    currentRoomId: "office",
+    view: "room",
+    messages: {},
+  };
+  const { node, asked } = avatarPanel(state, {
+    dialogNpc: { npcId: "npc-noah", npcName: "noah" },
+    npcMessages: [
+      { id: "a", role: "player", content: "안녕" },
+      { id: "b", role: "npc", content: "안녕하세요" },
+      { id: "c", role: "npc", content: "무엇을 도울까요" },
+    ],
+  });
+  const el = await mount(node);
+  assert.ok(el.querySelector("[data-chat-header-avatar]"), "DM 헤더에 아바타가 없다");
+  const slots = [...el.querySelectorAll("[data-chat-avatar]")].map((n) =>
+    n.getAttribute("data-chat-avatar"),
+  );
+  assert.deepEqual(slots, ["shown", "spacer"]);
+  assert.ok(asked.every((who) => who.id === "npc-noah"));
+});
+
+test("방 헤더 — 참여자를 최대 5명까지 겹쳐 쌓고 나머지는 +N", async () => {
+  const members = Array.from({ length: 7 }, (_, i) => ({
+    kind: "npc" as const,
+    id: `npc-${i}`,
+    name: `직원${i}`,
+  }));
+  const state: RoomState = {
+    rooms: [{ ...room("g1", "group", "기획팀"), members }],
+    viewerUserId: "u1",
+    currentRoomId: "g1",
+    view: "room",
+    messages: {},
+  };
+  const { node } = avatarPanel(state);
+  const el = await mount(node);
+  const stack = el.querySelector("[data-room-avatars]");
+  assert.ok(stack, "방 헤더에 아바타 묶음이 없다");
+  assert.equal(stack.querySelectorAll("[data-room-avatar]").length, 5);
+  assert.equal(stack.querySelector("[data-room-avatar-more]")?.textContent, "+2");
+});
+
+test("avatarFor 가 없으면 아바타를 그리지 않는다 — 기존 화면 그대로", async () => {
+  const state: RoomState = {
+    rooms: [room("g1", "group", "기획팀")],
+    viewerUserId: "u1",
+    currentRoomId: "g1",
+    view: "room",
+    messages: { g1: [roomMessage("m1", "npc", "npc-noah", "noah")] },
+  };
+  const { node } = avatarPanel(state, { avatarFor: undefined });
+  const el = await mount(node);
+  assert.equal(el.querySelector("[data-chat-avatar]"), null);
+  assert.equal(el.querySelector("[data-room-avatars]"), null);
+});

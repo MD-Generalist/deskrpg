@@ -29,6 +29,9 @@ import {
   sanitizeClientStreamingSpeech,
 } from "./meeting-room/stream-text";
 import MeetingSidebar from "./meeting-room/MeetingSidebar";
+import RosterAvatar from "./RosterAvatar";
+import { createAvatarLookup } from "@/app/game/avatar-lookup";
+import { CHAT_AVATAR_SIZE } from "./ui/ChatBubble";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -277,6 +280,16 @@ export default function MeetingRoom({
     appearance: character.appearance,
     type: "user",
   };
+
+  // 발언 말풍선의 아바타 — 직원은 채널 명부에서, 사람은 회의 참가자(소켓 id)에서 찾는다.
+  const meetingAvatarFor = createAvatarLookup(
+    npcs,
+    participants.map((participant) => ({
+      userId: participant.id,
+      name: participant.name,
+      appearance: participant.appearance,
+    })),
+  );
 
   // Build NPC participants
   const displayedNpcs = discussionNpcs ?? selectMeetingNpcs(npcs, selectedNpcIds);
@@ -1201,9 +1214,16 @@ export default function MeetingRoom({
                     {t("meeting.discussionStarted")}
                   </div>
                 )}
-                {messages.map((msg) => {
+                {messages.map((msg, index) => {
                   const isMe = msg.senderId === socket?.id;
                   const isNpc = msg.senderType === "npc";
+                  const isSystem = msg.senderId === "system";
+                  // 채팅 패널과 같은 규칙 — 상대에게만 아바타, 같은 발화자가 이어 말하면 자리만.
+                  const previous = messages[index - 1];
+                  const continued =
+                    !!previous &&
+                    previous.senderId === msg.senderId &&
+                    previous.senderType === msg.senderType;
                   return (
                     <div
                       key={msg.id}
@@ -1211,10 +1231,32 @@ export default function MeetingRoom({
                       // 화자를 밖에서 읽을 수 있어야 한다 — 색상 유틸리티 클래스로는 못 한다.
                       data-meeting-message={msg.senderType}
                       data-sender={msg.sender}
-                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                      className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}
                     >
+                      {!isMe &&
+                        !isSystem &&
+                        (continued ? (
+                          <div
+                            data-chat-avatar="spacer"
+                            aria-hidden="true"
+                            className="shrink-0"
+                            style={{ width: CHAT_AVATAR_SIZE }}
+                          />
+                        ) : (
+                          <div data-chat-avatar="shown" className="shrink-0 self-start">
+                            <RosterAvatar
+                              appearance={meetingAvatarFor({
+                                kind: isNpc ? "npc" : "user",
+                                // 회의 서버는 직원 발언의 senderId 를 `npc-<id>` 로 싣는다.
+                                id: isNpc ? msg.senderId.replace(/^npc-/, "") : msg.senderId,
+                                name: msg.sender,
+                              })}
+                              size={CHAT_AVATAR_SIZE}
+                            />
+                          </div>
+                        ))}
                       <div className="max-w-[85%]">
-                        {!isMe && (
+                        {!isMe && !(continued && !isSystem) && (
                           <div
                             className={`text-micro font-medium mb-0.5 ${
                               isNpc ? "text-npc" : "text-text-muted"

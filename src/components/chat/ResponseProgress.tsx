@@ -5,12 +5,19 @@ import { useT } from "@/lib/i18n";
 import { isActiveChatResponse } from "@/app/game/chat-response-state";
 import ChatBubble from "../ui/ChatBubble";
 
-type Props = { responses: ChatResponse[]; receipt?: boolean; receiptOnly?: boolean };
+type Props = {
+  responses: ChatResponse[];
+  receipt?: boolean;
+  receiptOnly?: boolean;
+  /** 답하는 직원의 외형 조회 — 있으면 스트리밍 말풍선에도 아바타가 붙는다. */
+  avatarFor?: (who: { kind: "npc" | "user"; id?: string | null; name: string }) => unknown;
+};
 
 export default function ResponseProgress({
   responses,
   receipt = false,
   receiptOnly = false,
+  avatarFor,
 }: Props) {
   const t = useT();
   if (responses.length === 0) return null;
@@ -30,7 +37,16 @@ export default function ResponseProgress({
           return (
             <div key={response.requestId} data-response-request-id={response.requestId}>
               {response.content && (
-                <ChatBubble sender="npc" name={response.npcName} streaming={active}>
+                <ChatBubble
+                  sender="npc"
+                  name={response.npcName}
+                  streaming={active}
+                  avatar={
+                    avatarFor
+                      ? avatarFor({ kind: "npc", id: response.npcId, name: response.npcName })
+                      : undefined
+                  }
+                >
                   {response.content}
                 </ChatBubble>
               )}
