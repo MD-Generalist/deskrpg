@@ -120,6 +120,16 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
 
   /** 이 소켓이 지금 보고 있는 방들. `room:send` 는 여기 없는 방을 거절한다. */
   const openRooms = new Set<string>();
+  /**
+   * 이 소켓이 **듣고 있는** 사무실 방. `openRooms`(보낼 수 있는 방)와는 다른 개념이다.
+   *
+   * 자동화 알림(카드 검토·막힘·완료, 크론 실패)은 사무실 방으로 방송된다. 방송을 `room:open`
+   * 한 소켓에만 보내면 DM·다른 그룹 방을 보고 있거나 패널을 접어 둔 사용자가 그 방으로
+   * 돌아올 때까지 알림을 받지 못한다 — 알려야 할 바로 그 사용자다. 사무실 방은 채널당
+   * 하나이고 채널에 들어올 수 있는 사람은 모두 볼 수 있으므로(하드 게이트 4), 채널 권한을
+   * 확인한 `room:list` 에서 늘 듣게 한다.
+   */
+  let listeningOfficeId: string | null = null;
 
   const socketRoom = roomSocketRoom;
 
@@ -187,13 +197,25 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       // createdBy 가 된다.
       const ownerId = await rooms.getChannelOwnerId(id);
       if (!ownerId) return fail(null, "not_found");
-      await rooms.ensureOfficeRoom(id, ownerId);
+      const office = await rooms.ensureOfficeRoom(id, ownerId);
+      // 채널을 옮겨 다시 물으면 이전 채널의 사무실 방은 그만 듣는다(열어 둔 방이면 그대로 둔다).
+      if (listeningOfficeId && listeningOfficeId !== office.id && !openRooms.has(listeningOfficeId))
+        socket.leave(socketRoom(listeningOfficeId));
+      listeningOfficeId = office.id;
+      socket.join(socketRoom(office.id));
       socket.emit("room:list-response", {
         channelId: id,
         // 클라이언트는 자기 user id 를 알 길이 없다(뷰어 신원 엔드포인트가 없다).
         // 방을 만든 사람인지 가리려면 이 값이 필요하다.
         viewerUserId: user.userId,
         rooms: await rooms.listRoomsForUser(id, user.userId),
+      });
+      // 접속 전에 쌓인 알림도 배지에 잡히도록 최근 줄을 함께 내려 준다. 클라이언트의 보고 큐는
+      // 받은 메시지에서만 파생하므로, 이게 없으면 방을 열기 전까지 큐가 비어 있다.
+      // `history` 는 `messages[roomId]` 만 채운다 — 방이 열린 것처럼 되지는 않는다.
+      socket.emit("room:history", {
+        roomId: office.id,
+        messages: await rooms.recentRoomMessages(office.id, HISTORY_LIMIT),
       });
     },
 
@@ -217,7 +239,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const id = asString(roomId);
       if (!id) return;
       openRooms.delete(id);
-      socket.leave(socketRoom(id));
+      // 사무실 방은 닫아도 계속 듣는다 — 보내는 것만 막힌다(`openRooms` 에서 빠졌으므로 not_open).
+      if (id !== listeningOfficeId) socket.leave(socketRoom(id));
     },
 
     async send(payload) {

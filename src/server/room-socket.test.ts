@@ -353,3 +353,103 @@ test("채널이 없으면 room:list 는 방을 만들지 않고 not_found 를 �
   assert.deepEqual(ev(t.emitted, "room:error").at(-1), { roomId: null, code: "not_found" });
   assert.deepEqual(ev(t.emitted, "room:list-response"), []);
 });
+
+// ── 사무실 방은 늘 듣는다 ─────────────────────────────────────────────────────
+//
+// 자동화 알림(카드 검토·막힘·완료, 크론 실패)은 사무실 방으로 방송된다. 예전에는 방송이
+// `room:open` 한 소켓에만 갔고 방을 옮기면 `room:close` 로 떠났다 — 그래서 DM 이나 다른
+// 그룹 방을 보고 있는 사용자, 패널을 접어 둔 사용자는 알림을 **그 방으로 돌아올 때까지**
+// 받지 못했다. "맵만 보는 사용자에게 알린다" 는 보고 기능이 정확히 그 사용자를 놓쳤다.
+
+const officeRoomId = (emitted: Emitted[]) =>
+  (ev(emitted, "room:list-response") as { rooms: { id: string; kind: string }[] }[])
+    .at(-1)!
+    .rooms.find((room) => room.kind === "office")!.id;
+
+test("room:list 만으로 사무실 방 방송을 듣는다 — 방을 열지 않아도", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  await t.socket.trigger("room:list", { channelId: seeded.channelId });
+  const officeId = officeRoomId(t.emitted);
+  assert.ok(
+    [...t.socket.joined].some((room) => room.includes(officeId)),
+    `사무실 방의 소켓 룸에 들어가 있어야 한다: ${[...t.socket.joined]}`,
+  );
+});
+
+test("room:list 는 사무실 방의 최근 줄도 내려 준다 — 접속 전에 쌓인 알림이 배지에 잡힌다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  await t.socket.trigger("room:list", { channelId: seeded.channelId });
+  const officeId = officeRoomId(t.emitted);
+  await rooms.appendRoomMessage({
+    roomId: officeId,
+    senderKind: "npc",
+    senderId: "npc-1",
+    senderName: "소피",
+    content: "접속 전에 온 알림",
+  });
+  t.emitted.length = 0;
+  await t.socket.trigger("room:list", { channelId: seeded.channelId });
+  const histories = ev(t.emitted, "room:history") as {
+    roomId: string;
+    messages: { content: string }[];
+  }[];
+  const office = histories.find((history) => history.roomId === officeId);
+  assert.ok(office, "사무실 방의 room:history 가 와야 한다");
+  assert.ok(office.messages.some((message) => message.content === "접속 전에 온 알림"));
+});
+
+test("다른 방으로 옮겨도(room:close) 사무실 방은 계속 듣는다 — 다만 열지 않은 방에는 못 보낸다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  await t.socket.trigger("room:list", { channelId: seeded.channelId });
+  const officeId = officeRoomId(t.emitted);
+  await t.socket.trigger("room:open", { roomId: officeId });
+  await t.socket.trigger("room:close", { roomId: officeId });
+  assert.ok(
+    [...t.socket.joined].some((room) => room.includes(officeId)),
+    "사무실 방을 닫아도 방송은 계속 받아야 한다",
+  );
+  // 듣는 것과 보내는 것은 다르다 — 닫은 방에 보내면 여전히 not_open 이다.
+  t.emitted.length = 0;
+  await t.socket.trigger("room:send", { roomId: officeId, message: "닫힌 방에 보내기" });
+  assert.deepEqual(
+    (ev(t.emitted, "room:error") as { code: string }[]).map((error) => error.code),
+    ["not_open"],
+  );
+});
+
+test("그룹 방은 예전대로다 — 닫으면 방송을 받지 않는다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup();
+  await t.register(seeded);
+  await t.socket.trigger("room:list", { channelId: seeded.channelId });
+  await t.socket.trigger("room:create", {
+    channelId: seeded.channelId,
+    name: "기획",
+    npcIds: [seeded.npcIds[0]],
+    userIds: [],
+  });
+  const group = (ev(t.emitted, "room:created") as { room: { id: string } }[]).at(-1)!.room;
+  await t.socket.trigger("room:open", { roomId: group.id });
+  assert.ok([...t.socket.joined].some((room) => room.includes(group.id)));
+  await t.socket.trigger("room:close", { roomId: group.id });
+  assert.equal(
+    [...t.socket.joined].some((room) => room.includes(group.id)),
+    false,
+    "그룹 방은 닫으면 떠난다",
+  );
+});
+
+test("채널 권한이 없으면 사무실 방에 들어가지 못한다", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup({ allowed: false });
+  await t.register(seeded);
+  await t.socket.trigger("room:list", { channelId: seeded.channelId });
+  assert.equal(t.socket.joined.size, 0, "권한 없는 소켓은 어떤 방에도 들어가지 않는다");
+  assert.equal(ev(t.emitted, "room:history").length, 0, "히스토리도 새지 않는다");
+});
