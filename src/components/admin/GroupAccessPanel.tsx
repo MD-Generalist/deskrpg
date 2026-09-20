@@ -91,6 +91,8 @@ type GroupAccessPanelProps = {
   canManageMembers: boolean;
   canManagePermissions: boolean;
   canApproveJoinRequests: boolean;
+  /** 시스템 관리자만 참이다 — 비밀번호 재설정은 그룹 관리자 권한으로는 못 한다. */
+  canResetPasswords?: boolean;
   /** 관리할 그룹이 여럿일 때 page 가 넘기는 그룹 전환 셀렉트. */
   groupSwitcher?: ReactNode;
 };
@@ -101,9 +103,16 @@ export default function GroupAccessPanel({
   canManageMembers,
   canManagePermissions,
   canApproveJoinRequests,
+  canResetPasswords = false,
   groupSwitcher,
 }: GroupAccessPanelProps) {
   const t = useT();
+
+  /** 발급된 임시 비밀번호는 화면에만 잠깐 머문다 — 새로 고치면 사라진다. */
+  const [issuedPassword, setIssuedPassword] = useState<{
+    nickname: string;
+    password: string;
+  } | null>(null);
 
   const [members, setMembers] = useState<SectionState<MemberRow>>({
     items: [],
@@ -332,6 +341,24 @@ export default function GroupAccessPanel({
           </button>
         </div>
         {flashMessage && <p className="mt-3 text-sm text-danger">{flashMessage}</p>}
+        {issuedPassword && (
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <p className="font-medium">
+              {issuedPassword.nickname} · {t("admin.users.temporaryPassword")}
+            </p>
+            <code className="mt-1 block break-all font-mono text-base">
+              {issuedPassword.password}
+            </code>
+            <p className="mt-1 text-xs">{t("admin.users.temporaryPasswordNotice")}</p>
+            <button
+              type="button"
+              onClick={() => setIssuedPassword(null)}
+              className="mt-2 text-xs underline"
+            >
+              {t("common.close")}
+            </button>
+          </div>
+        )}
         {initialLoading && (
           <p className="mt-3 text-sm text-text-muted">{t("admin.groups.loading")}</p>
         )}
@@ -405,29 +432,61 @@ export default function GroupAccessPanel({
                           {member.loginId} · {t(`admin.groups.role.${member.role}`)}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        disabled={member.role === "group_admin" && groupAdminCount === 1}
-                        onClick={() =>
-                          void submitAction(`member-remove-${member.userId}`, async () => {
-                            await readJsonOrThrow(
-                              await fetch(`/api/groups/${groupId}/members`, {
-                                method: "DELETE",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ targetUserId: member.userId }),
-                              }),
-                            );
-                          })
-                        }
-                        className="text-sm text-danger disabled:cursor-not-allowed disabled:text-text-dim"
-                        title={
-                          member.role === "group_admin" && groupAdminCount === 1
-                            ? t("errors.lastGroupAdminRequired")
-                            : undefined
-                        }
-                      >
-                        {t("admin.groups.remove")}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        {canResetPasswords && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                !confirm(
+                                  t("admin.users.resetPasswordConfirm", {
+                                    nickname: member.nickname || member.loginId,
+                                  }),
+                                )
+                              ) {
+                                return;
+                              }
+                              void submitAction(`member-reset-${member.userId}`, async () => {
+                                const payload = (await readJsonOrThrow(
+                                  await fetch(`/api/admin/users/${member.userId}/reset-password`, {
+                                    method: "POST",
+                                  }),
+                                )) as { temporaryPassword: string };
+                                setIssuedPassword({
+                                  nickname: member.nickname || member.loginId,
+                                  password: payload.temporaryPassword,
+                                });
+                              });
+                            }}
+                            className="text-sm text-text-muted hover:text-text"
+                          >
+                            {t("admin.users.resetPassword")}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={member.role === "group_admin" && groupAdminCount === 1}
+                          onClick={() =>
+                            void submitAction(`member-remove-${member.userId}`, async () => {
+                              await readJsonOrThrow(
+                                await fetch(`/api/groups/${groupId}/members`, {
+                                  method: "DELETE",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ targetUserId: member.userId }),
+                                }),
+                              );
+                            })
+                          }
+                          className="text-sm text-danger disabled:cursor-not-allowed disabled:text-text-dim"
+                          title={
+                            member.role === "group_admin" && groupAdminCount === 1
+                              ? t("errors.lastGroupAdminRequired")
+                              : undefined
+                          }
+                        >
+                          {t("admin.groups.remove")}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

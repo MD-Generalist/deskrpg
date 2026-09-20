@@ -26,6 +26,10 @@ function loadCliPasswordModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "cli-password.js"));
 }
 
+function loadCliResetPasswordModule() {
+  return require(path.join(getPackageRoot(), "src", "lib", "cli-reset-password.js"));
+}
+
 function getInstalledPackageRoot(packageName) {
   const packageJsonPath = require.resolve(path.join(packageName, "package.json"), {
     paths: [getPackageRoot(), process.cwd()],
@@ -211,6 +215,7 @@ function printHelp() {
   console.log("  start [-p PORT] [-d]  Start the DeskRPG server");
   console.log("  stop                  Stop the running DeskRPG server");
   console.log("  create-user           Create a new user account");
+  console.log("  reset-password <ID>   Issue a temporary password for a login ID");
   console.log("  update                Update to the latest version");
   console.log("  host-setup <on|off|status>  Toggle the connection wizard's host setup");
   console.log("  doctor                Check runtime health");
@@ -230,6 +235,10 @@ function printHelp() {
   console.log("  --password-stdin      Read the password from stdin instead");
   console.log("  --role ROLE           User role: admin or user (default: user)");
   console.log("");
+  console.log("reset-password:");
+  console.log("  deskrpg reset-password alice   # prints a one-time temporary password");
+  console.log("  The user must change it at the next login.");
+  console.log("");
   console.log("Examples:");
   console.log("  deskrpg init          # First-time setup");
   console.log("  deskrpg start         # Start on default port 3000");
@@ -246,7 +255,7 @@ function printHelp() {
 
 function printUsage() {
   console.error(
-    "Usage: deskrpg <init|start|stop|create-user|update|host-setup|doctor|remove|uninstall|version|help>",
+    "Usage: deskrpg <init|start|stop|create-user|reset-password|update|host-setup|doctor|remove|uninstall|version|help>",
   );
 }
 
@@ -912,6 +921,82 @@ async function runCreateUser() {
   }
 }
 
+/**
+ * 관리자 본인이 잠겼을 때의 최종 복구 경로다 — 호스트에서 DB 를 직접 열어
+ * 임시 비밀번호를 발급한다. 평문은 화면에 한 번 나올 뿐 저장하지 않는다.
+ */
+async function runResetPassword() {
+  const loginId = process.argv[3];
+  if (!loginId || loginId.startsWith("-")) {
+    console.error("Usage: deskrpg reset-password <login-id>");
+    process.exit(1);
+  }
+
+  const runtimePaths = loadRuntimePathsModule();
+  const envPath = runtimePaths.getDeskRpgEnvPath();
+  if (fs.existsSync(envPath)) {
+    loadEnvFile(envPath);
+  }
+
+  const dbUrl = process.env.DATABASE_URL;
+  const dbType = process.env.DB_TYPE;
+  const sqlitePath = process.env.SQLITE_PATH;
+
+  const { randomBytes } = require("node:crypto");
+  const temporaryPassword = randomBytes(16).toString("base64url");
+  const bcrypt = require("bcryptjs");
+  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+  let user = null;
+
+  if (dbType === "sqlite" || (!dbUrl && sqlitePath)) {
+    const resolvedPath = sqlitePath || path.join(runtimePaths.getDeskRpgDataDir(), "deskrpg.db");
+    if (!fs.existsSync(resolvedPath)) {
+      console.error(
+        `Error: SQLite database not found at ${resolvedPath}. Run "deskrpg init" first.`,
+      );
+      process.exit(1);
+    }
+    const Database = require("better-sqlite3");
+    const db = new Database(resolvedPath);
+    try {
+      const { resetSqliteUserPassword } = loadCliResetPasswordModule();
+      user = resetSqliteUserPassword(db, loginId, passwordHash);
+    } finally {
+      db.close();
+    }
+  } else if (dbUrl) {
+    const { Pool } = require("pg");
+    const pool = new Pool({ connectionString: dbUrl });
+    try {
+      const { rows } = await pool.query(
+        "UPDATE users SET password_hash = $1, must_change_password = true, updated_at = now() WHERE login_id = $2 RETURNING id, login_id, nickname",
+        [passwordHash, loginId],
+      );
+      user = rows[0]
+        ? { id: rows[0].id, loginId: rows[0].login_id, nickname: rows[0].nickname }
+        : null;
+    } finally {
+      await pool.end();
+    }
+  } else {
+    console.error("Error: No database configured. Set DATABASE_URL or run 'deskrpg init' first.");
+    process.exit(1);
+  }
+
+  if (!user) {
+    console.error(`Error: no user with login id '${loginId}'`);
+    process.exit(1);
+  }
+
+  console.log("Password reset:");
+  console.log(`  Login ID:  ${user.loginId}`);
+  console.log(`  Nickname:  ${user.nickname}`);
+  console.log(`  Temporary: ${temporaryPassword}`);
+  console.log("");
+  console.log("Hand this over directly. It is shown once and the user must change it at login.");
+}
+
 async function main() {
   const command = process.argv[2];
 
@@ -932,6 +1017,7 @@ async function main() {
       "start",
       "stop",
       "create-user",
+      "reset-password",
       "update",
       "host-setup",
       "doctor",
@@ -955,6 +1041,11 @@ async function main() {
 
   if (command === "create-user") {
     await runCreateUser();
+    return;
+  }
+
+  if (command === "reset-password") {
+    await runResetPassword();
     return;
   }
 

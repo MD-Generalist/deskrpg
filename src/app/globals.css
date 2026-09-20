@@ -190,6 +190,20 @@ body {
   color: var(--text);
 }
 /* 사이드바 아래의 공통 동작(로그아웃·언어). 그림 위에 놓고, 좁은 화면에서는 한 줄로 눕는다. */
+.workspace-sidebar-action-link {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--color-surface);
+  border-radius: 4px;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+.workspace-sidebar-action-link:hover {
+  color: var(--text);
+  background: var(--color-surface-raised);
+}
 .workspace-sidebar-actions {
   display: flex;
   border-top: 1px solid var(--border-subtle);

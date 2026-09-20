@@ -6,6 +6,10 @@ export type ErrorCode =
   | "login_id_length_invalid"
   | "nickname_length_invalid"
   | "password_length_invalid"
+  | "password_unchanged"
+  | "password_mismatch"
+  | "current_new_password_required"
+  | "user_not_found"
   | "login_id_taken"
   | "nickname_taken"
   | "gateway_url_required"
@@ -197,6 +201,11 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   login_id_length_invalid: "errors.loginIdLengthInvalid",
   nickname_length_invalid: "errors.nicknameLengthInvalid",
   password_length_invalid: "errors.passwordLengthInvalid",
+  password_unchanged: "errors.passwordUnchanged",
+  // 확인칸은 서버로 가지 않는다 — 화면만 쓰는 코드다.
+  password_mismatch: "errors.passwordMismatch",
+  current_new_password_required: "errors.currentNewPasswordRequired",
+  user_not_found: "errors.userNotFound",
   login_id_taken: "errors.loginIdTaken",
   nickname_taken: "errors.nicknameTaken",
   gateway_url_required: "errors.gatewayUrlRequired",

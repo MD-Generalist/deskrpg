@@ -70,6 +70,21 @@ const ja: Record<string, string> = {
   "chat.responseStatus.cancelled": "キャンセル済み",
   "chat.npcQueueFull":
     "{name}のリクエスト待機列がいっぱいです。しばらくしてから再試行してください。",
+  "account.password.title": "パスワード変更",
+  "account.password.description": "現在のパスワードを確認してから、新しいパスワードに変更します。",
+  "account.password.current": "現在のパスワード",
+  "account.password.new": "新しいパスワード",
+  "account.password.confirm": "新しいパスワード（確認）",
+  "account.password.submit": "変更",
+  "account.password.saved": "パスワードを変更しました。",
+  "account.password.forced":
+    "仮パスワードでログインしました。続けるには新しいパスワードに変更してください。",
+  "admin.users.resetPassword": "パスワードを再設定",
+  "admin.users.resetPasswordConfirm":
+    "{nickname} のパスワードを仮の値に再設定しますか？現在のパスワードはすぐに使えなくなります。",
+  "admin.users.temporaryPassword": "仮パスワード",
+  "admin.users.temporaryPasswordNotice":
+    "表示は一度だけです。本人に直接渡してください。次回のログインで変更が必要です。",
   "common.logout": "ログアウト",
   "common.language": "言語",
   "common.copy": "コピー",
@@ -2248,6 +2263,10 @@ const ja: Record<string, string> = {
   "errors.loginIdLengthInvalid": "ログインIDは2〜50文字で入力してください",
   "errors.nicknameLengthInvalid": "表示名は2〜50文字で入力してください",
   "errors.passwordLengthInvalid": "パスワードは8文字以上で入力してください",
+  "errors.passwordUnchanged": "新しいパスワードが現在のものと同じです",
+  "errors.passwordMismatch": "確認用のパスワードが一致しません",
+  "errors.currentNewPasswordRequired": "現在のパスワードと新しいパスワードを入力してください",
+  "errors.userNotFound": "ユーザーが見つかりません",
   "errors.loginIdTaken": "そのログインIDは既に使われています",
   "errors.nicknameTaken": "その表示名は既に使われています",
   "errors.gatewayUrlRequired": "ゲートウェイURLが必要です",

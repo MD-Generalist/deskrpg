@@ -29,6 +29,7 @@ const users = pgTable("users", {
   nickname: varchar("nickname", { length: 50 }).unique().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   systemRole: varchar("system_role", { length: 20 }).notNull().default("user"),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
