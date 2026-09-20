@@ -4,6 +4,12 @@
  * 보드는 **Hermes 가 정본**이다. 카드는 한 장도 여기 저장하지 않는다 — 우리가 남기는 것은
  * `channel_kanban_boards` 의 (채널, 게이트웨이, slug) 연결 기록과 마지막 실패 사유뿐이다.
  *
+ * 2026-09-21 부터 **채널은 보드를 여러 개 가진다**(보드 = 프로젝트). 연결 행의 PK 는 대리 키이고
+ * `(채널, slug)` 가 유니크다. 그중 정확히 하나가 **사건 수신 보드**(`isEventCarrier`)이고, 게이트웨이
+ * 전역 사건(크론·아티팩트)은 그 행에서만 받는다 — 플러그인의 `/deskrpg/events` 가 크론을 보드로
+ * 걸러 주지 않기 때문이다. 인자 없는 `getChannelBoard`·`ensureChannelBoard` 는 **사건 수신 보드**를
+ * 가리킨다(이관 전의 유일한 보드가 그것이다) — 그래서 기존 호출자는 뜻이 바뀌지 않는다.
+ *
  * - slug 는 채널 UUID 에서 결정적으로 나온다(`channelBoardSlug`). 그래서 "보드가 이미
  *   있는가" 를 DB 에 묻지 않아도 된다 — 플러그인의 `POST /deskrpg/kanban/boards` 가 같은
  *   slug 면 기존 보드를 200 으로 돌려주므로 확보는 늘 같은 호출 한 번이다(E1).
@@ -15,7 +21,9 @@
  *   실패하면 안 되기 때문이다.
  */
 
-import { eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+
+import { and, eq, ne } from "drizzle-orm";
 
 import { gateAutomationPlugin, type PluginGate } from "@/lib/automation-gate";
 import { channelKanbanBoards, channels, db, nowForDb } from "@/db";
@@ -63,11 +71,51 @@ export function channelBoardSlug(channelId: string): string {
   return `deskrpg-${channelId.replace(/-/g, "").toLowerCase()}`;
 }
 
+/**
+ * 둘째 보드부터 쓰는 slug. 첫 보드(= 사건 수신 보드)는 `channelBoardSlug` 그대로다 — Hermes 의
+ * 카드 DB 가 `board_dir(slug)` 아래에 있고 slug 를 바꾸는 라우트가 없어서, 이미 있는 보드의
+ * slug 는 건드릴 수 없다. 접미사 8자를 붙여도 `deskrpg-`(8) + 32 + `-`(1) + 8 = 49자라
+ * 플러그인의 64자 상한 안이다.
+ */
+export function newChannelBoardSlug(channelId: string): string {
+  return `${channelBoardSlug(channelId)}-${randomBytes(4).toString("hex")}`;
+}
+
+/**
+ * 채널의 **사건 수신 보드** 행. 인자 하나짜리 옛 호출자가 기대하던 "그 채널의 보드" 가 이것이다.
+ * 아직 carrier 가 정해지지 않은 옛 행이 있을 수 있어, 없으면 가장 먼저 만들어진 행으로 떨어진다.
+ */
 export async function getChannelBoard(channelId: string): Promise<ChannelBoardRow | null> {
-  const [row] = await db
+  const rows = await listChannelBoards(channelId);
+  return rows.find((row) => row.isEventCarrier) ?? rows[0] ?? null;
+}
+
+/** 채널에 붙은 보드 전부. 만들어진 순서 — 첫 행이 보통 사건 수신 보드다. */
+export async function listChannelBoards(channelId: string): Promise<ChannelBoardRow[]> {
+  return db
     .select()
     .from(channelKanbanBoards)
     .where(eq(channelKanbanBoards.channelId, channelId))
+    .orderBy(channelKanbanBoards.createdAt);
+}
+
+/**
+ * 이 채널에 **그 slug 로 붙어 있는** 보드 행. 없으면 null — 호출자는 404 로 답해야 한다.
+ * 다른 채널의 보드를 slug 로 집어 오는 것을 막는 유일한 관문이라 채널 조건을 뺄 수 없다.
+ */
+export async function getChannelBoardBySlug(
+  channelId: string,
+  boardSlug: string,
+): Promise<ChannelBoardRow | null> {
+  const [row] = await db
+    .select()
+    .from(channelKanbanBoards)
+    .where(
+      and(
+        eq(channelKanbanBoards.channelId, channelId),
+        eq(channelKanbanBoards.boardSlug, boardSlug),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }
@@ -93,8 +141,36 @@ export async function resolveChannelBoard(channelId: string): Promise<ResolvedCh
 }
 
 /**
- * 연결 행을 쓴다. 게이트웨이가 바뀌었으면 행을 **새로** 만든다(R4 — 커서·동기화 시각은 이전
- * 게이트웨이의 것이라 같이 버린다). 같은 게이트웨이면 준 필드만 갱신한다.
+ * 게이트웨이가 바뀌었으면 그 채널의 보드 행을 **새 게이트웨이로 옮긴다**(R4).
+ *
+ * 예전에는 행을 지우고 새로 만들었다. 이제는 그럴 수 없다 — `channel_projects.board_link_id` 가
+ * cascade 로 연결 행을 물고 있어서, 행을 지우면 프로젝트 메타(상태·목표일·출처 회의)가 함께
+ * 사라진다. 결정 D-1 은 "메타는 남기고 연결만 다시 붙인다" 이므로 행 id 를 유지한 채
+ * 게이트웨이만 갈아 끼우고, **이전 게이트웨이의 것인 커서와 동기화 시각은 버린다**.
+ *
+ * 카드는 새 게이트웨이에 없을 수 있다. 그것은 화면이 말해야 할 사실이지 여기서 숨길 일이 아니다.
+ */
+async function migrateChannelBoardsToGateway(channelId: string, gatewayId: string): Promise<void> {
+  await db
+    .update(channelKanbanBoards)
+    .set({
+      gatewayId,
+      eventCursor: null,
+      boardNameSyncedAt: null,
+      lastError: null,
+      updatedAt: nowForDb(),
+    })
+    .where(
+      and(
+        eq(channelKanbanBoards.channelId, channelId),
+        ne(channelKanbanBoards.gatewayId, gatewayId),
+      ),
+    );
+}
+
+/**
+ * 연결 행을 쓴다 — 키는 `(채널, slug)` 다. 그 채널에 아직 보드가 하나도 없으면 만들어지는 행이
+ * **사건 수신 보드**가 된다(크론·아티팩트를 받는 자리는 채널마다 정확히 하나다).
  */
 async function upsertBoardRow(input: {
   channelId: string;
@@ -103,34 +179,34 @@ async function upsertBoardRow(input: {
   lastError: string | null;
   boardNameSyncedAt?: Date | null;
 }): Promise<ChannelBoardRow> {
-  const existing = await getChannelBoard(input.channelId);
+  await migrateChannelBoardsToGateway(input.channelId, input.gatewayId);
   const now = nowForDb();
+  const existing = await getChannelBoardBySlug(input.channelId, input.boardSlug);
 
-  if (existing && existing.gatewayId === input.gatewayId) {
+  if (existing) {
     const [updated] = await db
       .update(channelKanbanBoards)
       .set({
-        boardSlug: input.boardSlug,
         lastError: input.lastError,
         ...(input.boardNameSyncedAt === undefined
           ? {}
           : { boardNameSyncedAt: input.boardNameSyncedAt }),
         updatedAt: now,
       })
-      .where(eq(channelKanbanBoards.channelId, input.channelId))
+      .where(eq(channelKanbanBoards.id, existing.id))
       .returning();
     return updated;
   }
 
-  if (existing) {
-    await db.delete(channelKanbanBoards).where(eq(channelKanbanBoards.channelId, input.channelId));
-  }
+  // 첫 보드가 사건 수신 보드다. 부분 유니크 인덱스가 둘째 carrier 를 막는다.
+  const carrierExists = (await listChannelBoards(input.channelId)).some((r) => r.isEventCarrier);
   const [created] = await db
     .insert(channelKanbanBoards)
     .values({
       channelId: input.channelId,
       gatewayId: input.gatewayId,
       boardSlug: input.boardSlug,
+      isEventCarrier: !carrierExists,
       boardNameSyncedAt: input.boardNameSyncedAt ?? null,
       lastError: input.lastError,
       createdAt: now,
@@ -159,6 +235,12 @@ async function readChannelName(channelId: string): Promise<string | null> {
 export async function ensureChannelBoard(
   channelId: string,
   resolved?: ResolvedChannelBoard,
+  /**
+   * 확보할 보드. 생략하면 그 채널의 기본 보드(= 사건 수신 보드) slug 다. 이미 붙어 있는 보드를
+   * 다시 확보할 때는 그 보드의 이름을 Hermes 가 갖고 있으므로 채널 이름으로 덮어쓰지 않는다 —
+   * 플러그인의 `POST /kanban/boards` 는 같은 slug 면 기존 보드를 이름째 돌려준다.
+   */
+  requestedSlug?: string,
 ): Promise<ChannelBoardResult> {
   try {
     resolved ??= await resolveChannelBoard(channelId);
@@ -170,7 +252,7 @@ export async function ensureChannelBoard(
     }
 
     const gatewayId = resolved.binding.resource.id;
-    const boardSlug = resolved.boardSlug;
+    const boardSlug = requestedSlug ?? resolved.boardSlug;
 
     if (!resolved.pluginGate.ok) {
       const row = await upsertBoardRow({

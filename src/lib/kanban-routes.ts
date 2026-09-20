@@ -147,8 +147,31 @@ async function resolveAssigneeField(
 // 공통 흐름
 // ---------------------------------------------------------------------------
 
+/**
+ * 요청이 가리키는 보드. `?board=` 가 없으면 undefined 이고, 그러면 컨텍스트가 그 채널의
+ * 사건 수신 보드를 쓴다 — 보드를 모르는 옛 클라이언트의 뜻이 바뀌지 않게 하는 지점이다.
+ *
+ * 형식 검사만 여기서 한다. **이 채널의 보드인지**는 `kanban-access` 가 404 로 판정한다 —
+ * 형식이 맞는 남의 보드 slug 를 형식 검사로는 걸러낼 수 없기 때문이다.
+ */
+function requestedBoardSlug(req: NextRequest): string | undefined | null {
+  const raw = req.nextUrl.searchParams.get("board");
+  if (raw === null || raw === "") return undefined;
+  return BOARD_SLUG.test(raw) ? raw : null;
+}
+
+/** 플러그인의 보드 slug 규칙과 같다(`BOARD_SLUG_RE`). */
+const BOARD_SLUG = /^[a-z0-9-]{1,64}$/;
+
 async function resolve(req: NextRequest, channelId: string) {
-  return resolveKanbanChannelContext({ userId: getUserId(req), channelId });
+  const boardSlug = requestedBoardSlug(req);
+  if (boardSlug === null) {
+    return {
+      ok: false as const,
+      response: cronError(400, "invalid_board", "board slug is malformed"),
+    };
+  }
+  return resolveKanbanChannelContext({ userId: getUserId(req), channelId, boardSlug });
 }
 
 /** R9. 생성·상태 변경 직후 dispatch 를 한 번 요청한다. 실패는 무시한다. */

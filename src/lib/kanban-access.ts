@@ -31,6 +31,7 @@ import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
 import {
   ensureChannelBoard,
   getChannelBoard,
+  getChannelBoardBySlug,
   resolveChannelBoard,
   type ChannelBoardRow,
   type ResolvedChannelBoard,
@@ -65,8 +66,27 @@ export type KanbanContextResult =
 async function requireBoardRow(
   channelId: string,
   resolved: Extract<ResolvedChannelBoard, { ok: true }>,
+  requestedSlug?: string,
 ): Promise<{ ok: true; row: ChannelBoardRow } | { ok: false; response: NextResponse }> {
   const gatewayId = resolved.binding.resource.id;
+
+  // 보드를 명시했으면 **이 채널에 붙어 있는지**부터 본다. 다른 채널의 보드를 slug 로 집어
+  // 오는 것을 막는 유일한 관문이고, 확보(503)보다 앞선다 — 남의 보드를 확보해 주면 안 된다.
+  if (requestedSlug !== undefined) {
+    const row = await getChannelBoardBySlug(channelId, requestedSlug);
+    if (!row) {
+      return {
+        ok: false,
+        response: cronError(404, "board_not_bound", "board is not bound to this channel"),
+      };
+    }
+    if (row.gatewayId === gatewayId && !row.lastError) return { ok: true, row };
+    // 게이트웨이가 바뀌었거나 지난번 확보가 실패했다 — 그 보드만 다시 확보한다.
+    const ensured = await ensureChannelBoard(channelId, resolved, requestedSlug);
+    if (ensured.ok) return { ok: true, row: ensured.row };
+    return { ok: false, response: cronError(503, ensured.code, ensured.reason || ensured.code) };
+  }
+
   const existing = await getChannelBoard(channelId);
   if (existing && existing.gatewayId === gatewayId && !existing.lastError) {
     return { ok: true, row: existing };
@@ -82,6 +102,11 @@ async function requireBoardRow(
 export async function resolveKanbanChannelContext(input: {
   userId: string | null;
   channelId: string;
+  /**
+   * `?board=` 로 명시된 보드. 생략하면 그 채널의 **사건 수신 보드**(이관 전의 유일한 보드)를
+   * 쓴다 — 그래서 보드를 모르는 옛 클라이언트도 뜻이 바뀌지 않는다.
+   */
+  boardSlug?: string;
 }): Promise<KanbanContextResult> {
   if (!input.userId) {
     return { ok: false, response: cronError(401, "unauthorized", "unauthorized") };
@@ -101,7 +126,7 @@ export async function resolveKanbanChannelContext(input: {
   }
   const info = resolved.pluginGate.info;
 
-  const board = await requireBoardRow(input.channelId, resolved);
+  const board = await requireBoardRow(input.channelId, resolved, input.boardSlug);
   if (!board.ok) return board;
 
   const gateway = resolved.binding.resource;
@@ -116,7 +141,9 @@ export async function resolveKanbanChannelContext(input: {
       timezone: info.timezone ?? null,
       isChannelOwner: access.channel.ownerId === input.userId,
       isGatewayOwner: gateway.ownerUserId === input.userId,
-      boardSlug: resolved.boardSlug,
+      // 컨텍스트의 boardSlug 는 **확보된 행**의 것이다 — resolved 의 것은 기본 보드 slug 라
+      // `?board=` 가 온 요청에서 다르다. 여기서 갈리면 라우트가 엉뚱한 보드를 만진다.
+      boardSlug: board.row.boardSlug,
       boardRow: board.row,
       client: resolved.ownerClient,
     },

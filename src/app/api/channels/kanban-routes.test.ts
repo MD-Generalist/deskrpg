@@ -1016,3 +1016,147 @@ test("첨부 — '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// `?board=` — 채널이 보드를 여러 개 갖는다(설계 2026-09-21 project-registry)
+//
+// 보드 응답에는 slug 가 실리지 않으므로 "어느 보드를 봤는가" 는 **그 보드의 카드**로 가린다.
+// ---------------------------------------------------------------------------
+
+/** 이 채널에 보드를 하나 더 붙이고 그 slug 를 돌려준다. 사건 수신 보드는 첫 보드 그대로다. */
+async function addSecondBoard(channelId: string): Promise<string> {
+  const { ensureChannelBoard, newChannelBoardSlug } = await import("@/lib/kanban-boards");
+  const slug = newChannelBoardSlug(channelId);
+  const ensured = await ensureChannelBoard(channelId, undefined, slug);
+  assert.ok(ensured.ok, `둘째 보드 확보 실패: ${ensured.ok ? "" : ensured.code}`);
+  return slug;
+}
+
+/** 그 보드에 보이는 카드 제목들. `board` 가 없으면 기본(사건 수신) 보드를 본다. */
+async function boardTitles(
+  routes: Routes,
+  userId: string,
+  channelId: string,
+  board?: string,
+): Promise<string[]> {
+  const url = `${base(channelId)}/board${board ? `?board=${board}` : ""}`;
+  const res = await routes.board.GET(req(userId, "GET", url), ctx(channelId));
+  assert.equal(res.status, 200, await res.clone().text());
+  const body = (await res.json()) as { columns: { tasks: { title: string }[] }[] };
+  return body.columns.flatMap((c) => c.tasks.map((t) => t.title)).sort();
+}
+
+async function createOn(
+  routes: Routes,
+  userId: string,
+  channelId: string,
+  title: string,
+  board?: string,
+) {
+  const url = `${base(channelId)}/tasks${board ? `?board=${board}` : ""}`;
+  return routes.tasks.POST(req(userId, "POST", url, { title }), ctx(channelId));
+}
+
+test("?board= 없이 부르면 사건 수신 보드를 쓴다 — 옛 클라이언트의 뜻이 바뀌지 않는다", async () => {
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const second = await addSecondBoard(seed.channelId);
+
+  assert.equal((await createOn(routes, seed.ownerId, seed.channelId, "첫 보드 카드")).status, 201);
+  assert.equal(
+    (await createOn(routes, seed.ownerId, seed.channelId, "둘째 보드 카드", second)).status,
+    201,
+  );
+
+  assert.deepEqual(await boardTitles(routes, seed.ownerId, seed.channelId), ["첫 보드 카드"]);
+});
+
+test("두 보드의 카드는 서로 섞이지 않는다", async () => {
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const second = await addSecondBoard(seed.channelId);
+
+  await createOn(routes, seed.ownerId, seed.channelId, "첫 보드 카드");
+  await createOn(routes, seed.ownerId, seed.channelId, "둘째 보드 카드", second);
+
+  assert.deepEqual(await boardTitles(routes, seed.ownerId, seed.channelId), ["첫 보드 카드"]);
+  assert.deepEqual(await boardTitles(routes, seed.ownerId, seed.channelId, second), [
+    "둘째 보드 카드",
+  ]);
+});
+
+test("다른 채널의 보드는 slug 를 알아도 404 다", async () => {
+  const routes = await loadRoutes();
+  const mine = await seedKanbanChannel();
+  const theirs = await seedKanbanChannel();
+
+  const res = await routes.board.GET(
+    req(mine.ownerId, "GET", `${base(mine.channelId)}/board?board=${theirs.boardSlug}`),
+    ctx(mine.channelId),
+  );
+  assert.equal(res.status, 404, "남의 보드가 열렸습니다");
+  assert.equal(((await res.json()) as { code?: string }).code, "board_not_bound");
+});
+
+test("남의 보드로 카드를 만들려 해도 404 이고 카드가 생기지 않는다", async () => {
+  const routes = await loadRoutes();
+  const mine = await seedKanbanChannel();
+  const theirs = await seedKanbanChannel();
+
+  const res = await createOn(
+    routes,
+    mine.ownerId,
+    mine.channelId,
+    "남의 보드에 쓰기",
+    theirs.boardSlug,
+  );
+  assert.equal(res.status, 404);
+  assert.deepEqual(
+    await boardTitles(routes, theirs.ownerId, theirs.channelId),
+    [],
+    "남의 보드에 카드가 들어갔습니다",
+  );
+});
+
+test("형식이 아닌 board 값은 400 이고 Hermes 를 부르지 않는다", async () => {
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const res = await routes.board.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/board?board=${encodeURIComponent("../etc")}`),
+    ctx(seed.channelId),
+  );
+  assert.equal(res.status, 400);
+  assert.equal(((await res.json()) as { code?: string }).code, "invalid_board");
+});
+
+test("빈 board 값은 지정하지 않은 것과 같다", async () => {
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  await createOn(routes, seed.ownerId, seed.channelId, "기본 카드");
+  const res = await routes.board.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/board?board=`),
+    ctx(seed.channelId),
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { columns: { tasks: { title: string }[] }[] };
+  assert.deepEqual(
+    body.columns.flatMap((c) => c.tasks.map((t) => t.title)),
+    ["기본 카드"],
+  );
+});
+
+test("채널에 보드가 여럿이어도 사건 수신 보드는 하나뿐이다", async () => {
+  const seed = await seedKanbanChannel();
+  await addSecondBoard(seed.channelId);
+  await addSecondBoard(seed.channelId);
+
+  const { listChannelBoards } = await import("@/lib/kanban-boards");
+  const rows = await listChannelBoards(seed.channelId);
+  assert.equal(rows.length, 3);
+  assert.equal(
+    rows.filter((r) => r.isEventCarrier).length,
+    1,
+    "사건 수신 보드가 하나가 아니면 크론 사건이 중복 소비됩니다",
+  );
+  assert.equal(rows.find((r) => r.isEventCarrier)?.boardSlug, seed.boardSlug);
+});
