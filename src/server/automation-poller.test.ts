@@ -749,3 +749,182 @@ test("보관된 프로젝트의 보드는 사건 수신 자리 후보에서 빠�
     "끝난 일의 보드를 사건 수신 자리로 되살리면 보관의 뜻이 무너집니다",
   );
 });
+
+// ---------------------------------------------------------------------------
+// 재시작 뒤 "일하는 중" 되세우기 (설계 2026-09-21 npc-working-state, 결정 A-1)
+// ---------------------------------------------------------------------------
+
+/** 그 보드에 실제 카드를 만들고 running 으로 옮긴다. */
+async function seedRunningCard(
+  channelId: string,
+  slug: string,
+  title: string,
+  assignee = "sophie",
+): Promise<string> {
+  const { resolveChannelBoard } = await import("@/lib/kanban-boards");
+  const resolved = await resolveChannelBoard(channelId);
+  assert.ok(resolved.ok);
+  const made = await resolved.ownerClient.kanban.createTask(slug, { title, assignee });
+  assert.ok(made.ok, `createTask 실패: ${made.ok ? "" : made.failure.code}`);
+  const taskId = made.data.task.id;
+  const moved = await resolved.ownerClient.kanban.updateTask(slug, taskId, { status: "running" });
+  assert.ok(moved.ok);
+  return taskId;
+}
+
+/** 프로세스 재시작 — 작업 상태와 재구성 표시를 함께 버린다(커서는 DB 에 남는다). */
+async function simulateRestart(channelId: string) {
+  const { resetAutomationState } = await import("./automation-events");
+  const { resetWorkingResyncForTests } = await import("./automation-poller");
+  resetAutomationState();
+  resetWorkingResyncForTests(channelId);
+}
+
+test("재시작하면 일하는 중이 사라지고, 폴링 한 바퀴가 그것을 되세운다", async () => {
+  const server = await startPlugin();
+  const { channel, npc } = await seedBoundChannel(server);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const { getWorkingSnapshot } = await import("./automation-events");
+  const { channelBoardSlug } = await import("@/lib/kanban-boards");
+  const slug = channelBoardSlug(channel.id);
+  const h = await makeDeps();
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const taskId = await seedRunningCard(channel.id, slug, "돌고 있는 카드");
+  server.pushEvent({
+    kind: "task.run.started",
+    board: slug,
+    task_id: taskId,
+    payload: { assignee: "sophie" },
+  });
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.equal(getWorkingSnapshot(channel.id).length, 1, "사전 조건: 일하는 중이다");
+
+  await simulateRestart(channel.id);
+  assert.deepEqual(getWorkingSnapshot(channel.id), [], "재시작하면 사라진다");
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const restored = getWorkingSnapshot(channel.id);
+  assert.equal(restored.length, 1, "폴링 한 바퀴가 되세우지 못했습니다");
+  assert.equal(restored[0].npcId, npc.id);
+  assert.equal(restored[0].sources.runningCards, 1);
+});
+
+test("되세운 뒤 진짜 finished 가 오면 꺼진다 — 영영 켜져 있지 않는다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const { getWorkingSnapshot } = await import("./automation-events");
+  const { channelBoardSlug } = await import("@/lib/kanban-boards");
+  const slug = channelBoardSlug(channel.id);
+  const h = await makeDeps();
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const taskId = await seedRunningCard(channel.id, slug, "끝날 카드");
+  await simulateRestart(channel.id);
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.equal(getWorkingSnapshot(channel.id).length, 1, "사전 조건: 되세워졌다");
+
+  server.pushEvent({
+    kind: "task.run.finished",
+    board: slug,
+    task_id: taskId,
+    payload: { assignee: "sophie" },
+  });
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.deepEqual(
+    getWorkingSnapshot(channel.id),
+    [],
+    "합성 시작을 진짜 종료가 닫지 못했습니다 — task_id 가 어긋났습니다",
+  );
+});
+
+test("재생된 옛 finished 뒤에도 running 카드의 담당은 일하는 중이다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const { getWorkingSnapshot } = await import("./automation-events");
+  const { channelBoardSlug } = await import("@/lib/kanban-boards");
+  const slug = channelBoardSlug(channel.id);
+  const h = await makeDeps();
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const taskId = await seedRunningCard(channel.id, slug, "재시도로 다시 도는 카드");
+
+  // 꺼져 있던 동안 쌓인 사건: 그 카드가 한 번 끝났다가 다시 시작했다. 커서는 DB 에 남으므로
+  // 재시작 뒤 첫 폴링이 이것을 재생한다. 되세우기를 폴링 **앞**에 두면 재생된 finished 가
+  // 합성 started 를 지워 실제로 돌고 있는 카드가 "쉬는 중" 으로 뒤집힌다.
+  server.pushEvent({
+    kind: "task.run.finished",
+    board: slug,
+    task_id: taskId,
+    payload: { assignee: "sophie" },
+  });
+
+  await simulateRestart(channel.id);
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  const snapshot = getWorkingSnapshot(channel.id);
+  assert.equal(
+    snapshot.length,
+    1,
+    "재생된 옛 종료가 되세우기를 지웠습니다 — 되세우기는 폴링을 비운 뒤에 와야 합니다",
+  );
+  assert.equal(snapshot[0].sources.runningCards, 1);
+});
+
+test("되세우기는 프로세스 수명당 채널마다 한 번만 보드를 읽는다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const { channelBoardSlug } = await import("@/lib/kanban-boards");
+  const slug = channelBoardSlug(channel.id);
+  const h = await makeDeps();
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  await seedRunningCard(channel.id, slug, "카드");
+  await simulateRestart(channel.id);
+
+  const before = server.requests().filter((r) => r.path.startsWith("/deskrpg/kanban/board")).length;
+  await pollChannelOnce(channel.id, h.deps);
+  const afterFirst = server
+    .requests()
+    .filter((r) => r.path.startsWith("/deskrpg/kanban/board")).length;
+  await pollChannelOnce(channel.id, h.deps);
+  await pollChannelOnce(channel.id, h.deps);
+  const afterMore = server
+    .requests()
+    .filter((r) => r.path.startsWith("/deskrpg/kanban/board")).length;
+
+  assert.ok(afterFirst > before, "첫 바퀴가 보드를 읽지 않았습니다");
+  assert.equal(
+    afterMore,
+    afterFirst,
+    "한가한 채널이 매 바퀴 보드를 조회합니다 — 조건이 '상태가 비었나' 로 잡혀 있습니다",
+  );
+});
+
+test("되세우기는 담당자 없는 running 카드를 건너뛴다", async () => {
+  const server = await startPlugin();
+  const { channel } = await seedBoundChannel(server);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const { getWorkingSnapshot } = await import("./automation-events");
+  const { channelBoardSlug, resolveChannelBoard } = await import("@/lib/kanban-boards");
+  const slug = channelBoardSlug(channel.id);
+  const h = await makeDeps();
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const resolved = await resolveChannelBoard(channel.id);
+  assert.ok(resolved.ok);
+  const made = await resolved.ownerClient.kanban.createTask(slug, { title: "담당 없는 카드" });
+  assert.ok(made.ok);
+  await resolved.ownerClient.kanban.updateTask(slug, made.data.task.id, { status: "running" });
+
+  await simulateRestart(channel.id);
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.deepEqual(
+    getWorkingSnapshot(channel.id),
+    [],
+    "담당자가 없으면 누구를 일하는 중으로 만들지 정할 수 없습니다",
+  );
+});

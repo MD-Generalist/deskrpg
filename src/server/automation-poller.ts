@@ -28,6 +28,7 @@ import type { Server } from "socket.io";
 
 import { channelGatewayBindings, channelKanbanBoards, channels, db, nowForDb } from "@/db";
 import { registerAutomationHooks, unregisterAutomationHooks } from "@/lib/automation-registry";
+import type { PluginEvent } from "@/lib/hermes/deskrpg-plugin-types";
 import {
   ensureChannelBoard,
   ensureChannelCarrier,
@@ -77,6 +78,13 @@ export type PollOnceDeps = {
   readRows: typeof listChannelBoards;
   /** carrier 가 0개로 떨어진 채널을 되살린다 — 읽는 쪽이 고치는 자가 복구. */
   ensureCarrier: typeof ensureChannelCarrier;
+  /** 재시작 뒤 "일하는 중" 을 보드에서 되세운다. 프로세스 수명당 채널마다 한 번. */
+  resyncWorking(
+    channelId: string,
+    rows: ChannelBoardRow[],
+    resolved: Extract<ResolvedChannelBoard, { ok: true }>,
+    deps: PollOnceDeps,
+  ): Promise<void>;
   /** 채널 이름과 마지막 수정 시각 — 보드 이름 동기화가 뒤처졌는지 판정한다(R2). */
   readChannel(channelId: string): Promise<{ name: string; updatedAt: Date | string | null } | null>;
   syncBoardName: typeof syncBoardName;
@@ -174,6 +182,7 @@ export function createDefaultPollDeps(
     ensureBoard: ensureChannelBoard,
     readRows: listChannelBoards,
     ensureCarrier: ensureChannelCarrier,
+    resyncWorking: resyncWorkingFromBoards,
     readChannel: readChannelNameAndUpdatedAt,
     syncBoardName,
     saveRow: saveBoardRow,
@@ -194,6 +203,75 @@ export function createDefaultPollDeps(
  * 채널 하나를 한 바퀴 폴링한다. 어떤 경우에도 던지지 않는다 — 실패는 `last_error` 와
  * 반환값에만 남는다(E6).
  */
+/**
+ * 이 프로세스에서 "일하는 중" 을 이미 되세운 채널들.
+ *
+ * 조건을 "채널 상태가 비어 있으면" 으로 잡으면 안 된다 — `ingest` 는 일이 끝나면 엔트리를
+ * 지우므로(`automation-events.ts` 의 `if (!payload.working) state.work.delete(npcId)`) 그 조건은
+ * 한가한 채널에서도 늘 참이 되고, 아무 일도 없는 채널이 매 바퀴 보드를 조회하게 된다.
+ * 프로세스가 죽으면 이 집합도 사라지므로 재시작마다 정확히 한 번 돈다.
+ */
+const resyncedChannels = new Set<string>();
+
+/** 테스트용 — 프로세스 수명 경계를 흉내낸다. */
+export function resetWorkingResyncForTests(channelId?: string) {
+  if (channelId === undefined) resyncedChannels.clear();
+  else resyncedChannels.delete(channelId);
+}
+
+/**
+ * 재시작 뒤 "일하는 중" 을 **보드에서 되세운다**(설계 2026-09-21 npc-working-state, 결정 A-1).
+ *
+ * 상태의 정본은 프로세스 메모리라 재시작 한 번에 전부 사라지고, 폴러는 커서 이후만 읽으므로
+ * 지나간 `task.run.started` 는 다시 오지 않는다 — 그대로 두면 카드가 돌고 있는데 화면은
+ * "아무도 일하지 않는다" 고 말한다. 보드의 `running` 열에는 담당자와 시작 시각이 남아 있으므로
+ * 그것으로 다시 세운다.
+ *
+ * **`npc:working` 을 여기서 쏘지 않는다.** 방송은 `ingest` 하나가 한다는 불변식(`src/server/AGENTS.md`)을
+ * 지키려고, 읽은 카드를 `task.run.started` **모양의 합성 사건**으로 만들어 평소 경로에 흘린다.
+ * 그래서 중복 제거(`state.seen`)와 차분 방송(`lastEmitted`)이 그대로 걸리고, 나중에 오는 **진짜**
+ * `task.run.finished` 가 같은 `task_id` 로 닫아 준다.
+ *
+ * 사건 id 는 결정적이다 — 랜덤이면 한 바퀴마다 다시 방송된다.
+ */
+async function resyncWorkingFromBoards(
+  channelId: string,
+  rows: ChannelBoardRow[],
+  resolved: Extract<ResolvedChannelBoard, { ok: true }>,
+  deps: PollOnceDeps,
+): Promise<void> {
+  if (resyncedChannels.has(channelId)) return;
+  resyncedChannels.add(channelId);
+
+  for (const row of rows) {
+    const view = await resolved.ownerClient.kanban.getBoard(row.boardSlug, {
+      includeArchived: false,
+    });
+    if (!view.ok) continue;
+    const events: PluginEvent[] = [];
+    for (const column of view.data.columns) {
+      for (const task of column.tasks) {
+        if (task.status !== "running" || !task.assignee) continue;
+        events.push({
+          id: `resync:${row.boardSlug}:${task.id}:${task.started_at ?? ""}`,
+          ts: Math.floor(Date.now() / 1000),
+          kind: "task.run.started",
+          board: row.boardSlug,
+          task_id: task.id,
+          payload: { assignee: task.assignee, title: task.title },
+        });
+      }
+    }
+    if (events.length === 0) continue;
+    const ingestDeps = deps.makeIngestDeps({
+      channelId,
+      gatewayId: resolved.binding.resource.id,
+      boardSlug: row.boardSlug,
+    });
+    await deps.ingest(channelId, events, ingestDeps);
+  }
+}
+
 /**
  * 보드 하나를 한 바퀴 폴링한다. 던지지 않는다 — 실패는 `last_error` 와 반환값에만 남는다(E6).
  *
@@ -315,6 +393,12 @@ export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Pr
 
     const boards: BoardPollOutcome[] = [];
     for (const row of rows) boards.push(await pollBoardOnce(channelId, row, resolved, deps));
+
+    // 재시작 뒤 "일하는 중" 되세우기 — **폴링을 다 비운 뒤에** 돈다(결정 A-1).
+    // 커서는 DB 에 남으므로 재시작 뒤 첫 폴링은 꺼져 있던 동안의 사건을 재생한다. 이것을 앞에 두면
+    // 재생된 **이전 실행의** `task.run.finished` 가 합성 `started` 와 같은 task_id 를 지워, 실제로
+    // 돌고 있는 카드가 "쉬는 중" 으로 뒤집힌다. 뒤에 두면 그 시점의 사실이 마지막에 놓인다.
+    await deps.resyncWorking(channelId, rows, resolved, deps);
 
     const carrierOutcome = boards.find((b) => b.boardSlug === nameTarget?.boardSlug) ?? boards[0];
     const failed = boards.find((b) => !b.ok);
