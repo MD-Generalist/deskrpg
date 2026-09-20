@@ -406,8 +406,13 @@ def unxml(value):
     # 상류 작업 XML 은 xml.sax.saxutils.escape 를 쓴다 — & < > 만 바뀌므로 되돌릴 것도 그 셋뿐이다.
     return value.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 def launches(arguments, target):
-    # 인자 목록이 정말 그 파일을 가리키는지 본다. 문서 어딘가에 경로가 적혀 있다고 통과시키지 않는다.
-    return any(same_path(unxml(token.group(1) or token.group(2) or ''), target) for token in re.finditer(r'"([^"]*)"|(\S+)', arguments))
+    # wscript.exe 는 스위치(//B, //Nologo)가 아닌 '첫' 인자를 실행한다. 진짜 실행되는 그 하나만 본다 —
+    # 뒤에 우리 런처 경로를 덧붙여 놓은 남의 작업이 통과하면 안 된다.
+    for token in re.finditer(r'"([^"]*)"|(\S+)', arguments):
+        value = unxml(token.group(1) or token.group(2) or '')
+        if value.startswith('//'): continue
+        return same_path(value, target)
+    return False
 def homes():
     result = [('default', ROOT)]
     profiles = ROOT / 'profiles'
@@ -530,10 +535,14 @@ def identity(name, home):
                 valid = valid and arguments is not None and launches(arguments.group(1), launcher)
             else:
                 # 시작 프로그램 폴더 폴백은 XML 이 아니다. 상류 _build_startup_launcher 가 적는
-                # target = "<런처>" 한 줄과 그것을 넘기는 wscript 호출만 본다.
+                # target = "<런처>" 한 줄과, 그 줄을 실제로 넘기는 sh.Run 의 wscript 호출을 묶어서 본다.
                 chained = re.search(r'^target = "(.*)"$', definition, re.M)
+                chain = re.search(r'^sh\.Run "(.*)", 0, False$', definition, re.M)
+                chain = chain.group(1).replace('""', '"') if chain else ''
+                runner = re.match(r'"([^"]*)"|(\S+)', chain)
                 valid = valid and chained is not None and same_path(chained.group(1).replace('""', '"'), launcher)
-                valid = valid and re.search(r'^sh\.Run ".*wscript\.exe.*", 0, False$', definition, re.M | re.I) is not None
+                valid = valid and runner is not None and pathlib.Path(runner.group(1) or runner.group(2)).name.lower() == 'wscript.exe'
+                valid = valid and runner is not None and launches(chain[runner.end():], launcher)
             if valid:
                 try:
                     # get_running_pid 는 gateway.status 에 있다. hermes_cli.gateway 는 모듈 수준에서 재노출하지 않는다.
