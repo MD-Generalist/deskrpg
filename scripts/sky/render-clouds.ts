@@ -39,7 +39,9 @@ async function main() {
           [variant, RENDER.width, RENDER.height] as const,
         );
         const file = `public/assets/brand/cloud-${variant + 1}.png`;
+        // 살짝 흐리게 줄인다 — 구체 경계가 남으면 도형을 붙인 것처럼 보인다.
         await sharp(Buffer.from(dataUrl.split(",")[1], "base64"))
+          .blur(3)
           .resize(OUT.width, OUT.height, { fit: "inside" })
           .png()
           .toFile(path.join(ROOT, file));

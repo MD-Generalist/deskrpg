@@ -44,17 +44,14 @@ export function cloudPuffs(variant: 0 | 1 | 2): CloudPuff[] {
 /** 구름 하나. 위는 햇빛을 받아 희고 아래는 살짝 가라앉는다(하늘빛 반사). */
 export function buildCloud(variant: 0 | 1 | 2): T.Group {
   const group = new T.Group();
-  const material = new T.MeshStandardMaterial({
-    color: "#ffffff",
-    roughness: 1,
-    metalness: 0,
-    flatShading: false,
-  });
+  // 덩어리 경계가 도드라지지 않게 명암 폭을 좁게 둔다 — 대비가 크면 "공을 붙여 놓은 것" 처럼 보이고,
+  // 아예 없애면(발광) 구름이 흰 판이 된다. 아래쪽만 하늘빛으로 살짝 가라앉힌다.
+  const material = new T.MeshStandardMaterial({ color: "#fdfefe", roughness: 1, metalness: 0 });
   for (const puff of cloudPuffs(variant)) {
     const mesh = new T.Mesh(new T.SphereGeometry(puff.r, 32, 24), material);
     mesh.position.set(puff.x, puff.y, puff.z);
     // 뭉게구름은 위아래로 눌려 있다 — 완전한 구는 솜사탕처럼 보인다.
-    mesh.scale.set(1, 0.78, 0.92);
+    mesh.scale.set(1, 0.82, 0.94);
     group.add(mesh);
   }
   return group;
@@ -62,8 +59,8 @@ export function buildCloud(variant: 0 | 1 | 2): T.Group {
 
 /** 구름 전용 조명 — 위에서 흰빛, 아래에서 하늘빛. 본사 조명과 섞지 않는다. */
 export function addCloudLights(scene: T.Scene) {
-  scene.add(new T.HemisphereLight("#ffffff", "#c8d8e4", 2.4));
-  const sun = new T.DirectionalLight("#fff6e0", 1.9);
+  scene.add(new T.HemisphereLight("#ffffff", "#dce7f1", 3.1));
+  const sun = new T.DirectionalLight("#fff6e0", 0.55);
   sun.position.set(2.5, 4, 3);
   scene.add(sun);
   return sun;

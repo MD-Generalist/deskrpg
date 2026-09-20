@@ -17,8 +17,12 @@ export function renderCloud(variant: 0 | 1 | 2, width: number, height: number): 
   scene.add(cloud);
   const box = new T.Box3().setFromObject(cloud);
   const center = box.getCenter(new T.Vector3());
-  const halfWidth = (box.max.x - box.min.x) / 2 + 0.25;
-  const halfHeight = halfWidth * (height / width);
+  // 가로·세로를 모두 담는다 — 가로만 맞추면 위아래가 잘린다(2026-09-20 실측).
+  const aspect = width / height;
+  let halfWidth = (box.max.x - box.min.x) / 2 + 0.25;
+  let halfHeight = (box.max.y - box.min.y) / 2 + 0.25;
+  if (halfWidth / halfHeight < aspect) halfWidth = halfHeight * aspect;
+  else halfHeight = halfWidth / aspect;
   const camera = new T.OrthographicCamera(-halfWidth, halfWidth, halfHeight, -halfHeight, 0.1, 40);
   camera.position.set(center.x, center.y, center.z + 12);
   camera.lookAt(center);
