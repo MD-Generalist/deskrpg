@@ -7,6 +7,31 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.921.1] - 2026-09-21
+
+### Added
+
+- Run DeskRPG natively on Windows. The connection wizard finds or installs a local Hermes, registers the gateway as a Scheduled Task, and reaches Linux hosts over SSH without a multiplexing socket (Windows OpenSSH has none). POSIX behaviour is unchanged.
+- Show who is speaking: circular avatars beside other people's bubbles (omitted when the same speaker continues), in the direct-message header, stacked in room headers with a `+N` overflow, and in meeting speech bubbles.
+- List direct messages with staff in the conversation list, with the last line of each. Opening one only reads; the staff member is called when you send.
+- Promote a single-line link to an OpenGraph preview card. The server-side fetcher refuses private, loopback, link-local, CGNAT and IPv4-in-IPv6 addresses, re-checks every redirect hop and the address the socket actually connects to, and proxies only raster images.
+- Add a download icon to file links and images in chat, including inline base64 images, which used to render as an empty box.
+- Inject a report-format rule ahead of staff conversations in direct messages, the office room and meetings.
+- List a card's attachments alongside its artifacts in the task drawer.
+
+### Changed
+
+- Pin the Hermes plugin to 0.10.2: the model list now contains only what the signed-in account can actually use, in the order Hermes intends (a Codex profile signed in with a ChatGPT account no longer offers public API models that fail at chat time).
+- Paint the `@` mention dropdown with brand tokens; white text on the cream surface made the selected entry unreadable.
+
+### Fixed
+
+- Open the task drawer when a kanban card is clicked. Pointer capture added for dragging retargeted the click away from the detail button. The card no longer captures the pointer; a press is tracked on the window instead, and the click that ends a drag is swallowed so dropping outside the board does not close the modal.
+- Keep staff out of the executive seat. The chair behind an `executive_desk` is no longer an assignable desk seat, and staff already sitting there are moved on the next server start.
+- Keep the request-address warning in the hire wizard out of the button row, where it squeezed the Save and Done buttons until their labels wrapped one character per line.
+- Keep the host bootstrap ASCII-only. It is the one host script passed as a `python3 -c` argument, so a non-ASCII comment stopped it from starting on hosts with a C/POSIX locale.
+- Round the install elapsed-time counter instead of flooring it; it could lag a second behind.
+
 ## [2026.920.7] - 2026-09-20
 
 ### Added

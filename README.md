@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.920.7` — Recover a password without email: an administrator resets one, the host CLI unlocks a locked-out administrator, and the owner changes it from the account screen. The sign-in screen now carries the same brand as the app. Earlier in 2026.920.x: connect a host over SSH or locally and install Hermes from the wizard even without python3, fewer instructions on screen, and a 3D miniature logo.
+- Version: `v2026.921.1` — Runs natively on Windows: the connection wizard finds or installs a local Hermes and reaches Linux hosts over SSH. Conversations show who is speaking with avatars, direct messages with staff appear in the conversation list, single-line links become preview cards, and files and images in chat can be downloaded. Staff no longer take the executive seat, clicking a kanban card opens its details again, and card attachments are listed with results. Earlier in 2026.920.x: password recovery without email, host connection over SSH or locally even without python3, and a 3D miniature logo.
 
 ## What You Can Do
 
