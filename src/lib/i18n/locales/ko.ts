@@ -2737,6 +2737,7 @@ const ko: Record<string, string> = {
   "artifacts.renderFailed": "미리보기를 그리지 못했습니다 — 다운로드해서 보세요",
   "artifacts.card.title": "결과물",
   "artifacts.card.empty": "이 카드에서 만든 결과물이 없습니다",
+  "artifacts.card.fromAttachment": "첨부",
   "artifacts.chip": "결과물 저장됨: {title}",
 };
 

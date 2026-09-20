@@ -2667,6 +2667,7 @@ const zh: Record<string, string> = {
   "artifacts.renderFailed": "无法渲染预览 — 请下载查看",
   "artifacts.card.title": "成果",
   "artifacts.card.empty": "此卡片尚无成果",
+  "artifacts.card.fromAttachment": "附件",
   "artifacts.chip": "成果已保存: {title}",
 };
 

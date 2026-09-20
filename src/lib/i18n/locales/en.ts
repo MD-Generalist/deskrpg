@@ -2748,6 +2748,7 @@ const en: Record<string, string> = {
   "artifacts.renderFailed": "Could not render the preview — download to view",
   "artifacts.card.title": "Artifacts",
   "artifacts.card.empty": "No artifacts from this card yet",
+  "artifacts.card.fromAttachment": "Attachment",
   "artifacts.chip": "Artifact saved: {title}",
 };
 

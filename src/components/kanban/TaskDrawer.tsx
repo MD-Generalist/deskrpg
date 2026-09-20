@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { ChevronDown, ChevronRight, Pencil, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Paperclip, Pencil, X } from "lucide-react";
 
 import { useLocale, useT } from "@/lib/i18n";
 import {
@@ -121,6 +121,16 @@ export default function TaskDrawer({
     authors,
   } = useMemo(() => splitBlackboardComments(detail?.comments ?? []), [detail?.comments]);
   const blackboardKeys = Object.keys(blackboard).filter((key) => key !== "_authors");
+
+  // 카드 첨부를 결과물 목록에도 함께 나열한다. 첨부는 인라인 base64(`kanban_attach`)나
+  // URL 로 들어와 디스크 파일이 아니므로, 파일 경로를 보는 자동 승격 훅의 시야에
+  // 구조적으로 들어올 수 없다 — 두 저장소가 만나는 곳은 이 화면뿐이다. 그래서 첨부가
+  // 있는데도 결과물 칸이 "없습니다" 라고 말하던 모순을 여기서 없앤다(2026-09-20 실측).
+  // `attachmentsSupported` 가 false 면 `detail.attachments` 를 신뢰하지 않는다(R12).
+  const cardAttachments = useMemo(
+    () => (attachmentsSupported ? (detail?.attachments ?? []) : []),
+    [attachmentsSupported, detail?.attachments],
+  );
 
   const load = useCallback(async () => {
     try {
@@ -814,7 +824,7 @@ export default function TaskDrawer({
                   </div>
                 ) : cardArtifacts === null ? (
                   <Empty>{t("common.loading")}</Empty>
-                ) : cardArtifacts.length === 0 ? (
+                ) : cardArtifacts.length === 0 && cardAttachments.length === 0 ? (
                   <Empty>{t("artifacts.card.empty")}</Empty>
                 ) : (
                   <ul className="space-y-1">
@@ -828,6 +838,21 @@ export default function TaskDrawer({
                           <KindIcon artifact={artifact} />
                           <span className="truncate">{artifact.title}</span>
                         </button>
+                      </li>
+                    ))}
+                    {cardAttachments.map((file) => (
+                      <li key={`attachment-${file.id}`}>
+                        <a
+                          href={api.attachmentUrl(file.id)}
+                          download={file.filename}
+                          className="flex w-full items-center gap-2 rounded-md bg-surface px-2 py-1 text-left text-text hover:brightness-125"
+                        >
+                          <Paperclip size={14} className="shrink-0 text-text-dim" />
+                          <span className="truncate">{file.filename}</span>
+                          <span className="ml-auto shrink-0 text-[10px] text-text-dim">
+                            {t("artifacts.card.fromAttachment")}
+                          </span>
+                        </a>
                       </li>
                     ))}
                   </ul>

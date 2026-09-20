@@ -2764,6 +2764,7 @@ const ja: Record<string, string> = {
   "artifacts.renderFailed": "プレビューを表示できませんでした — ダウンロードして確認してください",
   "artifacts.card.title": "成果物",
   "artifacts.card.empty": "このカードの成果物はまだありません",
+  "artifacts.card.fromAttachment": "添付",
   "artifacts.chip": "成果物を保存しました: {title}",
 };
 
