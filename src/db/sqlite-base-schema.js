@@ -299,9 +299,11 @@ const SQLITE_BASE_SCHEMA = `
     CREATE INDEX IF NOT EXISTS idx_chat_room_messages_room ON chat_room_messages(room_id, created_at);
 
     CREATE TABLE IF NOT EXISTS channel_kanban_boards (
-      channel_id TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
       gateway_id TEXT NOT NULL REFERENCES gateway_resources(id) ON DELETE CASCADE,
       board_slug TEXT NOT NULL,
+      is_event_carrier INTEGER NOT NULL DEFAULT 0,
       board_name_synced_at TEXT,
       event_cursor TEXT,
       last_polled_at TEXT,

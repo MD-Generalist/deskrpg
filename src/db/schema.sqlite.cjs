@@ -242,13 +242,17 @@ const channelGatewayBindings = sqliteTable(
 const channelKanbanBoards = sqliteTable(
   "channel_kanban_boards",
   {
-    channelId: text("channel_id")
+    id: text("id")
       .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    channelId: text("channel_id")
+      .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
     gatewayId: text("gateway_id")
       .notNull()
       .references(() => gatewayResources.id, { onDelete: "cascade" }),
     boardSlug: text("board_slug").notNull(),
+    isEventCarrier: integer("is_event_carrier", { mode: "boolean" }).notNull().default(false),
     boardNameSyncedAt: text("board_name_synced_at"),
     eventCursor: text("event_cursor"),
     lastPolledAt: text("last_polled_at"),
@@ -256,7 +260,14 @@ const channelKanbanBoards = sqliteTable(
     createdAt: text("created_at").$defaultFn(isoNow).notNull(),
     updatedAt: text("updated_at").$defaultFn(isoNow).notNull(),
   },
-  (table) => [index("idx_channel_kanban_boards_gateway_id").on(table.gatewayId)],
+  (table) => [
+    index("idx_channel_kanban_boards_gateway_id").on(table.gatewayId),
+    uniqueIndex("channel_kanban_boards_channel_slug_idx").on(table.channelId, table.boardSlug),
+    // 채널마다 사건 수신 보드(크론·아티팩트를 받는 행)는 정확히 하나다 — 사무실 방 불변식과 같은 수법.
+    uniqueIndex("channel_kanban_boards_carrier_idx")
+      .on(table.channelId)
+      .where(sql`${table.isEventCarrier}`),
+  ],
 );
 
 // DeskRPG 가 만든 Hermes cron 작업의 출처 장부. Hermes 쪽 작업은 (게이트웨이, 프로필, job id)
@@ -610,6 +621,84 @@ const meetingMinutes = sqliteTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// 프로젝트 목록표 (설계 2026-09-21 project-registry)
+//
+// 보드 = 프로젝트, 테넌트 = 서브프로젝트다. **이름·설명·진행률은 여기 두지 않는다** —
+// Hermes 보드 메타와 `GET /kanban/boards` 의 `counts` 가 정본이고, 사본을 두면 하드 게이트 1을
+// 어기며 언젠가 어긋난다. 여기 남는 것은 Hermes 가 담을 자리가 없는 사람 쪽 정보뿐이다:
+// 상태·리드 직원·목표일·색·아이콘·일시정지 사유, 그리고 "왜 이 일을 하는가" 에 답하는 출처 회의.
+// ---------------------------------------------------------------------------
+
+const channelProjects = sqliteTable(
+  "channel_projects",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    boardLinkId: text("board_link_id")
+      .notNull()
+      .unique()
+      .references(() => channelKanbanBoards.id, { onDelete: "cascade" }),
+    // 채널별 목록 질의를 조인 없이 하려고 둔 비정규화. 연결 행의 채널과 늘 같다.
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("planned"),
+    leadNpcId: text("lead_npc_id").references(() => npcs.id, { onDelete: "set null" }),
+    targetDate: text("target_date"),
+    color: text("color"),
+    icon: text("icon"),
+    // 일시정지는 상태가 아니라 이 칸이 채워진 in_progress 다(Paperclip 과 같은 취급).
+    pauseReason: text("pause_reason"),
+    originMeetingId: text("origin_meeting_id").references(() => meetingMinutes.id, {
+      onDelete: "set null",
+    }),
+    /** 결정 C-1 — 자리만 열어 둔다. 이 설계는 읽지도 쓰지도 않는다. */
+    hermesProjectId: text("hermes_project_id"),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: text("created_at").$defaultFn(isoNow).notNull(),
+    updatedAt: text("updated_at").$defaultFn(isoNow).notNull(),
+  },
+  (table) => [index("idx_channel_projects_channel").on(table.channelId)],
+);
+
+const channelSubprojects = sqliteTable(
+  "channel_subprojects",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => channelProjects.id, { onDelete: "cascade" }),
+    /**
+     * Hermes `tasks.tenant` 에 그대로 들어가는 값. **만든 뒤 절대 바꾸지 않는다** — 디스패처가
+     * 작업자에게 `HERMES_TENANT` 를 넘기고 자식 카드가 그것을 상속하므로, 값이 바뀌면 이미
+     * 만들어진 카드들이 고아가 된다. 표시 이름을 바꾸고 싶으면 `name` 만 바꾼다.
+     */
+    tenantSlug: text("tenant_slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("planned"),
+    leadNpcId: text("lead_npc_id").references(() => npcs.id, { onDelete: "set null" }),
+    targetDate: text("target_date"),
+    color: text("color"),
+    icon: text("icon"),
+    pauseReason: text("pause_reason"),
+    originMeetingId: text("origin_meeting_id").references(() => meetingMinutes.id, {
+      onDelete: "set null",
+    }),
+    createdAt: text("created_at").$defaultFn(isoNow).notNull(),
+    updatedAt: text("updated_at").$defaultFn(isoNow).notNull(),
+  },
+  (table) => [
+    uniqueIndex("channel_subprojects_project_tenant_idx").on(table.projectId, table.tenantSlug),
+  ],
+);
+
 module.exports = {
   users,
   characters,
@@ -636,4 +725,6 @@ module.exports = {
   chatRoomMembers,
   chatRoomMessages,
   meetingMinutes,
+  channelProjects,
+  channelSubprojects,
 };

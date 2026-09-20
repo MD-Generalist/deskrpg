@@ -13,6 +13,7 @@ const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js");
 const { migrateNpcsToProfileOwnership } = require("./sqlite-npc-profile-ownership.js");
 const { ensureChatRoomTables } = require("./sqlite-chat-rooms.js");
 const { ensureKanbanCronBookkeeping } = require("./sqlite-kanban-cron-bookkeeping.js");
+const { ensureProjectRegistry } = require("./sqlite-project-registry.js");
 const { dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js");
 const { retireMapEditor } = require("./sqlite-map-editor-drop.js");
 
@@ -374,6 +375,9 @@ function ensureSqliteCompatibility(sqlite) {
   ensureChatRoomTables(sqlite);
   // chat_room_messages 가 있어야 notice_json 을 더할 수 있으니 방 테이블 다음이다.
   ensureKanbanCronBookkeeping(sqlite);
+  // 보드 표의 PK 를 대리 키로 옮기고(기존 DB 만) 프로젝트·서브프로젝트 메타 표를 만든다.
+  // 반드시 보드 표가 선 다음이고, 메타 표의 FK 가 가리킬 대상이라 재구축이 먼저다.
+  ensureProjectRegistry(sqlite);
   // 2026-04 태스크 시스템 폐기 — 옛 태스크·보고 테이블은 데이터째 지운다.
   dropLegacyTaskTables(sqlite);
   // 맵 에디터 폐기 — 옛 외형을 오피스 룩으로 접고 맵 에디터 표 8개를 지운다.

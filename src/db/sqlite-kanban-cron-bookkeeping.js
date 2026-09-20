@@ -5,9 +5,11 @@
 
 const KANBAN_CRON_TABLES = `
   CREATE TABLE IF NOT EXISTS channel_kanban_boards (
-    channel_id TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY NOT NULL,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
     gateway_id TEXT NOT NULL REFERENCES gateway_resources(id) ON DELETE CASCADE,
     board_slug TEXT NOT NULL,
+    is_event_carrier INTEGER NOT NULL DEFAULT 0,
     board_name_synced_at TEXT,
     event_cursor TEXT,
     last_polled_at TEXT,
@@ -15,6 +17,8 @@ const KANBAN_CRON_TABLES = `
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+  -- (channel_id, board_slug)·carrier 유니크 인덱스는 여기서 만들지 않는다. 기존 DB 는 이 시점에
+  -- 아직 옛 모양(carrier 컬럼 없음)이라 터진다 — 재구축을 마친 sqlite-project-registry.js 몫이다.
   CREATE INDEX IF NOT EXISTS idx_channel_kanban_boards_gateway_id ON channel_kanban_boards(gateway_id);
   CREATE TABLE IF NOT EXISTS cron_job_origins (
     id TEXT PRIMARY KEY NOT NULL,

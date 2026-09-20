@@ -54,9 +54,12 @@ test("빈 DB 는 기본 스키마만으로 새 테이블·컬럼을 갖춘다", 
   assert.ok(columnNames(db, "gateway_resources").includes("plugin_info_json"));
   assert.ok(columnNames(db, "chat_room_messages").includes("notice_json"));
   assert.deepEqual(columnNames(db, "channel_kanban_boards"), [
+    // 0017 에서 PK 가 대리 키로 옮겨지고 사건 수신 보드 표시가 더해졌다.
+    "id",
     "channel_id",
     "gateway_id",
     "board_slug",
+    "is_event_carrier",
     "board_name_synced_at",
     "event_cursor",
     "last_polled_at",
@@ -131,7 +134,7 @@ test("채널을 지우면 보드 연결과 cron 출처가 cascade 로 사라진�
   db.exec(SQLITE_BASE_SCHEMA);
   seedFixture(db);
   db.prepare(
-    `INSERT INTO channel_kanban_boards (channel_id, gateway_id, board_slug, created_at, updated_at) VALUES ('c1','g1','board',datetime('now'),datetime('now'))`,
+    `INSERT INTO channel_kanban_boards (id, channel_id, gateway_id, board_slug, created_at, updated_at) VALUES ('b1','c1','g1','board',datetime('now'),datetime('now'))`,
   ).run();
   db.prepare(
     `INSERT INTO cron_job_origins (id, gateway_id, profile_name, job_id, channel_id, created_by_user_id, created_at) VALUES ('o1','g1','sophie','job-a','c1','u1',datetime('now'))`,
