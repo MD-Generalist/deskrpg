@@ -132,7 +132,7 @@ export async function resolveProposal<Ctx>(
   deps: ResolveDeps<Ctx>,
 ): Promise<ResolveOutcome> {
   if (input.choice !== "card" && input.choice !== "inline") {
-    return { ok: false, status: 400, code: "invalid_choice" };
+    return { ok: false, status: 400, code: "invalid_field" };
   }
 
   // 1. 관문 — 여기서 막히면 플러그인은 건드리지 않는다.
@@ -216,13 +216,29 @@ export async function resolveProposal<Ctx>(
     });
   } catch (error) {
     const failure = asStepFailure(error);
+    // 갈래가 비대칭이다. 카드가 있으면(`taskId`) 그 카드가 Hermes 의 정본이고 플러그인의
+    // `resolved_task_id` 도 채워져 되돌아가지 않으므로 되돌리지 않는다 — 실패만 정직하게 올린다.
+    // 카드가 없으면(`inline`, 또는 카드를 만들지 않은 갈래) 되돌릴 수 있는 유일한 반쪽 상태다:
+    // 되돌려야 사용자가 다시 고르고 후속 대화 경로를 탈 수 있다.
+    if (taskId === undefined) {
+      try {
+        await deps.unresolve({ ctx, proposalId: input.proposalId });
+      } catch (rollbackError) {
+        const rollback = asStepFailure(rollbackError);
+        return {
+          ok: false,
+          status: 500,
+          code: "resolve_rollback_failed",
+          message: `notice_write_failed: ${failure.message} / rollback ${rollback.code}: ${rollback.message}`,
+        };
+      }
+      return { ok: false, status: 500, code: "notice_write_failed", message: failure.message };
+    }
     return {
       ok: false,
       status: 500,
       code: "notice_write_failed",
-      message: taskId
-        ? `task ${taskId} created but notice not updated: ${failure.message}`
-        : failure.message,
+      message: `task ${taskId} created but notice not updated: ${failure.message}`,
     };
   }
 

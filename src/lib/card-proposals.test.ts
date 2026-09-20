@@ -28,7 +28,10 @@ const NOTICE: CardProposalNotice = {
 type Stub = ResolveDeps<Ctx> & {
   createTaskCalls: number;
   noticeUpdates: number;
+  /** `unresolve` 시도 횟수 — 성공 여부와 따로 센다. */
   rollbacks: number;
+  /** 되돌리기가 실제로 성공한 횟수. */
+  rollbacksDone: number;
   tasks: ProposalTaskInput[];
   order: string[];
   resolvedWrites: NonNullable<CardProposalNotice["resolved"]>[];
@@ -51,6 +54,7 @@ function stubDeps(over: {
     createTaskCalls: 0,
     noticeUpdates: 0,
     rollbacks: 0,
+    rollbacksDone: 0,
     tasks: [],
     order: [],
     resolvedWrites: [],
@@ -73,6 +77,7 @@ function stubDeps(over: {
       stub.rollbacks += 1;
       stub.order.push("unresolve");
       if (over.unresolve) await over.unresolve();
+      stub.rollbacksDone += 1;
     },
     resolveAssignee: async () => {
       stub.order.push("resolveAssignee");
@@ -225,5 +230,50 @@ test("알림 쓰기 실패는 카드가 만들어졌다는 사실을 오류에 �
   assert.equal(out.ok, false);
   assert.equal(out.ok === false && out.code, "notice_write_failed");
   assert.match(out.ok === false ? (out.message ?? "") : "", /t1/);
-  assert.equal(deps.rollbacks, 0); // 카드는 Hermes 에 있다 — 되돌리지 않는다
+  // 비대칭이 의도된 것이다 — 카드는 Hermes 의 정본이므로 되돌리지 않는다.
+  assert.equal(deps.rollbacks, 0);
+});
+
+test("inline + 알림 쓰기 실패는 되돌려 다시 고를 수 있게 둔다", async () => {
+  const deps = stubDeps({
+    writeResolved: async () => {
+      throw new Error("db down");
+    },
+  });
+  const out = await resolveProposal({ ...CARD, choice: "inline" }, deps);
+  assert.deepEqual(out, {
+    ok: false,
+    status: 500,
+    code: "notice_write_failed",
+    message: "db down",
+  });
+  assert.equal(deps.createTaskCalls, 0);
+  assert.equal(deps.rollbacks, 1); // 카드가 없으니 되돌릴 수 있다
+  assert.equal(deps.rollbacksDone, 1);
+  assert.deepEqual(deps.order, [
+    "gate",
+    "loadProposal",
+    "markResolved",
+    "writeResolved",
+    "unresolve",
+  ]);
+});
+
+test("inline 의 되돌리기가 실패하면 그 사실을 오류에 담아 올린다", async () => {
+  const deps = stubDeps({
+    writeResolved: async () => {
+      throw new Error("db down");
+    },
+    unresolve: async () => {
+      throw new Error("gateway offline");
+    },
+  });
+  const out = await resolveProposal({ ...CARD, choice: "inline" }, deps);
+  assert.equal(out.ok === false && out.code, "resolve_rollback_failed");
+  assert.equal(out.ok === false && out.status, 500);
+  const message = out.ok === false ? (out.message ?? "") : "";
+  assert.match(message, /notice_write_failed/);
+  assert.match(message, /gateway offline/);
+  assert.equal(deps.rollbacks, 1);
+  assert.equal(deps.rollbacksDone, 0); // 시도했으나 성공하지 못했다
 });
