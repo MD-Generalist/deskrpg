@@ -91,3 +91,30 @@ test("자리에 있거나 상태를 모르면 보내는 시점에 부른다", ()
   assert.equal(needsCallBeforeDmSend("idle"), true);
   assert.equal(needsCallBeforeDmSend("returning"), true);
 });
+
+// dev1 검토 질문: `loadDmThreads` 는 캐릭터의 DM 을 **채널 구분 없이** 읽는다. 다른 채널
+// 직원의 줄이 걸러지는 근거는 이 대조뿐이다 — 출근부(`rosterNpcs`)가
+// `/api/npcs?channelId=…&roster=1` 로 채널별로 오고, 거기 없는 npcId 는 줄이 되지 않는다.
+// 위의 "삭제된 직원" 테스트와 기계적으로 같은 경로지만, 이 경우로 이름을 붙여 둔다 —
+// 이름이 없으면 나중에 "채널 격리는 어디서 되나" 를 다시 조사하게 된다.
+test("다른 채널 직원과 나눈 대화는 현재 채널 목록에 섞이지 않는다", () => {
+  const threads = summarizeDmThreads([
+    { npcId: "here", role: "npc", content: "이 채널", createdAt: at("2026-09-01T00:00:00Z") },
+    {
+      npcId: "elsewhere",
+      role: "npc",
+      content: "다른 채널",
+      createdAt: at("2026-09-02T00:00:00Z"),
+    },
+  ]);
+  // 최신순이라 다른 채널 줄이 먼저 온다 — 그래도 목록에는 남지 않아야 한다.
+  assert.deepEqual(
+    threads.map((thread) => thread.npcId),
+    ["elsewhere", "here"],
+  );
+  const entries = buildDmThreadEntries(threads, [{ id: "here", name: "noah", active: true }]);
+  assert.deepEqual(
+    entries.map((entry) => entry.npcId),
+    ["here"],
+  );
+});
