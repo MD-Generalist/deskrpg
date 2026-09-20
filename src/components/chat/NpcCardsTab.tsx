@@ -18,6 +18,7 @@ import type { KanbanBoard } from "@/lib/hermes/deskrpg-plugin-types";
 import { classifyGateFailure } from "@/lib/gate-failure";
 import { getWizardErrorMessage } from "@/components/hermes/wizard-error-codes";
 import { assignedCards } from "@/components/kanban/npc-assigned-cards";
+import { failureLine } from "@/components/kanban/kanban-view-model";
 
 export interface NpcCardsTabProps {
   channelId: string;
@@ -75,9 +76,29 @@ export default function NpcCardsTab({
   );
 }
 
-/** 428/409/503 게이트 안내 — `CronErrorNotice`(`cron-notices.tsx`)와 같은 키를 쓴다. */
+/**
+ * 428/409/503 게이트 안내 — `CronErrorNotice`(`cron-notices.tsx`)와 같은 키를 쓴다.
+ *
+ * 503 `board_unavailable`(`kanban-access.ts` 가 내는 코드)은 `classifyGateFailure` 의 표에
+ * 없어 그대로 두면 일반 폴백("알 수 없는 오류")으로 떨어진다 — 칸반이 보드 미준비에 이미 쓰는
+ * `kanban.blocker.boardTitle` + `failureLine`(`KanbanBoardModal.tsx`)을 그대로 재사용한다.
+ */
 function CardsErrorNotice({ code }: { code: string }) {
   const t = useT();
+
+  if (code === "board_unavailable") {
+    return (
+      <div
+        role="alert"
+        data-testid="cards-error"
+        className="p-3 rounded border border-border bg-surface text-xs text-text space-y-1"
+      >
+        <p className="font-semibold">{t("kanban.blocker.boardTitle")}</p>
+        <p className="text-text-muted break-words">{failureLine({ code, message: code })}</p>
+      </div>
+    );
+  }
+
   const blocker = classifyGateFailure({ status: 0, code, message: code });
 
   if (blocker.kind === "gateway_not_bound") {

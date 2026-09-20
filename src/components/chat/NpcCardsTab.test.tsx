@@ -104,3 +104,19 @@ test("게이트에 막히면 이유를 보인다 — 빈 목록으로 위장하�
     cleanup();
   }
 });
+
+test("보드 미준비(board_unavailable)는 칸반이 쓰는 보드 미확보 문구를 재사용한다 — 알 수 없는 오류로 뭉개지 않는다", () => {
+  const { container, cleanup } = render(
+    <NpcCardsTab {...props} board={null} error="board_unavailable" />,
+  );
+  try {
+    const notice = container.querySelector("[data-testid='cards-error']");
+    assert.ok(notice);
+    assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
+    // 칸반 보드 미확보 배너와 같은 제목 — wizard-error-codes 의 일반 "알 수 없는 오류" 폴백이 아니다.
+    assert.match(notice!.textContent ?? "", /보드를 확보하지 못했습니다/);
+    assert.doesNotMatch(notice!.textContent ?? "", /알 수 없는 오류/);
+  } finally {
+    cleanup();
+  }
+});
