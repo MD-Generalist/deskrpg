@@ -7,6 +7,12 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+## [2026.920.6] - 2026-09-20
+
+### Fixed
+
+- Tell the hire wizard when a profile still carries a model endpoint from the default profile, and clear it on confirmation — otherwise a new provider kept sending requests to the old address.
+
 ## [2026.920.5] - 2026-09-20
 
 ### Fixed
