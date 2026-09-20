@@ -72,6 +72,12 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
         return;
       }
 
+      // 임시 비밀번호로 들어왔으면 곧바로 변경 화면으로 보낸다.
+      if (data?.user?.mustChangePassword) {
+        router.push("/account/password?forced=1");
+        return;
+      }
+
       router.push("/gateways");
     } catch {
       setError(t("common.networkError"));

@@ -93,3 +93,91 @@ test("권한 행은 원시 키 대신 사람이 읽는 이름과 번역된 값�
     globalThis.fetch = originalFetch;
   }
 });
+
+async function renderPanel(canResetPasswords: boolean, fetchImpl: typeof fetch) {
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+  const root = createRoot(el);
+  globalThis.fetch = fetchImpl;
+  await act(async () => {
+    root.render(
+      <I18nProvider initialLocale="ko">
+        <GroupAccessPanel
+          groupId="g1"
+          groupName="Default"
+          canManageMembers
+          canManagePermissions
+          canApproveJoinRequests
+          canResetPasswords={canResetPasswords}
+        />
+      </I18nProvider>,
+    );
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  return { el, root };
+}
+
+const sectionFetch = (async (input: RequestInfo | URL) => {
+  const url = String(input);
+  const section = url.split("/").pop() ?? "";
+  return new Response(JSON.stringify(responses[section] ?? {}), { status: 200 });
+}) as typeof fetch;
+
+test("시스템 관리자가 아니면 비밀번호 재설정 버튼이 없다", async () => {
+  const originalFetch = globalThis.fetch;
+  const { el, root } = await renderPanel(false, sectionFetch);
+  try {
+    assert.ok(!(el.textContent ?? "").includes("비밀번호 재설정"));
+  } finally {
+    await act(async () => root.unmount());
+    el.remove();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("시스템 관리자가 재설정하면 임시 비밀번호가 화면에 한 번 드러난다", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalConfirm = globalThis.confirm;
+  globalThis.confirm = () => true;
+  const calls: string[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("reset-password")) {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      return new Response(
+        JSON.stringify({
+          temporaryPassword: "temp-secret-value",
+          user: { id: "u2", loginId: "dev3", nickname: "dev3" },
+        }),
+        { status: 200 },
+      );
+    }
+    const section = url.split("/").pop() ?? "";
+    return new Response(JSON.stringify(responses[section] ?? {}), { status: 200 });
+  }) as typeof fetch;
+
+  const { el, root } = await renderPanel(true, fetchImpl);
+  try {
+    const button = Array.from(el.querySelectorAll("button")).find((node) =>
+      (node.textContent ?? "").includes("비밀번호 재설정"),
+    );
+    assert.ok(button, "재설정 버튼이 보이지 않는다");
+
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(calls, ["POST /api/admin/users/u2/reset-password"]);
+    assert.match(el.textContent ?? "", /temp-secret-value/);
+  } finally {
+    await act(async () => root.unmount());
+    el.remove();
+    globalThis.fetch = originalFetch;
+    globalThis.confirm = originalConfirm;
+  }
+});

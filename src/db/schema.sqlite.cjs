@@ -29,6 +29,7 @@ const users = sqliteTable("users", {
   nickname: text("nickname").unique().notNull(),
   passwordHash: text("password_hash").notNull(),
   systemRole: text("system_role").notNull().default("user"),
+  mustChangePassword: integer("must_change_password", { mode: "boolean" }).notNull().default(false),
   lastActiveAt: text("last_active_at"),
   createdAt: text("created_at").$defaultFn(isoNow),
   updatedAt: text("updated_at").$defaultFn(isoNow),

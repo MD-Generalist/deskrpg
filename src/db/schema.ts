@@ -21,6 +21,8 @@ export const users = pgTable("users", {
   nickname: varchar("nickname", { length: 50 }).unique().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   systemRole: varchar("system_role", { length: 20 }).notNull().default("user"),
+  /** 관리자·CLI 가 임시 비밀번호를 발급하면 참이 된다. 본인이 바꾸면 거짓으로 돌아간다. */
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

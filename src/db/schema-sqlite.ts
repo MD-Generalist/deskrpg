@@ -18,6 +18,8 @@ export const users = sqliteTable("users", {
   nickname: text("nickname").unique().notNull(),
   passwordHash: text("password_hash").notNull(),
   systemRole: text("system_role").notNull().default("user"),
+  /** 관리자·CLI 가 임시 비밀번호를 발급하면 참이 된다. 본인이 바꾸면 거짓으로 돌아간다. */
+  mustChangePassword: integer("must_change_password", { mode: "boolean" }).notNull().default(false),
   lastActiveAt: text("last_active_at"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),

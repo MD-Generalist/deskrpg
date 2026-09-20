@@ -42,6 +42,7 @@ export default function AdminGroupsPage() {
 function AdminGroupsPageInner() {
   const t = useT();
   const [groups, setGroups] = useState<GroupRow[]>([]);
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,6 +61,7 @@ function AdminGroupsPageInner() {
       .then((data) => {
         const nextGroups: GroupRow[] = Array.isArray(data.groups) ? data.groups : [];
         setGroups(nextGroups);
+        setIsSystemAdmin(data.isSystemAdmin === true);
         const nextManageableGroups = nextGroups.filter((group) => group.canManageGroup);
         setSelectedGroupId(nextManageableGroups[0]?.id ?? "");
         setLoading(false);
@@ -119,6 +121,7 @@ function AdminGroupsPageInner() {
               canManageMembers={selectedGroup.canManageMembers ?? false}
               canManagePermissions={selectedGroup.canManagePermissions ?? false}
               canApproveJoinRequests={selectedGroup.canApproveJoinRequests ?? false}
+              canResetPasswords={isSystemAdmin}
               groupSwitcher={
                 manageableGroups.length > 1 ? (
                   <select

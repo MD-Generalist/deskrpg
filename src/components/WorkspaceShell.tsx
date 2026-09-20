@@ -69,6 +69,9 @@ export default function WorkspaceShell({ children }: { children: ReactNode }) {
         {/* 로그아웃·언어는 모든 화면에 공통이라 사이드바가 맡는다 — 페이지 머리말에는
             그 화면의 동작만 남겨 좁은 폭에서도 버튼 글자가 쪼개지지 않는다(2026-09-20). */}
         <div className="workspace-sidebar-actions">
+          <Link href="/account/password" className="workspace-sidebar-action-link">
+            {t("account.password.title")}
+          </Link>
           <LogoutButton />
           <LocaleSwitcher />
         </div>

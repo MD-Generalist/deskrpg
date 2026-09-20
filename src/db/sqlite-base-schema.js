@@ -7,6 +7,7 @@ const SQLITE_BASE_SCHEMA = `
       nickname TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       system_role TEXT NOT NULL DEFAULT 'user',
+      must_change_password INTEGER NOT NULL DEFAULT 0,
       last_active_at TEXT,
       created_at TEXT,
       updated_at TEXT

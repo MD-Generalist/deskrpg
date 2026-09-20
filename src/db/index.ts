@@ -428,6 +428,7 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   applySqliteAlterStatements(sqlite, "characters", ["ALTER TABLE characters ADD COLUMN bio TEXT"]);
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",
+    "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0",
   ]);
   applySqliteAlterStatements(sqlite, "channels", [
     "ALTER TABLE channels ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE SET NULL",

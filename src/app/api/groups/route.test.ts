@@ -1,0 +1,42 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import path from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { NextRequest } from "next/server";
+
+const home = mkdtempSync(path.join(tmpdir(), "groups-route-"));
+process.env.DESKRPG_HOME = home;
+process.env.SQLITE_PATH = path.join(home, "test.db");
+process.env.DB_TYPE = "sqlite";
+process.on("exit", () => rmSync(home, { recursive: true, force: true }));
+
+const req = (userId: string) =>
+  new NextRequest("http://localhost:3102/api/groups", {
+    headers: { host: "localhost:3102", "x-user-id": userId },
+  });
+
+async function seedUser(role: string) {
+  const { db, users } = await import("@/db");
+  const [row] = await db
+    .insert(users)
+    .values({
+      loginId: randomUUID(),
+      nickname: `Groups-${randomUUID()}`,
+      passwordHash: "test-only",
+      systemRole: role,
+    })
+    .returning();
+  return row.id;
+}
+
+test("목록 응답이 호출자가 시스템 관리자인지 알려 준다", async () => {
+  const { GET } = await import("./route");
+
+  const admin = await seedUser("system_admin");
+  assert.equal((await (await GET(req(admin))).json()).isSystemAdmin, true);
+
+  const ordinary = await seedUser("user");
+  assert.equal((await (await GET(req(ordinary))).json()).isSystemAdmin, false);
+});
