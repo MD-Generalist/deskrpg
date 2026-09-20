@@ -14,7 +14,7 @@ import type {
   CronDeliveryTarget,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
-import { classifyGateFailure, type GateBlocker } from "@/lib/gate-failure";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import { composeDeliver, parseDeliver } from "./cron-schedule";
@@ -162,15 +162,14 @@ export default function BlueprintGallery({
         if (cancelled) return;
         setTargets([]);
         if (isCronApiError(err)) {
-          setTargetsBlocker(
-            classifyGateFailure({
-              status: err.status,
-              code: err.code,
-              message: err.message,
-              minVersion:
-                typeof err.details.minVersion === "string" ? err.details.minVersion : undefined,
-            }),
-          );
+          const blocker = classifyGateFailure({
+            status: err.status,
+            code: err.code,
+            message: err.message,
+            minVersion:
+              typeof err.details.minVersion === "string" ? err.details.minVersion : undefined,
+          });
+          if (isSetupBlocker(blocker)) setTargetsBlocker(blocker);
         }
       });
     return () => {

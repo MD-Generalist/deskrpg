@@ -12,7 +12,7 @@ import { X } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import type { CronDeliveryTarget } from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
-import { classifyGateFailure, type GateBlocker } from "@/lib/gate-failure";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import {
@@ -101,16 +101,18 @@ export default function CronEditorDialog({
         if (cancelled) return;
         setTargets([]);
         // 다만 "배달처가 없다"와 "게이트에 막혔다"는 다른 일이다. 전에는 구분 없이 삼켰다.
+        // 평범한 500·네트워크 오류까지 "설정이 더 필요하다"고 말하면 거짓 신호다 —
+        // `isSetupBlocker` 로 걸러진 넷(gateway_not_bound·plugin_absent·plugin_unauthorized·
+        // plugin_upgrade_required)만 체크리스트로 띄운다.
         if (isCronApiError(err)) {
-          setTargetsBlocker(
-            classifyGateFailure({
-              status: err.status,
-              code: err.code,
-              message: err.message,
-              minVersion:
-                typeof err.details.minVersion === "string" ? err.details.minVersion : undefined,
-            }),
-          );
+          const blocker = classifyGateFailure({
+            status: err.status,
+            code: err.code,
+            message: err.message,
+            minVersion:
+              typeof err.details.minVersion === "string" ? err.details.minVersion : undefined,
+          });
+          if (isSetupBlocker(blocker)) setTargetsBlocker(blocker);
         }
       });
     return () => {

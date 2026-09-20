@@ -16,7 +16,7 @@ import type { Socket } from "socket.io-client";
 import { useLocale, useT } from "@/lib/i18n";
 import type { CronRun } from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
-import { classifyGateFailure, type GateBlocker } from "@/lib/gate-failure";
+import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import {
@@ -287,20 +287,20 @@ export default function CronPanel({
   };
 
   // 배너는 `CronErrorNotice` 가 그대로 그린다 — 여기서는 그 옆에 체크리스트를 여는 버튼만
-  // 붙인다. `notice.kind` 가 upgrade·gateway 일 때만 보인다(다른 실패는 체크리스트로 표현하면
-  // 거짓말이 된다 — `isSetupBlocker`).
+  // 붙인다. `isSetupBlocker` 가 참인 넷(gateway_not_bound·plugin_absent·plugin_unauthorized·
+  // plugin_upgrade_required)일 때만 보인다 — 평범한 500·네트워크 오류에 "설정이 더 필요하다"고
+  // 말하면 거짓 신호가 된다. `CronEditorDialog`·`BlueprintGallery` 의 배달처 프리로드와 같은 기준.
   const gateChecklistTrigger = (err: unknown) => {
     if (!isCronApiError(err)) return null;
     const minVersion =
       typeof err.details.minVersion === "string" ? err.details.minVersion : undefined;
-    const notice = classifyCronError(err);
-    if (notice.kind !== "upgrade" && notice.kind !== "gateway") return null;
     const blocker = classifyGateFailure({
       status: err.status,
       code: err.code,
       message: err.message,
       minVersion,
     });
+    if (!isSetupBlocker(blocker)) return null;
     return (
       <button
         type="button"
