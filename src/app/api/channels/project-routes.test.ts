@@ -392,10 +392,44 @@ test("사건 수신 보드를 보관하면 그 자리가 다른 보드로 옮겨
     "사건 수신 보드가 하나가 아니면 크론 사건이 중복되거나 사라집니다",
   );
   assert.equal(rows.find((r) => r.isEventCarrier)?.boardSlug, secondSlug);
+});
+
+test("사건 수신 자리를 옮겨도 그 보드의 커서는 살려 둔다", async () => {
+  const routes = await loadRoutes();
+  const seed = await seedProjectChannel();
+  const created = await routes.projects.POST(
+    req(seed.ownerId, "POST", base(seed.channelId), { name: "둘째 프로젝트" }),
+    ctx(seed.channelId),
+  );
+  const secondSlug = ((await created.json()) as { project: ProjectView }).project.boardSlug;
+
+  // 둘째 보드가 이미 폴링해 온 위치를 흉내낸다.
+  const { db, channelKanbanBoards } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const { listChannelBoards } = await import("@/lib/kanban-boards");
+  const second = (await listChannelBoards(seed.channelId)).find((r) => r.boardSlug === secondSlug);
+  assert.ok(second);
+  await db
+    .update(channelKanbanBoards)
+    .set({ eventCursor: "CURSOR-SECOND" })
+    .where(eq(channelKanbanBoards.id, second.id));
+
+  const carrier = (await listProjects(routes, seed.ownerId, seed.channelId)).find(
+    (p) => p.isEventCarrier,
+  );
+  assert.ok(carrier);
+  await routes.archive.POST(
+    req(seed.ownerId, "POST", `${base(seed.channelId)}/${carrier.id}/archive`, {}),
+    ctx(seed.channelId, carrier.id),
+  );
+
+  const promoted = (await listChannelBoards(seed.channelId)).find((r) => r.isEventCarrier);
+  assert.equal(promoted?.boardSlug, secondSlug);
   assert.equal(
-    rows.find((r) => r.isEventCarrier)?.eventCursor,
-    null,
-    "옮긴 자리의 커서는 버려야 합니다 — 크론·아티팩트 위치가 그 커서에 없습니다",
+    promoted?.eventCursor,
+    "CURSOR-SECOND",
+    "승격하며 커서를 버리면 그 보드의 카드 사건을 한 구간 통째로 놓칩니다 — " +
+      "`a`(아티팩트)가 없는 커서는 플러그인이 '지금'으로 다루므로 버릴 이유가 없습니다",
   );
 });
 

@@ -369,8 +369,18 @@ export async function updateChannelProject(
  * **우리 쪽 상태 전이**다. 연결 행과 Hermes 보드는 남고 폴링도 계속한다. 보관된 프로젝트의 카드가
  * 아직 돌고 있을 수 있어서이고, 조용히 멈추면 "성공을 보고하면서 아무것도 안 함" 이 된다.
  *
- * 사건 수신 보드를 보관하면 다른 활성 보드로 그 자리를 옮긴다. 옮긴 행의 커서는 버린다 —
- * `c`·`a` 상태가 그 행의 커서에 없기 때문이다. 그 사이의 크론 사건은 유실되고 재생하지 않는다.
+ * 사건 수신 보드를 보관하면 다른 활성 보드로 그 자리를 옮긴다. **옮긴 행의 커서는 그대로 둔다.**
+ *
+ * 처음엔 버렸는데, 플러그인을 읽어 보니 버릴 이유가 없고 버리면 손해였다(2026-09-21 정정).
+ * - `k`(그 보드의 칸반 위치)는 그 행이 폴링해 온 진짜 위치다. 버리면 그 보드의 카드 사건을
+ *   한 구간 통째로 놓친다 — 바로 그 "화면은 멀쩡한데 카드만 안 움직이는" 실패다.
+ * - `c`(크론)는 비-carrier 행의 커서에도 **있다**. 플러그인의 `collect` 는 `include` 와 무관하게
+ *   늘 `cron_tail` 을 돌려 `c` 를 전진시킨다(우리가 그 사건을 버렸을 뿐이다).
+ * - `a`(아티팩트)만 없는데, 플러그인이 그 경우를 안전하게 다룬다. `artifact_position` 은 커서에
+ *   `a` 키가 없으면 **지금 max(id)** 를 돌려준다(`events.py:663-673`, "과거 사건을 폭포처럼 다시
+ *   주지 않는다"). 그래서 승격 뒤 첫 `include=artifacts` 호출이 과거를 재생하지 않는다.
+ *
+ * 자가 복구(`ensureChannelCarrier`)도 같은 이유로 커서를 유지한다 — 두 경로가 같은 규칙이다.
  */
 export async function archiveChannelProject(
   channelId: string,
@@ -407,7 +417,7 @@ export async function archiveChannelProject(
     try {
       await db
         .update(channelKanbanBoards)
-        .set({ isEventCarrier: true, eventCursor: null, updatedAt: now })
+        .set({ isEventCarrier: true, updatedAt: now })
         .where(eq(channelKanbanBoards.id, next.id));
     } catch (err) {
       await db
