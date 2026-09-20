@@ -2405,6 +2405,12 @@ const en: Record<string, string> = {
   "errors.setupBadOrigin":
     "Requests from another site are not accepted. Try again from this screen.",
   "errors.assigneeNotInChannel": "That employee is not working in this channel.",
+  "errors.approvalNotFound": "That approval request was not found.",
+  "errors.approvalAlreadyDecided": "This approval has already been decided.",
+  "errors.invalidDecision": "The decision value is not valid.",
+  "errors.invalidTargets": "The approval target list is not valid.",
+  "errors.targetNotInApproval": "That task is not part of this approval.",
+  "errors.targetDuplicated": "The same task was specified twice.",
   "errors.noTasksCreated": "No task could be created, so no approval was requested.",
   "errors.parentFailed": "A prerequisite task could not be created, so this one was skipped.",
   "errors.forbidden": "You do not have permission to do that",

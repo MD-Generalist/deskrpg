@@ -2426,6 +2426,12 @@ const ja: Record<string, string> = {
   "errors.setupBadOrigin":
     "他のサイトからのリクエストは受け付けません。この画面からやり直してください。",
   "errors.assigneeNotInChannel": "担当に指定した社員はこのチャンネルで勤務していません。",
+  "errors.approvalNotFound": "その承認依頼が見つかりません。",
+  "errors.approvalAlreadyDecided": "この承認はすでに決定済みです。",
+  "errors.invalidDecision": "決定の値が正しくありません。",
+  "errors.invalidTargets": "承認対象のリストが正しくありません。",
+  "errors.targetNotInApproval": "この承認に含まれないタスクです。",
+  "errors.targetDuplicated": "同じタスクを二度指定しました。",
   "errors.noTasksCreated": "タスクを一つも作成できなかったため、承認依頼は作成されませんでした。",
   "errors.parentFailed": "先行タスクを作成できなかったため、このタスクも作成されませんでした。",
   "errors.forbidden": "この操作を行う権限がありません",

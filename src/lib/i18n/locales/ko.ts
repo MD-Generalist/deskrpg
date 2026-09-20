@@ -2399,6 +2399,12 @@ const ko: Record<string, string> = {
   "errors.setupBadOrigin":
     "다른 사이트에서 보낸 요청은 처리하지 않습니다. 이 화면에서 다시 시도하세요.",
   "errors.assigneeNotInChannel": "담당으로 지정한 직원이 이 채널에서 일하고 있지 않습니다.",
+  "errors.approvalNotFound": "그 승인 요청을 찾을 수 없습니다.",
+  "errors.approvalAlreadyDecided": "이미 결정된 승인입니다.",
+  "errors.invalidDecision": "결정 값이 올바르지 않습니다.",
+  "errors.invalidTargets": "승인 대상 목록이 올바르지 않습니다.",
+  "errors.targetNotInApproval": "이 승인에 속하지 않은 과업입니다.",
+  "errors.targetDuplicated": "같은 과업을 두 번 지정했습니다.",
   "errors.noTasksCreated": "과업을 하나도 만들지 못해 승인 요청을 올리지 않았습니다.",
   "errors.parentFailed": "선행 과업을 만들지 못해 이 과업도 만들지 않았습니다.",
   "errors.forbidden": "이 작업을 수행할 권한이 없습니다",

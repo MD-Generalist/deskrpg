@@ -91,6 +91,12 @@ export type ErrorCode =
   | "failed_to_open_template_for_editing"
   | "unauthorized"
   | "setup_bad_origin"
+  | "approval_not_found"
+  | "approval_already_decided"
+  | "invalid_decision"
+  | "invalid_targets"
+  | "target_not_in_approval"
+  | "target_duplicated"
   | "assignee_not_in_channel"
   | "no_tasks_created"
   | "parent_failed"
@@ -303,6 +309,12 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   failed_to_open_template_for_editing: "errors.failedToOpenTemplateForEditing",
   unauthorized: "errors.unauthorized",
   setup_bad_origin: "errors.setupBadOrigin",
+  approval_not_found: "errors.approvalNotFound",
+  approval_already_decided: "errors.approvalAlreadyDecided",
+  invalid_decision: "errors.invalidDecision",
+  invalid_targets: "errors.invalidTargets",
+  target_not_in_approval: "errors.targetNotInApproval",
+  target_duplicated: "errors.targetDuplicated",
   assignee_not_in_channel: "errors.assigneeNotInChannel",
   no_tasks_created: "errors.noTasksCreated",
   parent_failed: "errors.parentFailed",
