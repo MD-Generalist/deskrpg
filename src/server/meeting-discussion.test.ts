@@ -645,3 +645,81 @@ test("요약자 범위는 회의 범위와 절대 같지 않다", () => {
     assert.notEqual(meetingSummarySessionScope(id), meetingSessionScope(id));
   }
 });
+
+test("회의가 끝나면 구조화된 결과와 요약 상태가 저장되고 방송된다", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("socket-1", calls);
+  const registry = new AdapterRegistry();
+  registry.register(recordingAdapter(["ok"]));
+  type Deps = Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"];
+  type Factory = NonNullable<Deps["createMeetingBroker"]>;
+  let callbacks!: Parameters<Factory>[1];
+  let summaryParticipants: unknown;
+  let persisted: Parameters<Deps["persistMeetingMinutes"]>[0] | undefined;
+  const outcome = {
+    decisions: ["A안 채택"],
+    followUps: [
+      {
+        title: "조사",
+        summary: null,
+        acceptance: null,
+        assigneeNpcId: "npc-1",
+        assigneeName: "NPC",
+        after: [],
+      },
+    ],
+    project: { recommended: true, name: "가격 개편", reason: null },
+  };
+  registerMeetingDiscussionHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      activeBrokers: new Map(),
+      discussionInitiators: new Map(),
+      meetingRooms: new Map([["a", { participants: new Set(["socket-1"]), messages: [] }]]),
+      players: new Map([["socket-1", { characterName: "Dante" }]]),
+      user: { userId: "u1" },
+      adapterRegistry: registry,
+      canControlMeeting: () => true,
+      getNpcConfigsForChannel: async () => [npcConfig({ adapterType: "cli" })],
+      createMeetingBroker: (_config, cb) => {
+        callbacks = cb;
+        return {
+          config: { participants: [{ npcId: "npc-1", displayName: "NPC" }] },
+          turns: [],
+          isRunning: () => true,
+          stop: () => {},
+          run: () => Promise.resolve(),
+        } as unknown as MeetingBrokerLike;
+      },
+      generateMeetingSummary: async (_adapter, _key, _topic, _transcript, participants) => {
+        summaryParticipants = participants;
+        return { keyTopics: ["가격"], conclusions: "A안", outcome, status: "ok" };
+      },
+      persistMeetingMinutes: async (input) => {
+        persisted = input;
+        return "minutes-1";
+      },
+    },
+  });
+
+  await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "가격" });
+  await callbacks.onMeetingEnd!("전문", 10);
+
+  // 담당 후보는 참석 **직원**만이다 — 사람 참석자는 넘기지 않는다.
+  assert.equal(Array.isArray(summaryParticipants), true);
+  assert.deepEqual(
+    (summaryParticipants as Array<{ npcId: string }>).map((p) => p.npcId),
+    [npcConfig({}).id],
+  );
+  assert.deepEqual(persisted?.outcome, outcome);
+  assert.equal(persisted?.summaryStatus, "ok");
+  const end = calls.find((call) => call.event === "meeting:end")?.payload as {
+    outcome: unknown;
+    summaryStatus: string;
+    minutesId: string;
+  };
+  assert.deepEqual(end.outcome, outcome);
+  assert.equal(end.summaryStatus, "ok");
+  assert.equal(end.minutesId, "minutes-1");
+});

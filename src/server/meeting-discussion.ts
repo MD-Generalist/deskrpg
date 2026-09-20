@@ -8,6 +8,11 @@ import {
   type RunMode,
 } from "../lib/conversation/conversation-engine";
 import type { Turn } from "../lib/conversation/transcript";
+import type {
+  MeetingOutcome,
+  MeetingSummaryStatus,
+  OutcomeParticipant,
+} from "../lib/meeting-outcome";
 import {
   classifyNpcDispatch,
   createHermesAdapterForNpc,
@@ -107,9 +112,12 @@ type MeetingBrokerConfig = {
   };
 };
 
+/** `outcome`·`status` 는 선택이다 — 없으면 구조화 결과 없이 성공한 요약으로 다룬다. */
 type MeetingSummary = {
   keyTopics: string[];
   conclusions: string | null;
+  outcome?: MeetingOutcome | null;
+  status?: MeetingSummaryStatus;
 };
 
 export type MeetingBrokerLike = {
@@ -164,6 +172,8 @@ type PersistMeetingMinutesInput = {
   initiatorId: string | null;
   keyTopics: string[];
   conclusions: string | null;
+  outcome?: MeetingOutcome | null;
+  summaryStatus?: MeetingSummaryStatus;
 };
 
 type RegisterMeetingDiscussionHandlersArgs = {
@@ -192,6 +202,8 @@ type RegisterMeetingDiscussionHandlersArgs = {
       sessionKey: string,
       topic: string,
       transcript: string,
+      /** 후속 업무의 담당 후보 — 회의에 참석한 직원만. */
+      participants?: OutcomeParticipant[],
     ) => Promise<MeetingSummary>;
     persistMeetingMinutes: (input: PersistMeetingMinutesInput) => Promise<string | null>;
   };
@@ -710,7 +722,13 @@ export function registerMeetingDiscussionHandlers({
         },
         onMeetingEnd: async (transcript, durationSeconds) => {
           if (activeBrokers.get(channelId) !== brokerInstance) return;
-          let summary: MeetingSummary = { keyTopics: [], conclusions: null };
+          // 요약할 직원이 없으면 실패가 아니라 건너뛴 것이다 — 다시 시도해도 같은 결과다.
+          let summary: MeetingSummary = {
+            keyTopics: [],
+            conclusions: null,
+            outcome: null,
+            status: "skipped",
+          };
           // 참가자 중 아무나 한 명에게 요약을 시킨다. 요약 세션 키는 회의 세션과 분리해
           // 요약 프롬프트가 그 NPC 의 회의 맥락에 섞이지 않게 한다.
           if (summarizerAdapter) {
@@ -722,6 +740,9 @@ export function registerMeetingDiscussionHandlers({
               summaryKey,
               topic,
               transcript,
+              meetingParticipants
+                .filter((participant) => participant.type === "npc")
+                .map((participant) => ({ npcId: participant.id, name: participant.name })),
             );
           }
 
@@ -736,6 +757,8 @@ export function registerMeetingDiscussionHandlers({
             initiatorId: discussionInitiators.get(channelId) || null,
             keyTopics: summary.keyTopics,
             conclusions: summary.conclusions,
+            outcome: summary.outcome ?? null,
+            summaryStatus: summary.status ?? "ok",
           });
 
           if (activeBrokers.get(channelId) !== brokerInstance) return;
@@ -743,6 +766,8 @@ export function registerMeetingDiscussionHandlers({
             transcript,
             keyTopics: summary.keyTopics,
             conclusions: summary.conclusions,
+            outcome: summary.outcome ?? null,
+            summaryStatus: summary.status ?? "ok",
             minutesId,
             discussion: brokerInstance.discussionState,
             participantCount: meetingParticipants.length,

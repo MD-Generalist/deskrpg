@@ -165,3 +165,47 @@ export function parseMeetingOutcome(
     },
   };
 }
+
+/**
+ * 요약 프롬프트. 담당 후보를 참석 직원 이름으로 못 박아 준다 — 모델이 고를 수 있는 이름을
+ * 알려 주지 않으면 회의에 없던 이름을 지어 낸다.
+ */
+export function buildMeetingSummaryPrompt(
+  topic: string,
+  transcript: string,
+  participants: OutcomeParticipant[],
+): string {
+  const names = participants.map((p) => p.name).join(", ") || "(없음)";
+  return `다음 회의 내용을 분석하여 JSON으로 응답하세요.
+
+회의 주제: ${topic}
+참석 직원: ${names}
+
+${transcript}
+
+응답 형식 (JSON만, 다른 텍스트 없이):
+{
+  "keyTopics": ["주제1", "주제2", "주제3"],
+  "conclusions": "결론 요약 2-3문장",
+  "decisions": ["회의에서 실제로 정해진 것 한 줄씩"],
+  "followUps": [
+    {
+      "title": "후속 업무 제목",
+      "summary": "무엇을 하는 일인지 1-2문장",
+      "acceptance": "무엇이 참이면 끝난 것인지",
+      "assignee": "참석 직원 이름 중 하나 또는 null",
+      "after": [먼저 끝나야 하는 followUps 항목의 0부터 시작하는 번호]
+    }
+  ],
+  "project": {
+    "recommended": true 또는 false,
+    "name": "묶어서 추적할 때의 프로젝트 이름",
+    "reason": "왜 여러 업무를 하나로 묶어 추적해야 하는지, 또는 왜 필요 없는지"
+  }
+}
+
+규칙:
+- 회의에서 합의되지 않은 업무를 지어내지 않는다. 후속 업무가 없으면 "followUps": [] 로 둔다.
+- "assignee" 는 위 참석 직원 이름만 쓴다. 회의에서 담당이 정해지지 않았으면 null.
+- "project.recommended" 는 후속 업무가 여럿이고 서로 이어질 때만 true.`;
+}

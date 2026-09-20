@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildMeetingSummaryPrompt,
   MEETING_OUTCOME_LIMITS,
   parseMeetingOutcome,
   type OutcomeParticipant,
@@ -145,4 +146,13 @@ test("project 가 없거나 모양이 틀리면 null", () => {
     name: null,
     reason: null,
   });
+});
+
+test("요약 프롬프트는 담당 후보를 참석 직원 이름으로 못 박는다", () => {
+  const prompt = buildMeetingSummaryPrompt("가격 개편", "소피: A안이 낫습니다", participants);
+  assert.match(prompt, /참석 직원: 소피, Noah/);
+  assert.match(prompt, /회의 주제: 가격 개편/);
+  assert.match(prompt, /소피: A안이 낫습니다/);
+  for (const key of ["decisions", "followUps", "project", "after", "acceptance"])
+    assert.ok(prompt.includes(`"${key}"`), key);
 });

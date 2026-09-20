@@ -84,6 +84,14 @@ import {
   invalidateRoomRuntimesForChannel,
 } from "./room-runtime";
 import * as chatRooms from "@/lib/chat-rooms";
+import {
+  buildMeetingSummaryPrompt,
+  parseMeetingOutcome,
+  type MeetingOutcome,
+  type MeetingSummaryStatus,
+  type OutcomeParticipant,
+  type ParsedMeetingOutcome,
+} from "@/lib/meeting-outcome";
 import { prefixReportFormat } from "@/lib/report-format";
 import { prefixUserContext, type UserContext } from "@/lib/user-context";
 import { AdapterRegistry } from "../lib/adapters/types.js";
@@ -796,26 +804,15 @@ async function generateMeetingSummary(
   sessionKey: string,
   topic: string,
   transcript: string,
-) {
-  const summaryPrompt = `다음 회의 내용을 분석하여 JSON으로 응답하세요.
-
-회의 주제: ${topic}
-
-${transcript}
-
-응답 형식 (JSON만, 다른 텍스트 없이):
-{
-  "keyTopics": ["주제1", "주제2", "주제3"],
-  "conclusions": "결론 요약 2-3문장"
-}`;
-
+  participants: OutcomeParticipant[] = [],
+): Promise<ParsedMeetingOutcome> {
   try {
     // multiParty: true — 요약은 그 NPC 의 영속 대화 세션이 아니라 일회성 실행이어야 한다.
     // 히스토리는 비운다; 트랜스크립트는 프롬프트에 이미 통째로 들어 있다.
     const { response } = await Promise.race([
       adapter.execute({
         sessionKey,
-        prompt: summaryPrompt,
+        prompt: buildMeetingSummaryPrompt(topic, transcript, participants),
         multiParty: true,
         conversationHistory: [],
       }),
@@ -823,21 +820,11 @@ ${transcript}
         setTimeout(() => reject(new Error("Summary timeout")), 60_000);
       }),
     ]);
-    const jsonMatch = (response || "").match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return { keyTopics: [], conclusions: null };
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]) as { keyTopics?: unknown; conclusions?: unknown };
-    return {
-      keyTopics: Array.isArray(parsed.keyTopics)
-        ? parsed.keyTopics.filter((topic): topic is string => typeof topic === "string")
-        : [],
-      conclusions: typeof parsed.conclusions === "string" ? parsed.conclusions : null,
-    };
+    // JSON 이 없거나 깨졌으면 `failed` 로 돌아온다 — 빈 값을 성공처럼 저장하지 않는다.
+    return parseMeetingOutcome(response || "", participants);
   } catch (err) {
     console.warn("[meeting] Summary generation failed:", err);
-    return { keyTopics: [], conclusions: null };
+    return { status: "failed", keyTopics: [], conclusions: null, outcome: null };
   }
 }
 
@@ -865,6 +852,8 @@ async function persistMeetingMinutes(input: {
   initiatorId: string | null;
   keyTopics: string[];
   conclusions: string | null;
+  outcome?: MeetingOutcome | null;
+  summaryStatus?: MeetingSummaryStatus;
 }) {
   try {
     const inserted = await db
@@ -879,6 +868,8 @@ async function persistMeetingMinutes(input: {
         initiatorId: input.initiatorId,
         keyTopics: jsonForDb(input.keyTopics),
         conclusions: input.conclusions,
+        outcomeJson: input.outcome ? jsonForDb(input.outcome) : null,
+        summaryStatus: input.summaryStatus ?? "ok",
       })
       .returning({ id: meetingMinutes.id });
 
