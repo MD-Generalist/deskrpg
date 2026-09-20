@@ -381,6 +381,10 @@ function ensureSqliteCompatibility(sqlite) {
   retireMapEditor(sqlite);
 
   applySqliteAlterStatements(sqlite, "characters", ["ALTER TABLE characters ADD COLUMN bio TEXT"]);
+  applySqliteAlterStatements(sqlite, "meeting_minutes", [
+    "ALTER TABLE meeting_minutes ADD COLUMN outcome_json TEXT",
+    "ALTER TABLE meeting_minutes ADD COLUMN summary_status TEXT NOT NULL DEFAULT 'ok'",
+  ]);
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",
     "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0",

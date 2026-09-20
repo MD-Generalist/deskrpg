@@ -622,6 +622,9 @@ export const meetingMinutes = sqliteTable(
     initiatorId: text("initiator_id").references(() => users.id, { onDelete: "set null" }),
     keyTopics: text("key_topics").notNull().default("[]"),
     conclusions: text("conclusions"),
+    // 구조화된 회의 결과(결정·후속 업무·프로젝트 권고). 초안이지 카드 사본이 아니다.
+    outcomeJson: text("outcome_json"),
+    summaryStatus: text("summary_status").notNull().default("ok"),
     createdAt: text("created_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),

@@ -334,6 +334,8 @@ const SQLITE_BASE_SCHEMA = `
       initiator_id TEXT REFERENCES users(id) ON DELETE SET NULL,
       key_topics TEXT NOT NULL DEFAULT '[]',
       conclusions TEXT,
+      outcome_json TEXT,
+      summary_status TEXT NOT NULL DEFAULT 'ok',
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_meeting_minutes_channel ON meeting_minutes(channel_id);
