@@ -104,7 +104,8 @@ export default function RoomNoticeMessage({
           <CardProposalNotice
             notice={notice}
             onResolve={(choice) => onResolveProposal?.(notice.proposalId, choice)}
-            pending={proposalPending || !onResolveProposal}
+            pending={proposalPending}
+            unavailable={!onResolveProposal}
             error={proposalError}
           />
         </div>

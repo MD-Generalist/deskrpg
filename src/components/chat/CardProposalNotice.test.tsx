@@ -181,3 +181,42 @@ test("완료 조건은 라벨을 달아 본문과 구분해 보인다", async ()
     await cleanup();
   }
 });
+
+test("처리할 수 없는 화면에서는 이유를 말한다 — 버튼만 비활성으로 두지 않는다", async () => {
+  for (const locale of LOCALES) {
+    const { host, cleanup } = await render(
+      <CardProposalNotice
+        notice={base}
+        onResolve={() => {}}
+        pending={false}
+        unavailable
+        error={null}
+      />,
+      locale,
+    );
+    const line = host.querySelector("[data-testid='card-proposal-unavailable']");
+    assert.ok(line, `${locale}: 이유 줄이 없다 — 비활성 버튼만 남으면 로딩처럼 보인다`);
+    assert.doesNotMatch(line.textContent!, /notice\.cardProposal/);
+    assert.ok(line.textContent!.trim().length > 0);
+    // 버튼은 사라지지 않고 비활성으로 남는다.
+    const buttons = [...host.querySelectorAll("button")];
+    assert.equal(buttons.length, 2);
+    assert.ok(
+      buttons.every((b) => (b as HTMLButtonElement).disabled),
+      `${locale}: 처리 불가인데 버튼이 눌린다`,
+    );
+    await cleanup();
+  }
+});
+
+test("pending 과 unavailable 은 다른 상태다 — 요청 중에는 이유 줄이 없다", async () => {
+  const { host, cleanup } = await render(
+    <CardProposalNotice notice={base} onResolve={() => {}} pending error={null} />,
+  );
+  assert.equal(host.querySelector("[data-testid='card-proposal-unavailable']"), null);
+  assert.ok(
+    [...host.querySelectorAll("button")].every((b) => (b as HTMLButtonElement).disabled),
+    "요청 중에는 버튼이 비활성이어야 한다",
+  );
+  await cleanup();
+});

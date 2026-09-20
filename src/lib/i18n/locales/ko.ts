@@ -2623,6 +2623,8 @@ const ko: Record<string, string> = {
   "notice.cardProposal.handledHere": "여기서 처리하기로 했습니다",
   "notice.cardProposal.failed": "등록하지 못했습니다: {reason}",
   "notice.cardProposal.acceptanceLabel": "완료 조건",
+  "notice.cardProposal.unavailable":
+    "이 화면에서는 제안을 처리할 수 없습니다 · 오피스 맵에서 열어 주세요",
   "notice.cardProposal.alreadyResolved": "이 제안은 이미 처리됐습니다 · 칸반에서 확인해 주세요",
   "notice.cardProposal.assigneeDropped": "담당 직원 없이 카드를 만들었습니다",
   "notice.cardProposal.inlineFollowUp": "이 건은 카드로 만들지 않고 여기서 바로 진행해 주세요.",

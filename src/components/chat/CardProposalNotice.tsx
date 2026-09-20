@@ -18,6 +18,8 @@ export interface CardProposalNoticeProps {
   onResolve: (choice: "card" | "inline") => void;
   /** 호출이 도는 중 — 버튼은 남기되 비활성. 중복 방지의 정본은 서버의 409 다. */
   pending: boolean;
+  /** 이 화면에서 제안을 처리할 수 없다(핸들러 미배선). `pending`(요청 중)과 다른 상태다. */
+  unavailable?: boolean;
   /** 서버가 거절한 이유(코드). 있으면 보이고 버튼은 그대로 둔다. */
   error: string | null;
 }
@@ -26,6 +28,7 @@ export default function CardProposalNotice({
   notice,
   onResolve,
   pending,
+  unavailable = false,
   error,
 }: CardProposalNoticeProps) {
   const t = useT();
@@ -84,10 +87,19 @@ export default function CardProposalNotice({
                 : t("notice.cardProposal.failed", { reason: error })}
             </div>
           )}
+          {unavailable && (
+            // 버튼을 비활성으로만 두면 로딩처럼 보여 사용자가 영영 기다린다 — 이유를 말한다.
+            <div
+              className="text-caption text-text-muted mt-1"
+              data-testid="card-proposal-unavailable"
+            >
+              {t("notice.cardProposal.unavailable")}
+            </div>
+          )}
           <div className="flex gap-1.5 flex-wrap mt-1">
             <button
               type="button"
-              disabled={pending}
+              disabled={pending || unavailable}
               onClick={() => onResolve("card")}
               className="px-2 py-1 rounded text-caption font-semibold bg-primary text-white disabled:opacity-50"
             >
@@ -95,7 +107,7 @@ export default function CardProposalNotice({
             </button>
             <button
               type="button"
-              disabled={pending}
+              disabled={pending || unavailable}
               onClick={() => onResolve("inline")}
               className="px-2 py-1 rounded text-caption font-semibold bg-surface-raised text-text-secondary border border-border disabled:opacity-50"
             >
