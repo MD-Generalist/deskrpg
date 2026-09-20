@@ -235,8 +235,10 @@ export async function resolveProposal<Ctx>(
     });
   } catch (error) {
     const failure = asStepFailure(error);
-    // 갈래가 비대칭이다. 카드가 있으면(`taskId`) 그 카드가 Hermes 의 정본이고 플러그인의
-    // `resolved_task_id` 도 채워져 되돌아가지 않으므로 되돌리지 않는다 — 실패만 정직하게 올린다.
+    // 갈래가 비대칭이다. 카드가 있으면(`taskId`) 되돌리지 않는다 — 그 카드가 Hermes 의
+    // 정본이고, 해소를 되돌려 사용자가 다시 고르면 같은 카드가 또 생긴다. 실패만 정직하게
+    // 올린다. (플러그인의 `resolved_task_id` 가 채워졌는지는 별개다 — 바로 위 `recordTask`
+    // 실패를 삼키므로 비어 있을 수 있고, 그래도 이 판단은 바뀌지 않는다.)
     // 카드가 없으면(`inline`, 또는 카드를 만들지 않은 갈래) 되돌릴 수 있는 유일한 반쪽 상태다:
     // 되돌려야 사용자가 다시 고르고 후속 대화 경로를 탈 수 있다.
     if (taskId === undefined) {

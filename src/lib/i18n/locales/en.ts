@@ -2632,6 +2632,7 @@ const en: Record<string, string> = {
   "notice.cardProposal.registered": "Registered as a card",
   "notice.cardProposal.handledHere": "Handled in this chat",
   "notice.cardProposal.failed": "Could not register: {reason}",
+  "notice.cardProposal.acceptanceLabel": "Acceptance",
   "notice.cardProposal.alreadyResolved":
     "This proposal was already handled · check the kanban board",
   "notice.cardProposal.assigneeDropped": "Card created without an assignee",

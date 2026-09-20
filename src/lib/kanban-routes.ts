@@ -16,8 +16,8 @@ import { NextResponse } from "next/server";
 
 import { db, gatewayResources } from "@/db";
 import { schedulePollNow } from "@/lib/automation-poll-trigger";
-import { liveResolveDeps, proposalFailureResponse } from "@/lib/card-proposals-live";
 import { resolveProposal } from "@/lib/card-proposals";
+import { liveResolveDeps, proposalFailureResponse } from "@/lib/card-proposals-live";
 import { readWorkingSnapshot } from "@/lib/automation-registry";
 import {
   cronError,

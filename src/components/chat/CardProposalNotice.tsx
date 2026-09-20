@@ -52,8 +52,10 @@ export default function CardProposalNotice({
         </div>
       )}
       {notice.acceptance && (
-        <div className="text-caption text-text-muted whitespace-pre-wrap break-words">
-          {notice.acceptance}
+        // 완료 조건은 본문이 아니다 — 라벨을 붙여 가른다(카드 본문의 `## Acceptance` 절과 같은 구분).
+        <div className="text-caption text-text-muted mt-0.5" data-testid="card-proposal-acceptance">
+          <span className="font-semibold">{t("notice.cardProposal.acceptanceLabel")}</span>{" "}
+          <span className="whitespace-pre-wrap break-words">{notice.acceptance}</span>
         </div>
       )}
 

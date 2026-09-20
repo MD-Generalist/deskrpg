@@ -39,7 +39,7 @@ function throwPluginFailure(res: Extract<PluginResponse<unknown>, { ok: false }>
  * 이 채널의 방 메시지 중 그 제안 알림 한 건. `notice_json` 은 문자열이므로 `like` 로 후보를
  * 좁히고 파싱해서 **정확히** 맞는 것만 인정한다(부분 일치로 남의 제안을 잡지 않는다).
  */
-export async function loadProposalRecord(input: {
+async function loadProposalRecord(input: {
   channelId: string;
   proposalId: string;
 }): Promise<ProposalRecord | null> {
@@ -62,7 +62,7 @@ export async function loadProposalRecord(input: {
 }
 
 /** 알림의 `resolved` 를 되쓴다. 같은 메시지의 나머지 필드는 건드리지 않는다. */
-export async function writeProposalResolved(input: {
+async function writeProposalResolved(input: {
   record: ProposalRecord;
   resolved: NonNullable<CardProposalNotice["resolved"]>;
 }): Promise<void> {

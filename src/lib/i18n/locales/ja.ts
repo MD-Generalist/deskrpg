@@ -2651,6 +2651,7 @@ const ja: Record<string, string> = {
   "notice.cardProposal.registered": "カードとして登録しました",
   "notice.cardProposal.handledHere": "このチャットで対応します",
   "notice.cardProposal.failed": "登録できませんでした: {reason}",
+  "notice.cardProposal.acceptanceLabel": "完了条件",
   "notice.cardProposal.alreadyResolved":
     "この提案はすでに処理されました · かんばんで確認してください",
   "notice.cardProposal.assigneeDropped": "担当者なしでカードを作成しました",

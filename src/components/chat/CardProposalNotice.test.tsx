@@ -162,3 +162,22 @@ test("이미 처리된 제안(409)은 코드가 아니라 무엇을 할지 안�
     await cleanup();
   }
 });
+
+test("완료 조건은 라벨을 달아 본문과 구분해 보인다", async () => {
+  const notice: Proposal = { ...base, body: "청구서를 모은다", acceptance: "표로 정리" };
+  for (const locale of LOCALES) {
+    const { host, cleanup } = await render(
+      <CardProposalNotice notice={notice} onResolve={() => {}} pending={false} error={null} />,
+      locale,
+    );
+    const line = host.querySelector("[data-testid='card-proposal-acceptance']");
+    assert.ok(line, `${locale}: 완료 조건 줄이 없다`);
+    assert.match(line.textContent!, /표로 정리/);
+    // 본문과 같은 줄에 섞이지 않는다.
+    assert.doesNotMatch(line.textContent!, /청구서를 모은다/);
+    // 라벨이 제 언어로 붙는다 — 번역 키가 새지 않는다.
+    assert.doesNotMatch(line.textContent!, /notice\.cardProposal/);
+    assert.ok(line.textContent!.replace("표로 정리", "").trim().length > 0);
+    await cleanup();
+  }
+});
