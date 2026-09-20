@@ -31,6 +31,11 @@ export type MeetingOutcomePanelProps = {
   npcs: Array<{ id: string; name: string }>;
   /** 회의 주재자·채널 소유자만 등록하고 요약을 다시 시킬 수 있다. */
   canRegister: boolean;
+  /**
+   * 연결된 플러그인이 카드를 승인 대기로 만들 수 있는가(`initial_status` capability).
+   * 못 하면 등록은 늘 실패한다 — 눌렀다가 오류를 보는 것보다 버튼을 그리지 않고 이유를 말한다.
+   */
+  registerSupported: boolean;
   registered: MeetingOutcomeRegistered | null;
   onRegister: (body: OutcomeRegistration) => Promise<void>;
   onRetrySummary: () => Promise<void>;
@@ -41,6 +46,7 @@ export default function MeetingOutcomePanel({
   summaryStatus,
   npcs,
   canRegister,
+  registerSupported,
   registered,
   onRegister,
   onRetrySummary,
@@ -124,7 +130,7 @@ export default function MeetingOutcomePanel({
           <ul className="space-y-1.5">
             {draft.items.map((item) => {
               const source = outcome.followUps[item.index];
-              const locked = Boolean(registered) || !canRegister;
+              const locked = Boolean(registered) || !canRegister || !registerSupported;
               return (
                 <li
                   key={item.index}
@@ -201,6 +207,10 @@ export default function MeetingOutcomePanel({
           {registered ? (
             <p className="text-caption text-success" data-outcome-registered>
               {t("meeting.outcome.registered", { count: registered.taskIds.length })}
+            </p>
+          ) : canRegister && !registerSupported ? (
+            <p className="text-caption text-warning" data-outcome-upgrade>
+              {t("meeting.outcome.pluginUpgradeRequired")}
             </p>
           ) : (
             canRegister && (

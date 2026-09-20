@@ -2016,6 +2016,8 @@ const zh: Record<string, string> = {
   "meeting.outcome.registering": "正在登记…",
   "meeting.outcome.registerHint": "登记后会创建卡片。批准后才会开始执行。",
   "meeting.outcome.registered": "已登记为 {count} 张卡片",
+  "meeting.outcome.pluginUpgradeRequired":
+    "已连接的插件尚不支持待批准卡片。将插件更新到 0.11.0 或更高版本后即可登记。",
   "meeting.totalTurns": "总轮数",
   "meeting.participantCount": "参与者",
   "meeting.duration": "{min}分{sec}秒",

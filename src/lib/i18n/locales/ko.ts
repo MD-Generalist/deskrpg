@@ -2069,6 +2069,8 @@ const ko: Record<string, string> = {
   "meeting.outcome.registering": "등록하는 중…",
   "meeting.outcome.registerHint": "등록하면 카드가 만들어집니다. 실행은 승인한 뒤에 시작됩니다.",
   "meeting.outcome.registered": "카드 {count}장으로 등록했습니다",
+  "meeting.outcome.pluginUpgradeRequired":
+    "연결된 플러그인이 승인 대기 카드를 아직 지원하지 않습니다. 플러그인을 0.11.0 이상으로 갱신하면 등록할 수 있습니다.",
   "meeting.totalTurns": "총 턴",
   "meeting.participantCount": "참가자",
   "meeting.duration": "{min}분 {sec}초",

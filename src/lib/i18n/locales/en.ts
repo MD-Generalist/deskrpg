@@ -2073,6 +2073,8 @@ const en: Record<string, string> = {
   "meeting.outcome.registerHint":
     "Registering creates the cards. Work starts only after you approve it.",
   "meeting.outcome.registered": "Registered as {count} cards",
+  "meeting.outcome.pluginUpgradeRequired":
+    "The connected plugin does not support approval-pending cards yet. Update the plugin to 0.11.0 or later to register.",
   "meeting.totalTurns": "Total Turns",
   "meeting.participantCount": "Participants",
   "meeting.duration": "{min}m {sec}s",

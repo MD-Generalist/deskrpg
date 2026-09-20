@@ -31,7 +31,14 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-function stubFetch(routes: Record<string, () => { status: number; body: unknown }>): Call[] {
+function stubFetch(given: Record<string, () => { status: number; body: unknown }>): Call[] {
+  const routes: typeof given = {
+    "GET /api/channels/c1/automation/status": () => ({
+      status: 200,
+      body: { capabilities: ["kanban", "initial_status"] },
+    }),
+    ...given,
+  };
   const calls: Call[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -52,7 +59,11 @@ async function mount(): Promise<HTMLElement> {
   await act(async () =>
     root.render(
       <I18nProvider initialLocale="ko">
-        <MeetingOutcomeSection minutesId="m1" npcs={[{ id: "npc-1", name: "소피" }]} />
+        <MeetingOutcomeSection
+          minutesId="m1"
+          channelId="c1"
+          npcs={[{ id: "npc-1", name: "소피" }]}
+        />
       </I18nProvider>,
     ),
   );
@@ -88,7 +99,8 @@ test("등록이 성공하면 버튼이 결과로 바뀐다", async () => {
   const el = await mount();
   await act(async () => (el.querySelector("[data-outcome-register]") as HTMLElement).click());
   await act(async () => {});
-  assert.deepEqual(calls[1].body, {
+  const posted = calls.find((call) => call.method === "POST");
+  assert.deepEqual(posted?.body, {
     tenant: { slug: "가격-개편", name: "가격 개편" },
     items: [{ index: 0, title: "조사", npcId: "npc-1", after: [] }],
   });
@@ -150,4 +162,35 @@ test("칸반 관문이 {code} 모양으로 거절해도 HTTP 상태가 아니라
   assert.ok(shown.length > 0, "오류가 보여야 한다");
   assert.ok(!/HTTP 409/.test(shown), `상태 코드가 아니라 사유를 보여야 한다: ${shown}`);
   assert.ok(Boolean(el.querySelector("[data-outcome-register]")), "버튼은 남는다");
+});
+
+test("플러그인이 initial_status 를 광고하지 않으면 등록 버튼을 그리지 않는다", async () => {
+  stubFetch({
+    "GET /api/meetings/m1": () => ({
+      status: 200,
+      body: { minutes: { outcome, summaryStatus: "ok" }, canManage: true },
+    }),
+    "GET /api/channels/c1/automation/status": () => ({
+      status: 200,
+      body: { capabilities: ["kanban", "swarm"] },
+    }),
+  });
+  const el = await mount();
+  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(Boolean(el.querySelector("[data-outcome-upgrade]")), "갱신 안내가 보여야 한다");
+});
+
+test("자동화 상태를 못 읽으면 못 하는 것으로 본다 — 실패하는 버튼을 그리지 않는다", async () => {
+  stubFetch({
+    "GET /api/meetings/m1": () => ({
+      status: 200,
+      body: { minutes: { outcome, summaryStatus: "ok" }, canManage: true },
+    }),
+    "GET /api/channels/c1/automation/status": () => ({
+      status: 409,
+      body: { code: "gateway_not_bound" },
+    }),
+  });
+  const el = await mount();
+  assert.equal(el.querySelector("[data-outcome-register]"), null);
 });

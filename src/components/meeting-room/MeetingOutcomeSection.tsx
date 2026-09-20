@@ -25,6 +25,8 @@ type Loaded = {
 
 export type MeetingOutcomeSectionProps = {
   minutesId: string;
+  /** 이 회의가 열린 채널 — 연결된 플러그인이 승인 대기 카드를 만들 수 있는지 묻는 데 쓴다. */
+  channelId: string;
   npcs: Array<{ id: string; name: string }>;
   /** 요약이 다시 만들어졌을 때 — 바깥 화면의 주제·결론 표시를 새로 고칠 기회. */
   onSummaryChanged?: (summary: { keyTopics: string[]; conclusions: string | null }) => void;
@@ -44,12 +46,32 @@ async function readError(res: Response): Promise<string> {
 
 export default function MeetingOutcomeSection({
   minutesId,
+  channelId,
   npcs,
   onSummaryChanged,
   onRegistered,
 }: MeetingOutcomeSectionProps) {
   const t = useT();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // 모르는 동안은 못 한다고 본다 — 눌러서 실패하는 버튼을 잠깐이라도 그리지 않는다.
+  const [registerSupported, setRegisterSupported] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // 스웜 버튼과 같은 길이다: 플러그인이 광고한 capability 로 판정한다(버전이 아니라).
+    void fetch(`/api/channels/${encodeURIComponent(channelId)}/automation/status`)
+      .then(async (res) => (res.ok ? ((await res.json()) as { capabilities?: string[] }) : null))
+      .then((status) => {
+        if (!cancelled)
+          setRegisterSupported(status?.capabilities?.includes("initial_status") ?? false);
+      })
+      .catch(() => {
+        // 상태를 못 읽으면 못 하는 것으로 남는다.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [channelId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +144,7 @@ export default function MeetingOutcomeSection({
       summaryStatus={loaded.summaryStatus}
       npcs={npcs}
       canRegister={loaded.canManage}
+      registerSupported={registerSupported}
       registered={registered}
       onRegister={register}
       onRetrySummary={retry}

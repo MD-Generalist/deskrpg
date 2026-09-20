@@ -2093,6 +2093,8 @@ const ja: Record<string, string> = {
   "meeting.outcome.registering": "登録中…",
   "meeting.outcome.registerHint": "登録するとカードが作成されます。実行は承認後に始まります。",
   "meeting.outcome.registered": "カード {count}枚として登録しました",
+  "meeting.outcome.pluginUpgradeRequired":
+    "接続中のプラグインは承認待ちカードにまだ対応していません。プラグインを 0.11.0 以上に更新すると登録できます。",
   "meeting.totalTurns": "総ターン数",
   "meeting.participantCount": "参加者",
   "meeting.duration": "{min}分{sec}秒",

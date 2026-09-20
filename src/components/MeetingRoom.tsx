@@ -1395,6 +1395,7 @@ export default function MeetingRoom({
                 {lastMeetingResult.minutesId && (
                   <MeetingOutcomeSection
                     minutesId={lastMeetingResult.minutesId}
+                    channelId={channelId}
                     npcs={npcs}
                     onSummaryChanged={(summary) =>
                       setLastMeetingResult((prev) => (prev ? { ...prev, ...summary } : prev))

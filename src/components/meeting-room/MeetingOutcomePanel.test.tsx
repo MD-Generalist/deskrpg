@@ -52,6 +52,7 @@ async function mount(props: Partial<MeetingOutcomePanelProps>): Promise<HTMLElem
           summaryStatus="ok"
           npcs={npcs}
           canRegister
+          registerSupported
           registered={null}
           onRegister={async () => {}}
           onRetrySummary={async () => {}}
@@ -153,4 +154,13 @@ test("등록 권한이 없으면 초안은 보이되 등록 버튼은 없다", a
   const el = await mount({ canRegister: false });
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 2);
   assert.equal(el.querySelector("[data-outcome-register]"), null);
+});
+
+test("플러그인이 승인 대기 카드를 못 만들면 버튼 대신 갱신 안내를 그리고 초안은 잠근다", async () => {
+  const el = await mount({ registerSupported: false });
+  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.match(el.querySelector("[data-outcome-upgrade]")?.textContent ?? "", /0\.11\.0/);
+  assert.equal(el.querySelectorAll("[data-outcome-item]").length, 2);
+  const firstCheckbox = el.querySelector("[data-outcome-item] input[type=checkbox]");
+  assert.equal((firstCheckbox as HTMLInputElement).disabled, true);
 });
