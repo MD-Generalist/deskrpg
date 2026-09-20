@@ -183,7 +183,9 @@ export function hostLaunch(
  */
 export const HOST_INSTALLER = String.raw`
 import hashlib, json, os, pathlib, subprocess, sys, tempfile, threading, urllib.request
-INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.sh'
+WINDOWS = sys.platform == 'win32'
+INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.ps1' if WINDOWS else 'https://hermes-agent.nousresearch.com/install.sh'
+INSTALLER_SUFFIX = '.ps1' if WINDOWS else '.sh'
 MAX_INSTALLER_BYTES = 1048576
 INSTALL_TIMEOUT = 580
 TAIL = 8192
@@ -212,18 +214,29 @@ def out(value):
     sys.stdout.write(json.dumps(value))
     raise SystemExit(0)
 try:
-    ROOT = pathlib.Path.home() / '.hermes'
+    ROOT = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
     INSTALL = ROOT / 'hermes-agent'
     if ROOT.is_symlink() or (ROOT.exists() and not ROOT.is_dir()): out({'error': 'unsafe_host_path'})
     # 업그레이드·재설치는 이 경로의 범위가 아니다. 이미 있으면 절대 손대지 않는다.
     if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
     ROOT.mkdir(parents=True, exist_ok=True)
-    import fcntl
-    fd = os.open(str(ROOT / '.deskrpg-setup.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        os.close(fd)
-        out({'error': 'host_busy'})
+    lock_path = ROOT / '.deskrpg-setup.lock'
+    if WINDOWS:
+        # O_NOFOLLOW 가 없다. 재해석 지점(심링크·정션)이면 거부한다.
+        if lock_path.is_symlink(): out({'error': 'unsafe_host_path'})
+        import msvcrt
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError:
+            os.close(fd)
+            out({'error': 'host_busy'})
+    else:
+        import fcntl; fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            out({'error': 'host_busy'})
     lock = os.fdopen(fd, 'w')
     # 잠금을 잡은 뒤 한 번 더 본다 — 경쟁하던 다른 설치가 방금 끝났을 수 있다.
     if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
@@ -235,12 +248,20 @@ try:
         out({'error': 'hermes_installer_unavailable'})
     if not body or len(body) > MAX_INSTALLER_BYTES: out({'error': 'hermes_installer_unavailable'})
     digest = hashlib.sha256(body).hexdigest()
-    handle, script = tempfile.mkstemp(prefix='.deskrpg-hermes-install-', suffix='.sh', dir=str(ROOT))
+    handle, script = tempfile.mkstemp(prefix='.deskrpg-hermes-install-', suffix=INSTALLER_SUFFIX, dir=str(ROOT))
     try:
         with os.fdopen(handle, 'wb') as stream:
             stream.write(body); stream.flush(); os.fsync(stream.fileno())
         env = {**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}
-        child = subprocess.Popen(['bash', script, '--skip-browser', '--skip-setup'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(ROOT), pass_fds=(lock.fileno(),))
+        if WINDOWS:
+            # 스위치 이름은 상류 scripts/install.ps1:15-60 실측이다. POSIX 의 --skip-browser 에
+            # 대응하는 이름은 -SkipBrowser 가 아니라 -SkipComputerUse 다.
+            argv = ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-SkipComputerUse', '-SkipSetup', '-NonInteractive']
+            extra = {}
+        else:
+            argv = ['bash', script, '--skip-browser', '--skip-setup']
+            extra = {'pass_fds': (lock.fileno(),)}
+        child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(ROOT), **extra)
         watchdog = threading.Timer(INSTALL_TIMEOUT, child.kill)
         watchdog.start()
         tail = b''
@@ -270,7 +291,8 @@ try:
         # git 은 설치 스크립트가 sudo 로 깔아 보려다 실패하면 이 문장을 남긴다(install.sh check_git 원문).
         if 'could not install git automatically' in diagnostic: out({'error': 'git_missing'})
         out({'error': 'hermes_install_failed'})
-    python = next((INSTALL / folder / 'bin' / 'python' for folder in ('venv', '.venv') if (INSTALL / folder / 'bin' / 'python').is_file()), None)
+    folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
+    python = next((INSTALL / folder / folder_name / exe for folder in ('venv', '.venv') if (INSTALL / folder / folder_name / exe).is_file()), None)
     if python is None: out({'error': 'hermes_install_failed'})
     probe = subprocess.run([str(python), '-m', 'hermes_cli.main', '--version'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
     if probe.returncode: out({'error': 'hermes_install_failed'})
@@ -285,6 +307,7 @@ except Exception:
 export const HOST_HELPER = String.raw`
 import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 import yaml
+WINDOWS = sys.platform == 'win32'
 ROOT = pathlib.Path.home() / '.hermes'
 INSTALL = ROOT / 'hermes-agent'
 sys.dont_write_bytecode = True
@@ -654,7 +677,10 @@ def atomic(path, content):
 
 def bounded(argv, env):
     # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
-    child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), pass_fds=(LOCK.fileno(),))
+    # Windows 는 pass_fds 를 지원하지 않는다. 잠금은 부모가 쥔 채로 두고 물려주지 않는다
+    # (부모가 자식보다 오래 살므로 보호 범위는 같다).
+    extra = {} if WINDOWS else {'pass_fds': (LOCK.fileno(),)}
+    child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), **extra)
     try:
         output = child.stdout.read(262145)
         if len(output) > 262144:
@@ -672,12 +698,24 @@ def main(action, candidate_id=None, option=None):
     if action in ('install','configure','restart','install-service','set-timezone','set-port','create-profile','provision-key'):
         # A host-wide advisory lock also protects against a retry from a restarted DeskRPG server.
         # Keep it inherited by the installer until the entire bounded action exits.
-        import fcntl
-        fd = os.open(str(ROOT / '.deskrpg-setup.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            fail('host_busy')
+        lock_path = ROOT / '.deskrpg-setup.lock'
+        if WINDOWS:
+            # O_NOFOLLOW 가 없다. 재해석 지점(심링크·정션)이면 거부한다.
+            if lock_path.is_symlink(): fail('unsafe_host_path')
+            import msvcrt
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            except OSError:
+                os.close(fd)
+                fail('host_busy')
+        else:
+            import fcntl
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                fail('host_busy')
         LOCK = os.fdopen(fd,'w')
     if action == 'discover':
         return discover()

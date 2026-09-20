@@ -1924,3 +1924,18 @@ test("HOST_BOOTSTRAP 은 SIGHUP 을 조건 없이 등록하지 않는다", () =>
   assert.ok(HOST_BOOTSTRAP.includes("taskkill"));
   assert.ok(HOST_BOOTSTRAP.includes("CREATE_NEW_PROCESS_GROUP"));
 });
+
+test("HOST_INSTALLER 는 두 설치 스크립트 URL 을 모두 안다", () => {
+  assert.ok(HOST_INSTALLER.includes("https://hermes-agent.nousresearch.com/install.sh"));
+  assert.ok(HOST_INSTALLER.includes("https://hermes-agent.nousresearch.com/install.ps1"));
+});
+
+test("HOST_INSTALLER 는 fcntl 을 조건 없이 import 하지 않는다", () => {
+  assert.ok(!/^\s*import fcntl\s*$/m.test(HOST_INSTALLER));
+  assert.ok(HOST_INSTALLER.includes("msvcrt"));
+});
+
+test("HOST_INSTALLER 는 win32 에서 pass_fds 를 쓰지 않는다", () => {
+  assert.ok(HOST_INSTALLER.includes("pass_fds"));
+  assert.ok(/if WINDOWS/.test(HOST_INSTALLER));
+});
