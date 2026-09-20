@@ -330,3 +330,59 @@ test("호출자가 키 순서를 바꿔 줘도 승인이 하나다", async () =>
     1,
   );
 });
+
+test("승인을 만들면 사무실 방에 시스템 알림이 남는다", async () => {
+  const { ctx, channelId } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const result = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "2건 수행할까요?",
+    requestedBy: "sophie",
+    source: { kind: "meeting", id: "m-notice" },
+    items: [{ title: "가" }, { title: "나" }],
+  });
+  assert.ok(result.ok);
+  if (!result.ok) return;
+
+  const { ensureOfficeRoom, recentRoomMessages, getChannelOwnerId } =
+    await import("@/lib/chat-rooms");
+  const ownerId = await getChannelOwnerId(channelId);
+  assert.ok(ownerId);
+  const room = await ensureOfficeRoom(channelId, ownerId!);
+  const messages = await recentRoomMessages(room.id, 20);
+  const notice = messages.map((m) => m.notice).find((n) => n?.kind === "approval_requested");
+  assert.ok(notice, "승인 알림이 방에 없다");
+  assert.deepEqual(notice, {
+    kind: "approval_requested",
+    approvalId: result.approvalId,
+    title: "2건 수행할까요?",
+    npcName: "sophie",
+    targetCount: 2,
+  });
+  const row = messages.find((m) => m.notice?.kind === "approval_requested");
+  assert.equal(row?.senderKind, "system", "사람이 시작한 묶음도 있으므로 직원 발화로 두지 않는다");
+});
+
+test("사람이 요청한 묶음은 알림에 직원 이름을 싣지 않는다", async () => {
+  const { ctx, channelId } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const { formatRequester } = await import("@/lib/approval-requester");
+  const result = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "회의에서 나온 일",
+    requestedBy: formatRequester({ kind: "user", userId: "u-1" }),
+    source: { kind: "meeting", id: "m-user" },
+    items: [{ title: "가" }],
+  });
+  assert.ok(result.ok);
+
+  const { ensureOfficeRoom, recentRoomMessages, getChannelOwnerId } =
+    await import("@/lib/chat-rooms");
+  const ownerId = await getChannelOwnerId(channelId);
+  const room = await ensureOfficeRoom(channelId, ownerId!);
+  const messages = await recentRoomMessages(room.id, 20);
+  const notice = messages.map((m) => m.notice).find((n) => n?.kind === "approval_requested");
+  assert.ok(notice && notice.kind === "approval_requested");
+  if (!notice || notice.kind !== "approval_requested") return;
+  assert.equal(notice.npcName, "", "user:<id> 를 직원 이름 자리에 넣으면 안 된다");
+});

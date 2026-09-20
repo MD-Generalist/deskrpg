@@ -27,6 +27,14 @@ export type AutomationHooks = {
   refreshPollers(): Promise<void>;
   /** 지금 "작업 중" 인 NPC 들의 스냅샷(R27). */
   getWorkingSnapshot(channelId: string): AutomationWorkingPayload[];
+  /**
+   * 이미 저장된 방 메시지를 그 방에 방송한다.
+   *
+   * DeskRPG 안에서 생기는 알림(승인 요청 등)은 Hermes 사건이 아니라 사건 싱크를 탈 수
+   * 없다. 행은 `appendRoomMessage` 가 쓰고, 이 훅은 **방송만** 한다 — 훅이 없으면 조용히
+   * 지나가되 행은 이미 DB 에 있으므로 사용자가 방을 열면 보인다.
+   */
+  emitRoomMessage(roomId: string, message: unknown): void;
 };
 
 const KEY = "__deskrpg_automation_hooks__";
@@ -59,6 +67,21 @@ export function requestRefreshPollers(): Promise<void> {
 export function readWorkingSnapshot(channelId: string): AutomationWorkingPayload[] {
   const hooks = getAutomationHooks();
   return hooks ? hooks.getWorkingSnapshot(channelId) : [];
+}
+
+/**
+ * 저장된 방 메시지를 방송한다. 훅이 없으면 조용히 no-op — **방송 실패가 알림을 만든
+ * 작업(승인 생성 등)을 실패시키면 안 된다.** 알림이 늦게 보이는 것과 승인이 안 생기는
+ * 것은 무게가 다르다.
+ */
+export function requestEmitRoomMessage(roomId: string, message: unknown): void {
+  const hooks = getAutomationHooks();
+  if (!hooks) return;
+  try {
+    hooks.emitRoomMessage(roomId, message);
+  } catch {
+    // 소켓 방송이 깨져도 호출자는 계속 간다.
+  }
 }
 
 /** 테스트 전용 — 꽂힌 훅을 비운다. */

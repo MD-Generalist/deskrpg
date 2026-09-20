@@ -38,6 +38,7 @@ import {
   type ChannelBoardRow,
   type ResolvedChannelBoard,
 } from "@/lib/kanban-boards";
+import type { RoomMessage } from "@/lib/chat-rooms-policy";
 import { broadcastRoomMessage } from "./room-socket";
 import {
   createLiveIngestDeps,
@@ -642,7 +643,12 @@ export async function startAutomationPollers(io: ChannelIo): Promise<AutomationP
   });
   // REST 라우트(칸반·크론·게이트웨이)는 `@/server/*` 를 직접 import 하지 않고 레지스트리로
   // 이 폴러를 만난다 — 소켓 서버 모듈이 Next 번들에 실리면 빌드가 깨진다.
-  registerAutomationHooks({ pollNow, refreshPollers, getWorkingSnapshot });
+  registerAutomationHooks({
+    pollNow,
+    refreshPollers,
+    getWorkingSnapshot,
+    emitRoomMessage: (roomId, message) => broadcastRoomMessage(io, roomId, message as RoomMessage),
+  });
   try {
     await live.refresh();
   } catch (err) {

@@ -45,6 +45,7 @@ before(async () => {
     },
     refreshPollers: async () => {},
     getWorkingSnapshot: () => [],
+    emitRoomMessage: () => {},
   });
 });
 

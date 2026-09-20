@@ -8,6 +8,7 @@ import {
   requestPollNow,
   requestRefreshPollers,
   resetAutomationHooksForTests,
+  requestEmitRoomMessage,
 } from "./automation-registry";
 
 afterEach(() => resetAutomationHooksForTests());
@@ -32,14 +33,34 @@ test("등록한 훅으로 위임하고, 리셋하면 다시 no-op 로 돌아간�
     getWorkingSnapshot: (channelId) => [
       { npcId: `npc-of-${channelId}`, working: true, sources: { runningCards: 1, cronRuns: 0 } },
     ],
+    emitRoomMessage: (roomId) => {
+      calls.push(`emit:${roomId}`);
+    },
   });
 
   assert.deepEqual(await requestPollNow("ch-1"), { ok: true });
   await requestRefreshPollers();
   assert.equal(readWorkingSnapshot("ch-1")[0]?.npcId, "npc-of-ch-1");
-  assert.deepEqual(calls, ["poll:ch-1", "refresh"]);
+  requestEmitRoomMessage("room-1", { id: "m1" });
+  assert.deepEqual(calls, ["poll:ch-1", "refresh", "emit:room-1"]);
 
   resetAutomationHooksForTests();
   assert.equal(await requestPollNow("ch-1"), null);
   assert.deepEqual(readWorkingSnapshot("ch-1"), []);
+  // 훅이 없어도 던지지 않는다 — 방송이 안 되는 것과 알림이 안 생기는 것은 무게가 다르다.
+  requestEmitRoomMessage("room-1", { id: "m1" });
+});
+
+test("방송이 던져도 호출자는 계속 간다", () => {
+  registerAutomationHooks({
+    pollNow: async () => null,
+    refreshPollers: async () => {},
+    getWorkingSnapshot: () => [],
+    emitRoomMessage: () => {
+      throw new Error("socket down");
+    },
+  });
+  // 던지면 승인 생성이 실패한다 — 그래서 삼킨다.
+  requestEmitRoomMessage("room-1", { id: "m1" });
+  resetAutomationHooksForTests();
 });

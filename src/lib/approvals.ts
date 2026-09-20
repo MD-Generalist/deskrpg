@@ -20,6 +20,10 @@ import type { CreateTaskBody } from "@/lib/hermes/deskrpg-plugin-types";
 import { orderApprovalBatch } from "@/lib/approval-batch-order";
 import type { KanbanChannelContext } from "@/lib/kanban-access";
 import { resolveAssignee } from "@/lib/kanban-access";
+import { requestEmitRoomMessage } from "@/lib/automation-registry";
+import { appendRoomMessage, ensureOfficeRoom } from "@/lib/chat-rooms";
+import { getChannelOwnerId } from "@/lib/chat-rooms";
+import { parseRequester } from "@/lib/approval-requester";
 
 export type ApprovalSource = {
   kind: "meeting" | "manual" | "chat_proposal";
@@ -179,6 +183,8 @@ export async function createApprovalBatch(
     }
   }
 
+  await announceApproval(ctx.channelId, approvalId, input, created.length);
+
   return {
     ok: true,
     approvalId,
@@ -222,4 +228,46 @@ export async function approvalTargetsByApproval(
     else out.set(row.approvalId, [row.taskId]);
   }
   return out;
+}
+
+/**
+ * 승인 요청을 사무실 방에 알린다.
+ *
+ * **시스템 메시지다.** 요청 주체가 사람(`user:<id>`)인 묶음을 직원 발화로 그리면 직원이
+ * 하지 않은 말을 한 것이 된다. 직원이 요청한 경우에도 "시스템이 사람에게 묻는 것" 으로
+ * 통일하고, 누가 요청했는지는 알림 본문이 `parseRequester` 로 갈라 말한다.
+ *
+ * **실패해도 던지지 않는다.** 알림이 늦게 보이는 것과 승인이 아예 안 생기는 것은 무게가
+ * 다르다. 행이 남으면 사용자가 방을 열 때 보이고, 방송만 실패하면 다음 새로고침에 보인다.
+ */
+async function announceApproval(
+  channelId: string,
+  approvalId: string,
+  input: ApprovalBatchInput,
+  targetCount: number,
+): Promise<void> {
+  try {
+    const ownerId = await getChannelOwnerId(channelId);
+    if (!ownerId) return;
+    const room = await ensureOfficeRoom(channelId, ownerId);
+    const requester = parseRequester(input.requestedBy);
+    const message = await appendRoomMessage({
+      roomId: room.id,
+      senderKind: "system",
+      senderId: null,
+      senderName: "",
+      // 로케일 무관 폴백. 문장은 보는 사람의 언어로 렌더러가 만든다.
+      content: input.title,
+      notice: {
+        kind: "approval_requested",
+        approvalId,
+        title: input.title,
+        npcName: requester.kind === "profile" ? requester.profileName : "",
+        targetCount,
+      },
+    });
+    requestEmitRoomMessage(room.id, message);
+  } catch {
+    // 알림 실패가 승인 생성을 실패시키지 않는다.
+  }
 }

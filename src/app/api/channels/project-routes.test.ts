@@ -33,6 +33,7 @@ before(async () => {
     pollNow: async () => null,
     refreshPollers: async () => {},
     getWorkingSnapshot: () => [],
+    emitRoomMessage: () => {},
   });
 });
 
