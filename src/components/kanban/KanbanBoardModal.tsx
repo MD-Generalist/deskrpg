@@ -15,6 +15,7 @@ import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gat
 import BoardSettingsPanel from "./BoardSettingsPanel";
 import KanbanColumn from "./KanbanColumn";
 import KanbanListView from "./KanbanListView";
+import KanbanMetricsPanel from "./KanbanMetricsPanel";
 import KanbanTimeline from "./KanbanTimeline";
 import KanbanViewToolbar from "./KanbanViewToolbar";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
@@ -24,6 +25,7 @@ import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-car
 import { applyFilter } from "@/lib/kanban-view-state";
 import { useProjectViewState, useTaskGroups } from "./use-project-view-state";
 import { presetWindow, type WindowPreset } from "@/lib/timeline-layout";
+import { computeOperationalMetrics } from "@/lib/kanban-metrics";
 import {
   createKanbanApi,
   toFailure,
@@ -399,6 +401,25 @@ export default function KanbanBoardModal({
       alive = false;
     };
   }, [api, blocker, timelineWindow, viewState.viewMode, viewsSupported, detailTick]);
+
+  /**
+   * 운영 지표. 타임라인과 **같은 실행 기록·같은 창**에서 계산한다 — 두 화면이 다른 수를
+   * 말하면 둘 다 신뢰를 잃는다.
+   *
+   * 승인 대기 카드 집합은 아직 비어 있다. 승인 관문(dev2)이 붙으면 그 집합을 넘긴다. 그때까지
+   * `blocked` 는 전부 오류 차단으로 읽히는데, 그게 안전한 쪽으로 틀리는 선택이다 — 승인을
+   * 두 번 요구하는 것보다 낫다.
+   */
+  const metrics = useMemo(
+    () =>
+      computeOperationalMetrics(
+        runsPage?.runs ?? [],
+        allTasks,
+        PENDING_APPROVALS_UNAVAILABLE,
+        timelineWindow,
+      ),
+    [runsPage, allTasks, timelineWindow],
+  );
 
   const byId = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
   const childrenOf = useMemo(() => resolveLinks(links, byId, "children"), [links, byId]);
@@ -810,17 +831,20 @@ export default function KanbanBoardModal({
                 onOpenChecklist={() => setChecklist(gateBlockerFromBoard(blocker))}
               />
             ) : viewState.viewMode === "timeline" ? (
-              <KanbanTimeline
-                runs={runsPage?.runs ?? []}
-                window={timelineWindow}
-                preset={timelinePreset}
-                onPresetChange={setTimelinePreset}
-                now={now}
-                truncated={runsPage?.truncated ?? false}
-                loading={runsLoading}
-                error={runsError}
-                onOpenTask={setSelectedTaskId}
-              />
+              <>
+                <KanbanTimeline
+                  runs={runsPage?.runs ?? []}
+                  window={timelineWindow}
+                  preset={timelinePreset}
+                  onPresetChange={setTimelinePreset}
+                  now={now}
+                  truncated={runsPage?.truncated ?? false}
+                  loading={runsLoading}
+                  error={runsError}
+                  onOpenTask={setSelectedTaskId}
+                  header={<KanbanMetricsPanel metrics={metrics} />}
+                />
+              </>
             ) : viewState.viewMode === "list" ? (
               <KanbanListView
                 groups={listGroups}
@@ -939,6 +963,12 @@ function resolveLinks(
   }
   return out;
 }
+
+/**
+ * 승인 관문이 붙기 전의 빈 집합. dev2 의 `approval_targets` 조회가 자리 잡으면 그 결과로
+ * 바꾼다. 비어 있는 동안 `blocked` 는 오류 차단으로 읽힌다 — 같은 결정을 두 번 묻지 않는 쪽이다.
+ */
+const PENDING_APPROVALS_UNAVAILABLE: ReadonlySet<string> = new Set();
 
 function gateBlockerFromBoard(blocker: BoardBlocker): GateBlocker | null {
   if (blocker.kind === "gateway_not_bound") return { kind: "gateway_not_bound" };

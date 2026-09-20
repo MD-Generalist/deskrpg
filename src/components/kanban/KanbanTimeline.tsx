@@ -57,6 +57,8 @@ export interface KanbanTimelineProps {
   /** 조회 실패 메시지. 있으면 그림 대신 이것을 보인다. */
   error: string | null;
   onOpenTask: (taskId: string) => void;
+  /** 그림 위에 얹는 것(운영 지표 요약). 타임라인이 내용을 모른 채 자리만 준다. */
+  header?: React.ReactNode;
 }
 
 export default function KanbanTimeline({
@@ -69,6 +71,7 @@ export default function KanbanTimeline({
   loading,
   error,
   onOpenTask,
+  header,
 }: KanbanTimelineProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -88,6 +91,7 @@ export default function KanbanTimeline({
 
   return (
     <div className="flex flex-1 flex-col overflow-auto p-2 sm:p-4">
+      {header}
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
         <div
           className="flex overflow-hidden rounded-md border border-border"
