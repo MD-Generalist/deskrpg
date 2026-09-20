@@ -75,7 +75,7 @@ const ko: Record<string, string> = {
   "common.copied": "복사됨",
 
   // Auth
-  "auth.title": "DeskRPG for Hermes",
+  "auth.title": "DeskRPG — AI Coworking Space",
   "auth.morningGreeting": "새로운 하루, 함께하는 출근길",
   "auth.morningCaption": "AI 동료가 기다리는 우리의 작은 오피스",
   "auth.subtitle": "AI 직원과 함께하는 가상 오피스",
