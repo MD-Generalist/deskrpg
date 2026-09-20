@@ -363,16 +363,32 @@ test("the real capture server ignores repository env files and listens on IPv4 l
     });
   });
 
+  // A full test run competes for the machine, so give the dev server a generous budget and stop
+  // early when the child dies — waiting out the clock on a crashed server hides the real reason.
   let health: Response | null = null;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
     try {
       health = await fetch(`http://127.0.0.1:${port}/__readme-capture/health`);
       if (health.ok) break;
     } catch {}
+    if (child.exitCode !== null || child.signalCode !== null) {
+      assert.fail(
+        `capture server exited before answering (code ${child.exitCode}, signal ${child.signalCode}): ${output}`,
+      );
+    }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   assert.ok(health?.ok, `capture server did not expose its health sentinel: ${output}`);
-  assert.deepEqual(await health.json(), {
+  const payload = await health.json();
+  // The probe frees its port before the child claims it, so another listener can slip in between.
+  // Say so instead of reporting the sentinel as wrong.
+  assert.equal(
+    (payload as { instanceId?: string }).instanceId,
+    instanceId,
+    `port ${port} answered for a different capture server; another listener took it`,
+  );
+  assert.deepEqual(payload, {
     instanceId,
     listenerAddress: "127.0.0.1",
     repositoryEnvLoaded: false,

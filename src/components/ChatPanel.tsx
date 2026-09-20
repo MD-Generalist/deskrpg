@@ -553,6 +553,7 @@ export default function ChatPanel({
                   onValueChange={updateConversationDraft}
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
                   disabled={!!npcChatInputDisabled}
+                  scope="npc"
                   disabledPlaceholder={
                     npcChatInputDisabled
                       ? (npcChatDisabledPlaceholder ?? t("chat.disconnected"))
@@ -653,6 +654,7 @@ export default function ChatPanel({
               placeholder={t("chat.placeholder")}
               disabledPlaceholder={t("chat.moveCloser")}
               disabled={!!channelChatInputDisabled}
+              scope="room"
               mentionCandidates={mentionCandidatesFor(roomState.currentRoomId)}
               autoFocus
             />

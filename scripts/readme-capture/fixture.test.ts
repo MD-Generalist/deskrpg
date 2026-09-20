@@ -4,7 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { buildOfficeEnvironment } from "../../src/game/three/office-environments";
+import { seatingMapFor } from "../../src/lib/seat-assignment";
+
 import { CAPTURE_ACCOUNT, prepareFixture, type FixtureApi } from "./fixture";
+
+// 캡처 채널이 실제로 쓰는 맵. 좌석이 바뀌면 이 테스트가 같이 움직인다.
+const captureMap = buildOfficeEnvironment("trading");
+const captureSeats = seatingMapFor({ mapData: captureMap })!;
 
 function recordingFixtureApi(calls: string[]): FixtureApi {
   return {
@@ -57,12 +64,31 @@ function recordingFixtureApi(calls: string[]): FixtureApi {
       }
       if (method === "PUT" && requestPath.startsWith("/api/npcs/npc-")) {
         const sophie = requestPath.endsWith("sophie");
-        assert.deepEqual(body, {
-          positionX: sophie ? 13 : 15,
-          positionY: sophie ? 17 : 18,
-          direction: "down",
-        });
+        const seat = body as { positionX: number; positionY: number };
+        // 좌표를 박지 않는다 — 맵이 정한 데스크 좌석 중 하나인지만 본다.
+        assert.ok(
+          captureSeats.seats.some((s) => s.col === seat.positionX && s.row === seat.positionY),
+          `NPC 자리는 데스크 좌석이어야 한다: ${JSON.stringify(seat)}`,
+        );
+        assert.equal((body as { direction: string }).direction, "down");
+        calls.push(sophie ? "seat:sophie" : "seat:noah");
         return { npc: { id: sophie ? "npc-sophie" : "npc-noah" } } as T;
+      }
+      if (method === "GET" && requestPath === "/api/channels/channel-1") {
+        calls.push("channel-detail");
+        return { channel: { id: "channel-1", mapData: captureMap, mapConfig: null } } as T;
+      }
+      if (method === "PUT" && requestPath === "/api/channels/channel-1") {
+        const config = (body as { mapConfig: { spawnCol: number; spawnRow: number } }).mapConfig;
+        // 스폰은 서 있을 수 있는 칸이어야 하고, Sophie 좌석에서 대화 사거리(1칸) 안이어야 한다.
+        assert.ok(
+          captureSeats.standing.some(
+            (tile) => tile.col === config.spawnCol && tile.row === config.spawnRow,
+          ),
+          `스폰은 설 수 있는 칸이어야 한다: ${JSON.stringify(config)}`,
+        );
+        calls.push("spawn");
+        return { channel: { id: "channel-1" } } as T;
       }
       if (method === "POST" && requestPath === "/api/channels") {
         calls.push("channel");
@@ -133,12 +159,33 @@ test("places newly hired unplaced NPCs and sets deterministic profile appearance
     },
   };
   await prepareFixture(api, "http://127.0.0.1:38642", sqlitePath);
-  assert.deepEqual(
-    writes.filter((w) => w.method === "PUT").map((w) => w.body),
-    [
-      { positionX: 13, positionY: 17, direction: "down" },
-      { positionX: 15, positionY: 18, direction: "down" },
-    ],
+  const puts = writes.filter((w) => w.method === "PUT");
+  const spawnWrite = puts.find((w) => w.path === "/api/channels/channel-1");
+  const seatWrites = puts.filter((w) => w.path.startsWith("/api/npcs/"));
+  assert.ok(spawnWrite, "스폰을 좌석 옆으로 옮긴다");
+  assert.equal(seatWrites.length, 2);
+  const spawn = (spawnWrite.body as { mapConfig: { spawnCol: number; spawnRow: number } })
+    .mapConfig;
+  for (const seat of seatWrites) {
+    const at = seat.body as { positionX: number; positionY: number; direction: string };
+    assert.ok(
+      captureSeats.seats.some((s) => s.col === at.positionX && s.row === at.positionY),
+      `맵이 정한 데스크 좌석이어야 한다: ${JSON.stringify(at)}`,
+    );
+    assert.equal(at.direction, "down");
+  }
+  const sophieSeat = seatWrites[0].body as { positionX: number; positionY: number };
+  const noahSeat = seatWrites[1].body as { positionX: number; positionY: number };
+  // 대화 사거리는 64px(2칸) — Noah 가 스폰 옆이어야 방 입력이 열린 채로 캡처가 시작된다.
+  assert.ok(
+    Math.abs(spawn.spawnCol - noahSeat.positionX) <= 1 &&
+      Math.abs(spawn.spawnRow - noahSeat.positionY) <= 1,
+    `스폰이 Noah 좌석 옆이어야 한다: ${JSON.stringify({ spawn, noahSeat })}`,
+  );
+  // Sophie 는 멀어야 한다 — "호출하기" 장면은 그가 걸어오는 그림이다.
+  assert.ok(
+    Math.hypot(sophieSeat.positionX - spawn.spawnCol, sophieSeat.positionY - spawn.spawnRow) > 3,
+    `Sophie 는 스폰에서 멀어야 한다: ${JSON.stringify({ spawn, sophieSeat })}`,
   );
   const appearances = writes.filter((w) => w.method === "PATCH");
   assert.equal(appearances.length, 2);
@@ -165,6 +212,10 @@ test("creates a user, character, channel, gateway, profiles and NPCs in dependen
     "group",
     "channel",
     "roster",
+    "channel-detail",
+    "spawn",
+    "seat:sophie",
+    "seat:noah",
     "board",
     "report",
   ]);
@@ -261,6 +312,10 @@ test("an interrupted run reuses the fixed account character and channel", async 
     "group",
     "channel:list",
     "roster",
+    "channel-detail",
+    "spawn",
+    "seat:sophie",
+    "seat:noah",
     "board",
     "report",
   ]);

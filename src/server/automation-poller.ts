@@ -269,10 +269,27 @@ export type PollerRegistryDeps = {
   listBoundChannelIds(): Promise<string[]>;
   isChannelBound(channelId: string): Promise<boolean>;
   intervals: { activeMs: number; idleMs: number };
+  /**
+   * 대기를 거는 방법. 테스트가 가짜 시계를 넣어 실제로 기다리지 않고 주기를 확인한다.
+   * 넣지 않으면 전역 타이머를 쓴다.
+   */
+  timers?: PollerTimers;
+};
+
+export type PollerTimers = {
+  setTimeout(handler: () => void, delayMs: number): PollerTimerHandle;
+  clearTimeout(handle: PollerTimerHandle): void;
+};
+
+export type PollerTimerHandle = { unref?: () => void };
+
+const systemTimers: PollerTimers = {
+  setTimeout: (handler, delayMs) => setTimeout(handler, delayMs),
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
 type Entry = {
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: PollerTimerHandle | null;
   active: boolean;
   running: Promise<PollOutcome> | null;
   /** 실행 중에 `pollNow` 가 또 왔다 — 끝나면 한 번 더 돈다. */
@@ -295,13 +312,14 @@ export type AutomationPoller = {
 
 export function createAutomationPoller(deps: PollerRegistryDeps): AutomationPoller {
   const entries = new Map<string, Entry>();
+  const timers = deps.timers ?? systemTimers;
 
   function schedule(channelId: string) {
     const entry = entries.get(channelId);
     if (!entry) return;
-    if (entry.timer) clearTimeout(entry.timer);
+    if (entry.timer) timers.clearTimeout(entry.timer);
     const delay = entry.active ? deps.intervals.activeMs : deps.intervals.idleMs;
-    entry.timer = setTimeout(() => {
+    entry.timer = timers.setTimeout(() => {
       entry.timer = null;
       void run(channelId);
     }, delay);
@@ -316,7 +334,7 @@ export function createAutomationPoller(deps: PollerRegistryDeps): AutomationPoll
       return entry.running;
     }
     if (entry.timer) {
-      clearTimeout(entry.timer);
+      timers.clearTimeout(entry.timer);
       entry.timer = null;
     }
     entry.running = deps
@@ -353,7 +371,7 @@ export function createAutomationPoller(deps: PollerRegistryDeps): AutomationPoll
     stop(channelId) {
       const entry = entries.get(channelId);
       if (!entry) return;
-      if (entry.timer) clearTimeout(entry.timer);
+      if (entry.timer) timers.clearTimeout(entry.timer);
       entries.delete(channelId);
     },
     has: (channelId) => entries.has(channelId),

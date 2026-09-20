@@ -61,6 +61,11 @@ function resetCaptureHistory(fixture: CaptureFixture) {
       "DELETE FROM chat_room_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE channel_id = ?)",
     ).run(fixture.channelId);
     db.prepare("DELETE FROM meeting_minutes WHERE channel_id = ?").run(fixture.channelId);
+    // 저장된 마지막 위치가 있으면 설정된 스폰을 덮는다(`office-simulation.createPlayer`).
+    // 비워야 픽스처가 잡아 둔 직원 옆자리에서 장면이 시작되고 방 입력이 열려 있다.
+    db.prepare("UPDATE channel_members SET last_x = NULL, last_y = NULL WHERE channel_id = ?").run(
+      fixture.channelId,
+    );
     db.prepare(
       "DELETE FROM chat_messages WHERE npc_id IN (SELECT id FROM npcs WHERE channel_id = ?)",
     ).run(fixture.channelId);
@@ -97,7 +102,7 @@ export async function prepareScene(page: Page, scene: CaptureScene, fixture: Cap
     // Attach passive listeners when the frontend EventBus creates its event sets.
     // No event is emitted or suppressed; the original listener dispatch is untouched.
     window.__readmeEvents = [];
-    const watched = new Set(["npc:call-to-player", "npc:movement-arrived"]);
+    const watched = new Set(["npc:call-to-player", "npc:movement-arrived", "chat:input-enabled"]);
     const originalSet = Map.prototype.set;
     Map.prototype.set = function (key, value) {
       if (watched.has(key) && value instanceof Set) {
@@ -136,7 +141,20 @@ export async function prepareScene(page: Page, scene: CaptureScene, fixture: Cap
     resetCaptureHistory(fixture);
     await enterCaptureOffice(page, fixture);
     await page.getByRole("button", { name: "전체 보기", exact: true }).click();
-    await expect(page.getByRole("textbox").last()).toHaveAttribute("contenteditable", "true");
+    // 어느 입력을 기다리는지 못박는다 — 근처 직원이 인사를 걸면 NPC 대화창이 열려
+    // "마지막 textbox" 가 방 입력이 아니게 된다.
+    const roomInput = page.locator('[data-chat-scope="room"] [contenteditable]');
+    const unlocked = Date.now() + 15_000;
+    while (Date.now() < unlocked) {
+      if ((await roomInput.getAttribute("contenteditable")) === "true") break;
+      await page.waitForTimeout(250);
+    }
+    if ((await roomInput.getAttribute("contenteditable")) !== "true") {
+      const seen = await page.evaluate(() =>
+        (window.__readmeEvents ?? []).filter((entry) => entry.event === "chat:input-enabled"),
+      );
+      throw new Error(`room input stayed locked; chat:input-enabled = ${JSON.stringify(seen)}`);
+    }
     await expect(page.getByLabel("3D performance")).toHaveCount(0);
   }
 }

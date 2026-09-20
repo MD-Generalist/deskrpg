@@ -11,6 +11,7 @@ import {
   seedUser,
   setupThrowawaySqlite,
 } from "@/test-setup/npc-seed";
+import type { PollerTimerHandle, PollerTimers } from "./automation-poller";
 
 // T5. 폴러 — 커서 저장, "지금" 토큰, unknown_cursor 복구, has_more 페이지 순회, last_error,
 // 그리고 실제 배선(createLiveIngestDeps)으로 사무실 방에 notice_json 이 남는지까지.
@@ -479,10 +480,52 @@ test("boardNameStale — 동기화 시각이 없거나 채널 수정 시각보�
   assert.equal(boardNameStale({ boardNameSyncedAt: t0 }, null), false, "채널 시각을 모르면 그대로");
 });
 
+/**
+ * 가짜 시계. 폴러의 대기를 실제 시간 대신 눈금으로 돌린다 — 머신이 바쁠 때 눈금이 밀려
+ * 주기 확인이 간헐 실패하던 것을 없앤다(B48).
+ */
+function createFakeClock() {
+  let now = 0;
+  let seq = 0;
+  const pending = new Map<number, { at: number; handler: () => void }>();
+  const timers: PollerTimers = {
+    setTimeout(handler: () => void, delayMs: number) {
+      const id = (seq += 1);
+      pending.set(id, { at: now + delayMs, handler });
+      return { id, unref() {} };
+    },
+    clearTimeout(handle: PollerTimerHandle) {
+      const id = (handle as { id?: number }).id;
+      if (id != null) pending.delete(id);
+    },
+  };
+  return {
+    timers,
+    /** 눈금을 밀고, 그 사이 걸린 대기를 시각 순서대로 깨운다. */
+    async advance(ms: number) {
+      const target = now + ms;
+      for (;;) {
+        // 폴러는 pollOnce 를 await 한 뒤에야 다음 대기를 건다 — 훑기 전에 큐를 비운다.
+        await new Promise((resolve) => setImmediate(resolve));
+        const due = [...pending.entries()]
+          .filter(([, t]) => t.at <= target)
+          .sort((a, b) => a[1].at - b[1].at)[0];
+        if (!due) break;
+        const [id, timer] = due;
+        pending.delete(id);
+        now = timer.at;
+        timer.handler();
+      }
+      now = target;
+    },
+  };
+}
+
 test("타이머 레지스트리 — 접속이 켜지면 즉시 한 바퀴, 짧은 주기; 꺼지면 긴 주기; refresh 가 표를 맞춘다", async () => {
   const { createAutomationPoller } = await import("./automation-poller");
   const calls: string[] = [];
   let bound = new Set(["a", "b"]);
+  const clock = createFakeClock();
   const poller = createAutomationPoller({
     pollOnce: async (id) => {
       calls.push(id);
@@ -491,6 +534,7 @@ test("타이머 레지스트리 — 접속이 켜지면 즉시 한 바퀴, 짧�
     listBoundChannelIds: async () => [...bound],
     isChannelBound: async (id) => bound.has(id),
     intervals: { activeMs: 15, idleMs: 10_000 },
+    timers: clock.timers,
   });
   try {
     await poller.refresh();
@@ -499,13 +543,13 @@ test("타이머 레지스트리 — 접속이 켜지면 즉시 한 바퀴, 짧�
 
     await poller.setActive("a", true);
     assert.deepEqual(calls, ["a"], "켜지면 즉시 한 바퀴");
-    await new Promise((r) => setTimeout(r, 60));
+    await clock.advance(60);
     assert.ok(calls.filter((c) => c === "a").length >= 3, `짧은 주기로 돈다: ${calls}`);
     assert.equal(calls.filter((c) => c === "b").length, 0, "b 는 긴 주기라 아직");
 
     await poller.setActive("a", false);
     const settled = calls.length;
-    await new Promise((r) => setTimeout(r, 40));
+    await clock.advance(40);
     assert.equal(calls.length, settled, "꺼지면 긴 주기로 돌아간다");
 
     const outcome = await poller.pollNow("b");

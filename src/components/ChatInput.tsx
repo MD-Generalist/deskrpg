@@ -22,6 +22,8 @@ interface ChatInputProps {
    * (채널 채팅: 출근 중 NPC, 회의: 참가 NPC). 전송값은 `@[이름]` 으로 직렬화된다.
    */
   mentionCandidates?: MentionCandidate[];
+  /** 어느 대화의 입력인지. 화면에는 보이지 않고 `data-chat-scope` 로만 나간다(캡처·e2e 가 집는다). */
+  scope?: "room" | "npc" | "meeting";
 }
 
 export default function ChatInput({
@@ -37,6 +39,7 @@ export default function ChatInput({
   showFileUpload = false,
   accentColor = "amber",
   mentionCandidates,
+  scope,
 }: ChatInputProps) {
   const t = useT();
   const [input, setInput] = useState("");
@@ -129,7 +132,7 @@ export default function ChatInput({
   const resolvedDisabledPlaceholder = disabledPlaceholder ?? t("chat.responding");
 
   return (
-    <div className="border-t border-border px-3 py-2">
+    <div className="border-t border-border px-3 py-2" data-chat-scope={scope}>
       {/* File preview */}
       {files.length > 0 && (
         <div className="flex gap-2 mb-2 flex-wrap">

@@ -211,16 +211,15 @@ for (const scene of SCENES) {
           }
         }).observe(document.body, { childList: true, subtree: true, characterData: true });
       });
+      // 모이는 그림까지 클립에 담는다 — 모인 뒤의 회의 화면만 9초 담으면 움직임이 너무 많아
+      // GIF 가 10MB 를 넘는다(실측 11.0MB, 디더링을 꺼도 안 내려갔다).
       await markClip(page, scene, async () => {
         await page.getByRole("button", { name: "회의 시작", exact: true }).click();
-        const cameraMove = async () => {
-          await page.mouse.move(350, 330);
-          for (let i = 1; i <= 48; i++) {
-            await page.mouse.move(350 + (300 * i) / 48, 330 - (35 * i) / 48);
-            await page.waitForTimeout(40);
-          }
-        };
-        await cameraMove();
+        await page.mouse.move(350, 330);
+        for (let i = 1; i <= 48; i++) {
+          await page.mouse.move(350 + (300 * i) / 48, 330 - (35 * i) / 48);
+          await page.waitForTimeout(40);
+        }
         await expect
           .poll(() => page.evaluate(() => window.__readmeSpeakers))
           .toEqual(expect.arrayContaining(["Sophie", "Noah"]));
