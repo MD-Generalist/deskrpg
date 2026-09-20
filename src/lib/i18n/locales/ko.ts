@@ -2577,6 +2577,7 @@ const ko: Record<string, string> = {
   // Kanban (T8)
   "kanban.title": "칸반 보드",
   "kanban.open": "칸반",
+  "kanban.project.pick": "프로젝트 선택",
   "kanban.newTask": "새 카드",
   "kanban.includeArchived": "보관함 보기",
   "kanban.dispatch": "지금 배정",

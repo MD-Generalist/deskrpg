@@ -2505,6 +2505,7 @@ const zh: Record<string, string> = {
   // Kanban (T8)
   "kanban.title": "看板",
   "kanban.open": "看板",
+  "kanban.project.pick": "选择项目",
   "kanban.newTask": "新建卡片",
   "kanban.includeArchived": "显示已归档",
   "kanban.dispatch": "立即派发",

@@ -72,6 +72,8 @@ async function mount(
     covered?: boolean;
     artifacts?: TaskDrawerArtifacts | null;
     artifactsRefreshTick?: number;
+    /** 헤더 선택기가 읽는 프로젝트 목록. 주지 않으면 빈 목록으로 답한다. */
+    projects?: unknown[];
   } = {},
 ) {
   // 보기 방식·필터는 채널별 localStorage 에 남는다. 한 테스트가 켠 "보관함 보기" 가 다음
@@ -86,6 +88,10 @@ async function mount(
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     calls.push(`${init?.method ?? "GET"} ${url}`);
+    // 프로젝트 목록은 헤더 선택기만 쓰는 곁가지다. 각 테스트의 handler 가 이것까지 다루게 하면
+    // "보드를 몇 번 불렀나" 같은 셈이 조용히 틀어진다 — 여기서 빈 목록으로 답하고 만다.
+    // 보드가 여럿인 화면을 보려면 그 테스트가 handler 에서 이 경로를 직접 가로채면 된다.
+    if (/\/projects(\?|$)/.test(url)) return json({ projects: props.projects ?? [] });
     return handler(url, init);
   }) as typeof fetch;
   const host = document.createElement("div");
@@ -1288,6 +1294,86 @@ test("서브프로젝트 필터는 보드와 목록 양쪽에 같게 걸린다",
       f.host.textContent?.includes("API 카드"),
       false,
       "두 표현이 다른 카드를 보이면 같은 데이터라고 할 수 없다",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 프로젝트(= 보드) 선택기 — 설계 2026-09-21 project-registry
+// ---------------------------------------------------------------------------
+
+const MAIN_PROJECT = {
+  id: "p1",
+  boardSlug: "deskrpg-main",
+  name: "기본 프로젝트",
+  status: "planned",
+  isEventCarrier: true,
+};
+const SIDE_PROJECT = {
+  id: "p2",
+  boardSlug: "deskrpg-side",
+  name: "둘째 프로젝트",
+  status: "in_progress",
+  isEventCarrier: false,
+};
+
+function plain(url: string) {
+  return url.includes("/automation/status") ? json(status()) : json(board());
+}
+
+test("보드가 하나뿐이면 선택기를 그리지 않는다", async () => {
+  const f = await mount(plain, { projects: [MAIN_PROJECT] });
+  try {
+    // 노드를 그대로 단언하지 않는다 — 실패 메시지가 DOM 트리를 직렬화하다 프로세스가 죽는다.
+    assert.equal(
+      f.host.querySelector("[data-project-picker]") === null,
+      true,
+      "고를 것이 없는데 선택기가 떴습니다",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("보드가 둘이면 선택기가 뜨고, 고른 보드가 ?board= 로 나간다", async () => {
+  const f = await mount(plain, { projects: [MAIN_PROJECT, SIDE_PROJECT] });
+  try {
+    const select = f.host.querySelector<HTMLSelectElement>("[data-project-picker]");
+    assert.ok(select, "선택기가 없습니다");
+    assert.deepEqual(
+      [...select.options].map((o) => o.value),
+      ["deskrpg-main", "deskrpg-side"],
+    );
+    assert.equal(select.value, "deskrpg-main", "기본은 사건 수신 보드입니다");
+
+    await act(async () => {
+      select.value = "deskrpg-side";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const boardCalls = f.calls.filter((c) => c.includes("/kanban/board"));
+    assert.ok(
+      boardCalls.some((c) => c.includes("board=deskrpg-side")),
+      `고른 보드가 요청에 실리지 않았습니다: ${boardCalls.join(" | ")}`,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("기본 보드를 보고 있으면 ?board= 를 붙이지 않는다 — 옛 요청과 같은 모양이다", async () => {
+  const f = await mount(plain, { projects: [MAIN_PROJECT, SIDE_PROJECT] });
+  try {
+    const boardCalls = f.calls.filter((c) => c.includes("/kanban/board"));
+    assert.ok(boardCalls.length > 0);
+    assert.ok(
+      boardCalls.every((c) => !c.includes("board=")),
+      `기본 보드인데 board= 가 붙었습니다: ${boardCalls.join(" | ")}`,
     );
   } finally {
     await f.cleanup();

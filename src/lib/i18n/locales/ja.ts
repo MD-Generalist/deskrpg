@@ -2606,6 +2606,7 @@ const ja: Record<string, string> = {
   // Kanban (T8)
   "kanban.title": "カンバンボード",
   "kanban.open": "カンバン",
+  "kanban.project.pick": "プロジェクトを選択",
   "kanban.newTask": "新しいカード",
   "kanban.includeArchived": "アーカイブを表示",
   "kanban.dispatch": "今すぐ割り当て",

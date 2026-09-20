@@ -71,6 +71,15 @@ export type CreateTaskResponse = { task: KanbanTask; warning?: string };
 
 type FetchLike = typeof fetch;
 
+/** 프로젝트 목록 한 줄 — 선택기가 쓰는 만큼만. 전체 모양은 `ProjectView`(서버). */
+export type ProjectSummary = {
+  id: string;
+  boardSlug: string;
+  name: string | null;
+  status: string;
+  isEventCarrier: boolean;
+};
+
 function base(channelId: string): string {
   return `/api/channels/${encodeURIComponent(channelId)}/kanban`;
 }
@@ -129,10 +138,22 @@ function json(method: string, body?: unknown): RequestInit {
 /**
  * 채널 하나에 묶인 호출 모음. `fetchImpl` 은 테스트용 — 기본은 전역 fetch 를 **호출 시점에**
  * 읽는다(테스트가 전역을 바꿔 끼우기 때문에 생성 시점에 붙잡으면 안 된다).
+ *
+ * `boardSlug` 를 주면 칸반 경로로 나가는 **모든** 호출에 `?board=` 가 붙는다. 호출마다 손으로
+ * 붙이지 않는 이유는, 그러면 새 호출을 더하는 사람이 잊기 때문이다 — 잊으면 조용히 기본 보드를
+ * 만지게 되고, 사용자는 다른 프로젝트를 열어 둔 채 엉뚱한 보드를 고치게 된다. 주입은 fetch 를
+ * 한 겹 감싸서 하고, `/automation/status` 처럼 칸반 경로가 아닌 곳에는 붙지 않는다.
+ *
+ * 생략하면 그 채널의 사건 수신 보드(= 기본 프로젝트)를 쓴다.
  */
-export function createKanbanApi(channelId: string, fetchImpl?: FetchLike) {
-  const f: FetchLike = (input, init) => (fetchImpl ?? globalThis.fetch)(input, init);
+export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardSlug?: string) {
   const root = base(channelId);
+  const withBoard = (url: string) => {
+    if (!boardSlug || !url.startsWith(root)) return url;
+    return `${url}${url.includes("?") ? "&" : "?"}board=${encodeURIComponent(boardSlug)}`;
+  };
+  const f: FetchLike = (input, init) =>
+    (fetchImpl ?? globalThis.fetch)(typeof input === "string" ? withBoard(input) : input, init);
   const task = (taskId: string) => `${root}/tasks/${encodeURIComponent(taskId)}`;
 
   return {
@@ -140,6 +161,15 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike) {
       request<AutomationStatus>(
         f,
         `/api/channels/${encodeURIComponent(channelId)}/automation/status`,
+      ),
+    /**
+     * 이 채널의 프로젝트(= 보드) 목록. 칸반 경로 밖이라 `?board=` 가 붙지 않는다 — 붙으면
+     * 목록을 읽을 때마다 고른 보드에 갇힌다.
+     */
+    projects: () =>
+      request<{ projects: ProjectSummary[] }>(
+        f,
+        `/api/channels/${encodeURIComponent(channelId)}/projects`,
       ),
     board: (includeArchived: boolean) =>
       request<BoardResponse>(f, `${root}/board${includeArchived ? "?include_archived=true" : ""}`),
@@ -174,8 +204,9 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike) {
       request<{ ok: true }>(f, `${root}/attachments/${encodeURIComponent(attachmentId)}`, {
         method: "DELETE",
       }),
+    // 브라우저가 직접 여는 주소라 fetch 를 거치지 않는다 — 여기만 손으로 붙인다.
     attachmentUrl: (attachmentId: string) =>
-      `${root}/attachments/${encodeURIComponent(attachmentId)}`,
+      withBoard(`${root}/attachments/${encodeURIComponent(attachmentId)}`),
     addLink: (parentId: string, childId: string) =>
       request<{ ok: true }>(
         f,

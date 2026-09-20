@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, KanbanSquare, Plus, RefreshCw, Settings, X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
+import { ProjectPicker, useSelectedBoard, type ProjectOption } from "./ProjectPicker";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
 import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
@@ -116,7 +117,13 @@ export default function KanbanBoardModal({
   covered = false,
 }: KanbanBoardModalProps) {
   const t = useT();
-  const api = useMemo(() => createKanbanApi(channelId), [channelId]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const { selected: selectedBoard, select: selectBoard } = useSelectedBoard(channelId, projects);
+  // 보드가 바뀌면 api 가 새로 만들어지고, 아래 로딩 효과가 그 보드로 다시 읽는다.
+  const api = useMemo(
+    () => createKanbanApi(channelId, undefined, selectedBoard ?? undefined),
+    [channelId, selectedBoard],
+  );
   const [status, setStatus] = useState<AutomationStatus | null>(null);
   const [board, setBoard] = useState<BoardResponse | null>(null);
   const [boardChannelId, setBoardChannelId] = useState<string | null>(null);
@@ -181,6 +188,26 @@ export default function KanbanBoardModal({
       mounted.current = false;
       moveRequestPending.current = false;
       reloadSequence.current += 1;
+    };
+  }, [channelId]);
+
+  // 프로젝트 목록은 채널에만 달렸다 — `api` 에 매달면 보드를 고를 때마다 다시 읽고,
+  // 그 결과가 다시 선택을 건드려 되돌이가 된다. 실패해도 조용히 넘긴다: 보드가 하나뿐인
+  // 채널에서는 선택기가 어차피 그려지지 않고, 목록이 없다고 칸반을 막을 이유는 없다.
+  useEffect(() => {
+    let alive = true;
+    const listApi = createKanbanApi(channelId);
+    void listApi
+      .projects()
+      .then((data) => {
+        // 모양이 예상과 다르면 빈 목록으로 본다 — 선택기 하나 때문에 칸반이 멈추면 안 된다.
+        if (alive) setProjects(Array.isArray(data?.projects) ? data.projects : []);
+      })
+      .catch(() => {
+        if (alive) setProjects([]);
+      });
+    return () => {
+      alive = false;
     };
   }, [channelId]);
 
@@ -576,6 +603,7 @@ export default function KanbanBoardModal({
             )}
           </h2>
           <div className="flex items-center gap-1.5 text-xs">
+            <ProjectPicker options={projects} selected={selectedBoard} onSelect={selectBoard} />
             <button
               type="button"
               onClick={() => openEditor({ mode: "create" })}

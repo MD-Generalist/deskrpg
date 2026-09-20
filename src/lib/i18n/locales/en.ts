@@ -2587,6 +2587,7 @@ const en: Record<string, string> = {
   // Kanban (T8)
   "kanban.title": "Kanban board",
   "kanban.open": "Kanban",
+  "kanban.project.pick": "Select project",
   "kanban.newTask": "New card",
   "kanban.includeArchived": "Show archived",
   "kanban.dispatch": "Dispatch now",
