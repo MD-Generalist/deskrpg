@@ -2519,6 +2519,8 @@ const ko: Record<string, string> = {
   "cron.title": "크론",
   "cron.tab.chat": "대화",
   "cron.tab.cron": "크론",
+  "cron.tab.cards": "카드",
+  "cards.empty": "담당 카드 없음",
   "cron.tzLabel": "{tz} 기준",
   "cron.tzUnknown": "게이트웨이 시간대 미확인",
   "cron.refresh": "새로고침",

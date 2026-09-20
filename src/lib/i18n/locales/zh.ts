@@ -2446,6 +2446,8 @@ const zh: Record<string, string> = {
   "cron.title": "定时任务",
   "cron.tab.chat": "对话",
   "cron.tab.cron": "定时任务",
+  "cron.tab.cards": "卡片",
+  "cards.empty": "没有指派的卡片",
   "cron.tzLabel": "以 {tz} 为准",
   "cron.tzUnknown": "网关时区未知",
   "cron.refresh": "刷新",

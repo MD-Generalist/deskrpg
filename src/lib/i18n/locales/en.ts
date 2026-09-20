@@ -2527,6 +2527,8 @@ const en: Record<string, string> = {
   "cron.title": "Cron",
   "cron.tab.chat": "Chat",
   "cron.tab.cron": "Cron",
+  "cron.tab.cards": "Cards",
+  "cards.empty": "No assigned cards",
   "cron.tzLabel": "{tz} time",
   "cron.tzUnknown": "Gateway timezone unknown",
   "cron.refresh": "Refresh",

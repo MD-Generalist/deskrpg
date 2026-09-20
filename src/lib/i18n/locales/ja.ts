@@ -2547,6 +2547,8 @@ const ja: Record<string, string> = {
   "cron.title": "クーロン",
   "cron.tab.chat": "会話",
   "cron.tab.cron": "クーロン",
+  "cron.tab.cards": "カード",
+  "cards.empty": "担当カードなし",
   "cron.tzLabel": "{tz} 基準",
   "cron.tzUnknown": "ゲートウェイのタイムゾーン不明",
   "cron.refresh": "更新",
