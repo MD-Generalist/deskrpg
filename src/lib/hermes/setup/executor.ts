@@ -157,13 +157,14 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
             writeFileSync(stdinFile, options.input);
             // 토큰이 담길 수 있으므로 권한을 좁힌다
             if (isWindows(process.platform)) {
-              // Windows: icacls로 명시적 ACL 설정 (chmod는 Windows에서 무효)
+              // Windows: icacls로 명시적 ACL 설정 (chmod는 Windows에서 읽기 전용 속성만 건드려 무효)
+              // %TEMP% 상속 ACL을 차단하고 현재 사용자에게만 FullControl 권한 부여
               const username = userInfo().username;
               execFileSync("icacls", [stdinFile, "/inheritance:r", `/grant:r`, `${username}:F`], {
                 stdio: "ignore",
               });
             } else {
-              // POSIX: chmod 사용
+              // POSIX: chmod 사용 (유효)
               chmodSync(stdinFile, 0o600);
             }
             stdinFd = openSync(stdinFile, "r");
@@ -194,6 +195,8 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       try {
         if (useFileStdio && stdoutFd !== undefined) {
           const stdio: any = [stdinFd !== undefined ? stdinFd : "pipe", stdoutFd, "pipe"];
+          // 주의: stdio[0]이 파이프가 아니면 child.stdin은 null이 된다.
+          // 파일 갈래에서는 :318-327에서 child.stdin을 null 체크로 가둔다.
           child = spawn(command, args, {
             stdio: stdio,
             shell: false,
@@ -311,6 +314,8 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       }
       child.stderr.on("data", (data) => collect(data, "stderr"));
       child.on("error", () => finish("command_failed"));
+      // 주의: finish()가 임시 파일을 정리한다. 이 리스너 등록 순서가 중요하다 —
+      // close 이벤트가 다른 에러(stdin 역참조 등)보다 먼저 finish()를 호출하면 정리가 보장된다.
       child.on("close", (code) => finish(undefined, code ?? 1));
       // stdin이 파일 fd면 Node는 child.stdin을 null로 둔다
       if (child.stdin) {
