@@ -23,7 +23,7 @@
   --text: #09223f; /* 브랜드 navy */
   --text-secondary: #3f4346; /* 브랜드 gray */
   --text-muted: #5f666d; /* 브랜드 gray-muted */
-  --text-dim: #7b8189;
+  --text-dim: #676d74; /* bg·surface 위 4.5:1 이상 — 더 옅게 하지 않는다. surface-raised 위에는 쓰지 않는다 */
   /* 브랜드 radius·shadow — 8px 가 상한이고 그림자는 navy-tint 전용이다. */
   --radius-sm: 2px;
   --radius-md: 4px;
