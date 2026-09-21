@@ -1146,3 +1146,45 @@ test("보고하러 온 직원의 대화창은 맨 위에 그 보고의 요약과
   const plain = await mount(withDialog(null));
   assert.equal(plain.querySelector('[data-testid="dialog-report-summary"]'), null);
 });
+
+test("모달이 떠 있으면 Esc 는 모달만 닫고 뒤의 직원 대화창은 닫지 않는다", async () => {
+  let closed = 0;
+  const node = (
+    <I18nProvider>
+      <ChatPanel
+        dialogNpc={{ npcId: "sophie", npcName: "소피" }}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {
+          closed += 1;
+        }}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={listState()}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+      />
+    </I18nProvider>
+  );
+  await mount(node);
+  const modal = document.createElement("div");
+  modal.setAttribute("aria-modal", "true");
+  document.body.appendChild(modal);
+  const esc = () =>
+    act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+  await esc();
+  assert.equal(closed, 0, "모달이 있으면 대화창은 그대로다");
+  modal.remove();
+  await esc();
+  assert.equal(closed, 1, "모달이 없으면 Esc 가 대화창을 닫는다");
+});

@@ -142,6 +142,11 @@ const MIN_WIDTH = 250;
 const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 320;
 
+/** 대화창보다 위에 모달 레이어가 떠 있는가. */
+function modalLayerOpen(): boolean {
+  return document.querySelector('[aria-modal="true"], [data-modal-overlay]') !== null;
+}
+
 export default function ChatPanel({
   presentation = "overlay",
   width: controlledWidth,
@@ -438,7 +443,10 @@ export default function ChatPanel({
   // ESC to close NPC dialog (return to channel chat)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && dialogNpc) {
+      // 가장 위 레이어만 Esc 를 먹는다. 칸반·크론 같은 모달이 열려 있으면 그 모달이 닫히고
+      // 뒤의 대화창은 그대로다 — 예전에는 둘 다 닫혀, 보고 대화창이면 "확인 없이 닫음" 으로
+      // 보고가 접혔다(스테이징 실측).
+      if (e.key === "Escape" && dialogNpc && !modalLayerOpen()) {
         onClose();
       }
     };
