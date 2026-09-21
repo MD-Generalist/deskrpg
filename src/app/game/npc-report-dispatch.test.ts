@@ -8,6 +8,8 @@ import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import {
   acknowledgedThrough,
   decideReportCall,
+  dismissReportsOf,
+  missedReportArrival,
   reportAckKey,
   npcSignature,
   reconcileReportAttempts,
@@ -431,3 +433,63 @@ test("경로 1 — 내 호출로 오던 직원을 누가 가져가면, 보낸 �
 function queueOf(messageId: string, npcId: string) {
   return [item(messageId, npcId, "2026-09-21T10:00:00.000Z")];
 }
+
+test("대화창을 확인 없이 닫으면 보고 중인 직원이 큐 전체를 막는다 — 닫힌 보고를 풀면 다음으로 넘어간다", () => {
+  const queue = [
+    item("m1", "sophie", "2026-09-21T01:00:00Z"),
+    item("m2", "oliver", "2026-09-21T02:00:00Z"),
+  ];
+  const signatures = { sophie: "waiting:mine:away", oliver: "idle:none:home" };
+  const attempts: ReportAttempt[] = [{ ...sent("m1", "idle:none:home"), acquired: true }];
+  // 재현: 소피가 도착해 대기, 시도는 "보냄" — 올리버도 부르지 않는다.
+  assert.equal(
+    decideReportCall({ queue, activeNpcId: "sophie", attempts, signatures, blocked: false }),
+    null,
+  );
+  const next = decideReportCall({
+    queue,
+    activeNpcId: null,
+    attempts: dismissReportsOf(attempts, "sophie", queue),
+    signatures,
+    blocked: false,
+  });
+  assert.equal(next?.messageId, "m2");
+});
+
+test("닫은 직원의 다른 보고도 다시 부르지 않는다", () => {
+  const queue = [
+    item("m1", "sophie", "2026-09-21T01:00:00Z"),
+    item("m2", "sophie", "2026-09-21T02:00:00Z"),
+  ];
+  const attempts = dismissReportsOf([sent("m1")], "sophie", queue);
+  assert.deepEqual(
+    attempts.map((a) => [a.messageId, a.outcome]),
+    [
+      ["m1", "dismissed"],
+      ["m2", "dismissed"],
+    ],
+  );
+  assert.equal(
+    decideReportCall({ queue, activeNpcId: null, attempts, signatures: {}, blocked: false }),
+    null,
+  );
+});
+
+test("도착 신호를 놓치고 내 곁에서 기다리는 직원은 대화창을 대신 연다 — 한 번만", () => {
+  const queue = [item("m1", "sophie", "2026-09-21T01:00:00Z")];
+  const signatures = { sophie: "waiting:mine:away" };
+  const attempts: ReportAttempt[] = [{ ...sent("m1"), acquired: true }];
+  const input = { queue, activeNpcId: "sophie", attempts, signatures, blocked: false };
+  assert.equal(missedReportArrival(input)?.messageId, "m1");
+  assert.equal(missedReportArrival({ ...input, blocked: true }), null);
+  assert.equal(
+    missedReportArrival({ ...input, attempts: [{ ...attempts[0], opened: true }] }),
+    null,
+  );
+  // 아직 걸어오는 중이면 기다린다.
+  assert.equal(
+    missedReportArrival({ ...input, signatures: { sophie: "moving-to-player:mine:away" } }),
+    null,
+  );
+  assert.equal(missedReportArrival({ ...input, activeNpcId: null }), null);
+});

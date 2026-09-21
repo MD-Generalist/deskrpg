@@ -46,13 +46,17 @@ export function reportTarget(
  *
  * - `sent` — 쏘았고 아직 거절을 받지 않았다. 같은 보고를 두 번 쏘는 것을 막는 낙관적 표시다.
  * - `rejected` — 거절됐다. 그 직원의 상태가 **그대로인 동안은** 다시 쏘지 않는다.
+ * - `dismissed` — 직원이 와서 대화창까지 열렸는데 사용자가 확인하지 않고 닫았다. 이 세션에서는
+ *   다시 부르지 않는다. 배지와 방 알림은 남으므로 사용자가 직접 열 수 있다.
  */
 export type ReportAttempt = {
   messageId: string;
-  outcome: "sent" | "rejected";
+  outcome: "sent" | "rejected" | "dismissed";
   signature: string;
   /** 보낸 호출로 직원이 실제로 내 것이 된 적이 있는가. 그 뒤에 잃어야 "빼앗겼다" 로 본다. */
   acquired?: boolean;
+  /** 도착 신호를 놓쳐 이쪽에서 대화창을 대신 열었는가. 한 번만 연다. */
+  opened?: boolean;
 };
 
 /**
@@ -143,8 +147,8 @@ export function decideReportCall(input: {
   const callable = (item: ReportItem): boolean => {
     const attempt = input.attempts.find((a) => a.messageId === item.messageId);
     if (!attempt) return true;
-    // 결과를 기다리는 중이면 다시 쏘지 않는다.
-    if (attempt.outcome === "sent") return false;
+    // 결과를 기다리는 중이면 다시 쏘지 않는다. 사용자가 닫은 보고도 다시 부르지 않는다.
+    if (attempt.outcome === "sent" || attempt.outcome === "dismissed") return false;
     // 거절 — 그 직원의 상태가 바뀌었을 때만 다시 후보가 된다.
     return (input.signatures[item.npcId] ?? "unknown:none:away") !== attempt.signature;
   };
@@ -154,6 +158,53 @@ export function decideReportCall(input: {
     return callable(active) ? active : null;
   // 맨 앞이 막아도 큐 전체가 멈추면 안 된다(head-of-line blocking). 다음 후보로 넘어간다.
   return input.queue.find(callable) ?? null;
+}
+
+/**
+ * 도착했는데 대화창이 열리지 않은 보고. 있으면 화면이 대신 대화창을 연다.
+ *
+ * 대화창은 `npc:movement-arrived` 한 번에만 열린다. 직원이 오는 도중 회의가 끼어들었거나
+ * 그 신호를 놓치면 직원은 내 곁에서 `waiting` 으로 서 있고, 시도는 "보냄" 으로 남아
+ * `decideReportCall` 이 그 직원을 우선한 채 null 만 돌려 **큐 전체가 멈췄다**(스테이징 실측:
+ * 소피가 "내 호출에 대기" 로 서 있고 배지는 그대로, 다른 직원도 오지 않았다).
+ */
+export function missedReportArrival(input: {
+  queue: readonly ReportItem[];
+  activeNpcId: string | null;
+  attempts: readonly ReportAttempt[];
+  signatures: Readonly<Record<string, string>>;
+  blocked: boolean;
+}): ReportItem | null {
+  if (input.blocked || !input.activeNpcId) return null;
+  const item = nextReporter(input.queue, input.activeNpcId);
+  if (!item || item.npcId !== input.activeNpcId) return null;
+  const attempt = input.attempts.find((a) => a.messageId === item.messageId);
+  if (!attempt || attempt.outcome !== "sent" || attempt.opened) return null;
+  const signature = input.signatures[item.npcId] ?? "";
+  return signature.startsWith("waiting:mine:") ? item : null;
+}
+
+/**
+ * 보고하러 온 직원과의 대화창을 확인 없이 닫았다 — 그 직원의 밀린 보고를 이 세션에서
+ * 다시 부르지 않는다.
+ *
+ * 확인은 알림 링크(카드·크론)를 열 때만 일어난다. 그래서 대화창만 닫으면 시도가 "보냄" 으로
+ * 남고 보고 중인 직원도 그대로라 큐 전체가 멈췄다. 한 사람의 보고를 전부 묶는 이유: 하나만
+ * 풀면 같은 직원이 다음 보고로 곧바로 다시 걸어온다.
+ */
+export function dismissReportsOf(
+  attempts: readonly ReportAttempt[],
+  npcId: string,
+  queue: readonly ReportItem[],
+): ReportAttempt[] {
+  const ids = new Set(queue.filter((item) => item.npcId === npcId).map((item) => item.messageId));
+  const kept = attempts.filter((attempt) => !ids.has(attempt.messageId));
+  const dismissed = [...ids].map((messageId) => ({
+    messageId,
+    outcome: "dismissed" as const,
+    signature: "",
+  }));
+  return [...kept, ...dismissed];
 }
 
 /**
