@@ -1048,6 +1048,31 @@ test("사건이 없으면 탭을 열어 둔 채 시간이 흘러도 보드를 �
   }
 });
 
+test("탭을 닫아 둔 사이 사건이 지나가도, 같은 직원의 탭을 다시 열 때 보드는 한 번만 읽는다", async () => {
+  const originalFetch = globalThis.fetch;
+  const server = boardFetch([["주간 보고서"], ["주간 보고서"], ["주간 보고서"]]);
+  globalThis.fetch = server.fetch;
+  try {
+    const view = await mountRerender(cardsPanel({ cardsRefreshTick: 1, cardsDebounceMs: 5 }));
+    await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await settle(30);
+    assert.equal(server.urls.length, 1);
+
+    // 대화 탭으로 돌아간 사이 사건이 지나간다 — 닫힌 탭은 읽지 않는다.
+    await click(view.el.querySelector('[role="tab"][data-tab="chat"]')!);
+    await view.render(cardsPanel({ cardsRefreshTick: 2, cardsDebounceMs: 5 }));
+    await settle(30);
+    assert.equal(server.urls.length, 1, "닫힌 탭이 보드를 읽었다");
+
+    // 다시 열면 그 순간이 최신이다 — 열기 조회 하나로 끝나야 한다.
+    await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await settle(30);
+    assert.equal(server.urls.length, 2, "다시 여는 것만으로 보드를 두 번 읽는다");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("사건이 이미 지나간 뒤 탭을 열어도 보드는 한 번만 읽는다 — 그 뒤 새 사건에는 반응한다", async () => {
   const originalFetch = globalThis.fetch;
   const server = boardFetch([["주간 보고서"]]);

@@ -253,7 +253,12 @@ export default function ChatPanel({
     tick: cardsRefreshTick,
   });
   useEffect(() => {
-    if (!cardsKey) return;
+    if (!cardsKey) {
+      // 탭이 닫혔다 — 기준선을 버린다. 남겨 두면 같은 직원의 탭을 다시 열 때 "그 사이 tick 이 올랐다" 로
+      // 읽혀, 열기 조회에 더해 한 번 더 읽는다.
+      cardsAppliedRef.current = { key: null, tick: cardsRefreshTick };
+      return;
+    }
     if (cardsAppliedRef.current.key !== cardsKey) {
       // 탭을 열었거나 직원이 바뀌었다 — 위 effect 가 방금 읽었으므로 여기선 기준선만 맞춘다.
       cardsAppliedRef.current = { key: cardsKey, tick: cardsRefreshTick };
