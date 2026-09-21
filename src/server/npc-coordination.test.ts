@@ -1661,3 +1661,39 @@ test("회의로 가던 중 구동자가 사라지면 회의석을 비우고 제�
     await h.close();
   }
 });
+
+test("atReservation — 좌석 위에 정지해 있는 사람은 이동 없이도 도착으로 본다 (이동 통지와 같은 규칙)", async () => {
+  let now = 0;
+  const arrivals: string[] = [];
+  const h = await harness({
+    now: () => now,
+    onSpatialPlayerArrival: (_channel, userId) => arrivals.push(userId),
+  });
+  try {
+    const a = await h.connect("a", { userId: "seated-user", characterId: "character" });
+    const seat = { x: 128, y: 128, seatId: "128:128" };
+    // 좌석 위로 먼저 와서 멈춘다 — 이 시점에는 예약이 없어 도착 통지도 없다.
+    now += 1000;
+    await h.coord.moved(h.servers.get(a.socket.id!)!, 200, 200);
+    now += 1000;
+    await h.coord.moved(h.servers.get(a.socket.id!)!, 128, 128);
+    assert.deepEqual(arrivals, [], "예약 전에는 통지가 없어야 한다");
+    assert.equal(await h.coord.spatial.atReservation("a", a.socket.id!), false, "예약이 없다");
+
+    // 이제 그 자리를 예약한다. 더 움직이지 않으므로 이동 통지는 오지 않는다.
+    assert.equal(await h.coord.spatial.reserve("a", a.socket.id!, seat), true);
+    assert.deepEqual(arrivals, [], "움직이지 않았으니 이동 통지는 여전히 없다");
+    assert.equal(
+      await h.coord.spatial.atReservation("a", a.socket.id!),
+      true,
+      "좌석 위에 있는데 도착으로 보지 않는다 — 집결이 이동 중에서 멈춘다",
+    );
+
+    // 같은 규칙이어야 한다: 반경을 벗어나면 둘 다 도착이 아니다.
+    now += 1000;
+    await h.coord.moved(h.servers.get(a.socket.id!)!, 131, 128);
+    assert.equal(await h.coord.spatial.atReservation("a", a.socket.id!), false);
+  } finally {
+    await h.close();
+  }
+});

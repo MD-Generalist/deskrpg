@@ -279,3 +279,89 @@ test("원래 좌석이 점유돼 있으면 설 자리로 강등해 회의석을 
   assert.equal(coordinator.snapshot("a")?.phase, "idle", "복귀가 끝나면 회의가 닫힌다");
   assert.ok(published.includes("returning"));
 });
+
+// ---------------------------------------------------------------------------
+// 이미 좌석에 앉아 있는 사람은 움직이지 않아도 도착한 것이다.
+//
+// 사람의 도착 통지는 플레이어 **이동** 핸들러에서만 온다. 그래서 좌석을 새로 예약하는 순간
+// 이미 그 자리에 앉아 있고 움직이지 않으면 통지가 영영 오지 않아, 집결이 `이동 중` 에서
+// 멈췄다가 시간 초과로 깨졌다(스테이징 실측). 재접속(새 소켓)과 재시도가 모두 좌석을
+// 다시 예약하므로 같은 길로 빠진다.
+// ---------------------------------------------------------------------------
+
+/** 좌석 위에 정지해 있는 소켓을 흉내낸다. 이 하네스에서는 `playerArrived` 를 부르지 않는다. */
+function seatedHarness(seatedSockets: Set<string>) {
+  const occupied = new Map<string, string>();
+  const coordinator = createMeetingSpatialCoordinator({
+    layout: async () => ({
+      spaceId: "meeting",
+      targets: [
+        { seatId: "80:80", x: 80, y: 80 },
+        { seatId: "112:80", x: 112, y: 80 },
+      ],
+    }),
+    capture: async () => ({ x: 16, y: 16, seatId: null }),
+    reserve: async (_channel, actorId, target) => {
+      const key = `${target.x}:${target.y}`;
+      const holder = occupied.get(key);
+      if (holder && holder !== actorId) return false;
+      occupied.set(key, actorId);
+      return true;
+    },
+    move: async () => true,
+    release: async (_channel, actorId) => {
+      for (const [key, holder] of occupied) if (holder === actorId) occupied.delete(key);
+    },
+    returnTarget: async (_channel, _actorId, origin) => origin,
+    atReservation: async (_channel, socketId) => seatedSockets.has(socketId),
+    publish: () => {},
+  });
+  return coordinator;
+}
+
+function playerState(c: ReturnType<typeof seatedHarness>, userId: string) {
+  return c.snapshot("a")?.participants.find((p) => p.actorId === userId)?.state;
+}
+
+test("이미 좌석에 앉아 있는 주재자는 움직이지 않아도 착석으로 잡히고 집결이 준비된다", async () => {
+  const c = seatedHarness(new Set(["socket1"]));
+  await c.joinPlayer("a", "u1", "socket1");
+  assert.equal(playerState(c, "u1"), "seated", "예약 순간 이미 그 자리인데 이동 중으로 남는다");
+
+  const generation = await c.start("a", "u1", ["n1"]);
+  const ready = c.ready("a", generation!);
+  assert.equal(c.arrived("a", "n1", generation!), true);
+  assert.equal(await ready, true, "주재자가 착석인데 집결이 준비되지 않는다");
+  assert.equal(c.snapshot("a")?.phase, "ready");
+});
+
+test("같은 사용자가 새 소켓으로 다시 들어와 좌석에 가만히 있어도 집결이 준비된다", async () => {
+  // 처음 소켓은 걸어 들어와 착석했다.
+  const seated = new Set<string>();
+  const c = seatedHarness(seated);
+  await c.joinPlayer("a", "u1", "socket1");
+  seated.add("socket1");
+  c.playerArrived("a", "u1", "socket1");
+  assert.equal(playerState(c, "u1"), "seated");
+
+  // 연결이 끊겼다가 새 소켓으로 돌아왔다 — 화면상 여전히 좌석에 앉아 있고 움직이지 않는다.
+  seated.delete("socket1");
+  seated.add("socket2");
+  await c.joinPlayer("a", "u1", "socket2");
+  assert.equal(playerState(c, "u1"), "seated", "재접속이 착석을 이동 중으로 되돌린다");
+
+  const generation = await c.start("a", "u1", ["n1"]);
+  const ready = c.ready("a", generation!);
+  c.arrived("a", "n1", generation!);
+  assert.equal(await ready, true);
+});
+
+test("좌석에 없는 사람은 여전히 걸어 와야 한다 — 즉시 도착 처리가 거짓 착석을 만들지 않는다", async () => {
+  const c = seatedHarness(new Set());
+  await c.joinPlayer("a", "u1", "socket1");
+  assert.equal(playerState(c, "u1"), "walking");
+
+  const generation = await c.start("a", "u1", ["n1"]);
+  c.arrived("a", "n1", generation!);
+  assert.equal(c.snapshot("a")?.phase, "assembling", "주재자가 오지 않았는데 준비됐다");
+});

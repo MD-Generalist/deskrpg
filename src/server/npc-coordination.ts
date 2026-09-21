@@ -77,6 +77,15 @@ export const MAX_IDLE_NPC_CHANNELS = 256;
 const directions = new Set(["up", "down", "left", "right"]);
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
+/**
+ * 사람이 자기 예약 좌석에 도착했는가. 이동 핸들러의 도착 통지와 회의 집결의 "이미 앉아 있다"
+ * 판정이 **같은 규칙**을 써야 한다 — 둘이 갈리면 한쪽에서는 도착, 다른 쪽에서는 이동 중이 된다.
+ */
+const PLAYER_ARRIVAL_RADIUS = 2;
+const atReservationPoint = (
+  reservation: { x: number; y: number },
+  position: { x: number; y: number },
+) => distance(reservation, position) <= PLAYER_ARRIVAL_RADIUS;
 
 /** Process-local authority. DB homes and seat anchors are inputs; no pathfinding or AI calls. */
 export function createNpcCoordination(io: Server, dependencies: CoordinationDependencies) {
@@ -844,7 +853,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       if (userId) dependencies.onSpatialPlayerBlocked?.(channelId!, userId);
     }
     updateReservation(state, socket.id, { x, y });
-    if (reservation && distance(reservation, { x, y }) <= 2) {
+    if (reservation && atReservationPoint(reservation, { x, y })) {
       const userId = dependencies.getPlayer(socket.id)?.userId;
       if (userId) dependencies.onSpatialPlayerArrival?.(channelId!, userId, socket.id);
     }
@@ -1167,6 +1176,15 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       releaseActor(state, actorId);
       changed(state);
       broadcast(channelId, state);
+    },
+    async atReservation(channelId: string, socketId: string) {
+      const state = await load(channelId);
+      if (!isCurrent(state)) return false;
+      const position = state.players.get(socketId);
+      const reservation = [...state.reservations.values()].find(
+        (r) => r.actorId === socketId && r.spatial,
+      );
+      return !!position && !!reservation && atReservationPoint(reservation, position);
     },
     async returnTarget(channelId: string, actorId: string, origin: MeetingSpatialTarget) {
       const state = await load(channelId);

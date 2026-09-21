@@ -14,6 +14,11 @@ type Dependencies = {
     returning: boolean,
   ): Promise<boolean>;
   release(channelId: string, actorId: string): Promise<void>;
+  /**
+   * 그 소켓이 **지금** 자기 예약 좌석에 있는가. 이동 핸들러가 도착을 알리는 것과 같은 판정이어야 한다.
+   * 사람의 도착 통지는 이동에서만 오므로, 예약하는 순간 이미 그 자리에 앉아 있으면 이것으로 본다.
+   */
+  atReservation?(channelId: string, socketId: string): Promise<boolean>;
   returnTarget(channelId: string, actorId: string, origin: Target): Promise<Target | null>;
   publish(state: MeetingSpatialState): void;
 };
@@ -219,6 +224,14 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
           p.target = { x: target.x, y: target.y };
           p.seatId = target.seatId;
           publish(s);
+          // 이미 그 자리에 있으면 지금 도착 처리한다. 도착 통지는 **이동**에서만 오므로, 좌석에
+          // 앉아 가만히 있는 사람(재접속·재시도로 좌석을 다시 예약한 경우 포함)은 여기서 보지 않으면
+          // 영영 `이동 중` 에 남아 집결이 시간 초과로 깨진다(스테이징 실측). 세대·취소 검사는
+          // `arrived` 가 그대로 한다.
+          if (await deps.atReservation?.(channelId, socketId)) {
+            if (!current() || playerSockets.get(key) !== socketId) return true;
+            arrived(channelId, userId, s.state.generation);
+          }
           return true;
         }
       }
