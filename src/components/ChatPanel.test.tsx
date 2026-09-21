@@ -1047,3 +1047,26 @@ test("사건이 없으면 탭을 열어 둔 채 시간이 흘러도 보드를 �
     globalThis.fetch = originalFetch;
   }
 });
+
+test("사건이 이미 지나간 뒤 탭을 열어도 보드는 한 번만 읽는다 — 그 뒤 새 사건에는 반응한다", async () => {
+  const originalFetch = globalThis.fetch;
+  const server = boardFetch([["주간 보고서"]]);
+  globalThis.fetch = server.fetch;
+  try {
+    // 대화창을 열기 전에 사건이 세 번 지나갔다 — tick 은 세션 동안 오르기만 한다.
+    const view = await mountRerender(cardsPanel({ cardsRefreshTick: 3, cardsDebounceMs: 5 }));
+    await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await settle(30);
+    assert.equal(
+      server.urls.length,
+      1,
+      "탭을 여는 것만으로 보드를 두 번 읽는다 — 새 사건은 없었다",
+    );
+
+    await view.render(cardsPanel({ cardsRefreshTick: 4, cardsDebounceMs: 5 }));
+    await settle(30);
+    assert.equal(server.urls.length, 2, "탭을 연 뒤의 새 사건에는 반응해야 한다");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

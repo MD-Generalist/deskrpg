@@ -236,22 +236,35 @@ export default function ChatPanel({
   }, [loadCards]);
   /**
    * `kanban:event` 로 목록을 다시 읽는다 — 배지만 오르고 목록이 낡는 상태를 없앤다.
+   *
+   * **"tick 이 0 이 아니다" 가 아니라 "tick 이 올랐다" 에 반응해야 한다.** `kanbanRefreshTick`
+   * 은 세션 동안 오르기만 하므로, 사건이 한 번 지나간 뒤 탭을 열면 위의 첫 조회와 여기의
+   * 타이머가 겹쳐 보드를 두 번 읽는다 — 그 사이에 새 사건은 없었는데도. 이 조회는 서버에서
+   * Hermes 보드를 읽으므로 탭 열기마다 두 배다. 그래서 마지막으로 반영한 tick 을 들고 다니며
+   * 탭을 연 순간의 값을 기준선으로 삼는다(열기 = 최신).
+   *
    * **탭이 열려 있을 때만** 돈다 — 조회를 막는 것은 `loadCards` 의 `cardsKey` 검사이고,
    * 여기 같은 조건을 한 번 더 두는 것은 닫힌 탭에서 타이머를 걸지 않기 위해서다. 조회 키는
    * 그대로라 재조회 중에도 이전 목록이 남는다 — 확정되지 않은 상태를 빈 목록으로
    * 단정하지 않는다는 카드 탭의 불변식(`6b2fb198`)이 여기서 유지된다.
    */
-  const cardsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardsAppliedRef = useRef<{ key: string | null; tick: number }>({
+    key: null,
+    tick: cardsRefreshTick,
+  });
   useEffect(() => {
-    if (cardsRefreshTick === 0 || !cardsKey) return;
-    if (cardsDebounceRef.current) clearTimeout(cardsDebounceRef.current);
-    cardsDebounceRef.current = setTimeout(() => {
-      cardsDebounceRef.current = null;
+    if (!cardsKey) return;
+    if (cardsAppliedRef.current.key !== cardsKey) {
+      // 탭을 열었거나 직원이 바뀌었다 — 위 effect 가 방금 읽었으므로 여기선 기준선만 맞춘다.
+      cardsAppliedRef.current = { key: cardsKey, tick: cardsRefreshTick };
+      return;
+    }
+    if (cardsAppliedRef.current.tick === cardsRefreshTick) return;
+    const timer = setTimeout(() => {
+      cardsAppliedRef.current = { key: cardsKey, tick: cardsRefreshTick };
       loadCards();
     }, cardsDebounceMs);
-    return () => {
-      if (cardsDebounceRef.current) clearTimeout(cardsDebounceRef.current);
-    };
+    return () => clearTimeout(timer);
   }, [cardsRefreshTick, cardsDebounceMs, cardsKey, loadCards]);
   const cardsLoaded = cardsFetch?.key === cardsKey ? cardsFetch : null;
   const cardsBoard = cardsLoaded?.board ?? null;
