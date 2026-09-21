@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import {
+  axisLabelKind,
   axisTicks,
   barDurationMs,
   dependencyEdges,
@@ -231,12 +232,25 @@ test("오늘 창은 자정부터 오늘 끝까지다 — now 에서 끊으면 �
   assert.ok(win.toMs > now);
 });
 
-test("이번 주 창은 7일이고 오늘 끝에서 닫힌다", () => {
+test("지난 7일 창은 7일째 되는 날의 로컬 자정에서 열리고 오늘 끝에서 닫힌다", () => {
   const now = Date.parse("2026-09-21T14:30:00.000Z");
   const win = presetWindow("week", now);
-  assert.equal(win.toMs - win.fromMs, 7 * 24 * 3600_000);
+  const start = new Date(win.fromMs);
+  // 달력 주가 아니라 롤링 7일이다. 시작을 로컬 자정에 맞추지 않으면 일 단위 눈금이 날짜
+  // 경계에서 어긋난다(라벨이 자정이 아닌 시각을 가리킨다).
+  assert.equal(start.getHours(), 0);
+  assert.equal(start.getMinutes(), 0);
   assert.equal(new Date(win.toMs).getHours(), 23);
+  assert.equal(localNoonDayIndex(win.toMs) - localNoonDayIndex(win.fromMs), 6, "오늘을 포함해 7일");
 });
+
+/** 로컬 날짜를 정수로 — DST 가 있는 지역에서 ms 나누기로 날 수를 세면 틀린다. */
+function localNoonDayIndex(ms: number): number {
+  const d = new Date(ms);
+  return Math.round(
+    new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).getTime() / 86_400_000,
+  );
+}
 
 test("눈금은 창 길이에 따라 간격을 고르고 창 안에만 놓인다", () => {
   const hour = 3600_000;
@@ -249,6 +263,47 @@ test("눈금은 창 길이에 따라 간격을 고르고 창 안에만 놓인다
 test("아주 짧은 창에서도 눈금이 창을 넘지 않는다", () => {
   const ticks = axisTicks({ fromMs: 0, toMs: 60_000 });
   assert.ok(ticks.every((t) => t <= 60_000));
+});
+
+test("일 단위 눈금은 로컬 자정에 놓인다 — epoch 경계에 맞추면 KST 에서 09:00 에 찍힌다", () => {
+  // **창을 자정에 맞추지 않은 상태로 `axisTicks` 를 직접 부른다.** `presetWindow` 가 이제 창
+  // 시작을 로컬 자정으로 맞추기 때문에, 프리셋 창으로 이 단정을 쓰면 눈금 정렬이 틀려도 통과한다
+  // (변이로 확인했다 — 정렬을 epoch 으로 되돌렸는데 테스트가 초록이었다). 원래 결함이 드러난
+  // 모양이 바로 이것이다: 옛 주 프리셋은 7일 전의 23:59:59 에서 열렸다.
+  //
+  // 단정을 "라벨 문자열" 이 아니라 "눈금 시각의 로컬 시·분이 0:00" 으로 쓴다 — 그래야 TZ=UTC 와
+  // TZ=Asia/Seoul 에서 같은 단정이 옳게 통과한다(UTC 에서는 두 자정이 같아 결함이 안 보인다).
+  const dayEnd = new Date(Date.parse("2026-09-14T00:00:00.000Z"));
+  dayEnd.setHours(23, 59, 59, 999);
+  const win = { fromMs: dayEnd.getTime(), toMs: dayEnd.getTime() + 7 * 24 * 3600_000 };
+  const ticks = axisTicks(win);
+  assert.ok(ticks.length >= 2, `주 단위 창에 눈금이 ${ticks.length}개입니다`);
+  for (const tick of ticks) {
+    const d = new Date(tick);
+    assert.equal(d.getHours(), 0, `눈금 ${d.toString()} 이 로컬 자정이 아닙니다`);
+    assert.equal(d.getMinutes(), 0);
+  }
+});
+
+test("프리셋 창의 눈금도 로컬 자정이다", () => {
+  const now = Date.parse("2026-09-21T14:30:00.000Z");
+  for (const tick of axisTicks(presetWindow("week", now))) {
+    assert.equal(new Date(tick).getHours(), 0);
+  }
+});
+
+test("하루를 넘는 창의 눈금은 서로 다른 날이다 — 라벨이 전부 같아지지 않는다", () => {
+  const now = Date.parse("2026-09-21T14:30:00.000Z");
+  const win = presetWindow("week", now);
+  const days = axisTicks(win).map((t) => new Date(t).toDateString());
+  assert.equal(new Set(days).size, days.length, `눈금이 같은 날에 겹쳤습니다: ${days.join(", ")}`);
+  assert.equal(axisLabelKind(win), "date", "하루를 넘는 창은 날짜 라벨을 써야 합니다");
+});
+
+test("하루 이하 창은 시각 라벨을 쓴다", () => {
+  const now = Date.parse("2026-09-21T14:30:00.000Z");
+  assert.equal(axisLabelKind(presetWindow("today", now)), "time");
+  assert.equal(axisLabelKind({ fromMs: 0, toMs: 4 * 3600_000 }), "time");
 });
 
 test("길이가 0인 창은 눈금이 없다", () => {

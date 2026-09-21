@@ -2704,7 +2704,7 @@ const ko: Record<string, string> = {
   "kanban.view.timeline.hint": "타임라인 — 누가 언제 일했는가, 목표일, 의존 관계",
   "kanban.timeline.range": "기간",
   "kanban.timeline.range.today": "오늘",
-  "kanban.timeline.range.week": "이번 주",
+  "kanban.timeline.range.week": "지난 7일",
   "kanban.timeline.empty": "이 기간에 기록된 실행이 없습니다.",
   "kanban.timeline.truncated":
     "기록이 많아 최근 것만 보여 줍니다. 기간을 좁히면 전부 볼 수 있습니다.",

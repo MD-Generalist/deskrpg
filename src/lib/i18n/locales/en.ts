@@ -2716,7 +2716,7 @@ const en: Record<string, string> = {
   "kanban.view.timeline.hint": "Timeline — who worked when, target date, dependencies",
   "kanban.timeline.range": "Range",
   "kanban.timeline.range.today": "Today",
-  "kanban.timeline.range.week": "This week",
+  "kanban.timeline.range.week": "Last 7 days",
   "kanban.timeline.empty": "No runs recorded in this range.",
   "kanban.timeline.truncated":
     "Too many runs — showing the most recent. Narrow the range to see them all.",

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useLocale, useT } from "@/lib/i18n";
 import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import {
+  axisLabelKind,
   axisTicks,
   barDurationMs,
   dependencyEdges,
@@ -95,8 +96,18 @@ export default function KanbanTimeline({
   const target = useMemo(() => targetMarker(targetDate, win, now), [targetDate, win, now]);
   const edges = useMemo(() => dependencyEdges(layout.rows, links ?? []), [layout.rows, links]);
 
+  // 창이 하루를 넘으면 시:분만으로는 눈금을 구분할 수 없다 — 주 단위 창에서 라벨 일곱 개가
+  // 모두 "오전 09:00" 이던 실측 결함이 이것이다. 날짜 라벨에 요일을 붙이는 것은 주 단위 창에서
+  // "언제가 월요일인가" 가 곧 읽는 사람이 찾는 것이기 때문이다.
+  const labelKind = axisLabelKind(win);
   const clock = (ms: number) =>
-    new Date(ms).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+    labelKind === "time"
+      ? new Date(ms).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
+      : new Date(ms).toLocaleDateString(locale, {
+          month: "numeric",
+          day: "numeric",
+          weekday: "short",
+        });
   const stamp = (ms: number) => new Date(ms).toLocaleString(locale);
 
   const rowTops: number[] = [];

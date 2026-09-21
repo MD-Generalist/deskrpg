@@ -2629,7 +2629,7 @@ const zh: Record<string, string> = {
   "kanban.view.timeline.hint": "时间线 — 谁在何时工作、目标日、依赖关系",
   "kanban.timeline.range": "时间范围",
   "kanban.timeline.range.today": "今天",
-  "kanban.timeline.range.week": "本周",
+  "kanban.timeline.range.week": "最近 7 天",
   "kanban.timeline.empty": "该范围内没有运行记录。",
   "kanban.timeline.truncated": "记录过多，仅显示最近的。缩小范围可查看全部。",
   "kanban.timeline.omitted": "有 {count} 条不在该范围内，未绘制。",

@@ -2734,7 +2734,7 @@ const ja: Record<string, string> = {
   "kanban.view.timeline.hint": "タイムライン — 誰がいつ働いたか、目標日、依存関係",
   "kanban.timeline.range": "期間",
   "kanban.timeline.range.today": "今日",
-  "kanban.timeline.range.week": "今週",
+  "kanban.timeline.range.week": "過去7日",
   "kanban.timeline.empty": "この期間に記録された実行はありません。",
   "kanban.timeline.truncated":
     "記録が多いため直近のみ表示しています。期間を狭めると全件見られます。",

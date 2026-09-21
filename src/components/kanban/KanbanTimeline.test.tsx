@@ -149,13 +149,30 @@ test("기간 버튼이 선택 상태를 드러내고 바꿈을 알린다", async
   const { host, presets } = await mount({ preset: "today" });
   const buttons = [...host.querySelectorAll("button[aria-pressed]")];
   const today = buttons.find((b) => b.textContent === "Today");
-  const week = buttons.find((b) => b.textContent === "This week");
+  // 달력 주가 아니라 롤링 7일이다 — 문구도 그것을 말한다(2026-09-21 결정).
+  const week = buttons.find((b) => b.textContent === "Last 7 days");
   assert.equal(today?.getAttribute("aria-pressed"), "true");
   assert.ok(week);
   await act(async () => {
     (week as HTMLElement).click();
   });
   assert.deepEqual(presets, ["week"]);
+});
+
+test("하루를 넘는 창에서는 축 라벨이 서로 다르다 — 전부 같은 시각이 아니다", async () => {
+  // 실측 결함의 모양: 주 단위 창의 눈금 일곱 개가 모두 "오전 09:00" 이었다.
+  const from = Date.parse("2026-09-15T00:00:00.000Z");
+  const started = Math.floor((from + 3600_000) / 1000);
+  const { host } = await mount({
+    window: { fromMs: from, toMs: from + 7 * 24 * 3600_000 },
+    preset: "week",
+    runs: [run({ started_at: started, ended_at: started + 60 })],
+  });
+  const labels = [...host.querySelectorAll("svg text")]
+    .map((n) => n.textContent ?? "")
+    .filter((text) => text.length > 0);
+  assert.ok(labels.length >= 2, `축 라벨이 ${labels.length}개입니다`);
+  assert.equal(new Set(labels).size, labels.length, `축 라벨이 겹칩니다: ${labels.join(" | ")}`);
 });
 
 test("아주 짧은 실행도 보이는 폭을 갖는다", async () => {

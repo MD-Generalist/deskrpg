@@ -180,19 +180,35 @@ export function presetWindow(preset: WindowPreset, nowMs: number): TimelineWindo
   const end = new Date(nowMs);
   end.setHours(23, 59, 59, 999);
   const toMs = end.getTime();
-  if (preset === "today") {
-    const start = new Date(nowMs);
-    start.setHours(0, 0, 0, 0);
-    return { fromMs: start.getTime(), toMs };
-  }
-  return { fromMs: toMs - 7 * 24 * 3600_000, toMs };
+  if (preset === "today") return { fromMs: localDayStart(nowMs), toMs };
+  // 달력 주가 아니라 **롤링 7일**이다. 월요일 아침에 빈 화면이 되는 달력 주보다, "최근에
+  // 무슨 일이 있었나" 를 보는 이 화면에는 롤링이 맞다(2026-09-21 결정). 창 시작을 그 날의
+  // 로컬 자정에 맞춰 눈금이 날짜 경계와 어긋나지 않게 한다 — 라벨은 "지난 7일" 이다.
+  return { fromMs: localDayStart(toMs - 6 * DAY_MS), toMs };
 }
+
+/** 그 시각이 속한 날의 **로컬** 자정. 눈금 기준점과 창 시작의 단일 출처다. */
+function localDayStart(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+const DAY_MS = 24 * 3600_000;
 
 /**
  * 시간축 눈금. 창 길이에 따라 간격을 고르고, 창 안에 드는 경계만 돌려준다.
  *
  * 눈금 수를 고정하지 않는 이유는 "오늘" 이 자정 직후면 한 시간도 안 되기 때문이다 —
  * 억지로 여섯 개를 만들면 초 단위 눈금이 생긴다.
+ *
+ * **경계는 epoch 이 아니라 로컬 자정을 기준으로 센다.** epoch 배수에 맞추면 일 단위 눈금이
+ * UTC 자정에 놓여 KST 에서는 09:00 에 찍힌다 — 주 단위 창의 눈금 일곱 개가 모두 "오전 09:00"
+ * 으로 같아지는 실측 결함이 이것이었다. 30분 오프셋 시간대(예: 인도)에서는 시 단위 눈금도
+ * 같은 문제를 겪으므로 간격에 상관없이 같은 기준을 쓴다.
+ *
+ * 일 단위는 24시간을 더하지 않고 **날짜를 하나 올린다** — DST 가 있는 지역에서 고정 24시간을
+ * 더하면 하루씩 밀려 자정에서 벗어난다.
  */
 export function axisTicks(win: TimelineWindow, maxTicks = 8): number[] {
   const span = win.toMs - win.fromMs;
@@ -205,14 +221,37 @@ export function axisTicks(win: TimelineWindow, maxTicks = 8): number[] {
     3 * 3600_000,
     6 * 3600_000,
     12 * 3600_000,
-    24 * 3600_000,
+    DAY_MS,
   ];
   // 눈금은 경계이므로 개수는 `span/step + 1` 이다. 간격을 고를 때 그 +1 을 빼먹으면
   // 딱 하나가 넘친다(4시간 창에서 30분 간격 → 9개).
   const step = steps.find((s) => Math.floor(span / s) + 1 <= maxTicks) ?? steps[steps.length - 1];
   const ticks: number[] = [];
-  for (let t = Math.ceil(win.fromMs / step) * step; t <= win.toMs; t += step) ticks.push(t);
+
+  if (step === DAY_MS) {
+    const cursor = new Date(localDayStart(win.fromMs));
+    if (cursor.getTime() < win.fromMs) cursor.setDate(cursor.getDate() + 1);
+    while (cursor.getTime() <= win.toMs) {
+      ticks.push(cursor.getTime());
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return ticks;
+  }
+
+  const origin = localDayStart(win.fromMs);
+  const first = origin + Math.ceil((win.fromMs - origin) / step) * step;
+  for (let t = first; t <= win.toMs; t += step) ticks.push(t);
   return ticks;
+}
+
+/**
+ * 눈금 라벨을 시각으로 쓸지 날짜로 쓸지. 창이 하루를 넘으면 시:분만으로는 구분이 안 된다 —
+ * 주 단위 창에서 라벨 일곱 개가 모두 같은 글자였던 실측 결함이 그것이다.
+ */
+export type AxisLabelKind = "time" | "date";
+
+export function axisLabelKind(win: TimelineWindow): AxisLabelKind {
+  return win.toMs - win.fromMs > DAY_MS ? "date" : "time";
 }
 
 /** 막대 한 건의 소요(ms). 아직 안 끝났으면 창 안에서 보이는 만큼이다. */
