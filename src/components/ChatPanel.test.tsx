@@ -9,7 +9,9 @@ import { createRoot } from "react-dom/client";
 import { I18nProvider } from "@/lib/i18n";
 import type { RoomState } from "@/app/game/room-state";
 import type { RoomSummary } from "@/lib/chat-rooms-policy";
+import type { ReportItem } from "@/game/report-queue";
 import ChatPanel from "./ChatPanel";
+import ReportBadge from "./report/ReportBadge";
 import { tabFor } from "./chat/npc-tab-state";
 import { openCardTarget } from "./kanban/open-card-target";
 
@@ -1187,4 +1189,75 @@ test("모달이 떠 있으면 Esc 는 모달만 닫고 뒤의 직원 대화창�
   modal.remove();
   await esc();
   assert.equal(closed, 1, "모달이 없으면 Esc 가 대화창을 닫는다");
+});
+
+test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대화창은 남는다", async () => {
+  let closed = 0;
+  const item: ReportItem = {
+    messageId: "m1",
+    npcId: "oliver",
+    npcName: "올리버",
+    kind: "card_done",
+    cardId: "c-1",
+    boardSlug: "b",
+    jobId: null,
+    cardTitle: "본문 초안",
+    summary: "",
+    createdAt: "2026-09-21T01:00:00Z",
+  };
+  const el = await mount(
+    <I18nProvider>
+      <ReportBadge
+        queue={[item]}
+        current={null}
+        dismissedIds={new Set()}
+        onOpen={() => {}}
+        onRecall={() => {}}
+      />
+      <ChatPanel
+        dialogNpc={{ npcId: "sophie", npcName: "소피" }}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {
+          closed += 1;
+        }}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={listState()}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+      />
+    </I18nProvider>,
+  );
+  await act(async () => {
+    el.querySelector('[data-testid="report-badge"]')!.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+  });
+  assert.ok(el.querySelector('[data-testid="report-list"]'), "배지를 누르면 목록이 열린다");
+
+  await act(async () => {
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+    document.dispatchEvent(event);
+    window.dispatchEvent(event);
+  });
+  assert.equal(
+    el.querySelector('[data-testid="report-list"]'),
+    null,
+    "가장 위 레이어인 목록이 닫힌다",
+  );
+  assert.equal(closed, 0, "목록을 닫는 Esc 가 뒤의 대화창까지 닫으면 안 된다");
+
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  });
+  assert.equal(closed, 1, "목록이 닫힌 뒤에는 Esc 가 대화창을 닫는다");
 });

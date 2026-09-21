@@ -27,6 +27,9 @@ export default function ReportList({
       role="dialog"
       aria-label={t("report.list.title")}
       data-testid="report-list"
+      /* 가장 위 레이어만 Esc 를 먹는다 — 이 표시가 없으면 목록을 닫는 Esc 가 뒤의 직원
+         대화창까지 닫아 보고가 접힌다(2026-09-21 스테이징 실측). */
+      data-modal-overlay=""
       className="absolute right-0 top-full z-50 mt-1 w-80 rounded-md border border-border bg-surface p-2 shadow-lg"
     >
       <p className="px-1 pb-1 text-caption font-semibold text-text-secondary">
