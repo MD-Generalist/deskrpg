@@ -48,7 +48,7 @@ jobs:
             echo "태그($TAG)와 package.json($PKG)이 다릅니다. 버전 커밋을 먼저 미세요." >&2
             exit 1
           fi
-          for f in README.md README.ko.md src/app/game/GamePageClient.tsx; do
+          for f in README.md README.ko.md; do
             grep -q "$PKG" "$f" || { echo "$f 에 $PKG 가 없습니다." >&2; exit 1; }
           done
           echo "version=$PKG" >> "$GITHUB_OUTPUT"

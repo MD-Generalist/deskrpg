@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_VERSION, BUG_REPORT_BASE_URL, LICENSE_URL, REPO_URL } from "@/lib/app-meta";
 import { npcMotionUi } from "./npc-motion-ui";
 import { navigatorMotion } from "./conversation-integration";
 import type { MotionSnapshot } from "@/game/motion-snapshot";
@@ -135,10 +136,7 @@ import {
   upsertLegacyNpcChunk,
 } from "./chat-response-state";
 
-const APP_VERSION = "2026.921.3";
-const BUG_REPORT_BASE_URL = "https://github.com/dandacompany/deskrpg/issues/new";
-const SOURCE_CODE_URL = "https://github.com/dandacompany/deskrpg";
-const LICENSE_URL = `${SOURCE_CODE_URL}/blob/main/LICENSE.md`;
+const SOURCE_CODE_URL = REPO_URL;
 const THIRD_PARTY_LICENSES_URL = "/third-party-licenses.html";
 const INSTANCE_ID_STORAGE_KEY = "deskrpg.instanceId";
 
