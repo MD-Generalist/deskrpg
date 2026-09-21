@@ -59,13 +59,13 @@ export function UpdateNoticeModal({
           <ul className="space-y-2">
             {UPDATE_COMMANDS.map(({ key, command }) => (
               <li key={key}>
-                <div className="text-text-dim">{t(key)}</div>
+                <div className="text-text-secondary">{t(key)}</div>
                 <code className="block rounded bg-surface-raised px-2 py-1 text-text break-all">
                   {command}
                 </code>
               </li>
             ))}
-            <li className="text-text-dim">{t("growth.updateHostinger")}</li>
+            <li className="text-text-secondary">{t("growth.updateHostinger")}</li>
           </ul>
         </div>
       </div>

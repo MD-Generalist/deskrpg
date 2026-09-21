@@ -145,3 +145,27 @@ test("설문을 보내면 답과 세트 버전을 전송하고 sent 로 끝난�
   assert.equal(failedOutcome, "never");
   await m2.cleanup();
 });
+
+test("설문·버그 창의 안내 글자는 흐린 글자색을 쓰지 않는다 — 크림 배경 위 3.8:1 로 AA 미달", async () => {
+  const survey = await mount(
+    <SurveyModal
+      survey={FALLBACK_SURVEY}
+      locale="ko"
+      feedbackUrl="https://fb.test"
+      consentNeeded
+      onDone={() => {}}
+    />,
+  );
+  const bug = await mount(<BugReportModal feedbackUrl="https://fb.test" onClose={() => {}} />);
+  for (const host of [survey.host, bug.host]) {
+    const dim = [...host.querySelectorAll("p, label, button")].filter(
+      (el) => el.className.includes("text-text-dim") && el.getAttribute("aria-label") === null,
+    );
+    assert.deepEqual(
+      dim.map((el) => el.textContent),
+      [],
+    );
+  }
+  await survey.cleanup();
+  await bug.cleanup();
+});

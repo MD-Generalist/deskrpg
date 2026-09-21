@@ -93,7 +93,7 @@ export function SurveyModal({
             </fieldset>
           ))}
           {consentNeeded && (
-            <p className="text-caption text-text-dim">{t("growth.surveyConsent")}</p>
+            <p className="text-caption text-text-secondary">{t("growth.surveyConsent")}</p>
           )}
           {failed && (
             <p className="text-caption text-danger" role="alert">
@@ -104,7 +104,7 @@ export function SurveyModal({
         <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-border">
           <button
             onClick={() => onDone("never")}
-            className="px-3 py-1.5 text-caption text-text-dim hover:text-text"
+            className="px-3 py-1.5 text-caption text-text-secondary hover:text-text"
           >
             {t("growth.surveyNever")}
           </button>

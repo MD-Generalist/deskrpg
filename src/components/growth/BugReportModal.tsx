@@ -153,7 +153,10 @@ export function BugReportModal({
             <div className="space-y-1">
               <div className="text-text-secondary">{t("growth.bugAttachments")}</div>
               {attachments.map((a) => (
-                <label key={a.key} className="flex items-start gap-2 text-caption text-text-dim">
+                <label
+                  key={a.key}
+                  className="flex items-start gap-2 text-caption text-text-secondary"
+                >
                   <input
                     type="checkbox"
                     checked={!excluded.has(a.key)}
@@ -191,7 +194,7 @@ export function BugReportModal({
               )}
             </div>
             {feedbackUrl && (
-              <p className="text-caption text-text-dim">{t("growth.bugPrivateNote")}</p>
+              <p className="text-caption text-text-secondary">{t("growth.bugPrivateNote")}</p>
             )}
           </div>
         )}
