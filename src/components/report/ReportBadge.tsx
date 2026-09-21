@@ -35,7 +35,11 @@ export default function ReportBadge({
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      // 가장 위 레이어인 이 목록이 Esc 를 **소비**한다. 실제 브라우저에서는 목록이 DOM 에서
+      // 사라진 뒤에 대화창 리스너가 돌아, 레이어 표시만으로는 대화창이 함께 닫혔다(실측).
+      event.preventDefault();
+      setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);

@@ -446,6 +446,8 @@ export default function ChatPanel({
       // 가장 위 레이어만 Esc 를 먹는다. 칸반·크론 같은 모달이 열려 있으면 그 모달이 닫히고
       // 뒤의 대화창은 그대로다 — 예전에는 둘 다 닫혀, 보고 대화창이면 "확인 없이 닫음" 으로
       // 보고가 접혔다(스테이징 실측).
+      // 위 레이어가 이미 소비한 Esc 는 여기서 다시 처리하지 않는다.
+      if (e.defaultPrevented) return;
       if (e.key === "Escape" && dialogNpc && !modalLayerOpen()) {
         onClose();
       }

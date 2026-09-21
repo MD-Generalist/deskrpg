@@ -1244,10 +1244,11 @@ test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대�
   });
   assert.ok(el.querySelector('[data-testid="report-list"]'), "배지를 누르면 목록이 열린다");
 
+  // 실제 브라우저처럼 한 이벤트가 본문에서 올라가 document 와 window 를 차례로 지난다.
   await act(async () => {
-    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
-    document.dispatchEvent(event);
-    window.dispatchEvent(event);
+    document.body.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    );
   });
   assert.equal(
     el.querySelector('[data-testid="report-list"]'),
@@ -1255,6 +1256,18 @@ test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대�
     "가장 위 레이어인 목록이 닫힌다",
   );
   assert.equal(closed, 0, "목록을 닫는 Esc 가 뒤의 대화창까지 닫으면 안 된다");
+
+  // 실제 브라우저에서는 목록이 DOM 에서 사라진 뒤에 대화창 리스너가 돈다(2026-09-21 스테이징
+  // 실측). 그때도 닫히지 않아야 하므로, 레이어가 Esc 를 소비한 상태를 그대로 세워 본다.
+  const consume = (event: KeyboardEvent) => event.preventDefault();
+  document.addEventListener("keydown", consume);
+  await act(async () => {
+    document.body.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    );
+  });
+  document.removeEventListener("keydown", consume);
+  assert.equal(closed, 0, "레이어가 소비한 Esc 로는 대화창이 닫히지 않는다");
 
   await act(async () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
