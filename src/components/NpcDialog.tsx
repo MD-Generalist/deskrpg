@@ -148,7 +148,7 @@ export default function NpcDialog({
                   ? "OpenClaw"
                   : adapterInfo.type.charAt(0).toUpperCase() + adapterInfo.type.slice(1)}
                 {adapterInfo.model && (
-                  <span className="ml-1 text-gray-600">· {adapterInfo.model}</span>
+                  <span className="ml-1 text-text-muted">· {adapterInfo.model}</span>
                 )}
               </span>
             )}

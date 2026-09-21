@@ -431,7 +431,7 @@ export default function ArtifactViewer({
         </div>
       )}
       {error && (
-        <p className="px-4 py-2 text-xs text-red-500 border-b border-border break-words">
+        <p className="px-4 py-2 text-xs text-danger border-b border-border break-words">
           {t("artifacts.error")} — {error}
         </p>
       )}
@@ -441,18 +441,18 @@ export default function ArtifactViewer({
         </p>
       )}
       {!editing && content?.truncated && (
-        <p className="px-4 py-2 text-xs text-amber-600 border-b border-border flex flex-wrap gap-x-2">
+        <p className="px-4 py-2 text-xs text-npc-dark border-b border-border flex flex-wrap gap-x-2">
           <span>{t("artifacts.truncated")}</span>
           {editableShape && <span>{t("artifacts.edit.truncatedReadOnly")}</span>}
         </p>
       )}
       {newerWhileEditing && (
-        <p className="px-4 py-2 text-xs text-amber-600 border-b border-border">
+        <p className="px-4 py-2 text-xs text-npc-dark border-b border-border">
           {t("artifacts.edit.newerVersion")}
         </p>
       )}
       {justSaved && (
-        <p className="px-4 py-2 text-xs text-emerald-600 border-b border-border">
+        <p className="px-4 py-2 text-xs text-success border-b border-border">
           {t("artifacts.edit.saved")}
         </p>
       )}

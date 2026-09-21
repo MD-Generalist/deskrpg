@@ -179,7 +179,7 @@ export default function ArtifactsModal({
               className="mx-auto mt-8 max-w-[560px] rounded-xl border border-border bg-surface p-5 text-xs"
             >
               <div className="text-sm font-bold text-text flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <AlertTriangle className="w-4 h-4 text-npc-dark" />
                 {gate === "gateway"
                   ? t("artifacts.gate.gateway")
                   : t("artifacts.gate.upgrade", { minVersion: error?.minVersion ?? "0.8.0" })}
@@ -198,7 +198,7 @@ export default function ArtifactsModal({
         ) : (
           <>
             {error && (
-              <div className="flex items-center gap-2 px-5 py-2 border-b border-border text-xs text-red-500">
+              <div className="flex items-center gap-2 px-5 py-2 border-b border-border text-xs text-danger">
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="break-words">
                   {t("artifacts.error")} — {error.message}

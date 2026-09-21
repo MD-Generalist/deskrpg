@@ -13,7 +13,7 @@ export default function CsvViewer({ text }: { text: string }) {
   return (
     <div className="text-xs">
       {truncated && (
-        <p className="mb-2 text-amber-600">{t("artifacts.csvTruncated", { rows: CSV_MAX_ROWS })}</p>
+        <p className="mb-2 text-npc-dark">{t("artifacts.csvTruncated", { rows: CSV_MAX_ROWS })}</p>
       )}
       <div className="overflow-auto">
         <table className="border-collapse">

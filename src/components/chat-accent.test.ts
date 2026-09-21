@@ -68,12 +68,17 @@ test("모르는 강조색은 기본값으로 떨어진다", () => {
 });
 
 /**
- * 크림 surface(#fcfcf8) 위에서 옅은 팔레트 글자색은 읽히지 않는다 —
- * text-amber-300 1.40:1, text-emerald-300 1.48:1, text-red-400 2.69:1 (AA 는 4.5:1).
- * 다크 테마를 전제로 쓴 잔재이므로 의미색 토큰(text-danger·text-success·text-info·text-npc-dark)으로 쓴다.
+ * 크림 surface(#fcfcf8) 위에서 600 이하 음영의 팔레트 글자색은 AA(4.5:1)를 넘지 못한다.
+ * 실측: text-amber-300 1.40:1, text-emerald-300 1.48:1, text-red-400 2.69:1,
+ * text-amber-600 3.10:1, text-red-500 3.71:1, text-red-600 4.63:1(경계).
+ * 자기 배경을 옅게 깐 배지도 마찬가지다 — bg-amber-500/15 위 text-amber-700 은 4.38:1.
+ * 의미색 토큰(text-danger·text-success·text-info·text-npc-dark)을 쓴다.
+ *
+ * 700 이상은 대비로는 통과하므로(4.55~8.77:1) 이 검사가 막지 않는다. 다만 제품 고유색
+ * 하나 원칙(docs/standards.md)에는 여전히 어긋나서 10곳이 남아 있고, 별 카드로 다룬다.
  */
 const PALE_PALETTE_TEXT =
-  /\btext-(amber|indigo|emerald|sky|rose|violet|teal|red|blue|green|yellow|slate|gray|zinc|stone|neutral|orange|lime|cyan|fuchsia|pink|purple)-(50|100|200|300|400)\b/;
+  /\btext-(amber|indigo|emerald|sky|rose|violet|teal|red|blue|green|yellow|slate|gray|zinc|stone|neutral|orange|lime|cyan|fuchsia|pink|purple)-(50|100|200|300|400|500|600)\b/;
 
 test("옅은 팔레트 글자색을 쓰지 않는다 — 의미색 토큰을 쓴다", () => {
   const offenders: string[] = [];

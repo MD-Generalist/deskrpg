@@ -565,7 +565,7 @@ export default function TaskDrawer({
                         <span
                           className={`rounded px-1 text-[10px] ${
                             diag.severity === "warning"
-                              ? "bg-amber-500/15 text-amber-700"
+                              ? "bg-npc-dark/15 text-npc-dark"
                               : "bg-danger-bg text-danger"
                           }`}
                         >

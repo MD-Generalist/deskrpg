@@ -737,7 +737,7 @@ export default function GatewaySetupWizard({
                   )}
                   {candidate.gatewayState && (
                     <p
-                      className={`mt-1 text-sm ${candidate.gatewayState === "running" ? "text-text-muted" : "text-amber-600"}`}
+                      className={`mt-1 text-sm ${candidate.gatewayState === "running" ? "text-text-muted" : "text-npc-dark"}`}
                       data-gateway-state={candidate.gatewayState}
                     >
                       {candidate.gatewayState === "running"

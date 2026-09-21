@@ -1065,7 +1065,7 @@ function Blocker({
       className="mx-auto mt-8 max-w-[560px] rounded-xl border border-border bg-surface p-5 text-xs"
     >
       <div className="text-sm font-bold text-text mb-2 flex items-center gap-1.5">
-        <AlertTriangle className="w-4 h-4 text-amber-600" />
+        <AlertTriangle className="w-4 h-4 text-npc-dark" />
         {title}
       </div>
       {blocker.kind === "upgrade_required" && (

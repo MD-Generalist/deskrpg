@@ -44,7 +44,7 @@ interface KanbanCardProps {
 const SEVERITY_CLASS: Record<"critical" | "error" | "warning", string> = {
   critical: "bg-danger-bg text-danger",
   error: "bg-danger-bg text-danger",
-  warning: "bg-amber-500/15 text-amber-700",
+  warning: "bg-npc-dark/15 text-npc-dark",
 };
 
 /** 카드 요약 한 장 — 제목·담당·우선순위·진행률·경고·실행 중·댓글·링크. 상세는 드로어가. */

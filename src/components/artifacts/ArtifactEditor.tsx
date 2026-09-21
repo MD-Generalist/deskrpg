@@ -157,8 +157,8 @@ export default function ArtifactEditor({
         aria-label={t("artifacts.edit.note")}
         className="px-2 py-1 rounded-md bg-surface-raised text-text"
       />
-      {isDirty && <p className="text-[11px] text-amber-600">{t("artifacts.edit.dirty")}</p>}
-      {error && <p className="text-[11px] text-red-500">{error}</p>}
+      {isDirty && <p className="text-[11px] text-npc-dark">{t("artifacts.edit.dirty")}</p>}
+      {error && <p className="text-[11px] text-danger">{error}</p>}
       {confirmingCancel && (
         <div
           role="alertdialog"
