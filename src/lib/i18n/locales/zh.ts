@@ -2048,6 +2048,10 @@ const zh: Record<string, string> = {
   "meeting.outcome.register": "将 {count} 项登记到项目",
   "meeting.outcome.registering": "正在登记…",
   "meeting.outcome.registerHint": "登记后会创建卡片。批准后才会开始执行。",
+  "meeting.outcome.decline": "不登记",
+  "meeting.autoReturn.counting": "{seconds} 秒后返回办公室",
+  "meeting.autoReturn.stay": "留下",
+  "meeting.autoReturn.hint": "回到办公室后，员工会来汇报",
   "meeting.outcome.registered": "已登记为 {count} 张卡片",
   "meeting.outcome.pluginUpgradeRequired":
     "已连接的插件尚不支持待批准卡片。将插件更新到 0.11.0 或更高版本后即可登记。",

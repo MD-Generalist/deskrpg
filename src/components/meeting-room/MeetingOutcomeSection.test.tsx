@@ -52,7 +52,9 @@ function stubFetch(given: Record<string, () => { status: number; body: unknown }
   return calls;
 }
 
-async function mount(): Promise<HTMLElement> {
+async function mount(
+  extra: Partial<React.ComponentProps<typeof MeetingOutcomeSection>> = {},
+): Promise<HTMLElement> {
   const el = document.createElement("div");
   document.body.appendChild(el);
   const root = createRoot(el);
@@ -63,6 +65,7 @@ async function mount(): Promise<HTMLElement> {
           minutesId="m1"
           channelId="c1"
           npcs={[{ id: "npc-1", name: "소피" }]}
+          {...extra}
         />
       </I18nProvider>,
     ),
@@ -193,4 +196,50 @@ test("자동화 상태를 못 읽으면 못 하는 것으로 본다 — 실패�
   });
   const el = await mount();
   assert.equal(el.querySelector("[data-outcome-register]"), null);
+});
+
+test("종료 화면은 등록할 후속 업무가 남았는지 듣고, '등록하지 않음' 을 누를 수 있다", async () => {
+  stubFetch({
+    "GET /api/meetings/m1": () => ({
+      status: 200,
+      body: { minutes: { outcome, summaryStatus: "ok" }, canManage: true },
+    }),
+  });
+  const loaded: boolean[] = [];
+  let declined = 0;
+  const el = await mount({
+    onOutcomeLoaded: (pending) => loaded.push(pending),
+    onDeclined: () => declined++,
+  });
+  assert.deepEqual(loaded, [true]);
+  await act(async () => (el.querySelector("[data-outcome-decline]") as HTMLElement).click());
+  assert.equal(declined, 1);
+});
+
+test("후속 업무가 없거나 등록 권한이 없으면 남은 일이 없다고 알린다", async () => {
+  for (const [body, why] of [
+    [{ minutes: { outcome: { ...outcome, followUps: [] } }, canManage: true }, "0건"],
+    [{ minutes: { outcome }, canManage: false }, "권한 없음"],
+    [
+      { minutes: { outcome: { ...outcome, registered: { taskIds: ["t"] } } }, canManage: true },
+      "이미 등록",
+    ],
+  ] as const) {
+    stubFetch({ "GET /api/meetings/m1": () => ({ status: 200, body }) });
+    const loaded: boolean[] = [];
+    await mount({ onOutcomeLoaded: (pending) => loaded.push(pending) });
+    assert.deepEqual(loaded, [false], why);
+  }
+});
+
+test("회의록 보관함처럼 콜백을 넘기지 않으면 '등록하지 않음' 버튼이 없다", async () => {
+  stubFetch({
+    "GET /api/meetings/m1": () => ({
+      status: 200,
+      body: { minutes: { outcome, summaryStatus: "ok" }, canManage: true },
+    }),
+  });
+  const el = await mount();
+  assert.ok(el.querySelector("[data-outcome-register]"));
+  assert.equal(el.querySelector("[data-outcome-decline]"), null);
 });

@@ -2105,6 +2105,10 @@ const ko: Record<string, string> = {
   "meeting.outcome.register": "{count}건을 프로젝트에 등록",
   "meeting.outcome.registering": "등록하는 중…",
   "meeting.outcome.registerHint": "등록하면 카드가 만들어집니다. 실행은 승인한 뒤에 시작됩니다.",
+  "meeting.outcome.decline": "등록하지 않음",
+  "meeting.autoReturn.counting": "{seconds}초 뒤 오피스로 돌아갑니다",
+  "meeting.autoReturn.stay": "머무르기",
+  "meeting.autoReturn.hint": "오피스로 나가면 직원이 보고하러 옵니다",
   "meeting.outcome.registered": "카드 {count}장으로 등록했습니다",
   "meeting.outcome.pluginUpgradeRequired":
     "연결된 플러그인이 승인 대기 카드를 아직 지원하지 않습니다. 플러그인을 0.11.0 이상으로 갱신하면 등록할 수 있습니다.",

@@ -6,7 +6,7 @@
  *
  * 등록·요약 권한(`canManage`)과 등록 여부는 클라이언트가 추측하지 않고 회의록 조회가 돌려준 값을 쓴다.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useT } from "@/lib/i18n";
 import { getLocalizedMessage } from "@/lib/i18n/error-codes";
@@ -32,6 +32,13 @@ export type MeetingOutcomeSectionProps = {
   onSummaryChanged?: (summary: { keyTopics: string[]; conclusions: string | null }) => void;
   /** 등록이 끝났을 때 — 만든 카드로 이동하는 등의 후속 동작. */
   onRegistered?: (registered: NonNullable<MeetingOutcome["registered"]>) => void;
+  /** 등록하지 않기로 했을 때. 넘기면 "등록하지 않음" 버튼이 생긴다(회의 종료 화면 전용). */
+  onDeclined?: () => void;
+  /**
+   * 결과를 읽었을 때 — 이 사용자가 등록할 후속 업무가 남았는가. 없으면 종료 화면은 자동으로
+   * 나가지 않고 안내만 한다. 회의록을 못 읽어도 한 번 `false` 로 알린다.
+   */
+  onOutcomeLoaded?: (pending: boolean) => void;
 };
 
 async function readError(res: Response): Promise<string> {
@@ -50,11 +57,18 @@ export default function MeetingOutcomeSection({
   npcs,
   onSummaryChanged,
   onRegistered,
+  onDeclined,
+  onOutcomeLoaded,
 }: MeetingOutcomeSectionProps) {
   const t = useT();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // 모르는 동안은 못 한다고 본다 — 눌러서 실패하는 버튼을 잠깐이라도 그리지 않는다.
   const [registerSupported, setRegisterSupported] = useState(false);
+  // 알림 콜백이 바뀌어도 회의록을 다시 읽지 않는다.
+  const report = useRef(onOutcomeLoaded);
+  useEffect(() => {
+    report.current = onOutcomeLoaded;
+  }, [onOutcomeLoaded]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +99,10 @@ export default function MeetingOutcomeSection({
       })
       .then((data) => {
         if (cancelled) return;
+        const followUps = data.minutes.outcome?.followUps.length ?? 0;
+        report.current?.(
+          followUps > 0 && data.canManage === true && !data.minutes.outcome?.registered,
+        );
         setLoaded({
           minutesId,
           outcome: data.minutes.outcome,
@@ -94,6 +112,7 @@ export default function MeetingOutcomeSection({
       })
       .catch(() => {
         // 회의록을 못 읽으면 패널을 그리지 않는다. 회의록 본문은 바깥 화면이 따로 보여 준다.
+        if (!cancelled) report.current?.(false);
       });
     return () => {
       cancelled = true;
@@ -148,6 +167,7 @@ export default function MeetingOutcomeSection({
       registered={registered}
       onRegister={register}
       onRetrySummary={retry}
+      onDecline={onDeclined}
     />
   );
 }

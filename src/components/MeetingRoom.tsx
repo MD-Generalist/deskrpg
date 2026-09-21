@@ -4,6 +4,7 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import type { Socket } from "socket.io-client";
 import ChatInput from "./ChatInput";
 import MeetingOutcomeSection from "./meeting-room/MeetingOutcomeSection";
+import { useMeetingAutoReturn } from "./meeting-room/use-meeting-auto-return";
 import MinutesModal from "./MinutesModal";
 import { useLocale, useT } from "@/lib/i18n";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
@@ -271,6 +272,14 @@ export default function MeetingRoom({
     durationSeconds: number | null;
     participantCount: number;
   } | null>(null);
+  // 종료 화면이 떠 있는 동안만 — 후속 업무 등록을 마치면 오피스로 돌아가 보고를 받게 한다.
+  const autoReturn = useMeetingAutoReturn(meetingEnded && lastMeetingResult !== null);
+  const endedWithoutMinutes = meetingEnded && lastMeetingResult?.minutesId === null;
+  const { hint: hintAutoReturn } = autoReturn;
+  useEffect(() => {
+    // 회의록이 없으면 등록할 것도 없다 — 안내만.
+    if (endedWithoutMinutes) hintAutoReturn();
+  }, [endedWithoutMinutes, hintAutoReturn]);
   const [showMinutesModal, setShowMinutesModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -1407,7 +1416,37 @@ export default function MeetingRoom({
                     onSummaryChanged={(summary) =>
                       setLastMeetingResult((prev) => (prev ? { ...prev, ...summary } : prev))
                     }
+                    onOutcomeLoaded={(pending) => {
+                      if (!pending) autoReturn.hint();
+                    }}
+                    onRegistered={autoReturn.start}
+                    onDeclined={autoReturn.start}
                   />
+                )}
+
+                {autoReturn.state.status === "counting" && (
+                  <div
+                    data-auto-return
+                    role="status"
+                    className="flex items-center gap-2 rounded-lg border border-info/40 bg-info/10 px-3 py-2"
+                  >
+                    <span className="flex-1 text-caption text-text-secondary">
+                      {t("meeting.autoReturn.counting", { seconds: autoReturn.state.remaining })}
+                    </span>
+                    <button
+                      type="button"
+                      data-auto-return-stay
+                      onClick={autoReturn.stay}
+                      className="px-3 py-1 rounded text-caption font-semibold bg-surface-raised text-text-secondary border border-border"
+                    >
+                      {t("meeting.autoReturn.stay")}
+                    </button>
+                  </div>
+                )}
+                {autoReturn.state.status === "hint" && (
+                  <p data-auto-return-hint className="text-caption text-info text-center">
+                    {t("meeting.autoReturn.hint")}
+                  </p>
                 )}
 
                 {/* Divider */}

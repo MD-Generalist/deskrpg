@@ -39,6 +39,8 @@ export type MeetingOutcomePanelProps = {
   registered: MeetingOutcomeRegistered | null;
   onRegister: (body: OutcomeRegistration) => Promise<void>;
   onRetrySummary: () => Promise<void>;
+  /** "등록하지 않음" — 회의 종료 화면만 넘긴다(누르면 오피스로 돌아갈 준비를 한다). 보관함에서는 없다. */
+  onDecline?: () => void;
 };
 
 export default function MeetingOutcomePanel({
@@ -50,6 +52,7 @@ export default function MeetingOutcomePanel({
   registered,
   onRegister,
   onRetrySummary,
+  onDecline,
 }: MeetingOutcomePanelProps) {
   const t = useT();
   const [draft, setDraft] = useState(() =>
@@ -97,6 +100,17 @@ export default function MeetingOutcomePanel({
   }
 
   const registration = draftToRegistration(draft);
+  const declineButton = onDecline && (
+    <button
+      type="button"
+      data-outcome-decline
+      disabled={busy}
+      onClick={onDecline}
+      className="w-full px-3 py-1.5 rounded text-caption font-semibold bg-surface-raised text-text-secondary border border-border disabled:opacity-50"
+    >
+      {t("meeting.outcome.decline")}
+    </button>
+  );
   const hasFollowUps = outcome.followUps.length > 0;
   if (outcome.decisions.length === 0 && !hasFollowUps) return null;
 
@@ -209,9 +223,12 @@ export default function MeetingOutcomePanel({
               {t("meeting.outcome.registered", { count: registered.taskIds.length })}
             </p>
           ) : canRegister && !registerSupported ? (
-            <p className="text-caption text-npc-dark" data-outcome-upgrade>
-              {t("meeting.outcome.pluginUpgradeRequired")}
-            </p>
+            <div className="space-y-2">
+              <p className="text-caption text-npc-dark" data-outcome-upgrade>
+                {t("meeting.outcome.pluginUpgradeRequired")}
+              </p>
+              {declineButton}
+            </div>
           ) : (
             canRegister && (
               <div className="space-y-2">
@@ -242,6 +259,7 @@ export default function MeetingOutcomePanel({
                     : t("meeting.outcome.register", { count: registration.items.length })}
                 </button>
                 <p className="text-micro text-text-muted">{t("meeting.outcome.registerHint")}</p>
+                {declineButton}
               </div>
             )
           )}
