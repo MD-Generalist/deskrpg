@@ -9,6 +9,7 @@ import {
   meetingSummarySessionScope,
   registerMeetingDiscussionHandlers,
   resolveNpcAdapter,
+  settleMeeting,
   type MeetingBrokerLike,
 } from "./meeting-discussion";
 
@@ -791,4 +792,128 @@ test("브로커 onError 가 어떤 값을 넘겨도 meeting:error 는 문자열 
     error: "backend_usage_limit",
     detail: "HTTP 429: The usage limit has been reached",
   });
+});
+
+// 모델 백엔드 한도(429)로 모든 턴이 실패하는 회의. 실제 엔진(defaultCreateMeetingBroker)과
+// 실제 공간 조정자를 쓴다 — 가짜 브로커로는 "턴 오류 뒤 엔진이 끝나는가" 를 볼 수 없다.
+async function runFailingMeeting(opts: { hang?: boolean } = {}) {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("socket-1", calls);
+  const released: string[] = [];
+  const spatial = createMeetingSpatialCoordinator({
+    layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "80:80" }] }),
+    capture: async () => ({ x: 16, y: 16, seatId: "16:16" }),
+    reserve: async () => true,
+    move: async () => true,
+    release: async (_c, actorId) => {
+      released.push(actorId);
+    },
+    returnTarget: async (_c, _a, p) => p,
+    publish: () => {},
+  });
+  let adapterCalls = 0;
+  const registry = new AdapterRegistry();
+  registry.register({
+    type: "cli",
+    async execute() {
+      adapterCalls++;
+      // 회의가 진행 중인 채로 주재자가 떠나는 경우를 보려고 응답을 붙잡아 둔다.
+      if (opts.hang) return new Promise(() => {});
+      throw Object.assign(new Error("HTTP 429: The usage limit has been reached"), {
+        name: "HermesError",
+        code: "run_failed",
+        status: 200,
+      });
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  } as never);
+  const activeBrokers = new Map<string, MeetingBrokerLike>();
+  const discussionInitiators = new Map<string, string>();
+  let ended = 0;
+  registerMeetingDiscussionHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      activeBrokers,
+      discussionInitiators,
+      meetingRooms: new Map([["a", { participants: new Set(["socket-1"]), messages: [] }]]),
+      players: new Map(),
+      user: { userId: "u1" },
+      adapterRegistry: registry,
+      spatial,
+      canStartMeeting: () => true,
+      canControlMeeting: () => true,
+      getNpcConfigsForChannel: async () => [
+        npcConfig({ id: "n1", name: "Sophie", adapterType: "cli" }),
+      ],
+      generateMeetingSummary: async () => {
+        ended++;
+        return { keyTopics: [], conclusions: null, status: "failed" };
+      },
+      persistMeetingMinutes: async () => null,
+    },
+  });
+  const pending = socket.trigger("meeting:start-discussion", {
+    channelId: "a",
+    topic: "t",
+    selectedNpcIds: ["n1"],
+    settings: { maxTotalTurns: 4 },
+  });
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  spatial.arrived("a", "n1", spatial.snapshot("a")!.generation);
+  await pending;
+  const seatedAfterStart = spatial.snapshot("a")?.phase;
+  // 엔진이 스스로 끝날 기회를 준다(실패 누적 → consecutive_failures).
+  const deadline = Date.now() + (opts.hang ? 50 : 3000);
+  while (Date.now() < deadline && activeBrokers.has("a")) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return {
+    calls,
+    released,
+    spatial,
+    activeBrokers,
+    discussionInitiators,
+    adapterCalls,
+    ended,
+    seatedAfterStart,
+    socket,
+  };
+}
+
+test("모든 호출이 한도 오류로 실패한 회의는 스스로 끝나고 직원을 자리로 돌려보낸다", async () => {
+  const r = await runFailingMeeting();
+  assert.equal(r.seatedAfterStart, "ready");
+  assert.equal(
+    r.activeBrokers.has("a"),
+    false,
+    "브로커가 activeBrokers 에 남아 다음 회의를 막는다",
+  );
+  assert.deepEqual(r.released, ["n1"], "직원이 회의석에서 풀려나지 않았다");
+});
+
+test("주재자가 떠나 방이 빈 회의도 직원을 자리로 돌려보내고, 같은 채널에서 다시 시작할 수 있다", async () => {
+  const r = await runFailingMeeting({ hang: true });
+  assert.equal(r.activeBrokers.has("a"), true, "전제: 회의가 진행 중이어야 한다");
+  // socket-handlers.ts 의 disconnect 처리와 같은 순서 — 플레이어가 빠지고, 방이 비면 정산한다.
+  await r.spatial.leavePlayer("a", "u1", "socket-1");
+  settleMeeting(r, "a", { stopBroker: true, context: "주재자 이탈" });
+  for (let i = 0; i < 50; i++) await new Promise((res) => setImmediate(res));
+
+  assert.equal(r.activeBrokers.has("a"), false);
+  assert.deepEqual(
+    r.released.filter((a) => a === "n1"),
+    ["n1"],
+    "직원이 회의석에서 풀려나지 않았다",
+  );
+  assert.equal(r.spatial.snapshot("a")?.phase, "returning");
+
+  // 직원이 자리에 돌아오면 공간 세션이 닫히고, 다음 회의가 시작된다.
+  // 예전에는 세션이 "ready" 에 머물러 spatial.start 가 null 을 돌려주고 회의가 조용히 시작되지 않았다.
+  r.spatial.arrived("a", "n1", r.spatial.snapshot("a")!.generation);
+  assert.equal(r.spatial.snapshot("a")?.phase, "idle");
+  const next = await r.spatial.start("a", "u1", ["n1"]);
+  assert.notEqual(next, null, "같은 채널에서 회의를 다시 시작할 수 없다");
 });

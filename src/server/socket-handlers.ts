@@ -73,7 +73,11 @@ import {
   emitMeetingNpcStream,
   registerMeetingSocketHandlers,
 } from "./meeting-socket";
-import { registerMeetingDiscussionHandlers, resolveNpcAdapter } from "./meeting-discussion";
+import {
+  registerMeetingDiscussionHandlers,
+  resolveNpcAdapter,
+  settleMeeting,
+} from "./meeting-discussion";
 import { createResummarizer } from "./meeting-resummarize";
 import { registerRoomHandlers } from "./room-socket";
 import { normalizeOfficeAppearance } from "@/game/three/office-appearance";
@@ -1899,12 +1903,13 @@ export function setupSocketHandlers(io: Server) {
         }
       }
 
-      for (const [channelId, broker] of activeBrokers.entries()) {
+      for (const channelId of [...activeBrokers.keys()]) {
         const room = meetingRooms.get(channelId);
         if (room && room.participants.size === 0) {
-          broker.stop();
-          activeBrokers.delete(channelId);
-          discussionInitiators.delete(channelId);
+          settleMeeting({ activeBrokers, discussionInitiators, spatial }, channelId, {
+            stopBroker: true,
+            context: "주재자 이탈",
+          });
         }
       }
 

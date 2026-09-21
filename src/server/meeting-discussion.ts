@@ -460,6 +460,29 @@ export async function defaultCreateMeetingBroker(
   };
 }
 
+/**
+ * 회의를 끝내는 경로가 모두 부르는 정산 — 브로커 정리와 직원 복귀를 한 곳에서 한다.
+ * 예전에는 경로마다 따로 적었고, 주재자가 떠나 방이 비는 경로(socket-handlers 의 disconnect)만
+ * 복귀를 빠뜨려 직원이 회의석에 남았다. 게다가 그 공간 세션이 "ready" 에 머물러
+ * spatial.start 가 null 을 돌려주므로, 그 채널의 다음 회의는 조용히 시작되지 않았다.
+ */
+export function settleMeeting(
+  state: {
+    activeBrokers: Map<string, MeetingBrokerLike>;
+    discussionInitiators: Map<string, string>;
+    spatial?: Pick<MeetingSpatialCoordinator, "cancel">;
+  },
+  channelId: string,
+  opts: { stopBroker?: boolean; context: string },
+): void {
+  if (opts.stopBroker) state.activeBrokers.get(channelId)?.stop();
+  state.activeBrokers.delete(channelId);
+  state.discussionInitiators.delete(channelId);
+  void state.spatial?.cancel(channelId).catch((error) => {
+    console.error(`[meeting] ${opts.context} 후 복귀 정산 실패`, { channelId }, error);
+  });
+}
+
 export function registerMeetingDiscussionHandlers({
   io,
   socket,
@@ -796,12 +819,7 @@ export function registerMeetingDiscussionHandlers({
             summaryStatus: summary.status ?? "ok",
           });
 
-          activeBrokers.delete(channelId);
-          discussionInitiators.delete(channelId);
-          // 복귀 정산이 실패하면 NPC 가 회의석에 남는다 — 조용히 버리지 않고 남긴다.
-          void deps.spatial?.cancel(channelId).catch((error) => {
-            console.error("[meeting] 회의 종료 후 복귀 정산 실패", { channelId }, error);
-          });
+          settleMeeting(deps, channelId, { context: "회의 종료" });
         },
         onError: (error) => {
           // 어댑터가 던진 값(HermesError 등)을 그대로 실으면 화면이 [object Object] 를 그린다.
@@ -866,12 +884,7 @@ export function registerMeetingDiscussionHandlers({
     brokerInstance.run().catch((error) => {
       if (activeBrokers.get(channelId) !== brokerInstance) return;
       console.error("[meeting] Broker error:", error);
-      activeBrokers.delete(channelId);
-      discussionInitiators.delete(channelId);
-      // 오류로 끝난 회의도 복귀는 해야 한다. 정산이 실패하면 회의석이 점유된 채 남는다.
-      void deps.spatial?.cancel(channelId).catch((error) => {
-        console.error("[meeting] 오류 종료 후 복귀 정산 실패", { channelId }, error);
-      });
+      settleMeeting(deps, channelId, { context: "오류 종료" });
       io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
         error: "Meeting ended due to error",
       });
