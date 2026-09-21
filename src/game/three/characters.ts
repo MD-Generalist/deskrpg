@@ -2,6 +2,7 @@ import { createGltfActor } from "./gltf-actor";
 import type { DistanceWalkOptions, DistanceWalkFrame } from "./commute-walk";
 import { officeLookAssetUrl } from "./office-look-assets";
 import { idleMotion } from "./idle-motion";
+import type { ActorGait } from "./gait";
 import * as T from "three";
 import { round, sphere } from "./primitives";
 export { round, sphere, cylinder } from "./primitives";
@@ -22,6 +23,8 @@ export function createActor(
   const root = new T.Group(),
     rig = new T.Group();
   root.add(rig);
+  // 렌더러가 rig.rotation.y 로 방향을 준다. 기울임(x)이 방향보다 먼저 적용돼야 바라보는 쪽으로 기운다.
+  rig.rotation.order = "YXZ";
   root.userData.actorId = id;
   const skin = palette?.skin || ["#e8b991", "#f1c9a4", "#d4a17c", "#edc6a6"][index % 4],
     hair = palette?.hair || ["#51382d", "#644536", "#283c40", "#4d323c"][index % 4];
@@ -93,21 +96,27 @@ export function createActor(
       phase: ActorPhase,
       seated: boolean,
       _frame?: DistanceWalkFrame,
+      pace?: ActorGait,
     ) {
       const sit = seated && !walking;
+      const run = walking && !!pace?.running;
+      // 뛰면 걸음 주기를 속도에 맞춰 빠르게 한다 — 그대로 두면 발이 미끄러진다.
+      const cycle = t * 9 * (run ? pace!.cadence : 1);
       const motion = idleMotion(t, index, walking, phase);
       head.rotation.y = motion.yaw;
       rig.position.y = sit
         ? 0.04
         : walking
-          ? -0.14 + Math.abs(Math.sin(t * 9)) * 0.035
+          ? -0.14 + Math.abs(Math.sin(cycle)) * (run ? 0.07 : 0.035)
           : -0.14 + Math.sin(t * 2.3 + index) * 0.012;
       torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.035 : motion.sway;
+      // 발목에서부터 온몸이 기운다 — 머리·팔·다리가 몸통의 형제라 몸통만 기울이면 안 된다.
+      rig.rotation.x = run ? 0.18 : 0;
       head.rotation.x = phase === "thinking" ? 0.12 : motion.nod;
       head.rotation.z = phase === "thinking" ? 0.12 : Math.sin(t * 1.8 + index) * 0.025;
       arms.forEach((a, i) => {
         a.rotation.x = walking
-          ? Math.sin(t * 9 + i * Math.PI) * 0.55
+          ? Math.sin(cycle + i * Math.PI) * (run ? 0.9 : 0.55)
           : phase === "thinking" && i === 0
             ? -1.7
             : phase === "streaming"
@@ -121,7 +130,11 @@ export function createActor(
       });
       legs.forEach(
         (l, i) =>
-          (l.rotation.x = walking ? Math.sin(t * 9 + i * Math.PI) * 0.5 : sit ? -Math.PI / 2 : 0),
+          (l.rotation.x = walking
+            ? Math.sin(cycle + i * Math.PI) * (run ? 0.8 : 0.5)
+            : sit
+              ? -Math.PI / 2
+              : 0),
       );
       ring.material.opacity = phase === "streaming" ? 0.55 + Math.sin(t * 4) * 0.25 : 0.3;
     },

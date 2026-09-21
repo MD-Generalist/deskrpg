@@ -1,4 +1,5 @@
 import * as T from "three";
+import type { ActorGait } from "./gait";
 import { miniatureDistancePose } from "./commute-walk";
 import { sphere, round } from "./primitives";
 import { idleMotion } from "./idle-motion";
@@ -6,6 +7,9 @@ import type { OfficeLook } from "./office-looks";
 import type { ActorPhase } from "./characters";
 
 /** Sculpted miniature pilot. The rig interface is shared with the standard office actors. */
+/** 뛸 때 온몸이 앞으로 기우는 각도(라디안). */
+const RUN_LEAN = 0.22;
+
 export function createMiniatureActor(id: string, look: OfficeLook, index: number) {
   const root = new T.Group(),
     rig = new T.Group();
@@ -239,20 +243,33 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
     ring,
     phase: "idle" as ActorPhase,
     seated: false,
-    update(t: number, walking: boolean, phase: ActorPhase, seated: boolean, walkPhase?: number) {
-      const gait = walkPhase ?? t * 7;
+    update(
+      t: number,
+      walking: boolean,
+      phase: ActorPhase,
+      seated: boolean,
+      walkPhase?: number,
+      pace?: ActorGait,
+    ) {
+      // 뛰기: 걸음 주기를 속도에 맞춰 빠르게 하고, 앞으로 기울이고, 팔을 굽혀 크게 흔든다.
+      const run = walking && !!pace?.running;
+      const gait = walkPhase ?? t * 7 * (run ? pace!.cadence : 1);
       const sit = seated && !walking,
         motion = idleMotion(t, index, walking, phase);
       rig.position.y = sit
         ? -0.21
         : walking
-          ? Math.abs(Math.sin(gait)) * 0.009
+          ? Math.abs(Math.sin(gait)) * (run ? 0.03 : 0.009)
           : Math.sin(t * 1.6 + index) * 0.003;
-      head.rotation.set(motion.nod * 0.6, motion.yaw * 0.7, 0);
+      // 기울인 만큼 고개를 들어 시선은 앞을 향한다.
+      head.rotation.set(motion.nod * 0.6 - (run ? 0.12 : 0), motion.yaw * 0.7, 0);
       torso.rotation.z = motion.sway * 0.4;
+      // 뛸 때는 발목에서부터 온몸이 기운다. 머리·팔·다리는 몸통의 자식이 아니라 형제라, 몸통만
+      // 기울이면 몸통 메시만 기울고 머리는 곧게 선다(처음 구현이 그랬다).
+      rig.rotation.x = run ? RUN_LEAN : 0;
       arms.forEach((a, i) => {
         a.rotation.x = walking
-          ? Math.sin(gait + i * Math.PI) * 0.28
+          ? Math.sin(gait + i * Math.PI) * (run ? 0.62 : 0.28)
           : sit
             ? -0.34
             : phase === "thinking" && i === 0
@@ -262,14 +279,14 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
                 : 0;
         a.rotation.z = (i === 0 ? -1 : 1) * 0.045;
       });
-      elbows.forEach((a) => (a.rotation.x = sit ? -0.85 : -0.12));
+      elbows.forEach((a) => (a.rotation.x = sit ? -0.85 : run ? -1.05 : -0.12));
       legs.forEach(
         (leg, i) =>
           (leg.rotation.x = sit
             ? -Math.PI / 2
             : walking
               ? walkPhase === undefined
-                ? Math.sin(gait + i * Math.PI) * 0.32
+                ? Math.sin(gait + i * Math.PI) * (run ? 0.55 : 0.32)
                 : miniatureDistancePose(gait + i * Math.PI).leg
               : 0),
       );
@@ -279,7 +296,7 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
             ? Math.PI / 2
             : walking
               ? walkPhase === undefined
-                ? Math.max(0, -Math.sin(gait + i * Math.PI)) * 0.4
+                ? Math.max(0, -Math.sin(gait + i * Math.PI)) * (run ? 0.9 : 0.4)
                 : miniatureDistancePose(gait + i * Math.PI).knee
               : 0),
       );

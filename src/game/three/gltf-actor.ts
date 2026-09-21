@@ -5,6 +5,7 @@ import type { ActorPhase } from "./characters";
 import type { OfficeLook } from "./office-looks";
 import { createMiniatureActor } from "./miniature-actor";
 import { createGltfGestures } from "./gltf-gestures";
+import type { ActorGait } from "./gait";
 import {
   COMMUTE_WALK_STRIDES,
   MINIATURE_WALK_STRIDE,
@@ -81,6 +82,10 @@ function cloneAsset(source: T.Object3D) {
   });
   return model;
 }
+
+/** 뛸 때 앞으로 기울이는 각도와 걸음마다 뛰어오르는 높이(월드 단위). 모델 기준이라 바라보는 쪽으로 기운다. */
+const GLTF_RUN_LEAN = 0.18;
+const GLTF_RUN_BOUNCE = 0.05;
 
 export function createGltfActor(
   id: string,
@@ -174,8 +179,10 @@ export function createGltfActor(
       phase: ActorPhase,
       seated: boolean,
       frame?: DistanceWalkFrame,
+      pace?: ActorGait,
     ) {
       if (disposed) return;
+      const run = walking && !!pace?.running;
       const delta = lastTime === undefined ? 0 : Math.max(0, Math.min(0.1, t - lastTime));
       lastTime = t;
       actor.phase = phase;
@@ -189,7 +196,7 @@ export function createGltfActor(
       if (fallbackVisual) fallbackVisual.visible = useFallback;
       if (model) model.visible = !useFallback;
       if (useFallback) {
-        fallback.update(t, walking, phase, seated, gait);
+        fallback.update(t, walking, phase, seated, gait, pace);
         return;
       }
       if (synced) rig.position.y = 0;
@@ -203,12 +210,21 @@ export function createGltfActor(
         }
         current = next;
       }
+      // 에셋에 달리기 클립이 없다(idle·walk·sit 뿐). 걷기 클립을 이동 속도에 맞춰 빨리 돌려 발이
+      // 미끄러지지 않게 하고, 기울임·반동·굽힌 팔을 얹어 뛰는 모양을 만든다.
+      if (current && name === "walk") current.setEffectiveTimeScale(run ? pace!.cadence : 1);
       gestures?.restore();
       if (synced && walking && current && gait !== undefined) {
         current.time = (gait / (Math.PI * 2)) * current.getClip().duration;
         mixer!.update(0);
       } else mixer!.update(delta);
-      gestures?.apply(t, walking, phase);
+      gestures?.apply(t, walking, phase, run);
+      if (model) model.rotation.x = run ? GLTF_RUN_LEAN : 0;
+      if (!synced) {
+        // 걷기 클립 한 주기는 두 걸음이다 — |sin| 은 주기마다 두 번 뛰어오른다.
+        const cycle = current ? (current.time / current.getClip().duration) * Math.PI * 2 : 0;
+        rig.position.y = run ? Math.abs(Math.sin(cycle)) * GLTF_RUN_BOUNCE : 0;
+      }
       ring.material.opacity = phase === "streaming" ? 0.45 : 0.22;
     },
     /** Call before generic disposeTree(root), including entire renderer shutdown. */

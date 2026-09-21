@@ -14,7 +14,8 @@ export function createGltfGestures(model: T.Object3D, seed: number) {
   const left = joint("LeftArm", "UpperArm.L");
   const right = joint("RightArm", "UpperArm.R");
   const forearm = joint("RightForeArm", "LowerArm.R");
-  const joints = [head, left, right, forearm].filter((item): item is Joint => !!item);
+  const leftForearm = joint("LeftForeArm", "LowerArm.L");
+  const joints = [head, left, right, forearm, leftForearm].filter((item): item is Joint => !!item);
   const axis = new T.Vector3();
   const parentRotation = new T.Quaternion();
   const modelRotation = new T.Quaternion();
@@ -33,11 +34,20 @@ export function createGltfGestures(model: T.Object3D, seed: number) {
     restore() {
       for (const { bone, base } of joints) bone.quaternion.copy(base);
     },
-    apply(time: number, walking: boolean, phase: ActorPhase) {
+    apply(time: number, walking: boolean, phase: ActorPhase, running = false) {
       for (const item of joints) item.base.copy(item.bone.quaternion);
-      if (walking) return;
+      if (walking && !running) return;
       model.updateWorldMatrix(true, true);
       model.getWorldQuaternion(modelRotation);
+      if (running) {
+        // 뛰는 팔: 팔꿈치를 굽히고 팔을 조금 앞으로 든다. 흔드는 위상은 걷기 클립의 것을 그대로 둔다 —
+        // 사인파를 얹으면 클립과 박자가 어긋나 팔이 떨린다. 굽힘은 일정하므로 싸우지 않는다.
+        rotate(forearm, 1, 0, -1.0);
+        rotate(leftForearm, 1, 0, -1.0);
+        rotate(right, 1, 0, -0.2);
+        rotate(left, 1, 0, -0.2);
+        return;
+      }
       const motion = idleMotion(time, seed, false, phase);
       rotate(head, 0, 1, motion.yaw * 0.7);
       rotate(head, 1, 0, motion.nod * 0.7 + (phase === "thinking" ? 0.06 : 0));

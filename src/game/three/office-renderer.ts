@@ -38,6 +38,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { officeLighting, shadowExtent, applyOfficeShadowFilter } from "./office-lighting";
 import { detailSurfaces, surfaceTexture } from "./surface-detail";
 import { resolveSeat, seatAt, sofaSeats, furnitureSeats, type Seat } from "./seating";
+import { createGaitTracker } from "./gait";
 import { PointerGesture } from "./pointer-gesture";
 import { buildBoundsTrees } from "./raycast-acceleration";
 import { pickFurnitureSeat } from "./seat-picking";
@@ -93,6 +94,8 @@ const environmentPalettes = {
 type RenderedActor = {
   previous?: { x: number; z: number; time: number; direction: string };
   yaw?: number;
+  /** 보이는 이동 속도로 뛰는지 가른다 — 이동 종류가 아니라 관측한 속도라 모든 화면에서 같다. */
+  gait?: ReturnType<typeof createGaitTracker>;
   model: ReturnType<typeof createActor>;
   label: HTMLButtonElement;
   name: HTMLSpanElement;
@@ -1530,8 +1533,23 @@ export class OfficeRenderer {
                 rendered.yaw ?? fallbackYaw,
                 (time - previous.time) / 1000,
               );
+        rendered.gait ??= createGaitTracker();
+        const pace = rendered.gait.update(
+          dx,
+          dz,
+          previous ? (time - previous.time) / 1000 : 0,
+          actor.walking && !seat,
+        );
         rendered.previous = { x: p.x, z: p.z, time, direction: actor.direction };
-        model.update(time / 1000, actor.walking, actorPresentationPhase(actor), !!seat);
+        model.update(
+          time / 1000,
+          actor.walking,
+          actorPresentationPhase(actor),
+          !!seat,
+          undefined,
+          pace,
+        );
+        label.dataset.running = String(pace.running);
         label.dataset.assetStatus = model.root.userData.assetStatus ?? "procedural";
         label.dataset.modelStyle = model.root.userData.modelStyle ?? "legacy";
         label.dataset.officeLookId = rendered.lookId ?? "";

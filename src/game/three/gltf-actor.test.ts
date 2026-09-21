@@ -273,3 +273,18 @@ test("both supplied skeletons retain gestures without accumulating or changing s
     actor.dispose();
   }
 });
+
+test("glTF 는 달리기 클립이 없어도 뛴다 — 걷기 클립을 이동 속도에 맞춰 빨리 돌리고 앞으로 기운다", async () => {
+  const actor = createGltfActor("run", look, 0, "run", async () => asset());
+  await actor.ready;
+  actor.update(0, true, "idle", false, undefined, { running: true, cadence: 2 });
+  actor.update(0.1, true, "idle", false, undefined, { running: true, cadence: 2 });
+  // 에셋이 올라오면 리그에 보이는 자식이 모델 하나다.
+  const model = actor.rig.children.find((c) => c.visible);
+  assert.ok(model, "보이는 모델이 없습니다");
+  assert.ok(model.rotation.x > 0.1, `기울기 ${model.rotation.x}`);
+  // 멈추면 곧게 선다.
+  actor.update(0.2, false, "idle", false, undefined, { running: false, cadence: 1 });
+  assert.equal(model.rotation.x, 0);
+  assert.equal(actor.rig.position.y, 0, "멈췄는데 반동이 남았습니다");
+});
