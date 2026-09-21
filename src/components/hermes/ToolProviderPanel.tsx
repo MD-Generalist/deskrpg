@@ -247,7 +247,7 @@ export default function ToolProviderPanel({
           {getLocalizedErrorMessage(t, saveError, "hermes.toolProviders.saveFailed")}
         </p>
       )}
-      {saved && <p className="text-xs text-emerald-300">{t("hermes.toolProviders.saved")}</p>}
+      {saved && <p className="text-xs text-success">{t("hermes.toolProviders.saved")}</p>}
 
       {row && row.setup !== "cli" && (
         <button

@@ -2440,7 +2440,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg text-text">
         <div className="text-center">
-          <div className="text-xl mb-4 text-red-400">{error}</div>
+          <div className="text-xl mb-4 text-danger">{error}</div>
           <Link
             href="/characters"
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold"
@@ -2632,16 +2632,16 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       {spawnSetMode && (
         <div
           style={{ top: "var(--game-header-height, 48px)" }}
-          className="fixed left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 bg-green-900/90 border border-green-500 rounded-lg text-green-100 text-sm shadow-lg"
+          className="fixed left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 bg-primary/95 border border-primary-light rounded-lg text-white text-sm shadow-lg"
         >
-          <Footprints className="w-4 h-4 text-green-400" />
+          <Footprints className="w-4 h-4 text-white" />
           <span>{t("game.spawnSetMode")}</span>
           <button
             onClick={() => {
               setSpawnSetMode(false);
               EventBus.emit("spawn-set-mode-end");
             }}
-            className="ml-2 px-2 py-0.5 bg-green-700 hover:bg-green-600 rounded text-xs"
+            className="ml-2 px-2 py-0.5 bg-primary-hover hover:bg-primary-light rounded text-xs"
           >
             {t("common.closeEsc")}
           </button>

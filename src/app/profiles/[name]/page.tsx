@@ -259,7 +259,7 @@ function EmployeeDetailContent() {
         </header>
 
         {error && <p className="text-sm text-danger">{error}</p>}
-        {notice && <p className="text-sm text-emerald-300">{notice}</p>}
+        {notice && <p className="text-sm text-success">{notice}</p>}
         {loading && !profile && <p className="text-sm text-text-muted">{t("common.loading")}</p>}
         {!loading && !profile && (
           <p className="text-sm text-danger">

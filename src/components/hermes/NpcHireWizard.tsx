@@ -794,7 +794,7 @@ export default function NpcHireWizard({
       </div>
       {showCloseConfirm && created && (
         <div className="mb-4 space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
-          <p className="text-sm font-semibold text-amber-300">
+          <p className="text-sm font-semibold text-npc-dark">
             {t("hermes.wizard.closeConfirmTitle")}
           </p>
           <p className="text-sm text-text-muted">
@@ -914,12 +914,12 @@ export default function NpcHireWizard({
               )}
               {created.cloneError && (
                 // 프로필은 만들어졌다 — 모델을 ③ 에서 직접 고르면 된다. 막지 않고 알린다.
-                <p className="text-xs text-amber-300">{t("hermes.wizard.profile.cloneFailed")}</p>
+                <p className="text-xs text-npc-dark">{t("hermes.wizard.profile.cloneFailed")}</p>
               )}
 
               {!created.keyIssued && (
                 <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
-                  <p className="text-sm font-semibold text-amber-300">
+                  <p className="text-sm font-semibold text-npc-dark">
                     {t("hermes.wizard.profile.keyIssuedFalseTitle")}
                   </p>
                   {created.keyError && (
@@ -969,7 +969,7 @@ export default function NpcHireWizard({
                     </p>
                   )}
                   {serving === "served" && (
-                    <p className="text-sm text-emerald-300">{t("hermes.wizard.profile.served")}</p>
+                    <p className="text-sm text-success">{t("hermes.wizard.profile.served")}</p>
                   )}
                   {serving === "key_rejected" && (
                     <p className="text-sm text-danger">{t("hermes.wizard.profile.keyRejected")}</p>
@@ -1057,7 +1057,7 @@ export default function NpcHireWizard({
                 // 아래 textarea 의 `identityBody` 는 이 블록과 무관하게 그대로 남는다 —
                 // 사용자가 명시적으로 "이 내용으로 바꾸기" 를 눌러야만 교체된다.
                 <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
-                  <p className="text-sm font-semibold text-amber-300">
+                  <p className="text-sm font-semibold text-npc-dark">
                     {t("hermes.wizard.identity.conflict")}
                   </p>
                   {conflictRemoteBody !== null && (
@@ -1098,7 +1098,7 @@ export default function NpcHireWizard({
                 className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
               />
               {identitySaved && (
-                <p className="text-xs text-emerald-300">{t("hermes.wizard.identity.saved")}</p>
+                <p className="text-xs text-success">{t("hermes.wizard.identity.saved")}</p>
               )}
               <div className="flex gap-2">
                 <button
@@ -1140,7 +1140,7 @@ export default function NpcHireWizard({
             />
           )}
           {appearanceSaved && (
-            <p className="text-xs text-emerald-300">{t("hermes.wizard.appearance.saved")}</p>
+            <p className="text-xs text-success">{t("hermes.wizard.appearance.saved")}</p>
           )}
           <button
             type="button"
@@ -1343,7 +1343,7 @@ export default function NpcHireWizard({
                 </div>
               </details>
               {configSaved && (
-                <p className="text-xs text-emerald-300">{t("hermes.wizard.config.saved")}</p>
+                <p className="text-xs text-success">{t("hermes.wizard.config.saved")}</p>
               )}
               {/* 출근 결과 한 줄 — 붙은 채널이 없으면 "출근했다" 고 말하지 않는다. 이어서
                   편집하는 기존 직원(`attendedChannels` 없음)은 알 수 없으므로 말하지 않는다. */}

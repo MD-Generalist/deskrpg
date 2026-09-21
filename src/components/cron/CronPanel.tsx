@@ -664,7 +664,7 @@ export default function CronPanel({
                       <span
                         className={`text-[10px] px-1.5 py-0.5 rounded ${
                           run.status === "error"
-                            ? "bg-red-900/40 text-red-300"
+                            ? "bg-danger/10 text-danger"
                             : "bg-surface-raised text-text-muted"
                         }`}
                       >

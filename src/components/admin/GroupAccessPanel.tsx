@@ -572,7 +572,7 @@ export default function GroupAccessPanel({
                             </span>
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <code className="rounded border border-border px-2 py-1 font-mono text-xs text-amber-400">
+                            <code className="rounded border border-border px-2 py-1 font-mono text-xs text-text">
                               {invite.token}
                             </code>
                             <button

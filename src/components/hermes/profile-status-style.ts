@@ -7,8 +7,8 @@
 import type { ProfileStatusTone } from "./profile-status";
 
 export const PROFILE_STATUS_BADGE_CLASS: Record<ProfileStatusTone, string> = {
-  ok: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300",
-  warn: "border-amber-400/40 bg-amber-400/10 text-amber-300",
+  ok: "border-success/40 bg-success/10 text-success",
+  warn: "border-npc-dark/40 bg-npc-dark/10 text-npc-dark",
   error: "border-danger/40 bg-danger/10 text-danger",
   unknown: "border-border bg-surface-raised text-text-muted",
 };

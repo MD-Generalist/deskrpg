@@ -66,3 +66,31 @@ test("모르는 강조색은 기본값으로 떨어진다", () => {
   // 런타임에 엉뚱한 값이 와도 클래스가 undefined 가 되지 않는다.
   assert.equal(accentClasses("nope" as never), CHAT_ACCENT.npc);
 });
+
+/**
+ * 크림 surface(#fcfcf8) 위에서 옅은 팔레트 글자색은 읽히지 않는다 —
+ * text-amber-300 1.40:1, text-emerald-300 1.48:1, text-red-400 2.69:1 (AA 는 4.5:1).
+ * 다크 테마를 전제로 쓴 잔재이므로 의미색 토큰(text-danger·text-success·text-info·text-npc-dark)으로 쓴다.
+ */
+const PALE_PALETTE_TEXT =
+  /\btext-(amber|indigo|emerald|sky|rose|violet|teal|red|blue|green|yellow|slate|gray|zinc|stone|neutral|orange|lime|cyan|fuchsia|pink|purple)-(50|100|200|300|400)\b/;
+
+test("옅은 팔레트 글자색을 쓰지 않는다 — 의미색 토큰을 쓴다", () => {
+  const offenders: string[] = [];
+  for (const file of walk(SRC)) {
+    if (file.endsWith("chat-accent.test.ts")) continue;
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        const bare = line.trim();
+        if (bare.startsWith("*") || bare.startsWith("//") || bare.startsWith("/*")) return;
+        if (PALE_PALETTE_TEXT.test(line))
+          offenders.push(`${path.relative(SRC, file)}:${i + 1} ${bare}`);
+      });
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `크림 배경 위 옅은 팔레트 글자색은 대비가 AA 에 못 미친다. 의미색 토큰으로 바꿔라 — 오류 text-danger, 성공 text-success, 정보 text-info, 경고 text-npc-dark:\n${offenders.join("\n")}`,
+  );
+});

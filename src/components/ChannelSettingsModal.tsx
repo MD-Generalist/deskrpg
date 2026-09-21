@@ -417,19 +417,19 @@ export default function ChannelSettingsModal({
         <div className="flex border-b border-border">
           <button
             onClick={() => setTab("settings")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "settings" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-text-muted"}`}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "settings" ? "text-info border-b-2 border-info" : "text-text-muted"}`}
           >
             {t("settings.general")}
           </button>
           <button
             onClick={() => setTab("members")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "members" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-text-muted"}`}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "members" ? "text-info border-b-2 border-info" : "text-text-muted"}`}
           >
             {t("settings.members")}
           </button>
           <button
             onClick={() => setTab("gateway")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "gateway" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-text-muted"}`}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "gateway" ? "text-info border-b-2 border-info" : "text-text-muted"}`}
           >
             {t("settings.gateway")}
           </button>
@@ -524,7 +524,7 @@ export default function ChannelSettingsModal({
                   </button>
                 </div>
               </div>
-              {saveError && <p className="text-red-400 text-sm">{saveError}</p>}
+              {saveError && <p className="text-danger text-sm">{saveError}</p>}
               {saveSuccess && <p className="text-success text-sm">{t("settings.saved")}</p>}
               <button
                 onClick={handleSave}
@@ -541,7 +541,7 @@ export default function ChannelSettingsModal({
                   {t("settings.loadingMembers")}
                 </p>
               ) : membersError ? (
-                <p className="text-red-400 text-sm py-4 text-center">{membersError}</p>
+                <p className="text-danger text-sm py-4 text-center">{membersError}</p>
               ) : members.length === 0 ? (
                 <p className="text-text-muted text-sm py-4 text-center">
                   {t("settings.noMembers")}
@@ -568,7 +568,7 @@ export default function ChannelSettingsModal({
                         <button
                           onClick={() => setConfirmKick(m)}
                           disabled={kickingUserId === m.userId}
-                          className="text-red-400 hover:text-red-300 text-xs px-2 py-1 disabled:opacity-50"
+                          className="text-danger hover:text-danger-hover text-xs px-2 py-1 disabled:opacity-50"
                         >
                           {t("settings.kick")}
                         </button>
@@ -682,13 +682,13 @@ export default function ChannelSettingsModal({
                           </p>
                         )}
                         {gatewayOptions.length === 0 && (
-                          <p className="mt-2 text-xs text-amber-300">
+                          <p className="mt-2 text-xs text-npc-dark">
                             {t("settings.gatewayNoSaved")}
                           </p>
                         )}
                       </div>
                       {!gatewayCanEditCredentials && selectedGatewayId && (
-                        <p className="text-xs text-amber-300">
+                        <p className="text-xs text-npc-dark">
                           {t("settings.gatewaySharedReadOnly")}
                         </p>
                       )}
@@ -734,9 +734,9 @@ export default function ChannelSettingsModal({
                           </button>
                         </div>
                       </div>
-                      <p className="text-xs text-amber-300">
+                      <p className="text-xs text-npc-dark">
                         {t("channel.gateway.directInputHint")}{" "}
-                        <Link href="/gateways" className="underline hover:text-amber-200">
+                        <Link href="/gateways" className="underline hover:text-npc">
                           {t("gateways.title")}
                         </Link>
                       </p>
@@ -755,12 +755,12 @@ export default function ChannelSettingsModal({
                   )}
                   {gatewayNotice && (
                     <p
-                      className={`text-sm ${gatewayNotice.success ? "text-success" : "text-red-400"}`}
+                      className={`text-sm ${gatewayNotice.success ? "text-success" : "text-danger"}`}
                     >
                       {gatewayNotice.message}
                     </p>
                   )}
-                  {gatewayError && <p className="text-red-400 text-sm">{gatewayError}</p>}
+                  {gatewayError && <p className="text-danger text-sm">{gatewayError}</p>}
                   <div className="flex gap-2">
                     {gatewayId && (
                       <button

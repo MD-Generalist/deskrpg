@@ -148,7 +148,7 @@ export default function ChatInput({
               <span className="text-text-dim">({(f.size / 1024).toFixed(0)}KB)</span>
               <button
                 onClick={() => removeFile(i)}
-                className="text-text-dim hover:text-red-400 ml-1"
+                className="text-text-dim hover:text-danger ml-1"
                 aria-label={t("chat.removeFile")}
                 title={t("chat.removeFile")}
               >
@@ -252,7 +252,7 @@ export default function ChatInput({
       {draft.length > maxLength * 0.8 && (
         <div className="text-right mt-1">
           <span
-            className={`text-[10px] ${draft.length >= maxLength ? "text-red-400" : "text-text-dim"}`}
+            className={`text-[10px] ${draft.length >= maxLength ? "text-danger" : "text-text-dim"}`}
           >
             {draft.length}/{maxLength}
           </span>

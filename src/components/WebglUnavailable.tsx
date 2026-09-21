@@ -23,7 +23,7 @@ export default function WebglUnavailable({ onRetry }: WebglUnavailableProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg text-text px-6"
     >
       <div className="max-w-md w-full rounded-lg border border-border bg-surface p-6 text-center">
-        <MonitorX className="w-10 h-10 mx-auto mb-4 text-red-400" aria-hidden />
+        <MonitorX className="w-10 h-10 mx-auto mb-4 text-danger" aria-hidden />
         <h1 className="text-xl font-semibold mb-3">{t("webgl.unavailableTitle")}</h1>
         <p className="text-sm text-text-muted mb-6 leading-relaxed">
           {t("webgl.unavailableDescription")}
