@@ -2954,26 +2954,22 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             </span>
           </button>
 
-          {/* Mode toggle */}
-          <button
-            data-meeting-entry="navbar"
-            onClick={() => (mode === "meeting" ? meetingEntry.cancel() : meetingEntry.request())}
-            title={mode === "office" ? t("game.meetingRoom") : t("common.back")}
-            aria-label={mode === "office" ? t("game.meetingRoom") : t("common.back")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-caption font-semibold ${
-              mode === "meeting"
-                ? "bg-primary hover:bg-primary-hover text-white"
-                : "bg-meeting/80 hover:bg-meeting text-white"
-            }`}
-          >
-            <Users className="w-3 h-3" />
-            <span className="header-full-label">
-              {mode === "office" ? t("game.meetingRoom") : t("common.back")}
-            </span>
-            <span className="bg-white/20 px-1.5 rounded-full text-micro">
-              {meetingMinutesCount}
-            </span>
-          </button>
+          {/* 회의실 입장 — 회의 화면에서는 숨긴다. 나가는 버튼은 맵 위(ThreeGame)에 있다. */}
+          {mode === "office" && (
+            <button
+              data-meeting-entry="navbar"
+              onClick={() => meetingEntry.request()}
+              title={t("game.meetingRoomWithMinutes", { count: meetingMinutesCount })}
+              aria-label={t("game.meetingRoom")}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-caption font-semibold bg-meeting/80 hover:bg-meeting text-white"
+            >
+              <Users className="w-3 h-3" />
+              <span className="header-full-label">{t("game.meetingRoom")}</span>
+              <span className="bg-white/20 px-1.5 rounded-full text-micro">
+                {meetingMinutesCount}
+              </span>
+            </button>
+          )}
 
           {/* Kanban board (T8) — 옛 태스크 보드 버튼 자리 */}
           <button

@@ -39,12 +39,15 @@ export function useMeetingEntry(socket: Socket | null, channelId: string | null)
       if (!["idle", "failed"].includes(entry.state.status))
         entry.fail(meetingErrorCode(reasonCode));
     };
+    // 맵 위 "오피스로" 버튼 — 회의 화면을 떠난다. 상단 네비에는 나가는 버튼을 두지 않는다.
+    const exit = () => entry.cancel();
     const disconnect = () => {
       if (entry.state.status === "walking") entry.fail("driver_disconnected");
       // 참가 화면은 유지해 재연결 snapshot을 수신하고, 조작은 회의 모드로 계속 잠근다.
     };
     EventBus.on("meeting:entry-state", arrival);
     EventBus.on("meeting:entry-intent", request);
+    EventBus.on("meeting:exit-intent", exit);
     EventBus.on("meeting:joined", joined);
     EventBus.on("meeting:presentation-result", camera);
     EventBus.on("meeting:join-failed", failed);
@@ -52,6 +55,7 @@ export function useMeetingEntry(socket: Socket | null, channelId: string | null)
     return () => {
       EventBus.off("meeting:entry-state", arrival);
       EventBus.off("meeting:entry-intent", request);
+      EventBus.off("meeting:exit-intent", exit);
       EventBus.off("meeting:joined", joined);
       EventBus.off("meeting:presentation-result", camera);
       EventBus.off("meeting:join-failed", failed);

@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Focus, Minus, Plus, Maximize, RotateCcw, RotateCw, Box, LayoutGrid } from "lucide-react";
+import {
+  Focus,
+  Minus,
+  Plus,
+  Maximize,
+  RotateCcw,
+  RotateCw,
+  Box,
+  LayoutGrid,
+  LogOut,
+} from "lucide-react";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { OfficeRenderer } from "@/game/three/office-renderer";
 import type { OfficeBridge } from "@/game/three/bridge";
@@ -325,6 +335,17 @@ export default function ThreeGame(props: ThreeGameProps) {
                 ? "클릭: 걷기 · 드래그: 화면 이동 · 우클릭 드래그: 회전 · 휠: 확대/축소"
                 : "Click: walk · Drag: pan · Right-drag: orbit · Scroll: zoom"}
           </div>
+          {meetingCamera.active && (
+            <button
+              type="button"
+              data-meeting-exit="map"
+              className="absolute right-4 top-4 z-[3] flex min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-surface-raised px-3 py-2 text-caption font-semibold text-text shadow-md hover:bg-surface"
+              onClick={() => EventBus.emit("meeting:exit-intent")}
+            >
+              <LogOut size={15} />
+              {t("meeting.backToOffice")}
+            </button>
+          )}
           {insideMeeting && !meetingCamera.active && (
             <button
               type="button"

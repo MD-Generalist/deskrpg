@@ -68,3 +68,24 @@ test("WebGL 렌더러가 없으면 성공을 가장하지 않고 참가 UI를 �
   assert.equal(element.firstElementChild?.getAttribute("data-state"), "failed");
   await act(async () => root.unmount());
 });
+
+test("맵 위 '오피스로' 버튼의 exit-intent 는 참가 중인 회의 화면을 닫는다", async (context) => {
+  const element = document.createElement("div");
+  document.body.appendChild(element);
+  const root = createRoot(element);
+  const camera = () => EventBus.emit("meeting:presentation-result", { ok: true });
+  EventBus.on("meeting:presentation-enter", camera);
+  context.after(async () => {
+    await act(async () => root.unmount());
+    EventBus.off("meeting:presentation-enter", camera);
+    element.remove();
+  });
+  await act(async () => root.render(<EntryHarness />));
+  await act(async () => element.querySelector("button")!.click());
+  await act(async () => EventBus.emit("meeting:entry-state", { status: "arrived" }));
+  await act(async () => EventBus.emit("meeting:joined"));
+  assert.equal(element.firstElementChild?.getAttribute("data-state"), "joined");
+  // 상단 네비에는 나가는 버튼이 없다 — 이 이벤트가 회의 화면을 떠나는 유일한 상단 밖 경로다.
+  await act(async () => EventBus.emit("meeting:exit-intent"));
+  assert.equal(element.firstElementChild?.getAttribute("data-state"), "idle");
+});

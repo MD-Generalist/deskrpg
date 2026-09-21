@@ -17,7 +17,7 @@ import {
 /**
  * 회의실 탭으로 들어가 참가자를 고르고 토론을 시작한다.
  *
- * 셀렉터 주의: 상단 버튼 레이블에는 배지 숫자가 붙는다("회의실 0", "뒤로 0"). 이름을
+ * 셀렉터 주의: 상단 버튼 레이블에는 배지 숫자가 붙는다("회의실 0"). 이름을
  * 정확 일치로 잡으면 숫자가 바뀌는 순간 조용히 멈춘다 — 정규식으로 받는다.
  */
 async function startMeeting(page: Page, npcNames: string[], topic: string): Promise<void> {
