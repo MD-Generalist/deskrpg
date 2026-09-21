@@ -139,6 +139,27 @@ export function activeReportReleased(
 }
 
 /**
+ * 복귀시킨 직원 목록을 정리한다 — 자리에 닿았으면(서명이 `:home` 이고 주인이 내가 아니면) 뺀다.
+ * 복귀를 누른 직후에는 스냅샷이 아직 "내 호출에 대기" 라 서명만으로는 복귀 중인지 모른다.
+ * 그래서 화면이 누른 순간 넣고, 여기서 도착을 확인해 뺀다.
+ */
+export function settleReturningNpcs(
+  returning: ReadonlySet<string>,
+  signatures: Readonly<Record<string, string>>,
+): ReadonlySet<string> {
+  let changed = false;
+  const next = new Set(returning);
+  for (const npcId of returning) {
+    const signature = signatures[npcId] ?? "";
+    if (signature.endsWith(":home") && signatureOwner(signature) !== "mine") {
+      next.delete(npcId);
+      changed = true;
+    }
+  }
+  return changed ? next : returning;
+}
+
+/**
  * 지금 보고하러 직원을 부르면 안 되는가.
  *
  * 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다. **회의실에 있는 동안에도** 부르지
@@ -165,9 +186,16 @@ export function decideReportCall(input: {
   signatures: Readonly<Record<string, string>>;
   /** 지금 부르면 안 되는가(`reportCallBlocked`). 큐는 그대로 남는다. */
   blocked: boolean;
+  /** 자리로 돌아가는 중이라 지금은 부르지 않을 직원(`settleReturningNpcs`). */
+  returningNpcIds?: ReadonlySet<string>;
 }): ReportItem | null {
   if (input.blocked) return null;
   const callable = (item: ReportItem): boolean => {
+    // 복귀 중인 직원은 자리에 닿을 때까지 후보가 아니다. 복귀가 보고를 확인하는 순간 같은
+    // 직원의 접힌 보고가 되살아나 곧바로 다시 불렸고, 그 호출이 복귀를 뒤집어 직원이 곁에
+    // 남았다(스테이징 실측: 올리버를 복귀시켰는데 "내 호출에 대기" 로 남고 소피가 먼저 왔다).
+    if (input.returningNpcIds?.has(item.npcId)) return false;
+    if ((input.signatures[item.npcId] ?? "").startsWith("returning:")) return false;
     const attempt = input.attempts.find((a) => a.messageId === item.messageId);
     if (!attempt) return true;
     // 결과를 기다리는 중이면 다시 쏘지 않는다. 사용자가 닫은 보고도 다시 부르지 않는다.

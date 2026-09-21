@@ -18,6 +18,7 @@ import {
   DISMISSED_REPORT_REVIVE_MS,
   recallReport,
   reviveDismissedReports,
+  settleReturningNpcs,
   missedReportArrival,
   reportAckKey,
   npcSignature,
@@ -671,4 +672,53 @@ test("다시 부르기는 접힌 보고를 즉시 후보로 만든다 — 막힘
   const input = { queue, activeMessageId: null, attempts, signatures: {}, blocked: false };
   assert.equal(decideReportCall(input)?.messageId, "m1");
   assert.equal(decideReportCall({ ...input, blocked: true }), null);
+});
+
+// 스테이징 실측(34369ac8): 복귀가 보고를 확인하는 순간 같은 직원의 접힌 보고가 되살아나
+// 곧바로 다시 불렸고, 그 호출이 복귀를 뒤집어 직원이 곁에 남았다.
+
+test("복귀 중인 직원은 자리에 닿을 때까지 보고 호출 후보가 아니다 — 다음 직원이 온다", () => {
+  const queue = [
+    item("m1", "oliver", "2026-09-21T01:00:00Z"),
+    item("m2", "sophie", "2026-09-21T02:00:00Z"),
+  ];
+  const input = {
+    queue,
+    activeMessageId: null,
+    attempts: [],
+    // 복귀를 누른 직후라 스냅샷은 아직 "내 호출에 대기" 다.
+    signatures: { oliver: "waiting:mine:away", sophie: "idle:none:home" },
+    blocked: false,
+  };
+  assert.equal(
+    decideReportCall({ ...input, returningNpcIds: new Set(["oliver"]) })?.messageId,
+    "m2",
+  );
+  assert.equal(
+    decideReportCall({
+      ...input,
+      signatures: { oliver: "returning:none:away", sophie: "idle:none:home" },
+    })?.messageId,
+    "m2",
+    "서버 스냅샷이 복귀 중이어도 부르지 않는다",
+  );
+});
+
+test("복귀한 직원은 자리에 닿으면 다시 후보가 된다", () => {
+  const returning = new Set(["oliver"]);
+  assert.equal(settleReturningNpcs(returning, { oliver: "waiting:mine:away" }), returning);
+  assert.equal(settleReturningNpcs(returning, { oliver: "returning:none:away" }), returning);
+  assert.equal(settleReturningNpcs(returning, { oliver: "idle:none:home" }).size, 0);
+  const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
+  assert.equal(
+    decideReportCall({
+      queue,
+      activeMessageId: null,
+      attempts: [],
+      signatures: { oliver: "idle:none:home" },
+      blocked: false,
+      returningNpcIds: settleReturningNpcs(returning, { oliver: "idle:none:home" }),
+    })?.messageId,
+    "m1",
+  );
 });

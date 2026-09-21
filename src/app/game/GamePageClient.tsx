@@ -63,6 +63,7 @@ import {
   dismissedReportIds,
   recallReport,
   reviveDismissedReports,
+  settleReturningNpcs,
   missedReportArrival,
   reconcileReportAttempts,
   reportCallBlocked,
@@ -254,6 +255,13 @@ export default function GamePage({ onFatal }: GamePageClientProps = {}) {
   );
 }
 
+function withoutNpc(set: ReadonlySet<string>, npcId: string): ReadonlySet<string> {
+  if (!set.has(npcId)) return set;
+  const next = new Set(set);
+  next.delete(npcId);
+  return next;
+}
+
 function GamePageInner({ onFatal }: GamePageClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -356,6 +364,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // 시도 기록(ref)이 바뀐 것을 화면에 알리는 버전, 마지막 확인 시각, 접힌 보고 되살리기용 시계.
   const [reportAttemptsVersion, setReportAttemptsVersion] = useState(0);
   const lastReportAckAtRef = useRef<number | null>(null);
+  // 복귀시켜 자리로 돌아가는 중인 직원. 도착할 때까지 보고 호출 후보가 아니다.
+  const returningNpcsRef = useRef<ReadonlySet<string>>(new Set());
   const [reportClock, setReportClock] = useState(0);
   const reportAttemptsRef = useRef<ReportAttempt[]>([]);
   // 대화 목록에 올라가는 직원별 DM 한 줄. 방과 달리 서버가 밀어 주지 않으므로 필요할 때 묻는다.
@@ -2206,6 +2216,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       reportAttemptsRef.current = revived;
       setReportAttemptsVersion((v) => v + 1);
     }
+    returningNpcsRef.current = settleReturningNpcs(returningNpcsRef.current, reportSignatures);
     reportAttemptsRef.current = reconcileReportAttempts(
       reportAttemptsRef.current,
       reportSignatures,
@@ -2250,6 +2261,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       attempts: reportAttemptsRef.current,
       signatures: reportSignatures,
       blocked,
+      returningNpcIds: returningNpcsRef.current,
     });
     if (!next) return;
     const signature = reportSignatures[next.npcId] ?? "unknown:none";
@@ -2258,6 +2270,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         ...reportAttemptsRef.current.filter((a) => a.messageId !== next.messageId).slice(-49),
         { messageId: next.messageId, outcome, signature },
       ];
+      setReportAttemptsVersion((v) => v + 1);
     };
     record("sent");
     setReportingMessageId(next.messageId);
@@ -2323,6 +2336,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // 보고 목록의 "접힘" 표시. 시도 기록은 ref 라 바뀔 때 버전을 올려 다시 읽는다.
   const dismissedReports = useMemo(
     () => dismissedReportIds(reportAttemptsRef.current),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 버전이 ref 변경을 대신 알린다
+    [reportAttemptsVersion],
+  );
+
+  const reportAttemptsDiagnostics = useMemo(
+    () =>
+      reportAttemptsRef.current
+        .map((a) => `${a.messageId}:${a.outcome}${a.signature ? `@${a.signature}` : ""}`)
+        .join(" "),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 버전이 ref 변경을 대신 알린다
     [reportAttemptsVersion],
   );
@@ -2536,6 +2558,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           "npc:return-home",
           { channelId, npcId },
           (error: Error | null, result?: { ok: boolean; error?: string }) => {
+            // 복귀가 거절되면 직원은 돌아가지 않는다 — 복귀 중 표시를 풀어 다시 부를 수 있게 한다.
+            if (error || !result?.ok)
+              returningNpcsRef.current = withoutNpc(returningNpcsRef.current, npcId);
             if (error || !result?.ok)
               showToastNotification(
                 `npc-return-${npcId}`,
@@ -2550,6 +2575,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           },
         );
       mapChatParticipantsRef.current.dismiss(npcId);
+      // 자리에 닿을 때까지 보고 호출 후보에서 뺀다(`settleReturningNpcs` 가 도착을 확인해 푼다).
+      returningNpcsRef.current = new Set([...returningNpcsRef.current, npcId]);
       // 보고하러 온 직원을 돌려보냈다 = 그 보고를 받은 것으로 본다(단테 결정 2026-09-21).
       // 안 그러면 집에 닿는 순간 같은 보고로 다시 불려온다. 방 알림은 남는다.
       const report = reportingItemRef.current;
@@ -2969,6 +2996,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 NPC {rosterNpcs.filter((npc) => npc.active).length}
               </span>
             </span>
+            {/* 보고 큐 진단 — 이 큐의 결함은 화면으로만 드러나고 console.debug 는 자동화 도구에
+                잡히지 않는다. 실측에서 DOM 으로 상태를 읽는다(값은 id·상태뿐, 내용 없음). */}
+            <span
+              hidden
+              data-testid="report-diagnostics"
+              data-active={reportingMessageId ?? ""}
+              data-attempts={reportAttemptsDiagnostics}
+              data-returning={[...returningNpcsRef.current].join(",")}
+            />
             <ReportBadge
               queue={reportQueue}
               current={reportingItem}
