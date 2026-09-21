@@ -74,7 +74,7 @@ export default function MeetingOutcomePanel({
   if (summaryStatus === "failed" || !outcome) {
     if (summaryStatus !== "failed") return null;
     return (
-      <div className="bg-surface rounded-lg p-4 border border-warning/40 space-y-2" data-outcome>
+      <div className="bg-surface rounded-lg p-4 border border-npc-dark/40 space-y-2" data-outcome>
         <p className="text-caption text-text-secondary">{t("meeting.outcome.summaryFailed")}</p>
         {canRegister && (
           <button
@@ -209,7 +209,7 @@ export default function MeetingOutcomePanel({
               {t("meeting.outcome.registered", { count: registered.taskIds.length })}
             </p>
           ) : canRegister && !registerSupported ? (
-            <p className="text-caption text-warning" data-outcome-upgrade>
+            <p className="text-caption text-npc-dark" data-outcome-upgrade>
               {t("meeting.outcome.pluginUpgradeRequired")}
             </p>
           ) : (

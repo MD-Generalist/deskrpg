@@ -99,3 +99,36 @@ test("옅은 팔레트 글자색을 쓰지 않는다 — 의미색 토큰을 쓴
     `크림 배경 위 옅은 팔레트 글자색은 대비가 AA 에 못 미친다. 의미색 토큰으로 바꿔라 — 오류 text-danger, 성공 text-success, 정보 text-info, 경고 text-npc-dark:\n${offenders.join("\n")}`,
   );
 });
+
+/**
+ * 뜻으로 읽히는 색 이름은 **정의돼 있을 때만** 쓴다. Tailwind 는 모르는 색 이름의 유틸리티를 조용히 버리므로
+ * `text-warning` 은 빌드도 타입도 lint 도 통과하면서 아무 색도 내지 않는다 — 2026-09-21 에 "사용자가 조치해야
+ * 한다" 를 말하려던 세 자리가 그렇게 죽어 있었다(경고는 `npc-dark` 토큰을 쓴다).
+ */
+const SEMANTIC_COLOR_NAMES = ["warning", "error", "caution", "alert", "positive", "negative"];
+
+test("정의되지 않은 의미색 이름으로 유틸리티 클래스를 쓰지 않는다", () => {
+  const css = ["styles/tokens.css", "app/globals.css"]
+    .map((file) => readFileSync(path.join(SRC, file), "utf8"))
+    .join("\n");
+  const undefinedNames = SEMANTIC_COLOR_NAMES.filter((name) => !css.includes(`--color-${name}:`));
+  const pattern = new RegExp(
+    `\\b(text|bg|border|fill|stroke|ring|from|to|via)-(${undefinedNames.join("|")})\\b`,
+  );
+  const offenders: string[] = [];
+  for (const file of walk(SRC)) {
+    if (file.endsWith("chat-accent.test.ts")) continue;
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        const bare = line.trim();
+        if (bare.startsWith("*") || bare.startsWith("//") || bare.startsWith("/*")) return;
+        if (pattern.test(line)) offenders.push(`${path.relative(SRC, file)}:${i + 1} ${bare}`);
+      });
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `정의되지 않은 색 이름이라 아무 색도 나지 않는다. 토큰을 정의하거나 있는 토큰을 써라(경고는 text-npc-dark):\n${offenders.join("\n")}`,
+  );
+});

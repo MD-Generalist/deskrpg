@@ -108,7 +108,7 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
 
   const tone =
     view.state === "outdated"
-      ? "text-warning"
+      ? "text-npc-dark"
       : view.state === "current"
         ? "text-success"
         : "text-text-muted";
