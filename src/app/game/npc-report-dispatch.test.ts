@@ -9,6 +9,7 @@ import {
   acknowledgedThrough,
   decideReportCall,
   reportAckKey,
+  reportCallBlocked,
   reportsForChannel,
   reportTarget,
 } from "./npc-report-dispatch";
@@ -312,4 +313,51 @@ test("응답을 기다리는 중인 보고(sent)는 상태가 바뀌어도 다�
     null,
     "낙관적 표시는 같은 보고를 두 번 쏘는 것을 막는 장치다 — 결과가 오기 전에는 유지한다",
   );
+});
+
+// ---------------------------------------------------------------------------
+// 회의실에 있는 동안에는 보고하러 부르지 않는다.
+//
+// 자동 보고 호출은 직원을 **내 호출**에 묶는다. 묶인 직원은 회의 집결이 원위치를 캡처하지
+// 못해 "참가자를 찾을 수 없습니다" 로 집결이 깨졌다 — 밀린 보고가 있으면 회의를 시작할 수
+// 없었다(스테이징 실측). 큐는 그대로 남고 회의실을 나오면 이어진다.
+// ---------------------------------------------------------------------------
+
+test("회의실에 있으면 보고 호출이 막힌다 — 대화창·칸반·크론과 같은 자리", () => {
+  const base = { dialogOpen: false, kanbanOpen: false, cronOpen: false, inMeeting: false };
+  assert.equal(reportCallBlocked(base), false);
+  assert.equal(reportCallBlocked({ ...base, inMeeting: true }), true, "회의 중에 직원을 부른다");
+  assert.equal(reportCallBlocked({ ...base, dialogOpen: true }), true);
+  assert.equal(reportCallBlocked({ ...base, kanbanOpen: true }), true);
+  assert.equal(reportCallBlocked({ ...base, cronOpen: true }), true);
+});
+
+test("회의 중에 막힌 보고는 큐에 남아 회의실을 나오면 다시 후보가 된다", () => {
+  const queue = [item("m1", "n1", "2026-09-21T10:00:00.000Z")];
+  const during = decideReportCall({
+    queue,
+    activeNpcId: null,
+    attempts: [],
+    signatures: {},
+    blocked: reportCallBlocked({
+      dialogOpen: false,
+      kanbanOpen: false,
+      cronOpen: false,
+      inMeeting: true,
+    }),
+  });
+  assert.equal(during, null);
+  const after = decideReportCall({
+    queue,
+    activeNpcId: null,
+    attempts: [],
+    signatures: {},
+    blocked: reportCallBlocked({
+      dialogOpen: false,
+      kanbanOpen: false,
+      cronOpen: false,
+      inMeeting: false,
+    }),
+  });
+  assert.equal(after?.messageId, "m1", "회의가 끝났는데 보고가 사라졌다");
 });

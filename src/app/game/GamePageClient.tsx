@@ -49,6 +49,7 @@ import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
 import {
   acknowledgedThrough,
   decideReportCall,
+  reportCallBlocked,
   reportAckKey,
   reportsForChannel,
   reportTarget,
@@ -2174,7 +2175,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       activeNpcId: reportingNpcId,
       attempts: reportAttemptsRef.current,
       signatures: reportSignatures,
-      blocked: Boolean(dialogNpc) || showKanban || showCron,
+      blocked: reportCallBlocked({
+        dialogOpen: Boolean(dialogNpc),
+        kanbanOpen: showKanban,
+        cronOpen: showCron,
+        inMeeting: mode === "meeting",
+      }),
     });
     if (!next) return;
     const signature = reportSignatures[next.npcId] ?? "unknown:none";
@@ -2211,6 +2217,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     dialogNpc,
     showKanban,
     showCron,
+    mode,
   ]);
 
   // 보고가 큐에서 빠지면(확인됨) 다음 사람에게 자리를 넘긴다.

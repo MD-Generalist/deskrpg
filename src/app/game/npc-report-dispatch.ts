@@ -68,6 +68,23 @@ export function npcSignature(
   return `${phase ?? "unknown"}:${owner}`;
 }
 
+/**
+ * 지금 보고하러 직원을 부르면 안 되는가.
+ *
+ * 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다. **회의실에 있는 동안에도** 부르지
+ * 않는다 — 자동 보고 호출은 직원을 내 호출에 묶고, 묶인 직원은 회의 집결이 원위치를 캡처하지
+ * 못해 "참가자를 찾을 수 없습니다" 로 집결이 깨진다. 밀린 보고가 있으면 회의를 시작할 수
+ * 없었다(스테이징 실측). 어느 경우든 큐는 그대로 남고, 막힌 이유가 사라지면 이어진다.
+ */
+export function reportCallBlocked(input: {
+  dialogOpen: boolean;
+  kanbanOpen: boolean;
+  cronOpen: boolean;
+  inMeeting: boolean;
+}): boolean {
+  return input.dialogOpen || input.kanbanOpen || input.cronOpen || input.inMeeting;
+}
+
 export function decideReportCall(input: {
   queue: readonly ReportItem[];
   /** 지금 보고하러 오는 중이거나 말하는 중인 NPC. */
@@ -76,7 +93,7 @@ export function decideReportCall(input: {
   attempts: readonly ReportAttempt[];
   /** 지금 각 직원의 상태 서명. 거절 당시와 다르면 다시 부를 수 있다. */
   signatures: Readonly<Record<string, string>>;
-  /** 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다. 큐는 그대로 남는다. */
+  /** 지금 부르면 안 되는가(`reportCallBlocked`). 큐는 그대로 남는다. */
   blocked: boolean;
 }): ReportItem | null {
   if (input.blocked) return null;
