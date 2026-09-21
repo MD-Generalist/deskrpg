@@ -3,7 +3,13 @@ import test from "node:test";
 
 import type { RoomMessage } from "@/lib/chat-rooms-policy";
 
-import { nextReporter, pendingReports } from "./report-queue";
+import {
+  acknowledgeReport,
+  EMPTY_REPORT_ACK,
+  parseReportAck,
+  pendingReports,
+  serializeReportAck,
+} from "./report-queue";
 
 const msg = (over: Partial<RoomMessage> & { id: string }): RoomMessage => ({
   roomId: "office",
@@ -55,7 +61,7 @@ test("보고 대상은 review·blocked·done 과 실패한 크론뿐이다", () 
     msg({ id: "f", createdAt: "2026-09-21T00:00:06.000Z" }),
   ];
   assert.deepEqual(
-    pendingReports(messages, null, present).map((r) => r.messageId),
+    pendingReports(messages, EMPTY_REPORT_ACK, present).map((r) => r.messageId),
     ["a", "b", "c", "e"],
     "성공한 크론과 일반 메시지는 보고가 아니다",
   );
@@ -68,7 +74,7 @@ test("발생 순서대로 줄을 세운다 — 목록이 뒤섞여 들어와도"
     card("mid", "card_done", "2026-09-21T00:00:05.000Z"),
   ];
   assert.deepEqual(
-    pendingReports(messages, null, present).map((r) => r.messageId),
+    pendingReports(messages, EMPTY_REPORT_ACK, present).map((r) => r.messageId),
     ["early", "mid", "late"],
   );
 });
@@ -80,7 +86,9 @@ test("확인 시점 이전의 보고는 제외한다 — 그 시점 자체도 �
     card("new", "card_review", "2026-09-21T00:00:09.000Z"),
   ];
   assert.deepEqual(
-    pendingReports(messages, "2026-09-21T00:00:05.000Z", present).map((r) => r.messageId),
+    pendingReports(messages, parseReportAck("2026-09-21T00:00:05.000Z"), present).map(
+      (r) => r.messageId,
+    ),
     ["new"],
   );
 });
@@ -91,7 +99,7 @@ test("맵에 없는 NPC 의 보고는 큐에 넣지 않는다 — 걸어올 주�
     card("here", "card_review", "2026-09-21T00:00:02.000Z", "npc-2"),
   ];
   assert.deepEqual(
-    pendingReports(messages, null, present).map((r) => r.messageId),
+    pendingReports(messages, EMPTY_REPORT_ACK, present).map((r) => r.messageId),
     ["here"],
   );
 });
@@ -99,7 +107,11 @@ test("맵에 없는 NPC 의 보고는 큐에 넣지 않는다 — 걸어올 주�
 test("발신자 id 가 없는 알림(시스템 대체)은 큐에 넣지 않는다", () => {
   const orphan = card("sys", "card_review", "2026-09-21T00:00:01.000Z");
   assert.deepEqual(
-    pendingReports([{ ...orphan, senderKind: "system", senderId: null }], null, present),
+    pendingReports(
+      [{ ...orphan, senderKind: "system", senderId: null }],
+      EMPTY_REPORT_ACK,
+      present,
+    ),
     [],
   );
 });
@@ -107,7 +119,7 @@ test("발신자 id 가 없는 알림(시스템 대체)은 큐에 넣지 않는�
 test("보고 항목은 카드로 이동할 값을 함께 싣는다", () => {
   const [item] = pendingReports(
     [card("a", "card_review", "2026-09-21T00:00:01.000Z")],
-    null,
+    EMPTY_REPORT_ACK,
     present,
   );
   assert.deepEqual(item, {
@@ -119,6 +131,7 @@ test("보고 항목은 카드로 이동할 값을 함께 싣는다", () => {
     cardId: "c-a",
     boardSlug: "b",
     cardTitle: "제목 a",
+    summary: "카드",
     createdAt: "2026-09-21T00:00:01.000Z",
   });
 });
@@ -138,7 +151,7 @@ test("크론 실패 보고는 열어야 할 곳이 카드가 아니라 크론 �
         },
       }),
     ],
-    null,
+    EMPTY_REPORT_ACK,
     present,
   );
   assert.equal(item.kind, "cron_failed");
@@ -150,27 +163,26 @@ test("크론 실패 보고는 열어야 할 곳이 카드가 아니라 크론 �
 test("카드 보고에는 jobId 가 없다", () => {
   const [item] = pendingReports(
     [card("a", "card_review", "2026-09-21T00:00:01.000Z")],
-    null,
+    EMPTY_REPORT_ACK,
     present,
   );
   assert.equal(item.jobId, null);
 });
 
-test("한 번에 한 명 — 이미 보고 중인 NPC 가 있으면 그 사람을 계속 돌려준다", () => {
-  const queue = pendingReports(
-    [
-      card("a", "card_review", "2026-09-21T00:00:01.000Z", "npc-1"),
-      card("b", "card_blocked", "2026-09-21T00:00:02.000Z", "npc-2"),
-    ],
-    null,
-    present,
+test("옛 문자열 워터마크는 그 시각 이전을 확인된 것으로 읽는다 — 하위 호환", () => {
+  assert.deepEqual(parseReportAck("2026-09-21T00:00:05.000Z"), {
+    through: "2026-09-21T00:00:05.000Z",
+    ids: [],
+  });
+  assert.deepEqual(parseReportAck(null), EMPTY_REPORT_ACK);
+  assert.deepEqual(parseReportAck("{깨짐"), EMPTY_REPORT_ACK);
+});
+
+test("확인은 건 단위로 쌓이고 저장·복원된다", () => {
+  const ack = acknowledgeReport(
+    acknowledgeReport(parseReportAck("2026-09-21T00:00:05.000Z"), "b"),
+    "b",
   );
-  assert.equal(nextReporter(queue, null)?.messageId, "a", "비어 있으면 맨 앞");
-  assert.equal(nextReporter(queue, "npc-2")?.messageId, "b", "보고 중인 쪽을 유지한다");
-  assert.equal(
-    nextReporter(queue, "npc-gone")?.messageId,
-    "a",
-    "보고 중이라던 NPC 의 보고가 큐에 없으면 맨 앞으로 넘어간다",
-  );
-  assert.equal(nextReporter([], "npc-1"), null);
+  assert.deepEqual(ack.ids, ["b"], "같은 건을 두 번 넣지 않는다");
+  assert.deepEqual(parseReportAck(serializeReportAck(ack)), ack);
 });

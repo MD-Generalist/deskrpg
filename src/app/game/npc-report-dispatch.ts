@@ -6,7 +6,7 @@
  */
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 
-import { nextReporter, pendingReports, type ReportItem } from "@/game/report-queue";
+import { pendingReports, type ReportAck, type ReportItem } from "@/game/report-queue";
 
 /**
  * 방 상태와 로스터에서 이번 채널의 보고 큐를 뽑는다. 화면이 갖고 있는 모양 그대로 받아
@@ -16,13 +16,13 @@ export function reportsForChannel(input: {
   rooms: readonly RoomSummary[];
   messages: Readonly<Record<string, RoomMessage[]>>;
   npcs: readonly { id: string; active: boolean }[];
-  acknowledgedAt: string | null;
+  acknowledged: ReportAck;
 }): ReportItem[] {
   const officeId = input.rooms.find((room) => room.kind === "office")?.id ?? null;
   if (!officeId) return [];
   return pendingReports(
     input.messages[officeId] ?? [],
-    input.acknowledgedAt,
+    input.acknowledged,
     input.npcs.filter((npc) => npc.active).map((npc) => npc.id),
   );
 }
@@ -46,8 +46,8 @@ export function reportTarget(
  *
  * - `sent` — 쏘았고 아직 거절을 받지 않았다. 같은 보고를 두 번 쏘는 것을 막는 낙관적 표시다.
  * - `rejected` — 거절됐다. 그 직원의 상태가 **그대로인 동안은** 다시 쏘지 않는다.
- * - `dismissed` — 직원이 와서 대화창까지 열렸는데 사용자가 확인하지 않고 닫았다. 이 세션에서는
- *   다시 부르지 않는다. 배지와 방 알림은 남으므로 사용자가 직접 열 수 있다.
+ * - `dismissed` — 직원이 와서 대화창까지 열렸는데 사용자가 확인하지 않고 닫았다. 이 보고는
+ *   이 세션에서 다시 부르지 않는다. 확인과 달리 배지에 남아 사용자가 직접 열 수 있다.
  */
 export type ReportAttempt = {
   messageId: string;
@@ -134,8 +134,8 @@ export function reportCallBlocked(input: {
 
 export function decideReportCall(input: {
   queue: readonly ReportItem[];
-  /** 지금 보고하러 오는 중이거나 말하는 중인 NPC. */
-  activeNpcId: string | null;
+  /** 지금 전하러 오는 중이거나 전하는 중인 보고. 직원이 아니라 보고 건으로 추적한다. */
+  activeMessageId: string | null;
   /** 이 보고들에 무엇을 했고 어떻게 됐는지. */
   attempts: readonly ReportAttempt[];
   /** 지금 각 직원의 상태 서명. 거절 당시와 다르면 다시 부를 수 있다. */
@@ -152,11 +152,13 @@ export function decideReportCall(input: {
     // 거절 — 그 직원의 상태가 바뀌었을 때만 다시 후보가 된다.
     return (input.signatures[item.npcId] ?? "unknown:none:away") !== attempt.signature;
   };
-  const active = nextReporter(input.queue, input.activeNpcId);
-  // 보고 중인 직원이 있으면 그 사람이 우선이다.
-  if (input.activeNpcId && active && active.npcId === input.activeNpcId)
-    return callable(active) ? active : null;
-  // 맨 앞이 막아도 큐 전체가 멈추면 안 된다(head-of-line blocking). 다음 후보로 넘어간다.
+  // 전하는 중인 보고가 끝날 때까지 다음 사람을 부르지 않는다 — 한 번에 한 명이다.
+  const active = input.queue.find((item) => item.messageId === input.activeMessageId);
+  if (active) return callable(active) ? active : null;
+  // 그 밖에는 **보고가 생긴 순서대로**다. 예전에는 보고 중이던 직원의 남은 보고를 먼저 골라,
+  // 소피→올리버→소피 큐에서 소피가 다시 불리고 올리버는 오지 못했다(배지는 올리버 보고를
+  // 가리키고 있었다). 같은 직원이 두 번 오가는 것은 감수한다. 맨 앞이 거절돼 막히면 큐 전체가
+  // 멈추지 않게 다음 후보로 넘어간다(head-of-line blocking).
   return input.queue.find(callable) ?? null;
 }
 
@@ -170,14 +172,14 @@ export function decideReportCall(input: {
  */
 export function missedReportArrival(input: {
   queue: readonly ReportItem[];
-  activeNpcId: string | null;
+  activeMessageId: string | null;
   attempts: readonly ReportAttempt[];
   signatures: Readonly<Record<string, string>>;
   blocked: boolean;
 }): ReportItem | null {
-  if (input.blocked || !input.activeNpcId) return null;
-  const item = nextReporter(input.queue, input.activeNpcId);
-  if (!item || item.npcId !== input.activeNpcId) return null;
+  if (input.blocked || !input.activeMessageId) return null;
+  const item = input.queue.find((entry) => entry.messageId === input.activeMessageId);
+  if (!item) return null;
   const attempt = input.attempts.find((a) => a.messageId === item.messageId);
   if (!attempt || attempt.outcome !== "sent" || attempt.opened) return null;
   const signature = input.signatures[item.npcId] ?? "";
@@ -185,38 +187,23 @@ export function missedReportArrival(input: {
 }
 
 /**
- * 보고하러 온 직원과의 대화창을 확인 없이 닫았다 — 그 직원의 밀린 보고를 이 세션에서
- * 다시 부르지 않는다.
+ * 보고하러 온 직원과의 대화창을 확인 없이 닫았다 — 이 보고를 이 세션에서 다시 부르지 않는다.
  *
- * 확인은 알림 링크(카드·크론)를 열 때만 일어난다. 그래서 대화창만 닫으면 시도가 "보냄" 으로
- * 남고 보고 중인 직원도 그대로라 큐 전체가 멈췄다. 한 사람의 보고를 전부 묶는 이유: 하나만
- * 풀면 같은 직원이 다음 보고로 곧바로 다시 걸어온다.
+ * 확인은 알림 링크를 열거나 복귀시킬 때 일어난다. 대화창만 닫으면 시도가 "보냄" 으로 남아
+ * 큐 전체가 멈췄다. **그 한 건만** 접는다 — 같은 직원의 다음 보고는 시간순 차례에 다시 온다.
  */
-export function dismissReportsOf(
+export function dismissReport(
   attempts: readonly ReportAttempt[],
-  npcId: string,
-  queue: readonly ReportItem[],
+  messageId: string,
 ): ReportAttempt[] {
-  const ids = new Set(queue.filter((item) => item.npcId === npcId).map((item) => item.messageId));
-  const kept = attempts.filter((attempt) => !ids.has(attempt.messageId));
-  const dismissed = [...ids].map((messageId) => ({
-    messageId,
-    outcome: "dismissed" as const,
-    signature: "",
-  }));
-  return [...kept, ...dismissed];
+  return [
+    ...attempts.filter((attempt) => attempt.messageId !== messageId),
+    { messageId, outcome: "dismissed", signature: "" },
+  ];
 }
 
 /**
- * 확인 지점을 이 보고까지 밀어 준다. 이미 더 뒤까지 확인했으면 되돌리지 않는다 —
- * 오래된 알림을 눌렀다고 새 보고가 되살아나면 안 된다.
- */
-export function acknowledgedThrough(current: string | null, item: ReportItem): string {
-  return current && current >= item.createdAt ? current : item.createdAt;
-}
-
-/**
- * 확인 지점을 담아 두는 브라우저 저장 키. 서버 읽은 지점 스키마를 건드리지 않으려는 선택이라,
+ * 확인 기록(`ReportAck`)을 담아 두는 브라우저 저장 키. 서버 읽은 지점 스키마를 건드리지 않으려는 선택이라,
  * 대가로 기기마다 배지가 다를 수 있다. 읽은 지점이 정리되면 그 값으로 갈아끼운다.
  */
 export function reportAckKey(channelId: string): string {

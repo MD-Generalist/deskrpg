@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ReportItem } from "@/game/report-queue";
+import {
+  acknowledgeReport,
+  EMPTY_REPORT_ACK,
+  pendingReports,
+  type ReportItem,
+} from "@/game/report-queue";
 
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 
 import {
-  acknowledgedThrough,
   decideReportCall,
-  dismissReportsOf,
+  dismissReport,
   missedReportArrival,
   reportAckKey,
   npcSignature,
@@ -28,6 +32,7 @@ const item = (messageId: string, npcId: string, createdAt: string): ReportItem =
   boardSlug: "b",
   jobId: null,
   cardTitle: messageId,
+  summary: "",
   createdAt,
 });
 
@@ -49,7 +54,7 @@ test("큐가 비어 있으면 아무도 부르지 않는다", () => {
   assert.equal(
     decideReportCall({
       queue: [],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [],
       signatures: {},
       blocked: false,
@@ -62,7 +67,7 @@ test("맨 앞 보고의 NPC 를 부른다", () => {
   assert.equal(
     decideReportCall({
       queue: [A, B],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [],
       signatures: {},
       blocked: false,
@@ -75,7 +80,7 @@ test("대화창·모달이 열려 있으면 부르지 않는다 — 큐는 남�
   assert.equal(
     decideReportCall({
       queue: [A, B],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [],
       signatures: {},
       blocked: true,
@@ -88,7 +93,7 @@ test("이미 호출을 쏜 보고는 다시 부르지 않는다 — 걸어오는
   assert.equal(
     decideReportCall({
       queue: [A, B],
-      activeNpcId: "npc-1",
+      activeMessageId: "a",
       attempts: [sent("a")],
       signatures: {},
       blocked: false,
@@ -97,27 +102,17 @@ test("이미 호출을 쏜 보고는 다시 부르지 않는다 — 걸어오는
   );
 });
 
-test("보고 중인 NPC 의 보고가 끝나 큐에서 빠지면 다음 사람을 부른다", () => {
+test("전하던 보고가 끝나 큐에서 빠지면 다음 보고를 부른다", () => {
   assert.equal(
     decideReportCall({
       queue: [B],
-      activeNpcId: "npc-1",
+      activeMessageId: "a",
       attempts: [sent("a")],
       signatures: {},
       blocked: false,
     })?.messageId,
     "b",
   );
-});
-
-test("확인 지점은 그 보고까지 포함해 앞선 것을 모두 덮는다", () => {
-  assert.equal(acknowledgedThrough(null, B), "2026-09-21T00:00:02.000Z");
-  assert.equal(
-    acknowledgedThrough("2026-09-21T00:00:05.000Z", B),
-    "2026-09-21T00:00:05.000Z",
-    "이미 더 뒤까지 확인했으면 되돌리지 않는다",
-  );
-  assert.equal(acknowledgedThrough("2026-09-21T00:00:01.000Z", B), "2026-09-21T00:00:02.000Z");
 });
 
 test("확인 지점 저장 키는 채널마다 다르다", () => {
@@ -158,7 +153,7 @@ test("사무실 방이 아직 없으면 빈 큐다 — 접속 직후 목록이 �
       rooms: [room("g", "group")],
       messages: { g: [notice("a", "npc-1")] },
       npcs: [{ id: "npc-1", active: true }],
-      acknowledgedAt: null,
+      acknowledged: EMPTY_REPORT_ACK,
     }),
     [],
   );
@@ -169,7 +164,7 @@ test("사무실 방의 알림만 본다 — 그룹 방 알림은 보고가 아�
     rooms: [room("office", "office"), room("g", "group")],
     messages: { office: [notice("a", "npc-1")], g: [notice("b", "npc-1")] },
     npcs: [{ id: "npc-1", active: true }],
-    acknowledgedAt: null,
+    acknowledged: EMPTY_REPORT_ACK,
   });
   assert.deepEqual(
     queue.map((item) => item.messageId),
@@ -183,18 +178,18 @@ test("잠든 NPC 의 보고는 큐에 넣지 않는다 — 걸어올 수 없다"
       rooms: [room("office", "office")],
       messages: { office: [notice("a", "npc-1")] },
       npcs: [{ id: "npc-1", active: false }],
-      acknowledgedAt: null,
+      acknowledged: EMPTY_REPORT_ACK,
     }),
     [],
   );
 });
 
 test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이 큐 전체를 막지 않는다", () => {
-  // sophie 의 호출이 거절되면 activeNpcId 가 비고, 그 항목은 calledMessageIds 에 남는다.
+  // sophie 의 호출이 거절되면 activeMessageId 가 비고, 그 항목은 calledMessageIds 에 남는다.
   // 예전에는 여기서 큐가 멈춰 noah 가 영영 걸어오지 못했다.
   const next = decideReportCall({
     queue: [A, B],
-    activeNpcId: null,
+    activeMessageId: null,
     attempts: [sent("a")],
     signatures: {},
     blocked: false,
@@ -203,7 +198,7 @@ test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이
   assert.equal(
     decideReportCall({
       queue: [A, B],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [sent("a"), sent("b")],
       signatures: {},
       blocked: false,
@@ -213,11 +208,11 @@ test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이
   );
 });
 
-test("보고 중인 직원이 있으면 그 사람이 우선이고 재호출은 하지 않는다", () => {
+test("전하는 중인 보고가 있으면 그 보고가 우선이고 재호출은 하지 않는다", () => {
   assert.equal(
     decideReportCall({
       queue: [A, B],
-      activeNpcId: "npc-2",
+      activeMessageId: "b",
       attempts: [],
       signatures: {},
       blocked: false,
@@ -228,7 +223,7 @@ test("보고 중인 직원이 있으면 그 사람이 우선이고 재호출은 
   assert.equal(
     decideReportCall({
       queue: [A, B],
-      activeNpcId: "npc-1",
+      activeMessageId: "a",
       attempts: [sent("a")],
       signatures: {},
       blocked: false,
@@ -255,7 +250,7 @@ test("거절된 보고는 그 직원의 상태가 그대로인 동안 다시 부
   assert.equal(
     decideReportCall({
       queue: [A],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [rejected("a", "idle:sock-1")],
       signatures: { "npc-1": "idle:sock-1" },
       blocked: false,
@@ -271,7 +266,7 @@ test("거절된 보고는 그 직원의 상태가 바뀌면 다시 후보가 된
   assert.equal(
     decideReportCall({
       queue: [A],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [rejected("a", "idle:sock-1")],
       signatures: { "npc-1": "idle:mine" },
       blocked: false,
@@ -286,7 +281,7 @@ test("미확인 보고가 전부 같은 직원 것이어도 상태가 바뀌면 
   assert.equal(
     decideReportCall({
       queue: [A, same],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [rejected("a", "idle:sock-1"), rejected("b", "idle:sock-1")],
       signatures: { "npc-1": "idle:sock-1" },
       blocked: false,
@@ -296,7 +291,7 @@ test("미확인 보고가 전부 같은 직원 것이어도 상태가 바뀌면 
   assert.equal(
     decideReportCall({
       queue: [A, same],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [rejected("a", "idle:sock-1"), rejected("b", "idle:sock-1")],
       signatures: { "npc-1": "idle:mine" },
       blocked: false,
@@ -310,7 +305,7 @@ test("응답을 기다리는 중인 보고(sent)는 상태가 바뀌어도 다�
   assert.equal(
     decideReportCall({
       queue: [A],
-      activeNpcId: null,
+      activeMessageId: null,
       attempts: [sent("a", "idle:sock-1")],
       signatures: { "npc-1": "walking:mine" },
       blocked: false,
@@ -341,7 +336,7 @@ test("회의 중에 막힌 보고는 큐에 남아 회의실을 나오면 다시
   const queue = [item("m1", "n1", "2026-09-21T10:00:00.000Z")];
   const during = decideReportCall({
     queue,
-    activeNpcId: null,
+    activeMessageId: null,
     attempts: [],
     signatures: {},
     blocked: reportCallBlocked({
@@ -354,7 +349,7 @@ test("회의 중에 막힌 보고는 큐에 남아 회의실을 나오면 다시
   assert.equal(during, null);
   const after = decideReportCall({
     queue,
-    activeNpcId: null,
+    activeMessageId: null,
     attempts: [],
     signatures: {},
     blocked: reportCallBlocked({
@@ -392,7 +387,7 @@ test("경로 2 — 회의가 끝나는 순간 낡은 상태로 거절된 호출�
   const home = npcSignature("idle", undefined, "me", true);
   const next = decideReportCall({
     queue,
-    activeNpcId: null,
+    activeMessageId: null,
     attempts,
     signatures: { n1: home },
     blocked: false,
@@ -422,7 +417,7 @@ test("경로 1 — 내 호출로 오던 직원을 누가 가져가면, 보낸 �
   // 회의가 끝나 집에 돌아오면 다시 후보가 된다.
   const next = decideReportCall({
     queue: queueOf("m1", "n1"),
-    activeNpcId: null,
+    activeMessageId: null,
     attempts,
     signatures: { n1: npcSignature("idle", undefined, "me", true) },
     blocked: false,
@@ -443,35 +438,33 @@ test("대화창을 확인 없이 닫으면 보고 중인 직원이 큐 전체를
   const attempts: ReportAttempt[] = [{ ...sent("m1", "idle:none:home"), acquired: true }];
   // 재현: 소피가 도착해 대기, 시도는 "보냄" — 올리버도 부르지 않는다.
   assert.equal(
-    decideReportCall({ queue, activeNpcId: "sophie", attempts, signatures, blocked: false }),
+    decideReportCall({ queue, activeMessageId: "m1", attempts, signatures, blocked: false }),
     null,
   );
   const next = decideReportCall({
     queue,
-    activeNpcId: null,
-    attempts: dismissReportsOf(attempts, "sophie", queue),
+    activeMessageId: null,
+    attempts: dismissReport(attempts, "m1"),
     signatures,
     blocked: false,
   });
   assert.equal(next?.messageId, "m2");
 });
 
-test("닫은 직원의 다른 보고도 다시 부르지 않는다", () => {
+test("닫은 보고 한 건만 접는다 — 같은 직원의 다음 보고는 시간순 차례에 온다", () => {
   const queue = [
     item("m1", "sophie", "2026-09-21T01:00:00Z"),
     item("m2", "sophie", "2026-09-21T02:00:00Z"),
   ];
-  const attempts = dismissReportsOf([sent("m1")], "sophie", queue);
+  const attempts = dismissReport([sent("m1")], "m1");
   assert.deepEqual(
     attempts.map((a) => [a.messageId, a.outcome]),
-    [
-      ["m1", "dismissed"],
-      ["m2", "dismissed"],
-    ],
+    [["m1", "dismissed"]],
   );
   assert.equal(
-    decideReportCall({ queue, activeNpcId: null, attempts, signatures: {}, blocked: false }),
-    null,
+    decideReportCall({ queue, activeMessageId: null, attempts, signatures: {}, blocked: false })
+      ?.messageId,
+    "m2",
   );
 });
 
@@ -479,7 +472,7 @@ test("도착 신호를 놓치고 내 곁에서 기다리는 직원은 대화창�
   const queue = [item("m1", "sophie", "2026-09-21T01:00:00Z")];
   const signatures = { sophie: "waiting:mine:away" };
   const attempts: ReportAttempt[] = [{ ...sent("m1"), acquired: true }];
-  const input = { queue, activeNpcId: "sophie", attempts, signatures, blocked: false };
+  const input = { queue, activeMessageId: "m1", attempts, signatures, blocked: false };
   assert.equal(missedReportArrival(input)?.messageId, "m1");
   assert.equal(missedReportArrival({ ...input, blocked: true }), null);
   assert.equal(
@@ -491,5 +484,88 @@ test("도착 신호를 놓치고 내 곁에서 기다리는 직원은 대화창�
     missedReportArrival({ ...input, signatures: { sophie: "moving-to-player:mine:away" } }),
     null,
   );
-  assert.equal(missedReportArrival({ ...input, activeNpcId: null }), null);
+  assert.equal(missedReportArrival({ ...input, activeMessageId: null }), null);
+});
+
+// 단테 결정(2026-09-21): 큐 시간순 우선 · 건 단위 확인 · 복귀 = 확인.
+
+const officeRoom = {
+  id: "office",
+  kind: "office" as const,
+  name: "사무실",
+  replyPolicy: "mention" as const,
+  createdBy: "u1",
+  lastMessageAt: null,
+  members: [],
+};
+const reportMessage = (id: string, npcId: string, createdAt: string): RoomMessage => ({
+  id,
+  roomId: "office",
+  senderKind: "npc",
+  senderId: npcId,
+  senderName: npcId,
+  content: `${id} 결과 요약`,
+  createdAt,
+  notice: { kind: "card_review", cardId: `c-${id}`, cardTitle: id, boardSlug: "b", npcName: npcId },
+});
+// 소피(목차) → 올리버(본문) → 소피(검수) — 스테이징에서 올리버가 오지 못했던 큐.
+const interleaved = [
+  reportMessage("toc", "sophie", "2026-09-21T01:00:00Z"),
+  reportMessage("body", "oliver", "2026-09-21T02:00:00Z"),
+  reportMessage("review", "sophie", "2026-09-21T03:00:00Z"),
+];
+const interleavedQueue = (acknowledged = EMPTY_REPORT_ACK) =>
+  reportsForChannel({
+    rooms: [officeRoom],
+    messages: { office: interleaved },
+    npcs: [
+      { id: "sophie", active: true },
+      { id: "oliver", active: true },
+    ],
+    acknowledged,
+  });
+
+test("교차 큐 — 소피의 첫 보고가 확인되면 둘째는 소피가 아니라 올리버가 온다", () => {
+  const queue = interleavedQueue(acknowledgeReport(EMPTY_REPORT_ACK, "toc"));
+  const next = decideReportCall({
+    queue,
+    // 방금까지 소피가 보고하던 중이었다 — 그래도 새치기하지 않는다.
+    activeMessageId: "toc",
+    attempts: [{ ...sent("toc"), acquired: true }],
+    signatures: { sophie: "waiting:mine:away", oliver: "idle:none:home" },
+    blocked: false,
+  });
+  assert.equal(next?.messageId, "body");
+  assert.equal(next?.npcId, "oliver");
+});
+
+test("한 건 확인은 다른 직원의 보고를 확인하지 않는다 — 뒤의 보고를 확인해도 앞의 올리버 보고가 남는다", () => {
+  const queue = interleavedQueue(acknowledgeReport(EMPTY_REPORT_ACK, "review"));
+  assert.deepEqual(
+    queue.map((entry) => entry.messageId),
+    ["toc", "body"],
+  );
+});
+
+test("복귀 = 그 보고를 확인 — 같은 보고로 재호출되지 않고 다음 보고로 넘어간다", () => {
+  // 복귀 핸들러는 전하던 보고를 `acknowledgeReport` 로 확인하고 전하던 보고를 비운다.
+  const queue = interleavedQueue(acknowledgeReport(EMPTY_REPORT_ACK, "toc"));
+  const next = decideReportCall({
+    queue,
+    activeMessageId: null,
+    attempts: [],
+    // 집에 돌아와 상태가 바뀐 소피 — 예전에는 이 순간 같은 보고로 다시 불렸다.
+    signatures: { sophie: "idle:none:home", oliver: "idle:none:home" },
+    blocked: false,
+  });
+  assert.equal(next?.messageId, "body");
+  assert.ok(!queue.some((entry) => entry.messageId === "toc"));
+});
+
+test("보고 항목은 대화창 요약에 쓸 알림 본문을 싣는다", () => {
+  assert.equal(interleavedQueue()[0].summary, "toc 결과 요약");
+  assert.equal(
+    pendingReports(interleaved, EMPTY_REPORT_ACK, ["oliver"])[0].summary,
+    "body 결과 요약",
+  );
 });

@@ -1095,3 +1095,54 @@ test("사건이 이미 지나간 뒤 탭을 열어도 보드는 한 번만 읽�
     globalThis.fetch = originalFetch;
   }
 });
+
+test("보고하러 온 직원의 대화창은 맨 위에 그 보고의 요약과 열기 링크를 보여 준다", async () => {
+  const opened: [string, string][] = [];
+  const report = {
+    messageId: "m1",
+    npcId: "sophie",
+    npcName: "소피",
+    kind: "card_review" as const,
+    cardId: "card-1",
+    boardSlug: "board-1",
+    jobId: null,
+    cardTitle: "목차 초안",
+    summary: "목차 7개 장을 정리했습니다",
+    createdAt: "2026-09-21T01:00:00Z",
+  };
+  const withDialog = (dialogReport: typeof report | null) => (
+    <I18nProvider>
+      <ChatPanel
+        dialogNpc={{ npcId: "sophie", npcName: "소피" }}
+        dialogReport={dialogReport}
+        onOpenNoticeCard={(cardId, boardSlug) => opened.push([cardId, boardSlug])}
+        npcMessages={[]}
+        isNpcStreaming={false}
+        onSend={() => {}}
+        onClose={() => {}}
+        npcSelectList={null}
+        onSelectNpc={() => {}}
+        roomState={listState()}
+        onRoomSend={() => {}}
+        onRoomAction={() => {}}
+        onRoomCreate={() => {}}
+        onRoomInvite={() => {}}
+        onRoomLeave={() => {}}
+        onRoomRename={() => {}}
+        onRoomDelete={() => {}}
+        mentionCandidatesFor={() => []}
+        onlinePlayers={[]}
+      />
+    </I18nProvider>
+  );
+  const el = await mount(withDialog(report));
+  const summary = el.querySelector('[data-testid="dialog-report-summary"]');
+  assert.ok(summary, "보고 요약이 보여야 한다");
+  assert.match(summary.textContent ?? "", /목차 초안/);
+  assert.match(summary.textContent ?? "", /목차 7개 장을 정리했습니다/);
+  await click(el.querySelector('[data-testid="dialog-report-open"]')!);
+  assert.deepEqual(opened, [["card-1", "board-1"]]);
+
+  const plain = await mount(withDialog(null));
+  assert.equal(plain.querySelector('[data-testid="dialog-report-summary"]'), null);
+});

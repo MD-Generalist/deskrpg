@@ -48,9 +48,8 @@ import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game
 import { decideChatError } from "./chat-error-dispatch";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
 import {
-  acknowledgedThrough,
   decideReportCall,
-  dismissReportsOf,
+  dismissReport,
   missedReportArrival,
   reconcileReportAttempts,
   reportCallBlocked,
@@ -60,7 +59,14 @@ import {
   npcSignature,
   type ReportAttempt,
 } from "./npc-report-dispatch";
-import type { ReportItem } from "@/game/report-queue";
+import {
+  acknowledgeReport,
+  EMPTY_REPORT_ACK,
+  parseReportAck,
+  serializeReportAck,
+  type ReportAck,
+  type ReportItem,
+} from "@/game/report-queue";
 import { decideContextInvite } from "./context-invite-decision";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import {
@@ -325,8 +331,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [npcActivityKey, setNpcActivityKey] = useState<string | null>(null);
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
   // 보고 큐 — 사무실 알림에서 파생한다. 확인 지점만 브라우저에 남긴다(`reportAckKey`).
-  const [reportAck, setReportAck] = useState<string | null>(null);
-  const [reportingNpcId, setReportingNpcId] = useState<string | null>(null);
+  const [reportAck, setReportAck] = useState<ReportAck>(EMPTY_REPORT_ACK);
+  // 지금 전하러 오는(또는 와서 전하는) 보고. 직원이 아니라 보고 건으로 추적한다 — 같은 직원의
+  // 다른 보고가 시간순 차례를 새치기하지 않게.
+  const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
+  // 보고하러 와서 열린 대화창이 맨 위에 보여 줄 보고.
+  const [dialogReport, setDialogReport] = useState<ReportItem | null>(null);
   const reportAttemptsRef = useRef<ReportAttempt[]>([]);
   // 대화 목록에 올라가는 직원별 DM 한 줄. 방과 달리 서버가 밀어 주지 않으므로 필요할 때 묻는다.
   const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
@@ -1282,6 +1292,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       // Auto-open dialog when NPC arrives — preserve existing messages (don't resetDialog)
       if (data.npcName && !fromMapChat) {
         const nextDialogNpc = { npcId: data.npcId, npcName: data.npcName };
+        // 보고하러 온 직원이면 대화창 맨 위에 그 보고를 띄운다.
+        const report = reportingItemRef.current;
+        setDialogReport(report && report.npcId === data.npcId ? report : null);
         dialogNpcRef.current = nextDialogNpc;
         setDialogNpc(nextDialogNpc);
         EventBus.emit("dialog:open");
@@ -2109,23 +2122,25 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, [socket, channelId]);
 
-  // 확인 지점을 브라우저에서 되읽는다. 없으면 null — 첫 방문에는 쌓인 것을 모두 보고한다.
+  // 확인 기록을 브라우저에서 되읽는다. 없으면 빈 기록 — 첫 방문에는 쌓인 것을 모두 보고한다.
+  // 옛 문자열 워터마크도 읽는다(`parseReportAck`).
   useEffect(() => {
     if (!channelId) return;
     try {
-      setReportAck(window.localStorage.getItem(reportAckKey(channelId)));
+      setReportAck(parseReportAck(window.localStorage.getItem(reportAckKey(channelId))));
     } catch {
-      setReportAck(null);
+      setReportAck(EMPTY_REPORT_ACK);
     }
   }, [channelId]);
 
+  /** 이 보고 **한 건만** 확인한다 — 앞에 있던 다른 직원의 보고는 그대로 남는다. */
   const acknowledgeReports = useCallback(
     (item: ReportItem) => {
       setReportAck((prev) => {
-        const next = acknowledgedThrough(prev, item);
+        const next = acknowledgeReport(prev, item.messageId);
         if (channelId)
           try {
-            window.localStorage.setItem(reportAckKey(channelId), next);
+            window.localStorage.setItem(reportAckKey(channelId), serializeReportAck(next));
           } catch {
             // 사생활 보호 모드 등으로 막혀도 이 세션 동안은 상태로 유지된다.
           }
@@ -2141,7 +2156,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         rooms: roomState.rooms,
         messages: roomState.messages,
         npcs: rosterNpcs,
-        acknowledgedAt: reportAck,
+        acknowledged: reportAck,
       }),
     [roomState.rooms, roomState.messages, rosterNpcs, reportAck],
   );
@@ -2159,10 +2174,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         openCardTarget({ boardOpen: showKanbanRef.current, taskId: cardId, prev }),
       );
       setShowKanban(true);
-      // 그 카드의 보고는 사용자가 본 것이다 — 앞선 것까지 확인 처리한다.
+      // 그 카드의 보고는 사용자가 본 것이다 — **그 카드의** 보고만 확인한다.
       // `cardId` 가 없는 보고(크론 실패)와 섞이지 않도록 빈 id 는 맞추지 않는다.
-      const item = cardId ? reportQueue.find((report) => report.cardId === cardId) : undefined;
-      if (item) acknowledgeReports(item);
+      if (cardId)
+        for (const item of reportQueue) if (item.cardId === cardId) acknowledgeReports(item);
     },
     [reportQueue, acknowledgeReports],
   );
@@ -2203,7 +2218,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     // 도착 신호를 놓친 직원이 내 곁에서 기다리면 대화창을 대신 연다(도착 핸들러와 같은 동작).
     const missed = missedReportArrival({
       queue: reportQueue,
-      activeNpcId: reportingNpcId,
+      activeMessageId: reportingMessageId,
       attempts: reportAttemptsRef.current,
       signatures: reportSignatures,
       blocked,
@@ -2213,6 +2228,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         a.messageId === missed.messageId ? { ...a, opened: true } : a,
       );
       const nextDialogNpc = { npcId: missed.npcId, npcName: missed.npcName };
+      setDialogReport(missed);
       dialogNpcRef.current = nextDialogNpc;
       setDialogNpc(nextDialogNpc);
       EventBus.emit("dialog:open");
@@ -2222,7 +2238,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     }
     const next = decideReportCall({
       queue: reportQueue,
-      activeNpcId: reportingNpcId,
+      activeMessageId: reportingMessageId,
       attempts: reportAttemptsRef.current,
       signatures: reportSignatures,
       blocked,
@@ -2236,7 +2252,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       ];
     };
     record("sent");
-    setReportingNpcId(next.npcId);
+    setReportingMessageId(next.messageId);
     socket.emit("npc:call", { channelId, npcId: next.npcId }, (result: unknown) => {
       // 거절(회의 중·다른 사용자 점유)은 **사용자에게는** 조용히 넘긴다 — 알림도 배지도
       // 남아 있고, 걸어오지 못했다는 토스트로는 사용자가 할 수 있는 일이 없다. 다만
@@ -2251,13 +2267,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       });
       // 거절을 기록해 둔다. 그 직원의 상태가 바뀌면 `decideReportCall` 이 다시 후보로 올린다.
       record("rejected");
-      setReportingNpcId(null);
+      setReportingMessageId(null);
     });
   }, [
     socket,
     channelId,
     reportQueue,
-    reportingNpcId,
+    reportingMessageId,
     reportSignatures,
     dialogNpc,
     showKanban,
@@ -2265,31 +2281,41 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     mode,
   ]);
 
-  // 보고하러 온 직원과의 대화창을 확인 없이 닫으면 그 직원의 보고를 이 세션에서 접고 다음
-  // 사람에게 넘긴다. 안 그러면 시도가 "보냄" 으로 남아 큐 전체가 멈춘다.
+  const reportingItem = useMemo(
+    () => reportQueue.find((item) => item.messageId === reportingMessageId) ?? null,
+    [reportQueue, reportingMessageId],
+  );
+  // 도착 핸들러는 마운트 때 한 번 등록되는 effect 안에 있어 ref 로 읽는다.
+  const reportingItemRef = useRef<ReportItem | null>(null);
+  useEffect(() => {
+    reportingItemRef.current = reportingItem;
+  }, [reportingItem]);
+
+  // 보고하러 온 직원과의 대화창을 확인 없이 닫으면 그 보고를 이 세션에서 접고 다음 보고로
+  // 넘긴다. 안 그러면 시도가 "보냄" 으로 남아 큐 전체가 멈춘다.
   const reportDialogNpcRef = useRef<string | null>(null);
   useEffect(() => {
     const prev = reportDialogNpcRef.current;
     const current = dialogNpc?.npcId ?? null;
     reportDialogNpcRef.current = current;
-    if (!prev || prev === current || prev !== reportingNpcId) return;
-    reportAttemptsRef.current = dismissReportsOf(reportAttemptsRef.current, prev, reportQueue);
-    setReportingNpcId(null);
-  }, [dialogNpc, reportingNpcId, reportQueue]);
+    if (!prev || prev === current) return;
+    setDialogReport(null);
+    if (!reportingItem || prev !== reportingItem.npcId) return;
+    reportAttemptsRef.current = dismissReport(reportAttemptsRef.current, reportingItem.messageId);
+    setReportingMessageId(null);
+  }, [dialogNpc, reportingItem]);
 
-  // 보고가 큐에서 빠지면(확인됨) 다음 사람에게 자리를 넘긴다.
+  // 보고가 큐에서 빠지면(확인됨) 다음 보고에 자리를 넘긴다.
   useEffect(() => {
-    if (reportingNpcId && !reportQueue.some((item) => item.npcId === reportingNpcId))
-      setReportingNpcId(null);
-  }, [reportQueue, reportingNpcId]);
+    if (reportingMessageId && !reportingItem) setReportingMessageId(null);
+  }, [reportingMessageId, reportingItem]);
 
   const openNoticeCronJob = useCallback(
     (jobId: string) => {
       setCronInitialJobId(jobId);
       setShowCron(true);
       // 크론 실패 보고도 여기서 닫힌다 — 그러지 않으면 배지가 영영 남는다.
-      const item = reportQueue.find((report) => report.jobId === jobId);
-      if (item) acknowledgeReports(item);
+      for (const item of reportQueue) if (item.jobId === jobId) acknowledgeReports(item);
     },
     [reportQueue, acknowledgeReports],
   );
@@ -2472,10 +2498,17 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           },
         );
       mapChatParticipantsRef.current.dismiss(npcId);
+      // 보고하러 온 직원을 돌려보냈다 = 그 보고를 받은 것으로 본다(단테 결정 2026-09-21).
+      // 안 그러면 집에 닿는 순간 같은 보고로 다시 불려온다. 방 알림은 남는다.
+      const report = reportingItemRef.current;
+      if (report && report.npcId === npcId) {
+        acknowledgeReports(report);
+        setReportingMessageId(null);
+      }
       setContextMenu(null);
       closeRosterMenus();
     },
-    [socket, channelId, closeRosterMenus, showToastNotification, t],
+    [socket, channelId, closeRosterMenus, showToastNotification, t, acknowledgeReports],
   );
 
   // ESC key to close context menu
@@ -2623,6 +2656,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         avatarFor={avatarFor}
         npcMoveState={dialogMotion.phase}
         onReturnNpc={dialogNpc && dialogMotion.caller === socket?.id ? handleReturnNpc : undefined}
+        dialogReport={dialogReport}
         cron={channelId ? { channelId, socket, onToast: cronToast } : null}
         onOpenNoticeCard={openNoticeCard}
         onOpenNoticeCronJob={openNoticeCronJob}
@@ -2888,12 +2922,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 type="button"
                 data-testid="report-badge"
                 onClick={() => {
-                  const target = reportTarget(reportQueue[0]);
+                  const target = reportTarget(reportingItem ?? reportQueue[0]);
                   if (target?.kind === "cron") openNoticeCronJob(target.jobId);
                   else if (target?.kind === "card") openNoticeCard(target.cardId);
                 }}
                 className="flex items-center gap-1.5 rounded-md border border-border bg-danger-bg px-2.5 py-1 text-caption font-semibold text-danger hover:bg-surface-raised"
-                title={reportQueue[0].cardTitle}
+                title={(reportingItem ?? reportQueue[0]).cardTitle}
               >
                 <span className="h-2 w-2 rounded-full bg-danger" />
                 <span className="header-full-label">

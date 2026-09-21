@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
+import type { ReportItem } from "@/game/report-queue";
+import DialogReportSummary from "./chat/DialogReportSummary";
 import { Pencil, UserMinus, RotateCcw, Undo2 } from "lucide-react";
 import type { NpcChatMessage } from "./NpcDialog";
 import ChatInput from "./ChatInput";
@@ -69,6 +71,8 @@ interface ChatPanelProps {
   onResetNpcChat?: (npcId: string) => void;
   npcMoveState?: string;
   onReturnNpc?: (npcId: string) => void;
+  /** 이 대화창이 보고하러 온 직원의 것이면 그 보고. 맨 위에 요약을 띄운다. */
+  dialogReport?: ReportItem | null;
   // Channel chat — 방(room) 단위. 목록·방 안·새 방/초대 세 화면이다.
   roomState: RoomState;
   channelChatOpen?: boolean;
@@ -174,6 +178,7 @@ export default function ChatPanel({
   currentPlayerName,
   npcMoveState,
   onReturnNpc,
+  dialogReport,
   cron = null,
   onOpenNoticeCard,
   onOpenNoticeCronJob,
@@ -722,6 +727,17 @@ export default function ChatPanel({
               </div>
             ) : (
               <>
+                {dialogReport && dialogReport.npcId === dialogNpc?.npcId && (
+                  <DialogReportSummary
+                    report={dialogReport}
+                    onOpenCard={
+                      onOpenNoticeCard
+                        ? (cardId) => onOpenNoticeCard(cardId, dialogReport.boardSlug ?? "")
+                        : undefined
+                    }
+                    onOpenCronJob={onOpenNoticeCronJob}
+                  />
+                )}
                 <div
                   ref={scrollRef}
                   onScroll={(event) =>
