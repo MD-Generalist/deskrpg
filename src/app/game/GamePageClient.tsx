@@ -1,6 +1,9 @@
 "use client";
 
 import { APP_VERSION, BUG_REPORT_BASE_URL, LICENSE_URL, REPO_URL } from "@/lib/app-meta";
+import { GrowthStarButton } from "@/components/growth/GrowthStarButton";
+import { UpdateNoticeModal } from "@/components/growth/UpdateNoticeModal";
+import { useAppMeta } from "@/components/growth/use-app-meta";
 import { npcMotionUi } from "./npc-motion-ui";
 import { navigatorMotion } from "./conversation-integration";
 import type { MotionSnapshot } from "@/game/motion-snapshot";
@@ -43,6 +46,7 @@ import {
   KanbanSquare,
   AlarmClock,
   Package,
+  ArrowUpCircle,
 } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
@@ -261,6 +265,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const appMeta = useAppMeta();
+  const [showUpdateNotice, setShowUpdateNotice] = useState(false);
   // 칸반 보드(T8). `kanbanRefreshTick` 은 `kanban:event` 마다 오르고, 모달이 디바운스해 재조회한다.
   const [showKanban, setShowKanban] = useState(false);
   useEffect(() => {
@@ -3002,6 +3008,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             <span className="header-full-label">{t("artifacts.open")}</span>
           </button>
 
+          <GrowthStarButton
+            stars={appMeta.stars}
+            clicked={appMeta.starClicked}
+            onClick={appMeta.markStarClicked}
+          />
+
           {/* Separator */}
           <div className="header-separator w-px h-5 bg-border" />
 
@@ -3019,7 +3031,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             >
               <Settings className="w-3.5 h-3.5" />
               <span className="header-full-label">{t("game.menuSettings")}</span>
-              {notifications.some((n) => !n.read) && (
+              {(notifications.some((n) => !n.read) || appMeta.hasUpdate) && (
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-danger rounded-full" />
               )}
               <ChevronDown className="header-full-label w-3 h-3" />
@@ -3140,6 +3152,21 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                   <Bug className="w-3.5 h-3.5" />
                   {t("game.reportBug")}
                 </button>
+                {appMeta.updateAvailable && appMeta.latestVersion && (
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      setShowUpdateNotice(true);
+                    }}
+                    className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
+                  >
+                    <ArrowUpCircle className="w-3.5 h-3.5" />
+                    {t("growth.newVersion", { version: `v${appMeta.latestVersion}` })}
+                    {appMeta.hasUpdate && (
+                      <span className="ml-auto w-2 h-2 bg-danger rounded-full" />
+                    )}
+                  </button>
+                )}
 
                 {/* Exit section */}
                 <div className="border-t border-border my-1" />
@@ -3255,6 +3282,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       {/* Click outside to close dropdowns */}
       {showUserMenu && (
         <div className="fixed inset-0 z-[9]" onClick={() => setShowUserMenu(false)} />
+      )}
+
+      {showUpdateNotice && appMeta.latestVersion && (
+        <UpdateNoticeModal
+          version={appMeta.version}
+          latestVersion={appMeta.latestVersion}
+          onSeen={appMeta.markUpdateSeen}
+          onClose={() => setShowUpdateNotice(false)}
+        />
       )}
 
       {showAboutModal && (
