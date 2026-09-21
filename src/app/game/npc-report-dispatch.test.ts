@@ -11,6 +11,7 @@ import {
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 
 import {
+  activeReportReleased,
   decideReportCall,
   dismissReport,
   missedReportArrival,
@@ -568,4 +569,62 @@ test("보고 항목은 대화창 요약에 쓸 알림 본문을 싣는다", () =
     pendingReports(interleaved, EMPTY_REPORT_ACK, ["oliver"])[0].summary,
     "body 결과 요약",
   );
+});
+
+// …75v1A — 서버가 돌려보낸(사용자 조작 없는) 복귀 뒤 큐가 멈추던 두 경로.
+
+test("자동 복귀 — 전하던 보고가 거절로 바뀌면 그 보고가 큐를 쥐지 않고 다음 보고가 호출된다", () => {
+  const queue = [
+    item("m1", "oliver", "2026-09-21T01:00:00Z"),
+    item("m2", "sophie", "2026-09-21T02:00:00Z"),
+  ];
+  // 올리버가 돌아가는 중(away)에 소유를 잃었다 — 거절 서명은 그 순간의 것이다.
+  const attempts = reconcileReportAttempts(
+    [{ ...sent("m1"), acquired: true }],
+    { oliver: "returning:none:away", sophie: "idle:none:home" },
+    queue,
+  );
+  assert.equal(attempts[0].outcome, "rejected");
+  assert.equal(activeReportReleased(attempts, "m1"), true);
+  assert.equal(
+    decideReportCall({
+      queue,
+      activeMessageId: "m1",
+      attempts,
+      signatures: { oliver: "returning:none:away", sophie: "idle:none:home" },
+      blocked: false,
+    })?.messageId,
+    "m2",
+  );
+});
+
+test("자동 복귀 — 소유를 잃은 순간 이미 집이면 서명이 더 바뀌지 않아도 즉시 재후보가 된다", () => {
+  const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
+  const signatures = { oliver: "idle:none:home" };
+  const attempts = reconcileReportAttempts([{ ...sent("m1"), acquired: true }], signatures, queue);
+  assert.equal(attempts[0].outcome, "rejected");
+  assert.equal(
+    decideReportCall({ queue, activeMessageId: "m1", attempts, signatures, blocked: false })
+      ?.messageId,
+    "m1",
+  );
+});
+
+test("자동 복귀 — 돌아가는 중에 거절된 보고는 집에 닿아 서명이 바뀌면 다시 부른다", () => {
+  const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
+  const attempts = reconcileReportAttempts(
+    [{ ...sent("m1"), acquired: true }],
+    { oliver: "returning:none:away" },
+    queue,
+  );
+  const decide = (signature: string) =>
+    decideReportCall({
+      queue,
+      activeMessageId: null,
+      attempts,
+      signatures: { oliver: signature },
+      blocked: false,
+    });
+  assert.equal(decide("returning:none:away"), null, "아직 돌아가는 중이면 기다린다");
+  assert.equal(decide("idle:none:home")?.messageId, "m1");
 });

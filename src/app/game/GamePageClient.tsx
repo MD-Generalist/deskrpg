@@ -53,6 +53,7 @@ import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game
 import { decideChatError } from "./chat-error-dispatch";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
 import {
+  activeReportReleased,
   decideReportCall,
   dismissReport,
   missedReportArrival,
@@ -2213,6 +2214,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       reportSignatures,
       reportQueue,
     );
+    // 전하던 보고가 거절로 바뀌었으면(자동 복귀·회의 등) 쥐고 있지 않는다 — 다음 렌더에서
+    // 시간순 규칙으로 다시 고른다.
+    if (activeReportReleased(reportAttemptsRef.current, reportingMessageId)) {
+      setReportingMessageId(null);
+      return;
+    }
     const blocked = reportCallBlocked({
       dialogOpen: Boolean(dialogNpc),
       kanbanOpen: showKanban,

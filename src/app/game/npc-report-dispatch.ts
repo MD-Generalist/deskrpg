@@ -111,8 +111,26 @@ export function reconcileReportAttempts(
     const mine = signatureOwner(signature) === "mine";
     if (mine) return attempt.acquired ? attempt : { ...attempt, acquired: true };
     if (!attempt.acquired) return attempt;
-    return { messageId: attempt.messageId, outcome: "rejected", signature };
+    // 이미 자기 자리에 돌아와 있으면 서명이 더 바뀌지 않는다 — 그 서명으로 거절해 두면 영영
+    // 다시 부르지 않는다(스테이징 실측: 올리버가 서버 복귀로 돌아간 뒤 배지 1건이 남고 아무도
+    // 오지 않았다). 그때는 빈 서명으로 남겨 **즉시** 후보가 되게 한다. 아직 돌아가는 중이면
+    // 그 순간의 서명으로 두어, 집에 닿아 서명이 바뀔 때 후보가 된다.
+    const home = signature.endsWith(":home");
+    return { messageId: attempt.messageId, outcome: "rejected", signature: home ? "" : signature };
   });
+}
+
+/**
+ * 전하던 보고가 더는 "진행 중" 이 아닌가. 거절(또는 접힘)로 바뀐 보고를 active 로 쥐고 있으면
+ * `decideReportCall` 이 그 보고만 기다리며 **큐 전체**를 멈춘다 — 화면은 이때 active 를 비운다.
+ */
+export function activeReportReleased(
+  attempts: readonly ReportAttempt[],
+  activeMessageId: string | null,
+): boolean {
+  if (!activeMessageId) return false;
+  const attempt = attempts.find((a) => a.messageId === activeMessageId);
+  return attempt !== undefined && attempt.outcome !== "sent";
 }
 
 /**
@@ -154,7 +172,9 @@ export function decideReportCall(input: {
   };
   // 전하는 중인 보고가 끝날 때까지 다음 사람을 부르지 않는다 — 한 번에 한 명이다.
   const active = input.queue.find((item) => item.messageId === input.activeMessageId);
-  if (active) return callable(active) ? active : null;
+  // 거절·접힘으로 끝난 보고는 active 라도 큐를 쥐지 않는다(`activeReportReleased`).
+  if (active && !activeReportReleased(input.attempts, active.messageId))
+    return callable(active) ? active : null;
   // 그 밖에는 **보고가 생긴 순서대로**다. 예전에는 보고 중이던 직원의 남은 보고를 먼저 골라,
   // 소피→올리버→소피 큐에서 소피가 다시 불리고 올리버는 오지 못했다(배지는 올리버 보고를
   // 가리키고 있었다). 같은 직원이 두 번 오가는 것은 감수한다. 맨 앞이 거절돼 막히면 큐 전체가
