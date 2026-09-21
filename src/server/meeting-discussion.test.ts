@@ -917,3 +917,55 @@ test("주재자가 떠나 방이 빈 회의도 직원을 자리로 돌려보내�
   const next = await r.spatial.start("a", "u1", ["n1"]);
   assert.notEqual(next, null, "같은 채널에서 회의를 다시 시작할 수 없다");
 });
+
+test("턴 끝 스트림 신호는 회의 기록과 같은 최종 본문을 싣는다 — 화면이 그것으로 말풍선을 확정한다", async () => {
+  const { MEETING_NPC_STREAM_EVENT } = await import("./meeting-socket");
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("socket-1", calls);
+  const registry = new AdapterRegistry();
+  registry.register(recordingAdapter(["ok"]));
+  type Factory = NonNullable<
+    Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"]["createMeetingBroker"]
+  >;
+  let cb!: Parameters<Factory>[1];
+  const meetingRooms = new Map([
+    ["a", { participants: new Set(["socket-1"]), messages: [] as Array<{ content: string }> }],
+  ]);
+  registerMeetingDiscussionHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      activeBrokers: new Map(),
+      discussionInitiators: new Map(),
+      meetingRooms: meetingRooms as never,
+      players: new Map(),
+      user: { userId: "u1" },
+      adapterRegistry: registry,
+      canControlMeeting: () => true,
+      getNpcConfigsForChannel: async () => [npcConfig({ adapterType: "cli" })],
+      createMeetingBroker: (_config, callbacks) => {
+        cb = callbacks;
+        return {
+          config: { participants: [{ npcId: "npc-1", displayName: "NPC" }] },
+          turns: [],
+          isRunning: () => true,
+          stop: () => {},
+          run: () => new Promise<void>(() => {}),
+        } as unknown as MeetingBrokerLike;
+      },
+      generateMeetingSummary: async () => ({ keyTopics: [], conclusions: null }),
+      persistMeetingMinutes: async () => null,
+    },
+  });
+  await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "t" });
+
+  cb.onTurnChunk!("npc-1", "첫 생성. ");
+  cb.onTurnChunk!("npc-1", "둘째 생성.");
+  cb.onTurnEnd!("npc-1", "둘째 생성.");
+
+  const done = calls.find(
+    (c) => c.event === MEETING_NPC_STREAM_EVENT && (c.payload as { done: boolean }).done,
+  );
+  assert.equal((done?.payload as { text?: string }).text, "둘째 생성.");
+  assert.equal(meetingRooms.get("a")!.messages.at(-1)?.content, "둘째 생성.");
+});

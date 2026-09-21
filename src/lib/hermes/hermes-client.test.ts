@@ -509,6 +509,57 @@ describe("HermesClient.streamRunEvents — /v1/runs 방언", () => {
   });
 });
 
+describe("streamRunEvents — run.completed 의 output 이 최종 답이다", () => {
+  function clientOf(frames: string[]) {
+    return new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "oliver",
+      token: "t",
+      fetchImpl: (async () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              for (const f of frames) c.enqueue(new TextEncoder().encode(f));
+              c.close();
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        )) as unknown as typeof fetch,
+    });
+  }
+  const frame = (event: object) => `data: ${JSON.stringify(event)}\n\n`;
+
+  test("델타가 두 번의 생성을 담아도 본문은 run.completed 의 output 하나다", async () => {
+    // 스테이징 실측: 회의 발언 말풍선에 서로 다르게 쓰인 같은 문단이 두 번 붙었다. /v1/runs 는
+    // message.completed 를 내지 않고 최종 답을 run.completed 의 output(final_response)에 싣는다.
+    // 델타는 되돌려지지 않으므로 모델 호출이 재시도되면 앞선 시도의 글까지 쌓인다.
+    const { text } = await clientOf([
+      frame({ event: "message.delta", run_id: "r", delta: "Today I'll review… then suggest." }),
+      frame({
+        event: "message.delta",
+        run_id: "r",
+        delta: " Today I'll review… before recommending.",
+      }),
+      frame({
+        event: "run.completed",
+        run_id: "r",
+        output: "Today I'll review… before recommending.",
+      }),
+    ]).streamRunEvents("r", () => {});
+    assert.equal(text, "Today I'll review… before recommending.");
+  });
+
+  test("output 이 비었거나 없으면 델타 누적분을 쓴다", async () => {
+    for (const completed of [{ output: "" }, {}]) {
+      const { text } = await clientOf([
+        frame({ event: "message.delta", run_id: "r", delta: "SPEAK: 안녕" }),
+        frame({ event: "run.completed", run_id: "r", ...completed }),
+      ]).streamRunEvents("r", () => {});
+      assert.equal(text, "SPEAK: 안녕");
+    }
+  });
+});
+
 describe("drain — 종료 이벤트 뒤 취소가 끝나지 않는 스트림", () => {
   /**
    * 실측(v0.20.2): 회의 경로 /v1/runs/<id>/events 는 run.completed 를 보낸 뒤에도 연결을

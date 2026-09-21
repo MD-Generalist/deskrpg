@@ -448,6 +448,8 @@ export default function MeetingRoom({
       npcName?: string;
       chunk: string;
       done: boolean;
+      /** 턴 끝(done)에만 온다 — 회의 기록에 남는 것과 같은 최종 본문. */
+      text?: unknown;
     }) => {
       if (data.done) {
         speaker.finish(data.npcId);
@@ -462,6 +464,7 @@ export default function MeetingRoom({
           npcId: data.npcId,
           fallbackSenderName: senderName,
           timestamp,
+          finalText: typeof data.text === "string" ? data.text : undefined,
         });
         const nextRawStreams = { ...npcRawStreamsRef.current };
         delete nextRawStreams[data.npcId];

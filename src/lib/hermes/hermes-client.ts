@@ -230,6 +230,15 @@ export class HermesClient {
             typeof event.data.content === "string"
           ) {
             completed = event.data.content;
+          } else if (
+            // 회의 경로(/v1/runs)는 message.completed 를 내지 않고 최종 답을 run.completed 의
+            // output(final_response)에 싣는다. 델타는 되돌려지지 않아, 모델 호출이 재시도되면 앞선
+            // 시도의 글까지 쌓인다 — 누적분 대신 이것을 본문으로 쓴다. 비었으면 누적분으로 둔다.
+            event.event === "run.completed" &&
+            typeof event.data.output === "string" &&
+            event.data.output.trim()
+          ) {
+            completed = event.data.output;
           } else if (event.event === "run.failed" || event.event === "error") {
             failure =
               typeof event.data.message === "string" ? event.data.message : "Hermes run failed";

@@ -682,6 +682,9 @@ export function registerMeetingDiscussionHandlers({
             npcName: agent?.displayName || npcId,
             chunk: "",
             done: true,
+            // 화면은 말풍선을 이것으로 확정한다. 델타 누적분은 재시도된 앞선 생성까지 담을 수 있어,
+            // 그대로 확정하면 아래에서 회의 기록에 남기는 본문과 어긋난다.
+            text: fullResponse,
           });
 
           const liveRoom = meetingRooms.get(channelId);
