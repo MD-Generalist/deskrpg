@@ -3,6 +3,7 @@ import { parseMotionContinuation, type MotionContinuation } from "./npc-motion-c
 import type { MeetingSpatialTarget, SpatialMotionTarget } from "../lib/meeting-discussion-state";
 import { insideMeetingSpace, type MeetingSpace } from "../game/meeting-space";
 import { clearSegment, findPath } from "../game/navigation";
+import { NPC_SPEED_RANGE } from "../lib/npc-motion-config";
 
 export type NpcMotionPhase = "idle" | "called" | "waiting" | "returning" | "ambient";
 export type NpcMotion = {
@@ -105,7 +106,16 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
   const validatedPlayers = new Map<string, { x: number; y: number }>();
   // 서버가 받아들이는 NPC 이동 상한(px/s). 캡처 런타임은 걸음이 빨라 상한도 같이 올린다
   // — 클라이언트의 `captureWalkSpeed` 와 짝이다.
-  const NPC_SPEED_CAP = process.env.DESKRPG_CAPTURE_MODE === "1" ? 180 * 3 : 180;
+  //
+  // 전에는 180 으로 고정이었다 — 걸음이 150 하나뿐일 때 그 1.2배였다. 걸음 속도가 채널 설정이
+  // 되자 회의 호출 기본값(300)이 이 상한을 넘어 서버가 좌석 이동을 거절했고, 집결이 "이동 중"
+  // 에서 영영 멈췄다(로컬 실측: 150 은 정상, 300 은 멈춤). 상한을 채널마다 설정에서 읽지 않고
+  // **설정할 수 있는 최고 속도의 1.2배**로 둔다 — DB 읽기·설정 변경 때의 캐시 무효화 없이 어느
+  // 채널 설정도 막지 않는다. 순간이동 방지(아래 누적 크레딧)는 그대로다.
+  // 캡처 배수 3 은 `npc-controller.ts` 의 `CAPTURE_WALK_MULTIPLIER` 다. 그 모듈을 서버로 끌어오지
+  // 않으려고 숫자로 둔다(원래도 그랬다).
+  const NPC_SPEED_CAP =
+    NPC_SPEED_RANGE.max * 1.2 * (process.env.DESKRPG_CAPTURE_MODE === "1" ? 3 : 1);
   const consumeMotion = (key: string, separation: number, speed: number) => {
     const elapsed = Math.max(0, (now() - (spatialLastMotion.get(key) ?? now())) / 1000);
     const credit = Math.min(speed, (spatialMotionCredit.get(key) ?? 8) + elapsed * speed);

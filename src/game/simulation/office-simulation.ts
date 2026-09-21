@@ -116,6 +116,12 @@ type PendingNpcCall = {
   roomId?: string;
 };
 
+/** 한 번 위치 보고에 움직여도 되는 거리(px) — 옛 걸음 150px/s 가 200ms 에 가던 거리다. */
+const NPC_SYNC_CHORD_PX = 30;
+const NPC_SYNC_MAX_INTERVAL_MS = 200;
+/** 초당 20번보다 자주 보내지 않는다 — 최고 속도(480px/s)에서도 62ms 라 여기에 닿지 않는다. */
+const NPC_SYNC_MIN_INTERVAL_MS = 50;
+
 export class OfficeSimulation {
   // ---------------------------------------------------------------------------
   // 수명 · 시계
@@ -1676,6 +1682,19 @@ export class OfficeSimulation {
     for (const npc of this.npcs) this.applyMotion(npc);
   }
 
+  /** 위치 보고 간격(ms). 가장 빠르게 움직이는 NPC 가 한 번에 30px 를 넘지 않게 한다. */
+  private npcPositionSyncInterval(): number {
+    let fastest = 0;
+    for (const npc of this.npcs)
+      if (npc.moveState !== "idle" && npc.moveState !== "waiting")
+        fastest = Math.max(fastest, npc.currentSpeed());
+    if (fastest <= 0) return NPC_SYNC_MAX_INTERVAL_MS;
+    return Math.min(
+      NPC_SYNC_MAX_INTERVAL_MS,
+      Math.max(NPC_SYNC_MIN_INTERVAL_MS, (NPC_SYNC_CHORD_PX / fastest) * 1000),
+    );
+  }
+
   private applyMotion(npc: NpcController): void {
     npc.moveSpeed = this.motion.walk;
     npc.strollSpeed = this.motion.stroll;
@@ -2850,9 +2869,13 @@ export class OfficeSimulation {
           });
       }
     }
-    // 움직이는 NPC 위치를 200ms 마다 서버에 보낸다
+    // 움직이는 NPC 위치를 서버에 보낸다. 간격은 **한 번에 움직이는 거리**로 정한다 — 서버는
+    // 연속한 두 보고 사이의 직선이 막히지 않았는지 검사하는데, 빠르게 걸으면 그 직선이 모퉁이·가구를
+    // 가로지른다. 한 번 거절되면 서버 위치가 뒤처져 다음 직선은 더 길어지고 영영 받아들여지지 않는다
+    // (실측: 200ms 고정일 때 회의 호출 150px/s 는 집결했고 300px/s 는 "이동 중" 에서 멈췄다). 옛
+    // 걸음(150px/s)이 200ms 에 가던 30px 를 넘지 않게 속도에 맞춰 간격을 줄인다.
     this.npcPositionSyncTimer += this.delta;
-    if (this.npcPositionSyncTimer >= 200) {
+    if (this.npcPositionSyncTimer >= this.npcPositionSyncInterval()) {
       this.npcPositionSyncTimer = 0;
       for (const npc of this.npcs) {
         if (!this.mayDriveNpc(npc)) continue;

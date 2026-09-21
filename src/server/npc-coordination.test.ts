@@ -1,4 +1,5 @@
 import test from "node:test";
+import { DEFAULT_NPC_MOTION } from "../lib/npc-motion-config";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { Server, type Socket as ServerSocket } from "socket.io";
@@ -1762,6 +1763,52 @@ test("capture — 다른 사용자가 부른 직원은 빼앗지 않는다", asy
     );
     // 소유권도 그대로다 — 부른 사람이 계속 데리고 있다.
     assert.equal((await ack(host, "npc:call", { npcId: "n1" })).error, "already_claimed");
+  } finally {
+    await h.close();
+  }
+});
+
+test("회의 좌석 이동은 회의 호출 기본 속도(300px/s)로 가도 받아들인다 — 전에는 180 상한에 막혀 집결이 멈췄다", async () => {
+  // 로컬 실측: 회의 호출 150px/s 는 집결이 끝났고 300px/s 는 "이동 중" 에서 영영 멈췄다.
+  // 서버가 좌석 이동의 위치 갱신을 180px/s 상한으로 거절했기 때문이다.
+  let now = 0;
+  const h = await harness({ now: () => now });
+  try {
+    const a = await h.connect();
+    const seat = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", seat), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 1, seat, false), true);
+    const step = (DEFAULT_NPC_MOTION.meetingSummon * 0.05) / Math.SQRT2;
+    let x = 32;
+    let y = 32;
+    while (x < 128) {
+      now += 50;
+      x = Math.min(128, x + step);
+      y = Math.min(128, y + step);
+      const res = await ack(a, "npc:position-update", { npcId: "n1", x, y, direction: "down" });
+      assert.equal(res.ok, true, `${x.toFixed(1)},${y.toFixed(1)} 에서 거절: ${res.error}`);
+    }
+  } finally {
+    await h.close();
+  }
+});
+
+test("상한을 올려도 순간이동은 여전히 거절한다 — 누적 크레딧이 막는다", async () => {
+  let now = 0;
+  const h = await harness({ now: () => now });
+  try {
+    const a = await h.connect();
+    const seat = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", seat), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 1, seat, false), true);
+    now += 50; // 50ms 에 136px — 2700px/s 다.
+    const res = await ack(a, "npc:position-update", {
+      npcId: "n1",
+      x: 128,
+      y: 128,
+      direction: "down",
+    });
+    assert.equal(res.error, "invalid_motion");
   } finally {
     await h.close();
   }

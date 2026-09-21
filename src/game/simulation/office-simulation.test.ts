@@ -625,3 +625,38 @@ test("채널 설정은 모든 NPC 의 일반 이동·산책 속도에 입혀진�
     sim.dispose();
   }
 });
+
+test("빠르게 걸을수록 위치를 자주 보낸다 — 한 번에 30px 를 넘지 않게", () => {
+  // 서버는 연속한 두 위치 보고 사이의 직선이 막히지 않았는지 검사한다. 200ms 고정이면 300px/s 에서
+  // 한 번에 60px(2칸)라 모퉁이를 가로질러 거절되고, 회의 집결이 "이동 중" 에서 영영 멈췄다(실측).
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const interval = (speeds: { speed: number; state: string }[]) => {
+      sim["npcs"] = speeds.map(({ speed, state }) => ({
+        moveState: state,
+        currentSpeed: () => speed,
+      })) as never;
+      return sim["npcPositionSyncInterval"]();
+    };
+    assert.equal(interval([]), 200, "움직이는 직원이 없으면 예전 간격");
+    assert.equal(interval([{ speed: 150, state: "strolling" }]), 200, "옛 걸음은 예전 그대로");
+    assert.equal(interval([{ speed: 300, state: "strolling" }]), 100);
+    assert.equal(interval([{ speed: 480, state: "moving-to-player" }]), 62.5);
+    assert.equal(
+      interval([
+        { speed: 55, state: "strolling" },
+        { speed: 300, state: "strolling" },
+      ]),
+      100,
+      "가장 빠른 직원에 맞춘다",
+    );
+    assert.equal(
+      interval([{ speed: 900, state: "strolling" }]),
+      50,
+      "초당 20번보다 자주 보내지 않는다",
+    );
+    assert.equal(interval([{ speed: 300, state: "waiting" }]), 200, "멈춘 직원은 치지 않는다");
+  } finally {
+    sim.dispose();
+  }
+});
