@@ -61,6 +61,9 @@ const ROOM_REACH = 1.5;
 
 type Shot = { kind: "table" } | { kind: "speaker"; key: string };
 
+/** 발언자를 찾았는지, 못 찾았다면 어디서 끊겼는지. */
+export type MeetingSpeakerState = "none" | "not-speaking" | "no-actor" | "outside-room" | "found";
+
 /**
  * 렌더러가 **실제로 그린** 모습 — 월드 경계 상자와 몸이 향한 각도(rig.rotation.y, 0 이면 +z).
  *
@@ -80,6 +83,9 @@ export class MeetingCamera {
   private speaker: MeetingSpeaker | null = null;
   private seats: Point[] = [];
   private presenter: ActorPresenter | null = null;
+  private error: string | null = null;
+  private errorReported = false;
+  private speakerState: MeetingSpeakerState = "none";
   private shotNow: Shot | null = null;
   /** Shot to take once the table view has settled (non-direct handoff). */
   private queued: string | null = null;
@@ -118,6 +124,13 @@ export class MeetingCamera {
     return this.space !== null;
   }
   /** What the automatic camera is framing: `table` or `speaker:<kind>:<id>`. */
+  /**
+   * 화면에서 읽을 수 있는 진단. 스테이징에서 발언자 클로즈업이 한 번도 안 나왔는데 로컬에서는 매번
+   * 나와 원인을 코드로 가를 수 없었다 — 다음 실행에서 DOM 만 보고 어디서 끊겼는지 알 수 있게 한다.
+   */
+  get diagnostics(): { shot: string; speaker: MeetingSpeakerState; error: string | null } {
+    return { shot: this.shot, speaker: this.speakerState, error: this.error };
+  }
   get shot(): string {
     if (!this.shotNow) return "none";
     return this.shotNow.kind === "table" ? "table" : `speaker:${this.shotNow.key}`;
@@ -285,16 +298,24 @@ export class MeetingCamera {
 
   private speakingActor(actors: ActorSnapshot[]): { key: string; actor: ActorSnapshot } | null {
     const s = this.speaker;
-    if (!s || (s.phase && s.phase !== "speaking")) return null;
+    if (!s) return this.found("none");
+    if (s.phase && s.phase !== "speaking") return this.found("not-speaking");
     const b = this.space!.bounds;
     const actor = actors.find((a) =>
       s.kind === "npc" ? a.kind === "npc" && a.id === s.id : a.kind !== "npc" && a.userId === s.id,
     );
-    if (!actor) return null;
+    if (!actor) return this.found("no-actor");
     const x = actor.x / 32;
     const z = actor.y / 32;
-    if (x < b.x || x > b.x + b.width || z < b.y || z > b.y + b.height) return null;
+    if (x < b.x || x > b.x + b.width || z < b.y || z > b.y + b.height)
+      return this.found("outside-room");
+    this.speakerState = "found";
     return { key: `${s.kind}:${s.id}`, actor };
+  }
+
+  private found(state: MeetingSpeakerState): null {
+    this.speakerState = state;
+    return null;
   }
 
   private actorForKey(key: string): ActorSnapshot | undefined {
@@ -307,13 +328,28 @@ export class MeetingCamera {
 
   /** Start a transition to `shot` (or re-frame it, when it is already the current shot). */
   private begin(shot: Shot) {
+    // 구도를 **먼저** 계산한다. 예전에는 샷 이름을 먼저 바꾸고 계산했는데, 계산이 던지면 샷은
+    // "발언자" 인데 화면은 테이블에 멈추고 다음 프레임부터는 같은 샷이라 다시 시도하지도 않았다.
+    let framed: { target: T.Vector3; orbit: T.Spherical };
+    try {
+      framed = this.compose(shot);
+      this.error = null;
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : String(error);
+      if (!this.errorReported) {
+        this.errorReported = true;
+        console.error("[meeting-camera] framing failed", error);
+      }
+      this.dirty = false;
+      return;
+    }
     const first = this.shotNow === null;
     if (first || shotLabel(shot) !== this.shot) {
       this.shotNow = shot;
       this.shotSince = this.clock;
       if (shot.kind === "table") this.speechEndedAt = null;
     }
-    const { target, orbit } = this.compose(shot);
+    const { target, orbit } = framed;
     this.dirty = false;
     this.fromTarget.copy(this.controls.target);
     this.fromOrbit.setFromVector3(this.camera.position.clone().sub(this.controls.target));

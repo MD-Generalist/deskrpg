@@ -493,6 +493,16 @@ export class OfficeRenderer {
     this.onMeetingCameraChange?.(this.meetingCameraState());
     return true;
   }
+  /** 회의 카메라가 지금 무엇을 찍는지 DOM 에 남긴다 — 배포본에서 개발자 도구로 읽는 진단. */
+  private publishMeetingDiagnostics() {
+    const { shot, speaker, error } = this.meetingCamera.diagnostics;
+    const data = this.host.dataset;
+    if (data.meetingShot !== shot) data.meetingShot = shot;
+    if (data.meetingSpeaker !== speaker) data.meetingSpeaker = speaker;
+    if (error === null) delete data.meetingCameraError;
+    else if (data.meetingCameraError !== error) data.meetingCameraError = error;
+  }
+
   exitMeeting() {
     const active = this.meetingCamera.active;
     this.meetingWalls.dispose();
@@ -500,6 +510,9 @@ export class OfficeRenderer {
     this.meetingSpace = null;
     this.meetingPointer = null;
     delete this.host.dataset.meeting;
+    delete this.host.dataset.meetingShot;
+    delete this.host.dataset.meetingSpeaker;
+    delete this.host.dataset.meetingCameraError;
     if (active) {
       this.following = this.meetingPreviousFollow;
       this.overviewDimensions = this.meetingPreviousOverview;
@@ -1497,6 +1510,7 @@ export class OfficeRenderer {
         this.priorFrame ? Math.min(0.1, (time - this.priorFrame) / 1000) : 0,
         this.lastActors,
       );
+      if (this.meetingCamera.active) this.publishMeetingDiagnostics();
       if (this.meetingSpace) {
         this.meetingWalls.update(this.camera.position, this.meetingOcclusionTargets());
       }

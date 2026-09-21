@@ -824,3 +824,55 @@ test("상반신은 실제 키로 잡는다 — 머리는 보이고 발은 잘린
     );
   }
 });
+
+test("진단은 발언자를 어디서 못 찾았는지 말한다", () => {
+  const { meeting } = setup();
+  meeting.configure({ minSpeakerDwellSeconds: 0, holdAfterSpeechSeconds: 0 });
+  meeting.enter(space);
+  meeting.update(1, actors);
+  assert.equal(meeting.diagnostics.speaker, "none");
+  meeting.setSpeaker({ kind: "npc", id: "ghost", utteranceId: "a" });
+  meeting.update(1, actors);
+  assert.equal(meeting.diagnostics.speaker, "no-actor");
+  meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "b", phase: "thinking" });
+  meeting.update(1, actors);
+  assert.equal(meeting.diagnostics.speaker, "not-speaking");
+  const outside = actors.map((a) => (a.kind === "npc" ? { ...a, x: 40 * 32 } : a));
+  meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "c" });
+  meeting.update(1, outside);
+  assert.equal(meeting.diagnostics.speaker, "outside-room");
+  meeting.update(1, actors);
+  assert.deepEqual(meeting.diagnostics, { shot: "speaker:npc:npc", speaker: "found", error: null });
+});
+
+test("발언자 구도 계산이 던지면 샷을 바꾸지 않고, 다음 프레임에 다시 시도한다", () => {
+  // 예전에는 샷 이름을 먼저 바꾼 뒤 계산해, 던지면 이름은 '발언자' 인데 화면은 테이블에 멈췄다.
+  const { meeting } = setup();
+  let broken = false;
+  meeting.setPresenter(() => {
+    if (broken) throw new Error("rig not ready");
+    return null;
+  });
+  meeting.configure({ minSpeakerDwellSeconds: 0, holdAfterSpeechSeconds: 0 });
+  meeting.enter(space);
+  meeting.update(1, actors);
+  assert.equal(meeting.shot, "table");
+  broken = true;
+  const errors: unknown[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
+    meeting.update(1, actors);
+    meeting.update(1, actors);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(meeting.shot, "table", "계산이 실패한 샷으로 이름만 넘어가지 않는다");
+  assert.equal(meeting.diagnostics.error, "rig not ready");
+  assert.equal(errors.length, 1, "같은 오류를 매 프레임 찍지 않는다");
+  broken = false;
+  meeting.update(1, actors);
+  assert.equal(meeting.shot, "speaker:npc:npc");
+  assert.equal(meeting.diagnostics.error, null);
+});
