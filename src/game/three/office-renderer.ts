@@ -467,6 +467,14 @@ export class OfficeRenderer {
       this.meetingRightInset,
     );
     this.meetingCamera.enter(space);
+    // "The whole table" is the seats in the room — the camera frames them, not the room's floor.
+    const b = space.bounds;
+    this.meetingCamera.setSeats(
+      this.seats.filter(
+        (seat) =>
+          seat.x >= b.x && seat.x <= b.x + b.width && seat.z >= b.y && seat.z <= b.y + b.height,
+      ),
+    );
     this.meetingWalls.enter(this.meetingWallObjects);
     this.host.dataset.meeting = "true";
     this.cursor.visible = false;

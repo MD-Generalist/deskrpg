@@ -17,17 +17,67 @@ export type MeetingCameraControls = {
   mouseButtons: { LEFT?: T.MOUSE | null; MIDDLE?: T.MOUSE | null; RIGHT?: T.MOUSE | null };
   touches: { ONE?: T.TOUCH | null; TWO?: T.TOUCH | null };
 };
+/**
+ * How tightly a speaker is framed. `table` keeps the whole table in view but turns to face the
+ * speaker; the other two close in on the speaker alone.
+ */
+export type MeetingSpeakerFraming = "upperBody" | "fullBody" | "table";
+export const MEETING_SPEAKER_FRAMINGS: readonly MeetingSpeakerFraming[] = [
+  "upperBody",
+  "fullBody",
+  "table",
+];
 export type MeetingCameraOptions = {
   reducedMotion?: boolean;
   roomTransitionSeconds?: number;
   speakerTransitionSeconds?: number;
-  maxSpeakerZoom?: number;
+  speakerFraming?: MeetingSpeakerFraming;
+  /** Cut straight from one speaker to the next instead of passing through the table view. */
+  directHandoff?: boolean;
+  /** A speaker shot is held at least this long, even if the speech ends sooner. */
+  minSpeakerDwellSeconds?: number;
+  /** After speech ends, wait this long for the next speaker before returning to the table. */
+  holdAfterSpeechSeconds?: number;
 };
+export const MEETING_CAMERA_DEFAULTS = {
+  roomTransitionSeconds: 1.0,
+  speakerTransitionSeconds: 0.9,
+  speakerFraming: "upperBody" as MeetingSpeakerFraming,
+  directHandoff: true,
+  minSpeakerDwellSeconds: 1.5,
+  holdAfterSpeechSeconds: 1.2,
+};
+
+// Elevation above the horizon. The table view sits beside the table rather than above the room;
+// speaker shots are close to eye level so the face, not the top of the head, is what we see.
+const TABLE_ELEVATION = T.MathUtils.degToRad(30);
+const SPEAKER_ELEVATION = T.MathUtils.degToRad(15);
+const TABLE_HEADING = Math.PI / 5;
+// World units are tiles. A seated head renders near y=2.0, a standing one near y=2.7.
+const SEATED_HEAD = 2.2;
+const STANDING_HEAD = 2.9;
+const BODY_PAD = 0.8;
+const SEAT_SNAP = 0.6;
+const FIT_MARGIN = 0.08;
+const MIN_SPEAKER_DISTANCE = 2.2;
+// A speaker shot may stand just past a wall (faded) but not deep in the next room.
+const ROOM_REACH = 1.5;
+
+type Shot = { kind: "table" } | { kind: "speaker"; key: string };
+type Point = { x: number; z: number };
+type Box = { min: T.Vector3; max: T.Vector3 };
+
 export class MeetingCamera {
   automatic = true;
   private space: MeetingSpace | null = null;
   private speaker: MeetingSpeaker | null = null;
-  private resolvedKey = "";
+  private seats: Point[] = [];
+  private shotNow: Shot | null = null;
+  /** Shot to take once the table view has settled (non-direct handoff). */
+  private queued: string | null = null;
+  private clock = 0;
+  private shotSince = 0;
+  private speechEndedAt: number | null = null;
   private width = 1;
   private height = 1;
   private right = 0;
@@ -38,6 +88,7 @@ export class MeetingCamera {
   private toTarget = new T.Vector3();
   private toOrbit = new T.Spherical();
   private dirty = false;
+  private scratch = new T.PerspectiveCamera();
   private saved: {
     position: T.Vector3;
     target: T.Vector3;
@@ -58,30 +109,39 @@ export class MeetingCamera {
   get active() {
     return this.space !== null;
   }
+  /** What the automatic camera is framing: `table` or `speaker:<kind>:<id>`. */
+  get shot(): string {
+    if (!this.shotNow) return "none";
+    return this.shotNow.kind === "table" ? "table" : `speaker:${this.shotNow.key}`;
+  }
   configure(options: MeetingCameraOptions) {
     this.options = { ...this.options, ...options };
+    this.dirty = true;
+  }
+  private opt<K extends keyof typeof MEETING_CAMERA_DEFAULTS>(key: K) {
+    return (this.options[key] ??
+      MEETING_CAMERA_DEFAULTS[key]) as (typeof MEETING_CAMERA_DEFAULTS)[K];
+  }
+  /** Seat positions inside the meeting room, in tiles. They define "the whole table". */
+  setSeats(seats: Point[]) {
+    this.seats = seats.map((s) => ({ x: s.x, z: s.z }));
     this.dirty = true;
   }
   setViewport(width: number, height: number, right = 0) {
     this.width = Math.max(1, width);
     this.height = Math.max(1, height);
     this.right = Math.max(0, Math.min(this.width - 1, right));
-    if (this.active) {
-      this.projection();
-      // Projection changes immediately on resize; keep the room visible even before RAF.
-      const offset = this.camera.position.clone().sub(this.controls.target);
-      const distance = Math.max(offset.length(), this.fitDistance(this.controls.target));
-      if (!offset.lengthSq()) offset.set(0.45, 0.9, 1);
-      this.camera.position.copy(this.controls.target).add(offset.setLength(distance));
-      this.camera.far = Math.max(250, distance * 4);
-      this.camera.updateProjectionMatrix();
-      this.camera.lookAt(this.controls.target);
-      this.dirty = true;
-    }
+    if (!this.active) return;
+    this.projection();
+    // Projection changes immediately on resize; re-fit now instead of waiting for a frame so the
+    // table never spends a frame cut off by the meeting panel.
+    this.dirty = true;
+    this.snapToCurrent();
   }
   private projection() {
     // Render the full canvas, with its optical center inside the unobscured left viewport.
     this.camera.setViewOffset(this.width - this.right, this.height, 0, 0, this.width, this.height);
+    this.camera.updateProjectionMatrix();
   }
   enter(space: MeetingSpace) {
     if (this.space?.id === space.id && this.space.version === space.version) return;
@@ -108,7 +168,9 @@ export class MeetingCamera {
     c.maxDistance = Infinity;
     c.mouseButtons = { LEFT: T.MOUSE.ROTATE, MIDDLE: T.MOUSE.ROTATE, RIGHT: T.MOUSE.ROTATE };
     c.touches = { ONE: T.TOUCH.ROTATE, TWO: T.TOUCH.DOLLY_ROTATE };
-    this.resolvedKey = "";
+    this.shotNow = null;
+    this.queued = null;
+    this.speechEndedAt = null;
     this.dirty = true;
     this.projection();
   }
@@ -127,113 +189,13 @@ export class MeetingCamera {
     this.saved = null;
     this.space = null;
     this.speaker = null;
-    this.resolvedKey = "";
+    this.shotNow = null;
+    this.queued = null;
+    this.speechEndedAt = null;
     this.automatic = true;
   }
   dispose() {
     this.exit();
-  }
-  update(delta: number, actors: ActorSnapshot[]) {
-    if (!this.space) return;
-    const b = this.space.bounds;
-    const speech =
-      this.speaker && (!this.speaker.phase || this.speaker.phase === "speaking")
-        ? this.speaker
-        : null;
-    const actor =
-      speech &&
-      actors.find((a) =>
-        speech.kind === "npc"
-          ? a.kind === "npc" && a.id === speech.id
-          : a.kind !== "npc" && a.userId === speech.id,
-      );
-    const inRoom =
-      actor &&
-      actor.x / 32 >= b.x &&
-      actor.x / 32 <= b.x + b.width &&
-      actor.y / 32 >= b.y &&
-      actor.y / 32 <= b.y + b.height;
-    const speaker = inRoom ? actor : undefined;
-    const key = speaker
-      ? `${this.speaker!.kind}:${speaker.id}:${this.speaker!.utteranceId}`
-      : "overview";
-    if (!this.automatic) {
-      if (this.dirty) {
-        const orbit = new T.Spherical().setFromVector3(
-          this.camera.position.clone().sub(this.controls.target),
-        );
-        orbit.radius = Math.max(orbit.radius, this.fitDistance(this.controls.target));
-        this.camera.position
-          .copy(this.controls.target)
-          .add(new T.Vector3().setFromSpherical(orbit));
-        this.camera.lookAt(this.controls.target);
-        this.dirty = false;
-      }
-      return;
-    }
-    if (this.dirty || this.resolvedKey !== key) {
-      const first = this.resolvedKey === "";
-      this.resolvedKey = key;
-      this.dirty = false;
-      this.fromTarget.copy(this.controls.target);
-      this.fromOrbit.setFromVector3(this.camera.position.clone().sub(this.controls.target));
-      this.toTarget.set(b.x + b.width / 2, 1.25, b.y + b.height / 2);
-      if (speaker) this.toTarget.lerp(new T.Vector3(speaker.x / 32, 1.25, speaker.y / 32), 0.35);
-      this.toOrbit.copy(this.fromOrbit);
-      // Absolute room-relative heading, never an accumulated turn per speech update.
-      const heading =
-        Math.PI / 5 +
-        (speaker
-          ? Math.atan2(
-              speaker.x / 32 - (b.x + b.width / 2),
-              speaker.y / 32 - (b.y + b.height / 2),
-            ) * 0.12
-          : 0);
-      this.toOrbit.theta =
-        this.fromOrbit.theta +
-        Math.atan2(
-          Math.sin(heading - this.fromOrbit.theta),
-          Math.cos(heading - this.fromOrbit.theta),
-        );
-      this.toOrbit.phi = Math.PI / 3.5;
-      const zoom = Math.max(1, Math.min(1.35, this.options.maxSpeakerZoom ?? 1.35));
-      this.toOrbit.radius = this.fitDistance(this.toTarget) * (speaker ? 1 : zoom);
-      this.elapsed = 0;
-      this.duration = Math.max(
-        0,
-        first
-          ? (this.options.roomTransitionSeconds ?? 0.8)
-          : (this.options.speakerTransitionSeconds ?? 0.6),
-      );
-      this.camera.far = Math.max(250, this.toOrbit.radius * 4);
-      this.camera.updateProjectionMatrix();
-    }
-    this.elapsed += Math.max(0, delta);
-    const t =
-      this.options.reducedMotion || this.duration === 0
-        ? 1
-        : Math.min(1, this.elapsed / this.duration);
-    const ease = t * t * (3 - 2 * t);
-    this.controls.target.lerpVectors(this.fromTarget, this.toTarget, ease);
-    const orbit = new T.Spherical(
-      T.MathUtils.lerp(this.fromOrbit.radius, this.toOrbit.radius, ease),
-      T.MathUtils.lerp(this.fromOrbit.phi, this.toOrbit.phi, ease),
-      T.MathUtils.lerp(this.fromOrbit.theta, this.toOrbit.theta, ease),
-    );
-    this.camera.position.copy(this.controls.target).add(new T.Vector3().setFromSpherical(orbit));
-    this.camera.lookAt(this.controls.target);
-  }
-  private fitDistance(target: T.Vector3) {
-    const b = this.space!.bounds;
-    // A bounding sphere guarantees furniture/participant clearance at every rotation angle.
-    let radius = 0;
-    for (const x of [b.x, b.x + b.width])
-      for (const z of [b.y, b.y + b.height])
-        for (const y of [0, 2.5])
-          radius = Math.max(radius, target.distanceTo(new T.Vector3(x, y, z)));
-    const vertical = T.MathUtils.degToRad(this.camera.fov / 2);
-    const horizontal = Math.atan((Math.tan(vertical) * (this.width - this.right)) / this.height);
-    return (radius / Math.sin(Math.min(vertical, horizontal))) * 1.08;
   }
   setSpeaker(speaker: MeetingSpeaker | null) {
     this.speaker = speaker;
@@ -246,5 +208,415 @@ export class MeetingCamera {
       this.automatic = true;
       this.dirty = true;
     }
+  }
+
+  private lastActors: ActorSnapshot[] = [];
+
+  update(delta: number, actors: ActorSnapshot[]) {
+    if (!this.space) return;
+    this.lastActors = actors;
+    const step = Math.max(0, delta);
+    this.clock += step;
+    if (!this.automatic) {
+      if (this.dirty) this.keepTableInManualView();
+      return;
+    }
+    const wanted = this.speakingActor(actors);
+    const next = this.decide(wanted);
+    // A settings change or "resume auto" re-frames the same shot, smoothly.
+    if (next) this.begin(next);
+    else if (this.dirty) this.begin(this.shotNow ?? { kind: "table" });
+    this.elapsed += step;
+    this.apply();
+  }
+
+  /**
+   * Which shot to move to now, or `null` to stay. Entering a speaker shot is never delayed — the
+   * camera answers the moment output starts (the rule `speaker-tracker` enforces). Only leaving is
+   * cushioned, by the minimum dwell and the post-speech hold, so fast exchanges do not whip the
+   * camera back and forth.
+   */
+  private decide(wanted: { key: string } | null): Shot | null {
+    const current = this.shotNow;
+    if (!current) return wanted ? { kind: "speaker", key: wanted.key } : { kind: "table" };
+
+    if (current.kind === "table") {
+      if (this.queued && this.settled()) {
+        const key = this.queued;
+        this.queued = null;
+        if (wanted?.key === key) return { kind: "speaker", key };
+      }
+      if (wanted && !this.queued) return { kind: "speaker", key: wanted.key };
+      return null;
+    }
+
+    // current is a speaker shot
+    if (wanted?.key === current.key) {
+      this.speechEndedAt = null;
+      return null;
+    }
+    if (this.speechEndedAt === null) this.speechEndedAt = this.clock;
+    if (this.clock - this.shotSince < this.opt("minSpeakerDwellSeconds")) return null;
+    if (wanted) {
+      if (this.opt("directHandoff")) return { kind: "speaker", key: wanted.key };
+      this.queued = wanted.key;
+      return { kind: "table" };
+    }
+    if (this.clock - this.speechEndedAt < this.opt("holdAfterSpeechSeconds")) return null;
+    return { kind: "table" };
+  }
+
+  private settled() {
+    return this.duration === 0 || this.elapsed >= this.duration;
+  }
+
+  private speakingActor(actors: ActorSnapshot[]): { key: string; actor: ActorSnapshot } | null {
+    const s = this.speaker;
+    if (!s || (s.phase && s.phase !== "speaking")) return null;
+    const b = this.space!.bounds;
+    const actor = actors.find((a) =>
+      s.kind === "npc" ? a.kind === "npc" && a.id === s.id : a.kind !== "npc" && a.userId === s.id,
+    );
+    if (!actor) return null;
+    const x = actor.x / 32;
+    const z = actor.y / 32;
+    if (x < b.x || x > b.x + b.width || z < b.y || z > b.y + b.height) return null;
+    return { key: `${s.kind}:${s.id}`, actor };
+  }
+
+  private actorForKey(key: string): ActorSnapshot | undefined {
+    const [kind, ...rest] = key.split(":");
+    const id = rest.join(":");
+    return this.lastActors.find((a) =>
+      kind === "npc" ? a.kind === "npc" && a.id === id : a.kind !== "npc" && a.userId === id,
+    );
+  }
+
+  /** Start a transition to `shot` (or re-frame it, when it is already the current shot). */
+  private begin(shot: Shot) {
+    const first = this.shotNow === null;
+    if (first || shotLabel(shot) !== this.shot) {
+      this.shotNow = shot;
+      this.shotSince = this.clock;
+      if (shot.kind === "table") this.speechEndedAt = null;
+    }
+    const { target, orbit } = this.compose(shot);
+    this.dirty = false;
+    this.fromTarget.copy(this.controls.target);
+    this.fromOrbit.setFromVector3(this.camera.position.clone().sub(this.controls.target));
+    this.toTarget.copy(target);
+    this.toOrbit.copy(orbit);
+    // Shortest way round, so a turn never spins through the long side.
+    this.toOrbit.theta =
+      this.fromOrbit.theta +
+      Math.atan2(
+        Math.sin(orbit.theta - this.fromOrbit.theta),
+        Math.cos(orbit.theta - this.fromOrbit.theta),
+      );
+    this.elapsed = 0;
+    this.duration = first
+      ? this.opt("roomTransitionSeconds")
+      : this.opt("speakerTransitionSeconds");
+    this.camera.far = Math.max(250, orbit.radius * 4);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Apply the current transition frame. */
+  private apply() {
+    const t =
+      this.options.reducedMotion || this.duration === 0
+        ? 1
+        : Math.min(1, this.elapsed / this.duration);
+    // Cubic ease-in-out: gentler start and landing than smoothstep.
+    const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    this.controls.target.lerpVectors(this.fromTarget, this.toTarget, ease);
+    const orbit = new T.Spherical(
+      T.MathUtils.lerp(this.fromOrbit.radius, this.toOrbit.radius, ease),
+      T.MathUtils.lerp(this.fromOrbit.phi, this.toOrbit.phi, ease),
+      T.MathUtils.lerp(this.fromOrbit.theta, this.toOrbit.theta, ease),
+    );
+    this.camera.position.copy(this.controls.target).add(new T.Vector3().setFromSpherical(orbit));
+    this.camera.lookAt(this.controls.target);
+  }
+
+  /** Re-fit the current shot immediately (no transition). */
+  private snapToCurrent() {
+    if (!this.automatic) {
+      this.keepTableInManualView();
+      return;
+    }
+    const shot = this.shotNow ?? { kind: "table" };
+    const { target, orbit } = this.compose(shot);
+    this.controls.target.copy(target);
+    this.camera.position.copy(target).add(new T.Vector3().setFromSpherical(orbit));
+    this.camera.far = Math.max(250, orbit.radius * 4);
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(target);
+    this.fromTarget.copy(target);
+    this.toTarget.copy(target);
+    this.fromOrbit.copy(orbit);
+    this.toOrbit.copy(orbit);
+    this.duration = 0;
+    this.dirty = false;
+  }
+
+  /** Manual orbit keeps the user's angle, but never lets a resize cut the table off. */
+  private keepTableInManualView() {
+    const orbit = new T.Spherical().setFromVector3(
+      this.camera.position.clone().sub(this.controls.target),
+    );
+    const box = this.tableBox();
+    orbit.radius = Math.max(orbit.radius, this.fitRadius(box, this.controls.target, orbit));
+    this.camera.position.copy(this.controls.target).add(new T.Vector3().setFromSpherical(orbit));
+    this.camera.lookAt(this.controls.target);
+    this.dirty = false;
+  }
+
+  private compose(shot: Shot): { target: T.Vector3; orbit: T.Spherical } {
+    const table = this.tableBox();
+    const tableCenter = table.min.clone().add(table.max).multiplyScalar(0.5);
+    const actor = shot.kind === "speaker" ? this.actorForKey(shot.key) : undefined;
+    if (shot.kind === "table" || !actor) return this.tableShot(table, tableCenter);
+
+    const seat = this.seatOf(actor);
+    const x = seat?.x ?? actor.x / 32;
+    const z = seat?.z ?? actor.y / 32;
+    const facing = facingOf(actor.direction);
+    // Stand where the speaker is looking: the camera sits on their facing side, so we see the face.
+    const heading = Math.atan2(facing.x, facing.z);
+    const framing = this.opt("speakerFraming");
+
+    if (framing === "table") {
+      // Keep the whole table, but look at it from the speaker's facing side.
+      const orbit = new T.Spherical(1, Math.PI / 2 - TABLE_ELEVATION, heading);
+      return this.centeredFit(table, tableCenter, orbit);
+    }
+
+    const head = seat ? SEATED_HEAD : STANDING_HEAD;
+    const bottom = framing === "upperBody" ? head * 0.45 : 0;
+    const box: Box = {
+      min: new T.Vector3(x - 0.6, bottom, z - 0.6),
+      max: new T.Vector3(x + 0.6, head, z + 0.6),
+    };
+    // Lean toward the table a little so listeners' shoulders edge the frame — it reads as talk.
+    const target = new T.Vector3(x, (bottom + head) / 2, z).lerp(
+      new T.Vector3(tableCenter.x, (bottom + head) / 2, tableCenter.z),
+      0.15,
+    );
+    const orbit = new T.Spherical(1, Math.PI / 2 - SPEAKER_ELEVATION, heading);
+    orbit.radius = Math.max(MIN_SPEAKER_DISTANCE, this.fitRadius(box, target, orbit));
+    this.keepNearRoom(box, target, orbit);
+    return { target, orbit };
+  }
+
+  /**
+   * The table view. A fixed heading looked at people along the line they sat in, so they overlapped
+   * and filled a third of the width (measured). Try headings across the front half of the room and
+   * keep the one that frames the table tightest — that is the angle where the table spreads out
+   * across the screen. Ties go to the old default so a symmetric room keeps its familiar angle.
+   */
+  private tableShot(table: Box, center: T.Vector3) {
+    let best: { target: T.Vector3; orbit: T.Spherical } | null = null;
+    for (let step = -6; step <= 6; step++) {
+      const heading = TABLE_HEADING + step * T.MathUtils.degToRad(15);
+      const framed = this.centeredFit(
+        table,
+        center,
+        new T.Spherical(1, Math.PI / 2 - TABLE_ELEVATION, heading),
+      );
+      if (!best || framed.orbit.radius < best.orbit.radius - 1e-3) best = framed;
+    }
+    return best!;
+  }
+
+  /**
+   * Fit `box` at the given angle with its projection centred in the usable viewport. Seen at an
+   * angle, a box's picture is lopsided around its centre point, so aiming at the centre wastes the
+   * frame on one side. Nudge the aim toward the picture's centre and re-fit, a few times.
+   */
+  private centeredFit(box: Box, start: T.Vector3, angle: T.Spherical) {
+    const target = start.clone();
+    const orbit = angle.clone();
+    const cam = this.scratch;
+    const halfV = Math.tan(T.MathUtils.degToRad(this.camera.fov / 2));
+    const aspect = (this.width - this.right) / this.height;
+    for (let i = 0; i < 4; i++) {
+      orbit.radius = this.fitRadius(box, target, orbit);
+      const rect = this.projectedRect(box, target, orbit);
+      const right = new T.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+      const up = new T.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+      const dx = ((rect.minX + rect.maxX) / 2 - 0.5) * 2 * orbit.radius * halfV * aspect;
+      const dy = -((rect.minY + rect.maxY) / 2 - 0.5) * 2 * orbit.radius * halfV;
+      if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) break;
+      target.addScaledVector(right, dx).addScaledVector(up, dy);
+    }
+    orbit.radius = this.fitRadius(box, target, orbit);
+    return { target, orbit };
+  }
+
+  /** Box picture in usable-viewport units (0..1 across the unobscured area, 0..1 top to bottom). */
+  private projectedRect(box: Box, target: T.Vector3, orbit: T.Spherical) {
+    const cam = this.placeScratch(target, orbit);
+    const usable = (this.width - this.right) / this.width;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const corner of boxCorners(box)) {
+      const p = corner.project(cam);
+      const x = (p.x + 1) / 2 / usable;
+      const y = (1 - p.y) / 2;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+    return { minX, maxX, minY, maxY };
+  }
+
+  private placeScratch(target: T.Vector3, orbit: T.Spherical) {
+    const cam = this.scratch;
+    cam.copy(this.camera);
+    cam.setViewOffset(this.width - this.right, this.height, 0, 0, this.width, this.height);
+    cam.updateProjectionMatrix();
+    cam.position.copy(target).add(new T.Vector3().setFromSpherical(orbit));
+    cam.lookAt(target);
+    cam.updateMatrixWorld(true);
+    return cam;
+  }
+
+  /**
+   * Keep a speaker shot near the room without ever cropping the speaker.
+   *
+   * The first version pulled the camera in until it was inside the walls, and that cut the
+   * speaker's head off (a test caught it). Walls between the camera and the people are already
+   * faded by `MeetingWallOcclusion`, so standing just outside a wall costs nothing; what we must
+   * not do is wander deep into the next room, where nothing is faded. So: raise the camera until it
+   * sits within a wall's reach of the room, re-fitting at every angle so the frame stays whole.
+   */
+  private keepNearRoom(box: Box, target: T.Vector3, orbit: T.Spherical) {
+    const b = this.space!.bounds;
+    const near = (o: T.Spherical) => {
+      const p = target.clone().add(new T.Vector3().setFromSpherical(o));
+      return (
+        p.x >= b.x - ROOM_REACH &&
+        p.x <= b.x + b.width + ROOM_REACH &&
+        p.z >= b.y - ROOM_REACH &&
+        p.z <= b.y + b.height + ROOM_REACH
+      );
+    };
+    if (near(orbit)) return;
+    const start = orbit.phi;
+    for (let phi = start; phi >= T.MathUtils.degToRad(20); phi -= T.MathUtils.degToRad(3)) {
+      const trial = new T.Spherical(1, phi, orbit.theta);
+      trial.radius = Math.max(MIN_SPEAKER_DISTANCE, this.fitRadius(box, target, trial));
+      if (near(trial)) {
+        orbit.phi = trial.phi;
+        orbit.radius = trial.radius;
+        return;
+      }
+    }
+  }
+
+  private seatOf(actor: ActorSnapshot): Point | undefined {
+    const x = actor.x / 32;
+    const z = actor.y / 32;
+    let best: Point | undefined;
+    let bestDistance = SEAT_SNAP;
+    for (const seat of this.seats) {
+      const d = Math.hypot(seat.x - x, seat.z - z);
+      if (d <= bestDistance) {
+        best = seat;
+        bestDistance = d;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * "The whole table": the seats, plus anyone standing in the room. With neither, the room.
+   * Framing people instead of the room rectangle is the point — empty floor and shelves were most
+   * of the picture before.
+   */
+  private tableBox(): Box {
+    const b = this.space!.bounds;
+    const points: Point[] = [...this.seats];
+    for (const actor of this.lastActors) {
+      const x = actor.x / 32;
+      const z = actor.y / 32;
+      if (x >= b.x && x <= b.x + b.width && z >= b.y && z <= b.y + b.height) points.push({ x, z });
+    }
+    if (points.length === 0) {
+      return {
+        min: new T.Vector3(b.x, 0, b.y),
+        max: new T.Vector3(b.x + b.width, SEATED_HEAD, b.y + b.height),
+      };
+    }
+    const min = new T.Vector3(Infinity, 0, Infinity);
+    const max = new T.Vector3(-Infinity, SEATED_HEAD, -Infinity);
+    for (const p of points) {
+      min.x = Math.min(min.x, p.x - BODY_PAD);
+      min.z = Math.min(min.z, p.z - BODY_PAD);
+      max.x = Math.max(max.x, p.x + BODY_PAD);
+      max.z = Math.max(max.z, p.z + BODY_PAD);
+    }
+    return { min, max };
+  }
+
+  /**
+   * Smallest distance at which every corner of `box` lands inside the usable viewport (the canvas
+   * minus the meeting panel) with a margin. Unlike a bounding sphere this knows the viewing angle,
+   * so it frames as tight as that angle allows.
+   */
+  private fitRadius(box: Box, target: T.Vector3, orbit: T.Spherical): number {
+    const corners = boxCorners(box);
+    const usable = (this.width - this.right) / this.width;
+    const fits = (radius: number) => {
+      const cam = this.placeScratch(target, new T.Spherical(radius, orbit.phi, orbit.theta));
+      for (const corner of corners) {
+        const inView = corner.clone().applyMatrix4(cam.matrixWorldInverse);
+        if (inView.z > -cam.near) return false;
+        const p = corner.clone().project(cam);
+        const px = (p.x + 1) / 2;
+        if (px < FIT_MARGIN * usable || px > usable * (1 - FIT_MARGIN)) return false;
+        if (Math.abs(p.y) > 1 - 2 * FIT_MARGIN) return false;
+      }
+      return true;
+    };
+    let lo = 0.5;
+    let hi = 400;
+    if (!fits(hi)) return hi;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  }
+}
+
+function boxCorners(box: Box): T.Vector3[] {
+  const corners: T.Vector3[] = [];
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y])
+      for (const z of [box.min.z, box.max.z]) corners.push(new T.Vector3(x, y, z));
+  return corners;
+}
+
+function shotLabel(shot: Shot) {
+  return shot.kind === "table" ? "table" : `speaker:${shot.key}`;
+}
+
+/** Screen `down` is +z in the world, `right` is +x. */
+function facingOf(direction: string): Point {
+  switch (direction) {
+    case "up":
+      return { x: 0, z: -1 };
+    case "left":
+      return { x: -1, z: 0 };
+    case "right":
+      return { x: 1, z: 0 };
+    default:
+      return { x: 0, z: 1 };
   }
 }
