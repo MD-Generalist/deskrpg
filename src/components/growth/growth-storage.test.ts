@@ -35,3 +35,16 @@ test("저장소를 읽을 수 없으면 ok 가 false 다", () => {
   assert.equal(readGrowthState(null).ok, false);
   assert.doesNotThrow(() => writeGrowthFlag(broken, "starClicked", "1"));
 });
+
+test("설문 상태를 저장하고 다시 읽으며, 망가진 값은 초기값으로 되돌린다", async () => {
+  const { readSurveyState, writeSurveyState } = await import("./growth-storage");
+  const s = memoryStorage();
+  assert.deepEqual(readSurveyState(s), { consent: "unknown", usageMs: 0, nextAt: null });
+  writeSurveyState(s, { consent: "granted", usageMs: 5, nextAt: 99 });
+  assert.deepEqual(readSurveyState(s), { consent: "granted", usageMs: 5, nextAt: 99 });
+  s.setItem("deskrpg.feedback.survey", "{not json");
+  assert.deepEqual(readSurveyState(s), { consent: "unknown", usageMs: 0, nextAt: null });
+  s.setItem("deskrpg.feedback.survey", JSON.stringify({ consent: "hacked", usageMs: -3 }));
+  assert.deepEqual(readSurveyState(s), { consent: "unknown", usageMs: 0, nextAt: null });
+  assert.equal(readSurveyState(null), null);
+});

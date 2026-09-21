@@ -1,3 +1,5 @@
+import { initialSurveyState, type SurveyState } from "./survey-schedule";
+
 const KEYS = {
   seenVersion: "deskrpg.growth.seenVersion",
   starClicked: "deskrpg.growth.starClicked",
@@ -40,5 +42,37 @@ export function browserStorage(): Storage | null {
     return typeof window === "undefined" ? null : window.localStorage;
   } catch {
     return null;
+  }
+}
+
+const SURVEY_KEY = "deskrpg.feedback.survey";
+
+/** 설문 상태. 저장소를 못 쓰면 null — 호출부는 설문을 띄우지 않는다. */
+export function readSurveyState(storage: Storage | null): SurveyState | null {
+  let raw: string | null;
+  try {
+    if (!storage) return null;
+    raw = storage.getItem(SURVEY_KEY);
+  } catch {
+    return null;
+  }
+  try {
+    const v = (raw ? JSON.parse(raw) : {}) as Partial<SurveyState>;
+    return {
+      consent: v.consent === "granted" || v.consent === "denied" ? v.consent : "unknown",
+      usageMs: typeof v.usageMs === "number" && v.usageMs >= 0 ? v.usageMs : 0,
+      nextAt: typeof v.nextAt === "number" ? v.nextAt : null,
+    };
+  } catch {
+    // 망가진 값은 처음부터 다시 센다.
+    return initialSurveyState();
+  }
+}
+
+export function writeSurveyState(storage: Storage | null, state: SurveyState): void {
+  try {
+    storage?.setItem(SURVEY_KEY, JSON.stringify(state));
+  } catch {
+    // 기억하지 못할 뿐이다.
   }
 }

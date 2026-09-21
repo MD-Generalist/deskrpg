@@ -144,6 +144,7 @@ Important environment variables:
 - `POSTGRES_PASSWORD` (PostgreSQL Docker setup)
 - `DESKRPG_LOCAL_DISCOVERY_ENABLED` (optional; lets a loopback gateway read `~/.hermes/profiles` on the host — off by default)
 - `DESKRPG_HOST_SETUP_ENABLED` (optional; the local/SSH gateway setup wizard is open to `system_admin` by default — set `0` to turn it off)
+- `DESKRPG_FEEDBACK_URL` (optional; where surveys and private bug reports go — see [Data DeskRPG sends](#data-deskrpg-sends). Set it to an empty value to turn both off)
 
 For production, always set a real `JWT_SECRET`.
 
@@ -248,6 +249,17 @@ later without firing it.
 - Create and manage Hermes cron jobs for each NPC without copying schedules into DeskRPG.
 - Pause, resume or run jobs immediately, inspect recent runs, and create common schedules from blueprints.
 - Completed runs post structured results to the office room that originated the schedule.
+
+## Data DeskRPG Sends
+
+DeskRPG sends nothing about your offices, staff or conversations. Two optional things can leave your browser:
+
+- **Usage survey.** After about 30 minutes on the map, a short survey appears (at most once every 30 days). Nothing is sent until you press **Send**; **Don't ask again** stops it for good in that browser. A response carries your answers, the app version, the UI language and a random install ID used only to spot duplicate answers.
+- **Private bug report.** From **Menu → Report a bug** you choose between a public GitHub issue and a private report. A private report carries what you typed, an optional contact, and the version, browser, screen size and recent error lines — each shown before sending and each can be unchecked.
+
+Both go to `https://feedback.deskrpg.com`, run by the DeskRPG maintainer; the server stores a salted hash of your IP only for rate limiting, never the address. Set `DESKRPG_FEEDBACK_URL=` (empty) on the server to turn both off, or point it at your own collector.
+
+The map also asks the GitHub API for the star count and the latest release through your DeskRPG server, so it can show a new-version dot. No identifier is sent.
 
 ## Product Notes
 

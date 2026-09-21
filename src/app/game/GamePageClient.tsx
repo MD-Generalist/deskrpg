@@ -1,9 +1,13 @@
 "use client";
 
-import { APP_VERSION, BUG_REPORT_BASE_URL, LICENSE_URL, REPO_URL } from "@/lib/app-meta";
+import { APP_VERSION, LICENSE_URL, REPO_URL } from "@/lib/app-meta";
 import { GrowthStarButton } from "@/components/growth/GrowthStarButton";
 import { UpdateNoticeModal } from "@/components/growth/UpdateNoticeModal";
 import { useAppMeta } from "@/components/growth/use-app-meta";
+import { BugReportModal } from "@/components/growth/BugReportModal";
+import { SurveyModal } from "@/components/growth/SurveyModal";
+import { installErrorCapture } from "@/components/growth/feedback-client";
+import { useSurveyPrompt } from "@/components/growth/use-survey-prompt";
 import { npcMotionUi } from "./npc-motion-ui";
 import { navigatorMotion } from "./conversation-integration";
 import type { MotionSnapshot } from "@/game/motion-snapshot";
@@ -272,6 +276,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const appMeta = useAppMeta();
   const [showUpdateNotice, setShowUpdateNotice] = useState(false);
+  const [showBugReport, setShowBugReport] = useState(false);
+  const surveyPrompt = useSurveyPrompt(appMeta.feedbackUrl);
+  useEffect(() => installErrorCapture(), []);
   // 칸반 보드(T8). `kanbanRefreshTick` 은 `kanban:event` 마다 오르고, 모달이 디바운스해 재조회한다.
   const [showKanban, setShowKanban] = useState(false);
   useEffect(() => {
@@ -502,35 +509,6 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     },
     [],
   );
-
-  const openBugReport = useCallback(() => {
-    const userAgent = typeof window !== "undefined" ? window.navigator.userAgent : "unknown";
-    const body = [
-      "## 문제 설명",
-      "",
-      "",
-      "## 재현 방법",
-      "",
-      "",
-      "## 기대 결과",
-      "",
-      "",
-      "## 실제 결과",
-      "",
-      "",
-      "## 디버그 정보",
-      "",
-      `- version: v${APP_VERSION}`,
-      `- browser: ${userAgent}`,
-    ].join("\n");
-
-    const params = new URLSearchParams({
-      labels: "bug-report",
-      body,
-    });
-
-    window.open(`${BUG_REPORT_BASE_URL}?${params.toString()}`, "_blank", "noopener,noreferrer");
-  }, []);
 
   const copyDebugInformation = useCallback(async () => {
     const debugInfo = [
@@ -3201,7 +3179,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 <button
                   onClick={() => {
                     setShowUserMenu(false);
-                    openBugReport();
+                    setShowBugReport(true);
                   }}
                   className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
                 >
@@ -3338,6 +3316,20 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       {/* Click outside to close dropdowns */}
       {showUserMenu && (
         <div className="fixed inset-0 z-[9]" onClick={() => setShowUserMenu(false)} />
+      )}
+
+      {showBugReport && (
+        <BugReportModal feedbackUrl={appMeta.feedbackUrl} onClose={() => setShowBugReport(false)} />
+      )}
+
+      {surveyPrompt.survey && appMeta.feedbackUrl && (
+        <SurveyModal
+          survey={surveyPrompt.survey}
+          locale={locale}
+          feedbackUrl={appMeta.feedbackUrl}
+          consentNeeded={surveyPrompt.consentNeeded}
+          onDone={surveyPrompt.finish}
+        />
       )}
 
       {showUpdateNotice && appMeta.latestVersion && (
