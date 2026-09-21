@@ -927,6 +927,47 @@ export async function startFakePluginServer(
     };
   }
 
+  /**
+   * 보드 전체 첨부(`GET /deskrpg/kanban/attachments`). 실제 플러그인 계약을 따른다:
+   * capability `kanban_attachment_list` 가 없으면 라우트가 없고(404), 최신 것부터,
+   * `limit` 기본 50·최대 200(넘으면 자른다), 0 이나 숫자 아니면 400 `invalid_query`,
+   * 깨졌거나 다른 보드의 커서면 400 `unknown_cursor`. 카드가 없으면 `task_title` 은 null.
+   */
+  function listBoardAttachments(board: BoardRecord, params: URLSearchParams): Reply {
+    if (!info.capabilities?.includes("kanban_attachment_list")) throw notFound();
+    const rawLimit = params.get("limit");
+    let limit = 50;
+    if (rawLimit !== null) {
+      const parsed = Number(rawLimit);
+      if (!Number.isInteger(parsed) || parsed <= 0) throw badRequest("invalid_query");
+      limit = Math.min(parsed, 200);
+    }
+    // 심은 순서가 곧 생성 순서다 — 최신이 먼저.
+    const all = [...board.attachments.values()].reverse();
+    let offset = 0;
+    const cursor = params.get("cursor");
+    if (cursor) {
+      const match = /^(.+):(\d+)$/.exec(cursor);
+      if (!match || match[1] !== board.meta.slug) throw badRequest("unknown_cursor");
+      offset = Number(match[2]);
+    }
+    const page = all.slice(offset, offset + limit);
+    const next = offset + limit < all.length ? `${board.meta.slug}:${offset + limit}` : null;
+    return {
+      status: 200,
+      body: {
+        attachments: page.map(({ bytes: _bytes, task_id, ...rest }) => ({
+          ...rest,
+          content_type: null,
+          created_at: null,
+          task_id,
+          task_title: board.tasks.get(task_id)?.task.title ?? null,
+        })),
+        next_cursor: next,
+      },
+    };
+  }
+
   /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
   function seedAttachment(input: {
     board: string;
@@ -1443,6 +1484,9 @@ export async function startFakePluginServer(
     m = /^\/deskrpg\/kanban\/tasks\/([^/]+)\/blackboard$/.exec(pathname);
     if (m && method === "GET") {
       return blackboardOf(boardOf(params), decodeURIComponent(m[1]));
+    }
+    if (pathname === "/deskrpg/kanban/attachments" && method === "GET") {
+      return listBoardAttachments(boardOf(params), params);
     }
     m = /^\/deskrpg\/kanban\/attachments\/([^/]+)$/.exec(pathname);
     if (m) {

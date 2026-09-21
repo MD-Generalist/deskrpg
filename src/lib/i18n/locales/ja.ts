@@ -2964,6 +2964,10 @@ const ja: Record<string, string> = {
   "artifacts.card.title": "成果物",
   "artifacts.card.empty": "このカードの成果物はまだありません",
   "artifacts.card.fromAttachment": "添付",
+  "artifacts.attachments.title": "カードの添付",
+  "artifacts.attachments.unsupported":
+    "このゲートウェイのプラグインはカード添付の一覧を返しません — プラグインを更新すると、完了したカードの添付もここに表示されます。",
+  "artifacts.attachments.untitledCard": "削除されたカード",
   "artifacts.chip": "成果物を保存しました: {title}",
 };
 

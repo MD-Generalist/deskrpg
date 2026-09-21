@@ -232,6 +232,14 @@ export function supportsSwarm(info: PluginInfo | null): boolean {
  * 그 인자를 받을 때만 capability 에 붙인다. 없는데 관문을 켜면 카드가 `running` 으로
  * 생겨 **승인 없이 실행된다** — 그래서 fail-closed 로 둔다.
  */
+/**
+ * 보드 전체 첨부를 한 번에 읽을 수 있는가. 없으면 결과물 갤러리가 카드 첨부를 빼고 아티팩트만
+ * 보여 준다 — 카드마다 상세를 부르는 N+1 로 흉내 내지 않는다. 스웜과 같은 이유로 버전을 보지 않는다.
+ */
+export function supportsBoardAttachmentList(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("kanban_attachment_list"));
+}
+
 export function supportsInitialStatus(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("initial_status"));
 }

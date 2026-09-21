@@ -282,7 +282,11 @@ test("taskId 로 열면 목록 요청에 taskId 가 붙는다", async () => {
     },
   });
   await render({ initialTaskId: "t-9" });
-  assert.deepEqual(calls, ["GET /api/channels/ch-1/artifacts?taskId=t-9&limit=50"]);
+  // 카드 첨부 조회(보드 목록·첨부)도 함께 나가므로 결과물 목록 요청만 본다.
+  assert.deepEqual(
+    calls.filter((c) => c.includes("/artifacts")),
+    ["GET /api/channels/ch-1/artifacts?taskId=t-9&limit=50"],
+  );
 });
 
 test("artifact.deleted 사건은 그 항목을 빼고 선택을 푼다", async () => {
@@ -618,4 +622,94 @@ test("미디어 탭 격자는 이미지는 썸네일로, 오디오·비디오는
   assert.ok(container.querySelector('img[alt="그림"]'), "이미지는 썸네일이다");
   assert.equal(container.querySelector('img[alt="오디오"]'), null, "오디오는 썸네일이 아니다");
   assert.ok(queryText("오디오"), "오디오는 제목이 붙은 타일이다");
+});
+
+// ---------------------------------------------------------------------------
+// 카드 첨부 — 워커가 만든 파일은 카드가 끝나면 scratch 와 함께 지워지고 첨부만 남는다.
+// ---------------------------------------------------------------------------
+
+const PROJECTS = "GET /api/channels/ch-1/projects";
+const ATTACHMENTS_B1 = "GET /api/channels/ch-1/kanban/attachments?board=b1";
+const oneBoard = {
+  projects: [
+    {
+      id: "p1",
+      boardSlug: "b1",
+      name: null,
+      status: "active",
+      isEventCarrier: true,
+      targetDate: null,
+    },
+  ],
+};
+
+test("카드 첨부를 아티팩트 뒤에 '첨부' 표시와 카드 제목으로 잇는다", async () => {
+  mockFetch({
+    [LIST]: { artifacts: [summary({ id: "a1", title: "주간 보고" })], cursor: "", has_more: false },
+    [PROJECTS]: oneBoard,
+    [ATTACHMENTS_B1]: {
+      supported: true,
+      attachments: [
+        { id: "att1", filename: "sales.csv", size: 3, task_id: "t9", task_title: "매출 정리" },
+      ],
+      next_cursor: null,
+    },
+  });
+  await render();
+  const section = container.querySelector('[data-testid="card-attachments"]');
+  assert.ok(section, "끝난 카드의 첨부가 갤러리에 없다");
+  assert.match(section.textContent ?? "", /sales\.csv/);
+  assert.match(section.textContent ?? "", /매출 정리/);
+  assert.match(section.textContent ?? "", /첨부/);
+  const link = section.querySelector("a");
+  assert.equal(link?.getAttribute("href"), "/api/channels/ch-1/kanban/attachments/att1?board=b1");
+});
+
+test("같은 카드의 같은 파일이 아티팩트로도 있으면 첨부 쪽에 다시 나오지 않는다", async () => {
+  mockFetch({
+    [LIST]: {
+      artifacts: [summary({ id: "a1", title: "보고서", filename: "report.md", task_id: "t1" })],
+      cursor: "",
+      has_more: false,
+    },
+    [PROJECTS]: oneBoard,
+    [ATTACHMENTS_B1]: {
+      supported: true,
+      attachments: [
+        { id: "att1", filename: "report.md", size: 3, task_id: "t1", task_title: "주간" },
+      ],
+      next_cursor: null,
+    },
+  });
+  await render();
+  assert.equal(
+    container.querySelector('[data-testid="card-attachments"]'),
+    null,
+    "같은 문서가 두 번 나온다",
+  );
+});
+
+test("플러그인이 첨부 목록을 모르면 아티팩트만 그리고 왜 없는지 한 줄 알린다", async () => {
+  mockFetch({
+    [LIST]: { artifacts: [summary({ id: "a1", title: "주간 보고" })], cursor: "", has_more: false },
+    [PROJECTS]: oneBoard,
+    [ATTACHMENTS_B1]: { supported: false, attachments: [], next_cursor: null },
+  });
+  await render();
+  assert.ok(byText("주간 보고"), "아티팩트까지 사라졌다");
+  assert.ok(
+    container.querySelector('[data-testid="card-attachments-unsupported"]'),
+    "첨부가 조용히 빠졌다 — 사용자는 왜 없는지 모른다",
+  );
+});
+
+test("첨부 조회가 실패해도 갤러리는 깨지지 않고 안내도 띄우지 않는다", async () => {
+  mockFetch({
+    [LIST]: { artifacts: [summary({ id: "a1", title: "주간 보고" })], cursor: "", has_more: false },
+    [PROJECTS]: oneBoard,
+    [ATTACHMENTS_B1]: { status: 503, json: { code: "board_unavailable", message: "x" } },
+  });
+  await render();
+  assert.ok(byText("주간 보고"));
+  assert.equal(container.querySelector('[data-testid="card-attachments-unsupported"]'), null);
 });

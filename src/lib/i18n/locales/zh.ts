@@ -2851,6 +2851,10 @@ const zh: Record<string, string> = {
   "artifacts.card.title": "成果",
   "artifacts.card.empty": "此卡片尚无成果",
   "artifacts.card.fromAttachment": "附件",
+  "artifacts.attachments.title": "卡片附件",
+  "artifacts.attachments.unsupported":
+    "此网关的插件不提供卡片附件列表 — 更新插件后，已完成卡片的附件也会显示在这里。",
+  "artifacts.attachments.untitledCard": "已删除的卡片",
   "artifacts.chip": "成果已保存: {title}",
 };
 

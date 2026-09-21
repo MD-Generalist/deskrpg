@@ -62,6 +62,7 @@ after(async () => {
 type Routes = {
   board: typeof import("./[id]/kanban/board/route");
   runs: typeof import("./[id]/kanban/runs/route");
+  boardAttachments: typeof import("./[id]/kanban/attachments/route");
   tasks: typeof import("./[id]/kanban/tasks/route");
   task: typeof import("./[id]/kanban/tasks/[taskId]/route");
   comments: typeof import("./[id]/kanban/tasks/[taskId]/comments/route");
@@ -101,6 +102,7 @@ async function loadRoutes(): Promise<Routes> {
     attachment: await import("./[id]/kanban/attachments/[attachmentId]/route"),
     links: await import("./[id]/kanban/links/route"),
     runs: await import("./[id]/kanban/runs/route"),
+    boardAttachments: await import("./[id]/kanban/attachments/route"),
     dispatch: await import("./[id]/kanban/dispatch/route"),
     settings: await import("./[id]/kanban/settings/route"),
     status: await import("./[id]/automation/status/route"),
@@ -1471,4 +1473,137 @@ test("제안 해소 — 제안한 직원이 퇴근했으면 담당 없이 만들
     .slice(before)
     .find((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks"));
   assert.equal((created?.json as Record<string, unknown>).assignee, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// 보드 전체 첨부 — 결과물 갤러리가 아티팩트 뒤에 잇는다.
+//
+// 워커가 만든 파일은 카드가 끝나면 scratch 와 함께 지워지고 첨부만 남는다. 갤러리가 이 목록을
+// 모르면 끝난 카드의 결과물이 어디에도 안 보인다.
+// ---------------------------------------------------------------------------
+
+async function withBoardAttachmentList<T>(
+  seed: { gatewayId: string },
+  enabled: boolean,
+  run: () => Promise<T>,
+): Promise<T> {
+  const caps = ["kanban", "cron", "events", "swarm", "kanban_views", "initial_status"];
+  server.setInfo({ capabilities: enabled ? [...caps, "kanban_attachment_list"] : caps });
+  const { db, gatewayResources } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  // 능력 캐시를 비워 라우트가 새 capability 를 보게 한다.
+  await db
+    .update(gatewayResources)
+    .set({ pluginCheckedAt: null, pluginInfoJson: null })
+    .where(eq(gatewayResources.id, seed.gatewayId));
+  try {
+    return await run();
+  } finally {
+    server.setInfo({ capabilities: caps });
+  }
+}
+
+test("보드 첨부 목록 — 어느 카드의 첨부인지와 함께, 최신 것부터 준다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  const taskId = created.body.task.id as string;
+  const board = seed.boardSlug;
+  server.seedAttachment({ board, taskId, filename: "first.md", body: "a" });
+  server.seedAttachment({ board, taskId, filename: "second.md", body: "b" });
+
+  await withBoardAttachmentList(seed, true, async () => {
+    const res = await routes.boardAttachments.GET(
+      req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments`),
+      ctx(seed.channelId),
+    );
+    assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+    const body = await res.json();
+    assert.equal(body.supported, true);
+    assert.deepEqual(
+      body.attachments.map((a: { filename: string }) => a.filename),
+      ["second.md", "first.md"],
+    );
+    assert.equal(body.attachments[0].task_id, taskId);
+    assert.equal(typeof body.attachments[0].task_title, "string", "어느 카드인지 모른다");
+    assert.equal(body.next_cursor, null);
+  });
+});
+
+test("보드 첨부 목록 — 첨부가 없는 보드는 빈 목록이다(지원 안 함과 구별된다)", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  await withBoardAttachmentList(seed, true, async () => {
+    const res = await routes.boardAttachments.GET(
+      req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments`),
+      ctx(seed.channelId),
+    );
+    const body = await res.json();
+    assert.equal(body.supported, true);
+    assert.deepEqual(body.attachments, []);
+  });
+});
+
+test("보드 첨부 목록 — 커서로 이어지는 두 쪽을 겹치지 않게 준다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  const taskId = created.body.task.id as string;
+  const board = seed.boardSlug;
+  for (const name of ["a.md", "b.md", "c.md"])
+    server.seedAttachment({ board, taskId, filename: name, body: name });
+
+  await withBoardAttachmentList(seed, true, async () => {
+    const first = await (
+      await routes.boardAttachments.GET(
+        req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments?limit=2`),
+        ctx(seed.channelId),
+      )
+    ).json();
+    assert.equal(first.attachments.length, 2);
+    assert.ok(first.next_cursor, "다음 쪽이 있는데 커서가 없다");
+    const second = await (
+      await routes.boardAttachments.GET(
+        req(
+          seed.ownerId,
+          "GET",
+          `${base(seed.channelId)}/attachments?limit=2&cursor=${encodeURIComponent(first.next_cursor)}`,
+        ),
+        ctx(seed.channelId),
+      )
+    ).json();
+    const names = [...first.attachments, ...second.attachments].map(
+      (a: { filename: string }) => a.filename,
+    );
+    assert.deepEqual(names, ["c.md", "b.md", "a.md"], "쪽이 겹치거나 빠졌다");
+    assert.equal(second.next_cursor, null);
+  });
+});
+
+test("보드 첨부 목록 — 목록을 모르는 옛 플러그인에는 부르지 않고 supported:false 로 답한다", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  await withBoardAttachmentList(seed, false, async () => {
+    const before = server.requests().length;
+    const res = await routes.boardAttachments.GET(
+      req(seed.ownerId, "GET", `${base(seed.channelId)}/attachments`),
+      ctx(seed.channelId),
+    );
+    assert.equal(res.status, 200, "옛 플러그인이 오류가 되면 갤러리 전체가 깨진다");
+    const body = await res.json();
+    assert.equal(body.supported, false);
+    assert.deepEqual(body.attachments, []);
+    assert.equal(
+      server
+        .requests()
+        .slice(before)
+        .filter((r) => r.path === "/deskrpg/kanban/attachments").length,
+      0,
+      "없는 라우트를 부른다",
+    );
+  });
 });

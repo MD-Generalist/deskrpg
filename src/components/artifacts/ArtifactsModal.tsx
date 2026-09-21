@@ -12,6 +12,9 @@ import ArtifactList, { type ArtifactFilter, type ArtifactListNpc } from "./Artif
 import ArtifactViewer, { type ArtifactViewerHandle } from "./ArtifactViewer";
 import { ArtifactsApiError, createArtifactsApi } from "./artifacts-api";
 import type { SourceTarget } from "./artifact-view-model";
+import { visibleCardAttachments } from "./card-attachments";
+import { useCardAttachments } from "./use-card-attachments";
+import { createKanbanApi } from "@/components/kanban/kanban-api";
 
 export type ArtifactsModalProps = {
   channelId: string;
@@ -48,6 +51,7 @@ export default function ArtifactsModal({
 }: ArtifactsModalProps) {
   const t = useT();
   const api = useMemo(() => createArtifactsApi(channelId), [channelId]);
+  const cardAttachments = useCardAttachments(channelId);
   const [filter, setFilter] = useState<ArtifactFilter>({});
   const [items, setItems] = useState<ArtifactSummary[]>([]);
   const [cursor, setCursor] = useState("");
@@ -234,6 +238,22 @@ export default function ArtifactsModal({
                   loading={loading}
                   onLoadMore={() => void load(cursor)}
                   thumbnailUrl={(a) => api.contentUrl(a.id, a.current_version)}
+                  cardAttachments={visibleCardAttachments(
+                    cardAttachments.items,
+                    items,
+                    filter,
+                    initialTaskId,
+                  )}
+                  cardAttachmentsSupported={cardAttachments.supported}
+                  cardAttachmentsHasMore={cardAttachments.hasMore}
+                  onLoadMoreCardAttachments={() => void cardAttachments.loadMore()}
+                  cardAttachmentUrl={(file) =>
+                    createKanbanApi(
+                      channelId,
+                      undefined,
+                      file.boardSlug || undefined,
+                    ).attachmentUrl(file.id)
+                  }
                 />
               </div>
               <div className={`flex-1 min-w-0 min-h-0 ${selectedId ? "block" : "hidden md:block"}`}>

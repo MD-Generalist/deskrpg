@@ -11,6 +11,7 @@
 import type {
   DispatchResult,
   KanbanAttachment,
+  KanbanBoardAttachment,
   KanbanBoard,
   KanbanComment,
   KanbanTask,
@@ -71,7 +72,7 @@ export type CreateTaskResponse = { task: KanbanTask; warning?: string };
 
 /** 카드 상세 응답에 `warning` 은 없다 — 생성 응답의 경고는 화면이 따로 들고 있는다(R9). */
 
-type FetchLike = typeof fetch;
+export type FetchLike = typeof fetch;
 
 /** 프로젝트 목록 한 줄 — 선택기가 쓰는 만큼만. 전체 모양은 `ProjectView`(서버). */
 export type ProjectSummary = {
@@ -226,6 +227,13 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
         method: "DELETE",
       }),
     // 브라우저가 직접 여는 주소라 fetch 를 거치지 않는다 — 여기만 손으로 붙인다.
+    /** 보드 전체 첨부. 플러그인이 목록을 모르면 `supported: false` 로 온다(오류가 아니다). */
+    boardAttachments: (cursor?: string) =>
+      request<{
+        supported: boolean;
+        attachments: KanbanBoardAttachment[];
+        next_cursor: string | null;
+      }>(f, `${root}/attachments${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
     attachmentUrl: (attachmentId: string) =>
       withBoard(`${root}/attachments/${encodeURIComponent(attachmentId)}`),
     addLink: (parentId: string, childId: string) =>

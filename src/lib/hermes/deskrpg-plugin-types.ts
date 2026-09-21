@@ -159,6 +159,22 @@ export type KanbanAttachment = {
   size?: number;
 };
 
+/**
+ * 보드 전체 첨부 목록의 한 건(`GET /deskrpg/kanban/attachments`, capability `kanban_attachment_list`).
+ * 카드 하나의 첨부와 같은 모양에 **어느 카드의 것인지** 를 더했다. 카드가 지워졌으면
+ * `task_title` 이 null 일 수 있다(플러그인 계약).
+ */
+export type KanbanBoardAttachment = KanbanAttachment & {
+  content_type?: string | null;
+  created_at?: number | null;
+  task_id: string;
+  task_title: string | null;
+};
+export type KanbanBoardAttachmentsPage = {
+  attachments: KanbanBoardAttachment[];
+  next_cursor: string | null;
+};
+
 export type KanbanColumn = {
   name: string;
   tasks: KanbanTask[];

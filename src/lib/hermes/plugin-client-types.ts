@@ -246,6 +246,7 @@ import type {
   EventsPage,
   InstantiateBlueprintBody,
   KanbanAttachment,
+  KanbanBoardAttachmentsPage,
   KanbanBoard,
   KanbanComment,
   KanbanLinksPage,
@@ -316,6 +317,11 @@ export type KanbanApi = {
     board: string,
     id: string,
   ): Promise<PluginResponse<{ attachments: KanbanAttachment[] }>>;
+  /** 보드 전체 첨부 — capability `kanban_attachment_list` 가 있어야 한다(없으면 404). */
+  listBoardAttachments(
+    board: string,
+    opts?: { limit?: number; cursor?: string },
+  ): Promise<PluginResponse<KanbanBoardAttachmentsPage>>;
   uploadAttachment(
     board: string,
     id: string,

@@ -2947,6 +2947,10 @@ const en: Record<string, string> = {
   "artifacts.card.title": "Artifacts",
   "artifacts.card.empty": "No artifacts from this card yet",
   "artifacts.card.fromAttachment": "Attachment",
+  "artifacts.attachments.title": "Card attachments",
+  "artifacts.attachments.unsupported":
+    "This gateway's plugin does not list card attachments — update the plugin to see attachments from finished cards here.",
+  "artifacts.attachments.untitledCard": "Deleted card",
   "artifacts.chip": "Artifact saved: {title}",
 };
 

@@ -356,6 +356,11 @@ export function createOwnerPluginClient(
       call(task(board, id, `/${action}`), token, { method: "POST", body }),
 
     listAttachments: (board, id) => call(task(board, id, "/attachments"), token),
+    listBoardAttachments: (board, opts) =>
+      call(
+        `/deskrpg/kanban/attachments${query({ board, limit: opts?.limit, cursor: opts?.cursor })}`,
+        token,
+      ),
     uploadAttachment: (board, id, file) => {
       const formData = new FormData();
       const blob = typeof file.content === "string" ? new Blob([file.content]) : file.content;

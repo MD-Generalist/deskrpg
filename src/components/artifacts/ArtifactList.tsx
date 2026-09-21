@@ -8,6 +8,7 @@ import {
   Film,
   Globe,
   Image as ImageIcon,
+  Paperclip,
   Search,
   X,
   type LucideIcon,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/hermes/deskrpg-plugin-types";
 
 import { safeHttpUrl } from "./artifact-view-model";
+import type { GalleryAttachment } from "./card-attachments";
 import { LinkIcon } from "./viewers/link-icon";
 
 export type ArtifactFilter = {
@@ -72,6 +74,16 @@ export type ArtifactListProps = {
   loading: boolean;
   onLoadMore(): void;
   thumbnailUrl(artifact: ArtifactSummary): string;
+  /**
+   * 아티팩트 뒤에 잇는 카드 첨부(이미 걸러진 것). 워커가 만든 파일은 카드가 끝나면 scratch 와
+   * 함께 지워지고 첨부만 남는다 — 이게 없으면 끝난 카드의 결과물이 어디에도 안 보인다.
+   */
+  cardAttachments?: GalleryAttachment[];
+  /** 플러그인이 보드 첨부 목록을 모르면 false — 왜 첨부가 없는지 한 줄 알린다. */
+  cardAttachmentsSupported?: boolean | null;
+  cardAttachmentsHasMore?: boolean;
+  onLoadMoreCardAttachments?(): void;
+  cardAttachmentUrl?(attachment: GalleryAttachment): string;
 };
 
 /** 종류 탭·출처·NPC·검색 + 행 목록(이미지 탭은 썸네일 격자와 확대 보기). */
@@ -86,6 +98,11 @@ export default function ArtifactList({
   loading,
   onLoadMore,
   thumbnailUrl,
+  cardAttachments = [],
+  cardAttachmentsSupported = null,
+  cardAttachmentsHasMore = false,
+  onLoadMoreCardAttachments,
+  cardAttachmentUrl,
 }: ArtifactListProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -262,6 +279,59 @@ export default function ArtifactList({
           >
             {t("artifacts.loadMore")}
           </button>
+        )}
+        {cardAttachmentsSupported === false && (
+          <p
+            data-testid="card-attachments-unsupported"
+            className="px-3 py-2 text-[11px] text-text-dim"
+          >
+            {t("artifacts.attachments.unsupported")}
+          </p>
+        )}
+        {cardAttachments.length > 0 && cardAttachmentUrl && (
+          <section data-testid="card-attachments" aria-label={t("artifacts.attachments.title")}>
+            <h3 className="px-3 pt-3 pb-1 text-[11px] font-semibold text-text-dim">
+              {t("artifacts.attachments.title")}
+            </h3>
+            <ul>
+              {cardAttachments.map((file) => (
+                <li key={`${file.boardSlug}:${file.id}`}>
+                  <a
+                    href={cardAttachmentUrl(file)}
+                    download={file.filename}
+                    className="w-full flex items-start gap-2 px-3 py-2 text-left border-b border-border hover:bg-surface-raised"
+                  >
+                    <Paperclip
+                      className="w-4 h-4 flex-shrink-0 text-text-secondary"
+                      aria-hidden="true"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate font-semibold text-text">
+                        {file.filename}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-[11px] text-text-dim">
+                        <span className="truncate">
+                          {file.task_title ?? t("artifacts.attachments.untitledCard")}
+                        </span>
+                        <span className="px-1 rounded bg-surface text-text-secondary">
+                          {t("artifacts.card.fromAttachment")}
+                        </span>
+                      </span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            {cardAttachmentsHasMore && onLoadMoreCardAttachments && (
+              <button
+                type="button"
+                onClick={onLoadMoreCardAttachments}
+                className="w-full py-2 text-text-secondary hover:text-text"
+              >
+                {t("artifacts.loadMore")}
+              </button>
+            )}
+          </section>
         )}
       </div>
 

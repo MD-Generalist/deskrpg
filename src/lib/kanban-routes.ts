@@ -34,7 +34,7 @@ import type {
   WorkspaceKind,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
-import { swarmGate } from "@/lib/hermes/plugin-capability";
+import { supportsBoardAttachmentList, swarmGate } from "@/lib/hermes/plugin-capability";
 import type { KanbanTaskActionInput } from "@/lib/hermes/plugin-client-types";
 import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
 import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
@@ -414,6 +414,38 @@ async function resolveForAttachments(req: NextRequest, channelId: string) {
     return { ok: false as const, response: attachmentsUnsupportedResponse() };
   }
   return resolved;
+}
+
+/**
+ * 보드 전체의 카드 첨부 — 결과물 갤러리가 아티팩트 뒤에 잇는다.
+ *
+ * 워커가 만든 파일은 `scratch` 워크스페이스와 함께 카드가 끝나면 지워지고 **첨부만 남는다.**
+ * 그래서 갤러리가 첨부를 모르면 끝난 카드의 결과물이 어디에도 안 보인다.
+ *
+ * 플러그인이 목록을 모르면(capability `kanban_attachment_list` 없음) 오류가 아니라
+ * `supported: false` 로 답한다 — 화면은 아티팩트만 그리고 **왜 첨부가 없는지** 한 줄 알린다.
+ * 카드마다 상세를 부르는 N+1 로 흉내 내지 않는다.
+ */
+export async function listBoardAttachments(req: NextRequest, channelId: string) {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const ctx = resolved.ctx;
+  if (!supportsAttachments(ctx) || !supportsBoardAttachmentList(ctx.info))
+    return NextResponse.json({ supported: false, attachments: [], next_cursor: null });
+  const q = req.nextUrl.searchParams;
+  const rawLimit = q.get("limit");
+  // 검증은 플러그인이 한다(`invalid_query`) — REST 계층에서 한 번 더 하면 두 규칙이 갈린다.
+  const limit = rawLimit === null || rawLimit === "" ? undefined : Number(rawLimit);
+  const res = await ctx.client.kanban.listBoardAttachments(ctx.boardSlug, {
+    limit,
+    cursor: q.get("cursor") || undefined,
+  });
+  if (!res.ok) return pluginFailureResponse(res);
+  return NextResponse.json({
+    supported: true,
+    attachments: res.data.attachments,
+    next_cursor: res.data.next_cursor ?? null,
+  });
 }
 
 export async function listAttachments(req: NextRequest, channelId: string, taskId: string) {

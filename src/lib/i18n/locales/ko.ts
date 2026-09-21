@@ -2933,6 +2933,10 @@ const ko: Record<string, string> = {
   "artifacts.card.title": "결과물",
   "artifacts.card.empty": "이 카드에서 만든 결과물이 없습니다",
   "artifacts.card.fromAttachment": "첨부",
+  "artifacts.attachments.title": "카드 첨부",
+  "artifacts.attachments.unsupported":
+    "이 게이트웨이의 플러그인은 카드 첨부 목록을 주지 않습니다 — 플러그인을 올리면 끝난 카드의 첨부도 여기 보입니다.",
+  "artifacts.attachments.untitledCard": "지워진 카드",
   "artifacts.chip": "결과물 저장됨: {title}",
 };
 
