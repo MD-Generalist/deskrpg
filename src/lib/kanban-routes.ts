@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 
 import { db, gatewayResources } from "@/db";
 import { schedulePollNow } from "@/lib/automation-poll-trigger";
+import { dispatchOnce } from "@/lib/kanban-dispatch";
 import { resolveProposal } from "@/lib/card-proposals";
 import { liveResolveDeps, proposalFailureResponse } from "@/lib/card-proposals-live";
 import { readWorkingSnapshot } from "@/lib/automation-registry";
@@ -174,15 +175,6 @@ async function resolve(req: NextRequest, channelId: string) {
     };
   }
   return resolveKanbanChannelContext({ userId: getUserId(req), channelId, boardSlug });
-}
-
-/** R9. 생성·상태 변경 직후 dispatch 를 한 번 요청한다. 실패는 무시한다. */
-async function dispatchOnce(ctx: KanbanChannelContext): Promise<void> {
-  try {
-    await ctx.client.kanban.dispatch(ctx.boardSlug);
-  } catch {
-    // 응답 경로에 섞지 않는다 — 다음 폴링·수동 dispatch 가 다시 시도한다.
-  }
 }
 
 // ---------------------------------------------------------------------------

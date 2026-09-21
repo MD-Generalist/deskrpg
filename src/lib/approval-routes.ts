@@ -31,6 +31,8 @@ import { initialStatusGate } from "@/lib/hermes/plugin-capability";
 import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
 import { getUserId } from "@/lib/internal-rpc";
 import { resolveKanbanChannelContext } from "@/lib/kanban-access";
+import { dispatchOnce } from "@/lib/kanban-dispatch";
+import { schedulePollNow } from "@/lib/automation-poll-trigger";
 
 export type ApprovalParams = { params: Promise<{ id: string; approvalId: string }> };
 
@@ -141,6 +143,14 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
       .set({ status: "pending", decidedBy: null, decidedAt: null })
       .where(eq(approvals.id, approvalId));
     return cronError(502, "unblock_failed", "could not unblock any task", { failed });
+  }
+
+  // 풀린 카드가 있으면 디스패치를 한 번 요청한다. 카드 액션 라우트는 unblock 뒤 이렇게 하는데,
+  // 여기는 unblock 을 직접 보내므로 따로 불러야 한다 — 부르지 않으면 게이트웨이 내장 디스패처의
+  // 주기에 맡겨져 카드가 ready 에 머문다(스테이징에서 약 5분). 실패해도 승인은 성공이다.
+  if (plan.unblock.length > failed.length) {
+    await dispatchOnce(ctx);
+    schedulePollNow(channelId);
   }
 
   // 댓글도 같은 `ctx.boardSlug` 로 간다 — 위에서 승인의 보드로 컨텍스트를 풀었기 때문이다.

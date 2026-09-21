@@ -372,3 +372,54 @@ test("풀기가 전부 실패하면 승인을 되돌리고 502 — 다시 누를
     "되돌리지 않으면 다시 누를 pending 이 없어 사용자가 카드를 손으로 풀어야 한다",
   );
 });
+
+// 승인으로 카드를 풀면 디스패치를 한 번 요청한다. 카드 액션 라우트는 unblock 뒤 디스패치를
+// 부르는데, 승인 결정은 unblock 을 직접 보내 그 규칙을 비껴갔다 — 그 뒤는 게이트웨이 내장
+// 디스패처의 주기에 맡겨져, 스테이징에서 카드가 ready 에 약 5분 머물렀다.
+function dispatchCount() {
+  return server
+    .requests()
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/dispatch")).length;
+}
+
+async function decide(approvalId: string, ownerId: string, channelId: string, body: unknown) {
+  const { decideApproval } = await import("@/lib/approval-routes");
+  return decideApproval(post(ownerId, channelId, approvalId, body), channelId, approvalId);
+}
+
+test("승인으로 카드를 풀면 디스패치를 한 번 요청한다", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  const batch = await makeApproval(ctx, ["가", "나"]);
+  const before = dispatchCount();
+  const res = await decide(batch.approvalId, ownerId, channelId, { decision: "approve" });
+  assert.equal(res.status, 200);
+  assert.equal(dispatchCount() - before, 1, "카드 두 장이어도 디스패치는 한 번이다");
+});
+
+test("반려·수정 요청은 아무것도 풀지 않으므로 디스패치하지 않는다", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  for (const decision of ["reject", "request_revision"]) {
+    const batch = await makeApproval(ctx, [`${decision}-가`]);
+    const before = dispatchCount();
+    await decide(batch.approvalId, ownerId, channelId, { decision });
+    assert.equal(dispatchCount() - before, 0, `${decision} 뒤에 디스패치가 나갔다`);
+  }
+});
+
+test("풀기가 전부 실패하면 디스패치하지 않는다", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  const batch = await makeApproval(ctx, ["가"]);
+  server.failNext("/deskrpg/kanban/tasks", 1);
+  const before = dispatchCount();
+  const res = await decide(batch.approvalId, ownerId, channelId, { decision: "approve" });
+  assert.equal(res.status, 502);
+  assert.equal(dispatchCount() - before, 0);
+});
+
+test("디스패치가 실패해도 승인은 성공이다 — 내장 디스패처가 이어받는다", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  const batch = await makeApproval(ctx, ["가"]);
+  server.failNext("/deskrpg/kanban/dispatch", 1);
+  const res = await decide(batch.approvalId, ownerId, channelId, { decision: "approve" });
+  assert.equal(res.status, 200);
+});
