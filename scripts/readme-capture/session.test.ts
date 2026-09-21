@@ -59,20 +59,32 @@ test("fixture manifest is atomically replaced before capture and has private per
   assert.deepEqual(fs.readdirSync(path.dirname(target)), ["fixture.json"]);
 });
 
-function runningChild(): { child: ChildProcess; wasKilled(): boolean } {
+// 세션은 자식의 프로세스 그룹(-pid)에 신호를 보낸다. 가짜 자식의 pid 는 지어낸 번호라, 실제
+// process.kill 로 가면 우연히 그 번호를 쓰는 남의 프로세스 그룹이 신호를 받고 가짜는 죽지 않는다.
+// 그래서 세션에는 늘 `groupKill` 을 넘겨 신호가 이 가짜에만 닿게 한다.
+function runningChild(): {
+  child: ChildProcess;
+  groupKill: typeof process.kill;
+  wasKilled(): boolean;
+} {
   const child = new EventEmitter() as ChildProcess;
   let killed = false;
+  const stop = (signal: NodeJS.Signals | number | undefined) => {
+    killed = true;
+    queueMicrotask(() => child.emit("exit", null, signal ?? "SIGTERM"));
+    return true;
+  };
   Object.assign(child, {
     pid: 44001,
     exitCode: null,
     signalCode: null,
-    kill() {
-      killed = true;
-      queueMicrotask(() => child.emit("exit", null, "SIGTERM"));
-      return true;
-    },
+    kill: stop,
   });
-  return { child, wasKilled: () => killed };
+  const groupKill = ((pid: number, signal?: NodeJS.Signals | number) => {
+    assert.equal(pid, -44001, "신호는 가짜 자식의 그룹으로만 가야 한다");
+    return stop(signal);
+  }) as typeof process.kill;
+  return { child, groupKill, wasKilled: () => killed };
 }
 
 test("a failed health check terminates the DeskRPG child owned by the session", async (t) => {
@@ -88,7 +100,14 @@ test("a failed health check terminates the DeskRPG child owned by the session", 
   const ports = await freePorts();
 
   await assert.rejects(
-    () => runCaptureSession({ root, spawn, fetch: unhealthyFetch as typeof fetch, ports }),
+    () =>
+      runCaptureSession({
+        root,
+        spawn,
+        fetch: unhealthyFetch as typeof fetch,
+        ports,
+        kill: fake.groupKill,
+      }),
     /exited|health/i,
   );
   assert.equal(fake.wasKilled(), true);
@@ -256,6 +275,7 @@ test("rejects a healthy response that does not identify the owned capture instan
         root,
         spawn,
         ports,
+        kill: fake.groupKill,
         fetch: (async () =>
           Response.json({
             instanceId: "some-other-server",
