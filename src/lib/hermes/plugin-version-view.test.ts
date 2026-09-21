@@ -6,9 +6,10 @@ import { PLUGIN_VERSION } from "@/lib/hermes/setup/pin";
 import { describePluginVersion } from "./plugin-version-view";
 
 test("설치본이 핀과 같으면 최신이다", () => {
-  const got = describePluginVersion({ installed: "0.10.2", pluginStatus: "plugin_ready" });
+  // 핀 리터럴을 여기 베껴 두면 플러그인을 올릴 때마다 이 테스트가 깨진다 — 상수를 그대로 쓴다.
+  const got = describePluginVersion({ installed: PLUGIN_VERSION, pluginStatus: "plugin_ready" });
   assert.equal(got.state, "current");
-  assert.equal(got.installed, "0.10.2");
+  assert.equal(got.installed, PLUGIN_VERSION);
   assert.equal(got.pinned, PLUGIN_VERSION);
 });
 
