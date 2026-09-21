@@ -921,6 +921,54 @@ test("재생된 옛 finished 뒤에도 running 카드의 담당은 일하는 중
   assert.equal(snapshot[0].sources.runningCards, 1);
 });
 
+// 카드 `…72Q0M` 의 재현. 주장은 "DeskRPG 가 꺼져 있던 동안 난 제안은 영구히 사라진다" 였다.
+// 커서는 `channel_kanban_boards.event_cursor` 에 있고 재시작이 그 행을 지우지 않으므로, 재시작
+// 뒤 첫 폴링이 그 사이의 제안을 재생한다. 아래 두 단정이 그 성질을 고정한다 — 하나라도 깨지면
+// 조회 라우트가 실제로 필요해진다.
+test("꺼져 있던 동안 난 카드 제안은 재시작 뒤 첫 폴링에서 알림으로 뜬다", async () => {
+  const server = await startPlugin();
+  const { channel, npc } = await seedBoundChannel(server);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+
+  // 첫 바퀴가 "지금" 토큰을 DB 에 저장한다.
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  // 여기서부터 DeskRPG 는 꺼져 있다 — 그 사이 직원이 제안을 냈다.
+  server.pushEvent({
+    kind: "card_proposal.created",
+    profile: "sophie",
+    payload: {
+      proposal_id: "0123456789abcdef0123456789abcdef",
+      title: "주간 보고 정리",
+      summary: "금요일마다 모은다",
+      profile: "sophie",
+    },
+  });
+
+  await simulateRestart(channel.id);
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+
+  const notices = h.roomEmits.filter((e) => e.message.notice?.kind === "card_proposal");
+  assert.equal(
+    notices.length,
+    1,
+    "꺼져 있던 동안의 제안이 오지 않았습니다 — 커서가 재시작에 살아남지 못했다는 뜻입니다",
+  );
+  const notice = notices[0].message.notice;
+  assert.ok(notice?.kind === "card_proposal");
+  assert.equal(notice.proposalId, "0123456789abcdef0123456789abcdef");
+  assert.equal(notice.npcId, npc.id);
+
+  // 두 번째 성질: 같은 제안의 알림이 둘 생기지 않는다(커서가 전진했다).
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.equal(
+    h.roomEmits.filter((e) => e.message.notice?.kind === "card_proposal").length,
+    1,
+    "같은 제안의 알림이 둘 생겼습니다 — 커서가 전진하지 않았습니다",
+  );
+});
+
 test("되세우기는 프로세스 수명당 채널마다 한 번만 보드를 읽는다", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
