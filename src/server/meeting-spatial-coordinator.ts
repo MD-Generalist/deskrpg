@@ -4,7 +4,11 @@ type Target = MeetingSpatialTarget;
 type Dependencies = {
   timeoutMs?: number;
   layout(channelId: string): Promise<{ spaceId: string; targets: Target[] }>;
-  capture(channelId: string, actorId: string): Promise<Target | null>;
+  /**
+   * 돌아올 자리를 잡는다. `takeFromSocketId` 는 회의를 여는 사람의 소켓 — 그 소켓이 부른 직원은
+   * 풀고 데려간다. 남이 부른 직원은 null(지금처럼 `actor_unavailable`).
+   */
+  capture(channelId: string, actorId: string, takeFromSocketId?: string): Promise<Target | null>;
   reserve(channelId: string, actorId: string, target: Target): Promise<boolean>;
   move(
     channelId: string,
@@ -134,7 +138,11 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
       for (const actorId of [...new Set(npcIds)]) {
         if (!current()) break;
         const p = s.state.participants.find((p) => p.actorId === actorId && p.kind === "npc")!;
-        const origin = await deps.capture(channelId, actorId);
+        const origin = await deps.capture(
+          channelId,
+          actorId,
+          playerSockets.get(`${channelId}:${ownerId}`),
+        );
         if (!current()) break;
         if (!origin) {
           block(channelId, actorId, "actor_unavailable", generation);

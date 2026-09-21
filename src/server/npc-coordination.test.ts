@@ -1697,3 +1697,72 @@ test("atReservation — 좌석 위에 정지해 있는 사람은 이동 없이�
     await h.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 회의를 여는 사람이 자기가 부른 직원은 회의로 데려간다.
+//
+// 누군가의 호출에 묶인 직원은 `capture()` 가 원위치를 주지 않아 집결이 "참가자를 찾을 수
+// 없습니다" 로 깨졌다. 여는 사람 **본인 소켓**이 소유한 호출이면 풀고 데려간다. 원위치는
+// 호출로 끌려온 지금 자리가 아니라 **자기 자리(home)** 다 — 회의가 끝나고 주재자 옆으로
+// 돌아가면 안 된다. 남이 데리고 있는 직원은 절대 빼앗지 않는다.
+// ---------------------------------------------------------------------------
+
+test("capture — 여는 사람 본인이 부른 직원은 풀고, 원위치는 호출 전 자기 자리다", async () => {
+  let now = 0;
+  const h = await harness({ now: () => now });
+  try {
+    const a = await h.connect("a", { userId: "host", characterId: "c1" });
+    const home = a.latest.npcs.find((n) => n.npcId === "n1")!;
+    const homeAt = { x: home.homeX, y: home.homeY };
+    assert.equal((await ack(a, "npc:call", { npcId: "n1" })).ok, true);
+    // 호출로 주재자 옆까지 걸어왔다.
+    now += 1000;
+    await ack(a, "npc:position-update", { npcId: "n1", x: 250, y: 250, direction: "down" });
+    assert.equal(
+      await h.coord.spatial.capture("a", "n1"),
+      null,
+      "여는 사람을 모르면 지금처럼 캡처하지 않는다",
+    );
+
+    const released = stateEvent(
+      a,
+      (st) => st.npcs.find((n) => n.npcId === "n1")?.ownerSocketId === null,
+    );
+    const origin = await h.coord.spatial.capture("a", "n1", a.socket.id!);
+    assert.ok(origin, "내가 부른 직원을 회의로 데려가지 못한다");
+    // 호출이 실제로 풀려야 한다. phase 만 바꾸면 걸음은 통과해도(자리를 벗어난 ambient 는
+    // 소유권 검사를 비켜 간다) 화면에는 여전히 "내 호출에 대기" 로 남는다.
+    await released;
+    assert.deepEqual(
+      { x: origin.x, y: origin.y },
+      homeAt,
+      "원위치가 호출로 끌려온 자리다 — 회의가 끝나면 주재자 옆으로 돌아간다",
+    );
+    // 풀렸으므로 회의 걸음이 소유권 검사에 막히지 않는다.
+    assert.equal(
+      await h.coord.spatial.move("a", "n1", 1, { x: 128, y: 128, seatId: "128:128" }, false),
+      true,
+      "캡처는 됐는데 여전히 호출에 묶여 회의 좌석으로 못 간다",
+    );
+  } finally {
+    await h.close();
+  }
+});
+
+test("capture — 다른 사용자가 부른 직원은 빼앗지 않는다", async () => {
+  const h = await harness();
+  try {
+    const host = await h.connect("a", { userId: "host", characterId: "c1" });
+    const other = await h.connect("a", { userId: "other", characterId: "c2" });
+    assert.equal((await ack(other, "npc:call", { npcId: "n1" })).ok, true);
+    assert.equal(
+      await h.coord.spatial.capture("a", "n1", host.socket.id!),
+      null,
+      "남이 데리고 있는 직원을 회의가 빼앗았다",
+    );
+    // 소유권도 그대로다 — 부른 사람이 계속 데리고 있다.
+    assert.equal((await ack(host, "npc:call", { npcId: "n1" })).error, "already_claimed");
+  } finally {
+    await h.close();
+  }
+});

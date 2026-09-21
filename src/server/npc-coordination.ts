@@ -1084,11 +1084,39 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         ],
       };
     },
-    async capture(channelId: string, actorId: string) {
+    /**
+     * 회의 집결이 직원을 데려가기 전에 돌아올 자리를 잡는다. 누군가의 호출에 묶인 직원은 주지 않는다 —
+     * 다만 **회의를 여는 사람 본인 소켓**(`takeFromSocketId`)이 소유한 호출이면 풀고 데려간다.
+     * 여는 사람이 자기가 부른 직원(자동 보고 호출 포함)을 회의에 데려가는 것은 그 사람의 의도와
+     * 같은 방향이다. 남이 데리고 있는 직원은 절대 빼앗지 않는다.
+     *
+     * 푼 경우 원위치는 **자기 자리(home)** 다. 호출로 끌려온 지금 자리를 원위치로 잡으면 회의가 끝나고
+     * 주재자 옆으로 돌아간다. 호출은 좌석 예약을 이미 놓았으므로(`npc:call` 의 `releaseActor`) 예약에서
+     * 원래 자리를 찾을 수 없고, 호출이 끝나면 어차피 home 으로 돌아가는 것이 기존 규칙이다.
+     */
+    async capture(channelId: string, actorId: string, takeFromSocketId?: string) {
       const state = await load(channelId),
         npc = state.npcs.get(actorId);
       if (!isCurrent(state)) return null;
-      if (!npc || (npc.ownerSocketId && !npc.spatialTarget && npc.phase !== "ambient")) return null;
+      if (!npc) return null;
+      if (npc.ownerSocketId && !npc.spatialTarget && npc.phase !== "ambient") {
+        if (!takeFromSocketId || npc.ownerSocketId !== takeFromSocketId) return null;
+        // 내 호출을 푼다. 소유자가 없어야 뒤따르는 회의 걸음(`move`)이 소유권 검사에 막히지 않는다.
+        // 자리를 벗어나 있으면 `ambient` 로 둔다 — 회의 자리를 못 잡아도 산책 규칙이 집으로 데려간다.
+        npc.ownerSocketId = null;
+        npc.phase = distance(npc, { x: npc.homeX, y: npc.homeY }) <= 2 ? "idle" : "ambient";
+        npc.moving = false;
+        npc.continuation = null;
+        changed(state, npc);
+        broadcast(channelId, state);
+        return {
+          x: npc.homeX,
+          y: npc.homeY,
+          seatId:
+            state.data.seats.find((s) => distance(s, { x: npc.homeX, y: npc.homeY }) <= 2)?.id ??
+            null,
+        };
+      }
       const seat = [...state.reservations.values()].find((s) => s.actorId === actorId && s.arrived);
       return {
         x: npc.x,

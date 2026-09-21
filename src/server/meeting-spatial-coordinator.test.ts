@@ -365,3 +365,23 @@ test("좌석에 없는 사람은 여전히 걸어 와야 한다 — 즉시 도�
   c.arrived("a", "n1", generation!);
   assert.equal(c.snapshot("a")?.phase, "assembling", "주재자가 오지 않았는데 준비됐다");
 });
+
+test("집결은 여는 사람의 소켓을 capture 에 넘긴다 — 그 사람이 부른 직원만 데려갈 수 있게", async () => {
+  const seen: Array<string | undefined> = [];
+  const c = createMeetingSpatialCoordinator({
+    layout: async () => ({ spaceId: "meeting", targets: [{ seatId: "80:80", x: 80, y: 80 }] }),
+    capture: async (_channel, _actorId, takeFrom) => {
+      seen.push(takeFrom);
+      return { x: 16, y: 16, seatId: null };
+    },
+    reserve: async () => true,
+    move: async () => true,
+    release: async () => {},
+    returnTarget: async (_c, _a, origin) => origin,
+    publish: () => {},
+  });
+  await c.joinPlayer("a", "host", "host-socket");
+  await c.joinPlayer("a", "guest", "guest-socket");
+  await c.start("a", "host", ["n1"]);
+  assert.deepEqual(seen, ["host-socket"], "여는 사람이 아닌 소켓을 넘긴다");
+});
