@@ -132,6 +132,8 @@ export function getRoomResponseSnapshot(roomId: string) {
 export type RoomRuntimeDeps = {
   getNpcConfigs?: typeof getNpcConfigsForChannel;
   resolveAdapter?: typeof resolveNpcAdapter;
+  /** 런타임을 만든 사용자의 화면 언어. NPC 규약의 응답 언어를 정한다. */
+  locale?: string | null;
 };
 
 export function getOrCreateRoomRuntime(
@@ -181,7 +183,7 @@ async function createRoomRuntime(
 ): Promise<OpenChatRuntime | null> {
   const loadNpcConfigs = deps.getNpcConfigs ?? getNpcConfigsForChannel;
   const resolveAdapter = deps.resolveAdapter ?? resolveNpcAdapter;
-  const npcConfigs = await loadNpcConfigs(room.channelId);
+  const npcConfigs = await loadNpcConfigs(room.channelId, deps.locale);
   // 사무실 방은 채널의 출근 NPC 전부, 그룹 방은 초대된 NPC 만.
   const allowed = room.kind === "group" ? new Set(await roomNpcMemberIds(room.id)) : null;
   const candidates = allowed ? npcConfigs.filter((npc) => allowed.has(npc.id)) : npcConfigs;

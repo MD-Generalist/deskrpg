@@ -50,3 +50,65 @@ test("휴면 NPC 는 대화 명단에서 빠지고, 자리 미정은 남는다",
   );
   assert.equal(configs.length, 1);
 });
+
+/**
+ * 응답 언어 계약은 **요청 시점의 언어**로 정한다. 새 고용 경로는 agent_config 를 NULL 로
+ * 두므로, 예전처럼 agent_config.locale 만 보면 한국어 오피스에서도 "모든 발언은 영어로"
+ * 계약이 실렸다(스테이징 실측: 올리버만 회의에서 영어로 답했다).
+ */
+const KO_CONTRACT = /응답 언어 계약/;
+const EN_CONTRACT = /Response Language Contract/;
+
+test("agent_config 가 없는 직원도 한국어 사용자의 요청이면 한국어 계약을 받는다", async () => {
+  const { getNpcConfigsForChannel } = await import("./socket-handlers");
+  const { hireGatewayProfilesIntoChannel } = await import("@/lib/npc-roster");
+
+  const { channelId, gatewayId } = await seedChannelWithProfiles({ profiles: 1 });
+  await hireGatewayProfilesIntoChannel(channelId, gatewayId);
+
+  const [config] = await getNpcConfigsForChannel(channelId, "ko");
+  assert.match(config.instructions ?? "", KO_CONTRACT);
+  assert.doesNotMatch(config.instructions ?? "", EN_CONTRACT);
+});
+
+test("응답 언어 폴백 순서: 요청자 → agent_config.locale → en", async () => {
+  const { resolveNpcInstructions } = await import("./socket-handlers");
+
+  assert.match(resolveNpcInstructions({ locale: "en" }, "ko") ?? "", KO_CONTRACT, "요청자가 우선");
+  assert.match(
+    resolveNpcInstructions({ locale: "ko" }, null) ?? "",
+    KO_CONTRACT,
+    "요청자 없으면 직원 값",
+  );
+  assert.match(resolveNpcInstructions({}, null) ?? "", EN_CONTRACT, "둘 다 없을 때만 en");
+});
+
+test("agent_config.locale=ko 인 기존 직원은 요청 언어가 없어도 그대로 한국어다", async () => {
+  const { resolveNpcInstructions } = await import("./socket-handlers");
+  assert.match(resolveNpcInstructions({ locale: "ko" }) ?? "", KO_CONTRACT);
+});
+
+test("사용자가 직접 쓴 회의 규약은 요청 언어로 바꾸지 않는다", async () => {
+  const { resolveNpcInstructions } = await import("./socket-handlers");
+  const out = resolveNpcInstructions({ meetingProtocol: "MY RULES" }, "ko") ?? "";
+  assert.match(out, /MY RULES/);
+  assert.doesNotMatch(out, KO_CONTRACT);
+});
+
+test("회의·1:1·방 세 경로가 같은 해석 함수에 요청자 언어를 넘긴다", async () => {
+  const { readFileSync } = await import("node:fs");
+  const handlers = readFileSync(new URL("./socket-handlers.ts", import.meta.url), "utf8");
+  const room = readFileSync(new URL("./room-runtime.ts", import.meta.url), "utf8");
+
+  // 설정 로더 두 곳 모두 한 함수로 조립한다 — 경로별로 규약을 따로 만들지 않는다.
+  assert.equal(handlers.match(/resolveNpcInstructions\(oc, requestLocale\)/g)?.length, 2);
+  assert.equal(handlers.match(/composeNpcInstructions\(/g)?.length, 2, "해석 함수 밖 조립 없음");
+  // 1:1 · 자유 회의 채팅 · 회의 토론 · 방 런타임이 소켓의 언어를 싣는다.
+  assert.match(handlers, /getNpcConfig\(npcId, socketLocale\(socket\)\)/);
+  assert.match(handlers, /getNpcConfigsForChannel\(channelId, socketLocale\(socket\)\)/);
+  assert.match(
+    handlers,
+    /getOrCreateRoomRuntime\(io, room, userId, \{ locale: socketLocale\(socket\) \}\)/,
+  );
+  assert.match(room, /loadNpcConfigs\(room\.channelId, deps\.locale\)/);
+});

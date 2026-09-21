@@ -33,6 +33,7 @@ import {
   jsonForDb,
 } from "../db";
 import { describeActivity } from "@/lib/npc-activity";
+import { readLocaleCookie } from "@/lib/i18n/server";
 import { composeNpcInstructions } from "@/lib/npc-prompt-layers";
 import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
 import {
@@ -430,15 +431,34 @@ function userContextOf(socket: { data?: Record<string, unknown> }): UserContext 
  * `agent_config` 를 NULL 로 둔다 — 이름·외형·인격의 정본이 프로필로 옮겨갔기 때문이다.
  * 그래서 폴백이 없으면 이 릴리스 이후 만들어지는 모든 NPC 가 `<team-instructions>`
  * 없이 회의에 들어간다. 기존 행은 옛 `agent_config` 를 그대로 쓴다.
+ *
+ * 기본 규약에는 "응답 언어 계약" 이 붙는다. 그 언어는 **요청 시점에** 정한다:
+ * 요청한 사용자의 화면 언어 → 직원의 `agent_config.locale` → 마지막에만 "en".
+ * 예전에는 `agent_config.locale` 만 봐서, 그 값이 없는 새 직원은 한국어 오피스에서도
+ * "모든 발언은 영어로" 라는 계약을 받았다. 사용자가 직접 쓴 `meetingProtocol` 은
+ * 손대지 않는다 — 그 언어는 쓴 사람의 선택이다.
+ * 회의·1:1·방 세 경로가 모두 이 함수 하나로 해석한다(경로별로 갈라지지 않게).
  */
-function resolveMeetingProtocol(oc: Record<string, unknown>): string {
+export function resolveNpcInstructions(
+  oc: Record<string, unknown>,
+  requestLocale?: string | null,
+): string | undefined {
   if (typeof oc.meetingProtocol === "string" && oc.meetingProtocol.trim()) {
-    return oc.meetingProtocol;
+    return composeNpcInstructions({ meetingProtocol: oc.meetingProtocol });
   }
-  return getDefaultMeetingProtocol(typeof oc.locale === "string" ? oc.locale : undefined);
+  const locale = requestLocale || (typeof oc.locale === "string" ? oc.locale : undefined);
+  return composeNpcInstructions({ meetingProtocol: getDefaultMeetingProtocol(locale) });
 }
 
-async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
+/** 이 소켓을 연 사용자의 화면 언어. 쿠키가 없으면 null. */
+function socketLocale(socket: Socket): string | null {
+  return readLocaleCookie(socket.handshake.headers.cookie);
+}
+
+async function getNpcConfig(
+  npcId: string,
+  requestLocale?: string | null,
+): Promise<NpcConfig | null> {
   try {
     // 이름은 프로필이 정본이다 — `npcs.name` 을 읽으면 프로필에서 이름을 바꾼 뒤에도
     // 옛 이름이 대화에 실린다. 투영이 이름·외형과 JSON 파싱을 한 번에 해 준다.
@@ -462,9 +482,7 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
       passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
       meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
       locale: typeof oc.locale === "string" ? oc.locale : null,
-      instructions: composeNpcInstructions({
-        meetingProtocol: resolveMeetingProtocol(oc),
-      }),
+      instructions: resolveNpcInstructions(oc, requestLocale),
     };
   } catch (err) {
     console.error(`[npc] Failed to load config for ${npcId}:`, err);
@@ -472,7 +490,10 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
   }
 }
 
-export async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> {
+export async function getNpcConfigsForChannel(
+  channelId: string,
+  requestLocale?: string | null,
+): Promise<NpcConfig[]> {
   try {
     // 회의·자유채팅 참가자 명단이다. 자리 미정(맵 밖)은 남기고 휴면만 뺀다 —
     // 출근부에서 퇴근시킨 NPC 가 자유채팅에 계속 답하면 토글이 아무 효과가 없다.
@@ -493,9 +514,7 @@ export async function getNpcConfigsForChannel(channelId: string): Promise<NpcCon
         _name: npc.name,
         meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
         locale: typeof oc.locale === "string" ? oc.locale : null,
-        instructions: composeNpcInstructions({
-          meetingProtocol: resolveMeetingProtocol(oc),
-        }),
+        instructions: resolveNpcInstructions(oc, requestLocale),
         role: "Participant",
         passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
       };
@@ -1477,7 +1496,7 @@ export function setupSocketHandlers(io: Server) {
         lastChatTime.set(socket.id, now);
 
         // Load NPC config
-        const npcConfig = await getNpcConfig(npcId);
+        const npcConfig = await getNpcConfig(npcId, socketLocale(socket));
         if (!npcConfig) {
           emitNpcSystemResponse(socket, npcId, "npc_not_found");
           return;
@@ -1757,7 +1776,7 @@ export function setupSocketHandlers(io: Server) {
           );
         },
         onMeetingChat: async ({ channelId, message, room, player }) => {
-          const npcConfigs = await getNpcConfigsForChannel(channelId);
+          const npcConfigs = await getNpcConfigsForChannel(channelId, socketLocale(socket));
           // Stagger NPC responses with random delays, but track all promises
           const promises = npcConfigs.map((npc) => {
             const delay = 1000 + Math.random() * 2000;
@@ -1823,7 +1842,9 @@ export function setupSocketHandlers(io: Server) {
         cooldownMs: CHAT_COOLDOWN_MS,
         getParticipationAccess: getSocketChannelParticipationAccess,
         rooms: chatRooms,
-        getRuntime: getOrCreateRoomRuntime,
+        // 방 런타임은 방마다 캐시된다 — 규약 언어는 런타임을 처음 만든 사람의 것이다.
+        getRuntime: (io, room, userId) =>
+          getOrCreateRoomRuntime(io, room, userId, { locale: socketLocale(socket) }),
         invalidateRuntime: invalidateRoomRuntime,
       },
     });
@@ -1838,7 +1859,9 @@ export function setupSocketHandlers(io: Server) {
         players,
         user,
         adapterRegistry,
-        getNpcConfigsForChannel,
+        // 회의를 연 사람의 화면 언어로 규약을 싣는다.
+        getNpcConfigsForChannel: (channelId: string) =>
+          getNpcConfigsForChannel(channelId, socketLocale(socket)),
         canControlMeeting: async (channelId, userId) => {
           const access = await getSocketChannelParticipationAccess(channelId, userId);
           return (
