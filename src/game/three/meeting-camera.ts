@@ -53,10 +53,24 @@ const BODY_PAD = 0.8;
 const SEAT_SNAP = 0.6;
 const FIT_MARGIN = 0.08;
 const MIN_SPEAKER_DISTANCE = 2.2;
+/** 상반신 구도가 담는 몸의 위쪽 비율과 머리 위 여유(칸). */
+const UPPER_BODY_SHARE = 0.5;
+const HEADROOM = 0.1;
 // A speaker shot may stand just past a wall (faded) but not deep in the next room.
 const ROOM_REACH = 1.5;
 
 type Shot = { kind: "table" } | { kind: "speaker"; key: string };
+
+/**
+ * 렌더러가 **실제로 그린** 모습 — 월드 경계 상자와 몸이 향한 각도(rig.rotation.y, 0 이면 +z).
+ *
+ * 처음엔 카메라가 이것을 짐작했다: 방향은 `ActorSnapshot.direction`, 키는 상수. 로컬에서 실제로
+ * 돌려 보니 앉은 발언자를 옆에서, 너무 가깝게, 몸이 잘린 채 잡았다. 앉은 사람은 좌석 방향을 보는데
+ * (`seat?.direction ?? actor.direction`) 스냅숏 방향은 좌석으로 걸어 들어갈 때의 마지막 방향이고,
+ * 앉은 머리는 상수보다 낮았다. 렌더러는 둘 다 정확히 안다.
+ */
+export type ActorPresentation = { box: T.Box3; yaw: number };
+export type ActorPresenter = (actor: ActorSnapshot) => ActorPresentation | null;
 type Point = { x: number; z: number };
 type Box = { min: T.Vector3; max: T.Vector3 };
 
@@ -65,6 +79,7 @@ export class MeetingCamera {
   private space: MeetingSpace | null = null;
   private speaker: MeetingSpeaker | null = null;
   private seats: Point[] = [];
+  private presenter: ActorPresenter | null = null;
   private shotNow: Shot | null = null;
   /** Shot to take once the table view has settled (non-direct handoff). */
   private queued: string | null = null;
@@ -114,6 +129,11 @@ export class MeetingCamera {
   private opt<K extends keyof typeof MEETING_CAMERA_DEFAULTS>(key: K) {
     return (this.options[key] ??
       MEETING_CAMERA_DEFAULTS[key]) as (typeof MEETING_CAMERA_DEFAULTS)[K];
+  }
+  /** 렌더러가 실제로 그린 모습을 알려 준다. 없으면(테스트 등) 스냅숏에서 짐작한다. */
+  setPresenter(presenter: ActorPresenter | null) {
+    this.presenter = presenter;
+    this.dirty = true;
   }
   /** Seat positions inside the meeting room, in tiles. They define "the whole table". */
   setSeats(seats: Point[]) {
@@ -371,12 +391,16 @@ export class MeetingCamera {
     const actor = shot.kind === "speaker" ? this.actorForKey(shot.key) : undefined;
     if (shot.kind === "table" || !actor) return this.tableShot(table, tableCenter);
 
-    const seat = this.seatOf(actor);
-    const x = seat?.x ?? actor.x / 32;
-    const z = seat?.z ?? actor.y / 32;
-    const facing = facingOf(actor.direction);
+    const shown = this.presenter?.(actor) ?? null;
+    const seat = shown ? undefined : this.seatOf(actor);
     // Stand where the speaker is looking: the camera sits on their facing side, so we see the face.
-    const heading = Math.atan2(facing.x, facing.z);
+    // The renderer knows which way the body actually turned (a seated body faces its seat).
+    const heading = shown
+      ? shown.yaw
+      : (() => {
+          const facing = facingOf(actor.direction);
+          return Math.atan2(facing.x, facing.z);
+        })();
     const framing = this.opt("speakerFraming");
 
     if (framing === "table") {
@@ -385,21 +409,36 @@ export class MeetingCamera {
       return this.centeredFit(table, tableCenter, orbit);
     }
 
-    const head = seat ? SEATED_HEAD : STANDING_HEAD;
-    const bottom = framing === "upperBody" ? head * 0.45 : 0;
+    const body: Box = shown
+      ? { min: shown.box.min.clone(), max: shown.box.max.clone() }
+      : (() => {
+          const x = seat?.x ?? actor.x / 32;
+          const z = seat?.z ?? actor.y / 32;
+          const head = seat ? SEATED_HEAD : STANDING_HEAD;
+          return {
+            min: new T.Vector3(x - 0.6, 0, z - 0.6),
+            max: new T.Vector3(x + 0.6, head, z + 0.6),
+          };
+        })();
+    const height = body.max.y - body.min.y;
+    const bottom = framing === "upperBody" ? body.max.y - height * UPPER_BODY_SHARE : body.min.y;
+    const cx = (body.min.x + body.max.x) / 2;
+    const cz = (body.min.z + body.max.z) / 2;
+    const half = Math.max(0.35, (body.max.x - body.min.x) / 2, (body.max.z - body.min.z) / 2);
     const box: Box = {
-      min: new T.Vector3(x - 0.6, bottom, z - 0.6),
-      max: new T.Vector3(x + 0.6, head, z + 0.6),
+      min: new T.Vector3(cx - half, bottom, cz - half),
+      max: new T.Vector3(cx + half, body.max.y + HEADROOM, cz + half),
     };
-    // Lean toward the table a little so listeners' shoulders edge the frame — it reads as talk.
-    const target = new T.Vector3(x, (bottom + head) / 2, z).lerp(
-      new T.Vector3(tableCenter.x, (bottom + head) / 2, tableCenter.z),
-      0.15,
+    // Centre the speaker. An earlier version leaned the aim toward the table for an
+    // over-the-shoulder feel; on the real map that pushed the speaker off the edge of the frame.
+    const framed = this.centeredFit(
+      box,
+      box.min.clone().add(box.max).multiplyScalar(0.5),
+      new T.Spherical(1, Math.PI / 2 - SPEAKER_ELEVATION, heading),
     );
-    const orbit = new T.Spherical(1, Math.PI / 2 - SPEAKER_ELEVATION, heading);
-    orbit.radius = Math.max(MIN_SPEAKER_DISTANCE, this.fitRadius(box, target, orbit));
-    this.keepNearRoom(box, target, orbit);
-    return { target, orbit };
+    framed.orbit.radius = Math.max(MIN_SPEAKER_DISTANCE, framed.orbit.radius);
+    this.keepNearRoom(box, framed.target, framed.orbit);
+    return framed;
   }
 
   /**
@@ -534,10 +573,18 @@ export class MeetingCamera {
   private tableBox(): Box {
     const b = this.space!.bounds;
     const points: Point[] = [...this.seats];
+    let top = SEATED_HEAD;
     for (const actor of this.lastActors) {
       const x = actor.x / 32;
       const z = actor.y / 32;
-      if (x >= b.x && x <= b.x + b.width && z >= b.y && z <= b.y + b.height) points.push({ x, z });
+      if (x < b.x || x > b.x + b.width || z < b.y || z > b.y + b.height) continue;
+      // 실제 모습이 있으면 그 경계로 — 앉은 사람은 좌석에, 선 사람은 그 키로 담긴다.
+      const shown = this.presenter?.(actor);
+      if (shown) {
+        points.push({ x: shown.box.min.x + BODY_PAD, z: shown.box.min.z + BODY_PAD });
+        points.push({ x: shown.box.max.x - BODY_PAD, z: shown.box.max.z - BODY_PAD });
+        top = Math.max(top, shown.box.max.y);
+      } else points.push({ x, z });
     }
     if (points.length === 0) {
       return {
@@ -546,7 +593,7 @@ export class MeetingCamera {
       };
     }
     const min = new T.Vector3(Infinity, 0, Infinity);
-    const max = new T.Vector3(-Infinity, SEATED_HEAD, -Infinity);
+    const max = new T.Vector3(-Infinity, top, -Infinity);
     for (const p of points) {
       min.x = Math.min(min.x, p.x - BODY_PAD);
       min.z = Math.min(min.z, p.z - BODY_PAD);

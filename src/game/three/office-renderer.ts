@@ -470,6 +470,14 @@ export class OfficeRenderer {
       this.meetingRightInset,
     );
     this.meetingCamera.enter(space);
+    // 카메라가 사람의 위치·방향·크기를 짐작하지 않게 실제로 그린 모습을 넘긴다. 링(바닥 표시)은
+    // 몸보다 넓어 구도를 흐리므로 리그만 잰다. precise 는 스키닝 자세(앉음)를 반영한다.
+    this.meetingCamera.setPresenter((actor) => {
+      const rendered = this.actors.get(actor.id);
+      if (!rendered) return null;
+      const box = new T.Box3().setFromObject(rendered.model.rig, true);
+      return box.isEmpty() ? null : { box, yaw: rendered.model.rig.rotation.y };
+    });
     // "The whole table" is the seats in the room — the camera frames them, not the room's floor.
     const b = space.bounds;
     this.meetingCamera.setSeats(

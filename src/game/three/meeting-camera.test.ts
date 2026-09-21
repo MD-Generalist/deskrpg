@@ -105,6 +105,8 @@ function rebuildingRenderer() {
     furnitureHighlight: new FurnitureHighlight(),
     boardArrival: new BoardArrival(),
     meetingWallObjects: [],
+    // 카메라가 렌더러에 각 액터의 실제 모습을 묻는다.
+    actors: new Map(),
     world,
     scene,
     theme: "office",
@@ -727,6 +729,8 @@ test("renderer enter/rotate/resume/exit restores follow state and wall materials
     meetingWallObjects: [wall],
     // The camera now frames the room's seats, so enterMeeting reads them.
     seats: [],
+    // …and asks the renderer what each actor actually looks like.
+    actors: new Map(),
     furnitureHighlight: new FurnitureHighlight(),
     boardArrival: new BoardArrival(),
     host,
@@ -762,4 +766,61 @@ test("renderer enter/rotate/resume/exit restores follow state and wall materials
   assert.equal(host.dataset.meeting, undefined);
   assert.equal((renderer as unknown as { following: boolean }).following, true);
   assert.deepEqual(states, [true, false, true, false, true, true]);
+});
+
+// ---------------------------------------------------------------------------
+// 렌더러가 넘기는 실제 모습 — 짐작하지 않는다
+
+/** 앉은 npc: 좌석(16,9)에 앉아 +x(오른쪽)를 본다. 앉은 몸은 1.5칸 높이다. */
+function seatedPresenter(yaw = Math.PI / 2) {
+  return (actor: ActorSnapshot) =>
+    actor.id === "npc"
+      ? { box: new T.Box3(new T.Vector3(15.7, 0, 8.7), new T.Vector3(16.3, 1.5, 9.3)), yaw }
+      : null;
+}
+
+test("실제 몸 방향을 따른다 — 스냅숏이 '아래' 라도 몸이 오른쪽을 보면 오른쪽에서 잡는다", () => {
+  // 로컬 실측에서 드러난 결함: 앉은 사람은 좌석 방향을 보는데, 스냅숏 방향은 좌석으로 걸어 들어갈
+  // 때의 마지막 방향이라 카메라가 옆에서 잡았다.
+  const { camera, meeting } = setup();
+  meeting.setPresenter(seatedPresenter());
+  meeting.enter(space);
+  meeting.update(1, actors); // actors 의 npc 스냅숏 방향은 "down"
+  meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
+  meeting.update(1, actors);
+  const toCamera = camera.position
+    .clone()
+    .sub(new T.Vector3(16, 0, 9))
+    .setY(0)
+    .normalize();
+  assert.ok(
+    toCamera.x > 0.9,
+    `몸이 향한 쪽(+x)이 아닙니다: ${toCamera.toArray().map((v) => v.toFixed(2))}`,
+  );
+});
+
+test("상반신은 실제 키로 잡는다 — 머리는 보이고 발은 잘린다, 전신은 발까지 보인다", () => {
+  for (const [speakerFraming, feetVisible] of [
+    ["upperBody", false],
+    ["fullBody", true],
+  ] as const) {
+    const { camera, meeting } = setup();
+    meeting.configure({ speakerFraming });
+    meeting.setPresenter(seatedPresenter());
+    meeting.enter(space);
+    meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
+    meeting.update(1, actors);
+    assertVisible(camera, new T.Vector3(16, 1.5, 9), 1200, 350, `${speakerFraming} 머리`);
+    const feet = usableSpot(camera, new T.Vector3(16, 0, 9), 1200, 350);
+    assert.equal(
+      feet.y >= 0 && feet.y <= 1,
+      feetVisible,
+      `${speakerFraming} 발 세로 ${feet.y.toFixed(2)}`,
+    );
+    const head = usableSpot(camera, new T.Vector3(16, 1.3, 9), 1200, 350);
+    assert.ok(
+      Math.abs(head.x - 0.5) < 0.15,
+      `${speakerFraming}: 발언자가 가운데에 있지 않습니다 ${head.x.toFixed(2)}`,
+    );
+  }
 });
