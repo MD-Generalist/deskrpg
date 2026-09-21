@@ -83,6 +83,7 @@ const channels = sqliteTable("channels", {
   maxPlayers: integer("max_players").default(50),
   password: text("password"),
   gatewayConfig: text("gateway_config"),
+  motionConfig: text("motion_config"),
   createdAt: text("created_at").$defaultFn(isoNow),
   updatedAt: text("updated_at").$defaultFn(isoNow),
 });

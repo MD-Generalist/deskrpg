@@ -84,6 +84,7 @@ import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
 import ViewSettingsModal from "@/components/ViewSettingsModal";
+import type { NpcMotionConfig } from "@/lib/npc-motion-config";
 import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
 import { CRON_SOCKET_EVENT } from "@/components/cron/CronPanel";
 import type { PanelBadgeCounts } from "@/components/ChatPanel";
@@ -176,6 +177,8 @@ interface ChannelInfo {
   inviteCode: string | null;
   mapData: unknown;
   mapConfig: unknown;
+  /** NPC 걸음 속도(채널 공유). 서버가 접어서 주므로 비어 있지 않다. */
+  motionConfig?: NpcMotionConfig;
   isPublic: boolean;
   isMember?: boolean;
   isOwner?: boolean;
@@ -933,9 +936,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         },
       );
 
-      socketInstance.on("channel:updated", (data: { name?: string; isPublic?: boolean }) => {
-        setChannel((prev) => (prev ? { ...prev, ...data } : prev));
-      });
+      socketInstance.on(
+        "channel:updated",
+        (data: { name?: string; isPublic?: boolean; motionConfig?: NpcMotionConfig }) => {
+          setChannel((prev) => (prev ? { ...prev, ...data } : prev));
+          // 소유자가 걸음 속도를 바꿨다. 이 브라우저가 NPC 를 구동하고 있으면 다음 걸음부터 반영된다.
+          if (data.motionConfig) EventBus.emit("channel:motion-config", data.motionConfig);
+        },
+      );
 
       socketInstance.on("channel:deleted", () => {
         alert(t("game.channelDeleted"));
@@ -1792,6 +1800,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               typeof channelData.channel.mapConfig === "string"
                 ? JSON.parse(channelData.channel.mapConfig)
                 : channelData.channel.mapConfig || null,
+            motionConfig: channelData.channel.motionConfig ?? null,
             savedPosition:
               channelData.channel.lastX != null && channelData.channel.lastY != null
                 ? { x: channelData.channel.lastX, y: channelData.channel.lastY }
@@ -3346,6 +3355,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           channelDescription={channel.description}
           isPublic={channel.isPublic}
           inviteCode={channel.inviteCode}
+          motionConfig={channel.motionConfig}
           initialTab={channelSettingsInitialTab}
           onClose={() => {
             setShowChannelSettings(false);

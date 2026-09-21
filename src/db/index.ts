@@ -451,6 +451,7 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   ]);
   applySqliteAlterStatements(sqlite, "channels", [
     "ALTER TABLE channels ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE SET NULL",
+    "ALTER TABLE channels ADD COLUMN motion_config TEXT",
   ]);
   applySqliteAlterStatements(sqlite, "npcs", [
     "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'hermes'",

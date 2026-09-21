@@ -78,6 +78,7 @@ const channels = pgTable("channels", {
   maxPlayers: integer("max_players").default(50),
   password: varchar("password", { length: 255 }),
   gatewayConfig: jsonb("gateway_config"),
+  motionConfig: jsonb("motion_config"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });

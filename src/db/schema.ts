@@ -72,6 +72,8 @@ export const channels = pgTable("channels", {
   maxPlayers: integer("max_players").default(50),
   password: varchar("password", { length: 255 }),
   gatewayConfig: jsonb("gateway_config"),
+  /** NPC 걸음 속도(`npc-motion-config`). 비어 있으면 기본값 — 채널 공유 설정이다. */
+  motionConfig: jsonb("motion_config"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });

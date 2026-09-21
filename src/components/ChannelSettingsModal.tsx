@@ -1,5 +1,14 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import {
+  DEFAULT_NPC_MOTION,
+  NPC_MOTION_KINDS,
+  NPC_SPEED_RANGE,
+  RUN_SPEED_THRESHOLD,
+  normalizeNpcMotionConfig,
+  tilesPerSecond,
+  type NpcMotionConfig,
+} from "@/lib/npc-motion-config";
 import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
@@ -13,12 +22,15 @@ interface ChannelSettingsModalProps {
   channelDescription: string | null;
   isPublic: boolean;
   inviteCode: string | null;
+  /** 채널의 NPC 걸음 속도. 서버가 접어서 준다. */
+  motionConfig?: NpcMotionConfig;
   initialTab?: ChannelSettingsTab;
   onClose: () => void;
   onUpdated: (data: {
     name?: string;
     description?: string | null;
     isPublic?: boolean;
+    motionConfig?: NpcMotionConfig;
     gatewayConfig?: {
       gatewayId?: string | null;
       url?: string | null;
@@ -57,6 +69,7 @@ export default function ChannelSettingsModal({
   channelDescription,
   isPublic,
   inviteCode,
+  motionConfig,
   initialTab = "settings",
   onClose,
   onUpdated,
@@ -66,6 +79,8 @@ export default function ChannelSettingsModal({
   const [name, setName] = useState(channelName);
   const [description, setDescription] = useState(channelDescription || "");
   const [visibility, setVisibility] = useState(isPublic);
+  const initialMotion = normalizeNpcMotionConfig(motionConfig);
+  const [motion, setMotion] = useState<NpcMotionConfig>(initialMotion);
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -197,6 +212,8 @@ export default function ChannelSettingsModal({
       updates.description = description.trim() || null;
     if (visibility !== isPublic) updates.isPublic = visibility;
     if (!visibility && password) updates.password = password;
+    if (NPC_MOTION_KINDS.some((kind) => motion[kind] !== initialMotion[kind]))
+      updates.motionConfig = motion;
 
     if (Object.keys(updates).length === 0) {
       setSaving(false);
@@ -221,7 +238,14 @@ export default function ChannelSettingsModal({
       } else {
         setSaveSuccess(true);
         setPassword("");
-        onUpdated(updates as { name?: string; description?: string | null; isPublic?: boolean });
+        onUpdated(
+          updates as {
+            name?: string;
+            description?: string | null;
+            isPublic?: boolean;
+            motionConfig?: NpcMotionConfig;
+          },
+        );
         setTimeout(() => setSaveSuccess(false), 2000);
       }
     } catch {
@@ -524,6 +548,46 @@ export default function ChannelSettingsModal({
                   </button>
                 </div>
               </div>
+              <fieldset className="space-y-3 border-t border-border pt-4" data-motion-settings>
+                <legend className="text-sm font-semibold text-text-secondary">
+                  {t("settings.npcMotion")}
+                </legend>
+                <p className="text-caption text-text-muted">{t("settings.npcMotionHint")}</p>
+                {NPC_MOTION_KINDS.map((kind) => (
+                  <label key={kind} className="block">
+                    <span className="flex items-baseline justify-between text-sm text-text-secondary mb-1">
+                      <span>{t(`settings.npcMotion.${kind}`)}</span>
+                      <span className="text-text tabular-nums">
+                        {t("settings.npcMotion.value", {
+                          tiles: tilesPerSecond(motion[kind]),
+                          times: Math.round((motion[kind] / motion.walk) * 10) / 10,
+                        })}
+                        {motion[kind] >= RUN_SPEED_THRESHOLD
+                          ? ` · ${t("settings.npcMotion.running")}`
+                          : ""}
+                      </span>
+                    </span>
+                    <input
+                      type="range"
+                      data-motion-kind={kind}
+                      min={NPC_SPEED_RANGE.min}
+                      max={NPC_SPEED_RANGE.max}
+                      step={NPC_SPEED_RANGE.step}
+                      value={motion[kind]}
+                      onChange={(e) => setMotion({ ...motion, [kind]: Number(e.target.value) })}
+                      className="w-full"
+                    />
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  data-motion-reset
+                  onClick={() => setMotion(DEFAULT_NPC_MOTION)}
+                  className="text-sm text-info hover:underline"
+                >
+                  {t("settings.npcMotion.reset")}
+                </button>
+              </fieldset>
               {saveError && <p className="text-danger text-sm">{saveError}</p>}
               {saveSuccess && <p className="text-success text-sm">{t("settings.saved")}</p>}
               <button

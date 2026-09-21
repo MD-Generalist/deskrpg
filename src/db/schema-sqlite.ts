@@ -73,6 +73,8 @@ export const channels = sqliteTable("channels", {
   maxPlayers: integer("max_players").default(50),
   password: text("password"),
   gatewayConfig: text("gateway_config"),
+  /** NPC 걸음 속도(`npc-motion-config`). 비어 있으면 기본값 — 채널 공유 설정이다. */
+  motionConfig: text("motion_config"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });

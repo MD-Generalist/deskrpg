@@ -48,6 +48,7 @@ const SQLITE_BASE_SCHEMA = `
       max_players INTEGER DEFAULT 50,
       password TEXT,
       gateway_config TEXT,
+      motion_config TEXT,
       created_at TEXT,
       updated_at TEXT
     );

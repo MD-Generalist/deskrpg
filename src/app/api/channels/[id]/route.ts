@@ -6,6 +6,7 @@ import {
 import { resolveChannelMapUpgrade } from "@/lib/channel-map-upgrade";
 import { backupChannelMap } from "@/lib/channel-map-backup";
 import { requestMapRefresh } from "@/lib/channel-map-refresh";
+import { normalizeNpcMotionConfig } from "@/lib/npc-motion-config";
 import { db, isPostgres, jsonForDb } from "@/db";
 import { channels, channelMembers, groupMembers, groups } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
@@ -53,6 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           mapData: channels.mapData,
           mapConfig: channels.mapConfig,
           gatewayConfig: channels.gatewayConfig,
+          motionConfig: channels.motionConfig,
           createdAt: channels.createdAt,
           updatedAt: channels.updatedAt,
           rowRevision: channelRowRevisionExpression(channels.updatedAt, isPostgres),
@@ -184,6 +186,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         mapData: effectiveMap.mapData,
         meetingSpace: effectiveMap.meetingSpace,
         mapConfig: parsedMapConfig,
+        // 비어 있으면 기본값 — 클라이언트가 빈 값을 따로 해석하지 않게 여기서 접는다.
+        motionConfig: normalizeNpcMotionConfig(parseDbJson(channel.motionConfig)),
         isOwner,
         isMember,
         canView: true,
@@ -276,6 +280,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
     if (body.mapConfig !== undefined) updates.mapConfig = jsonForDb(body.mapConfig);
+    // NPC 걸음 속도. 믿지 않고 접어서 저장한다 — 틀린 값이 채널의 모든 NPC 를 멈추게 두지 않는다.
+    const motionConfig =
+      body.motionConfig !== undefined ? normalizeNpcMotionConfig(body.motionConfig) : undefined;
+    if (motionConfig) updates.motionConfig = jsonForDb(motionConfig);
 
     if (body.isPublic !== undefined) {
       updates.isPublic = body.isPublic;
@@ -341,7 +349,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         body: JSON.stringify({
           event: "channel:updated",
           room: id,
-          payload: { name: updated.name, isPublic: updated.isPublic },
+          // `motionConfig` 는 바뀐 때만 싣는 선택 필드다 — 새 이벤트를 만들지 않는다.
+          payload: {
+            name: updated.name,
+            isPublic: updated.isPublic,
+            ...(motionConfig ? { motionConfig } : {}),
+          },
         }),
       });
     } catch {

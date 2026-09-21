@@ -398,6 +398,7 @@ function ensureSqliteCompatibility(sqlite) {
   ]);
   applySqliteAlterStatements(sqlite, "channels", [
     "ALTER TABLE channels ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE SET NULL",
+    "ALTER TABLE channels ADD COLUMN motion_config TEXT",
   ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);
