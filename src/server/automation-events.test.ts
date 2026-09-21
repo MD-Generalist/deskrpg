@@ -205,6 +205,31 @@ test("blocked 진입은 하위 카드여도 게시한다", async () => {
   );
 });
 
+test("승인 대기라서 blocked 인 카드는 막힘 알림을 내지 않는다 — 승인 요청 줄이 이미 말하고 있다", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  const asked: string[] = [];
+  await ingest(
+    CHANNEL,
+    [
+      statusEvent({ to: "blocked", parent_count: 0, task_id: "waiting" }),
+      statusEvent({ to: "blocked", parent_count: 0, task_id: "really-stuck" }),
+    ],
+    {
+      ...h.deps,
+      isAwaitingApproval: async (_channelId, taskId) => {
+        asked.push(taskId);
+        return taskId === "waiting";
+      },
+    },
+  );
+  assert.deepEqual(asked, ["waiting", "really-stuck"]);
+  // 진짜로 막힌 카드는 여전히 알린다.
+  assert.deepEqual(
+    h.posted.map((p) => (p.notice as { cardId: string }).cardId),
+    ["really-stuck"],
+  );
+});
+
 test("review 진입은 하위 카드여도 게시한다 — 사람의 판단을 기다리는 자리다", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(

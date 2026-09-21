@@ -91,6 +91,48 @@ test("같은 id 메시지는 두 번 쌓이지 않는다", () => {
   assert.equal(s.messages.o.length, 1);
 });
 
+test("같은 id 가 해소된 알림으로 다시 오면 제자리에서 갈아 끼운다 — 순서와 개수는 그대로", () => {
+  let s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
+  const notice = {
+    kind: "meeting_outcome" as const,
+    minutesId: "min-1",
+    topic: "가격 개편",
+    followUpCount: 2,
+    recommended: true,
+  };
+  const first: RoomMessage = {
+    id: "n1",
+    roomId: "o",
+    senderKind: "system",
+    senderId: null,
+    senderName: "",
+    content: "가격 개편",
+    createdAt: "2026-09-10T00:00:00Z",
+    notice,
+  };
+  const later: RoomMessage = {
+    ...first,
+    id: "n2",
+    createdAt: "2026-09-10T00:01:00Z",
+    notice: undefined,
+  };
+  s = reduceRoomState(s, { type: "message", roomId: "o", message: first });
+  s = reduceRoomState(s, { type: "message", roomId: "o", message: later });
+
+  const resolved = {
+    ...notice,
+    resolved: { boardSlug: "b", tenant: null, taskCount: 2, by: "u1", at: "2026-09-10T00:02:00Z" },
+  };
+  s = reduceRoomState(s, { type: "message", roomId: "o", message: { ...first, notice: resolved } });
+
+  assert.deepEqual(
+    s.messages.o.map((m) => m.id),
+    ["n1", "n2"],
+    "되쓰인 알림이 새 줄로 쌓이거나 순서를 바꾸면 안 된다",
+  );
+  assert.deepEqual(s.messages.o[0].notice, resolved, "등록 결과가 새로고침 없이 보여야 한다");
+});
+
 test("history 는 그 방의 메시지를 통째로 갈아 끼운다", () => {
   let s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
   const m: RoomMessage = {

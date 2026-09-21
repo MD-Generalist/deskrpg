@@ -106,6 +106,8 @@ interface ChatPanelProps {
   cardsDebounceMs?: number;
   /** 방 알림의 "이력 열기"(R30) — 채널 크론 화면을 그 잡으로 연다. 없으면 링크가 없다. */
   onOpenNoticeCronJob?: (jobId: string) => void;
+  /** 승인 요청 알림의 "승인 열기" — 판단 모음을 연다. 없으면 버튼이 없다. */
+  onOpenNoticeApproval?: (approvalId: string) => void;
   /** 회의 결과 알림의 "프로젝트로 등록" — 그 회의록을 연다. 없으면 버튼이 없다. */
   onOpenNoticeMinutes?: (minutesId: string) => void;
   /** 이 대화에서 NPC 가 저장한 결과물 — 마지막 답변 아래 칩으로 그린다. */
@@ -175,6 +177,7 @@ export default function ChatPanel({
   cron = null,
   onOpenNoticeCard,
   onOpenNoticeCronJob,
+  onOpenNoticeApproval,
   onOpenNoticeMinutes,
   badges = null,
   onMarkSeen,
@@ -881,6 +884,7 @@ export default function ChatPanel({
                       message={withLocalResolution(msg)}
                       onOpenCard={onOpenNoticeCard}
                       onOpenCronJob={onOpenNoticeCronJob}
+                      onOpenApproval={onOpenNoticeApproval}
                       onOpenMinutes={onOpenNoticeMinutes}
                       onResolveProposal={cardsChannelId ? handleResolveProposal : undefined}
                       proposalPending={

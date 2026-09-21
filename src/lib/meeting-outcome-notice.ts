@@ -7,17 +7,15 @@
  * **여기 함수들은 던지지 않는다.** 알림이 늦게 보이는 것과 회의록이 안 남는 것·등록이 실패하는 것은
  * 무게가 다르다.
  */
-import { and, eq, like } from "drizzle-orm";
-
-import { chatRoomMessages, chatRooms, db } from "@/db";
 import { requestEmitRoomMessage } from "@/lib/automation-registry";
 import { appendRoomMessage, ensureOfficeRoom, getChannelOwnerId } from "@/lib/chat-rooms";
-import { parseRoomNotice, type RoomNotice } from "@/lib/chat-rooms-policy";
+import type { RoomNotice } from "@/lib/chat-rooms-policy";
 import type {
   MeetingOutcome,
   MeetingOutcomeRegistered,
   MeetingSummaryStatus,
 } from "@/lib/meeting-outcome";
+import { rewriteRoomNotices } from "@/lib/room-notice-rewrite";
 
 export type MeetingOutcomeNotice = Extract<RoomNotice, { kind: "meeting_outcome" }>;
 
@@ -88,37 +86,22 @@ export async function markMeetingOutcomeNoticeRegistered(input: {
   minutesId: string;
   registered: MeetingOutcomeRegistered;
 }): Promise<void> {
-  try {
-    const rows = await db
-      .select({ id: chatRoomMessages.id, noticeJson: chatRoomMessages.noticeJson })
-      .from(chatRoomMessages)
-      .innerJoin(chatRooms, eq(chatRooms.id, chatRoomMessages.roomId))
-      .where(
-        and(
-          eq(chatRooms.channelId, input.channelId),
-          like(chatRoomMessages.noticeJson, `%${input.minutesId}%`),
-        ),
-      );
-    for (const row of rows) {
-      const notice = parseRoomNotice(row.noticeJson);
-      // LIKE 는 후보만 좁힌다 — 다른 회의 id 의 부분 문자열일 수 있으니 정확히 맞춘다.
-      if (notice?.kind !== "meeting_outcome" || notice.minutesId !== input.minutesId) continue;
-      const next: MeetingOutcomeNotice = {
-        ...notice,
-        resolved: {
-          boardSlug: input.registered.boardSlug,
-          tenant: input.registered.tenant,
-          taskCount: input.registered.taskIds.length,
-          by: input.registered.by,
-          at: input.registered.at,
-        },
-      };
-      await db
-        .update(chatRoomMessages)
-        .set({ noticeJson: JSON.stringify(next) })
-        .where(eq(chatRoomMessages.id, row.id));
-    }
-  } catch (error) {
-    console.warn("[meeting] 회의 결과 알림을 되쓰지 못했다", { minutesId: input.minutesId }, error);
-  }
+  await rewriteRoomNotices({
+    channelId: input.channelId,
+    needle: input.minutesId,
+    // LIKE 는 후보만 좁힌다 — 다른 회의 id 의 부분 문자열일 수 있으니 정확히 맞춘다.
+    update: (notice) =>
+      notice.kind === "meeting_outcome" && notice.minutesId === input.minutesId
+        ? {
+            ...notice,
+            resolved: {
+              boardSlug: input.registered.boardSlug,
+              tenant: input.registered.tenant,
+              taskCount: input.registered.taskIds.length,
+              by: input.registered.by,
+              at: input.registered.at,
+            },
+          }
+        : null,
+  });
 }

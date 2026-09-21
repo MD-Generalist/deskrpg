@@ -84,6 +84,8 @@ import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
 import { CRON_SOCKET_EVENT } from "@/components/cron/CronPanel";
 import type { PanelBadgeCounts } from "@/components/ChatPanel";
 import { openCardTarget, type OpenCardTarget } from "@/components/kanban/open-card-target";
+import AttentionInboxPanel from "@/components/attention/AttentionInboxPanel";
+import Modal from "@/components/ui/Modal";
 import MinutesModal from "@/components/MinutesModal";
 import CronModal from "@/components/cron/CronModal";
 import ArtifactsModal from "@/components/artifacts/ArtifactsModal";
@@ -270,6 +272,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [kanbanCard, setKanbanCard] = useState<OpenCardTarget | null>(null);
   // 방 알림의 "프로젝트로 등록" — 회의실에 들어가지 않고도 그 회의록(후속 업무 등록 화면)을 연다.
   const [noticeMinutesId, setNoticeMinutesId] = useState<string | null>(null);
+  // 판단 모음 — 승인·검토·막힘처럼 사람이 답해야 하는 것. 헤더 버튼과 승인 요청 알림이 연다.
+  // 이 화면이 없으면 회의에서 등록한 카드는 승인 대기(`blocked`)에 영영 머문다.
+  const [showAttention, setShowAttention] = useState(false);
   // 채널 크론 화면(T10, R15). "이력 열기"(R30) 는 그 잡의 실행 이력으로 연다.
   const [showCron, setShowCron] = useState(false);
   const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
@@ -2557,6 +2562,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         cron={channelId ? { channelId, socket, onToast: cronToast } : null}
         onOpenNoticeCard={openNoticeCard}
         onOpenNoticeCronJob={openNoticeCronJob}
+        onOpenNoticeApproval={() => setShowAttention(true)}
         onOpenNoticeMinutes={setNoticeMinutesId}
         badges={panelBadges}
         onMarkSeen={markPanelTabSeen}
@@ -2835,6 +2841,20 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               </button>
             )}
           </div>
+
+          <button
+            type="button"
+            data-testid="attention-entry"
+            onClick={() => setShowAttention(true)}
+            title={t("attention.title")}
+            aria-label={t("attention.title")}
+            className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-caption font-semibold text-text-secondary hover:bg-surface-raised"
+          >
+            <span className="header-full-label">{t("attention.title")}</span>
+            <span className="header-mobile-label" aria-hidden="true">
+              !
+            </span>
+          </button>
 
           {/* Mode toggle */}
           <button
@@ -3207,6 +3227,23 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         </div>
       )}
 
+      {showAttention && channelId && (
+        <Modal open onClose={() => setShowAttention(false)} title={t("attention.title")} size="lg">
+          <Modal.Body>
+            <AttentionInboxPanel
+              channelId={channelId}
+              onOpenCard={(taskId) => {
+                setShowAttention(false);
+                openNoticeCard(taskId);
+              }}
+              onOpenCronJob={(jobId) => {
+                setShowAttention(false);
+                openNoticeCronJob(jobId);
+              }}
+            />
+          </Modal.Body>
+        </Modal>
+      )}
       {noticeMinutesId && channelId && (
         <MinutesModal
           channelId={channelId}

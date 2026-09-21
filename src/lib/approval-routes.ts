@@ -25,6 +25,7 @@ import {
   parseDecision,
   type TargetDecision,
 } from "@/lib/approval-decision";
+import { rewriteRoomNotices } from "@/lib/room-notice-rewrite";
 import { cronError } from "@/lib/cron-access";
 import { initialStatusGate } from "@/lib/hermes/plugin-capability";
 import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
@@ -151,6 +152,23 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
         author: "deskrpg",
         body: note,
       });
+
+  // 방의 승인 요청 줄이 결과를 말하게 한다 — 그러지 않으면 결정한 뒤에도 "승인 열기" 가 남는다.
+  await rewriteRoomNotices({
+    channelId,
+    needle: approvalId,
+    update: (notice) =>
+      notice.kind === "approval_requested" && notice.approvalId === approvalId
+        ? {
+            ...notice,
+            resolved: {
+              decision: nextApprovalStatus(decision),
+              by: ctx.userId,
+              at: new Date().toISOString(),
+            },
+          }
+        : null,
+  });
 
   return NextResponse.json({
     ok: true,

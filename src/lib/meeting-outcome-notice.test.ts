@@ -119,17 +119,36 @@ test("등록되면 같은 줄에 결과가 되쓰인다 — 다른 회의의 알
       summaryStatus: "ok",
     });
 
-  await markMeetingOutcomeNoticeRegistered({
-    channelId,
-    minutesId: "m-4",
-    registered: {
-      boardSlug: "board-1",
-      tenant: "가격-개편",
-      taskIds: ["t1", "t2"],
-      by: "user-1",
-      at: "2026-09-21T00:00:00.000Z",
+  const { registerAutomationHooks, resetAutomationHooksForTests } =
+    await import("@/lib/automation-registry");
+  const reEmitted: Array<{ id?: string; notice?: { minutesId?: string; resolved?: unknown } }> = [];
+  registerAutomationHooks({
+    pollNow: async () => null,
+    refreshPollers: async () => {},
+    getWorkingSnapshot: () => [],
+    emitRoomMessage: (_roomId: string, message: unknown) => {
+      reEmitted.push(message as (typeof reEmitted)[number]);
     },
   });
+  try {
+    await markMeetingOutcomeNoticeRegistered({
+      channelId,
+      minutesId: "m-4",
+      registered: {
+        boardSlug: "board-1",
+        tenant: "가격-개편",
+        taskIds: ["t1", "t2"],
+        by: "user-1",
+        at: "2026-09-21T00:00:00.000Z",
+      },
+    });
+  } finally {
+    resetAutomationHooksForTests();
+  }
+  // 되쓴 줄을 같은 id 로 다시 방송한다 — 그러지 않으면 열려 있는 화면은 새로고침 전까지 등록 버튼을 그대로 보여 준다.
+  assert.equal(reEmitted.length, 1);
+  assert.equal(reEmitted[0].notice?.minutesId, "m-4");
+  assert.ok(reEmitted[0].notice?.resolved);
 
   const byId = new Map(
     (await officeNotices(channelId)).map((m) => {

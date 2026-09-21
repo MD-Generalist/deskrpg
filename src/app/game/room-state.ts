@@ -77,7 +77,26 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
       const previous = state.messages[action.roomId] ?? [];
       // 같은 메시지가 두 번 오는 경로가 실제로 있다 — 히스토리를 받은 직후에
       // 그 마지막 줄의 브로드캐스트가 도착하면 화면에 두 번 찍힌다.
-      if (previous.some((message) => message.id === action.message.id)) return state;
+      const existing = previous.find((message) => message.id === action.message.id);
+      if (existing) {
+        // 같은 줄이 **해소된 알림**으로 다시 왔으면 제자리에서 갈아 끼운다(등록·승인 뒤 서버가 같은 id 로
+        // 되쓴 줄을 방송한다). 순서·미리보기는 건드리지 않는다 — 새 메시지가 아니다.
+        if (
+          JSON.stringify(existing.notice ?? null) === JSON.stringify(action.message.notice ?? null)
+        )
+          return state;
+        return {
+          ...state,
+          messages: {
+            ...state.messages,
+            [action.roomId]: previous.map((message) =>
+              message.id === action.message.id
+                ? { ...message, notice: action.message.notice }
+                : message,
+            ),
+          },
+        };
+      }
       const rooms = sortRooms(
         state.rooms.map((room) =>
           room.id === action.roomId

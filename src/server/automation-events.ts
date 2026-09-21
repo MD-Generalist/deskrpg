@@ -25,7 +25,7 @@
 
 import { eq, and } from "drizzle-orm";
 
-import { db, hermesProfiles, npcs } from "@/db";
+import { approvalTargets, approvals, db, hermesProfiles, npcs } from "@/db";
 import type { RoomMessage, RoomNotice } from "@/lib/chat-rooms-policy";
 import { appendRoomMessage, ensureOfficeRoom, getChannelOwnerId } from "@/lib/chat-rooms";
 import { findCronOrigin, resolveOriginForGateway } from "@/lib/cron-origins";
@@ -166,6 +166,11 @@ export type IngestDeps = {
   /** 채널의 보드 slug. 카드 알림의 `notice.boardSlug`. */
   boardSlug: string;
   findNpcByProfile(channelId: string, profileName: string): Promise<ChannelNpcLookup | null>;
+  /**
+   * 이 카드가 **승인 대기** 라서 `blocked` 인가. 그렇다면 "막혔습니다" 알림을 내지 않는다 — 승인 요청 줄이 이미
+   * 같은 일을 말하고 있고, 승인 대기는 고장이 아니다. 선택 의존이라 없으면 예전처럼 알린다.
+   */
+  isAwaitingApproval?(channelId: string, taskId: string): Promise<boolean>;
   findCronOriginChannel(key: {
     gatewayId: string;
     profileName: string;
@@ -442,6 +447,9 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
             ? "card_done"
             : null;
     if (!kind) return;
+    if (kind === "card_blocked" && event.task_id && deps.isAwaitingApproval) {
+      if (await deps.isAwaitingApproval(channelId, event.task_id)) return;
+    }
     const sender = await resolveSender(channelId, p.assignee ?? null, deps);
     const cardTitle = typeof p.title === "string" ? p.title : (event.task_id ?? "");
     await post(
@@ -548,6 +556,22 @@ export function createLiveIngestDeps(wiring: LiveIngestWiring): IngestDeps {
     boardSlug: wiring.boardSlug,
     emitChannel: wiring.emitChannel,
     emitRoomMessage: wiring.emitRoomMessage,
+
+    async isAwaitingApproval(channelId, taskId) {
+      const [row] = await db
+        .select({ id: approvals.id })
+        .from(approvalTargets)
+        .innerJoin(approvals, eq(approvals.id, approvalTargets.approvalId))
+        .where(
+          and(
+            eq(approvals.channelId, channelId),
+            eq(approvals.status, "pending"),
+            eq(approvalTargets.taskId, taskId),
+          ),
+        )
+        .limit(1);
+      return Boolean(row);
+    },
 
     async findNpcByProfile(channelId, profileName) {
       const [row] = await db

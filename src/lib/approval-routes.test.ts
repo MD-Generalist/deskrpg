@@ -87,6 +87,28 @@ test("승인하면 대상 카드가 전부 풀린다", async () => {
   }
 });
 
+test("결정하면 방의 승인 요청 줄이 결과를 말한다 — 버튼이 남지 않는다", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  const batch = await makeApproval(ctx, ["가"]);
+  const { decideApproval } = await import("@/lib/approval-routes");
+  const res = await decideApproval(
+    post(ownerId, channelId, batch.approvalId, { decision: "approve" }),
+    channelId,
+    batch.approvalId,
+  );
+  assert.equal(res.status, 200);
+
+  const { ensureOfficeRoom, recentRoomMessages } = await import("@/lib/chat-rooms");
+  const room = await ensureOfficeRoom(channelId, ownerId);
+  const notice = (await recentRoomMessages(room.id, 20))
+    .map((m) => m.notice)
+    .find((n) => n?.kind === "approval_requested" && n.approvalId === batch.approvalId);
+  assert.ok(notice && notice.kind === "approval_requested");
+  if (!notice || notice.kind !== "approval_requested") return;
+  assert.equal(notice.resolved?.decision, "approved");
+  assert.equal(notice.resolved?.by, ownerId);
+});
+
 test("반려하면 아무것도 풀리지 않고 카드는 blocked 로 남는다", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
