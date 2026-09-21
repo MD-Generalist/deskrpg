@@ -732,3 +732,63 @@ test("회의가 끝나면 구조화된 결과와 요약 상태가 저장되고 �
   assert.equal(end.summaryStatus, "ok");
   assert.equal(end.minutesId, "minutes-1");
 });
+
+test("브로커 onError 가 어떤 값을 넘겨도 meeting:error 는 문자열 코드와 사유를 싣는다", async () => {
+  const calls: RecordedCall[] = [];
+  const socket = createFakeSocket("socket-1", calls);
+  const registry = new AdapterRegistry();
+  registry.register(recordingAdapter(["ok"]));
+  type Factory = NonNullable<
+    Parameters<typeof registerMeetingDiscussionHandlers>[0]["deps"]["createMeetingBroker"]
+  >;
+  let cb!: Parameters<Factory>[1];
+  registerMeetingDiscussionHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      activeBrokers: new Map(),
+      discussionInitiators: new Map(),
+      meetingRooms: new Map([["a", { participants: new Set(["socket-1"]), messages: [] }]]),
+      players: new Map(),
+      user: { userId: "u1" },
+      adapterRegistry: registry,
+      canControlMeeting: () => true,
+      getNpcConfigsForChannel: async () => [npcConfig({ adapterType: "cli" })],
+      createMeetingBroker: (_config, callbacks) => {
+        cb = callbacks;
+        return {
+          config: { participants: [{ npcId: "npc-1", displayName: "NPC" }] },
+          turns: [],
+          isRunning: () => true,
+          stop: () => {},
+          run: () => new Promise<void>(() => {}),
+        } as unknown as MeetingBrokerLike;
+      },
+      generateMeetingSummary: async () => ({ keyTopics: [], conclusions: null }),
+      persistMeetingMinutes: async () => null,
+    },
+  });
+  await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "t" });
+
+  // 스테이징 실측과 같은 모양 — 어댑터가 HermesError 를 던졌다
+  const usage = Object.assign(new Error("HTTP 429: The usage limit has been reached"), {
+    name: "HermesError",
+    code: "run_failed",
+    status: 200,
+  });
+  for (const thrown of [usage, { code: "x", message: "obj" }, "plain", undefined]) {
+    cb.onError!(thrown);
+  }
+  const payloads = calls
+    .filter((call) => call.event === "meeting:error")
+    .map((call) => call.payload as { error: unknown; detail: unknown });
+  assert.equal(payloads.length, 4);
+  for (const p of payloads) {
+    assert.equal(typeof p.error, "string", `error 가 문자열이 아니다: ${JSON.stringify(p)}`);
+    assert.ok(p.detail === null || typeof p.detail === "string");
+  }
+  assert.deepEqual(payloads[0], {
+    error: "backend_usage_limit",
+    detail: "HTTP 429: The usage limit has been reached",
+  });
+});

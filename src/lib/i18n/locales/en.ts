@@ -28,6 +28,13 @@ const en: Record<string, string> = {
   "meeting.reason.arrival_timeout": "Arrival or join confirmation timed out.",
   "meeting.reason.participant_left": "A participant left.",
   "meeting.reason.backend_unavailable": "NPC service unavailable.",
+  "meeting.reason.backend_usage_limit":
+    "The AI backend has reached its usage limit. Try again after it resets or change the model settings.",
+  "meeting.reason.gateway_busy":
+    "The gateway is handling as many requests as it can. Try again shortly.",
+  "meeting.reason.backend_unauthorized":
+    "The gateway rejected authentication. Check the gateway connection.",
+  "meeting.reason.npc_response_failed": "The employee could not respond.",
   "meeting.reason.driver_disconnected": "Movement connection disconnected.",
   "meeting.reason.path_unavailable": "No walking route to the meeting room.",
   "meeting.reason.destination_invalidated": "Destination is no longer available.",

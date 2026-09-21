@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { EventBus } from "@/game/EventBus";
+import { meetingErrorCode } from "@/lib/meeting-error";
 import { MeetingEntryController, type EntryState, type ArrivalState } from "./entry-controller";
 
 export function useMeetingEntry(socket: Socket | null, channelId: string | null) {
@@ -33,8 +34,10 @@ export function useMeetingEntry(socket: Socket | null, channelId: string | null)
         EventBus.emit("meeting:mode", { active: true });
       }
     };
-    const failed = ({ reasonCode }: { reasonCode: string }) => {
-      if (!["idle", "failed"].includes(entry.state.status)) entry.fail(reasonCode);
+    // 사유 코드는 번역 키 조회와 화면 문구에 그대로 들어간다 — 문자열이 아니면 [object Object] 가 된다.
+    const failed = ({ reasonCode }: { reasonCode: unknown }) => {
+      if (!["idle", "failed"].includes(entry.state.status))
+        entry.fail(meetingErrorCode(reasonCode));
     };
     const disconnect = () => {
       if (entry.state.status === "walking") entry.fail("driver_disconnected");

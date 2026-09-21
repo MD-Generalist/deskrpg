@@ -33,6 +33,7 @@ import MeetingSidebar from "./meeting-room/MeetingSidebar";
 import RosterAvatar from "./RosterAvatar";
 import { createAvatarLookup } from "@/app/game/avatar-lookup";
 import { CHAT_AVATAR_SIZE } from "./ui/ChatBubble";
+import { meetingErrorCode, meetingErrorMessage } from "@/lib/meeting-error";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -550,17 +551,20 @@ export default function MeetingRoom({
       }
     };
 
-    const handleMeetingError = (data: { error: string }) => {
+    // 서버가 옛 버전이라 객체를 보내도 [object Object] 를 그리지 않는다 — 코드는 문자열일 때만 쓴다.
+    const handleMeetingError = (data: { error?: unknown; detail?: unknown }) => {
       clearTimeout(joinTimer);
       setStartingMeeting(false);
-      setMeetingError(data.error);
-      if (!confirmed) EventBus.emit("meeting:join-failed", { reasonCode: data.error });
+      const code = meetingErrorCode(data.error);
+      const text = meetingErrorMessage(data, tRef.current);
+      setMeetingError(text);
+      if (!confirmed) EventBus.emit("meeting:join-failed", { reasonCode: code });
       const errorMsg: MeetingMessage = {
         id: `error-${Date.now()}`,
         sender: tRef.current("meeting.systemSender"),
         senderId: "system",
         senderType: "npc",
-        content: `${tRef.current("meeting.errorPrefix")} ${data.error}`,
+        content: `${tRef.current("meeting.errorPrefix")} ${text}`,
         timestamp: Date.now(),
       };
       setMessages((prev) => appendMeetingMessage(prev, errorMsg));

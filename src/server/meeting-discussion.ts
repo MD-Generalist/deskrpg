@@ -1,4 +1,5 @@
 import type { MeetingDiscussionState } from "../lib/meeting-discussion-state";
+import { describeMeetingFailure } from "../lib/meeting-error";
 import type { MeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 import { MEETING_NPC_STREAM_EVENT } from "./meeting-socket";
 import type { AdapterRegistry, NpcAdapter } from "../lib/adapters/types";
@@ -803,7 +804,10 @@ export function registerMeetingDiscussionHandlers({
           });
         },
         onError: (error) => {
-          io.to(getMeetingRoomId(channelId)).emit("meeting:error", { error });
+          // 어댑터가 던진 값(HermesError 등)을 그대로 실으면 화면이 [object Object] 를 그린다.
+          const failure = describeMeetingFailure(error);
+          console.warn("[meeting] NPC 응답 실패", { channelId, code: failure.error }, error);
+          io.to(getMeetingRoomId(channelId)).emit("meeting:error", failure);
         },
       },
     );

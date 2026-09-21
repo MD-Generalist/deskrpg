@@ -28,6 +28,13 @@ const ja: Record<string, string> = {
   "meeting.reason.arrival_timeout": "到着または参加確認がタイムアウトしました。",
   "meeting.reason.participant_left": "参加者が退室しました。",
   "meeting.reason.backend_unavailable": "NPCサービスに接続できません。",
+  "meeting.reason.backend_usage_limit":
+    "AI バックエンドの利用上限に達しました。上限が解除された後に再試行するか、モデル設定を変更してください。",
+  "meeting.reason.gateway_busy":
+    "ゲートウェイの同時処理数が上限に達しています。しばらくしてから再試行してください。",
+  "meeting.reason.backend_unauthorized":
+    "ゲートウェイが認証を拒否しました。ゲートウェイ接続を確認してください。",
+  "meeting.reason.npc_response_failed": "社員が応答できませんでした。",
   "meeting.reason.driver_disconnected": "移動用の接続が切れました。",
   "meeting.reason.path_unavailable": "会議室へ歩ける経路がありません。",
   "meeting.reason.destination_invalidated": "目的地が利用できなくなりました。",

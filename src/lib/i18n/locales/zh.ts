@@ -28,6 +28,11 @@ const zh: Record<string, string> = {
   "meeting.reason.arrival_timeout": "到达或加入确认超时。",
   "meeting.reason.participant_left": "参与者已离开。",
   "meeting.reason.backend_unavailable": "NPC服务不可用。",
+  "meeting.reason.backend_usage_limit":
+    "AI 后端已达到使用上限。请在上限重置后重试,或更改模型设置。",
+  "meeting.reason.gateway_busy": "网关的并发请求已满。请稍后重试。",
+  "meeting.reason.backend_unauthorized": "网关拒绝了认证。请检查网关连接。",
+  "meeting.reason.npc_response_failed": "员工未能回复。",
   "meeting.reason.driver_disconnected": "移动连接已断开。",
   "meeting.reason.path_unavailable": "没有通往会议室的步行路线。",
   "meeting.reason.destination_invalidated": "目的地已不可用。",

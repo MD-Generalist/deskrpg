@@ -28,6 +28,13 @@ const ko: Record<string, string> = {
   "meeting.reason.arrival_timeout": "도착 또는 참가 확인 시간이 초과되었습니다.",
   "meeting.reason.participant_left": "참가자가 나갔습니다.",
   "meeting.reason.backend_unavailable": "NPC 서비스에 연결할 수 없습니다.",
+  "meeting.reason.backend_usage_limit":
+    "AI 백엔드의 사용 한도가 찼습니다. 한도가 풀린 뒤 다시 시도하거나 모델 설정을 바꾸세요.",
+  "meeting.reason.gateway_busy":
+    "게이트웨이가 동시에 처리할 수 있는 요청이 가득 찼습니다. 잠시 뒤 다시 시도하세요.",
+  "meeting.reason.backend_unauthorized":
+    "게이트웨이가 인증을 거절했습니다. 게이트웨이 연결을 확인하세요.",
+  "meeting.reason.npc_response_failed": "직원이 응답하지 못했습니다.",
   "meeting.reason.driver_disconnected": "이동 담당 연결이 끊겼습니다.",
   "meeting.reason.path_unavailable": "회의실까지 걸어갈 경로가 없습니다.",
   "meeting.reason.destination_invalidated": "목적지를 더 이상 사용할 수 없습니다.",
