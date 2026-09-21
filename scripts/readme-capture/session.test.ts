@@ -404,17 +404,30 @@ test(
     child.stderr?.on("data", (chunk) => {
       output += String(chunk);
     });
+    // 시간 초과로 끊겨도 node:test 는 이 파일의 프로세스가 끝나기를 기다린다. 런처가 SIGTERM 을
+    // 넘기면 살아 있는 자식의 파이프가 그 프로세스를 붙잡아 러너 전체가 멈춘다(6시간 멈춤 실측).
+    // 그래서 SIGTERM 뒤에 SIGKILL 까지 보내고, 어느 쪽이든 파이프를 닫아 이 파일이 끝나게 한다.
     t.after(async () => {
-      if (child.pid && child.exitCode === null && child.signalCode === null) {
+      const exited = () => child.exitCode !== null || child.signalCode !== null;
+      const waitExit = (ms: number) =>
+        new Promise<void>((resolve) => {
+          if (exited()) return resolve();
+          child.once("exit", () => resolve());
+          setTimeout(resolve, ms).unref();
+        });
+      const signalGroup = (signal: NodeJS.Signals) => {
+        if (!child.pid || exited()) return;
         try {
-          process.kill(-child.pid, "SIGTERM");
+          process.kill(-child.pid, signal);
         } catch {}
-      }
-      await new Promise<void>((resolve) => {
-        if (child.exitCode !== null || child.signalCode !== null) return resolve();
-        child.once("exit", () => resolve());
-        setTimeout(resolve, 2_000).unref();
-      });
+      };
+      signalGroup("SIGTERM");
+      await waitExit(2_000);
+      signalGroup("SIGKILL");
+      await waitExit(2_000);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      child.unref();
     });
 
     // A full test run competes for the machine, so give the dev server a generous budget and stop
