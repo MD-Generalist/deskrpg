@@ -14,11 +14,36 @@ repo="$(git rev-parse --show-toplevel)"
 # 삭제 푸시는 검사할 것이 없다.
 zero="0000000000000000000000000000000000000000"
 only_deletes=1
-while read -r _local_ref local_sha _remote_ref _remote_sha; do
+ranges=()
+while read -r _local_ref local_sha _remote_ref remote_sha; do
   [ -z "${local_sha:-}" ] && continue
-  [ "$local_sha" = "$zero" ] || only_deletes=0
+  [ "$local_sha" = "$zero" ] && continue
+  only_deletes=0
+  # 새 브랜치면 원격 어디에도 없는 커밋만, 아니면 원격 머리 이후 커밋만 본다.
+  if [ "$remote_sha" = "$zero" ]; then ranges+=("$local_sha --not --remotes")
+  else ranges+=("$remote_sha..$local_sha"); fi
 done
 [ "$only_deletes" -eq 1 ] && exit 0
+
+# 커밋 메시지의 개발 메타 — 30초 게이트보다 먼저, 몇 밀리초면 끝난다.
+# rebase·cherry-pick·병합은 commit-msg 훅을 다시 돌리지 않으므로 공개 전 마지막 관문은 여기다.
+meta_failed=0
+meta_err="$(mktemp)"
+for range in "${ranges[@]}"; do
+  # shellcheck disable=SC2086
+  for sha in $(git rev-list $range); do
+    if ! git log -1 --format=%B "$sha" | bash "$repo/scripts/check-commit-meta.sh" 2>"$meta_err"; then
+      printf '\n\033[1;31m[pre-push] %s %s\033[0m\n' "$(git log -1 --format=%h "$sha")" "$(git log -1 --format=%s "$sha")" >&2
+      cat "$meta_err" >&2
+      meta_failed=1
+    fi
+  done
+done
+rm -f "$meta_err"
+if [ "$meta_failed" -ne 0 ]; then
+  printf '\n\033[1;31m[pre-push] 공개 레포에 개발 메타가 든 커밋을 올리려 한다. 메시지를 고친 뒤(git rebase -i 의 reword) 다시 푸시하라.\033[0m\n' >&2
+  exit 1
+fi
 
 if [ ! -d "$repo/node_modules" ]; then
   printf '\n\033[1;33m[pre-push] node_modules 가 없어 건너뛴다. `npm ci` 후 다시 푸시하면 검사한다.\033[0m\n'
