@@ -13,6 +13,7 @@ import {
   recentErrorDigest,
   type AttachmentKey,
 } from "./feedback-client";
+import { useEscapeClose } from "./use-escape-close";
 import { browserStorage } from "./growth-storage";
 
 export function BugReportModal({
@@ -23,6 +24,7 @@ export function BugReportModal({
   onClose: () => void;
 }) {
   const t = useT();
+  useEscapeClose(onClose);
   // 모달은 사용자가 연 뒤에만 그려지므로 여기서 설치 ID 를 만들어도 서버 렌더와 어긋나지 않는다.
   const [installId] = useState(() => getInstallId(browserStorage()));
   const [title, setTitle] = useState("");

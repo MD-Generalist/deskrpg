@@ -169,3 +169,43 @@ test("설문·버그 창의 안내 글자는 흐린 글자색을 쓰지 않는�
   await survey.cleanup();
   await bug.cleanup();
 });
+
+/** 실제 브라우저처럼 body 에서 올라가는 취소 가능한 Esc 하나. jsdom 의 리스너 순서에 기대지 않는다. */
+function pressEscape(consumedAbove = false) {
+  const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  if (consumedAbove) event.preventDefault();
+  act(() => {
+    document.body.dispatchEvent(event);
+  });
+  return event;
+}
+
+test("버그 신고 창은 Esc 로 닫히고 그 Esc 를 소비한다, 위 레이어가 소비한 Esc 는 무시한다", async () => {
+  let closed = 0;
+  const m = await mount(<BugReportModal feedbackUrl={null} onClose={() => closed++} />);
+  pressEscape(true);
+  assert.equal(closed, 0);
+  const event = pressEscape();
+  assert.equal(closed, 1);
+  assert.equal(event.defaultPrevented, true);
+  await m.cleanup();
+});
+
+test("설문 창의 Esc 는 '나중에' 와 같다 — 다시 묻지 않음으로 기록하지 않는다", async () => {
+  const outcomes: string[] = [];
+  const m = await mount(
+    <SurveyModal
+      survey={FALLBACK_SURVEY}
+      locale="ko"
+      feedbackUrl="https://fb.test"
+      consentNeeded={false}
+      onDone={(o) => outcomes.push(o)}
+    />,
+  );
+  pressEscape(true);
+  assert.deepEqual(outcomes, []);
+  const event = pressEscape();
+  assert.deepEqual(outcomes, ["later"]);
+  assert.equal(event.defaultPrevented, true);
+  await m.cleanup();
+});

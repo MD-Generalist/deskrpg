@@ -8,6 +8,7 @@ import { useT } from "@/lib/i18n";
 import { getInstallId, postFeedback, promptFor, type SurveySet } from "./feedback-client";
 import { browserStorage } from "./growth-storage";
 import type { SurveyOutcome } from "./survey-schedule";
+import { useEscapeClose } from "./use-escape-close";
 
 export function SurveyModal({
   survey,
@@ -23,6 +24,8 @@ export function SurveyModal({
   onDone: (outcome: SurveyOutcome) => void;
 }) {
   const t = useT();
+  // Esc 는 "나중에" 와 같다. 다시 묻지 않음은 사용자가 버튼으로만 고른다.
+  useEscapeClose(() => onDone("later"));
   // 모달은 사용자가 연 뒤에만 그려지므로 여기서 설치 ID 를 만들어도 서버 렌더와 어긋나지 않는다.
   const [installId] = useState(() => getInstallId(browserStorage()));
   const [answers, setAnswers] = useState<Record<string, number | string>>({});

@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { REPO_URL } from "@/lib/app-meta";
 import { useT } from "@/lib/i18n";
 
+import { useEscapeClose } from "./use-escape-close";
 const UPDATE_COMMANDS: { key: string; command: string }[] = [
   { key: "growth.updateNpm", command: "npx deskrpg@latest start" },
   { key: "growth.updateDocker", command: "docker compose pull && docker compose up -d" },
@@ -23,6 +24,7 @@ export function UpdateNoticeModal({
   onClose: () => void;
 }) {
   const t = useT();
+  useEscapeClose(onClose);
   useEffect(() => {
     onSeen();
   }, [onSeen]);
