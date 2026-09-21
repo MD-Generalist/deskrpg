@@ -9,6 +9,7 @@ import type { OfficeSimulation } from "@/game/simulation/office-simulation";
 import { useLocale, useT } from "@/lib/i18n";
 import { insideMeetingSpace } from "@/game/meeting-space";
 import type { MeetingSpeaker } from "@/game/three/meeting-camera";
+import { loadMeetingCameraPrefs, type MeetingCameraPrefs } from "@/lib/meeting-camera-prefs";
 import type { Socket } from "socket.io-client";
 import "@/game/three/office.css";
 
@@ -130,7 +131,10 @@ export default function ThreeGame(props: ThreeGameProps) {
     };
     view.configureMeetingCamera({
       reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+      ...loadMeetingCameraPrefs(),
     });
+    // 보기 설정에서 바꾸면 저장 버튼 없이 바로 반영한다(보는 사람마다의 설정).
+    const meetingCameraPrefs = (prefs: MeetingCameraPrefs) => view.configureMeetingCamera(prefs);
     const enterMeeting = () => {
       view.setMeetingViewport(0);
       EventBus.emit("meeting:presentation-result", { ok: view.enterMeeting() });
@@ -156,6 +160,7 @@ export default function ThreeGame(props: ThreeGameProps) {
     EventBus.on("meeting:presentation-exit", exitMeeting);
     EventBus.on("meeting:speaker", meetingSpeaker);
     EventBus.on("meeting:entry-state", meetingEntryState);
+    EventBus.on("view:meeting-camera-prefs", meetingCameraPrefs);
     EventBus.on("three:bridge-ready", ready);
     EventBus.on("chat:bubble", speech);
     // Mount ordering: the simulation starts asynchronously, but this also handles a later renderer mount.
@@ -168,6 +173,7 @@ export default function ThreeGame(props: ThreeGameProps) {
       EventBus.off("meeting:presentation-exit", exitMeeting);
       EventBus.off("meeting:speaker", meetingSpeaker);
       EventBus.off("meeting:entry-state", meetingEntryState);
+      EventBus.off("view:meeting-camera-prefs", meetingCameraPrefs);
       window.clearInterval(checkInside);
       expectedExit = true;
       view.dispose();

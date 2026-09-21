@@ -1,6 +1,11 @@
 import * as T from "three";
 import type { MeetingSpace } from "../meeting-space";
 import type { ActorSnapshot } from "./bridge";
+import {
+  DEFAULT_MEETING_CAMERA_PREFS,
+  type MeetingSpeakerFraming,
+} from "../../lib/meeting-camera-prefs";
+export type { MeetingSpeakerFraming };
 export type MeetingSpeaker = {
   kind: "user" | "npc";
   id: string;
@@ -17,16 +22,6 @@ export type MeetingCameraControls = {
   mouseButtons: { LEFT?: T.MOUSE | null; MIDDLE?: T.MOUSE | null; RIGHT?: T.MOUSE | null };
   touches: { ONE?: T.TOUCH | null; TWO?: T.TOUCH | null };
 };
-/**
- * How tightly a speaker is framed. `table` keeps the whole table in view but turns to face the
- * speaker; the other two close in on the speaker alone.
- */
-export type MeetingSpeakerFraming = "upperBody" | "fullBody" | "table";
-export const MEETING_SPEAKER_FRAMINGS: readonly MeetingSpeakerFraming[] = [
-  "upperBody",
-  "fullBody",
-  "table",
-];
 export type MeetingCameraOptions = {
   reducedMotion?: boolean;
   roomTransitionSeconds?: number;
@@ -39,13 +34,11 @@ export type MeetingCameraOptions = {
   /** After speech ends, wait this long for the next speaker before returning to the table. */
   holdAfterSpeechSeconds?: number;
 };
+/** Viewer preferences come from `meeting-camera-prefs` (the single source); timings are ours. */
 export const MEETING_CAMERA_DEFAULTS = {
   roomTransitionSeconds: 1.0,
   speakerTransitionSeconds: 0.9,
-  speakerFraming: "upperBody" as MeetingSpeakerFraming,
-  directHandoff: true,
-  minSpeakerDwellSeconds: 1.5,
-  holdAfterSpeechSeconds: 1.2,
+  ...DEFAULT_MEETING_CAMERA_PREFS,
 };
 
 // Elevation above the horizon. The table view sits beside the table rather than above the room;

@@ -31,6 +31,7 @@ import {
   ChevronDown,
   UserMinus,
   Settings,
+  Eye,
   LogOut,
   Pencil,
   Users,
@@ -82,6 +83,7 @@ import { createAvatarLookup } from "./avatar-lookup";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
+import ViewSettingsModal from "@/components/ViewSettingsModal";
 import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
 import { CRON_SOCKET_EVENT } from "@/components/cron/CronPanel";
 import type { PanelBadgeCounts } from "@/components/ChatPanel";
@@ -407,6 +409,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
+  const [showViewSettings, setShowViewSettings] = useState(false);
   const returnToKanbanRef = useRef(false);
   const [channelSettingsInitialTab, setChannelSettingsInitialTab] = useState<
     "settings" | "members" | "gateway"
@@ -2963,6 +2966,18 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                     {t("game.settings")}
                   </button>
                 )}
+                {/* 보기 설정은 누구나 — 이 브라우저에만 적용되는 개인 설정이다. */}
+                <button
+                  data-menu-item="view-settings"
+                  onClick={() => {
+                    setShowViewSettings(true);
+                    setShowUserMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-text flex items-center gap-2"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  {t("viewSettings.menu")}
+                </button>
 
                 {/* Notifications section */}
                 <div className="border-t border-border my-1" />
@@ -3323,6 +3338,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         />
       )}
 
+      {showViewSettings && <ViewSettingsModal onClose={() => setShowViewSettings(false)} />}
       {showChannelSettings && channel && (
         <ChannelSettingsModal
           channelId={channel.id}
