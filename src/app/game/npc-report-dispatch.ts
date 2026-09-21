@@ -51,6 +51,8 @@ export type ReportAttempt = {
   messageId: string;
   outcome: "sent" | "rejected";
   signature: string;
+  /** 보낸 호출로 직원이 실제로 내 것이 된 적이 있는가. 그 뒤에 잃어야 "빼앗겼다" 로 본다. */
+  acquired?: boolean;
 };
 
 /**
@@ -63,9 +65,50 @@ export function npcSignature(
   phase: string | undefined,
   ownerSocketId: string | undefined,
   mySocketId: string | undefined,
+  /**
+   * 자기 자리(home)에 있는가. 회의 전후로 직원은 **같은 모양으로 돌아온다** — 회의석에 앉은
+   * 직원도, 자리로 돌아온 직원도 `idle` · 주인 없음이다. 이것이 없으면 회의가 끝나는 순간
+   * 낡은 화면 상태로 거절된 호출이, 복귀가 끝난 뒤에도 "달라진 것이 없다" 로 보여 영영
+   * 재시도되지 않는다(스테이징 실측: 회의를 마치고 나와도 보고하러 오지 않았다).
+   */
+  atHome: boolean,
 ): string {
   const owner = !ownerSocketId ? "none" : ownerSocketId === mySocketId ? "mine" : "other";
-  return `${phase ?? "unknown"}:${owner}`;
+  return `${phase ?? "unknown"}:${owner}:${atHome ? "home" : "away"}`;
+}
+
+/** 서명에서 "주인이 나인가" 부분만 읽는다. `npcSignature` 와 같은 파일에 두어 형식이 갈리지 않게 한다. */
+function signatureOwner(signature: string): string {
+  return signature.split(":")[1] ?? "none";
+}
+
+/**
+ * 보낸 호출의 결과를 직원 상태로 정리한다.
+ *
+ * "보냄" 은 보고가 확인돼 큐에서 빠질 때만 풀렸다. 그래서 내 호출로 오던 직원을 회의가
+ * 데려가면 그 보고는 영영 "보냄" 으로 남아, 회의가 끝나도 다시 부르지 않았다. 이제 직원이
+ * 한 번 내 것이 된 뒤 **내 것이 아니게 되면** 그 시도를 그 순간의 서명으로 거절 처리한다 —
+ * 상태가 다시 바뀌면(예: 집에 돌아오면) 후보가 된다.
+ *
+ * 내 것이 되기 전에는 건드리지 않는다. 호출을 막 보냈을 때는 스냅샷이 아직 옛 상태라
+ * "내 것이 아니다" 로 보이는데, 그것을 잃은 것으로 보면 방금 보낸 호출을 스스로 취소한다.
+ */
+export function reconcileReportAttempts(
+  attempts: readonly ReportAttempt[],
+  signatures: Readonly<Record<string, string>>,
+  queue: readonly ReportItem[],
+): ReportAttempt[] {
+  return attempts.map((attempt) => {
+    if (attempt.outcome !== "sent") return attempt;
+    const npcId = queue.find((item) => item.messageId === attempt.messageId)?.npcId;
+    if (!npcId) return attempt;
+    const signature = signatures[npcId];
+    if (!signature) return attempt;
+    const mine = signatureOwner(signature) === "mine";
+    if (mine) return attempt.acquired ? attempt : { ...attempt, acquired: true };
+    if (!attempt.acquired) return attempt;
+    return { messageId: attempt.messageId, outcome: "rejected", signature };
+  });
 }
 
 /**
@@ -103,7 +146,7 @@ export function decideReportCall(input: {
     // 결과를 기다리는 중이면 다시 쏘지 않는다.
     if (attempt.outcome === "sent") return false;
     // 거절 — 그 직원의 상태가 바뀌었을 때만 다시 후보가 된다.
-    return (input.signatures[item.npcId] ?? "unknown:none") !== attempt.signature;
+    return (input.signatures[item.npcId] ?? "unknown:none:away") !== attempt.signature;
   };
   const active = nextReporter(input.queue, input.activeNpcId);
   // 보고 중인 직원이 있으면 그 사람이 우선이다.

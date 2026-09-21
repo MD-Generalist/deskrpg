@@ -49,6 +49,7 @@ import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
 import {
   acknowledgedThrough,
   decideReportCall,
+  reconcileReportAttempts,
   reportCallBlocked,
   reportAckKey,
   reportsForChannel,
@@ -2163,13 +2164,22 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     const out: Record<string, string> = {};
     for (const npc of rosterNpcs) {
       const motion = npcMotionUi(snapshot, npc.id, npcMoveStates[npc.id], npcCallers[npc.id]);
-      out[npc.id] = npcSignature(motion.phase, motion.caller, socket?.id);
+      const entry = snapshot?.npcs.find((candidate) => candidate.npcId === npc.id);
+      const atHome = !entry || Math.hypot(entry.x - entry.homeX, entry.y - entry.homeY) <= 2;
+      out[npc.id] = npcSignature(motion.phase, motion.caller, socket?.id, atHome);
     }
     return out;
   }, [rosterNpcs, npcMoveStates, npcCallers, socket?.id]);
 
   useEffect(() => {
     if (!socket || !channelId) return;
+    // 내 호출로 오던 직원을 누가 데려갔으면(회의 등) 그 "보냄" 을 거절로 정리한다 — 안 그러면
+    // 보고가 확인될 때까지 영영 다시 부르지 않는다.
+    reportAttemptsRef.current = reconcileReportAttempts(
+      reportAttemptsRef.current,
+      reportSignatures,
+      reportQueue,
+    );
     const next = decideReportCall({
       queue: reportQueue,
       activeNpcId: reportingNpcId,

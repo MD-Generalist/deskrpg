@@ -9,9 +9,12 @@ import {
   acknowledgedThrough,
   decideReportCall,
   reportAckKey,
+  npcSignature,
+  reconcileReportAttempts,
   reportCallBlocked,
   reportsForChannel,
   reportTarget,
+  type ReportAttempt,
 } from "./npc-report-dispatch";
 
 const item = (messageId: string, npcId: string, createdAt: string): ReportItem => ({
@@ -361,3 +364,70 @@ test("회의 중에 막힌 보고는 큐에 남아 회의실을 나오면 다시
   });
   assert.equal(after?.messageId, "m1", "회의가 끝났는데 보고가 사라졌다");
 });
+
+// ---------------------------------------------------------------------------
+// 회의가 끝나고 돌아와도 보고하러 오지 않던 두 경로.
+//
+// 재시도는 "직원 상태가 거절 당시와 달라졌다" 로만 일어난다. 그런데 회의 전후로 직원의
+// 상태는 **같은 모양으로 돌아온다** — 회의석에 앉은 직원도, 자리로 돌아온 직원도
+// `idle` · 주인 없음이다. 그래서 상태가 한 바퀴 돌아도 "달라졌다" 가 보이지 않았다.
+// ---------------------------------------------------------------------------
+
+test("서명은 자기 자리에 있는지를 가른다 — 회의석의 idle 과 집의 idle 은 다르다", () => {
+  assert.notEqual(
+    npcSignature("idle", undefined, "me", false),
+    npcSignature("idle", undefined, "me", true),
+    "회의석과 집을 같은 상태로 본다 — 복귀가 끝나도 재시도가 일어나지 않는다",
+  );
+});
+
+test("경로 2 — 회의가 끝나는 순간 낡은 상태로 거절된 호출도, 집에 돌아오면 다시 부른다", () => {
+  const queue = [item("m1", "n1", "2026-09-21T10:00:00.000Z")];
+  // 회의실을 나온 직후: 화면은 아직 "회의석에 앉은 idle" 인데 서버는 이미 복귀를 시작해
+  // `meeting_reserved` 로 거절했다. 기록되는 서명은 화면이 본 회의석 상태다.
+  const atMeetingSeat = npcSignature("idle", undefined, "me", false);
+  const attempts = [{ messageId: "m1", outcome: "rejected" as const, signature: atMeetingSeat }];
+  const home = npcSignature("idle", undefined, "me", true);
+  const next = decideReportCall({
+    queue,
+    activeNpcId: null,
+    attempts,
+    signatures: { n1: home },
+    blocked: false,
+  });
+  assert.equal(next?.messageId, "m1", "집에 돌아왔는데 다시 부르지 않는다");
+});
+
+test("경로 1 — 내 호출로 오던 직원을 누가 가져가면, 보낸 시도를 거절로 바꿔 다시 부를 수 있게 한다", () => {
+  const sentAt = npcSignature("idle", undefined, "me", true);
+  let attempts: ReportAttempt[] = [{ messageId: "m1", outcome: "sent", signature: sentAt }];
+
+  // 아직 내 것이 되기 전(스냅샷이 오기 전)에는 건드리지 않는다 — 방금 보낸 호출을 잃은 것으로 보면 안 된다.
+  attempts = reconcileReportAttempts(attempts, { n1: sentAt }, queueOf("m1", "n1"));
+  assert.equal(attempts[0].outcome, "sent");
+
+  // 내 호출로 걸어오는 중.
+  const mine = npcSignature("moving-to-player", "me", "me", false);
+  attempts = reconcileReportAttempts(attempts, { n1: mine }, queueOf("m1", "n1"));
+  assert.equal(attempts[0].outcome, "sent");
+
+  // 회의가 데려갔다 — 더 이상 내 것이 아니다.
+  const taken = npcSignature("moving-to-player", "leader", "me", false);
+  attempts = reconcileReportAttempts(attempts, { n1: taken }, queueOf("m1", "n1"));
+  assert.equal(attempts[0].outcome, "rejected", "빼앗긴 호출이 영영 '보냄' 으로 남는다");
+  assert.equal(attempts[0].signature, taken);
+
+  // 회의가 끝나 집에 돌아오면 다시 후보가 된다.
+  const next = decideReportCall({
+    queue: queueOf("m1", "n1"),
+    activeNpcId: null,
+    attempts,
+    signatures: { n1: npcSignature("idle", undefined, "me", true) },
+    blocked: false,
+  });
+  assert.equal(next?.messageId, "m1");
+});
+
+function queueOf(messageId: string, npcId: string) {
+  return [item(messageId, npcId, "2026-09-21T10:00:00.000Z")];
+}
