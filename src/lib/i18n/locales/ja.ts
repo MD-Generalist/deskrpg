@@ -1817,6 +1817,7 @@ const ja: Record<string, string> = {
     "このブラウザにのみ適用されます。変更はすぐに反映され、自動で保存されます。",
   "viewSettings.meetingCamera": "会議カメラ",
   "viewSettings.speakerFraming": "発言者のアップ",
+  "viewSettings.framing.face": "顔アップ",
   "viewSettings.framing.upperBody": "上半身",
   "viewSettings.framing.fullBody": "全身",
   "viewSettings.framing.table": "テーブル全体",

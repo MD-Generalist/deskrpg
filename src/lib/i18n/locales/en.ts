@@ -1802,6 +1802,7 @@ const en: Record<string, string> = {
     "Applies to this browser only. Changes take effect immediately and are saved automatically.",
   "viewSettings.meetingCamera": "Meeting camera",
   "viewSettings.speakerFraming": "Speaker close-up",
+  "viewSettings.framing.face": "Close-up",
   "viewSettings.framing.upperBody": "Upper body",
   "viewSettings.framing.fullBody": "Full body",
   "viewSettings.framing.table": "Whole table",

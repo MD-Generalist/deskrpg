@@ -55,6 +55,8 @@ const FIT_MARGIN = 0.08;
 const MIN_SPEAKER_DISTANCE = 2.2;
 /** 상반신 구도가 담는 몸의 위쪽 비율과 머리 위 여유(칸). */
 const UPPER_BODY_SHARE = 0.5;
+/** 가슴 위: 머리부터 몸 높이의 이 비율까지. 옆 사람이 걸리면 상반신도 여기까지 당긴다. */
+const BUST_SHARE = 0.3;
 const HEADROOM = 0.1;
 // A speaker shot may stand just past a wall (faded) but not deep in the next room.
 const ROOM_REACH = 1.5;
@@ -456,8 +458,19 @@ export class MeetingCamera {
             max: new T.Vector3(x + 0.6, head, z + 0.6),
           };
         })();
+    const angle = new T.Spherical(1, Math.PI / 2 - SPEAKER_ELEVATION, heading);
+    if (framing === "face") return this.speakerFit(body, BUST_SHARE, angle);
+    if (framing === "fullBody") return this.speakerFit(body, 1, angle);
+    // 상반신. 좌석이 붙어 있으면 16:9 화면 옆으로 옆자리 사람이 들어와 투샷이 된다(스테이징 실측).
+    // 그럴 때만 가슴 위까지 당겨 발언자를 주인공으로 둔다. 옆이 비어 있으면 상반신 그대로다.
+    const upper = this.speakerFit(body, UPPER_BODY_SHARE, angle);
+    return this.neighborInFrame(actor, upper) ? this.speakerFit(body, BUST_SHARE, angle) : upper;
+  }
+
+  /** 몸 상자의 위쪽 `share` 만큼(머리 여유 포함)을 가운데 두고 담는다. */
+  private speakerFit(body: Box, share: number, angle: T.Spherical) {
     const height = body.max.y - body.min.y;
-    const bottom = framing === "upperBody" ? body.max.y - height * UPPER_BODY_SHARE : body.min.y;
+    const bottom = body.max.y - height * share;
     const cx = (body.min.x + body.max.x) / 2;
     const cz = (body.min.z + body.max.z) / 2;
     const half = Math.max(0.35, (body.max.x - body.min.x) / 2, (body.max.z - body.min.z) / 2);
@@ -467,14 +480,52 @@ export class MeetingCamera {
     };
     // Centre the speaker. An earlier version leaned the aim toward the table for an
     // over-the-shoulder feel; on the real map that pushed the speaker off the edge of the frame.
-    const framed = this.centeredFit(
-      box,
-      box.min.clone().add(box.max).multiplyScalar(0.5),
-      new T.Spherical(1, Math.PI / 2 - SPEAKER_ELEVATION, heading),
-    );
+    const framed = this.centeredFit(box, box.min.clone().add(box.max).multiplyScalar(0.5), angle);
     framed.orbit.radius = Math.max(MIN_SPEAKER_DISTANCE, framed.orbit.radius);
     this.keepNearRoom(box, framed.target, framed.orbit);
     return framed;
+  }
+
+  /** 발언자가 아닌 참가자의 머리가 이 구도의 화면 안(카메라 앞)에 들어오는가. */
+  private neighborInFrame(
+    speaker: ActorSnapshot,
+    framed: { target: T.Vector3; orbit: T.Spherical },
+  ) {
+    const cam = this.placeScratch(framed.target, framed.orbit);
+    const usable = (this.width - this.right) / this.width;
+    const forward = cam.getWorldDirection(new T.Vector3());
+    for (const other of this.lastActors) {
+      if (other === speaker || !this.inRoom(other)) continue;
+      const head = this.headOf(other);
+      if (head.clone().sub(cam.position).dot(forward) <= 0) continue;
+      const p = head.project(cam);
+      const x = (p.x + 1) / 2 / usable;
+      const y = (1 - p.y) / 2;
+      if (x > 0 && x < 1 && y > 0 && y < 1) return true;
+    }
+    return false;
+  }
+
+  private headOf(actor: ActorSnapshot): T.Vector3 {
+    const shown = this.presenter?.(actor) ?? null;
+    if (shown) {
+      const b = shown.box;
+      return new T.Vector3((b.min.x + b.max.x) / 2, b.max.y - 0.15, (b.min.z + b.max.z) / 2);
+    }
+    const seat = this.seatOf(actor);
+    return new T.Vector3(
+      seat?.x ?? actor.x / 32,
+      (seat ? SEATED_HEAD : STANDING_HEAD) - 0.15,
+      seat?.z ?? actor.y / 32,
+    );
+  }
+
+  private inRoom(actor: ActorSnapshot) {
+    const b = this.space?.bounds;
+    if (!b) return false;
+    const x = actor.x / 32;
+    const z = actor.y / 32;
+    return x >= b.x && x <= b.x + b.width && z >= b.y && z <= b.y + b.height;
   }
 
   /**

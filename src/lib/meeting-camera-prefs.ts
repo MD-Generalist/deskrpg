@@ -6,9 +6,12 @@
  * 방송하므로 사람마다 다르면 누가 구동하느냐에 따라 모두가 보는 속도가 바뀐다.
  */
 
-/** 발언자를 얼마나 당길까. `table` 은 테이블 전체를 담은 채 발언자 쪽으로만 돈다. */
-export type MeetingSpeakerFraming = "upperBody" | "fullBody" | "table";
+/**
+ * 발언자를 얼마나 당길까. `face` 는 가슴 위, `upperBody` 는 상반신이되 옆자리 사람이 화면에 걸리면
+ * 가슴 위까지 당긴다. `table` 은 테이블 전체를 담은 채 발언자 쪽으로만 돈다. */
+export type MeetingSpeakerFraming = "face" | "upperBody" | "fullBody" | "table";
 export const MEETING_SPEAKER_FRAMINGS: readonly MeetingSpeakerFraming[] = [
+  "face",
   "upperBody",
   "fullBody",
   "table",

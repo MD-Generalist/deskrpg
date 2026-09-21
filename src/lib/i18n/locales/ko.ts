@@ -1800,6 +1800,7 @@ const ko: Record<string, string> = {
   "viewSettings.localOnly": "이 브라우저에만 적용됩니다. 바꾸면 바로 반영되고 자동으로 저장됩니다.",
   "viewSettings.meetingCamera": "회의 카메라",
   "viewSettings.speakerFraming": "발언자 확대",
+  "viewSettings.framing.face": "얼굴 가까이",
   "viewSettings.framing.upperBody": "상반신",
   "viewSettings.framing.fullBody": "전신",
   "viewSettings.framing.table": "테이블 전체",

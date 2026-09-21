@@ -1753,6 +1753,7 @@ const zh: Record<string, string> = {
   "viewSettings.localOnly": "仅适用于此浏览器。更改会立即生效并自动保存。",
   "viewSettings.meetingCamera": "会议镜头",
   "viewSettings.speakerFraming": "发言人特写",
+  "viewSettings.framing.face": "面部特写",
   "viewSettings.framing.upperBody": "上半身",
   "viewSettings.framing.fullBody": "全身",
   "viewSettings.framing.table": "整张桌子",

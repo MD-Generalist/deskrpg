@@ -472,9 +472,9 @@ test("위를 보는 발언자는 반대편(−z)에서 잡는다", () => {
   assert.ok(camera.position.z < 9, `카메라 z ${camera.position.z} — 얼굴 쪽이 아닙니다`);
 });
 
-test("발언자 확대 정도: 상반신 < 전신 < 테이블 전체", () => {
+test("발언자 확대 정도: 얼굴 가까이 < 상반신 < 전신 < 테이블 전체", () => {
   const distances: number[] = [];
-  for (const speakerFraming of ["upperBody", "fullBody", "table"] as const) {
+  for (const speakerFraming of ["face", "upperBody", "fullBody", "table"] as const) {
     const { camera, controls, meeting } = setup();
     meeting.configure({ speakerFraming });
     meeting.enter(space);
@@ -483,7 +483,45 @@ test("발언자 확대 정도: 상반신 < 전신 < 테이블 전체", () => {
     meeting.update(1, actors);
     distances.push(camera.position.distanceTo(controls.target));
   }
-  assert.ok(distances[0] < distances[1] && distances[1] < distances[2], distances.join(" < "));
+  assert.ok(
+    distances[0] < distances[1] && distances[1] < distances[2] && distances[2] < distances[3],
+    distances.join(" < "),
+  );
+});
+
+function speakerDistance(
+  list: ActorSnapshot[],
+  speakerFraming: "face" | "upperBody" = "upperBody",
+) {
+  const { camera, controls, meeting } = setup();
+  meeting.configure({ speakerFraming });
+  meeting.enter(space);
+  meeting.update(1, list);
+  meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
+  meeting.update(1, list);
+  return { camera, distance: camera.position.distanceTo(controls.target) };
+}
+
+test("상반신 구도에 옆자리 사람이 들어오면 가슴 위까지 당기고, 옆이 비면 상반신 그대로다", () => {
+  // 스테이징 실측: 붙은 좌석에서 발언자와 옆 사람이 투샷으로 잡혔다.
+  const neighbor: ActorSnapshot = {
+    id: "neighbor",
+    kind: "npc",
+    name: "Next",
+    x: 17 * 32,
+    y: 9 * 32,
+    direction: "down",
+    walking: false,
+  };
+  const alone = speakerDistance(actors).distance;
+  const beside = speakerDistance([...actors, neighbor]);
+  const bust = speakerDistance(actors, "face").distance;
+  assert.ok(beside.distance < alone - 0.1, `옆자리 ${beside.distance} vs 단독 ${alone}`);
+  assert.ok(Math.abs(beside.distance - bust) < 1e-6, "옆자리가 있으면 가슴 위 구도와 같다");
+  assertVisible(beside.camera, new T.Vector3(16, 2.9, 9), 1200, 350, "발언자 머리");
+  // 방 밖(유리벽 너머)에 있는 사람은 옆자리가 아니다.
+  const outside = { ...neighbor, x: 40 * 32 };
+  assert.ok(Math.abs(speakerDistance([...actors, outside]).distance - alone) < 1e-6);
 });
 
 test("발언 중 '테이블 전체' 설정은 참가자를 모두 담은 채 발언자 쪽으로 돈다", () => {

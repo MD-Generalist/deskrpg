@@ -29,7 +29,7 @@ test("기본값은 단테 결정 그대로다 — 상반신·직행·체류 1.5�
 
 test("저장된 값을 믿지 않는다 — 틀린 항목만 기본값으로 떨어지고 나머지는 산다", () => {
   const prefs = normalizeMeetingCameraPrefs({
-    speakerFraming: "face",
+    speakerFraming: "portrait",
     directHandoff: "yes",
     minSpeakerDwellSeconds: 99,
     holdAfterSpeechSeconds: 0.73,
@@ -40,6 +40,18 @@ test("저장된 값을 믿지 않는다 — 틀린 항목만 기본값으로 떨
   assert.equal(prefs.holdAfterSpeechSeconds, 0.7, "0.1초 단위로 맞춘다");
   assert.deepEqual(normalizeMeetingCameraPrefs("garbage"), DEFAULT_MEETING_CAMERA_PREFS);
   assert.deepEqual(normalizeMeetingCameraPrefs(null), DEFAULT_MEETING_CAMERA_PREFS);
+});
+
+test("'얼굴 가까이' 단계를 더해도 이전 버전이 저장한 값은 그대로 읽힌다", () => {
+  const stored = {
+    speakerFraming: "fullBody",
+    directHandoff: false,
+    minSpeakerDwellSeconds: 2,
+    holdAfterSpeechSeconds: 1,
+  };
+  const store = memory({ [MEETING_CAMERA_PREFS_KEY]: JSON.stringify(stored) });
+  assert.deepEqual(loadMeetingCameraPrefs(store), stored);
+  assert.equal(normalizeMeetingCameraPrefs({ speakerFraming: "face" }).speakerFraming, "face");
 });
 
 test("저장하고 다시 읽으면 같은 값이다", () => {
