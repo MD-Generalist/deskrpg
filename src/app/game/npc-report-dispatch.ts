@@ -46,8 +46,8 @@ export function reportTarget(
  *
  * - `sent` — 쏘았고 아직 거절을 받지 않았다. 같은 보고를 두 번 쏘는 것을 막는 낙관적 표시다.
  * - `rejected` — 거절됐다. 그 직원의 상태가 **그대로인 동안은** 다시 쏘지 않는다.
- * - `dismissed` — 직원이 와서 대화창까지 열렸는데 사용자가 확인하지 않고 닫았다. 이 보고는
- *   이 세션에서 다시 부르지 않는다. 확인과 달리 배지에 남아 사용자가 직접 열 수 있다.
+ * - `dismissed` — 직원이 와서 대화창까지 열렸는데 사용자가 확인하지 않고 닫았다. 한동안
+ *   다시 부르지 않는다(`reviveDismissedReports` 가 되살린다). 배지와 보고 목록에는 남는다.
  */
 export type ReportAttempt = {
   messageId: string;
@@ -57,7 +57,12 @@ export type ReportAttempt = {
   acquired?: boolean;
   /** 도착 신호를 놓쳐 이쪽에서 대화창을 대신 열었는가. 한 번만 연다. */
   opened?: boolean;
+  /** `dismissed` 가 된 시각(ms). 되살릴 때를 가른다. */
+  dismissedAt?: number;
 };
+
+/** 접힌 보고가 저절로 다시 후보가 되기까지의 시간(단테 결정 2026-09-21: 약 10분). */
+export const DISMISSED_REPORT_REVIVE_MS = 10 * 60 * 1000;
 
 /**
  * 재시도 신호가 되는 직원 상태. 모션 스냅샷의 `phase` 와 "주인이 나인가" 를 합친다.
@@ -215,11 +220,44 @@ export function missedReportArrival(input: {
 export function dismissReport(
   attempts: readonly ReportAttempt[],
   messageId: string,
+  now: number,
 ): ReportAttempt[] {
   return [
     ...attempts.filter((attempt) => attempt.messageId !== messageId),
-    { messageId, outcome: "dismissed", signature: "" },
+    { messageId, outcome: "dismissed", signature: "", dismissedAt: now },
   ];
+}
+
+/**
+ * 접힌 보고를 다시 후보로 되돌린다 — 접은 뒤 **다른 보고를 확인했거나** 약 10분이 지났으면.
+ * 영구히 접어 두면 배지에는 남았는데 아무도 오지 않는 상태가 세션 끝까지 간다(…75v1A).
+ * 되돌린다는 것은 시도 기록을 지우는 것이다 — 기록이 없는 보고는 `decideReportCall` 의 후보다.
+ */
+export function reviveDismissedReports(
+  attempts: readonly ReportAttempt[],
+  now: number,
+  lastAcknowledgedAt: number | null,
+): ReportAttempt[] {
+  const next = attempts.filter((attempt) => {
+    if (attempt.outcome !== "dismissed") return true;
+    const at = attempt.dismissedAt ?? 0;
+    if (now - at >= DISMISSED_REPORT_REVIVE_MS) return false;
+    return !(lastAcknowledgedAt !== null && lastAcknowledgedAt > at);
+  });
+  return next.length === attempts.length ? (attempts as ReportAttempt[]) : next;
+}
+
+/** "다시 부르기" — 그 보고를 즉시 후보로 되돌린다. */
+export function recallReport(
+  attempts: readonly ReportAttempt[],
+  messageId: string,
+): ReportAttempt[] {
+  return attempts.filter((attempt) => attempt.messageId !== messageId);
+}
+
+/** 보고 목록에 "접힘" 과 "다시 부르기" 를 보일 보고들. */
+export function dismissedReportIds(attempts: readonly ReportAttempt[]): Set<string> {
+  return new Set(attempts.filter((a) => a.outcome === "dismissed").map((a) => a.messageId));
 }
 
 /**

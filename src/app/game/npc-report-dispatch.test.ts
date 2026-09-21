@@ -14,6 +14,10 @@ import {
   activeReportReleased,
   decideReportCall,
   dismissReport,
+  dismissedReportIds,
+  DISMISSED_REPORT_REVIVE_MS,
+  recallReport,
+  reviveDismissedReports,
   missedReportArrival,
   reportAckKey,
   npcSignature,
@@ -445,7 +449,7 @@ test("대화창을 확인 없이 닫으면 보고 중인 직원이 큐 전체를
   const next = decideReportCall({
     queue,
     activeMessageId: null,
-    attempts: dismissReport(attempts, "m1"),
+    attempts: dismissReport(attempts, "m1", 0),
     signatures,
     blocked: false,
   });
@@ -457,7 +461,7 @@ test("닫은 보고 한 건만 접는다 — 같은 직원의 다음 보고는 �
     item("m1", "sophie", "2026-09-21T01:00:00Z"),
     item("m2", "sophie", "2026-09-21T02:00:00Z"),
   ];
-  const attempts = dismissReport([sent("m1")], "m1");
+  const attempts = dismissReport([sent("m1")], "m1", 0);
   assert.deepEqual(
     attempts.map((a) => [a.messageId, a.outcome]),
     [["m1", "dismissed"]],
@@ -627,4 +631,44 @@ test("자동 복귀 — 돌아가는 중에 거절된 보고는 집에 닿아 �
     });
   assert.equal(decide("returning:none:away"), null, "아직 돌아가는 중이면 기다린다");
   assert.equal(decide("idle:none:home")?.messageId, "m1");
+});
+
+// …75v1A ③ — 접힌 보고의 자동 재후보(단테 결정: 다른 보고 확인 또는 약 10분).
+
+test("접힌 보고는 약 10분이 지나면 다시 후보가 된다", () => {
+  const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
+  const attempts = dismissReport([], "m1", 1_000);
+  const decide = (a: ReportAttempt[]) =>
+    decideReportCall({ queue, activeMessageId: null, attempts: a, signatures: {}, blocked: false });
+  assert.equal(decide(reviveDismissedReports(attempts, 1_000 + 60_000, null)), null);
+  assert.equal(
+    decide(reviveDismissedReports(attempts, 1_000 + DISMISSED_REPORT_REVIVE_MS, null))?.messageId,
+    "m1",
+  );
+});
+
+test("접힌 뒤 다른 보고를 확인하면 접힌 보고가 다시 후보가 된다 — 접기 전 확인은 세지 않는다", () => {
+  const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
+  const attempts = dismissReport([], "m1", 5_000);
+  assert.deepEqual(reviveDismissedReports(attempts, 6_000, 4_000), attempts);
+  assert.deepEqual(reviveDismissedReports(attempts, 6_000, 5_500), []);
+  assert.equal(
+    decideReportCall({
+      queue,
+      activeMessageId: null,
+      attempts: reviveDismissedReports(attempts, 6_000, 5_500),
+      signatures: {},
+      blocked: false,
+    })?.messageId,
+    "m1",
+  );
+});
+
+test("다시 부르기는 접힌 보고를 즉시 후보로 만든다 — 막힘 규칙은 그대로", () => {
+  const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
+  const attempts = recallReport(dismissReport([], "m1", 0), "m1");
+  assert.equal(dismissedReportIds(attempts).size, 0);
+  const input = { queue, activeMessageId: null, attempts, signatures: {}, blocked: false };
+  assert.equal(decideReportCall(input)?.messageId, "m1");
+  assert.equal(decideReportCall({ ...input, blocked: true }), null);
 });

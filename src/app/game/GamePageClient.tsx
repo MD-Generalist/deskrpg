@@ -56,6 +56,9 @@ import {
   activeReportReleased,
   decideReportCall,
   dismissReport,
+  dismissedReportIds,
+  recallReport,
+  reviveDismissedReports,
   missedReportArrival,
   reconcileReportAttempts,
   reportCallBlocked,
@@ -80,6 +83,7 @@ import {
   keepsPlacementMode,
   placementBroadcastPlan,
 } from "@/game/npc-placement-request";
+import ReportBadge from "@/components/report/ReportBadge";
 import ChatPanel from "@/components/ChatPanel";
 import ConversationPane from "@/components/conversation/ConversationPane";
 import ConversationWorkspace from "@/components/conversation/ConversationWorkspace";
@@ -342,6 +346,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
   // 보고하러 와서 열린 대화창이 맨 위에 보여 줄 보고.
   const [dialogReport, setDialogReport] = useState<ReportItem | null>(null);
+  // 시도 기록(ref)이 바뀐 것을 화면에 알리는 버전, 마지막 확인 시각, 접힌 보고 되살리기용 시계.
+  const [reportAttemptsVersion, setReportAttemptsVersion] = useState(0);
+  const lastReportAckAtRef = useRef<number | null>(null);
+  const [reportClock, setReportClock] = useState(0);
   const reportAttemptsRef = useRef<ReportAttempt[]>([]);
   // 대화 목록에 올라가는 직원별 DM 한 줄. 방과 달리 서버가 밀어 주지 않으므로 필요할 때 묻는다.
   const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
@@ -2143,6 +2151,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     (item: ReportItem) => {
       setReportAck((prev) => {
         const next = acknowledgeReport(prev, item.messageId);
+        lastReportAckAtRef.current = Date.now();
         if (channelId)
           try {
             window.localStorage.setItem(reportAckKey(channelId), serializeReportAck(next));
@@ -2209,6 +2218,16 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     if (!socket || !channelId) return;
     // 내 호출로 오던 직원을 누가 데려갔으면(회의 등) 그 "보냄" 을 거절로 정리한다 — 안 그러면
     // 보고가 확인될 때까지 영영 다시 부르지 않는다.
+    // 접힌 보고는 다른 보고를 확인했거나 약 10분이 지나면 다시 후보가 된다.
+    const revived = reviveDismissedReports(
+      reportAttemptsRef.current,
+      Date.now(),
+      lastReportAckAtRef.current,
+    );
+    if (revived !== reportAttemptsRef.current) {
+      reportAttemptsRef.current = revived;
+      setReportAttemptsVersion((v) => v + 1);
+    }
     reportAttemptsRef.current = reconcileReportAttempts(
       reportAttemptsRef.current,
       reportSignatures,
@@ -2286,6 +2305,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     reportQueue,
     reportingMessageId,
     reportSignatures,
+    reportAttemptsVersion,
+    reportClock,
     dialogNpc,
     showKanban,
     showCron,
@@ -2312,9 +2333,34 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     if (!prev || prev === current) return;
     setDialogReport(null);
     if (!reportingItem || prev !== reportingItem.npcId) return;
-    reportAttemptsRef.current = dismissReport(reportAttemptsRef.current, reportingItem.messageId);
+    reportAttemptsRef.current = dismissReport(
+      reportAttemptsRef.current,
+      reportingItem.messageId,
+      Date.now(),
+    );
+    setReportAttemptsVersion((v) => v + 1);
     setReportingMessageId(null);
   }, [dialogNpc, reportingItem]);
+
+  // 보고 목록의 "접힘" 표시. 시도 기록은 ref 라 바뀔 때 버전을 올려 다시 읽는다.
+  const dismissedReports = useMemo(
+    () => dismissedReportIds(reportAttemptsRef.current),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 버전이 ref 변경을 대신 알린다
+    [reportAttemptsVersion],
+  );
+
+  /** "다시 부르기" — 접힌 보고를 즉시 후보로 되돌린다. 막힘 규칙은 그대로다. */
+  const recallDismissedReport = useCallback((item: ReportItem) => {
+    reportAttemptsRef.current = recallReport(reportAttemptsRef.current, item.messageId);
+    setReportAttemptsVersion((v) => v + 1);
+  }, []);
+
+  // 접힌 보고가 있을 때만 시계를 돌려 시간 경과 되살리기를 판정한다.
+  useEffect(() => {
+    if (dismissedReports.size === 0) return;
+    const timer = window.setInterval(() => setReportClock((c) => c + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, [dismissedReports]);
 
   // 보고가 큐에서 빠지면(확인됨) 다음 보고에 자리를 넘긴다.
   useEffect(() => {
@@ -2329,6 +2375,23 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       for (const item of reportQueue) if (item.jobId === jobId) acknowledgeReports(item);
     },
     [reportQueue, acknowledgeReports],
+  );
+  /** 보고 목록의 "열기" — 그 카드/이력을 열고 **그 보고 한 건만** 확인한다. */
+  const openReport = useCallback(
+    (item: ReportItem) => {
+      const target = reportTarget(item);
+      if (target?.kind === "cron") {
+        setCronInitialJobId(target.jobId);
+        setShowCron(true);
+      } else if (target?.kind === "card") {
+        setKanbanCard((prev) =>
+          openCardTarget({ boardOpen: showKanbanRef.current, taskId: target.cardId, prev }),
+        );
+        setShowKanban(true);
+      }
+      acknowledgeReports(item);
+    },
+    [acknowledgeReports],
   );
   const closeKanban = useCallback(() => {
     setShowKanban(false);
@@ -2928,27 +2991,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 NPC {rosterNpcs.filter((npc) => npc.active).length}
               </span>
             </span>
-            {reportQueue.length > 0 && (
-              <button
-                type="button"
-                data-testid="report-badge"
-                onClick={() => {
-                  const target = reportTarget(reportingItem ?? reportQueue[0]);
-                  if (target?.kind === "cron") openNoticeCronJob(target.jobId);
-                  else if (target?.kind === "card") openNoticeCard(target.cardId);
-                }}
-                className="flex items-center gap-1.5 rounded-md border border-border bg-danger-bg px-2.5 py-1 text-caption font-semibold text-danger hover:bg-surface-raised"
-                title={(reportingItem ?? reportQueue[0]).cardTitle}
-              >
-                <span className="h-2 w-2 rounded-full bg-danger" />
-                <span className="header-full-label">
-                  {t("notice.pendingReports", { count: reportQueue.length })}
-                </span>
-                <span className="header-mobile-label" aria-hidden="true">
-                  {reportQueue.length}
-                </span>
-              </button>
-            )}
+            <ReportBadge
+              queue={reportQueue}
+              current={reportingItem}
+              dismissedIds={dismissedReports}
+              onOpen={openReport}
+              onRecall={recallDismissedReport}
+            />
           </div>
 
           <button
