@@ -171,6 +171,13 @@ export type IngestDeps = {
    * 같은 일을 말하고 있고, 승인 대기는 고장이 아니다. 선택 의존이라 없으면 예전처럼 알린다.
    */
   isAwaitingApproval?(channelId: string, taskId: string): Promise<boolean>;
+  /**
+   * 이 카드가 사람이 승인한 묶음에 **들었던** 카드인가(승인 상태와 무관). 그렇다면 부모가 있어도
+   * 독립 업무로 보고 완료를 알린다 — 회의 후속처럼 "먼저 끝나야 함" 을 부모 링크로 이은 카드다.
+   * 부모 링크는 묶음이 아니라 실행 순서이고, 그것만 보면 이 카드들이 하위 카드로 취급돼 조용해진다.
+   * 스웜·분해 자식은 승인을 거치지 않으므로 여전히 조용하다. 선택 의존이라 없으면 예전처럼 알리지 않는다.
+   */
+  isApprovalBatchCard?(channelId: string, taskId: string): Promise<boolean>;
   findCronOriginChannel(key: {
     gatewayId: string;
     profileName: string;
@@ -433,6 +440,22 @@ async function post(
   deps.emitRoomMessage(roomId, message);
 }
 
+/**
+ * 완료를 알리는가. 하위 카드(부모가 있음)의 완료는 부모가 보고하므로 조용히 둔다 — 스웜이 자식 10장을
+ * 만들면 알림 10개가 뜨는 것을 막으려는 규칙이다. 다만 승인 묶음에 들었던 카드는 부모가 있어도
+ * 사람이 목록으로 본 독립 업무라 알린다.
+ */
+async function announcesDone(
+  channelId: string,
+  taskId: string | null | undefined,
+  p: Partial<TaskStatusEventPayload>,
+  deps: IngestDeps,
+): Promise<boolean> {
+  if ((p.parent_count ?? 0) === 0) return true;
+  if (!taskId || !deps.isApprovalBatchCard) return false;
+  return deps.isApprovalBatchCard(channelId, taskId);
+}
+
 async function postNotice(channelId: string, event: PluginEvent, deps: IngestDeps) {
   if (event.kind === "task.status") {
     const p = event.payload as Partial<TaskStatusEventPayload>;
@@ -443,7 +466,7 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
         ? "card_blocked"
         : p.to === "review"
           ? "card_review"
-          : p.to === "done" && (p.parent_count ?? 0) === 0
+          : p.to === "done" && (await announcesDone(channelId, event.task_id, p, deps))
             ? "card_done"
             : null;
     if (!kind) return;
@@ -556,6 +579,18 @@ export function createLiveIngestDeps(wiring: LiveIngestWiring): IngestDeps {
     boardSlug: wiring.boardSlug,
     emitChannel: wiring.emitChannel,
     emitRoomMessage: wiring.emitRoomMessage,
+
+    async isApprovalBatchCard(channelId, taskId) {
+      // 상태 조건이 없다 — 반려·수정 요청 묶음의 카드가 나중에 손으로 풀려 끝나도 사람이 목록으로
+      // 본 독립 업무라는 점은 같다. (승인 대기의 blocked 를 거르는 isAwaitingApproval 과 같은 표, 다른 조건.)
+      const [row] = await db
+        .select({ id: approvals.id })
+        .from(approvalTargets)
+        .innerJoin(approvals, eq(approvals.id, approvalTargets.approvalId))
+        .where(and(eq(approvals.channelId, channelId), eq(approvalTargets.taskId, taskId)))
+        .limit(1);
+      return Boolean(row);
+    },
 
     async isAwaitingApproval(channelId, taskId) {
       const [row] = await db

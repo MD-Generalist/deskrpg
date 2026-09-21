@@ -185,6 +185,44 @@ test("하위 카드(parent_count > 0)의 done 은 게시하지 않는다", async
   assert.equal(h.posted.length, 0);
 });
 
+test("승인 묶음에 든 카드는 부모가 있어도 done 을 게시한다 — 순서로 이은 독립 업무다", async () => {
+  // 회의 후속 업무는 "먼저 끝나야 함" 을 부모 링크로 옮긴다. 부모 링크는 묶음이 아니라 실행 순서라
+  // 둘째 카드가 하위 카드로 취급돼 끝나도 아무도 보고하지 않았다(스테이징 실측).
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  const asked: string[] = [];
+  await ingest(
+    CHANNEL,
+    [
+      statusEvent({ to: "done", parent_count: 1, task_id: "followup-2" }),
+      statusEvent({ to: "done", parent_count: 1, task_id: "swarm-child" }),
+      statusEvent({ to: "done", parent_count: 0, task_id: "root" }),
+    ],
+    {
+      ...h.deps,
+      isApprovalBatchCard: async (_channelId, taskId) => {
+        asked.push(taskId);
+        return taskId === "followup-2";
+      },
+    },
+  );
+  assert.deepEqual(
+    h.posted.map((p) => [p.notice?.kind, (p.notice as { cardId: string }).cardId]),
+    [
+      ["card_done", "followup-2"],
+      ["card_done", "root"],
+    ],
+  );
+  // 스웜·분해 자식은 승인을 거치지 않으니 조용하다 — 자식 10장이 알림 10개가 되지 않는다.
+  // 부모가 없는 카드는 물어볼 필요가 없다.
+  assert.deepEqual(asked, ["followup-2", "swarm-child"]);
+});
+
+test("승인 묶음 조회가 없으면 부모 있는 done 은 예전처럼 게시하지 않는다", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(CHANNEL, [statusEvent({ to: "done", parent_count: 1 })], h.deps);
+  assert.equal(h.posted.length, 0);
+});
+
 test("blocked 진입은 하위 카드여도 게시한다", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(
