@@ -42,7 +42,7 @@ export default function KanbanColumn({
     >
       <header className="flex items-center justify-between px-2.5 py-2 border-b border-border">
         <span className="text-xs font-bold text-text-secondary">{t(`kanban.column.${name}`)}</span>
-        <span className="rounded-full bg-surface-raised px-1.5 text-[10px] text-text-dim">
+        <span className="rounded-full bg-surface-raised px-1.5 text-[10px] text-text-muted">
           {tasks.length}
         </span>
       </header>
