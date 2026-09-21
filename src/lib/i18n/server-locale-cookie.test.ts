@@ -14,3 +14,8 @@ test("쿠키가 없거나 비면 추측하지 않고 null", () => {
   assert.equal(readLocaleCookie("deskrpg-locale="), null);
   assert.equal(readLocaleCookie("xdeskrpg-locale=ko"), null);
 });
+
+test("깨진 인코딩의 쿠키는 던지지 않고 null 이다 — 쿠키 하나로 소켓 핸들러가 죽지 않는다", () => {
+  assert.equal(readLocaleCookie("deskrpg-locale=%E0%A4%A"), null);
+  assert.equal(readLocaleCookie("deskrpg-locale=%E0%A4%A; token=x"), null);
+});

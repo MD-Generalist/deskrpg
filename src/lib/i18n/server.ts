@@ -29,8 +29,13 @@ export function readLocaleCookie(cookieHeader: string | null | undefined): Serve
   for (const part of cookieHeader.split(";")) {
     const eq = part.indexOf("=");
     if (eq < 0 || part.slice(0, eq).trim() !== LOCALE_COOKIE_NAME) continue;
-    const raw = decodeURIComponent(part.slice(eq + 1).trim());
-    return raw ? normalizeLocale(raw) : null;
+    try {
+      const raw = decodeURIComponent(part.slice(eq + 1).trim());
+      return raw ? normalizeLocale(raw) : null;
+    } catch {
+      // 깨진 퍼센트 인코딩(`%E0%A4%A`)은 URIError 를 던진다 — 쿠키 하나 때문에 소켓 핸들러가 죽지 않게 한다.
+      return null;
+    }
   }
   return null;
 }
