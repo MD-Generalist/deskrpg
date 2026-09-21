@@ -84,6 +84,7 @@ import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
 import { CRON_SOCKET_EVENT } from "@/components/cron/CronPanel";
 import type { PanelBadgeCounts } from "@/components/ChatPanel";
 import { openCardTarget, type OpenCardTarget } from "@/components/kanban/open-card-target";
+import MinutesModal from "@/components/MinutesModal";
 import CronModal from "@/components/cron/CronModal";
 import ArtifactsModal from "@/components/artifacts/ArtifactsModal";
 import type { SourceTarget } from "@/components/artifacts/artifact-view-model";
@@ -267,6 +268,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // 상세를 편다. 누를 당시 보드가 닫혀 있었으면 `initialTaskId`(마운트 때 읽힌다), 열려 있었으면
   // `focusRequest` 의 `seq` 를 올린다(`openCardTarget`).
   const [kanbanCard, setKanbanCard] = useState<OpenCardTarget | null>(null);
+  // 방 알림의 "프로젝트로 등록" — 회의실에 들어가지 않고도 그 회의록(후속 업무 등록 화면)을 연다.
+  const [noticeMinutesId, setNoticeMinutesId] = useState<string | null>(null);
   // 채널 크론 화면(T10, R15). "이력 열기"(R30) 는 그 잡의 실행 이력으로 연다.
   const [showCron, setShowCron] = useState(false);
   const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
@@ -2554,6 +2557,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         cron={channelId ? { channelId, socket, onToast: cronToast } : null}
         onOpenNoticeCard={openNoticeCard}
         onOpenNoticeCronJob={openNoticeCronJob}
+        onOpenNoticeMinutes={setNoticeMinutesId}
         badges={panelBadges}
         onMarkSeen={markPanelTabSeen}
         onOpenAssignedCard={openNoticeCard}
@@ -3202,6 +3206,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         </div>
       )}
 
+      {noticeMinutesId && channelId && (
+        <MinutesModal
+          channelId={channelId}
+          npcs={rosterNpcs.map((npc) => ({ id: npc.id, name: npc.name }))}
+          initialMinutesId={noticeMinutesId}
+          onClose={() => setNoticeMinutesId(null)}
+        />
+      )}
       {showKanban && channelId && (
         <KanbanBoardModal
           channelId={channelId}

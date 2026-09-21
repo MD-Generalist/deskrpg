@@ -2601,6 +2601,12 @@ const en: Record<string, string> = {
   "notice.cardReview": "A card needs your review: {title}",
   "notice.approvalRequested": "Shall we proceed? {title} ({count} task(s))",
   "notice.openApproval": "Open approval",
+  "notice.meetingOutcome": "The meeting “{topic}” produced {count} follow-up task(s).",
+  "notice.meetingOutcome.recommended":
+    "The meeting “{topic}” produced {count} follow-up task(s). Register them as a project?",
+  "notice.meetingOutcome.register": "Register as project",
+  "notice.meetingOutcome.view": "View minutes",
+  "notice.meetingOutcome.registered": "Registered {count} task(s)",
   "attention.title": "Needs you",
   "attention.empty": "Nothing needs your answer right now.",
   "attention.loading": "Loading…",

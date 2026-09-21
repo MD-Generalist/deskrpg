@@ -670,6 +670,7 @@ test("회의가 끝나면 구조화된 결과와 요약 상태가 저장되고 �
     ],
     project: { recommended: true, name: "가격 개편", reason: null },
   };
+  const announced: unknown[] = [];
   registerMeetingDiscussionHandlers({
     io: createFakeIo(calls),
     socket,
@@ -700,11 +701,19 @@ test("회의가 끝나면 구조화된 결과와 요약 상태가 저장되고 �
         persisted = input;
         return "minutes-1";
       },
+      announceOutcome: async (input) => {
+        announced.push(input);
+      },
     },
   });
 
   await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "가격" });
   await callbacks.onMeetingEnd!("전문", 10);
+
+  // 회의실 밖 사람도 알도록 사무실 방 알림을 요청한다 — 저장된 회의록 id 와 같은 결과를 넘긴다.
+  assert.deepEqual(announced, [
+    { channelId: "a", minutesId: "minutes-1", topic: "가격", outcome, summaryStatus: "ok" },
+  ]);
 
   // 담당 후보는 참석 **직원**만이다 — 사람 참석자는 넘기지 않는다.
   assert.equal(Array.isArray(summaryParticipants), true);

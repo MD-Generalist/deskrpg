@@ -2591,6 +2591,12 @@ const ko: Record<string, string> = {
   "notice.cardReview": "확인이 필요합니다: {title}",
   "notice.approvalRequested": "수행할까요? {title} (과업 {count}건)",
   "notice.openApproval": "승인 열기",
+  "notice.meetingOutcome": "회의 「{topic}」에서 후속 업무 {count}건이 나왔습니다.",
+  "notice.meetingOutcome.recommended":
+    "회의 「{topic}」에서 후속 업무 {count}건이 나왔습니다. 프로젝트로 묶어 등록할까요?",
+  "notice.meetingOutcome.register": "프로젝트로 등록",
+  "notice.meetingOutcome.view": "회의록 보기",
+  "notice.meetingOutcome.registered": "과업 {count}건을 등록했습니다",
   "attention.title": "판단 모음",
   "attention.empty": "지금 답할 것이 없습니다.",
   "attention.loading": "불러오는 중…",

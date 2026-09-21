@@ -48,6 +48,7 @@ COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatter.js
 COPY --from=builder /app/src/lib/meeting-discussion-state.ts ./src/lib/meeting-discussion-state.ts
 COPY --from=builder /app/src/lib/meeting-outcome.ts ./src/lib/meeting-outcome.ts
+COPY --from=builder /app/src/lib/meeting-outcome-notice.ts ./src/lib/meeting-outcome-notice.ts
 COPY --from=builder /app/src/lib/meeting-registry.ts ./src/lib/meeting-registry.ts
 COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
 COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js

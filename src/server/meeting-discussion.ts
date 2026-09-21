@@ -189,6 +189,17 @@ type RegisterMeetingDiscussionHandlersArgs = {
     getNpcConfigsForChannel: (channelId: string) => Promise<MeetingNpcConfig[]>;
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
     spatial?: MeetingSpatialCoordinator;
+    /**
+     * 후속 업무가 나온 회의가 끝나면 사무실 방에 알린다. 선택 의존이다 — 주입하지 않으면 알림이 없다
+     * (소켓·DB 없이 도는 회의 테스트가 그대로 돈다). 구현은 던지지 않는다.
+     */
+    announceOutcome?: (input: {
+      channelId: string;
+      minutesId: string | null;
+      topic: string;
+      outcome: MeetingOutcome | null;
+      summaryStatus: MeetingSummaryStatus;
+    }) => Promise<void>;
     canStartMeeting?: (channelId: string, userId: string) => Promise<boolean> | boolean;
     createMeetingBroker?: (
       config: MeetingBrokerConfig,
@@ -773,6 +784,15 @@ export function registerMeetingDiscussionHandlers({
             participantCount: meetingParticipants.length,
             totalTurns: brokerInstance.turns.length,
             durationSeconds,
+          });
+
+          // 회의실 밖 사람도 알 수 있게 사무실 방에 남긴다. 조건(후속 업무 있음·요약 성공)은 구현이 본다.
+          void deps.announceOutcome?.({
+            channelId,
+            minutesId,
+            topic,
+            outcome: summary.outcome ?? null,
+            summaryStatus: summary.status ?? "ok",
           });
 
           activeBrokers.delete(channelId);

@@ -2620,6 +2620,12 @@ const ja: Record<string, string> = {
   "notice.cardReview": "確認が必要です: {title}",
   "notice.approvalRequested": "実行しますか? {title} (タスク {count}件)",
   "notice.openApproval": "承認を開く",
+  "notice.meetingOutcome": "会議「{topic}」からフォローアップ業務が{count}件出ました。",
+  "notice.meetingOutcome.recommended":
+    "会議「{topic}」からフォローアップ業務が{count}件出ました。プロジェクトとして登録しますか？",
+  "notice.meetingOutcome.register": "プロジェクトとして登録",
+  "notice.meetingOutcome.view": "議事録を見る",
+  "notice.meetingOutcome.registered": "タスク{count}件を登録しました",
   "attention.title": "判断待ち",
   "attention.empty": "今すぐ答えるものはありません。",
   "attention.loading": "読み込み中…",

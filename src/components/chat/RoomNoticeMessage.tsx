@@ -48,7 +48,8 @@ export function isKnownNotice(notice: RoomNotice | null | undefined): notice is 
       | "card_review"
       | "approval_requested"
       | "cron_result"
-      | "card_proposal";
+      | "card_proposal"
+      | "meeting_outcome";
   }
 > {
   return (
@@ -58,7 +59,8 @@ export function isKnownNotice(notice: RoomNotice | null | undefined): notice is 
       notice.kind === "card_review" ||
       notice.kind === "approval_requested" ||
       notice.kind === "cron_result" ||
-      notice.kind === "card_proposal")
+      notice.kind === "card_proposal" ||
+      notice.kind === "meeting_outcome")
   );
 }
 
@@ -67,6 +69,8 @@ export interface RoomNoticeMessageProps {
   onOpenCard?: (cardId: string, boardSlug: string) => void;
   onOpenCronJob?: (jobId: string) => void;
   onOpenApproval?: (approvalId: string) => void;
+  /** 회의 결과 알림 — 그 회의의 회의록(후속 업무 등록 화면)을 연다. 없으면 버튼이 없다. */
+  onOpenMinutes?: (minutesId: string) => void;
   /** 제안 알림의 선택. 없으면 제안은 버튼 없이 본문만 보인다(읽기 전용). */
   onResolveProposal?: (proposalId: string, choice: "card" | "inline") => void;
   /** 그 제안이 지금 서버 호출 중인지. */
@@ -80,6 +84,7 @@ export default function RoomNoticeMessage({
   onOpenCard,
   onOpenCronJob,
   onOpenApproval,
+  onOpenMinutes,
   onResolveProposal,
   proposalPending = false,
   proposalError = null,
@@ -150,6 +155,38 @@ export default function RoomNoticeMessage({
               onClick={() => onOpenCronJob(notice.jobId)}
             >
               {t("notice.openHistory")}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (notice.kind === "meeting_outcome") {
+    // 등록되면 같은 줄이 결과를 말한다. 렌더러가 `resolved` 를 읽어서이지 클라이언트가 숨기는 것이 아니다.
+    const registered = notice.resolved;
+    return (
+      <div className="flex justify-start" data-room-notice={notice.kind}>
+        <div className="max-w-[85%] px-3 py-2 rounded-lg text-body bg-surface-raised text-text-secondary border border-border">
+          <div className="break-words">
+            {t(notice.recommended ? "notice.meetingOutcome.recommended" : "notice.meetingOutcome", {
+              topic: notice.topic,
+              count: notice.followUpCount,
+            })}
+          </div>
+          {registered && (
+            <div className="text-caption text-text-muted mt-1" data-meeting-outcome-resolved>
+              {t("notice.meetingOutcome.registered", { count: registered.taskCount })}
+            </div>
+          )}
+          {onOpenMinutes && (
+            <button
+              type="button"
+              data-meeting-outcome-open={registered ? "view" : "register"}
+              className={`${linkClass} mt-1`}
+              onClick={() => onOpenMinutes(notice.minutesId)}
+            >
+              {t(registered ? "notice.meetingOutcome.view" : "notice.meetingOutcome.register")}
             </button>
           )}
         </div>

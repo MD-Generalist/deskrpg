@@ -2517,6 +2517,12 @@ const zh: Record<string, string> = {
   "notice.cardReview": "卡片需要您确认:{title}",
   "notice.approvalRequested": "要执行吗？{title}（{count} 项任务）",
   "notice.openApproval": "打开审批",
+  "notice.meetingOutcome": "会议「{topic}」产生了 {count} 项后续任务。",
+  "notice.meetingOutcome.recommended":
+    "会议「{topic}」产生了 {count} 项后续任务。要作为项目登记吗？",
+  "notice.meetingOutcome.register": "登记为项目",
+  "notice.meetingOutcome.view": "查看会议记录",
+  "notice.meetingOutcome.registered": "已登记 {count} 项任务",
   "attention.title": "待你判断",
   "attention.empty": "目前没有需要你回答的事项。",
   "attention.loading": "加载中…",

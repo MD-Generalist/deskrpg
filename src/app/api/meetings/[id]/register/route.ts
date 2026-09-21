@@ -6,6 +6,7 @@ import { formatRequester } from "@/lib/approval-requester";
 import { createApprovalBatch } from "@/lib/approvals";
 import { getUserId } from "@/lib/internal-rpc";
 import { resolveKanbanChannelContext } from "@/lib/kanban-access";
+import { markMeetingOutcomeNoticeRegistered } from "@/lib/meeting-outcome-notice";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 import { registerMeetingOutcome } from "@/lib/meeting-register";
 import { createSubproject, ensureProjectRow, ProjectRegistryError } from "@/lib/project-registry";
@@ -66,7 +67,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         createBatch: (ctx, input) => createApprovalBatch(ctx, input),
         saveRegistered: async (minutesId, registered) => {
           const [row] = await db
-            .select({ outcomeJson: meetingMinutes.outcomeJson })
+            .select({
+              outcomeJson: meetingMinutes.outcomeJson,
+              channelId: meetingMinutes.channelId,
+            })
             .from(meetingMinutes)
             .where(eq(meetingMinutes.id, minutesId))
             .limit(1);
@@ -76,6 +80,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .update(meetingMinutes)
             .set({ outcomeJson: jsonForDb({ ...outcome, registered }) })
             .where(eq(meetingMinutes.id, minutesId));
+          // 사무실 방의 "프로젝트로 등록할까요?" 줄이 결과를 말하게 한다. 던지지 않는다.
+          await markMeetingOutcomeNoticeRegistered({
+            channelId: row.channelId,
+            minutesId,
+            registered,
+          });
         },
         requesterForUser: (id) => formatRequester({ kind: "user", userId: id }),
         now: () => new Date().toISOString(),

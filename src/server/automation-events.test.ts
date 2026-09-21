@@ -151,6 +151,11 @@ const workingEvents = (emitted: Emitted[]) =>
     .filter((e) => e.event === AUTOMATION_SOCKET_EVENTS.working)
     .map((e) => e.payload as NpcWorkingPayload);
 
+/** 직원 이름을 싣지 않는 알림 kind(회의 결과)가 있어 유니온에서 바로 읽을 수 없다. */
+function noticeNpcName(notice: { kind: string } | null | undefined): string | undefined {
+  return notice && "npcName" in notice ? (notice as { npcName: string }).npcName : undefined;
+}
+
 test("최상위 카드의 done 진입은 담당 NPC 이름으로 사무실 방에 알림 1건 — notice 포함", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(CHANNEL, [statusEvent({ to: "done", parent_count: 0 })], h.deps);
@@ -231,7 +236,7 @@ test("담당 NPC 가 잠들었거나 채널에 없으면 시스템 메시지 —
     assert.equal(post.senderId, null);
     assert.equal(post.senderName, "소피");
     assert.equal(post.content, "소피: 보고서 초안");
-    assert.equal(post.notice?.npcName, "소피");
+    assert.equal(noticeNpcName(post.notice), "소피");
   }
 });
 
@@ -250,7 +255,7 @@ test("담당자 없는 카드의 알림은 이름 없는 시스템 메시지", a
   assert.equal(h.posted[0].senderKind, "system");
   assert.equal(h.posted[0].senderName, "");
   assert.equal(h.posted[0].content, "보고서 초안");
-  assert.equal(h.posted[0].notice?.npcName, "");
+  assert.equal(noticeNpcName(h.posted[0].notice), "");
 });
 
 test("사무실 방을 확보하지 못하면 게시는 건너뛰되 방송은 그대로 나간다", async () => {

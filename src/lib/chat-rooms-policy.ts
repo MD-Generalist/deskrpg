@@ -65,6 +65,25 @@ export type RoomNotice =
       resolved?: { choice: "card" | "inline"; by: string; at: string; taskId?: string };
     }
   | {
+      /**
+       * 후속 업무가 나온 회의가 끝났다 — "프로젝트로 등록할까요?" 를 방에 남긴다. 회의는 자동화
+       * 사건이 아니라 사건 싱크를 타지 않는다. 이름이 아니라 **id 와 개수만** 싣는다(사본이 낡지 않게).
+       */
+      kind: "meeting_outcome";
+      minutesId: string;
+      topic: string;
+      followUpCount: number;
+      recommended: boolean;
+      /** 등록되면 채워진다 — 버튼 대신 결과를 그린다. */
+      resolved?: {
+        boardSlug: string;
+        tenant: string | null;
+        taskCount: number;
+        by: string;
+        at: string;
+      };
+    }
+  | {
       kind: "cron_result";
       jobId: string;
       jobName: string;
@@ -78,6 +97,7 @@ const ROOM_NOTICE_KINDS = new Set([
   "card_review",
   "approval_requested",
   "card_proposal",
+  "meeting_outcome",
   "cron_result",
 ]);
 

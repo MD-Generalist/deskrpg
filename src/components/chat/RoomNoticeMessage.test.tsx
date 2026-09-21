@@ -217,6 +217,77 @@ test("approval_requested — 결정 전에는 버튼, 결정 뒤에는 결과", 
   }
 });
 
+test("meeting_outcome — 등록 전에는 '프로젝트로 등록' 버튼, 등록 뒤에는 결과", async () => {
+  for (const locale of LOCALES) {
+    const opened: string[] = [];
+    const notice = {
+      kind: "meeting_outcome" as const,
+      minutesId: "min-1",
+      topic: "가격 개편",
+      followUpCount: 3,
+      recommended: true,
+    };
+    const pending = await render(
+      <RoomNoticeMessage message={message({ notice })} onOpenMinutes={(id) => opened.push(id)} />,
+      locale,
+    );
+    const text = pending.host.textContent ?? "";
+    assert.ok(text.includes("가격 개편"), `${locale}: 회의 주제가 없다`);
+    assert.ok(text.includes("3"), `${locale}: 후속 업무 개수가 없다`);
+    const button = pending.host.querySelector("[data-meeting-outcome-open]");
+    assert.ok(Boolean(button), `${locale}: 등록 버튼이 없다`);
+    await act(async () => (button as HTMLElement).click());
+    assert.deepEqual(opened, ["min-1"]);
+    await pending.cleanup();
+
+    const resolved = await render(
+      <RoomNoticeMessage
+        message={message({
+          notice: {
+            ...notice,
+            resolved: {
+              boardSlug: "b",
+              tenant: null,
+              taskCount: 2,
+              by: "u1",
+              at: "2026-09-21T00:00:00.000Z",
+            },
+          },
+        })}
+        onOpenMinutes={(id) => opened.push(id)}
+      />,
+      locale,
+    );
+    assert.ok(
+      Boolean(resolved.host.querySelector("[data-meeting-outcome-resolved]")),
+      `${locale}: 등록 결과 줄이 없다`,
+    );
+    // 등록된 뒤에도 회의록은 열 수 있다 — 다만 "등록" 을 다시 권하지는 않는다.
+    const after = resolved.host.querySelector("[data-meeting-outcome-open]");
+    assert.equal(after?.getAttribute("data-meeting-outcome-open"), "view", `${locale}`);
+    await resolved.cleanup();
+  }
+});
+
+test("meeting_outcome — 열 길이 없으면 버튼을 그리지 않는다", async () => {
+  const view = await render(
+    <RoomNoticeMessage
+      message={message({
+        notice: {
+          kind: "meeting_outcome",
+          minutesId: "min-2",
+          topic: "가격 개편",
+          followUpCount: 1,
+          recommended: false,
+        },
+      })}
+    />,
+    "ko",
+  );
+  assert.equal(view.host.querySelectorAll("button").length, 0);
+  await view.cleanup();
+});
+
 test("cron_result — 헤더에 잡 이름, 본문은 content 그대로, error 면 실패 배지, 이력 열기 (R30)", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];

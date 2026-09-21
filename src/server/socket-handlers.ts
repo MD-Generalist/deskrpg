@@ -93,6 +93,7 @@ import {
   type OutcomeParticipant,
   type ParsedMeetingOutcome,
 } from "@/lib/meeting-outcome";
+import { announceMeetingOutcome } from "@/lib/meeting-outcome-notice";
 import { registerMeetingHooks } from "@/lib/meeting-registry";
 import { prefixReportFormat } from "@/lib/report-format";
 import { prefixUserContext, type UserContext } from "@/lib/user-context";
@@ -1844,6 +1845,7 @@ export function setupSocketHandlers(io: Server) {
           );
         },
         spatial,
+        announceOutcome: announceMeetingOutcome,
         canStartMeeting: async (channelId, userId) => {
           const access = await getSocketChannelParticipationAccess(channelId, userId);
           return (

@@ -36,9 +36,16 @@ interface MinutesModalProps {
   /** 후속 업무의 담당으로 고를 수 있는 채널 직원. */
   npcs: Array<{ id: string; name: string }>;
   onClose: () => void;
+  /** 방 알림에서 열었을 때 — 목록이 아니라 그 회의록을 바로 편다. */
+  initialMinutesId?: string | null;
 }
 
-export default function MinutesModal({ channelId, npcs, onClose }: MinutesModalProps) {
+export default function MinutesModal({
+  channelId,
+  npcs,
+  onClose,
+  initialMinutesId = null,
+}: MinutesModalProps) {
   const t = useT();
   const { locale } = useLocale();
   const [items, setItems] = useState<MeetingMinutesItem[]>([]);
@@ -77,6 +84,11 @@ export default function MinutesModal({ channelId, npcs, onClose }: MinutesModalP
       })
       .catch(() => setDetailLoading(false));
   }, []);
+
+  // 마운트 때 한 번. 이후 사용자가 다른 회의록을 고르면 그 선택을 따른다.
+  useEffect(() => {
+    if (initialMinutesId) loadDetail(initialMinutesId);
+  }, [initialMinutesId, loadDetail]);
 
   const handleExport = useCallback(
     async (format: string) => {
