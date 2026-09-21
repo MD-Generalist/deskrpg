@@ -8,7 +8,7 @@ const zh: Record<string, string> = {
   "meeting.panelCollapse": "收起会议面板",
   "meeting.cameraAutomatic": "自动镜头已开启",
   "meeting.cameraResume": "手动镜头 · 恢复自动",
-  "meeting.rotationHint": "拖动旋转 · 离开会议后可移动或换座位。",
+  "meeting.rotationHint": "拖动旋转 · 返回办公室后可移动或换座位。",
   "meeting.backToOffice": "返回办公室",
   "meeting.availabilityLoading": "正在确认会议状态…",
   "meeting.prepare": "开始会议",

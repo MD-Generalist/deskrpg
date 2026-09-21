@@ -38,7 +38,7 @@ export default function MeetingWorkspace(props: Props) {
           {t(collapsed ? "meeting.panelExpand" : "meeting.panelCollapse")}
         </button>
         <button type="button" data-meeting-leave onClick={props.onLeave}>
-          {t("common.leave")}
+          {t("meeting.backToOffice")}
         </button>
       </div>
       <div id="meeting-map-content" className="min-h-0 flex-1" hidden={collapsed}>

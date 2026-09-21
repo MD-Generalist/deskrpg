@@ -8,7 +8,7 @@ const ko: Record<string, string> = {
   "meeting.panelCollapse": "회의 패널 접기",
   "meeting.cameraAutomatic": "자동 카메라 켜짐",
   "meeting.cameraResume": "수동 카메라 · 자동 재개",
-  "meeting.rotationHint": "드래그: 회전 · 이동과 좌석 변경은 나간 후 가능합니다.",
+  "meeting.rotationHint": "드래그: 회전 · 이동과 좌석 변경은 오피스로 돌아간 뒤 가능합니다.",
   "meeting.backToOffice": "오피스로",
   "meeting.availabilityLoading": "회의 상태 확인 중…",
   "meeting.prepare": "회의 시작",

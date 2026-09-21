@@ -8,7 +8,7 @@ const ja: Record<string, string> = {
   "meeting.panelCollapse": "会議パネルを閉じる",
   "meeting.cameraAutomatic": "自動カメラ：オン",
   "meeting.cameraResume": "手動カメラ・自動に戻す",
-  "meeting.rotationHint": "ドラッグで回転・移動や席の変更は退室後にできます。",
+  "meeting.rotationHint": "ドラッグで回転・移動や席の変更はオフィスに戻ってからできます。",
   "meeting.backToOffice": "オフィスへ",
   "meeting.availabilityLoading": "会議の状態を確認中…",
   "meeting.prepare": "会議を開始",

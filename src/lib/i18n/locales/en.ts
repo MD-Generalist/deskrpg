@@ -8,7 +8,7 @@ const en: Record<string, string> = {
   "meeting.panelCollapse": "Collapse meeting panel",
   "meeting.cameraAutomatic": "Automatic camera on",
   "meeting.cameraResume": "Manual camera · Resume automatic",
-  "meeting.rotationHint": "Drag to rotate · Leave the meeting to walk or change seats.",
+  "meeting.rotationHint": "Drag to rotate · Head back to the office to walk or change seats.",
   "meeting.backToOffice": "Back to office",
   "meeting.availabilityLoading": "Checking meeting status…",
   "meeting.prepare": "Start meeting",

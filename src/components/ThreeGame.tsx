@@ -328,7 +328,7 @@ export default function ThreeGame(props: ThreeGameProps) {
               <Minus size={17} />
             </button>
           </div>
-          <div className="office-movement-hint">
+          <div className="office-movement-hint" data-meeting={meetingCamera.active || undefined}>
             {meetingCamera.active
               ? t("meeting.rotationHint")
               : ko

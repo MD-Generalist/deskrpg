@@ -41,6 +41,8 @@ test("meeting workspace keeps the existing meeting controls inside a labelled su
   assert.ok(surface);
   assert.equal(surface.getAttribute("aria-label"), "회의실");
   assert.match(surface.textContent ?? "", /회의/);
+  // 패널의 출구는 맵 우상단 버튼과 같은 동작이라 이름도 같다.
+  assert.equal(element.querySelector("[data-meeting-leave]")?.textContent, "오피스로");
   await act(async () => root.unmount());
 });
 

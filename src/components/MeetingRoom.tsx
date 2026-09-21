@@ -1424,25 +1424,6 @@ export default function MeetingRoom({
                   />
                 )}
 
-                {autoReturn.state.status === "counting" && (
-                  <div
-                    data-auto-return
-                    role="status"
-                    className="flex items-center gap-2 rounded-lg border border-info/40 bg-info/10 px-3 py-2"
-                  >
-                    <span className="flex-1 text-caption text-text-secondary">
-                      {t("meeting.autoReturn.counting", { seconds: autoReturn.state.remaining })}
-                    </span>
-                    <button
-                      type="button"
-                      data-auto-return-stay
-                      onClick={autoReturn.stay}
-                      className="px-3 py-1 rounded text-caption font-semibold bg-surface-raised text-text-secondary border border-border"
-                    >
-                      {t("meeting.autoReturn.stay")}
-                    </button>
-                  </div>
-                )}
                 {autoReturn.state.status === "hint" && (
                   <p data-auto-return-hint className="text-caption text-info text-center">
                     {t("meeting.autoReturn.hint")}
@@ -1478,6 +1459,26 @@ export default function MeetingRoom({
                 </div>
               </div>
 
+              {/* 자동 복귀 안내 — 결과 패널은 스크롤되므로 늘 보이는 하단에 둔다. 머무르기를 못 보면 고를 수 없다. */}
+              {autoReturn.state.status === "counting" && (
+                <div
+                  data-auto-return
+                  role="status"
+                  className="flex items-center gap-2 border-t border-info/40 bg-info/10 px-4 py-2 flex-shrink-0"
+                >
+                  <span className="flex-1 text-caption text-text-secondary">
+                    {t("meeting.autoReturn.counting", { seconds: autoReturn.state.remaining })}
+                  </span>
+                  <button
+                    type="button"
+                    data-auto-return-stay
+                    onClick={autoReturn.stay}
+                    className="px-3 py-1 rounded text-caption font-semibold bg-surface-raised text-text-secondary border border-border"
+                  >
+                    {t("meeting.autoReturn.stay")}
+                  </button>
+                </div>
+              )}
               {/* Fixed bottom bar */}
               <div className="px-4 py-3 border-t border-border bg-surface/80 flex items-center gap-2 flex-shrink-0">
                 <div className="relative">
