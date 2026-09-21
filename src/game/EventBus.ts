@@ -49,6 +49,8 @@ export type PendingChannelData = {
   mapData: unknown;
   tiledJson?: unknown;
   mapConfig?: unknown;
+  /** 채널의 NPC 걸음 속도(`npc-motion-config`). 비어 있으면 기본값. */
+  motionConfig?: unknown;
   savedPosition?: { x: number; y: number } | null;
 } | null;
 

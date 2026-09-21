@@ -544,3 +544,84 @@ test("일하지 않는 직원의 산책은 그대로 둔다", async () => {
     sim.dispose();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 걸음 속도 — 채널 설정이 호출·회의 호출·일반 이동·산책에 각각 닿는다
+
+test("호출은 채널의 호출 속도로 뛰어온다", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const calls: { speed?: number }[] = [];
+    sim["player"] = { x: 0, y: 0 } as never;
+    sim["motionSnapshot"] = { current: {} } as never;
+    sim["npcs"] = [
+      {
+        id: "n1",
+        name: "소피",
+        pixelX: 0,
+        pixelY: 0,
+        moveState: "idle",
+        calledForRoom: null,
+        distanceTo: () => 9999,
+        moveTo: (_c: number, _r: number, _f: unknown, _v: unknown, o: { speed?: number }) => {
+          calls.push(o);
+          return true;
+        },
+      },
+    ] as never;
+    sim["workingCounts"] = {};
+    sim["ensureLocalNpcOwnership"] = () => true;
+    sim["npcTilePositions"] = new Set() as never;
+    sim.setMotionConfig({ summon: 360 });
+
+    sim["handleNpcCallToPlayer"]({ npcId: "n1", npcName: "소피" } as never);
+    assert.equal(calls.at(-1)?.speed, 360, "호출이 채널 호출 속도를 쓰지 않았습니다");
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("회의 호출은 산책 속도가 아니라 채널의 회의 호출 속도로 모인다", () => {
+  // 전에는 회의 집결이 산책 경로를 그대로 써서 55px/s 로 모였다.
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const strolls: (number | undefined)[] = [];
+    sim["socket"] = { id: "me", emit() {} } as never;
+    sim["npcPathfinder"] = () => () => [{ x: 3, y: 3 }];
+    sim.setMotionConfig({ meetingSummon: 330, stroll: 40 });
+    const npc = {
+      id: "n1",
+      pixelX: 32,
+      pixelY: 32,
+      cancelMovement() {},
+      startStroll: (_path: unknown, speed?: number) => strolls.push(speed),
+    };
+    sim["applySpatialNpc"](
+      npc as never,
+      {
+        npcId: "n1",
+        ownerSocketId: "me",
+        moving: true,
+        spatialTarget: { x: 96, y: 96, generation: 1 },
+      } as never,
+    );
+    assert.deepEqual(strolls, [330]);
+  } finally {
+    sim.dispose();
+  }
+});
+
+test("채널 설정은 모든 NPC 의 일반 이동·산책 속도에 입혀진다 — 나중에 온 NPC 에도", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    const first = { moveSpeed: 0, strollSpeed: 0 };
+    sim["npcs"] = [first] as never;
+    sim.setMotionConfig({ walk: 200, stroll: 70 });
+    assert.deepEqual(first, { moveSpeed: 200, strollSpeed: 70 });
+    // 비었거나 틀린 설정은 기본값이다 — 걸음이 멈추지 않는다.
+    sim.setMotionConfig(null);
+    assert.deepEqual(first, { moveSpeed: 150, strollSpeed: 55 });
+  } finally {
+    sim.dispose();
+  }
+});

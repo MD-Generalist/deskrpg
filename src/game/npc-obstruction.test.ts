@@ -155,3 +155,35 @@ test("tagged retry starts at the current tile and keeps the fixed purpose destin
   assert.equal(npc.moveState, "waiting");
   assert.ok(Math.hypot(npc.pixelX / 32 - 0.5 - 5, npc.pixelY / 32 - 0.5 - 8) < 0.1);
 });
+
+// ---------------------------------------------------------------------------
+// 걸음 속도 — 이동마다 속도가 다르다(`npc-motion-config`)
+
+function walker() {
+  return new NpcController({ id: "n", name: "n", positionX: 2, positionY: 2, direction: "down" });
+}
+
+test("호출처럼 속도를 준 이동은 그 속도로, 복귀는 일반 이동 속도로 걷는다", () => {
+  const npc = walker();
+  npc.moveSpeed = 150;
+  const path = (_c: number, _r: number, tc: number, tr: number) => [{ x: tc, y: tr }];
+  assert.ok(npc.moveTo(8, 2, path, () => true, { speed: 300 }));
+  assert.equal(npc.currentSpeed(), 300);
+  npc.moveTo(8, 2, path, () => true);
+  assert.equal(
+    npc.currentSpeed(),
+    150,
+    "속도를 안 주면 평소 걸음이다 — 앞 이동의 속도가 남지 않는다",
+  );
+});
+
+test("산책은 산책 속도, 속도를 준 산책 경로(회의 집결)는 그 속도다", () => {
+  const npc = walker();
+  npc.strollSpeed = 55;
+  npc.startStroll([{ x: 5, y: 2 }]);
+  assert.equal(npc.currentSpeed(), 55);
+  npc.startStroll([{ x: 5, y: 2 }], 300);
+  assert.equal(npc.currentSpeed(), 300, "회의 호출이 산책 속도로 걸으면 안 된다");
+  npc.startStroll([{ x: 5, y: 2 }]);
+  assert.equal(npc.currentSpeed(), 55, "다음 산책에 회의 속도가 남으면 안 된다");
+});

@@ -4,6 +4,7 @@ import type { AmbientExitPolicy } from "../ambient-zones";
 import type { RemoteNpcPresentation } from "../remote-npc-presentation";
 import { TILE_SIZE } from "./constants";
 import { DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP, directionFromName } from "./directions";
+import { DEFAULT_NPC_MOTION } from "../../lib/npc-motion-config";
 
 export interface NpcData {
   id: string;
@@ -67,7 +68,15 @@ export class NpcController {
   remoteWalkingUntil = 0;
   remotePresentation: RemoteNpcPresentation | null = null;
   motionLocallyDriven?: boolean;
-  moveSpeed = captureWalkSpeed(150); // px/s (플레이어 120 보다 빠르다)
+  /** 일반 이동(복귀·대화 접근) 속도, px/s. 채널 걸음 설정이 덮어쓴다(`npc-motion-config`). */
+  moveSpeed = DEFAULT_NPC_MOTION.walk;
+  /** 산책 속도, px/s. */
+  strollSpeed = DEFAULT_NPC_MOTION.stroll;
+  /**
+   * 지금 걷는 경로의 속도. 호출·회의 호출처럼 경로마다 다른 속도를 쓰는 이동이 정한다.
+   * `null` 이면 상태에 맞는 기본값(산책이면 `strollSpeed`, 그 밖엔 `moveSpeed`)이다.
+   */
+  pathSpeed: number | null = null;
   pendingMessage: string | null = null;
   arrivalBubbleText: string | null = null;
   waitDurationMs = 10000;
@@ -140,6 +149,8 @@ export class NpcController {
       bubbleText?: string;
       waitDurationMs?: number;
       destinationTag?: string;
+      /** 이 이동의 속도(px/s). 호출은 뛰어온다 — 평소 걸음과 다르다. */
+      speed?: number;
     },
   ): boolean {
     const startCol = Math.floor(this.pixelX / TILE_SIZE);
@@ -158,6 +169,7 @@ export class NpcController {
     this.pendingMessage = options?.message || null;
     this.arrivalBubbleText = options?.bubbleText || null;
     this.waitDurationMs = options?.waitDurationMs ?? 10000;
+    this.pathSpeed = options?.speed ?? null;
     this.destinationTag = options?.destinationTag ?? null;
     this.destinationTarget = this.destinationTag ? { x: targetCol, y: targetRow } : null;
     this.purposeAccessOrigin = this.destinationTag ? { x: startCol, y: startRow } : null;
@@ -165,7 +177,16 @@ export class NpcController {
     return true;
   }
 
-  startStroll(path: NavigationPoint[]): void {
+  /** 지금 걷는 속도(px/s). README 캡처 런타임에서는 배수가 붙는다. */
+  currentSpeed(): number {
+    const base =
+      this.pathSpeed ?? (this.moveState === "strolling" ? this.strollSpeed : this.moveSpeed);
+    return captureWalkSpeed(base);
+  }
+
+  /** `speed` 를 주면 산책 속도 대신 그 속도로 걷는다 — 회의 집결이 이 경로를 쓴다. */
+  startStroll(path: NavigationPoint[], speed?: number): void {
+    this.pathSpeed = speed ?? null;
     this.destinationTag = null;
     this.destinationTarget = null;
     this.purposeAccessOrigin = null;
@@ -224,6 +245,7 @@ export class NpcController {
     this.pendingMessage = null;
     this.arrivalBubbleText = null;
     this.waitDurationMs = 10000;
+    this.pathSpeed = null;
     this.moveState = "returning";
     return true;
   }
@@ -419,8 +441,7 @@ export class NpcController {
 
     const moveAmount = Math.min(
       Math.hypot(cdx, cdy),
-      (this.moveState === "strolling" ? captureWalkSpeed(55) : this.moveSpeed) *
-        (Math.min(delta, 100) / 1000),
+      this.currentSpeed() * (Math.min(delta, 100) / 1000),
     );
     const angle = Math.atan2(cdy, cdx);
     const planned = trafficStep?.(

@@ -9,6 +9,11 @@
 import type { Socket } from "socket.io-client";
 import { isNpcCallRejected, npcCallErrorKey } from "../../lib/npc-call-errors";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
+import {
+  DEFAULT_NPC_MOTION,
+  normalizeNpcMotionConfig,
+  type NpcMotionConfig,
+} from "../../lib/npc-motion-config";
 import { effectiveMapSpawn } from "../../lib/effective-map-spawn";
 import { RemoteNpcPresentation } from "../remote-npc-presentation";
 import {
@@ -239,6 +244,11 @@ export class OfficeSimulation {
   private mapRevision?: string;
   private channelId = "";
   private meetingSpace: MeetingSpace | undefined;
+  /**
+   * 채널의 NPC 걸음 속도. 채널 공유 설정이다 — 이 브라우저가 NPC 를 구동하면 이 값으로 걷고,
+   * 다른 사람은 방송된 위치를 따라가므로 모두 같은 속도를 본다.
+   */
+  private motion: NpcMotionConfig = DEFAULT_NPC_MOTION;
   private tiledMode = false;
   private officeEnvironment: string | undefined;
   private officeEnvironmentVersion: number | undefined;
@@ -456,6 +466,9 @@ export class OfficeSimulation {
 
   private boot(data: NonNullable<typeof pendingChannelData>): void {
     this.booted = true;
+    this.setMotionConfig(data.motionConfig);
+    // 소유자가 채널 설정에서 바꾸면 `channel:updated` 로 온다 — 다시 불러오지 않아도 바로 반영.
+    this.eventScope.on("channel:motion-config", (config: unknown) => this.setMotionConfig(config));
     this.eventScope.on("meeting:request-entry", () => this.requestMeetingEntry());
     this.eventScope.on("meeting:cancel-entry", () => this.cancelMeetingEntry());
     this.eventScope.on("meeting:mode", (payload: { active: boolean }) =>
@@ -1031,7 +1044,8 @@ export class OfficeSimulation {
       return;
     }
     path[path.length - 1] = { x: target.x / 32 - 0.5, y: target.y / 32 - 0.5 };
-    npc.startStroll(path);
+    // 회의 호출. 전에는 산책 경로를 그대로 써서 산책 속도(55px/s)로 모였다 — 부르면 뛰어온다.
+    npc.startStroll(path, this.motion.meetingSummon);
   }
 
   private updateSpatialNpc(npc: NpcController, state: MotionNpc): void {
@@ -1474,6 +1488,8 @@ export class OfficeSimulation {
     npc.moveTo(playerCol, playerRow, findPath, this.createNpcWalkValidator(), {
       message: payload.message,
       bubbleText: payload.bubbleText,
+      // 호출 — 부르면 뛰어온다(기본은 평소 걸음의 2배).
+      speed: this.motion.summon,
     });
   }
 
@@ -1654,6 +1670,17 @@ export class OfficeSimulation {
     return npcs;
   }
 
+  /** 채널 걸음 설정을 받는다. 믿지 않고 접으므로 비었거나 틀린 값이면 기본값이다. */
+  setMotionConfig(config: unknown): void {
+    this.motion = normalizeNpcMotionConfig(config);
+    for (const npc of this.npcs) this.applyMotion(npc);
+  }
+
+  private applyMotion(npc: NpcController): void {
+    npc.moveSpeed = this.motion.walk;
+    npc.strollSpeed = this.motion.stroll;
+  }
+
   private loadNpcs(npcDataList: NpcData[]): void {
     for (const npc of npcDataList) this.addNpc(npc);
   }
@@ -1661,6 +1688,7 @@ export class OfficeSimulation {
   private addNpc(data: NpcData): void {
     if (this.npcs.some((n) => n.id === data.id)) return;
     const npc = new NpcController(data);
+    this.applyMotion(npc);
     this.npcs.push(npc);
     this.seatLabelCache = null;
     this.restoreMotionNpc(npc);
