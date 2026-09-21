@@ -1016,6 +1016,20 @@ export class OfficeSimulation {
   // NPC 이동 권위 · 스냅샷 적용
   // ===========================================================================
 
+  /**
+   * 걷던 중에 서버가 도착을 확정했다(`STALLED_MOTION_MS` — 탭이 가려져 걸음이 멈춘 경우).
+   * 이 탭이 구동자라 평소엔 스냅샷 좌표를 받지 않지만, 남은 걸음을 버리고 확정된 자리로 옮긴다.
+   * 스스로 도착한 경우에는 좌표가 같아 보이는 변화가 없다.
+   */
+  private snapToAuthority(npc: NpcController, state: MotionNpc): void {
+    npc.pixelX = state.x;
+    npc.pixelY = state.y;
+    npc.direction = directionFromName(state.direction);
+    npc.syncView();
+    npc.remotePresentation?.accept(state.x, state.y, true);
+    this.traffic.clear(npc.id);
+  }
+
   private applySpatialNpc(npc: NpcController, state: MotionNpc): void {
     const target = state.spatialTarget!;
     if (state.ownerSocketId !== this.socket?.id) {
@@ -1023,6 +1037,7 @@ export class OfficeSimulation {
       return;
     }
     if (!state.moving) {
+      if (npc.moveState !== "waiting") this.snapToAuthority(npc, state);
       npc.cancelMovement();
       npc.moveState = "waiting";
       return;
@@ -1173,6 +1188,7 @@ export class OfficeSimulation {
       npc.returnToHome(this.npcPathfinder(npc), this.createNpcWalkValidator());
       if (npc.moveState === "idle") this.finishNpcReturn(npc, true);
     } else if (localDriver && state.phase === "waiting" && npc.moveState !== "waiting") {
+      this.snapToAuthority(npc, state);
       npc.cancelMovement();
       npc.moveState = "waiting";
     }

@@ -75,6 +75,15 @@ type Ack = (result: { ok: boolean; error?: string; revision?: number; seatId?: s
 export const NPC_RECONNECT_GRACE_MS = 30_000;
 export const NPC_IDLE_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const MAX_IDLE_NPC_CHANNELS = 256;
+/**
+ * 소유된 이동(호출·회의 이동)이 이만큼 아무 진척도 보고하지 않으면 서버가 도착으로 확정한다.
+ *
+ * 걸음은 브라우저 한 탭의 rAF 가 구동한다. 탭이 가려지면 브라우저가 rAF 를 멈추는데, 연결은
+ * 살아 있으므로 "구동자 없음" 정산은 불리지 않고 호출·회의 집결이 "이동 중" 에서 굳었다
+ * (스테이징 실측). 걷는 중이면 초당 여러 번 위치가 오므로 10초 침묵은 걸음이 멈췄다는 뜻이다.
+ */
+export const STALLED_MOTION_MS = 10_000;
+const STALL_SWEEP_INTERVAL_MS = 2_000;
 const directions = new Set(["up", "down", "left", "right"]);
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
@@ -309,9 +318,15 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     state.ambientLeaderId = leader(channelId);
     return io.to(channelId).emit("npc:motion-state", snapshot(channelId, state));
   };
+  // 채널:NPC → 마지막으로 권위 상태가 바뀐 시각. 위치 통지·호출·이동 시작이 모두 `changed` 를
+  // 거치므로 여기서 찍으면 "진척이 있었다" 의 기준이 한 곳에 모인다.
+  const motionAt = new Map<string, number>();
   const changed = (state: Channel, npc?: NpcMotion) => {
     state.revision = nextRevision(state.channelId);
-    if (npc) npc.revision = state.revision;
+    if (npc) {
+      npc.revision = state.revision;
+      motionAt.set(`${state.channelId}:${npc.npcId}`, now());
+    }
   };
   const releaseActor = (state: Channel, actorId: string) => {
     for (const [id, seat] of state.reservations)
@@ -1266,5 +1281,88 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       return best;
     },
   };
-  return { register, joined, moved, left, invalidate, reset, occupancy, spatial };
+  /** 호출한 사람 곁의 설 자리. 네 방향 이웃 칸 중 설 수 있는 첫 칸, 없으면 그 사람 자리. */
+  const besidePlayer = (state: Channel, player: { x: number; y: number }) => {
+    const { width = Infinity, height = Infinity } = state.data.bounds ?? {};
+    for (const [dx, dy] of [
+      [32, 0],
+      [-32, 0],
+      [0, 32],
+      [0, -32],
+    ]) {
+      const p = { x: player.x + dx, y: player.y + dy };
+      if (p.x < 0 || p.y < 0 || p.x >= width || p.y >= height) continue;
+      if (state.data.canStandAt && !state.data.canStandAt(p)) continue;
+      return p;
+    }
+    return { x: player.x, y: player.y };
+  };
+  /**
+   * 걸음이 멈춘 소유 이동을 도착으로 확정한다. 탭이 돌아오면 화면은 스냅샷을 따라 순간이동한다.
+   *
+   * - 회의 이동: 들어가던 중이면 `npc:arrived` 와 같은 결과(좌석 도착·`waiting`)로, 돌아가던 중이면
+   *   구동자 없는 복귀와 같은 정산으로 끝내고 회의 세션을 진행시킨다.
+   * - 호출: 호출한 사람 곁에 세우고 `waiting` 으로 둔다. 소유권은 그대로라 보고·대화가 이어진다.
+   */
+  const settleStalled = (state: Channel, npc: NpcMotion, channelId: string) => {
+    const target = npc.spatialTarget;
+    if (target?.returning) {
+      settleSpatial(state, npc, channelId, target);
+      broadcast(channelId, state);
+      return;
+    }
+    if (target) {
+      npc.x = target.x;
+      npc.y = target.y;
+      npc.moving = false;
+      npc.phase = "waiting";
+      npc.continuation = null;
+      for (const reservation of state.reservations.values())
+        if (reservation.actorId === npc.npcId) {
+          reservation.x = target.x;
+          reservation.y = target.y;
+          reservation.arrived = true;
+        }
+      changed(state, npc);
+      broadcast(channelId, state);
+      dependencies.onSpatialArrival?.(channelId, npc.npcId, target.generation);
+      return;
+    }
+    const caller = npc.ownerSocketId ? dependencies.getPlayer(npc.ownerSocketId) : undefined;
+    if (typeof caller?.x === "number" && typeof caller.y === "number") {
+      const at = besidePlayer(state, { x: caller.x, y: caller.y });
+      npc.x = at.x;
+      npc.y = at.y;
+    }
+    npc.moving = false;
+    npc.phase = "waiting";
+    npc.continuation = null;
+    changed(state, npc);
+    broadcast(channelId, state);
+    io.to(channelId).emit("npc:position-sync", {
+      npcId: npc.npcId,
+      x: npc.x,
+      y: npc.y,
+      direction: npc.direction,
+    });
+    io.to(channelId).emit("npc:stop-moving", { npcId: npc.npcId });
+  };
+  async function sweepStalled() {
+    for (const pending of [...channels.values()]) {
+      const state = await pending.catch(() => null);
+      if (!state || !isCurrent(state)) continue;
+      for (const npc of state.npcs.values()) {
+        if (!npc.moving || !npc.ownerSocketId) continue;
+        if (npc.phase !== "called" && !npc.spatialTarget) continue;
+        const last = motionAt.get(`${state.channelId}:${npc.npcId}`) ?? now();
+        if (now() - last < STALLED_MOTION_MS) continue;
+        settleStalled(state, npc, state.channelId);
+      }
+    }
+  }
+  const sweepTimer = setInterval(() => {
+    void sweepStalled().catch((error) => console.error("[npc-coordination] stall sweep", error));
+  }, STALL_SWEEP_INTERVAL_MS);
+  sweepTimer.unref?.();
+  return { register, joined, moved, left, invalidate, reset, occupancy, spatial, sweepStalled };
 }

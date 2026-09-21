@@ -7,6 +7,7 @@ import { io as connectSocket, type Socket as ClientSocket } from "socket.io-clie
 import {
   createNpcCoordination,
   MAX_IDLE_NPC_CHANNELS,
+  STALLED_MOTION_MS,
   type CoordinationChannel,
   type NpcMotion,
 } from "./npc-coordination";
@@ -1809,6 +1810,86 @@ test("상한을 올려도 순간이동은 여전히 거절한다 — 누적 크�
       direction: "down",
     });
     assert.equal(res.error, "invalid_motion");
+  } finally {
+    await h.close();
+  }
+});
+
+// 탭이 가려지면 브라우저가 rAF 를 멈춰 걸음 통지가 끊긴다. 연결은 살아 있으므로 "구동자 없음"
+// 정산(`settleDriverlessSpatial`)은 불리지 않고, 호출·회의 집결이 "이동 중" 에서 굳는다.
+// 서버는 걸음이 **멈춘 지 오래된** 이동을 도착으로 확정한다.
+test("걸음 통지가 끊긴 호출은 기한이 지나면 호출한 사람 곁으로 정산된다", async () => {
+  let t = 1_000_000;
+  const h = await harness({ now: () => t });
+  try {
+    const a = await h.connect();
+    assert.equal((await ack(a, "npc:call", { npcId: "n1" })).ok, true);
+    t += STALLED_MOTION_MS - 1;
+    await h.coord.sweepStalled();
+    assert.equal(
+      a.latest.npcs.find((n) => n.npcId === "n1")!.phase,
+      "called",
+      "기한 전엔 기다린다",
+    );
+
+    const settled = stateEvent(a, (s) => s.npcs.find((n) => n.npcId === "n1")!.phase === "waiting");
+    t += 1;
+    await h.coord.sweepStalled();
+    const npc = (await settled).npcs.find((n) => n.npcId === "n1")!;
+    assert.equal(npc.moving, false);
+    assert.equal(npc.ownerSocketId, a.socket.id, "보고·대화는 호출한 사람과 이어진다");
+    assert.ok(Math.hypot(npc.x - 300, npc.y - 350) <= 48, "호출한 사람 곁에 선다");
+  } finally {
+    await h.close();
+  }
+});
+
+test("걸음 통지가 이어지는 동안은 정산하지 않는다", async () => {
+  let t = 1_000_000;
+  const h = await harness({ now: () => t });
+  try {
+    const a = await h.connect();
+    assert.equal((await ack(a, "npc:call", { npcId: "n1" })).ok, true);
+    t += STALLED_MOTION_MS - 1000;
+    assert.equal(
+      (await ack(a, "npc:position-update", { npcId: "n1", x: 64, y: 64, direction: "down" })).ok,
+      true,
+    );
+    t += 2000;
+    await h.coord.sweepStalled();
+    const npc = a.latest.npcs.find((n) => n.npcId === "n1")!;
+    assert.equal(npc.phase, "called");
+    assert.deepEqual([npc.x, npc.y], [64, 64]);
+  } finally {
+    await h.close();
+  }
+});
+
+test("걸음 통지가 끊긴 회의 집결은 기한이 지나면 좌석 도착으로 확정된다", async () => {
+  let t = 1_000_000;
+  const arrivals: string[] = [];
+  const h = await harness({
+    now: () => t,
+    onSpatialArrival: (_channelId, actorId) => arrivals.push(actorId),
+  });
+  try {
+    await h.connect(); // 구동자가 있어야 "연결은 살아 있고 걸음만 멈춘" 상황이 된다
+    const meeting = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 3, meeting, false), true);
+    t += STALLED_MOTION_MS;
+    await h.coord.sweepStalled();
+    assert.deepEqual(arrivals, ["n1"], "회의 세션이 착석 완료로 진행해야 한다");
+    const back = await h.connect();
+    const npc = back.latest.npcs.find((n) => n.npcId === "n1")!;
+    assert.deepEqual([npc.x, npc.y], [meeting.x, meeting.y]);
+    assert.equal(npc.moving, false);
+    assert.equal(npc.phase, "waiting");
+    assert.equal(
+      back.latest.seats.some((seat) => seat.seatId === meeting.seatId),
+      true,
+      "회의석 예약은 유지된다",
+    );
   } finally {
     await h.close();
   }
