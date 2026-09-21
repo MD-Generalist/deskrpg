@@ -15,14 +15,24 @@ export type SessionDeps = {
   root: string;
   signals: SignalSource;
   kill: typeof process.kill;
+  ports: CapturePorts;
 };
+
+/**
+ * 캡처가 쓰는 포트. 실제 캡처는 README 가 가리키는 3310 을 고정으로 쓴다.
+ *
+ * 테스트는 주입한다 — 가짜 자식을 쓰는 단위 테스트도 포트 점유 검사와 모의 Hermes 바인드는 실제로
+ * 하므로, 기본값을 쓰면 다른 세션이 같은 파일을 동시에 돌릴 때 `EADDRINUSE 127.0.0.1:38642` 로
+ * 깨졌다(2026-09-21, 전체 실행 두 벌 동시 실측).
+ */
+export type CapturePorts = { app: number; internal: number; hermes: number };
+export const DEFAULT_CAPTURE_PORTS: CapturePorts = { app: 3310, internal: 3311, hermes: 38642 };
 
 export type SignalSource = {
   on(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
   off(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
 };
 
-const APP_URL = "http://127.0.0.1:3310";
 const CAPTURE_ARTIFACT_DIR = ".artifacts/readme-capture";
 
 export function captureStages(recordOnly: boolean): Array<"record" | "media" | "verify"> {
@@ -168,6 +178,7 @@ function safeChildEnvironment(
   runtimePath: string,
   sqlitePath: string,
   instanceId: string,
+  ports: CapturePorts,
 ): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
     PATH: process.env.PATH,
@@ -185,13 +196,14 @@ function safeChildEnvironment(
     COMING_SOON: "false",
     NEXT_PUBLIC_COMING_SOON: "false",
     NEXT_PUBLIC_README_CAPTURE: "1",
-    PORT: "3310",
-    INTERNAL_PORT: "3311",
+    PORT: String(ports.app),
+    INTERNAL_PORT: String(ports.internal),
     HOSTNAME: "127.0.0.1",
     NODE_ENV: "development",
     DESKRPG_CAPTURE_MODE: "1",
     DESKRPG_CAPTURE_INSTANCE_ID: instanceId,
     DESKRPG_PROJECT_ROOT: root,
+    DESKRPG_CAPTURE_PARENT_PID: String(process.pid),
     README_CAPTURE_DRY_RUN: process.env.README_CAPTURE_DRY_RUN === "1" ? "1" : "0",
   };
   const browserCache =
@@ -243,6 +255,7 @@ export async function terminateOwnedChild(
 
 async function waitForHealth(
   request: typeof globalThis.fetch,
+  appUrl: string,
   child: ChildProcess,
   instanceId: string,
   signal: AbortSignal,
@@ -260,7 +273,7 @@ async function waitForHealth(
       }
       let response: Response | null = null;
       try {
-        response = await request(`${APP_URL}/__readme-capture/health`, {
+        response = await request(`${appUrl}/__readme-capture/health`, {
           redirect: "error",
           signal: AbortSignal.any([signal, AbortSignal.timeout(1_000)]),
         });
@@ -337,7 +350,9 @@ export async function runCaptureSession(deps: Partial<SessionDeps> = {}): Promis
   const ownedChildren = new Set<ChildProcess>();
   let mockHermes: Awaited<ReturnType<typeof startMockHermes>> | null = null;
   const instanceId = `readme-capture-${randomUUID()}`;
-  const environment = safeChildEnvironment(root, runtimePath, sqlitePath, instanceId);
+  const ports = deps.ports ?? DEFAULT_CAPTURE_PORTS;
+  const appUrl = `http://127.0.0.1:${ports.app}`;
+  const environment = safeChildEnvironment(root, runtimePath, sqlitePath, instanceId, ports);
   const cancellation = new AbortController();
   const interrupt = (signal: "SIGINT" | "SIGTERM") => () => {
     cancellation.abort(new Error(`README capture interrupted by ${signal}`));
@@ -381,19 +396,19 @@ export async function runCaptureSession(deps: Partial<SessionDeps> = {}): Promis
   };
 
   try {
-    await assertExclusivePort("127.0.0.1", 3310);
+    await assertExclusivePort("127.0.0.1", ports.app);
     cancellation.signal.throwIfAborted();
-    mockHermes = await startMockHermes({ host: "127.0.0.1", port: 38642 });
+    mockHermes = await startMockHermes({ host: "127.0.0.1", port: ports.hermes });
     cancellation.signal.throwIfAborted();
     const app = startOwned(process.execPath, [
       "--import",
       "tsx",
       path.join(root, "scripts/readme-capture/server-launcher.ts"),
     ]);
-    await waitForHealth(sessionFetch, app, instanceId, cancellation.signal);
+    await waitForHealth(sessionFetch, appUrl, app, instanceId, cancellation.signal);
     cancellation.signal.throwIfAborted();
     const fixture = await prepareFixture(
-      createFixtureApi(APP_URL, sessionFetch),
+      createFixtureApi(appUrl, sessionFetch),
       mockHermes.baseUrl,
       sqlitePath,
     );
