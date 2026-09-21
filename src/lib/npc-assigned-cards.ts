@@ -1,4 +1,5 @@
 import type { KanbanBoard, KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
+import { taskTimeMs } from "@/lib/plugin-time";
 
 /**
  * 상태 묶음 순서 — 작을수록 앞. 어휘는 `KANBAN_TASK_STATUSES` 다(`in_progress` 같은 상태는
@@ -18,6 +19,7 @@ export function assignedCards(board: KanbanBoard, npcProfile: string): KanbanTas
   return mine.sort((a, b) => {
     const byRank = rank(a.status) - rank(b.status);
     if (byRank !== 0) return byRank;
-    return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+    // 칸반 시각은 epoch 초이거나 ISO 문자열이다 — 문자열 비교를 하지 않고 `taskTimeMs` 로만 읽는다.
+    return (taskTimeMs(b.created_at) ?? 0) - (taskTimeMs(a.created_at) ?? 0);
   });
 }

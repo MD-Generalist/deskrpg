@@ -39,11 +39,17 @@ export function cardNoticeText(
  * 지원 목록을 `Extract` 로 양성적으로 적는다: 새 kind 가 유니온에 들어와도 여기서 빠지면
  * 자동으로 폴백이 되고, `Exclude` 예외가 kind 마다 쌓이지 않는다.
  */
-export function isKnownNotice(
-  notice: RoomNotice | null | undefined,
-): notice is Extract<
+export function isKnownNotice(notice: RoomNotice | null | undefined): notice is Extract<
   RoomNotice,
-  { kind: "card_done" | "card_blocked" | "card_review" | "cron_result" | "card_proposal" }
+  {
+    kind:
+      | "card_done"
+      | "card_blocked"
+      | "card_review"
+      | "approval_requested"
+      | "cron_result"
+      | "card_proposal";
+  }
 > {
   return (
     !!notice &&

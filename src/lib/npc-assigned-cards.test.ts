@@ -89,3 +89,22 @@ test("created_at 이 없으면 같은 묶음 안에서 뒤로 간다", () => {
 test("담당이 없는 카드는 어떤 직원에게도 안 보인다", () => {
   assert.deepEqual(assignedCards(board([task("z", "todo", undefined)]), "noah"), []);
 });
+
+test("시각이 epoch 초로 와도 최신순이다 — 문자열 비교를 하면 자릿수가 다른 값에서 뒤집힌다", () => {
+  // 실제 플러그인은 칸반 시각을 epoch 초(숫자)로 준다. 999 < 1000 이지만 "999" > "1000" 이다.
+  const board = {
+    columns: [
+      {
+        name: "todo",
+        tasks: [
+          { id: "old", title: "OLD", status: "todo", assignee: "sophie", created_at: 999 },
+          { id: "new", title: "NEW", status: "todo", assignee: "sophie", created_at: 1000 },
+        ],
+      },
+    ],
+  } as unknown as Parameters<typeof assignedCards>[0];
+  assert.deepEqual(
+    assignedCards(board, "sophie").map((t) => t.id),
+    ["new", "old"],
+  );
+});
