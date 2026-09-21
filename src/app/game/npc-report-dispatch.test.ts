@@ -23,6 +23,7 @@ import {
   reportAckKey,
   npcSignature,
   reconcileReportAttempts,
+  releaseUnacquiredReportCalls,
   reportCallBlocked,
   reportsForChannel,
   reportTarget,
@@ -721,4 +722,32 @@ test("복귀한 직원은 자리에 닿으면 다시 후보가 된다", () => {
     })?.messageId,
     "m1",
   );
+});
+
+test("ack 전에 끊기면 재연결 뒤 같은 보고가 다시 후보가 된다", () => {
+  // 보낸 호출의 응답을 받기 전에 소켓이 끊기면 서버가 그 호출을 받았는지 알 수 없다.
+  // 예전에는 "보냄" 으로 남아 새로고침 전까지 그 보고를 다시 부르지 않았다.
+  const attempts = releaseUnacquiredReportCalls([sent("a", "idle:none:home")]);
+  assert.deepEqual(attempts, [{ messageId: "a", outcome: "rejected", signature: "" }]);
+  assert.equal(activeReportReleased(attempts, "a"), true);
+  assert.equal(
+    decideReportCall({
+      queue: [A],
+      activeMessageId: null,
+      attempts,
+      signatures: { "npc-1": "idle:none:home" },
+      blocked: false,
+    })?.messageId,
+    "a",
+  );
+});
+
+test("획득된 보고는 끊김으로 거절이 되지 않는다 — 이미 와 있는 직원을 다시 부르지 않는다", () => {
+  const acquired: ReportAttempt = { ...sent("a", "idle:mine:away"), acquired: true };
+  const others: ReportAttempt[] = [
+    acquired,
+    rejected("b", "idle:sock-1:home"),
+    { messageId: "c", outcome: "dismissed", signature: "", dismissedAt: 1 },
+  ];
+  assert.deepEqual(releaseUnacquiredReportCalls(others), others);
 });

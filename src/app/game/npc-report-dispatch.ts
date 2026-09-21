@@ -126,6 +126,22 @@ export function reconcileReportAttempts(
 }
 
 /**
+ * 소켓이 끊기면 응답을 받지 못한 호출(보냈지만 직원이 내 것이 된 적 없는 것)을 거절로 바꾼다.
+ * 서버가 그 호출을 받았는지 알 수 없으므로, 빈 서명으로 두어 재연결 뒤 **즉시** 다시 후보가
+ * 되게 한다. 이미 내 것이 된 보고는 직원이 와 있거나 오는 중이라 그대로 둔다.
+ */
+export function releaseUnacquiredReportCalls(
+  attempts: readonly ReportAttempt[],
+): readonly ReportAttempt[] {
+  if (!attempts.some((attempt) => attempt.outcome === "sent" && !attempt.acquired)) return attempts;
+  return attempts.map((attempt) =>
+    attempt.outcome === "sent" && !attempt.acquired
+      ? { messageId: attempt.messageId, outcome: "rejected", signature: "" }
+      : attempt,
+  );
+}
+
+/**
  * 전하던 보고가 더는 "진행 중" 이 아닌가. 거절(또는 접힘)로 바뀐 보고를 active 로 쥐고 있으면
  * `decideReportCall` 이 그 보고만 기다리며 **큐 전체**를 멈춘다 — 화면은 이때 active 를 비운다.
  */

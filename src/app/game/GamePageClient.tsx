@@ -66,6 +66,7 @@ import {
   settleReturningNpcs,
   missedReportArrival,
   reconcileReportAttempts,
+  releaseUnacquiredReportCalls,
   reportCallBlocked,
   reportAckKey,
   reportsForChannel,
@@ -664,6 +665,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         setIsNpcStreaming(false);
         setNpcActivityKey(null);
         dispatchChatResponse({ type: "disconnect" });
+        // 응답을 못 받은 보고 호출은 재연결 뒤 다시 부를 수 있게 푼다.
+        const released = releaseUnacquiredReportCalls(reportAttemptsRef.current);
+        if (released !== reportAttemptsRef.current) {
+          reportAttemptsRef.current = [...released];
+          setReportAttemptsVersion((v) => v + 1);
+        }
         setNpcMessages((previous) => previous.filter((message) => !message.responseTransient));
         // 서버의 openRooms 는 소켓별 상태다 — 끊기면 비므로 다시 열어야 한다.
         openedRoomRef.current = null;
