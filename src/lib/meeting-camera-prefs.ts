@@ -27,12 +27,12 @@ export type MeetingCameraPrefs = {
   holdAfterSpeechSeconds: number;
 };
 
-/** 단테 결정(2026-09-21): 상반신 · 직행 · 체류 1.5초 · 머묾 1.2초. */
+/** 단테 결정(2026-09-21): 상반신 · 직행 · 체류 2.0초 · 머묾 1.5초(짧은 발언 체감 뒤 상향). */
 export const DEFAULT_MEETING_CAMERA_PREFS: MeetingCameraPrefs = {
   speakerFraming: "upperBody",
   directHandoff: true,
-  minSpeakerDwellSeconds: 1.5,
-  holdAfterSpeechSeconds: 1.2,
+  minSpeakerDwellSeconds: 2,
+  holdAfterSpeechSeconds: 1.5,
 };
 
 /** 조정 범위. 0 이면 짧은 발언마다 카메라가 따라 움직여 멀미가 나고, 너무 길면 대화를 놓친다. */

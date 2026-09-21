@@ -32,12 +32,12 @@ function field<T extends Element>(host: HTMLElement, name: string): T {
   return el as T;
 }
 
-test("기본값으로 열린다 — 상반신·직행·1.5초·1.2초", async () => {
+test("기본값으로 열린다 — 상반신·직행·2초·1.5초", async () => {
   const host = await mount();
   assert.equal(field<HTMLSelectElement>(host, "speakerFraming").value, "upperBody");
   assert.equal(field<HTMLInputElement>(host, "directHandoff").checked, true);
-  assert.equal(field<HTMLInputElement>(host, "minSpeakerDwellSeconds").value, "1.5");
-  assert.equal(field<HTMLInputElement>(host, "holdAfterSpeechSeconds").value, "1.2");
+  assert.equal(field<HTMLInputElement>(host, "minSpeakerDwellSeconds").value, "2");
+  assert.equal(field<HTMLInputElement>(host, "holdAfterSpeechSeconds").value, "1.5");
 });
 
 test("바꾸는 즉시 이 브라우저에 저장하고 카메라에 알린다 — 저장 버튼이 없다", async () => {

@@ -18,12 +18,12 @@ function memory(initial: Record<string, string> = {}) {
   };
 }
 
-test("기본값은 단테 결정 그대로다 — 상반신·직행·체류 1.5초·머묾 1.2초", () => {
+test("기본값은 단테 결정 그대로다 — 상반신·직행·체류 2.0초·머묾 1.5초", () => {
   assert.deepEqual(DEFAULT_MEETING_CAMERA_PREFS, {
     speakerFraming: "upperBody",
     directHandoff: true,
-    minSpeakerDwellSeconds: 1.5,
-    holdAfterSpeechSeconds: 1.2,
+    minSpeakerDwellSeconds: 2,
+    holdAfterSpeechSeconds: 1.5,
   });
 });
 
