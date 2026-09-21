@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { APP_VERSION, isNewer } from "@/lib/app-meta";
-import type { AppMeta } from "@/lib/app-meta-server";
+import type { AppMeta as ServerAppMeta } from "@/lib/app-meta-server";
 
 import {
   browserStorage,
@@ -12,11 +12,14 @@ import {
   type GrowthState,
 } from "./growth-storage";
 
+type AppMeta = ServerAppMeta & { feedbackUrl: string | null };
+
 export function useAppMeta() {
   const [meta, setMeta] = useState<AppMeta>({
     version: APP_VERSION,
     latestVersion: null,
     stars: null,
+    feedbackUrl: null,
   });
   const [state, setState] = useState<GrowthState>({
     ok: false,
