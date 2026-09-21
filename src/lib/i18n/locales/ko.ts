@@ -2720,9 +2720,10 @@ const ko: Record<string, string> = {
   "kanban.timeline.tone.running": "실행 중",
   "kanban.timeline.tone.done": "완료",
   "kanban.timeline.tone.failed": "실패",
-  "kanban.timeline.tone.gaveUp": "포기",
-  "kanban.timeline.tone.interrupted": "중단",
-  "kanban.timeline.tone.other": "기타",
+  "kanban.timeline.tone.actionable": "조치 필요",
+  "kanban.timeline.tone.neutral": "중단",
+  "kanban.timeline.tone.unknown": "결과 미기록",
+  "kanban.timeline.legend": "결과 범례",
   "kanban.timeline.unsupported":
     "실적 타임라인은 플러그인 {version} 이상이 필요합니다. 업그레이드하면 켜집니다.",
   "kanban.metrics.title": "운영 지표",

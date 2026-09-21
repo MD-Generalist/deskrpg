@@ -14,29 +14,36 @@ import { taskTimeMs } from "@/lib/plugin-time";
 /**
  * 막대 색을 고르는 결과 종류.
  *
- * Hermes 의 `outcome` 어휘(`completed|blocked|crashed|timed_out|spawn_failed|gave_up|reclaimed`)를
- * 화면이 구분해야 하는 만큼으로 접는다. **실패를 한 덩어리로 뭉개지 않는다** — `gave_up` 과
- * `crashed` 는 사람이 할 일이 다르다.
+ * `outcome` 은 **Hermes 코어가 소유한 열린 어휘**다. 닫힌 목록으로 믿으면 코어가 값을 하나
+ * 늘릴 때마다 조용히 회색으로 빠진다 — 실제로 그렇게 됐다(스테이징 실측: 실행 178건 중
+ * 177건이 `rate_limited` 였고 색 매핑에 없어 "기타" 로 그려졌다). 그래서 여기서 하는 일은
+ * "아는 값을 나열" 이 아니라 **뜻으로 묶기**이고, 모르는 값은 `unknown` 으로 두되 화면이
+ * 그 문자열을 그대로 보여 준다(`outcomeLegend`).
+ *
+ * `actionable` 은 실패와 다르다 — 한도·차단·변경요청은 **사용자가 할 일이 있는** 상태다.
+ * 실패색으로 칠하면 "고장" 으로 읽혀 할 일을 놓친다.
  */
-export type RunTone = "running" | "done" | "failed" | "gaveUp" | "interrupted" | "other";
+export type RunTone = "running" | "done" | "failed" | "actionable" | "neutral" | "unknown";
+
+/** 뜻이 같은 결과끼리. 값은 `~/.hermes` 코어의 `kanban_db.py` 에서 확인한 것이다. */
+const TONE_BY_OUTCOME: Readonly<Record<string, RunTone>> = {
+  completed: "done",
+  crashed: "failed",
+  gave_up: "failed",
+  timed_out: "failed",
+  spawn_failed: "failed",
+  stale: "failed",
+  rate_limited: "actionable",
+  blocked: "actionable",
+  changes_requested: "actionable",
+  reclaimed: "neutral",
+  scheduled: "neutral",
+  review_requested: "neutral",
+};
 
 export function toneOf(run: Pick<KanbanTimelineRun, "outcome" | "ended_at">): RunTone {
-  if (!run.outcome) return run.ended_at === undefined ? "running" : "other";
-  switch (run.outcome) {
-    case "completed":
-      return "done";
-    case "crashed":
-    case "timed_out":
-    case "spawn_failed":
-      return "failed";
-    case "gave_up":
-      return "gaveUp";
-    case "reclaimed":
-    case "blocked":
-      return "interrupted";
-    default:
-      return "other";
-  }
+  if (!run.outcome) return run.ended_at === undefined ? "running" : "unknown";
+  return TONE_BY_OUTCOME[run.outcome] ?? "unknown";
 }
 
 export type TimelineWindow = { fromMs: number; toMs: number };
@@ -187,7 +194,7 @@ export function presetWindow(preset: WindowPreset, nowMs: number): TimelineWindo
   return { fromMs: localDayStart(toMs - 6 * DAY_MS), toMs };
 }
 
-/** 그 시각이 속한 날의 **로컬** 자정. 눈금 기준점과 창 시작의 단일 출처다. */
+/** 그 시각이 속한 날의 **로컬** 자정. 눈금 기준점과 날짜 비교의 단일 출처다. */
 function localDayStart(ms: number): number {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
@@ -252,6 +259,37 @@ export type AxisLabelKind = "time" | "date";
 
 export function axisLabelKind(win: TimelineWindow): AxisLabelKind {
   return win.toMs - win.fromMs > DAY_MS ? "date" : "time";
+}
+
+/**
+ * 범례 한 항목. `outcome` 이 `null` 이면 "결과 미기록" 이나 "아직 도는 중" 이라 화면이
+ * 자기 말로 붙인다.
+ */
+export type OutcomeLegendEntry = { outcome: string | null; tone: RunTone; count: number };
+
+/**
+ * 보이는 막대에 **실제로 있는** 결과만 범례로 만든다.
+ *
+ * tone 고정 목록을 범례로 쓰면 모르는 값이 "기타" 한 칸에 뭉개져 이름을 잃는다. 여기서는
+ * 값 자체가 항목이므로 코어가 어휘를 늘려도 그 문자열이 그대로 화면에 나온다 — 색을 못
+ * 골라도 이름은 잃지 않는다는 것이 이 함수의 목적이다.
+ *
+ * 많은 것부터, 같으면 이름 순. 정렬을 고정해 두면 스냅샷이 흔들리지 않는다.
+ */
+export function outcomeLegend(rows: readonly ActorRow[]): OutcomeLegendEntry[] {
+  const seen = new Map<string, OutcomeLegendEntry>();
+  for (const row of rows) {
+    for (const bar of row.bars) {
+      const outcome = bar.run.outcome ?? null;
+      const key = `${bar.tone}\u0000${outcome ?? ""}`;
+      const found = seen.get(key);
+      if (found) found.count += 1;
+      else seen.set(key, { outcome, tone: bar.tone, count: 1 });
+    }
+  }
+  return [...seen.values()].sort(
+    (a, b) => b.count - a.count || (a.outcome ?? "").localeCompare(b.outcome ?? ""),
+  );
 }
 
 /** 막대 한 건의 소요(ms). 아직 안 끝났으면 창 안에서 보이는 만큼이다. */

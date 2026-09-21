@@ -10,7 +10,9 @@ import {
   barDurationMs,
   dependencyEdges,
   layoutTimeline,
+  outcomeLegend,
   targetMarker,
+  type OutcomeLegendEntry,
   type PositionedBar,
   type RunTone,
   type TimelineWindow,
@@ -39,13 +41,27 @@ const ROW_GAP = 8;
 const AXIS_HEIGHT = 18;
 const PLOT_WIDTH = 1000; // viewBox 좌표. 실제 폭은 CSS 가 정한다.
 
+// `actionable` 은 실패색이 아니라 주의색이다 — 한도·차단·변경요청은 사용자가 할 일이 있는
+// 상태이고, 빨강으로 칠하면 "고장" 으로 읽혀 그 할 일을 놓친다. `npc`(앰버)를 쓰는 이유는
+// **`warning` 토큰이 없기 때문이다** — `tokens.css` 에 `--color-warning` 이 정의돼 있지 않아
+// `fill-warning` 은 아무 색도 내지 않는다(실측).
 const TONE_CLASS: Record<RunTone, string> = {
   running: "fill-primary",
   done: "fill-success",
   failed: "fill-danger",
-  gaveUp: "fill-meeting",
-  interrupted: "fill-info",
-  other: "fill-text-muted",
+  actionable: "fill-npc",
+  neutral: "fill-info",
+  unknown: "fill-text-muted",
+};
+
+/** 범례 점은 막대와 **같은** 색을 써야 한다 — 다르면 범례가 거짓말을 한다. */
+const TONE_DOT: Record<RunTone, string> = {
+  running: "bg-primary",
+  done: "bg-success",
+  failed: "bg-danger",
+  actionable: "bg-npc",
+  neutral: "bg-info",
+  unknown: "bg-text-muted",
 };
 
 export interface KanbanTimelineProps {
@@ -95,6 +111,7 @@ export default function KanbanTimeline({
   const ticks = useMemo(() => axisTicks(win), [win]);
   const target = useMemo(() => targetMarker(targetDate, win, now), [targetDate, win, now]);
   const edges = useMemo(() => dependencyEdges(layout.rows, links ?? []), [layout.rows, links]);
+  const legend = useMemo(() => outcomeLegend(layout.rows), [layout.rows]);
 
   // 창이 하루를 넘으면 시:분만으로는 눈금을 구분할 수 없다 — 주 단위 창에서 라벨 일곱 개가
   // 모두 "오전 09:00" 이던 실측 결함이 이것이다. 날짜 라벨에 요일을 붙이는 것은 주 단위 창에서
@@ -148,6 +165,8 @@ export default function KanbanTimeline({
         {loading && <span className="text-text-dim">{t("common.loading")}</span>}
         <TargetChip target={target} />
       </div>
+
+      <OutcomeLegend entries={legend} t={t} />
 
       {truncated && (
         <p className="mb-2 rounded-md bg-surface-raised px-2 py-1 text-[11px] text-text-secondary">
@@ -355,6 +374,42 @@ function Arrow({
       strokeDasharray={edge.outOfOrder ? "3 2" : undefined}
       opacity={0.6}
     />
+  );
+}
+
+/**
+ * 범례 — 화면에 **실제로 있는** 결과만. 항목 이름은 `outcome` 문자열 그대로다.
+ *
+ * tone 고정 목록을 쓰면 모르는 값이 "기타" 한 칸에 뭉개져 이름을 잃는다. 실측에서 실행 178건
+ * 중 177건이 `rate_limited` 였는데 색 매핑에 없어 회색으로 그려졌고, 화면에는 그 이름을 설명할
+ * 곳이 없었다. 값을 항목으로 쓰면 코어가 어휘를 늘려도 이름은 잃지 않는다.
+ */
+function OutcomeLegend({
+  entries,
+  t,
+}: {
+  entries: readonly OutcomeLegendEntry[];
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <ul
+      className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-secondary"
+      aria-label={t("kanban.timeline.legend")}
+    >
+      {entries.map((entry) => (
+        <li key={`${entry.tone}:${entry.outcome ?? ""}`} className="flex items-center gap-1">
+          <span
+            aria-hidden="true"
+            className={`inline-block h-2 w-2 rounded-sm ${TONE_DOT[entry.tone]}`}
+          />
+          <span data-timeline-legend={entry.outcome ?? entry.tone}>
+            {entry.outcome ?? t(`kanban.timeline.tone.${entry.tone}`)}
+          </span>
+          <span className="text-text-muted">{entry.count}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

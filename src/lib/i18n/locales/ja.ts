@@ -2750,9 +2750,10 @@ const ja: Record<string, string> = {
   "kanban.timeline.tone.running": "実行中",
   "kanban.timeline.tone.done": "完了",
   "kanban.timeline.tone.failed": "失敗",
-  "kanban.timeline.tone.gaveUp": "断念",
-  "kanban.timeline.tone.interrupted": "中断",
-  "kanban.timeline.tone.other": "その他",
+  "kanban.timeline.tone.actionable": "対応が必要",
+  "kanban.timeline.tone.neutral": "中断",
+  "kanban.timeline.tone.unknown": "結果未記録",
+  "kanban.timeline.legend": "結果の凡例",
   "kanban.timeline.unsupported":
     "実績タイムラインにはプラグイン {version} 以上が必要です。アップグレードで有効になります。",
   "kanban.metrics.title": "運用指標",

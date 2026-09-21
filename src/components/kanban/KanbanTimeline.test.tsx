@@ -96,14 +96,64 @@ test("작업자를 모르는 실행도 행으로 나온다", async () => {
   assert.ok(host.textContent?.includes("Unknown worker"));
 });
 
-test("결과별로 다른 색 클래스를 쓴다 — 실패를 뭉개지 않는다", async () => {
+test("결과를 뜻으로 칠한다 — '할 일이 있다' 는 실패색이 아니다", async () => {
   const { host } = await mount({
-    runs: [run({ outcome: "completed" }), run({ outcome: "crashed" }), run({ outcome: "gave_up" })],
+    runs: [
+      run({ outcome: "completed" }),
+      run({ outcome: "crashed" }),
+      run({ outcome: "rate_limited" }),
+    ],
   });
   const classes = [...host.querySelectorAll("svg rect")].map((r) => r.getAttribute("class"));
   assert.ok(classes.includes("fill-success"));
   assert.ok(classes.includes("fill-danger"));
-  assert.ok(classes.includes("fill-meeting"), "포기는 실패와 다른 색이어야 한다");
+  // 한도에 걸린 것은 고장이 아니라 사용자가 할 일이 있는 상태다. 빨강이면 그 할 일을 놓친다.
+  // `warning` 토큰이 없어 `fill-warning` 은 아무 색도 내지 않는다 — 있는 토큰을 쓴다.
+  assert.ok(classes.includes("fill-npc"), "조치 필요는 실패와 다른 색이어야 한다");
+  assert.equal(
+    classes.filter((c) => c === "fill-text-muted").length,
+    0,
+    "아는 결과가 '기타' 회색으로 빠졌습니다",
+  );
+});
+
+test("모르는 결과도 범례에 그 이름이 그대로 나온다 — 회색으로 뭉개지 않는다", async () => {
+  // 실측(스테이징 0.11.1): 실행 178건 중 177건이 `rate_limited` 였고 색 매핑에 없어 회색으로
+  // 그려졌다. `outcome` 은 Hermes 코어가 소유한 열린 어휘라 값이 또 늘 수 있다 — 색을 못 골라도
+  // 이름은 잃지 않아야 한다.
+  const { host } = await mount({
+    runs: [run({ outcome: "some_future_outcome" }), run({ outcome: "rate_limited" })],
+  });
+  const labels = [...host.querySelectorAll("[data-timeline-legend]")].map((n) =>
+    n.getAttribute("data-timeline-legend"),
+  );
+  assert.ok(
+    labels.includes("some_future_outcome"),
+    `범례가 모르는 결과의 이름을 잃었습니다: ${labels.join(", ")}`,
+  );
+  assert.ok(labels.includes("rate_limited"));
+  const shown = host.querySelector('[data-timeline-legend="some_future_outcome"]');
+  assert.equal(shown?.textContent, "some_future_outcome", "범례가 값 대신 다른 글자를 씁니다");
+});
+
+test("하루를 넘는 창에서는 축 라벨이 서로 다르다 — 전부 같은 시각이 아니다", async () => {
+  // 실측 결함의 모양: 주 단위 창의 눈금 일곱 개가 모두 "오전 09:00" 이었다.
+  const from = Date.parse("2026-09-15T00:00:00.000Z");
+  const started = Math.floor((from + 3600_000) / 1000);
+  const { host } = await mount({
+    window: { fromMs: from, toMs: from + 7 * 24 * 3600_000 },
+    preset: "week",
+    runs: [run({ started_at: started, ended_at: started + 60 })],
+  });
+  const labels = [...host.querySelectorAll("svg text")]
+    .map((n) => n.textContent ?? "")
+    .filter((text) => text.length > 0);
+  assert.ok(labels.length >= 2, `축 라벨이 ${labels.length}개입니다`);
+  assert.equal(
+    new Set(labels).size,
+    labels.length,
+    `축 라벨이 서로 겹칩니다: ${labels.join(" | ")}`,
+  );
 });
 
 test("끝나지 않은 실행은 흐리게 그리고 표에 진행 중이라고 쓴다", async () => {
@@ -157,22 +207,6 @@ test("기간 버튼이 선택 상태를 드러내고 바꿈을 알린다", async
     (week as HTMLElement).click();
   });
   assert.deepEqual(presets, ["week"]);
-});
-
-test("하루를 넘는 창에서는 축 라벨이 서로 다르다 — 전부 같은 시각이 아니다", async () => {
-  // 실측 결함의 모양: 주 단위 창의 눈금 일곱 개가 모두 "오전 09:00" 이었다.
-  const from = Date.parse("2026-09-15T00:00:00.000Z");
-  const started = Math.floor((from + 3600_000) / 1000);
-  const { host } = await mount({
-    window: { fromMs: from, toMs: from + 7 * 24 * 3600_000 },
-    preset: "week",
-    runs: [run({ started_at: started, ended_at: started + 60 })],
-  });
-  const labels = [...host.querySelectorAll("svg text")]
-    .map((n) => n.textContent ?? "")
-    .filter((text) => text.length > 0);
-  assert.ok(labels.length >= 2, `축 라벨이 ${labels.length}개입니다`);
-  assert.equal(new Set(labels).size, labels.length, `축 라벨이 겹칩니다: ${labels.join(" | ")}`);
 });
 
 test("아주 짧은 실행도 보이는 폭을 갖는다", async () => {

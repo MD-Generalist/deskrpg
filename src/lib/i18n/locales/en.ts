@@ -2732,9 +2732,10 @@ const en: Record<string, string> = {
   "kanban.timeline.tone.running": "Running",
   "kanban.timeline.tone.done": "Done",
   "kanban.timeline.tone.failed": "Failed",
-  "kanban.timeline.tone.gaveUp": "Gave up",
-  "kanban.timeline.tone.interrupted": "Interrupted",
-  "kanban.timeline.tone.other": "Other",
+  "kanban.timeline.tone.actionable": "Needs action",
+  "kanban.timeline.tone.neutral": "Interrupted",
+  "kanban.timeline.tone.unknown": "No outcome recorded",
+  "kanban.timeline.legend": "Outcome legend",
   "kanban.timeline.unsupported":
     "The work timeline needs plugin {version} or newer. Upgrading turns it on.",
   "kanban.metrics.title": "Operational metrics",

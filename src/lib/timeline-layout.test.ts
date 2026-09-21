@@ -8,6 +8,7 @@ import {
   barDurationMs,
   dependencyEdges,
   layoutTimeline,
+  outcomeLegend,
   presetWindow,
   targetMarker,
   toneOf,
@@ -36,21 +37,62 @@ function run(over: Partial<KanbanTimelineRun> = {}): KanbanTimelineRun {
 // 결과 색
 // ---------------------------------------------------------------------------
 
-test("실패를 한 덩어리로 뭉개지 않는다", () => {
+test("결과를 뜻으로 묶는다 — 실패와 '할 일이 있다' 를 가른다", () => {
   assert.equal(toneOf({ outcome: "completed", ended_at: 1 }), "done");
-  assert.equal(toneOf({ outcome: "crashed", ended_at: 1 }), "failed");
-  assert.equal(toneOf({ outcome: "timed_out", ended_at: 1 }), "failed");
-  assert.equal(toneOf({ outcome: "spawn_failed", ended_at: 1 }), "failed");
-  // 포기는 사람이 원인을 봐야 하는 부류라 실패와 따로 둔다.
-  assert.equal(toneOf({ outcome: "gave_up", ended_at: 1 }), "gaveUp");
-  assert.equal(toneOf({ outcome: "reclaimed", ended_at: 1 }), "interrupted");
-  assert.equal(toneOf({ outcome: "blocked", ended_at: 1 }), "interrupted");
+  for (const bad of ["crashed", "timed_out", "spawn_failed", "gave_up", "stale"]) {
+    assert.equal(toneOf({ outcome: bad, ended_at: 1 }), "failed", bad);
+  }
+  // 한도·차단·변경요청은 사용자가 할 일이 있는 상태다. 실패색으로 칠하면 "고장" 으로 읽혀
+  // 그 할 일을 놓친다.
+  for (const todo of ["rate_limited", "blocked", "changes_requested"]) {
+    assert.equal(toneOf({ outcome: todo, ended_at: 1 }), "actionable", todo);
+  }
+  for (const mid of ["reclaimed", "scheduled", "review_requested"]) {
+    assert.equal(toneOf({ outcome: mid, ended_at: 1 }), "neutral", mid);
+  }
 });
 
 test("결과가 없고 끝나지도 않았으면 실행 중이다", () => {
   assert.equal(toneOf({ ended_at: undefined }), "running");
   // 끝났는데 결과가 없는 것은 판단하지 않는다 — 없는 뜻을 지어내지 않는다.
-  assert.equal(toneOf({ ended_at: 1 }), "other");
+  assert.equal(toneOf({ ended_at: 1 }), "unknown");
+});
+
+test("모르는 결과는 unknown 이고, 범례가 그 문자열을 잃지 않는다", () => {
+  // `outcome` 은 Hermes 코어가 소유한 열린 어휘다. 값이 늘어도 이름은 화면에 남아야 한다 —
+  // 실측에서 `rate_limited` 177건이 색 매핑에 없어 회색으로 뭉개진 것이 이 결함이었다.
+  assert.equal(toneOf({ outcome: "some_future_outcome", ended_at: 1 }), "unknown");
+  const win = { fromMs: 0, toMs: 10_000 };
+  const layout = layoutTimeline(
+    [
+      run({
+        id: "a",
+        profile: "sophie",
+        started_at: 1,
+        ended_at: 2,
+        outcome: "some_future_outcome",
+      }),
+      run({
+        id: "b",
+        profile: "sophie",
+        started_at: 3,
+        ended_at: 4,
+        outcome: "some_future_outcome",
+      }),
+      run({ id: "c", profile: "sophie", started_at: 5, ended_at: 6, outcome: "rate_limited" }),
+    ],
+    win,
+    10_000,
+  );
+  const legend = outcomeLegend(layout.rows);
+  assert.deepEqual(
+    legend.map((e) => [e.outcome, e.tone, e.count]),
+    [
+      ["some_future_outcome", "unknown", 2],
+      ["rate_limited", "actionable", 1],
+    ],
+    "범례가 값 이름을 잃거나 '기타' 로 뭉갰습니다",
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -241,7 +283,8 @@ test("지난 7일 창은 7일째 되는 날의 로컬 자정에서 열리고 오
   assert.equal(start.getHours(), 0);
   assert.equal(start.getMinutes(), 0);
   assert.equal(new Date(win.toMs).getHours(), 23);
-  assert.equal(localNoonDayIndex(win.toMs) - localNoonDayIndex(win.fromMs), 6, "오늘을 포함해 7일");
+  const days = Math.round(localNoonDayIndex(win.toMs) - localNoonDayIndex(win.fromMs));
+  assert.equal(days, 6, "오늘을 포함해 7일이어야 합니다");
 });
 
 /** 로컬 날짜를 정수로 — DST 가 있는 지역에서 ms 나누기로 날 수를 세면 틀린다. */
@@ -288,14 +331,18 @@ test("일 단위 눈금은 로컬 자정에 놓인다 — epoch 경계에 맞추
 test("프리셋 창의 눈금도 로컬 자정이다", () => {
   const now = Date.parse("2026-09-21T14:30:00.000Z");
   for (const tick of axisTicks(presetWindow("week", now))) {
-    assert.equal(new Date(tick).getHours(), 0);
+    const d = new Date(tick);
+    assert.equal(d.getHours(), 0, `눈금 ${d.toString()} 이 로컬 자정이 아닙니다`);
   }
 });
 
 test("하루를 넘는 창의 눈금은 서로 다른 날이다 — 라벨이 전부 같아지지 않는다", () => {
   const now = Date.parse("2026-09-21T14:30:00.000Z");
   const win = presetWindow("week", now);
-  const days = axisTicks(win).map((t) => new Date(t).toDateString());
+  const ticks = axisTicks(win);
+  // 실측 결함의 모양은 "라벨 일곱 개가 모두 오전 09:00" 이었다. 라벨 포맷은 로케일 소관이므로
+  // 여기서는 그 근거가 되는 성질만 본다 — 눈금이 서로 다른 **날짜**여야 한다.
+  const days = ticks.map((t) => new Date(t).toDateString());
   assert.equal(new Set(days).size, days.length, `눈금이 같은 날에 겹쳤습니다: ${days.join(", ")}`);
   assert.equal(axisLabelKind(win), "date", "하루를 넘는 창은 날짜 라벨을 써야 합니다");
 });
