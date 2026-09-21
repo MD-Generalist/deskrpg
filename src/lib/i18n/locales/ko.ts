@@ -2200,6 +2200,20 @@ const ko: Record<string, string> = {
     "뒤처져 있습니다. 호스트에서 플러그인을 올린 뒤 연결 테스트를 누르세요.",
   "gateways.pluginVersionRecheck": "연결 테스트를 누르면 확인합니다.",
   "gateways.pluginVersionUpdateNow": "지금 갱신",
+  "gateways.workerPlugin.missing":
+    "칸반·크론으로 한 일의 결과물이 쌓이지 않는 직원 {count}명 — {names}",
+  "gateways.workerPlugin.apply": "적용",
+  "gateways.workerPlugin.applying": "적용 중…",
+  "gateways.workerPlugin.whatChanges": "각 직원 설정에 플러그인 항목을 추가하고 백업을 남깁니다",
+  "gateways.workerPlugin.disabledByOperator":
+    "{names}: 운영자가 플러그인을 꺼 두어 적용하지 않습니다",
+  "gateways.workerPlugin.applied":
+    "적용했습니다. 칸반 작업은 다음 카드부터 반영됩니다. 크론은 설치 방식에 따라 게이트웨이를 다시 시작해야 반영될 수 있습니다.",
+  "gateways.workerPlugin.failed": "{name}: {reason}",
+  "gateways.workerPlugin.reasonConfigUnreadable": "설정 파일을 읽을 수 없어 바꾸지 않았습니다",
+  "gateways.workerPlugin.reasonNotFound": "직원을 찾을 수 없습니다",
+  "gateways.workerPlugin.reasonOther": "적용하지 못했습니다 ({code})",
+  "gateways.workerPlugin.requestFailed": "적용 요청이 실패했습니다 ({code})",
   "gateways.editTitle": "게이트웨이 수정",
   "gateways.createHelp":
     "나만의 Hermes 게이트웨이를 등록합니다. 등록한 뒤 사용할 프로필을 추가하세요.",

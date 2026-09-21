@@ -32,7 +32,23 @@ export type PluginInfo = {
    * 파서가 http(s) 만 남긴다. 구버전 플러그인·기존 캐시에는 키가 없어 선택으로 둔다.
    */
   dashboard_url?: string | null;
+  /**
+   * 0.12.0 — 칸반 워커·크론에서 플러그인이 안 뜨는 직원(`worker-plugin.ts`). 옛 플러그인에는
+   * 키가 없고(undefined), 판정 실패면 null 이다. 둘을 섞지 않는다.
+   */
+  worker_plugin?: WorkerPluginReport | null;
 };
+
+/** 한 직원의 워커 플러그인 상태. `link`: linked · missing · other. */
+export type WorkerPluginGap = {
+  profile: string;
+  link: string;
+  enabled: boolean;
+  /** 운영자가 `plugins.disabled` 로 끈 직원 — 적용해도 켜지지 않는다. */
+  disabled: boolean;
+};
+
+export type WorkerPluginReport = { missing: WorkerPluginGap[] };
 
 // ---------------------------------------------------------------------------
 // A.1 칸반 — 보드·카드

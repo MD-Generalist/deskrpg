@@ -2223,6 +2223,21 @@ const ja: Record<string, string> = {
   "gateways.pluginVersionOutdated": "が古いです。ホストで更新してから接続テストを押してください。",
   "gateways.pluginVersionRecheck": "接続テストを押すと確認します。",
   "gateways.pluginVersionUpdateNow": "今すぐ更新",
+  "gateways.workerPlugin.missing":
+    "カンバン・クロンで行った作業の成果物がたまらない社員 {count}人 — {names}",
+  "gateways.workerPlugin.apply": "適用",
+  "gateways.workerPlugin.applying": "適用中…",
+  "gateways.workerPlugin.whatChanges":
+    "各社員の設定にプラグイン項目を追加し、バックアップを残します",
+  "gateways.workerPlugin.disabledByOperator":
+    "{names}: 運用者がプラグインを無効にしているため適用しません",
+  "gateways.workerPlugin.applied":
+    "適用しました。カンバンの作業は次のカードから反映されます。クロンはインストール方法によってはゲートウェイの再起動が必要です。",
+  "gateways.workerPlugin.failed": "{name}: {reason}",
+  "gateways.workerPlugin.reasonConfigUnreadable": "設定ファイルを読めないため変更しませんでした",
+  "gateways.workerPlugin.reasonNotFound": "社員が見つかりません",
+  "gateways.workerPlugin.reasonOther": "適用できませんでした ({code})",
+  "gateways.workerPlugin.requestFailed": "適用リクエストが失敗しました ({code})",
   "gateways.editTitle": "ゲートウェイ編集",
   "gateways.createHelp":
     "自分の Hermes ゲートウェイを登録します。登録後、使用するプロファイルを追加してください。",

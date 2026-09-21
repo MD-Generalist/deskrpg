@@ -17,6 +17,8 @@ import { backLinkTarget } from "./return-target";
 import { employeesHref } from "@/components/workspace-navigation";
 import { describePluginVersion } from "@/lib/hermes/plugin-version-view";
 import { setupCopy, setupError, setupHostError, setupStep } from "@/components/gateway/setup-copy";
+import type { WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
+import WorkerPluginLine, { type WorkerPluginApplyResponse } from "./WorkerPluginLine";
 
 type GatewayRow = {
   id: string;
@@ -34,6 +36,8 @@ type GatewayRow = {
   /** 마지막 프로브가 본 설치본 버전. `/api/gateways` 가 캐시에서 내려준다. */
   pluginVersion?: string | null;
   pluginStatus?: string | null;
+  /** 칸반·크론 결과물이 쌓이지 않는 직원. 소유자에게만 내려온다(`worker-plugin.ts`). */
+  workerPluginWarning?: WorkerPluginWarning | null;
 };
 
 type GatewayShare = {
@@ -140,6 +144,17 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
       {updateError && <span className="text-danger">{updateError}</span>}
     </p>
   );
+}
+
+/** 서버가 200 + errorCode 로도 실패를 말하므로(프록시 관례) 본문의 `results` 유무로 가른다. */
+async function applyWorkerPluginRequest(gatewayId: string): Promise<WorkerPluginApplyResponse> {
+  const res = await fetch(`/api/gateways/${gatewayId}/plugin/worker-plugin`, { method: "POST" });
+  const body = await res.json().catch(() => ({}));
+  if (res.ok && Array.isArray(body?.results)) return { ok: true, results: body.results };
+  return {
+    ok: false,
+    errorCode: typeof body?.errorCode === "string" ? body.errorCode : `http_${res.status}`,
+  };
 }
 
 const EMPTY_TEST_STATE: GatewayTestState = { status: "idle" };
@@ -700,6 +715,17 @@ function GatewayManagementPageInner() {
                   <PluginVersionLine
                     gateway={selectedGateway}
                     onUpdated={() => void loadGateways({ autoSelect: false })}
+                  />
+                )}
+
+                {selectedGateway && (
+                  // 게이트웨이를 바꾸면 이전 적용 결과를 들고 가지 않도록 key 로 새로 만든다.
+                  <WorkerPluginLine
+                    key={selectedGateway.id}
+                    warning={selectedGateway.workerPluginWarning ?? null}
+                    isOwner={selectedGateway.isOwner === true}
+                    apply={() => applyWorkerPluginRequest(selectedGateway.id)}
+                    onApplied={() => void loadGateways({ autoSelect: false })}
                   />
                 )}
 

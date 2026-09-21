@@ -1,3 +1,4 @@
+import type { WorkerPluginResult } from "./worker-plugin";
 /** Pure plugin contracts shared by server clients and browser components. */
 import type { PluginFailure } from "./plugin-errors";
 import type { ArtifactDetail, ArtifactPage, ArtifactVersion } from "./deskrpg-plugin-types";
@@ -156,6 +157,10 @@ export type ProviderKeyPayload = {
 
 export type PluginClient = {
   listProfiles(): Promise<PluginResponse<{ profiles: unknown[] }>>;
+  /** 0.12.0 — 칸반 워커·크론이 뜨는 프로필 홈에도 플러그인을 둔다(소유자 키). 이름이 없으면 전부. */
+  ensureWorkerPlugin(
+    profiles?: string[],
+  ): Promise<PluginResponse<{ results: WorkerPluginResult[] }>>;
   createProfile(
     name: string,
     options?: CreateProfileOptions,

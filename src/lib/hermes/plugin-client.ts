@@ -230,6 +230,12 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
   return {
     listProfiles: () => call("/deskrpg/profiles", input.defaultToken),
 
+    ensureWorkerPlugin: (profiles) =>
+      call("/deskrpg/worker-plugin", input.defaultToken, {
+        method: "POST",
+        body: profiles ? { profiles } : {},
+      }),
+
     createProfile: (name, options) =>
       call("/deskrpg/profiles", input.defaultToken, {
         method: "POST",

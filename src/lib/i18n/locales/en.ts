@@ -2205,6 +2205,22 @@ const en: Record<string, string> = {
     "is out of date. Update it on the host, then run Test connection.",
   "gateways.pluginVersionRecheck": "Run Test connection to check.",
   "gateways.pluginVersionUpdateNow": "Update now",
+  "gateways.workerPlugin.missing":
+    "{count} staff whose kanban and cron work does not reach Results — {names}",
+  "gateways.workerPlugin.apply": "Apply",
+  "gateways.workerPlugin.applying": "Applying…",
+  "gateways.workerPlugin.whatChanges":
+    "Adds the plugin entry to each staff member's settings and keeps a backup",
+  "gateways.workerPlugin.disabledByOperator":
+    "{names}: the operator disabled the plugin, so it is left off",
+  "gateways.workerPlugin.applied":
+    "Applied. Kanban work picks it up from the next card. Cron may need a gateway restart, depending on how it is installed.",
+  "gateways.workerPlugin.failed": "{name}: {reason}",
+  "gateways.workerPlugin.reasonConfigUnreadable":
+    "the settings file could not be read, so it was not changed",
+  "gateways.workerPlugin.reasonNotFound": "staff member not found",
+  "gateways.workerPlugin.reasonOther": "could not apply ({code})",
+  "gateways.workerPlugin.requestFailed": "The apply request failed ({code})",
   "gateways.editTitle": "Edit gateway",
   "gateways.createHelp":
     "Register a Hermes gateway that you own, then add the profiles you want to use.",

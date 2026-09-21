@@ -17,6 +17,7 @@
  * `buildPluginCacheUpdate` 는 그래서 `plugin-cache-update.ts`(서버 전용)로 뽑았다.
  */
 
+import { parseWorkerPluginReport } from "./worker-plugin";
 import type { PluginInfo } from "./deskrpg-plugin-types";
 
 export type PluginStatus = "plugin_ready" | "plugin_unauthorized" | "plugin_absent" | "unknown";
@@ -93,6 +94,8 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
       ? (record.kanban as Record<string, unknown>)
       : {};
 
+  const workerPlugin = parseWorkerPluginReport(record.worker_plugin);
+
   return {
     plugin: PLUGIN_NAME,
     version: record.version,
@@ -103,6 +106,8 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
       attachments: kanbanRecord.attachments === true,
     },
     dashboard_url: httpUrlOrNull(record.dashboard_url),
+    // 옛 플러그인 본문에는 키를 만들지 않는다 — "필드 없음" 과 "판정 실패(null)" 를 구분한다.
+    ...(workerPlugin === undefined ? {} : { worker_plugin: workerPlugin }),
   };
 }
 
