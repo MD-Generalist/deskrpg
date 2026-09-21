@@ -45,22 +45,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/server.js ./server.js
 
 # CommonJS modules required by server.js (not traced by Next.js standalone)
-COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatter.js
-COPY --from=builder /app/src/lib/meeting-discussion-state.ts ./src/lib/meeting-discussion-state.ts
-COPY --from=builder /app/src/lib/meeting-outcome.ts ./src/lib/meeting-outcome.ts
-COPY --from=builder /app/src/lib/meeting-outcome-notice.ts ./src/lib/meeting-outcome-notice.ts
-COPY --from=builder /app/src/lib/room-notice-rewrite.ts ./src/lib/room-notice-rewrite.ts
-COPY --from=builder /app/src/lib/meeting-registry.ts ./src/lib/meeting-registry.ts
-COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
-COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
-COPY --from=builder /app/src/lib/path-alias.js ./src/lib/path-alias.js
-COPY --from=builder /app/src/lib/startup-check.js ./src/lib/startup-check.js
-COPY --from=builder /app/src/lib/runtime-env-bootstrap.js ./src/lib/runtime-env-bootstrap.js
-COPY --from=builder /app/src/lib/npc-chat-history.ts ./src/lib/npc-chat-history.ts
-COPY --from=builder /app/src/lib/dm-threads.ts ./src/lib/dm-threads.ts
-COPY --from=builder /app/src/lib/npc-activity.ts ./src/lib/npc-activity.ts
-COPY --from=builder /app/src/lib/npc-prompt-layers.ts ./src/lib/npc-prompt-layers.ts
-COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-access.ts
+# `src/lib` 는 **디렉터리째** 복사한다. 파일마다 COPY 하면 줄마다 레이어가 하나씩 생겨, 런타임 의존이
+# 늘 때마다 이미지가 overlay2 의 레이어 한도에 다가간다 — 2026.921.2 는 126 레이어가 되어 Linux 에서
+# `docker pull` 이 `max depth exceeded` 로 실패했다. 새 의존을 더할 때 이 파일을 고칠 필요도 없어진다.
+COPY --from=builder /app/src/lib ./src/lib
 
 # 대화 런타임과 소켓 서버는 **디렉토리째** 복사한다.
 #
@@ -70,75 +58,32 @@ COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-a
 # socket-handlers.ts 를 import 하므로 그대로 두면 컨테이너가 기동에서 죽는다.
 #
 # 목록을 손으로 맞추는 대신 경계를 통째로 옮긴다. 새 형제 파일이 생겨도 따라온다.
-COPY --from=builder /app/src/lib/conversation ./src/lib/conversation
 COPY --from=builder /app/src/server ./src/server
 # Pure shared map geometry and navigation used by channel motion coordination.
-COPY --from=builder /app/src/lib/tiled-geometry.ts ./src/lib/tiled-geometry.ts
-COPY --from=builder /app/src/lib/object-types.ts ./src/lib/object-types.ts
 COPY --from=builder /app/src/game/navigation.ts ./src/game/navigation.ts
 # Shared catalog/layout/seat modules evolve together; retain their runtime boundary.
 COPY --from=builder /app/src/game/three ./src/game/three
 COPY --from=builder /app/src/game/ambient-zones.ts ./src/game/ambient-zones.ts
 COPY --from=builder /app/src/game/meeting-map-normalization.ts ./src/game/meeting-map-normalization.ts
 COPY --from=builder /app/src/game/meeting-space.ts ./src/game/meeting-space.ts
-COPY --from=builder /app/src/lib/open-chat-formatter.ts ./src/lib/open-chat-formatter.ts
 
 # DB 경계는 통째로 옮긴다. 파일 목록으로 두면 `require("./sqlite-...js")` 처럼
 # 정적 추적에 안 걸리는 진입점이 생길 때마다 조용히 빠진다 — 실제로 이관 모듈
 # 둘(sqlite-npc-profile-ownership.js, sqlite-openclaw-retirement.js)이 COPY 줄
 # 없이 Next 의 standalone 추적에 얹혀 살아 있었다.
 COPY --from=builder /app/src/db ./src/db
-COPY --from=builder /app/src/lib/file-extractor.ts ./src/lib/file-extractor.ts
-COPY --from=builder /app/src/lib/db-json.ts ./src/lib/db-json.ts
-COPY --from=builder /app/src/lib/my-character.ts ./src/lib/my-character.ts
-COPY --from=builder /app/src/lib/my-character-limits.ts ./src/lib/my-character-limits.ts
-COPY --from=builder /app/src/lib/user-context.ts ./src/lib/user-context.ts
-COPY --from=builder /app/src/lib/report-format.ts ./src/lib/report-format.ts
-COPY --from=builder /app/src/lib/quick-start.ts ./src/lib/quick-start.ts
-COPY --from=builder /app/src/lib/channel-map-refresh.ts ./src/lib/channel-map-refresh.ts
-COPY --from=builder /app/src/lib/channel-motion-layout.ts ./src/lib/channel-motion-layout.ts
-COPY --from=builder /app/src/lib/effective-map-spawn.ts ./src/lib/effective-map-spawn.ts
-COPY --from=builder /app/src/lib/channel-map-revision.ts ./src/lib/channel-map-revision.ts
-COPY --from=builder /app/src/lib/db-unique-violation.ts ./src/lib/db-unique-violation.ts
-COPY --from=builder /app/src/lib/chat-rooms.ts ./src/lib/chat-rooms.ts
-COPY --from=builder /app/src/lib/uuid-v7.ts ./src/lib/uuid-v7.ts
-COPY --from=builder /app/src/lib/chat-rooms-policy.ts ./src/lib/chat-rooms-policy.ts
-COPY --from=builder /app/src/lib/chat-response.ts ./src/lib/chat-response.ts
 # NPC 의 이름·외형은 Hermes 프로필이 정본이다 — 소켓 서버의 NPC 로더가 이 투영을 거친다.
-COPY --from=builder /app/src/lib/npc-projection.ts ./src/lib/npc-projection.ts
 # npc:set-active 소켓 핸들러가 출근/퇴근 토글에 쓴다.
-COPY --from=builder /app/src/lib/npc-roster.ts ./src/lib/npc-roster.ts
-COPY --from=builder /app/src/lib/npc-seating.ts ./src/lib/npc-seating.ts
-COPY --from=builder /app/src/lib/seat-assignment.ts ./src/lib/seat-assignment.ts
 # NOTE: src/lib/runtime-paths.ts (ESM) is distinct from src/lib/runtime-paths.js
 # (CJS, copied above for openclaw-gateway.js's require()). db/index.ts imports the
 # extensionless "../lib/runtime-paths", which TypeScript resolves to the .ts file.
-COPY --from=builder /app/src/lib/runtime-paths.ts ./src/lib/runtime-paths.ts
-COPY --from=builder /app/src/lib/gateway-resources.ts ./src/lib/gateway-resources.ts
 # gateway-resources 가 바인딩 뒤 보드 확보(T4)를 위해 끌어온다 — 빠지면 소켓 서버가 기동에서 죽는다.
-COPY --from=builder /app/src/lib/kanban-boards.ts ./src/lib/kanban-boards.ts
-COPY --from=builder /app/src/lib/automation-gate.ts ./src/lib/automation-gate.ts
 # 폴러(T5)가 REST 라우트에 자기를 꽂는 globalThis 레지스트리 — 빠지면 소켓 서버가 기동에서 죽는다.
-COPY --from=builder /app/src/lib/automation-registry.ts ./src/lib/automation-registry.ts
 # 자동화 사건 싱크(T5)가 크론 결과의 출처를 대조하려고 끌어온다.
-COPY --from=builder /app/src/lib/cron-origins.ts ./src/lib/cron-origins.ts
-COPY --from=builder /app/src/lib/gateway-runtime-cache.ts ./src/lib/gateway-runtime-cache.ts
-COPY --from=builder /app/src/lib/npc-response-messages.ts ./src/lib/npc-response-messages.ts
-COPY --from=builder /app/src/lib/dev-constants.ts ./src/lib/dev-constants.ts
-COPY --from=builder /app/src/lib/i18n/error-codes.ts ./src/lib/i18n/error-codes.ts
 # 회의 규약 폴백(getDefaultMeetingProtocol)이 끌어오는 프리셋·로케일 트리.
-COPY --from=builder /app/src/lib/npc-agent-defaults.ts ./src/lib/npc-agent-defaults.ts
-COPY --from=builder /app/src/lib/npc-persona-presets.ts ./src/lib/npc-persona-presets.ts
-COPY --from=builder /app/src/lib/office-presets.ts ./src/lib/office-presets.ts
-COPY --from=builder /app/src/lib/i18n/server.ts ./src/lib/i18n/server.ts
-COPY --from=builder /app/src/lib/i18n/locales ./src/lib/i18n/locales
 # Whole-directory copies (not per-file): this project has missed individual files in
 # these two directories five times (most recently local-discovery-gate.ts and
 # profile-name.ts, neither of which had its own COPY line before this fix).
-COPY --from=builder /app/src/lib/adapters ./src/lib/adapters
-COPY --from=builder /app/src/lib/hermes-profiles.ts ./src/lib/hermes-profiles.ts
-COPY --from=builder /app/src/lib/profile-look-assignment.ts ./src/lib/profile-look-assignment.ts
-COPY --from=builder /app/src/lib/hermes ./src/lib/hermes
 
 # .dockerignore does NOT apply to `COPY --from=<stage>` — it filters the build context
 # sent to the daemon, not files already inside a stage. Verified by inspecting a built

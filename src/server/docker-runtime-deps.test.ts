@@ -90,3 +90,17 @@ test("npm allowlist includes every socket server runtime source dependency", () 
   );
   assert.deepEqual(missing.sort(), [], "npm package would omit runtime dependencies");
 });
+
+test("이미지의 레이어 수가 overlay2 한도에서 멀다", () => {
+  // Linux 의 overlay2 는 레이어가 125개를 넘는 이미지를 풀지 못한다(`failed to register layer: max depth
+  // exceeded`). 2026.921.2 가 126 레이어로 공개돼 `docker pull` 이 실패했다 — 빌드·푸시·매니페스트 확인은
+  // 전부 초록이었고, 실제로 pull 해 보기 전에는 아무도 몰랐다. COPY·RUN·ADD 한 줄이 레이어 하나다.
+  // 기반 이미지(node:22-bookworm-slim)가 5개 안팎을 쓰므로 여유를 크게 둔다.
+  const dockerfile = readFileSync(path.join(repoRoot, "Dockerfile"), "utf8");
+  const runner = dockerfile.slice(dockerfile.lastIndexOf("\nFROM "));
+  const layers = runner.split("\n").filter((line) => /^(COPY|RUN|ADD)\b/.test(line)).length;
+  assert.ok(
+    layers <= 90,
+    `runner 단계가 레이어 ${layers}개를 만든다 — 파일마다 COPY 하지 말고 디렉터리째 복사하라`,
+  );
+});
