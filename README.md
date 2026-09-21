@@ -103,30 +103,29 @@ SQLite stores data in `data/deskrpg.db`.
 Recommended if you expect multiple users or want a more durable database.
 
 ```bash
-cp .env.example .env.docker
-docker compose --env-file .env.docker up -d
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
+printf 'JWT_SECRET=%s\nPOSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 16)" > .env.docker
+docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -d
 ```
-
-Before the first run, open `.env.docker` and set:
-
-- `JWT_SECRET`
-- `POSTGRES_PASSWORD`
 
 DeskRPG will open on `http://localhost:3102`.
 
+Pass `-f docker/docker-compose.external.yml` every time, including `down` and `logs`. The
+repository root also holds a `docker-compose.yml`, but that one is the Hostinger one-click stack:
+it publishes no HTTP port and defaults `COOKIE_SECURE` to `true`, so a plain `docker compose up`
+gives you nothing to connect to, and a browser would discard the login cookie over HTTP. See
+[deploy/hostinger/README.md](deploy/hostinger/README.md) for that path.
+
 Public images live on GHCR: `ghcr.io/dandacompany/deskrpg`. The Compose default is `ghcr.io/dandacompany/deskrpg:latest`; to pin a release, set `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<release tag>` in `.env.docker`. The old Docker Hub `dandacompany/deskrpg` images are legacy and stop at `2026.9.19` — they receive no new releases.
-
-If you prefer the explicit file path version, you can run:
-
-```bash
-docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -d
-```
 
 ### Option 5: Docker with SQLite
 
 Recommended if you want the simplest single-machine setup.
 
 ```bash
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
 printf 'JWT_SECRET=%s\n' "$(openssl rand -hex 32)" > .env.lite
 docker compose --env-file .env.lite -f docker/docker-compose.lite.yml up -d
 ```

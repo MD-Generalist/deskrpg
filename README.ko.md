@@ -103,30 +103,28 @@ SQLite 데이터는 `data/deskrpg.db`에 저장됩니다.
 여러 사용자가 함께 쓰거나, 조금 더 안정적인 데이터 저장이 필요하면 이 구성을 권장합니다.
 
 ```bash
-cp .env.example .env.docker
-docker compose --env-file .env.docker up -d
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
+printf 'JWT_SECRET=%s\nPOSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 16)" > .env.docker
+docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -d
 ```
-
-처음 실행하기 전 `.env.docker`를 열어 아래 값을 설정하세요.
-
-- `JWT_SECRET`
-- `POSTGRES_PASSWORD`
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
+`down`·`logs`를 포함해 매번 `-f docker/docker-compose.external.yml`을 붙이세요. 저장소 루트에도
+`docker-compose.yml`이 있지만 그것은 Hostinger 원클릭 스택입니다 — HTTP 포트를 열지 않고
+`COOKIE_SECURE` 기본값이 `true`라, 그냥 `docker compose up`을 하면 접속할 포트가 없고 HTTP에서는
+브라우저가 로그인 쿠키를 버립니다. 그 경로는 [deploy/hostinger/README.md](deploy/hostinger/README.md)를 보세요.
+
 공개 이미지는 GHCR `ghcr.io/dandacompany/deskrpg`에 있습니다. Compose 기본값은 `ghcr.io/dandacompany/deskrpg:latest`이며, 특정 릴리스로 고정하려면 `.env.docker`에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<릴리스 태그>`를 설정하세요. 옛 Docker Hub `dandacompany/deskrpg` 이미지는 `2026.9.19`에서 멈춘 레거시이며 새 릴리스가 올라가지 않습니다.
-
-명시적으로 파일 경로를 지정하고 싶다면 아래 명령을 사용해도 됩니다.
-
-```bash
-docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -d
-```
 
 ### 5. Docker + SQLite
 
 한 대의 서버에서 가볍게 시작하고 싶다면 이 구성이 가장 간단합니다.
 
 ```bash
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
 printf 'JWT_SECRET=%s\n' "$(openssl rand -hex 32)" > .env.lite
 docker compose --env-file .env.lite -f docker/docker-compose.lite.yml up -d
 ```
