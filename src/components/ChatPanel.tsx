@@ -28,6 +28,13 @@ import NpcCardsTab from "./chat/NpcCardsTab";
 import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state";
 import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
 
+/**
+ * `kanban:event` 가 몰아칠 때 카드 탭이 보드를 이벤트 수만큼 읽지 않도록 묶는 시간.
+ * 칸반 모달의 `KANBAN_EVENT_DEBOUNCE_MS` 와 같은 값이다 — 같은 사건 스트림을 듣는다.
+ * 모듈을 끌어오지 않으려고 여기 둔다(모달은 무거운 클라이언트 컴포넌트다).
+ */
+const CARDS_EVENT_DEBOUNCE_MS = 400;
+
 /** NPC 대화창의 크론 탭(T9)에 필요한 것. 배선(GamePageClient)이 넘긴다 — 없으면 탭이 없다. */
 /** 직원 대화창 탭의 미확인 개수(`GET .../panel-reads`). */
 export type PanelBadgeCounts = { cards: number; cron: number };
@@ -90,6 +97,13 @@ interface ChatPanelProps {
   onMarkSeen?: (tab: "cron" | "cards") => void;
   /** 카드 탭에서 카드를 눌렀다 — 칸반을 그 카드로 지목한다. 없으면 누를 수 없다. */
   onOpenAssignedCard?: (taskId: string) => void;
+  /**
+   * `kanban:event` 마다 오르는 값(배선의 `kanbanRefreshTick`). 카드 탭이 열려 있을 때만
+   * 보드를 다시 읽는다 — 배지와 목록이 같은 트리거를 쓰게 하는 것이 이 prop 의 전부다.
+   */
+  cardsRefreshTick?: number;
+  /** 사건 → 재조회 디바운스(ms). 칸반 모달과 같은 값이다(테스트에서 줄인다). */
+  cardsDebounceMs?: number;
   /** 방 알림의 "이력 열기"(R30) — 채널 크론 화면을 그 잡으로 연다. 없으면 링크가 없다. */
   onOpenNoticeCronJob?: (jobId: string) => void;
   /** 회의 결과 알림의 "프로젝트로 등록" — 그 회의록을 연다. 없으면 버튼이 없다. */
@@ -165,6 +179,8 @@ export default function ChatPanel({
   badges = null,
   onMarkSeen,
   onOpenAssignedCard,
+  cardsRefreshTick = 0,
+  cardsDebounceMs = CARDS_EVENT_DEBOUNCE_MS,
   npcArtifactChips = [],
   onOpenArtifact,
   avatarFor,
@@ -179,7 +195,7 @@ export default function ChatPanel({
     setNpcTabState({ npcId: dialogNpcId, tab });
     if (tab !== "chat") onMarkSeen?.(tab);
   };
-  // 카드 탭의 보드 — 탭을 열 때 한 번 읽는다. 실패하면 **서버가 준 코드를 그대로** 들고 가야
+  // 카드 탭의 보드 — 탭을 열 때, 그리고 `kanban:event` 가 올 때 읽는다. 실패하면 **서버가 준 코드를 그대로** 들고 가야
   // `NpcCardsTab` 이 428·409·503 전용 안내를 고를 수 있다(감싸거나 바꾸지 않는다).
   // 결과에 조회 키를 함께 담아, 직원·채널이 바뀌면 옛 결과를 렌더 중에 버린다(effect 로
   // 되돌리지 않는다 — 한 프레임 동안 남의 카드가 보이는 일이 없다).
@@ -191,26 +207,52 @@ export default function ChatPanel({
   const cardsChannelId = cron?.channelId ?? null;
   const cardsKey =
     npcTab === "cards" && cardsChannelId && dialogNpcId ? `${cardsChannelId}:${dialogNpcId}` : null;
-  useEffect(() => {
+  // 늦게 온 응답이 새 조회 결과를 덮지 않게 하는 세대 번호. 디바운스 재조회가 생기면서
+  // 조회가 겹칠 수 있어 effect 지역의 `alive` 플래그만으로는 모자란다.
+  const cardsRequestRef = useRef(0);
+  const loadCards = useCallback(() => {
     if (!cardsKey || !cardsChannelId) return;
-    let alive = true;
+    const seq = ++cardsRequestRef.current;
     createKanbanApi(cardsChannelId)
       .board(false)
       .then((board) => {
-        if (alive) setCardsFetch({ key: cardsKey, board, error: null });
+        if (seq === cardsRequestRef.current) setCardsFetch({ key: cardsKey, board, error: null });
       })
       .catch((err: unknown) => {
-        if (!alive) return;
+        if (seq !== cardsRequestRef.current) return;
         setCardsFetch({
           key: cardsKey,
           board: null,
           error: err instanceof KanbanApiError ? err.code : "unknown_error",
         });
       });
-    return () => {
-      alive = false;
-    };
   }, [cardsKey, cardsChannelId]);
+  useEffect(() => {
+    loadCards();
+    return () => {
+      // 직원·채널이 바뀌면 진행 중인 조회의 결과를 버린다.
+      cardsRequestRef.current += 1;
+    };
+  }, [loadCards]);
+  /**
+   * `kanban:event` 로 목록을 다시 읽는다 — 배지만 오르고 목록이 낡는 상태를 없앤다.
+   * **탭이 열려 있을 때만** 돈다 — 조회를 막는 것은 `loadCards` 의 `cardsKey` 검사이고,
+   * 여기 같은 조건을 한 번 더 두는 것은 닫힌 탭에서 타이머를 걸지 않기 위해서다. 조회 키는
+   * 그대로라 재조회 중에도 이전 목록이 남는다 — 확정되지 않은 상태를 빈 목록으로
+   * 단정하지 않는다는 카드 탭의 불변식(`6b2fb198`)이 여기서 유지된다.
+   */
+  const cardsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (cardsRefreshTick === 0 || !cardsKey) return;
+    if (cardsDebounceRef.current) clearTimeout(cardsDebounceRef.current);
+    cardsDebounceRef.current = setTimeout(() => {
+      cardsDebounceRef.current = null;
+      loadCards();
+    }, cardsDebounceMs);
+    return () => {
+      if (cardsDebounceRef.current) clearTimeout(cardsDebounceRef.current);
+    };
+  }, [cardsRefreshTick, cardsDebounceMs, cardsKey, loadCards]);
   const cardsLoaded = cardsFetch?.key === cardsKey ? cardsFetch : null;
   const cardsBoard = cardsLoaded?.board ?? null;
   const cardsError = cardsLoaded?.error ?? null;

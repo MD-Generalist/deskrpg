@@ -864,3 +864,186 @@ test("제안 알림 — 서버가 409 로 거절하면 안내를 보이고 버�
     globalThis.fetch = originalFetch;
   }
 });
+
+// ---------------------------------------------------------------------------
+// 카드 탭 목록이 `kanban:event` 로 갱신된다 — 배지만 오르고 목록이 낡는 상태를 없앤다.
+// ---------------------------------------------------------------------------
+
+/** prop 을 바꿔 다시 그릴 수 있는 mount. 배선이 올려 주는 tick 을 흉내낸다. */
+async function mountRerender(
+  node: React.ReactElement,
+): Promise<{ el: HTMLElement; render: (next: React.ReactElement) => Promise<void> }> {
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+  const root = createRoot(el);
+  await act(async () => {
+    root.render(node);
+  });
+  return {
+    el,
+    render: async (next) => {
+      await act(async () => {
+        root.render(next);
+      });
+    },
+  };
+}
+
+/** 디바운스가 지나고 그 뒤 조회까지 끝나기를 기다린다. */
+async function settle(ms: number) {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  });
+}
+
+/** 담당 카드 `titles` 를 가진 보드를 돌려주는 fetch. 호출된 URL 을 모은다. */
+function boardFetch(titlesByCall: string[][]): { urls: string[]; fetch: typeof fetch } {
+  const urls: string[] = [];
+  let call = 0;
+  const impl = (async (input: RequestInfo | URL) => {
+    urls.push(typeof input === "string" ? input : input.toString());
+    const titles = titlesByCall[Math.min(call, titlesByCall.length - 1)] ?? [];
+    call += 1;
+    return new Response(
+      JSON.stringify({
+        columns: [
+          {
+            status: "todo",
+            tasks: titles.map((title, i) => ({
+              id: `t${i + 1}`,
+              title,
+              status: "todo",
+              assignee: "sophie",
+            })),
+          },
+        ],
+        npcs: [{ npcId: "npc-a", npcName: "소피", profileName: "sophie", active: true }],
+      }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+  return { urls, fetch: impl };
+}
+
+function cardTitles(el: HTMLElement): string[] {
+  return Array.from(el.querySelectorAll('[data-testid="npc-cards-tab"] [data-card-id]')).map(
+    (node) => (node.textContent ?? "").trim(),
+  );
+}
+
+test("카드 탭을 열어 둔 채 kanban:event 가 오면 목록이 다시 읽힌다", async () => {
+  const originalFetch = globalThis.fetch;
+  const server = boardFetch([["주간 보고서"], ["주간 보고서", "새로 배정된 카드"]]);
+  globalThis.fetch = server.fetch;
+  try {
+    const view = await mountRerender(cardsPanel({ cardsRefreshTick: 0, cardsDebounceMs: 5 }));
+    await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await settle(20);
+    assert.equal(cardTitles(view.el).length, 1);
+
+    await view.render(cardsPanel({ cardsRefreshTick: 1, cardsDebounceMs: 5 }));
+    await settle(30);
+    assert.equal(
+      cardTitles(view.el).length,
+      2,
+      "사건이 왔는데 목록이 그대로다 — 배지만 오르고 목록이 낡는다",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("사건이 몰아쳐도 보드 조회는 묶여서 한 번만 나간다", async () => {
+  const originalFetch = globalThis.fetch;
+  const server = boardFetch([["주간 보고서"]]);
+  globalThis.fetch = server.fetch;
+  try {
+    const view = await mountRerender(cardsPanel({ cardsRefreshTick: 0, cardsDebounceMs: 30 }));
+    await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await settle(10);
+    const afterOpen = server.urls.length;
+
+    for (const tick of [1, 2, 3, 4]) {
+      await view.render(cardsPanel({ cardsRefreshTick: tick, cardsDebounceMs: 30 }));
+    }
+    await settle(60);
+    assert.equal(
+      server.urls.length - afterOpen,
+      1,
+      "사건 수만큼 보드를 읽고 있다 — 이 조회는 서버에서 Hermes 를 부른다",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("카드 탭을 열지 않았으면 사건이 와도 보드를 읽지 않는다", async () => {
+  const originalFetch = globalThis.fetch;
+  const server = boardFetch([[]]);
+  globalThis.fetch = server.fetch;
+  try {
+    const view = await mountRerender(cardsPanel({ cardsRefreshTick: 0, cardsDebounceMs: 5 }));
+    await view.render(cardsPanel({ cardsRefreshTick: 1, cardsDebounceMs: 5 }));
+    await settle(20);
+    assert.deepEqual(server.urls, [], "닫힌 탭이 보드를 읽고 있다");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("다시 읽는 동안에도 이전 목록이 남는다 — 빈 목록으로 단정하지 않는다", async () => {
+  const originalFetch = globalThis.fetch;
+  // 둘째 조회를 붙잡아 둘 문. 콜백 안에서 대입하면 TS 가 `never` 로 좁히므로 미리 만든다.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    urls.push(typeof input === "string" ? input : input.toString());
+    const body = JSON.stringify({
+      columns: [
+        {
+          status: "todo",
+          tasks: [{ id: "t1", title: "주간 보고서", status: "todo", assignee: "sophie" }],
+        },
+      ],
+      npcs: [{ npcId: "npc-a", npcName: "소피", profileName: "sophie", active: true }],
+    });
+    // 둘째 조회는 붙잡아 둔다 — 그 사이 화면이 어떻게 보이는지가 이 테스트의 전부다.
+    if (urls.length === 2) await held;
+    return new Response(body, { status: 200 });
+  }) as typeof fetch;
+  try {
+    const view = await mountRerender(cardsPanel({ cardsRefreshTick: 0, cardsDebounceMs: 5 }));
+    await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await settle(20);
+    assert.equal(cardTitles(view.el).length, 1);
+
+    await view.render(cardsPanel({ cardsRefreshTick: 1, cardsDebounceMs: 5 }));
+    await settle(20);
+    assert.equal(urls.length, 2, "둘째 조회가 나가야 한다");
+    assert.equal(cardTitles(view.el).length, 1, "재조회 중에 목록이 비었다");
+    assert.equal(view.el.querySelector('[data-testid="cards-empty"]'), null);
+    release();
+    await settle(10);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("사건이 없으면 탭을 열어 둔 채 시간이 흘러도 보드를 다시 읽지 않는다 — 폴링하지 않는다", async () => {
+  const originalFetch = globalThis.fetch;
+  const server = boardFetch([["주간 보고서"]]);
+  globalThis.fetch = server.fetch;
+  try {
+    const view = await mountRerender(cardsPanel({ cardsRefreshTick: 0, cardsDebounceMs: 5 }));
+    await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
+    await settle(20);
+    const afterOpen = server.urls.length;
+    await settle(60);
+    assert.equal(server.urls.length, afterOpen, "이 조회는 서버에서 Hermes 보드를 읽는다");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

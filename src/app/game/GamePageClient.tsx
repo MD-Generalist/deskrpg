@@ -2560,6 +2560,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         onOpenNoticeMinutes={setNoticeMinutesId}
         badges={panelBadges}
         onMarkSeen={markPanelTabSeen}
+        cardsRefreshTick={kanbanRefreshTick}
         onOpenAssignedCard={openNoticeCard}
         npcArtifactChips={npcArtifactChips}
         onOpenArtifact={openArtifact}
