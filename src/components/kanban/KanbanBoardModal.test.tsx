@@ -1436,7 +1436,12 @@ test("capability 가 없으면 타임라인 버튼을 두지 않는다", async (
 test("타임라인이 목표일과 의존 화살표를 실제로 그린다 — 모달에서 값이 흘러야 한다", async () => {
   // 조각은 각각 초록인데 조각 사이의 배선이 끊겨 목표일도 화살표도 화면에 없던 결함을 고정한다.
   // 노드가 아니라 **값**으로 단언한다 — 선이 있는지가 아니라 그 선이 그 날짜인지를 본다.
-  const dayStart = Date.parse("2026-09-21T00:00:00");
+  // 타임라인은 "오늘" 창을 그린다 — 날짜를 박아 두면 그 날이 지나는 순간 실패한다(2026-09-22 실측).
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayStart = today.getTime();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const targetDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   const runStart = Math.floor((dayStart + 3600_000) / 1000);
   const timelineBoard = board({
     columns: [
@@ -1497,7 +1502,7 @@ test("타임라인이 목표일과 의존 화살표를 실제로 그린다 — �
       return json({ code: "not_found", message: "no route" }, { status: 404 });
     },
     {
-      projects: [{ ...MAIN_PROJECT, boardSlug: "deskrpg-main", targetDate: "2026-09-21" }],
+      projects: [{ ...MAIN_PROJECT, boardSlug: "deskrpg-main", targetDate }],
     },
   );
   try {
@@ -1515,7 +1520,7 @@ test("타임라인이 목표일과 의존 화살표를 실제로 그린다 — �
     const target = f.host.querySelector("[data-timeline-target]");
     assert.ok(target, "모달이 목표일을 계산했는데 화면에 세로선이 없다");
     assert.ok(
-      (target.getAttribute("data-timeline-target") ?? "").startsWith("2026-09-2"),
+      (target.getAttribute("data-timeline-target") ?? "").startsWith(targetDate),
       `목표일 선이 다른 날짜다: ${target.getAttribute("data-timeline-target")}`,
     );
 
