@@ -47,7 +47,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 ## Quick Start
 
-Choose one of these five ways to start DeskRPG.
+Choose one of these six ways to start DeskRPG.
 
 ### Option 1: npm Install Runtime
 
@@ -135,6 +135,20 @@ DeskRPG will open on `http://localhost:3102`.
 To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<release tag>` before the command ([release tags](https://github.com/dandacompany/deskrpg/releases)).
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
+
+### Option 6: Docker with Hermes on your own computer
+
+Runs the office and a Hermes gateway together on one machine — no VPS, no HTTPS. Ports are bound to `127.0.0.1` only.
+
+```bash
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
+printf 'HERMES_API_KEY=%s\n' "$(openssl rand -hex 32)" > .env.hermes
+echo 'OPENROUTER_API_KEY=<your key>' >> .env.hermes   # or OPENAI_API_KEY / ANTHROPIC_API_KEY
+docker compose --env-file .env.hermes -f docker/docker-compose.hermes.yml up -d
+```
+
+Open `http://localhost:3102`, then add a gateway with URL `http://hermes:8642` and the `HERMES_API_KEY` value as the token. The DeskRPG plugin is installed and enabled for you. Without a model provider key the gateway does not start. Set `HERMES_DASHBOARD_PASSWORD` to also open the Hermes dashboard on `http://localhost:9119`.
 
 ### Environment
 

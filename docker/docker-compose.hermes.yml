@@ -1,0 +1,86 @@
+# docker/docker-compose.hermes.yml — DeskRPG + Hermes on your own computer (no VPS, no Traefik).
+# The VPS stack (root docker-compose.yml) opens no ports and requires HTTPS cookies; this one
+# publishes to 127.0.0.1 only and runs over plain HTTP.
+#
+#   printf 'HERMES_API_KEY=%s\n' "$(openssl rand -hex 32)" > .env.hermes
+#   echo 'OPENROUTER_API_KEY=...' >> .env.hermes   # or OPENAI_API_KEY / ANTHROPIC_API_KEY
+#   docker compose --env-file .env.hermes -f docker/docker-compose.hermes.yml up -d
+#
+# Office: http://localhost:3102. In DeskRPG register the gateway as http://hermes:8642 with
+# HERMES_API_KEY as the token. Hermes dashboard (optional): set HERMES_DASHBOARD_PASSWORD,
+# then http://localhost:9119 (user admin).
+services:
+  deskrpg:
+    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
+    restart: unless-stopped
+    depends_on:
+      - hermes
+    ports:
+      - "127.0.0.1:3102:3000"
+      - "127.0.0.1:3103:3001"
+    environment:
+      DB_TYPE: sqlite
+      SQLITE_PATH: /app/data/deskrpg.db
+      # Inside the volume so a generated JWT_SECRET survives image updates.
+      DESKRPG_HOME: /app/data/home
+      JWT_SECRET: ${JWT_SECRET:-}
+      # Plain HTTP on localhost: a Secure cookie would be dropped and login would loop.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      INTERNAL_HOSTNAME: 0.0.0.0
+    volumes:
+      - deskrpg-data:/app/data
+
+  # Same key/UID as hermes: without API_SERVER_KEY the image writes a random key to the
+  # volume's .env, which then overrides HERMES_API_KEY (DeskRPG gets 401).
+  hermes-plugins:
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+    restart: "no"
+    environment:
+      HERMES_UID: ${HERMES_UID:-10000}
+      HERMES_GID: ${HERMES_GID:-10000}
+      API_SERVER_KEY: ${HERMES_API_KEY:?set HERMES_API_KEY in your env file}
+    volumes:
+      - hermes-data:/opt/data
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        if hermes plugins list --plain --no-bundled | grep -q ' deskrpg$$'; then
+          hermes plugins update deskrpg || echo "plugin update failed; keeping installed version"
+        else
+          hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+        fi
+        hermes plugins enable deskrpg
+
+  # API server stays on the compose network (http://hermes:8642); only the dashboard is
+  # published, and only when a password is set.
+  hermes:
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    depends_on:
+      hermes-plugins:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:9119:9119"
+    environment:
+      HERMES_UID: ${HERMES_UID:-10000}
+      HERMES_GID: ${HERMES_GID:-10000}
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_PORT: "8642"
+      API_SERVER_KEY: ${HERMES_API_KEY:?set HERMES_API_KEY in your env file}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HERMES_DASHBOARD: ${HERMES_DASHBOARD_PASSWORD:+true}
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_USER:-admin}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_PASSWORD:-}
+      HERMES_DASHBOARD_PUBLIC_URL: http://localhost:9119
+    volumes:
+      - hermes-data:/opt/data
+
+volumes:
+  deskrpg-data:
+  hermes-data:

@@ -47,7 +47,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 ## 빠른 시작
 
-아래 다섯 가지 방법 중 하나를 골라 DeskRPG를 시작할 수 있습니다.
+아래 여섯 가지 방법 중 하나를 골라 DeskRPG를 시작할 수 있습니다.
 
 ### 1. npm 설치 런타임
 
@@ -134,6 +134,20 @@ DeskRPG는 `http://localhost:3102`에서 열립니다.
 특정 릴리스로 고정하려면 명령 앞에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<릴리스 태그>`를 붙이면 됩니다([릴리스 태그 목록](https://github.com/dandacompany/deskrpg/releases)).
 
 빠르게 시작하려면 SQLite, 오래 운영하려면 PostgreSQL을 선택하면 됩니다.
+
+### 6. 내 컴퓨터에서 Docker + Hermes
+
+사무실과 Hermes 게이트웨이를 한 대의 컴퓨터에서 함께 띄웁니다. VPS도 HTTPS도 필요 없고, 포트는 `127.0.0.1`에만 열립니다.
+
+```bash
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
+printf 'HERMES_API_KEY=%s\n' "$(openssl rand -hex 32)" > .env.hermes
+echo 'OPENROUTER_API_KEY=<내 키>' >> .env.hermes   # OPENAI_API_KEY 나 ANTHROPIC_API_KEY 도 됩니다
+docker compose --env-file .env.hermes -f docker/docker-compose.hermes.yml up -d
+```
+
+`http://localhost:3102`를 열고 게이트웨이 URL `http://hermes:8642`, 토큰 `HERMES_API_KEY` 값으로 게이트웨이를 등록합니다. DeskRPG 플러그인은 자동으로 설치·활성화됩니다. 모델 제공자 키가 없으면 게이트웨이가 뜨지 않습니다. `HERMES_DASHBOARD_PASSWORD`를 넣으면 `http://localhost:9119`에서 Hermes 대시보드도 열립니다.
 
 ### 환경 변수
 
