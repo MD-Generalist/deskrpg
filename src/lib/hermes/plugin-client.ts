@@ -410,6 +410,7 @@ export function createOwnerPluginClient(
   };
 
   const events: EventsApi = {
+    handoff: (body) => call("/deskrpg/events/handoff", token, { method: "POST", body }),
     poll: (opts) =>
       call(
         `/deskrpg/events${query({
