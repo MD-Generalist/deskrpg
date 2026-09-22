@@ -18,7 +18,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.922.1` — 직원이 사용자의 언어로 답합니다. 대화·회의 발언·방 응답 모두 묻는 사람의 화면 언어를 따릅니다(새로 채용한 직원이 영어로 답하도록 지시받던 문제를 고쳤습니다). 연결이 끊겨 중단된 보고 호출은 재연결 뒤 다시 부르고, 복귀시킨 직원은 자리에 닿을 때까지 다시 부르지 않으며, Esc 는 가장 위 레이어만 닫습니다 — 칸반·크론 모달을 닫는 Esc 가 뒤의 직원 대화창까지 닫지 않고, 보고 목록은 자기만 닫히며, 업데이트·버그 신고·설문 창도 Esc 로 닫힙니다. 보드 열의 카드 개수 배지가 더 잘 읽힙니다. 기여자용 테스트 수정: README 캡처 서버 테스트가 멈추거나 다른 프로세스에 신호를 보내지 않고, 타임라인 테스트가 날짜가 바뀌어도 깨지지 않습니다. 앞선 2026.921.4: 회의부터 보고까지 이어지는 흐름, 시간순 보고, 탭이 뒤에 있어도 움직이는 직원, 카드별 결과물, 브랜드 색, GitHub Star·설문·버그 리포트.
+- 버전: `v2026.922.2` — 내 컴퓨터에서 Docker Compose 명령 하나로 사무실과 Hermes 게이트웨이를 함께 띄웁니다(아래 6번). 포트는 `127.0.0.1`에만 열리고, HTTP에서도 로그인되며, DeskRPG 플러그인이 자동으로 설치됩니다. 앞선 2026.922.1: 직원이 사용자의 언어로 답합니다. 대화·회의 발언·방 응답 모두 묻는 사람의 화면 언어를 따릅니다(새로 채용한 직원이 영어로 답하도록 지시받던 문제를 고쳤습니다). 연결이 끊겨 중단된 보고 호출은 재연결 뒤 다시 부르고, 복귀시킨 직원은 자리에 닿을 때까지 다시 부르지 않으며, Esc 는 가장 위 레이어만 닫습니다 — 칸반·크론 모달을 닫는 Esc 가 뒤의 직원 대화창까지 닫지 않고, 보고 목록은 자기만 닫히며, 업데이트·버그 신고·설문 창도 Esc 로 닫힙니다. 보드 열의 카드 개수 배지가 더 잘 읽힙니다. 기여자용 테스트 수정: README 캡처 서버 테스트가 멈추거나 다른 프로세스에 신호를 보내지 않고, 타임라인 테스트가 날짜가 바뀌어도 깨지지 않습니다. 앞선 2026.921.4: 회의부터 보고까지 이어지는 흐름, 시간순 보고, 탭이 뒤에 있어도 움직이는 직원, 카드별 결과물, 브랜드 색, GitHub Star·설문·버그 리포트.
 
 ## 무엇을 할 수 있나요
 
@@ -47,7 +47,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 ## 빠른 시작
 
-아래 다섯 가지 방법 중 하나를 골라 DeskRPG를 시작할 수 있습니다.
+아래 여섯 가지 방법 중 하나를 골라 DeskRPG를 시작할 수 있습니다.
 
 ### 1. npm 설치 런타임
 
@@ -134,6 +134,20 @@ DeskRPG는 `http://localhost:3102`에서 열립니다.
 특정 릴리스로 고정하려면 명령 앞에 `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<릴리스 태그>`를 붙이면 됩니다([릴리스 태그 목록](https://github.com/dandacompany/deskrpg/releases)).
 
 빠르게 시작하려면 SQLite, 오래 운영하려면 PostgreSQL을 선택하면 됩니다.
+
+### 6. 내 컴퓨터에서 Docker + Hermes
+
+사무실과 Hermes 게이트웨이를 한 대의 컴퓨터에서 함께 띄웁니다. VPS도 HTTPS도 필요 없고, 포트는 `127.0.0.1`에만 열립니다.
+
+```bash
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
+printf 'HERMES_API_KEY=%s\n' "$(openssl rand -hex 32)" > .env.hermes
+echo 'OPENROUTER_API_KEY=<내 키>' >> .env.hermes   # OPENAI_API_KEY 나 ANTHROPIC_API_KEY 도 됩니다
+docker compose --env-file .env.hermes -f docker/docker-compose.hermes.yml up -d
+```
+
+`http://localhost:3102`를 열고 게이트웨이 URL `http://hermes:8642`, 토큰 `HERMES_API_KEY` 값으로 게이트웨이를 등록합니다. DeskRPG 플러그인은 자동으로 설치·활성화됩니다. 모델 제공자 키가 없으면 게이트웨이가 뜨지 않습니다. `HERMES_DASHBOARD_PASSWORD`를 넣으면 `http://localhost:9119`에서 Hermes 대시보드도 열립니다.
 
 ### 환경 변수
 

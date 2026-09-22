@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.922.1` — Staff now answer in your language: every conversation, meeting turn and room reply follows the display language of the person asking (a new hire used to be told to answer in English). Report calls that were cut off by a dropped connection are retried after reconnecting, a staff member you send back is not called again until they are at their desk, and Escape now closes only the topmost layer — a board or cron modal no longer closes the staff chat behind it, the report list closes on its own, and the update, bug report and survey windows close with Escape too. Column count badges on the board are easier to read. Test-suite fixes only for contributors: the README capture server test no longer hangs or signals other processes, and the timeline test no longer breaks when the date changes. Earlier in 2026.921.4: the end-to-end loop from meeting to report, reports in order, background-tab movement, results per card, brand colors, GitHub Star, survey and bug report.
+- Version: `v2026.922.2` — Run the office and a Hermes gateway together on your own computer with one Docker Compose command (Option 6 below) — ports stay on `127.0.0.1`, login works over plain HTTP, and the DeskRPG plugin is installed for you. Earlier 2026.922.1: Staff now answer in your language: every conversation, meeting turn and room reply follows the display language of the person asking (a new hire used to be told to answer in English). Report calls that were cut off by a dropped connection are retried after reconnecting, a staff member you send back is not called again until they are at their desk, and Escape now closes only the topmost layer — a board or cron modal no longer closes the staff chat behind it, the report list closes on its own, and the update, bug report and survey windows close with Escape too. Column count badges on the board are easier to read. Test-suite fixes only for contributors: the README capture server test no longer hangs or signals other processes, and the timeline test no longer breaks when the date changes. Earlier in 2026.921.4: the end-to-end loop from meeting to report, reports in order, background-tab movement, results per card, brand colors, GitHub Star, survey and bug report.
 
 ## What You Can Do
 
@@ -47,7 +47,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 ## Quick Start
 
-Choose one of these five ways to start DeskRPG.
+Choose one of these six ways to start DeskRPG.
 
 ### Option 1: npm Install Runtime
 
@@ -135,6 +135,20 @@ DeskRPG will open on `http://localhost:3102`.
 To pin a specific release, add `DESKRPG_IMAGE=ghcr.io/dandacompany/deskrpg:<release tag>` before the command ([release tags](https://github.com/dandacompany/deskrpg/releases)).
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
+
+### Option 6: Docker with Hermes on your own computer
+
+Runs the office and a Hermes gateway together on one machine — no VPS, no HTTPS. Ports are bound to `127.0.0.1` only.
+
+```bash
+git clone https://github.com/dandacompany/deskrpg.git
+cd deskrpg
+printf 'HERMES_API_KEY=%s\n' "$(openssl rand -hex 32)" > .env.hermes
+echo 'OPENROUTER_API_KEY=<your key>' >> .env.hermes   # or OPENAI_API_KEY / ANTHROPIC_API_KEY
+docker compose --env-file .env.hermes -f docker/docker-compose.hermes.yml up -d
+```
+
+Open `http://localhost:3102`, then add a gateway with URL `http://hermes:8642` and the `HERMES_API_KEY` value as the token. The DeskRPG plugin is installed and enabled for you. Without a model provider key the gateway does not start. Set `HERMES_DASHBOARD_PASSWORD` to also open the Hermes dashboard on `http://localhost:9119`.
 
 ### Environment
 
