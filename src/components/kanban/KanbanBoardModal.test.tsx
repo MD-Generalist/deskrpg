@@ -163,6 +163,7 @@ const detail = (task: Record<string, unknown>) => ({
 });
 
 test("R4: move PATCHes status once, keeps counts unchanged while pending, then reloads server truth", async () => {
+  const originalRaf = globalThis.requestAnimationFrame;
   let patchResolve!: (response: Response) => void;
   const patch = new Promise<Response>((resolve) => (patchResolve = resolve));
   let boardReads = 0;
@@ -207,6 +208,11 @@ test("R4: move PATCHes status once, keeps counts unchanged while pending, then r
       false,
     );
 
+    // 다음 페인트 콜백이 React의 서버 응답 렌더보다 먼저 실행되는 순서를 고정한다.
+    globalThis.requestAnimationFrame = (callback) => {
+      callback(performance.now());
+      return 0;
+    };
     await act(async () =>
       patchResolve(json({ task: { id: "t-todo", title: "할 카드", status: "scheduled" } })),
     );
@@ -219,11 +225,12 @@ test("R4: move PATCHes status once, keeps counts unchanged while pending, then r
     );
     await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     assert.equal(
-      document.activeElement,
-      f.host.querySelector('[data-card-move-handle="t-todo"]'),
+      document.activeElement === f.host.querySelector('[data-card-move-handle="t-todo"]'),
+      true,
       "focus follows the authoritative card into its new column",
     );
   } finally {
+    globalThis.requestAnimationFrame = originalRaf;
     await f.cleanup();
   }
 });

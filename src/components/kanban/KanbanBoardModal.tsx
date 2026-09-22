@@ -193,6 +193,13 @@ export default function KanbanBoardModal({
   selectedTaskIdRef.current = selectedTaskId;
   const getBoardRoot = useCallback(() => boardRootRef.current, []);
 
+  // 서버 정본이 화면에 반영된 뒤 새 카드 DOM으로 포커스를 옮긴다.
+  useEffect(() => {
+    if (move.phase === "success") {
+      restoreKanbanMoveResultFocus(boardRootRef.current, move.taskId);
+    }
+  }, [move]);
+
   // 출처로 이동 — 열린 보드에서도 요청된 카드로 드로어를 옮긴다(보드 상태는 그대로 둔다).
   const focusSeq = focusRequest?.seq ?? null;
   const focusTaskId = focusRequest?.taskId ?? null;
@@ -580,7 +587,6 @@ export default function KanbanBoardModal({
           title: request.title,
           status: authoritativeTask?.status,
         });
-        restoreKanbanMoveResultFocus(boardRootRef.current, task.id);
       })();
     },
     [allTasks, api, includeArchived, moveBlocked, reconcileReload, reload],
@@ -603,7 +609,6 @@ export default function KanbanBoardModal({
         title: request.title,
         status: authoritativeTask?.status,
       });
-      restoreKanbanMoveResultFocus(boardRootRef.current, request.taskId);
     }
   }, [includeArchived, move, reconcileReload, reload]);
 
