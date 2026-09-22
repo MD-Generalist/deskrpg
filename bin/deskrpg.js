@@ -562,7 +562,8 @@ async function runStart() {
 
   process.env.DESKRPG_HOME = runtimePaths.getDeskRpgHomeDir();
   process.env.DESKRPG_ENV_PATH = envPath;
-  loadEnvFile(envPath);
+  const { applyEnvText } = require(path.join(getPackageRoot(), "src/lib/runtime-env-bootstrap.js"));
+  applyEnvText(fs.readFileSync(envPath, "utf8"), process.env);
   if (portOverride) process.env.PORT = portOverride;
   prepareStandaloneRuntime();
   const serverRoot = getPackageRoot();

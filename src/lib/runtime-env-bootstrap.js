@@ -19,6 +19,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { parseEnv } = require("node:util");
 
 /** `KEY=value` 한 줄을 파싱한다. 주석·빈 줄·이상한 줄은 null. */
 function parseEnvLine(line) {
@@ -35,9 +36,19 @@ function parseEnvLine(line) {
  */
 function applyEnvText(text, env) {
   const applied = [];
-  for (const line of text.split(/\r?\n/)) {
-    const parsed = parseEnvLine(line);
-    if (!parsed) continue;
+  // Capture the incoming environment before reading the home file. A saved URL must not
+  // override a saved SQLite selection, but an external URL outranks home defaults.
+  const externalPostgres =
+    Boolean(env.DATABASE_URL) &&
+    (!env.DB_TYPE || ["postgresql", "postgres"].includes(env.DB_TYPE.toLowerCase()));
+  // Keep Node's dotenv syntax (quoted # and multiline values) when the CLI uses this
+  // loader instead of process.loadEnvFile. Older Node versions retain the fallback.
+  const entries =
+    typeof parseEnv === "function"
+      ? Object.entries(parseEnv(text)).map(([key, value]) => ({ key, value }))
+      : text.split(/\r?\n/).map(parseEnvLine).filter(Boolean);
+  for (const parsed of entries) {
+    if (externalPostgres && ["DB_TYPE", "SQLITE_PATH"].includes(parsed.key)) continue;
     const current = env[parsed.key];
     // 빈 문자열도 "없음" 으로 본다 — 그러지 않으면 빈 환경변수가 홈 파일을 가린다.
     if (current !== undefined && current !== "") continue;

@@ -38,8 +38,11 @@ test("an explicit DB_TYPE survives the runtime home's DB_TYPE=sqlite line", () =
   applyEnvText(home, explicit);
   assert.equal(explicit.DB_TYPE, "postgresql");
 
-  // 이것이 운영에서 본 실패다 — 방언이 비어 있으면 홈 파일의 sqlite 가 이긴다.
+  // 외부 DATABASE_URL 은 홈의 SQLite 기본값보다 우선한다.
   const inferred = { DATABASE_URL: "postgresql://x" };
   applyEnvText(home, inferred);
-  assert.equal(inferred.DB_TYPE, "sqlite");
+  assert.equal(inferred.DB_TYPE, undefined);
+  const { inspectEnvironment } = createRequire(import.meta.url)("./startup-check.js");
+  assert.equal(inspectEnvironment(inferred).dbTarget, "postgresql");
+  assert.equal(inferred.SQLITE_PATH, undefined);
 });

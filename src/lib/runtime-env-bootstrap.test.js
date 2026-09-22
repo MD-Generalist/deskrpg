@@ -84,3 +84,80 @@ test("런타임 경로 모듈이 없으면 조용히 넘어간다 — 기동을 
   assert.equal(result.envPath, null);
   assert.deepEqual(result.applied, []);
 });
+
+for (const dbType of [undefined, "", "postgresql", "postgres", "sqlite"]) {
+  test(`external DATABASE_URL preserves explicit DB_TYPE=${String(dbType)}`, () => {
+    const env = { DATABASE_URL: "postgresql://localhost/test", DB_TYPE: dbType };
+    applyEnvText("DB_TYPE=sqlite\nSQLITE_PATH=/saved/custom.db\n", env);
+    assert.equal(env.DB_TYPE, dbType);
+    assert.equal(env.SQLITE_PATH, dbType === "sqlite" ? "/saved/custom.db" : undefined);
+  });
+}
+
+test("saved SQLite configuration survives bootstrap and a restart", () => {
+  const homeDir = tmpHome("sqlite-preserved");
+  try {
+    const envPath = path.join(homeDir, ".env.local");
+    const sqlitePath = path.join(homeDir, "custom.db");
+    fs.writeFileSync(sqlitePath, "existing user data");
+    fs.writeFileSync(envPath, `DB_TYPE=sqlite\nSQLITE_PATH=${sqlitePath}\n`);
+    for (let i = 0; i < 2; i++) {
+      const env = { DESKRPG_HOME: homeDir };
+      bootstrapRuntimeEnv({ packageRoot: PACKAGE_ROOT, env });
+      assert.equal(env.DB_TYPE, "sqlite");
+      assert.equal(env.SQLITE_PATH, sqlitePath);
+      assert.equal(fs.readFileSync(sqlitePath, "utf8"), "existing user data");
+    }
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+  }
+});
+
+for (const text of [
+  "DATABASE_URL=postgresql://localhost/saved\nDB_TYPE=sqlite\nSQLITE_PATH=/saved.db\n",
+  "DB_TYPE=sqlite\nSQLITE_PATH=/saved.db\nDATABASE_URL=postgresql://localhost/saved\n",
+]) {
+  test("a saved URL does not override the saved SQLite choice regardless of line order", () => {
+    const env = {};
+    applyEnvText(text, env);
+    assert.equal(env.DB_TYPE, "sqlite");
+    assert.equal(env.SQLITE_PATH, "/saved.db");
+  });
+}
+
+test("PostgreSQL override leaves saved SQLite settings and data untouched", () => {
+  const homeDir = tmpHome("override");
+  try {
+    const envPath = path.join(homeDir, ".env.local");
+    const sqlitePath = path.join(homeDir, "custom.db");
+    fs.writeFileSync(sqlitePath, "existing data");
+    const saved = `DB_TYPE=sqlite\nSQLITE_PATH=${sqlitePath}\nJWT_SECRET=${"a".repeat(48)}\n`;
+    fs.writeFileSync(envPath, saved);
+    const env = { DESKRPG_HOME: homeDir, DATABASE_URL: "postgresql://localhost/test" };
+    bootstrapRuntimeEnv({ packageRoot: PACKAGE_ROOT, env });
+    assert.equal(env.DB_TYPE, undefined);
+    assert.equal(env.SQLITE_PATH, undefined);
+    assert.match(fs.readFileSync(envPath, "utf8"), /DB_TYPE=sqlite/);
+    assert.ok(fs.readFileSync(envPath, "utf8").includes(`SQLITE_PATH=${sqlitePath}`));
+    assert.equal(fs.readFileSync(sqlitePath, "utf8"), "existing data");
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+  }
+});
+
+test(
+  "native dotenv syntax survives CLI environment loading",
+  { skip: typeof require("node:util").parseEnv !== "function" },
+  () => {
+    const env = {};
+    applyEnvText(
+      'PLAIN=value # comment\nQUOTED="value # literal"\nMULTILINE="first\nsecond"\n',
+      env,
+    );
+    assert.deepEqual(env, {
+      PLAIN: "value",
+      QUOTED: "value # literal",
+      MULTILINE: "first\nsecond",
+    });
+  },
+);

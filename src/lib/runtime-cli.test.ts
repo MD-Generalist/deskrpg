@@ -89,3 +89,47 @@ test("deskrpg init works from an installed node_modules path", () => {
   assert.equal(fs.existsSync(path.join(homeDir, ".env.local")), true);
   assert.match(result.stdout, /DeskRPG home ready/);
 });
+
+for (const dbType of [undefined, "", "sqlite", "postgresql"]) {
+  test(`installed deskrpg start selects DB with DATABASE_URL and DB_TYPE=${String(dbType)}`, () => {
+    const installedCliPath = createInstalledCliFixture();
+    const packageRoot = path.dirname(path.dirname(installedCliPath));
+    const fixtureRoot = path.dirname(path.dirname(packageRoot));
+    const homeDir = path.join(fixtureRoot, "home");
+    fs.mkdirSync(homeDir);
+    fs.writeFileSync(path.join(homeDir, ".env.local"), "DB_TYPE=sqlite\nSQLITE_PATH=/saved.db\n");
+    for (const name of ["runtime-env-bootstrap.js", "startup-check.js"]) {
+      fs.copyFileSync(
+        path.join(repoRoot, "src/lib", name),
+        path.join(packageRoot, "src/lib", name),
+      );
+    }
+    // Only the server boundary and loader are fixtures; execute the installed CLI and real bootstrap.
+    const loaderDir = path.join(fixtureRoot, "node_modules", "tsx");
+    fs.mkdirSync(loaderDir);
+    fs.writeFileSync(path.join(loaderDir, "index.js"), "");
+    fs.writeFileSync(
+      path.join(packageRoot, "server.js"),
+      `require('./src/lib/runtime-env-bootstrap.js').bootstrapRuntimeEnv({ packageRoot: __dirname });
+       const { inspectEnvironment } = require('./src/lib/startup-check.js');
+       console.log('DB(' + inspectEnvironment(process.env).dbTarget + ')');`,
+    );
+    try {
+      const result = spawnSync(process.execPath, [installedCliPath, "start"], {
+        env: {
+          PATH: process.env.PATH,
+          NODE_ENV: "test",
+          DESKRPG_HOME: homeDir,
+          DATABASE_URL: "postgresql://localhost/test",
+          ...(dbType === undefined ? {} : { DB_TYPE: dbType }),
+        },
+        encoding: "utf8",
+        timeout: 10000,
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, dbType === "sqlite" ? /DB\(sqlite\)/ : /DB\(postgresql\)/);
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+}

@@ -86,8 +86,16 @@ export function ensureDeskRpgHome(options: DeskRpgHomeOptions = {}) {
   }
 
   let envText = fs.readFileSync(envPath, "utf8");
-  envText = upsertEnvLine(envText, "DB_TYPE", "sqlite");
-  envText = upsertEnvLine(envText, "SQLITE_PATH", sqlitePath);
+  // Fill defaults only; startup must preserve the user's saved dialect and data path.
+  for (const [key, fallback] of [
+    ["DB_TYPE", "sqlite"],
+    ["SQLITE_PATH", sqlitePath],
+  ]) {
+    const saved = envText.match(new RegExp(`^\\s*${key}=(.*)$`, "m"));
+    if (!saved?.[1].trim().replace(/^["']|["']$/g, "")) {
+      envText = upsertEnvLine(envText, key, fallback);
+    }
+  }
 
   // `.env.example` 를 복사해 온 런타임은 JWT_SECRET 자리에 안내 문구가 들어 있다. 값이 비어
   // 있는지만 보면 그 안내 문구를 진짜 비밀로 착각해, 모든 설치가 공개된 같은 키로 세션 토큰을
