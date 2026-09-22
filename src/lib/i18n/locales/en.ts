@@ -2058,6 +2058,8 @@ const en: Record<string, string> = {
   "meeting.table": "Meeting Table",
   "meeting.startDiscussion": "Start Discussion",
   "meeting.topic": "Meeting Topic",
+  "meeting.topicTooLong":
+    "Shorten the topic to {limit} characters. Your input has not been truncated.",
   "meeting.topicPlaceholder": "Enter the meeting topic",
   "meeting.participants": "Participants",
   "meeting.noNpcs": "No NPCs in this channel",

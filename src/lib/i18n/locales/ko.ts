@@ -2056,6 +2056,7 @@ const ko: Record<string, string> = {
   "meeting.table": "회의 테이블",
   "meeting.startDiscussion": "회의 시작",
   "meeting.topic": "회의 주제",
+  "meeting.topicTooLong": "{limit}자 이하로 줄여 주세요. 입력 내용은 삭제되지 않았습니다.",
   "meeting.topicPlaceholder": "회의 주제를 입력하세요",
   "meeting.participants": "참가자 선택",
   "meeting.noNpcs": "오피스에 NPC가 없습니다",

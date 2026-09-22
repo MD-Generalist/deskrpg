@@ -2080,6 +2080,7 @@ const ja: Record<string, string> = {
   "meeting.table": "会議テーブル",
   "meeting.startDiscussion": "会議を開始",
   "meeting.topic": "会議テーマ",
+  "meeting.topicTooLong": "{limit} 文字以内に短くしてください。入力内容は削除されていません。",
   "meeting.topicPlaceholder": "会議テーマを入力",
   "meeting.participants": "参加者を選択",
   "meeting.noNpcs": "チャンネルにNPCがいません",

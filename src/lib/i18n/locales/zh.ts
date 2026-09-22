@@ -1998,6 +1998,7 @@ const zh: Record<string, string> = {
   "meeting.table": "会议桌",
   "meeting.startDiscussion": "开始会议",
   "meeting.topic": "会议主题",
+  "meeting.topicTooLong": "请缩短至 {limit} 个字符以内。输入内容未被截断。",
   "meeting.topicPlaceholder": "输入会议主题",
   "meeting.participants": "选择参与者",
   "meeting.noNpcs": "频道中没有NPC",
