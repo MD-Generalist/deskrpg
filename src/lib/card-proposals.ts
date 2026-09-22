@@ -64,7 +64,11 @@ export type ProposalAssigneeResult =
 
 export type ResolveDeps<Ctx = unknown> = {
   /** DeskRPG 관문. `resolveKanbanChannelContext` 를 그대로 싸면 된다. */
-  gate(input: { userId: string; channelId: string }): Promise<ProposalGateResult<Ctx>>;
+  gate(input: {
+    userId: string;
+    channelId: string;
+    choice: "card" | "inline";
+  }): Promise<ProposalGateResult<Ctx>>;
   /** 이 채널의 제안 알림. 없으면 null → 404. */
   loadProposal(input: { channelId: string; proposalId: string }): Promise<ProposalRecord | null>;
   /**
@@ -143,7 +147,11 @@ export async function resolveProposal<Ctx>(
   }
 
   // 1. 관문 — 여기서 막히면 플러그인은 건드리지 않는다.
-  const gate = await deps.gate({ userId: input.userId, channelId: input.channelId });
+  const gate = await deps.gate({
+    userId: input.userId,
+    channelId: input.channelId,
+    choice: input.choice,
+  });
   if (!gate.ok) {
     return {
       ok: false,

@@ -84,6 +84,16 @@ test("카드는 blocked 로 서고 승인 1건에 전부 묶인다", async () =>
     assert.ok(res.ok);
     assert.equal(res.data.task.status, "blocked", "승인 전에는 디스패치되면 안 된다");
   }
+  const created = server
+    .requests()
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"));
+  assert.ok(created.length >= 3);
+  for (const request of created.slice(-3))
+    assert.deepEqual((request.json as Record<string, unknown>).review_policy, {
+      version: 1,
+      mode: "human",
+      reviewer_profile: null,
+    });
   const pending = await pendingApprovalTaskIds(channelId);
   assert.equal(pending.size, 3);
 });
@@ -385,4 +395,20 @@ test("사람이 요청한 묶음은 알림에 직원 이름을 싣지 않는다"
   assert.ok(notice && notice.kind === "approval_requested");
   if (!notice || notice.kind !== "approval_requested") return;
   assert.equal(notice.npcName, "", "user:<id> 를 직원 이름 자리에 넣으면 안 된다");
+});
+
+test("승인 정책 미지원이면 묶음의 카드와 승인 레코드를 쓰지 않는다", async () => {
+  const { ctx } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  ctx.info = { ...ctx.info!, capabilities: ["kanban", "cron", "events"] };
+  const before = server.requests().length;
+  const result = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "새 업무",
+    requestedBy: "sophie",
+    source,
+    items: [{ title: "쓰기 금지" }],
+  });
+  assert.deepEqual(result, { ok: false, errorCode: "review_policy_required" });
+  assert.equal(server.requests().length, before);
 });

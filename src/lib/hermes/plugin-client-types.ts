@@ -272,13 +272,15 @@ import type {
 } from "./deskrpg-plugin-types";
 
 /** 카드 액션별 본문. reassign·request-changes·unblock 외의 액션은 빈 객체다. */
-export type KanbanTaskActionInput<A extends KanbanTaskAction> = A extends "reassign"
-  ? { profile: string; reclaim_first: true }
-  : A extends "request-changes"
-    ? { comment: string }
-    : A extends "unblock"
-      ? { comment?: string }
-      : Record<string, never>;
+export type KanbanTaskActionInput<A extends KanbanTaskAction> = A extends "approve"
+  ? { submission_id?: string; request_id?: string }
+  : A extends "reassign"
+    ? { profile: string; reclaim_first: true }
+    : A extends "request-changes"
+      ? { comment: string }
+      : A extends "unblock"
+        ? { comment?: string }
+        : Record<string, never>;
 
 export type KanbanApi = {
   listBoards(): Promise<PluginResponse<{ boards: BoardMeta[]; current: string | null }>>;
@@ -316,6 +318,7 @@ export type KanbanApi = {
     id: string,
     action: A,
     body: KanbanTaskActionInput<A>,
+    actor?: { userId: string; name?: string },
   ): Promise<PluginResponse<{ task: KanbanTask }>>;
 
   listAttachments(

@@ -198,7 +198,15 @@ export async function startFakePluginServer(
   let info: PluginInfo = {
     plugin: "deskrpg",
     version: "0.6.0",
-    capabilities: ["kanban", "cron", "events", "swarm", "kanban_views", "initial_status"],
+    capabilities: [
+      "kanban",
+      "cron",
+      "events",
+      "swarm",
+      "kanban_views",
+      "initial_status",
+      "kanban_review_policy_v1",
+    ],
     timezone: "Asia/Seoul",
     kanban: { dispatcher_present: true, attachments: true },
     dashboard_url: null,

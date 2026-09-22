@@ -2884,6 +2884,41 @@ const ko: Record<string, string> = {
   "kanban.move.failed": "{title} 카드 이동 실패: {error}",
   "kanban.move.unconfirmed": "{title} 카드 이동은 저장됐지만 최신 상태를 확인하지 못했습니다.",
   "kanban.move.retryRead": "다시 확인",
+  "kanban.review.reason.human_review_required": "사람이 결과를 확인하면 완료할 수 있습니다.",
+  "kanban.review.reason.new_submission_required":
+    "업무 조건이나 결과가 바뀌었습니다. 새 결과를 제출해야 합니다.",
+  "kanban.review.reason.review_dispatch_disabled": "관리자가 AI 검토 자동 실행을 중지했습니다.",
+  "kanban.review.reason.reviewer_unavailable":
+    "지정한 검토 직원을 사용할 수 없습니다. 사람이 확인해 주세요.",
+  "kanban.review.reason.independent_reviewer_required":
+    "실행자와 검토자가 같아 자동 승인할 수 없습니다.",
+  "kanban.review.reason.reviewer_assignment_mismatch":
+    "검토 담당이 정책과 다릅니다. 사람이 확인해 주세요.",
+  "kanban.review.reason.review_round_limit":
+    "AI 검토 3회로 해결되지 않아 사람의 판단을 기다립니다.",
+  "kanban.review.reason.reviewer_needs_input": "AI 검토자가 사람의 판단을 요청했습니다.",
+  "kanban.review.reason.unknown": "자동 검토가 멈췄습니다. 검토 이력을 확인해 주세요.",
+  "kanban.review.label": "완료 승인",
+  "kanban.review.human": "사람 승인",
+  "kanban.review.agent": "AI 직원 승인",
+  "kanban.review.reviewer": "검토 직원",
+  "kanban.review.selectReviewer": "다른 직원을 선택하세요",
+  "kanban.review.reviewerRequired": "담당자와 다른 출근 직원을 검토자로 선택하세요.",
+  "kanban.review.help": "결과를 제출한 뒤 선택한 승인자가 확인해야 완료됩니다.",
+  "kanban.review.unsupported":
+    "승인 정책을 지원하는 Hermes와 플러그인으로 업데이트해야 새 업무를 등록할 수 있습니다.",
+  "kanban.review.swarmUnsupported":
+    "팀 업무 생성은 승인 정책 지원을 준비 중입니다. 개별 업무로 등록해 주세요.",
+  "kanban.review.legacy": "기존 승인 방식",
+  "kanban.review.round": "AI 검토 회차",
+  "kanban.review.approvedBy": "승인자",
+  "kanban.review.submission": "승인한 제출",
+  "kanban.review.state.awaiting_submission": "결과 제출 대기",
+  "kanban.review.state.humanWaiting": "사람 승인 대기",
+  "kanban.review.state.agentWaiting": "AI 검토 대기",
+  "kanban.review.state.reviewing": "AI 검토 진행 중",
+  "kanban.review.state.human_required": "사람 판단 필요",
+  "kanban.review.state.approved": "승인 완료",
   "kanban.form.createTitle": "카드 만들기",
   "kanban.form.editTitle": "카드 수정",
   "kanban.form.title": "제목",

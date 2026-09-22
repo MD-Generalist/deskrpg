@@ -146,7 +146,10 @@ test("R31/R32: board failures classify into upgrade / gateway / board / other", 
 });
 
 test("R8: form → body sends only filled fields, assignee as npcId, skills split", () => {
-  assert.deepEqual(taskFormToBody({ ...EMPTY_TASK_FORM, title: "  hi  " }), { title: "hi" });
+  assert.deepEqual(taskFormToBody({ ...EMPTY_TASK_FORM, title: "  hi  " }), {
+    title: "hi",
+    reviewPolicy: { mode: "human" },
+  });
   const body = taskFormToBody({
     ...EMPTY_TASK_FORM,
     title: "t",
@@ -165,6 +168,7 @@ test("R8: form → body sends only filled fields, assignee as npcId, skills spli
     goalMaxTurns: "8",
   });
   assert.deepEqual(body, {
+    reviewPolicy: { mode: "human" },
     title: "t",
     body: "desc",
     assignee: "n1",

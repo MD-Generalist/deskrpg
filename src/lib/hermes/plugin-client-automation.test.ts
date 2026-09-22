@@ -58,6 +58,7 @@ describe("owner client — info", () => {
       "swarm",
       "kanban_views",
       "initial_status",
+      "kanban_review_policy_v1",
     ]);
     assert.equal(info.timezone, "Asia/Seoul");
     assert.deepEqual(info.kanban, { dispatcher_present: true, attachments: true });

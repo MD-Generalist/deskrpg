@@ -106,7 +106,38 @@ export type Diagnostic = {
 export type PluginTime = string | number;
 
 /** 보드 열에 실리는 카드 요약. */
+export type KanbanReviewPolicy = {
+  version: 1;
+  mode: "human" | "agent";
+  reviewer_profile: string | null;
+};
+
+export type KanbanReviewState = {
+  policy: KanbanReviewPolicy;
+  policy_revision: number;
+  submission: null | {
+    id: string;
+    run_id: string | number | null;
+    hash: string;
+    policy_revision: number;
+  };
+  review_round: number;
+  state: "awaiting_submission" | "submitted" | "reviewing" | "human_required" | "approved";
+  reason: string | null;
+  approval: null | {
+    actor_kind: "human" | "agent";
+    actor_id: string;
+    actor_name?: string;
+    submission_id: string;
+    policy_revision: number;
+    hash: string;
+    approved_at: number;
+    request_id: string | null;
+  };
+};
+
 export type KanbanTask = {
+  review?: KanbanReviewState | null;
   id: string;
   title: string;
   body?: string;
@@ -250,6 +281,7 @@ export type KanbanTaskDetail = {
 export type WorkspaceKind = "scratch" | "worktree" | "dir";
 
 export type CreateTaskBody = {
+  review_policy?: KanbanReviewPolicy;
   title: string;
   body?: string;
   assignee?: string;
@@ -279,6 +311,7 @@ export type CreateTaskBody = {
 /** `PATCH /kanban/tasks/{id}` — 부분 갱신. */
 export type UpdateTaskBody = Partial<Omit<CreateTaskBody, "idempotency_key">> & {
   status?: KanbanTaskStatus;
+  expected_revision?: number;
 };
 
 export type CreateBoardBody = {

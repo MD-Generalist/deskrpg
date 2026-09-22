@@ -22,6 +22,8 @@ interface TaskEditorDialogProps {
   serverError: string | null;
   submitting: boolean;
   confirmChatDraft?: boolean;
+  reviewSupported?: boolean;
+  assigneeLocked?: boolean;
   onSubmit: (body: Record<string, unknown>) => void;
   onClose: () => void;
 }
@@ -41,6 +43,8 @@ export default function TaskEditorDialog({
   serverError,
   submitting,
   confirmChatDraft = false,
+  reviewSupported = true,
+  assigneeLocked = false,
   onSubmit,
   onClose,
 }: TaskEditorDialogProps) {
@@ -50,19 +54,33 @@ export default function TaskEditorDialog({
   const [completionCriteria, setCompletionCriteria] = useState("");
   const [confirmationError, setConfirmationError] = useState(false);
   const assignees = activeAssigneeOptions(npcs);
+  const implementer = assignees.find((npc) => npc.npcId === values.assigneeNpcId);
+  const reviewers = assignees.filter(
+    (npc) => npc.profileName.trim().toLowerCase() !== implementer?.profileName.trim().toLowerCase(),
+  );
+  const [reviewError, setReviewError] = useState(false);
 
   const set = <K extends keyof TaskFormValues>(key: K, value: TaskFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    if (mode === "create" && !reviewSupported) return;
+    if (
+      values.reviewMode === "agent" &&
+      (!implementer || !reviewers.some((npc) => npc.npcId === values.reviewerNpcId))
+    ) {
+      setReviewError(true);
+      return;
+    }
+    setReviewError(false);
     if (!values.title.trim()) {
       setTitleError(true);
       return;
     }
     setTitleError(false);
     if (
-      confirmChatDraft &&
+      mode === "create" &&
       (!completionCriteria.trim() || !assignees.some((npc) => npc.npcId === values.assigneeNpcId))
     ) {
       setConfirmationError(true);
@@ -71,7 +89,7 @@ export default function TaskEditorDialog({
     setConfirmationError(false);
     onSubmit(
       taskFormToBody(
-        confirmChatDraft
+        mode === "create"
           ? {
               ...values,
               body: `${values.body}\n\n${t("chat.taskCompletionCriteria")}\n${completionCriteria.trim()}`,
@@ -145,9 +163,11 @@ export default function TaskEditorDialog({
             />
           </div>
 
-          {confirmChatDraft && (
+          {mode === "create" && (
             <div>
-              <p className="mb-2 text-xs text-text-secondary">{t("chat.taskConfirmationHelp")}</p>
+              {confirmChatDraft && (
+                <p className="mb-2 text-xs text-text-secondary">{t("chat.taskConfirmationHelp")}</p>
+              )}
               <label className={LABEL} htmlFor="kanban-completion-criteria">
                 {t("chat.taskCompletionCriteria")} *
               </label>
@@ -171,6 +191,7 @@ export default function TaskEditorDialog({
               </label>
               <select
                 id="kanban-assignee"
+                disabled={assigneeLocked}
                 className={FIELD}
                 value={values.assigneeNpcId}
                 onChange={(e) => set("assigneeNpcId", e.target.value)}
@@ -196,6 +217,53 @@ export default function TaskEditorDialog({
             </div>
           </div>
 
+          {mode === "create" && !reviewSupported && (
+            <p role="alert" className="text-xs text-danger">
+              {t("kanban.review.unsupported")}
+            </p>
+          )}
+          {values.reviewMode && (
+            <fieldset className="space-y-2 rounded-md border border-border p-3">
+              <label className={LABEL} htmlFor="kanban-review-mode">
+                {t("kanban.review.label")}
+              </label>
+              <select
+                id="kanban-review-mode"
+                className={FIELD}
+                value={values.reviewMode}
+                onChange={(e) => set("reviewMode", e.target.value as "human" | "agent")}
+              >
+                <option value="human">{t("kanban.review.human")}</option>
+                <option value="agent">{t("kanban.review.agent")}</option>
+              </select>
+              {values.reviewMode === "agent" && (
+                <>
+                  <label className={LABEL} htmlFor="kanban-reviewer">
+                    {t("kanban.review.reviewer")}
+                  </label>
+                  <select
+                    id="kanban-reviewer"
+                    className={FIELD}
+                    value={values.reviewerNpcId ?? ""}
+                    onChange={(e) => set("reviewerNpcId", e.target.value)}
+                  >
+                    <option value="">{t("kanban.review.selectReviewer")}</option>
+                    {reviewers.map((npc) => (
+                      <option key={npc.npcId} value={npc.npcId}>
+                        {npc.npcName}
+                      </option>
+                    ))}
+                  </select>
+                  {(!implementer || reviewers.length === 0 || reviewError) && (
+                    <p role="alert" className="text-xs text-danger">
+                      {t("kanban.review.reviewerRequired")}
+                    </p>
+                  )}
+                </>
+              )}
+              <p className="text-xs text-text-secondary">{t("kanban.review.help")}</p>
+            </fieldset>
+          )}
           <div>
             <div className={LABEL}>{t("kanban.form.parents")}</div>
             {candidates.length === 0 ? (
@@ -367,7 +435,7 @@ export default function TaskEditorDialog({
           </button>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || (mode === "create" && !reviewSupported)}
             className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold disabled:opacity-60"
           >
             {submitting

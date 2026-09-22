@@ -93,6 +93,15 @@ function formFromTask(task: KanbanTask & Record<string, unknown>, npcs: BoardRes
   const kind = str("workspace_kind");
   return {
     ...EMPTY_TASK_FORM,
+    reviewMode:
+      task.review &&
+      !task.started_at &&
+      !task.review.submission &&
+      ["todo", "ready", "blocked", "triage"].includes(task.status)
+        ? task.review.policy.mode
+        : undefined,
+    reviewerNpcId: npcIdForAssignee(task.review?.policy.reviewer_profile, npcs) ?? "",
+    reviewRevision: task.review?.policy_revision,
     title: task.title,
     body: task.body ?? "",
     assigneeNpcId: npcIdForAssignee(task.assignee, npcs) ?? "",
@@ -489,7 +498,8 @@ export default function KanbanBoardModal({
   // 스웜 워커는 출근 중인 NPC 중에서만 고른다 — 서버가 잠든 NPC 를 400 으로 거절한다.
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
   // 플러그인이 스웜을 못 하면 버튼을 아예 숨긴다 — 눌렀다가 428 을 보는 것보다 낫다.
-  const swarmSupported = status?.capabilities?.includes("swarm") ?? false;
+  const reviewSupported = status?.capabilities?.includes("kanban_review_policy_v1") ?? false;
+  const swarmSupported = false; // 정책을 보장하는 native 스웜 생성 계약이 아직 없다.
   const anyRunning = allTasks.some(isRunning);
   const movePending = move.phase === "pending";
   const moveBlocked =
@@ -739,7 +749,8 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => openEditor({ mode: "create" })}
-              disabled={!currentBoard}
+              disabled={!currentBoard || !reviewSupported}
+              title={!reviewSupported ? t("kanban.review.unsupported") : undefined}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary hover:bg-primary-hover text-white font-semibold disabled:opacity-50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -964,9 +975,18 @@ export default function KanbanBoardModal({
         </div>
       </div>
 
+      {currentBoard && !reviewSupported && (
+        <p role="status" className="px-5 py-2 text-xs text-amber-700">
+          {t("kanban.review.unsupported")}
+        </p>
+      )}
       {editor && currentBoard && !blocker && (
         <TaskEditorDialog
           mode={editor.mode}
+          reviewSupported={reviewSupported}
+          assigneeLocked={
+            editor.mode === "edit" && !!editor.task.review && !!editor.task.started_at
+          }
           confirmChatDraft={editor.mode === "create" && !!editor.draft}
           initial={
             editor.mode === "edit"

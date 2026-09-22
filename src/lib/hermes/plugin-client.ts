@@ -358,8 +358,19 @@ export function createOwnerPluginClient(
     deleteTask: (board, id) => call(task(board, id), token, { method: "DELETE" }),
     addComment: (board, id, body) =>
       call(task(board, id, "/comments"), token, { method: "POST", body }),
-    runTaskAction: (board, id, action, body) =>
-      call(task(board, id, `/${action}`), token, { method: "POST", body }),
+    runTaskAction: (board, id, action, body, actor) =>
+      call(task(board, id, `/${action}`), token, {
+        method: "POST",
+        body,
+        ...(actor
+          ? {
+              headers: {
+                "X-DeskRPG-User-Id": actor.userId,
+                ...(actor.name ? { "X-DeskRPG-User-Name": encodeURIComponent(actor.name) } : {}),
+              },
+            }
+          : {}),
+      }),
 
     listAttachments: (board, id) => call(task(board, id, "/attachments"), token),
     listBoardAttachments: (board, opts) =>

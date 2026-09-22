@@ -1,3 +1,4 @@
+import { reviewPolicyFailure } from "@/lib/kanban-access";
 /**
  * 카드 제안 해소의 **실물 결선**. 판정은 `card-proposals.ts` 가 하고, 여기서는 그 `ResolveDeps`
  * 의 구멍을 DB·플러그인 클라이언트로 채운다.
@@ -95,9 +96,12 @@ export function liveResolveDeps(): {
 } {
   let gated: KanbanChannelContext | null = null;
   const deps: ResolveDeps<KanbanChannelContext> = {
-    gate: async ({ userId, channelId }) => {
+    gate: async ({ userId, channelId, choice }) => {
       const gate = await resolveKanbanChannelContext({ userId, channelId });
       if (gate.ok) {
+        const failure = choice === "card" ? reviewPolicyFailure(gate.ctx) : null;
+        if (failure)
+          return { ok: false, status: 428, code: "review_policy_required", response: failure };
         gated = gate.ctx;
         return { ok: true, ctx: gate.ctx };
       }
@@ -137,6 +141,7 @@ export function liveResolveDeps(): {
       const body = taskBody(task);
       const res = await ctx.client.kanban.createTask(ctx.boardSlug, {
         title: task.title,
+        review_policy: { version: 1, mode: "human", reviewer_profile: null },
         ...(body ? { body } : {}),
         ...(task.assignee ? { assignee: task.assignee } : {}),
       });

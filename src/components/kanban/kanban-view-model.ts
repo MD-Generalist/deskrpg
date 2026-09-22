@@ -201,6 +201,9 @@ export function failureLine(failure: Pick<KanbanFailure, "code" | "message">): s
 // ---------------------------------------------------------------------------
 
 export type TaskFormValues = {
+  reviewMode?: "human" | "agent";
+  reviewerNpcId?: string;
+  reviewRevision?: number;
   title: string;
   body: string;
   assigneeNpcId: string;
@@ -220,6 +223,8 @@ export type TaskFormValues = {
 export type ChatTaskDraft = Pick<TaskFormValues, "title" | "body" | "assigneeNpcId">;
 
 export const EMPTY_TASK_FORM: TaskFormValues = {
+  reviewMode: "human",
+  reviewerNpcId: "",
   title: "",
   body: "",
   assigneeNpcId: "",
@@ -251,6 +256,13 @@ export function parseSkills(raw: string): string[] {
  */
 export function taskFormToBody(values: TaskFormValues): Record<string, unknown> {
   const body: Record<string, unknown> = { title: values.title.trim() };
+  if (values.reviewMode) {
+    body.reviewPolicy =
+      values.reviewMode === "agent"
+        ? { mode: "agent", reviewerNpcId: values.reviewerNpcId }
+        : { mode: "human" };
+    if (values.reviewRevision !== undefined) body.expected_revision = values.reviewRevision;
+  }
   if (values.body.trim()) body.body = values.body;
   if (values.assigneeNpcId) body.assignee = values.assigneeNpcId;
   if (values.priority.trim()) body.priority = values.priority.trim();

@@ -33,9 +33,14 @@ import type {
   UpdateOrchestrationBody,
   UpdateTaskBody,
   WorkspaceKind,
+  KanbanReviewPolicy,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
-import { supportsBoardAttachmentList, swarmGate } from "@/lib/hermes/plugin-capability";
+import {
+  supportsBoardAttachmentList,
+  supportsReviewPolicy,
+  swarmGate,
+} from "@/lib/hermes/plugin-capability";
 import type { KanbanTaskActionInput } from "@/lib/hermes/plugin-client-types";
 import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
 import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
@@ -146,6 +151,41 @@ async function resolveAssigneeField(
   return { ok: true, assignee: resolved.profileName };
 }
 
+function reviewPolicyRequired() {
+  return cronError(
+    428,
+    "review_policy_required",
+    "Update Hermes and the plugin to enable approval policies",
+  );
+}
+
+async function resolveReviewPolicy(
+  ctx: KanbanChannelContext,
+  body: JsonBody,
+  assignee?: string | null,
+): Promise<{ ok: true; policy: KanbanReviewPolicy } | { ok: false; response: NextResponse }> {
+  const raw = body.reviewPolicy;
+  if (raw === undefined)
+    return { ok: true, policy: { version: 1, mode: "human", reviewer_profile: null } };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    return { ok: false, response: invalidBody("reviewPolicy must be an object") };
+  const policy = raw as JsonBody;
+  if (Object.keys(policy).some((key) => !["mode", "reviewerNpcId"].includes(key)))
+    return { ok: false, response: invalidBody("Unknown approval policy field") };
+  if (policy.mode === "human" && !policy.reviewerNpcId)
+    return { ok: true, policy: { version: 1, mode: "human", reviewer_profile: null } };
+  if (policy.mode !== "agent" || typeof policy.reviewerNpcId !== "string" || !assignee)
+    return { ok: false, response: invalidBody("AI approval requires an assignee and reviewer") };
+  const reviewer = await resolveAssignee(ctx, policy.reviewerNpcId);
+  if (!reviewer.ok) return reviewer;
+  if (reviewer.profileName.trim().toLowerCase() === assignee.trim().toLowerCase())
+    return { ok: false, response: invalidBody("Reviewer must be a different employee") };
+  return {
+    ok: true,
+    policy: { version: 1, mode: "agent", reviewer_profile: reviewer.profileName },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 공통 흐름
 // ---------------------------------------------------------------------------
@@ -254,7 +294,11 @@ export async function createTask(req: NextRequest, channelId: string) {
   const assignee = await resolveAssigneeField(ctx, body);
   if (!assignee.ok) return assignee.response;
 
+  if (!supportsReviewPolicy(ctx.info)) return reviewPolicyRequired();
+  const review = await resolveReviewPolicy(ctx, body, assignee.assignee);
+  if (!review.ok) return review.response;
   const task: CreateTaskBody = {
+    review_policy: review.policy,
     title,
     ...pickTaskFields(body),
     ...(typeof assignee.assignee === "string" ? { assignee: assignee.assignee } : {}),
@@ -292,6 +336,21 @@ export async function updateTask(req: NextRequest, channelId: string, taskId: st
     update.assignee = (assignee.assignee ?? undefined) as UpdateTaskBody["assignee"];
   }
 
+  if ("reviewPolicy" in body) {
+    if (!supportsReviewPolicy(ctx.info)) return reviewPolicyRequired();
+    const existing = await ctx.client.kanban.getTask(ctx.boardSlug, taskId);
+    if (!existing.ok) return pluginFailureResponse(existing);
+    const review = await resolveReviewPolicy(
+      ctx,
+      body,
+      assignee.assignee ?? existing.data.task.assignee,
+    );
+    if (!review.ok) return review.response;
+    if (!Number.isInteger(body.expected_revision) || Number(body.expected_revision) < 1)
+      return invalidBody("expected_revision is required");
+    update.review_policy = review.policy;
+    update.expected_revision = Number(body.expected_revision);
+  }
   const res = await ctx.client.kanban.updateTask(ctx.boardSlug, taskId, update);
   if (!res.ok) return pluginFailureResponse(res);
 
@@ -355,6 +414,16 @@ export async function runTaskAction(
 
   let res;
   switch (action) {
+    case "approve": {
+      const input: KanbanTaskActionInput<"approve"> = {};
+      if (typeof body.submission_id === "string") input.submission_id = body.submission_id;
+      if (typeof body.request_id === "string") input.request_id = body.request_id;
+      res = await ctx.client.kanban.runTaskAction(ctx.boardSlug, taskId, "approve", input, {
+        userId: ctx.userId,
+        name: (await commentAuthorFor(ctx.userId)).slice("deskrpg:".length).slice(0, 200),
+      });
+      break;
+    }
     case "reassign": {
       const npcId = typeof body.npcId === "string" ? body.npcId : "";
       if (!npcId) return invalidBody("npcId is required");
@@ -549,83 +618,15 @@ export async function dispatchBoard(req: NextRequest, channelId: string) {
 
 type SwarmWorkerInput = { npcId: string; title: string; body?: string; skills?: string[] };
 
-function parseSwarmWorkers(raw: unknown): SwarmWorkerInput[] | null {
-  if (!Array.isArray(raw) || raw.length === 0) return null;
-  const out: SwarmWorkerInput[] = [];
-  for (const entry of raw) {
-    if (typeof entry !== "object" || entry === null) return null;
-    const record = entry as Record<string, unknown>;
-    if (typeof record.npcId !== "string" || !record.npcId) return null;
-    if (typeof record.title !== "string" || !record.title.trim()) return null;
-    out.push({
-      npcId: record.npcId,
-      title: record.title.trim(),
-      body: typeof record.body === "string" ? record.body : undefined,
-      skills: stringList(record.skills),
-    });
-  }
-  return out;
-}
-
 export async function createSwarm(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
-  const ctx = resolved.ctx;
-
-  // 능력 판정이 먼저다. NPC 를 다 풀어 놓고 404 를 받으면 사용자가 원인을 못 본다.
-  const gate = swarmGate(ctx.info);
-  if (!gate.ok) {
-    const failure = pluginUpgradeRequired(gate);
-    return cronError(428, failure.code, failure.message, failure.details);
-  }
-
-  const body = await readJsonBody(req);
-  if (!body) return invalidBody("body must be a JSON object");
-
-  const goal = typeof body.goal === "string" ? body.goal.trim() : "";
-  if (!goal) return invalidBody("goal is required");
-
-  const workers = parseSwarmWorkers(body.workers);
-  if (!workers) return invalidBody("workers must be a non-empty array of {npcId, title}");
-
-  if (typeof body.verifierNpcId !== "string" || !body.verifierNpcId) {
-    return invalidBody("verifierNpcId must be an npcId");
-  }
-  if (typeof body.synthesizerNpcId !== "string" || !body.synthesizerNpcId) {
-    return invalidBody("synthesizerNpcId must be an npcId");
-  }
-
-  // 전부 풀고 나서 보낸다. 하나라도 실패하면 아무것도 만들지 않는다 — 부분 생성은
-  // 반쯤 연결된 그래프를 남기고, 그걸 디스패처가 본다.
-  const workerProfiles: string[] = [];
-  for (const worker of workers) {
-    const r = await resolveAssignee(ctx, worker.npcId);
-    if (!r.ok) return r.response;
-    workerProfiles.push(r.profileName);
-  }
-  const verifier = await resolveAssignee(ctx, body.verifierNpcId);
-  if (!verifier.ok) return verifier.response;
-  const synthesizer = await resolveAssignee(ctx, body.synthesizerNpcId);
-  if (!synthesizer.ok) return synthesizer.response;
-
-  const res = await ctx.client.kanban.createSwarm(ctx.boardSlug, {
-    goal,
-    workers: workers.map((worker, index) => ({
-      profile: workerProfiles[index],
-      title: worker.title,
-      ...(worker.body ? { body: worker.body } : {}),
-      ...(worker.skills ? { skills: worker.skills } : {}),
-    })),
-    verifier: verifier.profileName,
-    synthesizer: synthesizer.profileName,
-    ...(typeof body.idempotencyKey === "string" ? { idempotency_key: body.idempotencyKey } : {}),
-  });
-  if (!res.ok) return pluginFailureResponse(res);
-
-  // R9 와 같다 — 만들자마자 한 틱 돌려 워커가 60초를 기다리지 않게 한다.
-  await dispatchOnce(ctx);
-  schedulePollNow(ctx.channelId);
-  return NextResponse.json(res.data);
+  // Native 스웜의 즉시 완료 루트는 카드별 승인을 보장하지 못한다. 기존 스웜 읽기는 유지한다.
+  return cronError(
+    428,
+    "swarm_review_policy_unsupported",
+    "New team tasks require a policy-aware Hermes swarm contract",
+  );
 }
 
 export async function getBlackboard(req: NextRequest, channelId: string, taskId: string) {

@@ -121,59 +121,9 @@ function getRequest(ctx: SwarmCtx, taskId: string) {
   return req(ctx.ownerId, "GET", `${base(ctx.channelId)}/tasks/${taskId}/blackboard`);
 }
 
-test("채널 NPC id 를 프로필 이름으로 바꿔 넘긴다", async () => {
-  const { createSwarm } = await import("@/lib/kanban-routes");
-  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"]);
-  const res = await createSwarm(
-    postRequest(ctx, {
-      goal: "목표",
-      workers: [
-        { npcId: ctx.npcIds.nova, title: "조사" },
-        { npcId: ctx.npcIds.luna, title: "인터뷰" },
-      ],
-      verifierNpcId: ctx.npcIds.sophie,
-      synthesizerNpcId: ctx.npcIds.dante,
-    }),
-    ctx.channelId,
-  );
-  assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
-  const sent = ctx.fakePlugin.lastSwarmBody() as {
-    workers: Array<{ profile: string }>;
-    verifier: string;
-  };
-  assert.deepEqual(
-    sent.workers.map((w) => w.profile),
-    ["nova", "luna"],
-  );
-  assert.equal(sent.verifier, "sophie");
-});
-
-test("채널 밖 NPC 가 하나라도 있으면 아무것도 만들지 않는다", async () => {
+test("신규 스웜은 정책 계약이 없으면 어떤 카드도 만들지 않고 428", async () => {
   const { createSwarm } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"]);
-  const before = ctx.fakePlugin.swarmCallCount();
-  const res = await createSwarm(
-    postRequest(ctx, {
-      goal: "목표",
-      workers: [
-        { npcId: ctx.npcIds.nova, title: "조사" },
-        { npcId: "00000000-0000-0000-0000-000000000000", title: "침입" },
-      ],
-      verifierNpcId: ctx.npcIds.sophie,
-      synthesizerNpcId: ctx.npcIds.dante,
-    }),
-    ctx.channelId,
-  );
-  assert.equal(res.status, 400);
-  // 부분 생성이 없어야 한다 — 반쯤 연결된 그래프가 남으면 디스패처가 그걸 본다.
-  assert.equal(ctx.fakePlugin.swarmCallCount(), before);
-});
-
-test("플러그인이 스웜을 못 하면 428 을 낸다", async () => {
-  const { createSwarm } = await import("@/lib/kanban-routes");
-  const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"], {
-    capabilities: ["kanban", "cron", "events"],
-  });
   const res = await createSwarm(
     postRequest(ctx, {
       goal: "목표",
@@ -184,24 +134,8 @@ test("플러그인이 스웜을 못 하면 428 을 낸다", async () => {
     ctx.channelId,
   );
   assert.equal(res.status, 428);
-  const body = await res.json();
-  assert.equal(body.code, "plugin_upgrade_required");
-  assert.deepEqual(body.missing, ["swarm"]);
-});
-
-test("워커가 없으면 400", async () => {
-  const { createSwarm } = await import("@/lib/kanban-routes");
-  const ctx = await seedChannelWithNpcs(["sophie", "dante"]);
-  const res = await createSwarm(
-    postRequest(ctx, {
-      goal: "목표",
-      workers: [],
-      verifierNpcId: ctx.npcIds.sophie,
-      synthesizerNpcId: ctx.npcIds.dante,
-    }),
-    ctx.channelId,
-  );
-  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, "swarm_review_policy_unsupported");
+  assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
 });
 
 test("플러그인이 스웜을 못 하면 getBlackboard 도 428 을 낸다", async () => {
@@ -222,18 +156,23 @@ test("플러그인이 스웜을 못 하면 getBlackboard 도 428 을 낸다", as
 });
 
 test("블랙보드를 그대로 돌려준다", async () => {
-  const { createSwarm, getBlackboard } = await import("@/lib/kanban-routes");
+  const { getBlackboard } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"]);
-  const created = await createSwarm(
-    postRequest(ctx, {
-      goal: "목표",
-      workers: [{ npcId: ctx.npcIds.nova, title: "조사" }],
-      verifierNpcId: ctx.npcIds.sophie,
-      synthesizerNpcId: ctx.npcIds.dante,
-    }),
-    ctx.channelId,
-  );
-  const { root_id } = await created.json();
+  const { resolveKanbanChannelContext } = await import("@/lib/kanban-access");
+  const resolved = await resolveKanbanChannelContext({
+    userId: ctx.ownerId,
+    channelId: ctx.channelId,
+  });
+  assert.ok(resolved.ok);
+  // 업그레이드 전에 존재하던 스웜을 fake Hermes에 심는다.
+  const created = await resolved.ctx.client.kanban.createSwarm(resolved.ctx.boardSlug, {
+    goal: "기존",
+    workers: [{ profile: "nova", title: "조사" }],
+    verifier: "sophie",
+    synthesizer: "dante",
+  });
+  assert.ok(created.ok);
+  const { root_id } = created.data;
   const res = await getBlackboard(getRequest(ctx, root_id), ctx.channelId, root_id);
   assert.equal(res.status, 200);
   const body = await res.json();

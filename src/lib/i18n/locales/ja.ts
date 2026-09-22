@@ -2916,6 +2916,41 @@ const ja: Record<string, string> = {
   "kanban.move.failed": "{title} を移動できませんでした: {error}",
   "kanban.move.unconfirmed": "{title} の移動は保存されましたが、最新状態を確認できませんでした。",
   "kanban.move.retryRead": "再確認",
+  "kanban.review.reason.human_review_required": "人が結果を確認すると完了できます。",
+  "kanban.review.reason.new_submission_required":
+    "業務条件または結果が変わりました。再提出が必要です。",
+  "kanban.review.reason.review_dispatch_disabled": "管理者がAIレビューの自動実行を停止しています。",
+  "kanban.review.reason.reviewer_unavailable":
+    "指定したレビュアーを利用できません。人による確認が必要です。",
+  "kanban.review.reason.independent_reviewer_required":
+    "実行者とレビュアーが同じため自動承認できません。",
+  "kanban.review.reason.reviewer_assignment_mismatch":
+    "レビュー担当がポリシーと異なります。人の確認が必要です。",
+  "kanban.review.reason.review_round_limit":
+    "3回のAIレビューで解決しなかったため、人の判断を待っています。",
+  "kanban.review.reason.reviewer_needs_input": "AIレビュアーが人の判断を求めています。",
+  "kanban.review.reason.unknown": "自動レビューが停止しました。履歴を確認してください。",
+  "kanban.review.label": "完了承認",
+  "kanban.review.human": "人による承認",
+  "kanban.review.agent": "AIスタッフの承認",
+  "kanban.review.reviewer": "レビュー担当",
+  "kanban.review.selectReviewer": "別のスタッフを選択",
+  "kanban.review.reviewerRequired": "実行担当とは別の出勤中スタッフを選択してください。",
+  "kanban.review.help": "結果提出後、選択した承認者が確認すると完了します。",
+  "kanban.review.unsupported":
+    "新しい業務の登録には承認ポリシー対応のHermesとプラグインが必要です。",
+  "kanban.review.swarmUnsupported":
+    "チーム業務の作成は承認ポリシー対応準備中です。個別に登録してください。",
+  "kanban.review.legacy": "従来の承認方式",
+  "kanban.review.round": "AIレビュー回数",
+  "kanban.review.approvedBy": "承認者",
+  "kanban.review.submission": "承認した提出",
+  "kanban.review.state.awaiting_submission": "結果提出待ち",
+  "kanban.review.state.humanWaiting": "人の承認待ち",
+  "kanban.review.state.agentWaiting": "AIレビュー待ち",
+  "kanban.review.state.reviewing": "AIレビュー中",
+  "kanban.review.state.human_required": "人の判断が必要",
+  "kanban.review.state.approved": "承認済み",
   "kanban.form.createTitle": "カードを作成",
   "kanban.form.editTitle": "カードを編集",
   "kanban.form.title": "タイトル",

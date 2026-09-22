@@ -17,7 +17,7 @@ const CHANNEL = "ch-1";
 const status = (overrides: Record<string, unknown> = {}) => ({
   pluginStatus: "ready",
   pluginVersion: "0.6.0",
-  capabilities: ["kanban", "cron", "events"],
+  capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"],
   timezone: "Asia/Seoul",
   boardSlug: "deskrpg-ch-1",
   dispatcherPresent: true,
@@ -494,23 +494,6 @@ test("R1/R5: stale source and server failure cancel/fail without false success",
   }
 });
 
-test("R3/R5: Escape while the swarm dialog is open does not close the board modal", async () => {
-  const f = await mount((url) => {
-    if (url.includes("/automation/status"))
-      return json(status({ capabilities: ["kanban", "swarm"] }));
-    if (url.includes("/kanban/board")) return json(board());
-    return json({ code: "not_found", message: "no route" }, { status: 404 });
-  });
-  try {
-    await f.click("스웜");
-    assert.ok(f.host.querySelector('[aria-labelledby="swarm-dialog-title"]'));
-    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
-    assert.equal(f.isClosed(), false);
-  } finally {
-    await f.cleanup();
-  }
-});
-
 test("R4: completion refreshes detail only when the moved card is currently selected", async () => {
   let patchResolve!: (response: Response) => void;
   const patch = new Promise<Response>((resolve) => (patchResolve = resolve));
@@ -803,6 +786,17 @@ test("R8/R9: create posts to the server, shows the 400 message verbatim, and sur
       setter?.call(title, "새 카드");
       title.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    await act(async () => {
+      const assignee = f.host.querySelector<HTMLSelectElement>("#kanban-assignee")!;
+      assignee.value = "n1";
+      assignee.dispatchEvent(new Event("change", { bubbles: true }));
+      const criteria = f.host.querySelector<HTMLTextAreaElement>("#kanban-completion-criteria")!;
+      Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(
+        criteria,
+        "검증한 결과",
+      );
+      criteria.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await f.click("만들기");
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
@@ -932,125 +926,6 @@ test("스웜: capabilities 에 swarm 이 없으면 버튼이 렌더되지 않는
   });
   try {
     assert.equal(findButton(f.host, "스웜"), undefined, "swarm capability 없이는 버튼 없음");
-  } finally {
-    await f.cleanup();
-  }
-});
-
-test("스웜: 다이얼로그가 제출하는 idempotencyKey 는 두 번 제출해도 같다", async () => {
-  const swarmBodies: Array<{ idempotencyKey: string }> = [];
-  let swarmAttempts = 0;
-  const f = await mount((url, init) => {
-    if (url.includes("/automation/status")) return json(status({ capabilities: ["swarm"] }));
-    if (url.includes("/kanban/board")) return json(board());
-    if (url.endsWith("/swarm") && init?.method === "POST") {
-      swarmAttempts += 1;
-      const body = JSON.parse(String(init.body)) as { idempotencyKey: string };
-      swarmBodies.push(body);
-      // 첫 시도는 실패시켜 다이얼로그를 열린 채로 두고, 재시도가 같은 키를 쓰는지 본다.
-      if (swarmAttempts === 1) {
-        return json({ code: "unavailable", message: "잠깐 실패" }, { status: 503 });
-      }
-      return json({
-        root_id: "t-root",
-        worker_ids: ["t-w1"],
-        verifier_id: "t-v",
-        synthesizer_id: "t-s",
-      });
-    }
-    return json({ code: "not_found", message: "no route" }, { status: 404 });
-  });
-  try {
-    await f.click("스웜");
-    const dialog = f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]');
-    assert.ok(dialog, "스웜 다이얼로그가 열린다");
-
-    const setValue = (el: HTMLInputElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(el, value);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-
-    const goalInput = f.host.querySelector<HTMLInputElement>("#swarm-goal");
-    assert.ok(goalInput);
-    await act(async () => setValue(goalInput, "테스트 목표"));
-
-    const workerInput = f.host.querySelector<HTMLInputElement>('input[aria-label="맡길 일"]');
-    assert.ok(workerInput);
-    await act(async () => setValue(workerInput, "워커 작업"));
-
-    const submitButton = () => findButton(f.host, "스웜 시작");
-    assert.ok(submitButton());
-    await act(async () => submitButton()?.click());
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
-    });
-
-    // 첫 시도는 503 으로 실패했으니 다이얼로그가 여전히 열려 있다.
-    const dialogAfterFailure = f.host.querySelector<HTMLElement>(
-      '[aria-labelledby="swarm-dialog-title"]',
-    );
-    assert.ok(dialogAfterFailure);
-    // 실패 메시지는 다이얼로그 안에서 보여야 한다 — boardWarning 배너는 이 오버레이 밑에 깔려
-    // 사용자에게 보이지 않는다.
-    const alert = dialogAfterFailure.querySelector<HTMLElement>('[role="alert"]');
-    assert.ok(alert, "다이얼로그 안에 오류 배너가 있다");
-    assert.ok(alert.textContent?.includes("잠깐 실패"), "서버 실패 메시지가 그대로 보인다");
-
-    await act(async () => submitButton()?.click());
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
-    });
-
-    assert.equal(swarmBodies.length, 2);
-    assert.equal(swarmBodies[0].idempotencyKey, swarmBodies[1].idempotencyKey);
-  } finally {
-    await f.cleanup();
-  }
-});
-
-test("스웜: 428 plugin_upgrade_required 는 다이얼로그 안에 kanban.swarm.unsupported 로 보인다", async () => {
-  // capability 캐시가 낡아 버튼은 보이지만, 서버는 428 을 낸다 — 이 경로가 죽은 i18n 키
-  // kanban.swarm.unsupported 의 제자리다.
-  const f = await mount((url, init) => {
-    if (url.includes("/automation/status")) return json(status({ capabilities: ["swarm"] }));
-    if (url.includes("/kanban/board")) return json(board());
-    if (url.endsWith("/swarm") && init?.method === "POST") {
-      return json(
-        { code: "plugin_upgrade_required", message: "too old", minVersion: "0.9.0" },
-        { status: 428 },
-      );
-    }
-    return json({ code: "not_found", message: "no route" }, { status: 404 });
-  });
-  try {
-    await f.click("스웜");
-    const dialog = f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]');
-    assert.ok(dialog);
-
-    const setValue = (el: HTMLInputElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(el, value);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-    const goalInput = f.host.querySelector<HTMLInputElement>("#swarm-goal");
-    assert.ok(goalInput);
-    await act(async () => setValue(goalInput, "테스트 목표"));
-    const workerInput = f.host.querySelector<HTMLInputElement>('input[aria-label="맡길 일"]');
-    assert.ok(workerInput);
-    await act(async () => setValue(workerInput, "워커 작업"));
-
-    const submitButton = () => findButton(f.host, "스웜 시작");
-    await act(async () => submitButton()?.click());
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
-    });
-
-    const stillOpen = f.host.querySelector<HTMLElement>('[aria-labelledby="swarm-dialog-title"]');
-    assert.ok(stillOpen, "실패해도 다이얼로그는 열린 채로 남는다");
-    const alert = stillOpen.querySelector<HTMLElement>('[role="alert"]');
-    assert.ok(alert);
-    assert.equal(alert.textContent, "이 게이트웨이의 플러그인은 스웜을 지원하지 않습니다.");
   } finally {
     await f.cleanup();
   }
@@ -1716,3 +1591,59 @@ for (const sample of [
     }
   });
 }
+
+test("혼합 승인: 옛 스웜 capability는 신규 생성 버튼을 켜지 않는다", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(status({ capabilities: ["kanban", "swarm"] }))
+      : json(board()),
+  );
+  try {
+    assert.equal(
+      [...f.host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "스웜"),
+      false,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("보호 카드의 사람 판단 화면은 AI 검토 의견 대신 승인 대상 결과를 보여 준다", async () => {
+  const f = await mount(
+    (url) => {
+      if (url.includes("/automation/status")) return json(status());
+      if (url.includes("/kanban/board")) return json(board());
+      return json(
+        detail({
+          id: "t-todo",
+          title: "할 카드",
+          status: "review",
+          started_at: 123,
+          result: "제출한 실제 결과",
+          latest_summary: "AI의 수정 요청",
+          review: {
+            policy: { version: 1, mode: "agent", reviewer_profile: "noah" },
+            policy_revision: 1,
+            submission: { id: "s1", run_id: 1, hash: "hash", policy_revision: 1 },
+            review_round: 3,
+            state: "human_required",
+            reason: "review_round_limit",
+            approval: null,
+          },
+        }),
+      );
+    },
+    { initialTaskId: "t-todo" },
+  );
+  try {
+    const result = [...f.host.querySelectorAll('aside[aria-label="카드 상세"] section')].find(
+      (node) => node.firstElementChild?.textContent === "결과",
+    );
+    assert.match(result?.textContent ?? "", /제출한 실제 결과/);
+    assert.doesNotMatch(result?.textContent ?? "", /AI의 수정 요청/);
+    const reassign = f.host.querySelector<HTMLSelectElement>('select[aria-label="재배정"]');
+    assert.ok(!reassign || reassign.disabled);
+  } finally {
+    await f.cleanup();
+  }
+});

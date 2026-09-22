@@ -299,3 +299,14 @@ export function attachmentsUnsupportedResponse(): NextResponse {
 export function supportsAttachments(ctx: Pick<KanbanChannelContext, "info">): boolean {
   return ctx.info.kanban.attachments !== false;
 }
+
+/** 신규 업무의 완료 정책을 보장할 수 없으면 쓰기 전에 차단한다. */
+export function reviewPolicyFailure(ctx: Pick<KanbanChannelContext, "info">): NextResponse | null {
+  return ctx.info?.capabilities.includes("kanban_review_policy_v1")
+    ? null
+    : cronError(
+        428,
+        "review_policy_required",
+        "Update Hermes and the plugin to enable approval policies",
+      );
+}

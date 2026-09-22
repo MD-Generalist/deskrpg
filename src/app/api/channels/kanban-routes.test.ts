@@ -221,15 +221,19 @@ test("보드 보기 — 멤버는 200 + 로스터, 비멤버 403, 로그인 없�
   assert.ok(Array.isArray(body.columns));
   assert.ok(!body.columns.some((c: { name: string }) => c.name === "archived"));
   assert.deepEqual(
-    body.npcs.map((n: Record<string, unknown>) => ({
-      npcId: n.npcId,
-      npcName: n.npcName,
-      profileName: n.profileName,
-      active: n.active,
-    })),
+    body.npcs
+      .toSorted((a: { profileName: string }, b: { profileName: string }) =>
+        a.profileName.localeCompare(b.profileName),
+      )
+      .map((n: Record<string, unknown>) => ({
+        npcId: n.npcId,
+        npcName: n.npcName,
+        profileName: n.profileName,
+        active: n.active,
+      })),
     [
-      { npcId: seed.npcId, npcName: "소피", profileName: "sophie", active: true },
       { npcId: seed.extras[0].npcId, npcName: "noah", profileName: "noah", active: false },
+      { npcId: seed.npcId, npcName: "소피", profileName: "sophie", active: true },
     ],
   );
 
@@ -944,6 +948,7 @@ test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중
     "swarm",
     "kanban_views",
     "initial_status",
+    "kanban_review_policy_v1",
   ]);
   assert.equal(body.timezone, "Asia/Seoul");
   assert.equal(body.boardSlug, seed.boardSlug);
@@ -1548,6 +1553,7 @@ test("보드 첨부 목록 — 첨부가 없는 보드는 빈 목록이다(지�
 
 test("보드 첨부 목록 — 커서로 이어지는 두 쪽을 겹치지 않게 준다", async () => {
   server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
   const created = await createTask(routes, seed.ownerId, seed.channelId);
@@ -1606,4 +1612,96 @@ test("보드 첨부 목록 — 목록을 모르는 옛 플러그인에는 부르
       "없는 라우트를 부른다",
     );
   });
+});
+
+test("혼합 승인: 새 카드는 기본 사람 정책이고 null 정책으로 우회할 수 없다", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  assert.equal(created.status, 201);
+  const sent = server
+    .requests()
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"))
+    .at(-1)!;
+  assert.deepEqual((sent.json as Record<string, unknown>).review_policy, {
+    version: 1,
+    mode: "human",
+    reviewer_profile: null,
+  });
+  const invalid = await createTask(routes, seed.ownerId, seed.channelId, { reviewPolicy: null });
+  assert.equal(invalid.status, 400);
+});
+
+test("혼합 승인: 미지원 코어는 새 카드 쓰기를 차단한다", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const before = server.requests().length;
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  assert.equal(created.status, 428);
+  assert.equal(
+    server
+      .requests()
+      .slice(before)
+      .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?")).length,
+    0,
+  );
+});
+
+test("혼합 승인: 다른 active 직원만 AI 검토자로 지정한다", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
+  const same = await createTask(routes, seed.ownerId, seed.channelId, {
+    assignee: seed.npcId,
+    reviewPolicy: { mode: "agent", reviewerNpcId: seed.npcId },
+  });
+  assert.equal(same.status, 400);
+  const valid = await createTask(routes, seed.ownerId, seed.channelId, {
+    assignee: seed.npcId,
+    reviewPolicy: { mode: "agent", reviewerNpcId: seed.extras[0].npcId },
+  });
+  assert.equal(valid.status, 201);
+  const sent = server
+    .requests()
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"))
+    .at(-1)!;
+  assert.deepEqual((sent.json as Record<string, unknown>).review_policy, {
+    version: 1,
+    mode: "agent",
+    reviewer_profile: "noah",
+  });
+});
+
+test("혼합 승인: 승인 사용자와 제출은 서버 인증과 명시한 snapshot에서만 온다", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  const taskId = created.body.task.id;
+  await routes.approve.POST(
+    req(seed.ownerId, "POST", `${base(seed.channelId)}/tasks/${taskId}/approve`, {
+      submission_id: "s-current",
+      request_id: "attempt-1",
+      actor_id: "spoof",
+      actor_name: "forged-name",
+    }),
+    ctx(seed.channelId, taskId),
+  );
+  const sent = server
+    .requests()
+    .filter((r) => r.path.includes(`/${taskId}/approve`))
+    .at(-1)!;
+  assert.equal(sent.headers["x-deskrpg-user-id"], seed.ownerId);
+  const { commentAuthorFor } = await import("@/lib/kanban-access");
+  assert.equal(
+    decodeURIComponent(sent.headers["x-deskrpg-user-name"]!),
+    (await commentAuthorFor(seed.ownerId)).slice("deskrpg:".length),
+  );
+  assert.deepEqual(sent.json, { submission_id: "s-current", request_id: "attempt-1" });
 });

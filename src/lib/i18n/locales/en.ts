@@ -2902,6 +2902,42 @@ const en: Record<string, string> = {
   "kanban.move.unconfirmed":
     "The move for {title} was saved, but the latest state could not be confirmed.",
   "kanban.move.retryRead": "Check again",
+  "kanban.review.reason.human_review_required":
+    "A person must review this result before completion.",
+  "kanban.review.reason.new_submission_required":
+    "The task or result changed. Submit a new result.",
+  "kanban.review.reason.review_dispatch_disabled": "The administrator paused automatic AI reviews.",
+  "kanban.review.reason.reviewer_unavailable":
+    "The selected reviewer is unavailable. Human review is needed.",
+  "kanban.review.reason.independent_reviewer_required":
+    "The reviewer is also the implementer, so automatic approval is blocked.",
+  "kanban.review.reason.reviewer_assignment_mismatch":
+    "The assigned reviewer differs from the policy. Human review is needed.",
+  "kanban.review.reason.review_round_limit":
+    "Three AI review rounds did not resolve the issues. Awaiting a person.",
+  "kanban.review.reason.reviewer_needs_input": "The AI reviewer requested human input.",
+  "kanban.review.reason.unknown": "Automatic review stopped. Check the review history.",
+  "kanban.review.label": "Completion approval",
+  "kanban.review.human": "Human approval",
+  "kanban.review.agent": "AI employee approval",
+  "kanban.review.reviewer": "Reviewer",
+  "kanban.review.selectReviewer": "Select another employee",
+  "kanban.review.reviewerRequired": "Choose an active reviewer different from the assignee.",
+  "kanban.review.help": "After submission, the selected reviewer must approve before completion.",
+  "kanban.review.unsupported":
+    "Update Hermes and its plugin to support approval policies before creating tasks.",
+  "kanban.review.swarmUnsupported":
+    "Team task creation is awaiting approval policy support. Create individual tasks instead.",
+  "kanban.review.legacy": "Legacy approval behavior",
+  "kanban.review.round": "AI review round",
+  "kanban.review.approvedBy": "Approved by",
+  "kanban.review.submission": "Approved submission",
+  "kanban.review.state.awaiting_submission": "Awaiting submission",
+  "kanban.review.state.humanWaiting": "Awaiting human approval",
+  "kanban.review.state.agentWaiting": "Awaiting AI review",
+  "kanban.review.state.reviewing": "AI review in progress",
+  "kanban.review.state.human_required": "Human decision needed",
+  "kanban.review.state.approved": "Approved",
   "kanban.form.createTitle": "Create card",
   "kanban.form.editTitle": "Edit card",
   "kanban.form.title": "Title",

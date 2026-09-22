@@ -1,4 +1,6 @@
 export type ErrorCode =
+  | "review_policy_required"
+  | "swarm_review_policy_unsupported"
   | "setup_invalid_request"
   | "invalid_credentials"
   | "login_id_password_required"
@@ -215,6 +217,8 @@ export type ErrorCode =
 
 /** 등록된 모든 에러코드 → 번역 키. 커버리지 가드가 이 표 전체를 훑는다. */
 export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
+  review_policy_required: "kanban.review.unsupported",
+  swarm_review_policy_unsupported: "kanban.review.swarmUnsupported",
   invalid_credentials: "errors.invalidCredentials",
   login_id_password_required: "errors.loginIdPasswordRequired",
   login_id_nickname_password_required: "errors.loginIdNicknamePasswordRequired",

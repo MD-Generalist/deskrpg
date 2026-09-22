@@ -427,3 +427,8 @@ export async function probeDeskrpgPluginWithInfo(input: ProbeInput): Promise<Plu
     ? { capability: { status: "unknown", version: null }, info: null, failure: raw.failure }
     : classifyPluginProbeWithInfo(raw);
 }
+
+/** 새 업무의 완료 정책을 코어에서 강제하는 계약. */
+export function supportsReviewPolicy(info: PluginInfo | null): boolean {
+  return info?.capabilities.includes("kanban_review_policy_v1") ?? false;
+}

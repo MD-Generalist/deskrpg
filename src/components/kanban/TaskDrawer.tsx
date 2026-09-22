@@ -222,19 +222,22 @@ export default function TaskDrawer({
       return result;
     } catch (err) {
       setActionError(failureLine(toFailure(err)));
+      if (kind === "approve") await load();
       return null;
     } finally {
       setPending(null);
     }
   };
 
+  const approvalAttempt = useRef<{ submission: string; request: string } | null>(null);
   const act = (action: KanbanTaskAction, body?: Record<string, unknown>) =>
     run(action, () => api.action(taskId, action, body));
 
   const task = detail?.task ?? null;
   const status = task?.status;
-  const resultText =
-    status === "review"
+  const resultText = task?.review?.submission
+    ? task.result
+    : status === "review"
       ? task?.latest_summary?.trim() || task?.result
       : task?.result?.trim() || (status === "done" ? task?.latest_summary : undefined);
   const assignees = activeAssigneeOptions(npcs);
@@ -307,7 +310,7 @@ export default function TaskDrawer({
           )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {task && (
+          {task && !(task.review?.approval && ["done", "archived"].includes(task.status)) && (
             <button
               type="button"
               onClick={() => onEdit(task)}
@@ -343,6 +346,49 @@ export default function TaskDrawer({
 
         {detail && task && (
           <>
+            <section className="rounded-md border border-border p-2 text-xs space-y-1">
+              <div>
+                {t("kanban.review.label")}:{" "}
+                {task.review
+                  ? t(`kanban.review.${task.review.policy.mode}`)
+                  : t("kanban.review.legacy")}
+              </div>
+              {task.review && (
+                <>
+                  <div>
+                    {t(
+                      `kanban.review.state.${task.review.state === "submitted" ? (task.review.policy.mode === "human" ? "humanWaiting" : "agentWaiting") : task.review.state}`,
+                    )}
+                  </div>
+                  {task.review.policy.reviewer_profile && (
+                    <div>
+                      {t("kanban.review.reviewer")}:{" "}
+                      {npcs.find((npc) => npc.profileName === task.review?.policy.reviewer_profile)
+                        ?.npcName ?? task.review.policy.reviewer_profile}
+                    </div>
+                  )}
+                  <div>
+                    {t("kanban.review.round")}: {task.review.review_round}
+                  </div>
+                  {task.review.reason && (
+                    <div className="text-text-secondary">
+                      {t(
+                        `kanban.review.reason.${["human_review_required", "new_submission_required", "review_dispatch_disabled", "reviewer_unavailable", "independent_reviewer_required", "reviewer_assignment_mismatch", "review_round_limit", "reviewer_needs_input"].includes(task.review.reason) ? task.review.reason : "unknown"}`,
+                      )}
+                    </div>
+                  )}
+                  {task.review.approval && (
+                    <div>
+                      {t("kanban.review.approvedBy")}:{" "}
+                      {task.review.approval.actor_name || task.review.approval.actor_id} ·{" "}
+                      {new Date(task.review.approval.approved_at * 1000).toLocaleString()}
+                      <br />
+                      {t("kanban.review.submission")}: {task.review.approval.submission_id}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
             {/* 상태 + 액션 (R10·R13) */}
             <section className="space-y-2">
               <div className="flex items-center gap-2">
@@ -360,7 +406,11 @@ export default function TaskDrawer({
                   onChange={handleStatus}
                 >
                   {KANBAN_TASK_STATUSES.map((name) => (
-                    <option key={name} value={name}>
+                    <option
+                      key={name}
+                      value={name}
+                      disabled={!!task.review && name === "done" && task.status !== "done"}
+                    >
                       {t(`kanban.column.${name}`)}
                     </option>
                   ))}
@@ -372,8 +422,24 @@ export default function TaskDrawer({
                   <button
                     type="button"
                     className={BTN_PRIMARY}
-                    disabled={pending !== null}
-                    onClick={() => void act("approve")}
+                    disabled={
+                      pending !== null ||
+                      (!!task.review &&
+                        (!task.review.submission || task.review.state === "reviewing"))
+                    }
+                    onClick={() => {
+                      const submission = task.review?.submission?.id;
+                      if (!submission) {
+                        void act("approve");
+                        return;
+                      }
+                      if (approvalAttempt.current?.submission !== submission)
+                        approvalAttempt.current = { submission, request: crypto.randomUUID() };
+                      void act("approve", {
+                        submission_id: submission,
+                        request_id: approvalAttempt.current.request,
+                      });
+                    }}
                   >
                     {t("kanban.action.approve")}
                   </button>
@@ -440,7 +506,13 @@ export default function TaskDrawer({
                   aria-label={t("kanban.action.reassign")}
                   className="rounded-md border border-border bg-surface px-2 py-1 text-xs"
                   value={reassignNpcId}
-                  disabled={pending !== null}
+                  disabled={
+                    pending !== null ||
+                    !!(
+                      task.review &&
+                      (task.started_at || task.review.submission || task.review.review_round)
+                    )
+                  }
                   onChange={(e) => setReassignNpcId(e.target.value)}
                 >
                   <option value="">{t("kanban.form.assigneeNone")}</option>
@@ -453,7 +525,14 @@ export default function TaskDrawer({
                 <button
                   type="button"
                   className={BTN_SOFT}
-                  disabled={pending !== null || !reassignNpcId}
+                  disabled={
+                    pending !== null ||
+                    !reassignNpcId ||
+                    !!(
+                      task.review &&
+                      (task.started_at || task.review.submission || task.review.review_round)
+                    )
+                  }
                   onClick={() => void act("reassign", { npcId: reassignNpcId })}
                 >
                   {t("kanban.action.reassign")}

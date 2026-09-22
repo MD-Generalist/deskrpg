@@ -19,7 +19,7 @@ import { approvalTargets, approvals, db } from "@/db";
 import type { CreateTaskBody } from "@/lib/hermes/deskrpg-plugin-types";
 import { orderApprovalBatch } from "@/lib/approval-batch-order";
 import type { KanbanChannelContext } from "@/lib/kanban-access";
-import { resolveAssignee } from "@/lib/kanban-access";
+import { resolveAssignee, reviewPolicyFailure } from "@/lib/kanban-access";
 import { requestEmitRoomMessage } from "@/lib/automation-registry";
 import { appendRoomMessage, ensureOfficeRoom } from "@/lib/chat-rooms";
 import { getChannelOwnerId } from "@/lib/chat-rooms";
@@ -82,6 +82,7 @@ export async function createApprovalBatch(
   ctx: KanbanChannelContext,
   input: ApprovalBatchInput,
 ): Promise<ApprovalBatchResult> {
+  if (reviewPolicyFailure(ctx)) return { ok: false, errorCode: "review_policy_required" };
   const ordered = orderApprovalBatch(input.items);
   if (!ordered.ok) return { ok: false, errorCode: ordered.error, index: ordered.index };
 
@@ -113,6 +114,7 @@ export async function createApprovalBatch(
 
     const body: CreateTaskBody = {
       title: item.title,
+      review_policy: { version: 1, mode: "human", reviewer_profile: null },
       // 관문의 핵심 — 처음부터 세운다. 만든 뒤 상태를 바꾸면 그 사이 dispatch 가 나간다.
       initial_status: "blocked",
       ...(item.body ? { body: item.body } : {}),

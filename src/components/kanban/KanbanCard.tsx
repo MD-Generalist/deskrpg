@@ -398,6 +398,9 @@ export default function KanbanCard({
         className="w-full p-2.5 pr-9 text-left"
       >
         <div className="font-semibold text-text leading-snug break-words">{task.title}</div>
+        <div className="text-[10px] text-text-secondary">
+          {task.review ? t(`kanban.review.${task.review.policy.mode}`) : t("kanban.review.legacy")}
+        </div>
         <div className="mt-1 text-[11px] text-text-muted truncate">
           {assignee ?? t("kanban.card.unassigned")}
         </div>
