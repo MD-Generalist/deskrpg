@@ -19,6 +19,7 @@ import { isBlockedAddress, parsePreviewTarget } from "./guard";
 
 const MAX_HOPS = 3;
 const TIMEOUT_MS = 5_000;
+const TOTAL_TIMEOUT_MS = 8_000;
 
 export type FetchGuardedOptions = {
   /** 받아들일 content-type 의 앞부분(`text/html`·`image/`). */
@@ -59,7 +60,12 @@ function hostIsAddressLiteral(hostname: string): boolean {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":");
 }
 
-function openHop(url: URL, isAllowedAddress: (address: string) => boolean): Promise<Hop | null> {
+function openHop(
+  url: URL,
+  isAllowedAddress: (address: string) => boolean,
+  signal: AbortSignal,
+): Promise<Hop | null> {
+  if (signal.aborted) return Promise.resolve(null);
   // IP 리터럴은 `lookup` 을 거치지 않으므로 여기서 같은 정책을 적용한다.
   if (hostIsAddressLiteral(url.hostname)) {
     const literal = url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname;
@@ -119,6 +125,11 @@ function openHop(url: URL, isAllowedAddress: (address: string) => boolean): Prom
         });
       },
     );
+    // 전체 예산이 끝나면 DNS·헤더·본문 중 어느 단계에 있든 소켓을 끊는다.
+    const abort = () => req.destroy(new Error("deadline"));
+    signal.addEventListener("abort", abort, { once: true });
+    req.on("close", () => signal.removeEventListener("abort", abort));
+    if (signal.aborted) req.destroy(new Error("deadline"));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error("timeout")));
     req.on("error", () => done(null));
     req.end();
@@ -126,11 +137,19 @@ function openHop(url: URL, isAllowedAddress: (address: string) => boolean): Prom
 }
 
 /** 상한까지만 읽는다. 상한을 넘으면 연결을 끊는다 — 다 읽고 자르면 상한이 아니다. */
-function readCapped(message: IncomingMessage, maxBytes: number): Promise<Uint8Array> {
+function readCapped(
+  message: IncomingMessage,
+  maxBytes: number,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let total = 0;
     const finish = () => resolve(new Uint8Array(Buffer.concat(chunks, total)));
+    const abort = () => message.destroy(new Error("deadline"));
+    signal.addEventListener("abort", abort, { once: true });
+    message.on("close", () => signal.removeEventListener("abort", abort));
+    if (signal.aborted) message.destroy(new Error("deadline"));
     message.on("data", (chunk: Buffer) => {
       const room = maxBytes - total;
       if (room <= 0) {
@@ -156,18 +175,41 @@ export async function fetchGuarded(
   target: URL,
   options: FetchGuardedOptions,
 ): Promise<FetchedBody | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
+  // 주소 검사도 비동기 작업이다. 검사 자체가 멎어도 전체 예산에서 빠져나온다.
+  const expired = new Promise<null>((resolve) => {
+    controller.signal.addEventListener("abort", () => resolve(null), { once: true });
+  });
+  try {
+    return await Promise.race([fetchWithinDeadline(target, options, controller.signal), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchWithinDeadline(
+  target: URL,
+  options: FetchGuardedOptions,
+  signal: AbortSignal,
+): Promise<FetchedBody | null> {
   const isAllowed = options.isAllowedUrl ?? isAllowedPreviewUrl;
   const isAllowedAddress = options.isAllowedAddress ?? ((a: string) => !isBlockedAddress(a));
   let url = target;
 
   for (let hop = 0; hop < MAX_HOPS; hop++) {
-    if (!(await isAllowed(url))) return null;
+    if (signal.aborted || !(await isAllowed(url)) || signal.aborted) return null;
 
-    const res = await openHop(url, isAllowedAddress);
+    const res = await openHop(url, isAllowedAddress, signal);
     if (!res) return null;
+    if (signal.aborted) {
+      res.message.destroy();
+      return null;
+    }
 
     if (res.status >= 300 && res.status < 400) {
-      res.message.resume();
+      // 리다이렉트 본문은 사용하지 않는다. 흘려 보내면 이전 홉의 소켓이 계속 열린다.
+      res.message.destroy();
       if (!res.location) return null;
       try {
         url = new URL(res.location, url);
@@ -188,7 +230,8 @@ export async function fetchGuarded(
       res.message.destroy();
       return null;
     }
-    const bytes = await readCapped(res.message, options.maxBytes);
+    const bytes = await readCapped(res.message, options.maxBytes, signal);
+    if (signal.aborted) return null;
     return {
       url,
       bytes,

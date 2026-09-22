@@ -203,3 +203,114 @@ test("압축된 응답은 받지 않는다 — 상한이 압축 전 바이트면
     s.close();
   }
 });
+
+test("느린 조각 본문도 전체 8초가 지나면 버린다", { timeout: 12000 }, async () => {
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.write("start");
+    const interval = setInterval(() => res.write("x"), 1000);
+    res.on("close", () => clearInterval(interval));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const started = Date.now();
+  try {
+    const got = await fetchGuarded(new URL(`http://127.0.0.1:${address.port}/`), {
+      accept: "text/html",
+      maxBytes: 1024,
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    });
+    assert.equal(got, null);
+    assert.ok(Date.now() - started < 10000);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("헤더를 보내지 않는 서버도 전체 예산 안에 끝난다", { timeout: 12000 }, async () => {
+  const server = createServer(() => {});
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const started = Date.now();
+  try {
+    const got = await fetchGuarded(new URL(`http://127.0.0.1:${address.port}/`), {
+      accept: "text/html",
+      maxBytes: 1024,
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    });
+    assert.equal(got, null);
+    assert.ok(Date.now() - started < 10000);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("리다이렉트마다 시계를 다시 시작하지 않는다", { timeout: 12000 }, async () => {
+  const server = createServer((req, res) => {
+    setTimeout(() => {
+      if (res.destroyed) return;
+      const n = Number(req.url?.slice(1) ?? 0);
+      if (n < 2) res.writeHead(302, { location: `/${n + 1}` }).end();
+      else res.writeHead(200, { "content-type": "text/html" }).end("done");
+    }, 3000);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const started = Date.now();
+  try {
+    const got = await fetchGuarded(new URL(`http://127.0.0.1:${address.port}/0`), {
+      accept: "text/html",
+      maxBytes: 1024,
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    });
+    assert.equal(got, null);
+    assert.ok(Date.now() - started < 10000);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test("본문이 끝나지 않는 리다이렉트의 이전 소켓을 닫는다", async () => {
+  let closed = false;
+  const server = createServer((req, res) => {
+    if (req.url === "/first") {
+      res.writeHead(302, { location: "/final" });
+      res.write("unused");
+      res.on("close", () => {
+        closed = true;
+      });
+      return;
+    }
+    res.writeHead(200, { "content-type": "text/html" }).end("done");
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    const got = await fetchGuarded(new URL(`http://127.0.0.1:${address.port}/first`), {
+      accept: "text/html",
+      maxBytes: 1024,
+      isAllowedUrl: allowAll,
+      isAllowedAddress: () => true,
+    });
+    assert.equal(got?.body, "done");
+    for (let i = 0; i < 20 && !closed; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(closed, true);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});

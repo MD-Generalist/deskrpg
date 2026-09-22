@@ -13,6 +13,22 @@ import { normalizePreviewUrl } from "./guard";
 const HTML_MAX_BYTES = 512 * 1024;
 const TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 500;
+const MAX_ACTIVE_FETCHES = 8;
+const slotState = globalThis as typeof globalThis & { __deskrpgPreviewSlots?: { active: number } };
+const slots = (slotState.__deskrpgPreviewSlots ??= { active: 0 });
+
+/** HTML 과 이미지가 같은 프로세스 예산을 사용한다. 꽉 차면 대기하지 않는다. */
+export async function withPreviewSlot<T>(
+  work: () => Promise<T>,
+): Promise<{ admitted: true; value: T } | { admitted: false }> {
+  if (slots.active >= MAX_ACTIVE_FETCHES) return { admitted: false };
+  slots.active++;
+  try {
+    return { admitted: true, value: await work() };
+  } finally {
+    slots.active--;
+  }
+}
 
 type Entry = { at: number; value: LinkPreview | null };
 const cache = new Map<string, Entry>();
@@ -49,12 +65,17 @@ export async function buildLinkPreview(
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
-  const fetched = await fetchGuarded(target, {
-    accept: "text/html",
-    maxBytes: HTML_MAX_BYTES,
-    isAllowedUrl: options?.isAllowedUrl,
-    isAllowedAddress: options?.isAllowedAddress,
-  });
+  const result = await withPreviewSlot(() =>
+    fetchGuarded(target, {
+      accept: "text/html",
+      maxBytes: HTML_MAX_BYTES,
+      isAllowedUrl: options?.isAllowedUrl,
+      isAllowedAddress: options?.isAllowedAddress,
+    }),
+  );
+  // 포화는 일시적이다. 실패 캐시에 저장하면 슬롯이 풀린 뒤에도 복구되지 않는다.
+  if (!result.admitted) return null;
+  const fetched = result.value;
   if (!fetched) return remember(key, null);
 
   const parsed = parseOpenGraph(fetched.body, fetched.url);

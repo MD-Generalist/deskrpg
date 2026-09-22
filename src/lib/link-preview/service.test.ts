@@ -92,3 +92,56 @@ test("가드가 거부하는 주소는 조회하지 않는다", async () => {
     );
   }
 });
+
+test("HTML 과 이미지 작업이 8개 슬롯을 공유하고 실패 후 슬롯을 반환한다", async () => {
+  const { withPreviewSlot } = await import("./service");
+  const releases: Array<() => void> = [];
+  const pending = Array.from({ length: 8 }, () =>
+    withPreviewSlot(() => new Promise<void>((resolve) => releases.push(resolve))),
+  );
+  assert.equal(releases.length, 8);
+  let called = false;
+  assert.deepEqual(
+    await withPreviewSlot(async () => {
+      called = true;
+      return "image";
+    }),
+    { admitted: false },
+  );
+  assert.equal(called, false);
+  releases[0]();
+  await pending[0];
+  assert.deepEqual(await withPreviewSlot(async () => "image"), { admitted: true, value: "image" });
+  releases.slice(1).forEach((release) => release());
+  await Promise.all(pending);
+  await assert.rejects(
+    withPreviewSlot(async () => {
+      throw new Error("failed");
+    }),
+    /failed/,
+  );
+  assert.deepEqual(await withPreviewSlot(async () => "html"), { admitted: true, value: "html" });
+});
+
+test("포화로 실패한 주소는 캐시에 남지 않아 슬롯 해제 뒤 성공한다", async () => {
+  clearLinkPreviewCache();
+  const { withPreviewSlot } = await import("./service");
+  const s = await serve(`<title>복구</title>`);
+  const releases: Array<() => void> = [];
+  const pending = Array.from({ length: 8 }, () =>
+    withPreviewSlot(() => new Promise<void>((resolve) => releases.push(resolve))),
+  );
+  try {
+    const target = `${s.origin}/recover`;
+    const options = { isAllowedUrl: allowAll, isAllowedAddress: () => true };
+    assert.equal(await buildLinkPreview(target, options), null);
+    assert.equal(s.hits, 0);
+    releases.forEach((release) => release());
+    await Promise.all(pending);
+    assert.equal((await buildLinkPreview(target, options))?.title, "복구");
+    assert.equal(s.hits, 1);
+  } finally {
+    releases.forEach((release) => release());
+    s.close();
+  }
+});
