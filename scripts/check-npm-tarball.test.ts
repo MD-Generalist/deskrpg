@@ -46,6 +46,9 @@ test("npm tarball 검사기가 개발 파일과 지침을 거절한다", () => {
     "package/.next/standalone/AGENTS.md",
     "package/.next/standalone/src/lib/AGENTS.md",
     "package/.next/standalone/docs/plan.md",
+    "package/.next/standalone/playwright.fixtures.config.ts",
+    "package/.next/standalone/tsconfig.tsbuildinfo",
+    "package/.next/standalone/src/test-setup/dom.ts",
   ]) {
     const result = checkTarball([name]);
     assert.equal(result.status, 1, name);
@@ -54,7 +57,11 @@ test("npm tarball 검사기가 개발 파일과 지침을 거절한다", () => {
 });
 
 test("npm tarball 검사기가 의존성 런타임 스크립트를 허용한다", () => {
-  const result = checkTarball(["package/.next/standalone/node_modules/pkg/scripts/runtime.js"]);
+  const result = checkTarball([
+    "package/.next/standalone/node_modules/pkg/scripts/runtime.js",
+    "package/.next/standalone/node_modules/pkg/playwright.config.js",
+    "package/.next/standalone/node_modules/pkg/test-setup/runtime.js",
+  ]);
   assert.equal(result.status, 0, result.stderr);
 });
 

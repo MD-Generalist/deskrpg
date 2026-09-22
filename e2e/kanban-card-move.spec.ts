@@ -1,11 +1,9 @@
-import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
-import { SignJWT } from "jose";
+import { type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, installGameFixture, json } from "./fixtures/game";
 
 const CHANNEL_ID = "kanban-e2e-channel";
 const CHARACTER_ID = "kanban-e2e-character";
 const TASK_ID = "kanban-e2e-task";
-const DEV_JWT_SECRET = "deskrpg-dev-jwt-secret-do-not-use-in-production";
-const BASE_URL = process.env.DESKRPG_E2E_BASE_URL ?? "http://localhost:3000";
 
 type TaskStatus =
   | "triage"
@@ -40,10 +38,6 @@ const statuses: TaskStatus[] = [
   "archived",
 ];
 
-function json(route: Route, body: unknown, status = 200) {
-  return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-}
-
 function board(state: FixtureState, includeArchived: boolean) {
   return {
     columns: statuses
@@ -64,118 +58,59 @@ function board(state: FixtureState, includeArchived: boolean) {
 }
 
 async function installFixture(context: BrowserContext, state: FixtureState) {
-  const token = await new SignJWT({ userId: "e2e-user", nickname: "E2E" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(new TextEncoder().encode(DEV_JWT_SECRET));
-  await context.addCookies([
-    // 쿠키는 테스트가 실제로 여는 주소에 심는다 — 3000 으로 박아 두면 다른 포트의 서버에서는
-    // 로그인이 안 돼 "인증 확인 중" 에서 멈춘다.
-    { name: "token", value: token, url: BASE_URL, httpOnly: true, sameSite: "Lax" },
-  ]);
+  await installGameFixture(context, {
+    channelId: CHANNEL_ID,
+    characterId: CHARACTER_ID,
+    handle: async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const path = url.pathname;
 
-  await context.route("**/socket.io/**", (route) => route.abort());
-  await context.route("**/api/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
-    // 게임 화면은 "나" 를 URL 이 아니라 여기서 읽는다. 비어 있으면 캐릭터 화면으로 튕긴다.
-    if (path === "/api/characters/me") {
-      return json(route, {
-        character: {
-          id: CHARACTER_ID,
-          name: "E2E Character",
-          appearance: { officeLookId: "office-jun", bodyType: "male" },
-        },
-      });
-    }
-    if (path === "/api/characters") {
-      return json(route, {
-        characters: [
-          {
-            id: CHARACTER_ID,
-            name: "E2E Character",
-            appearance: { officeLookId: "office-jun", bodyType: "male" },
-          },
-        ],
-      });
-    }
-    if (path === `/api/channels/${CHANNEL_ID}`) {
-      return json(route, {
-        channel: {
-          id: CHANNEL_ID,
-          name: "Kanban E2E",
-          description: null,
-          inviteCode: null,
-          mapData: null,
-          mapConfig: null,
-          mapRevision: "fixture",
-          isPublic: true,
-          isMember: true,
-          isOwner: true,
-          hasGateway: true,
-        },
-      });
-    }
-    if (path === "/api/npcs") return json(route, { npcs: [] });
-    if (path === "/api/meetings") return json(route, { minutes: [] });
-    if (path.endsWith("/automation/status")) {
-      return json(route, {
-        pluginStatus: "ready",
-        pluginVersion: "0.6.0",
-        capabilities: ["kanban", "events"],
-        timezone: "Asia/Seoul",
-        boardSlug: "fixture",
-        dispatcherPresent: true,
-        attachments: true,
-        lastPolledAt: null,
-        lastError: null,
-        minVersion: "0.6.0",
-        working: [],
-      });
-    }
-    // 카드 상세는 그 카드의 결과물도 읽는다. 목록이 없는 응답이면 드로어가 통째로 죽는다.
-    if (path.endsWith("/artifacts"))
-      return json(route, { artifacts: [], cursor: "", has_more: false });
-    if (path.endsWith("/kanban/board")) {
-      state.boardReads += 1;
-      return json(route, board(state, url.searchParams.get("include_archived") === "true"));
-    }
-    if (path.endsWith(`/kanban/tasks/${TASK_ID}`) && request.method() === "GET") {
-      return json(route, {
-        task: { id: TASK_ID, title: "브라우저 이동 카드", status: state.status },
-        comments: [],
-        events: [],
-        attachments: [],
-        links: { parents: [], children: [] },
-        runs: [],
-      });
-    }
-    if (path.endsWith(`/kanban/tasks/${TASK_ID}`) && request.method() === "PATCH") {
-      const body = request.postDataJSON() as { status: TaskStatus };
-      state.patchBodies.push(body);
-      if (state.patchMode === "error") {
-        return json(route, { code: "fixture_failure", message: "fixture move failed" }, 500);
+      // 카드 상세는 그 카드의 결과물도 읽는다. 목록이 없는 응답이면 드로어가 통째로 죽는다.
+      if (path === `/api/channels/${CHANNEL_ID}/artifacts` && request.method() === "GET")
+        return json(route, { artifacts: [], cursor: "", has_more: false });
+      if (path === `/api/channels/${CHANNEL_ID}/kanban/board` && request.method() === "GET") {
+        state.boardReads += 1;
+        return json(route, board(state, url.searchParams.get("include_archived") === "true"));
       }
-      if (state.patchMode === "pending") {
-        await new Promise<void>((resolve) => (state.releasePatch = resolve));
+      if (
+        path === `/api/channels/${CHANNEL_ID}/kanban/tasks/${TASK_ID}` &&
+        request.method() === "GET"
+      ) {
+        return json(route, {
+          task: { id: TASK_ID, title: "브라우저 이동 카드", status: state.status },
+          comments: [],
+          events: [],
+          attachments: [],
+          links: { parents: [], children: [] },
+          runs: [],
+        });
       }
-      state.status = body.status;
-      if (state.deleteAfterPatch) state.hidden = true;
-      return json(route, {
-        task: { id: TASK_ID, title: "브라우저 이동 카드", status: body.status },
-      });
-    }
-    return json(route, {});
+      if (
+        path === `/api/channels/${CHANNEL_ID}/kanban/tasks/${TASK_ID}` &&
+        request.method() === "PATCH"
+      ) {
+        const body = request.postDataJSON() as { status: TaskStatus };
+        state.patchBodies.push(body);
+        if (state.patchMode === "error") {
+          return json(route, { code: "fixture_failure", message: "fixture move failed" }, 500);
+        }
+        if (state.patchMode === "pending") {
+          await new Promise<void>((resolve) => (state.releasePatch = resolve));
+        }
+        state.status = body.status;
+        if (state.deleteAfterPatch) state.hidden = true;
+        return json(route, {
+          task: { id: TASK_ID, title: "브라우저 이동 카드", status: body.status },
+        });
+      }
+      return false;
+    },
   });
 }
 
 async function openBoard(page: Page) {
-  // 페이지가 죽으면 뒤의 단계는 "요소를 못 찾음" 으로만 보인다 — 원인을 그대로 드러낸다.
-  page.on("pageerror", (error) => console.error(`[pageerror] ${error.stack ?? error.message}`));
-  await page.goto(`/game?channelId=${CHANNEL_ID}&characterId=${CHARACTER_ID}`);
+  await page.goto(`/game?channelId=${CHANNEL_ID}`);
   await page.getByRole("button", { name: "칸반 보드" }).click();
   await expect(page.getByRole("dialog", { name: "칸반 보드" })).toBeVisible();
   await expect(page.locator(`[data-card-move-handle="${TASK_ID}"]`)).toBeVisible();

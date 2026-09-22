@@ -1,10 +1,9 @@
-import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
-import { SignJWT } from "jose";
+import { type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, installGameFixture, json } from "./fixtures/game";
 
 const CHANNEL_ID = "artifacts-e2e-channel";
 const CHARACTER_ID = "artifacts-e2e-character";
 const TASK_ID = "artifacts-e2e-task";
-const DEV_JWT_SECRET = "deskrpg-dev-jwt-secret-do-not-use-in-production";
 
 // 투명 1x1 PNG — 이미지 결과물 콘텐츠로 그대로 서빙한다.
 const PNG_1PX = Buffer.from(
@@ -33,10 +32,6 @@ type ArtifactSeed = {
 type FixtureState = {
   artifacts: ArtifactSeed[];
 };
-
-function json(route: Route, body: unknown, status = 200) {
-  return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-}
 
 function text(content: string, filename: string, mime: string, version = 1): ArtifactVersionSeed {
   return { version, content: Buffer.from(content, "utf8"), filename, mime };
@@ -126,161 +121,109 @@ async function installFixture(
   state: FixtureState,
   options: { withKanbanCard?: boolean } = {},
 ) {
-  const token = await new SignJWT({ userId: "e2e-user", nickname: "E2E" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(new TextEncoder().encode(DEV_JWT_SECRET));
-  await context.addCookies([
-    { name: "token", value: token, url: "http://localhost:3000", httpOnly: true, sameSite: "Lax" },
-  ]);
+  await installGameFixture(context, {
+    channelId: CHANNEL_ID,
+    characterId: CHARACTER_ID,
+    handle: async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const path = url.pathname;
+      const method = request.method();
+      const root = `/api/channels/${CHANNEL_ID}/artifacts`;
 
-  await context.route("**/socket.io/**", (route) => route.abort());
-  await context.route("**/api/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-    const method = request.method();
-    const root = `/api/channels/${CHANNEL_ID}/artifacts`;
+      if (options.withKanbanCard) {
+        if (path === `/api/channels/${CHANNEL_ID}/kanban/board` && request.method() === "GET") {
+          return json(route, {
+            columns: [
+              {
+                name: "todo",
+                tasks: [{ id: TASK_ID, title: "결과물 카드", status: "todo", assignee: "fixture" }],
+              },
+            ],
+            tenants: [],
+            assignees: ["fixture"],
+            latest_event_id: null,
+            now: "2026-09-18T00:00:00Z",
+            npcs: [{ npcId: "npc-1", npcName: "Fixture NPC", profileName: "sophie", active: true }],
+          });
+        }
+        if (path === `/api/channels/${CHANNEL_ID}/kanban/tasks/${TASK_ID}` && method === "GET") {
+          return json(route, {
+            task: { id: TASK_ID, title: "결과물 카드", status: "todo" },
+            comments: [],
+            events: [],
+            attachments: [],
+            links: { parents: [], children: [] },
+            runs: [],
+          });
+        }
+      }
 
-    if (path === "/api/characters") {
-      return json(route, {
-        characters: [
-          {
-            id: CHARACTER_ID,
-            name: "E2E Character",
-            appearance: { officeLookId: "office-jun", bodyType: "male" },
+      if (path === root && method === "GET") {
+        const taskId = url.searchParams.get("taskId");
+        const items = state.artifacts
+          .filter((a) => !taskId || a.taskId === taskId)
+          .map(summaryOf)
+          .sort((a, b) => b.updated_at - a.updated_at);
+        return json(route, { artifacts: items, cursor: "", has_more: false });
+      }
+
+      const single = path.match(new RegExp(`^${root}/([^/]+)$`));
+      if (single && (method === "GET" || method === "DELETE")) {
+        const found = state.artifacts.find((a) => a.id === single[1]);
+        if (!found) return json(route, { code: "artifact_not_found", message: "not found" }, 404);
+        if (method === "GET") return json(route, detailOf(found));
+        if (method === "DELETE") {
+          state.artifacts = state.artifacts.filter((a) => a.id !== single[1]);
+          return json(route, { ok: true });
+        }
+      }
+
+      const versions = path.match(new RegExp(`^${root}/([^/]+)/versions$`));
+      if (versions && method === "POST") {
+        const found = state.artifacts.find((a) => a.id === versions[1]);
+        if (!found) return json(route, { code: "artifact_not_found", message: "not found" }, 404);
+        const body = request.postDataJSON() as { content: string; filename: string; note?: string };
+        const prev = latest(found);
+        const nextVersion = prev.version + 1;
+        found.versions.push({
+          version: nextVersion,
+          content: Buffer.from(body.content, "utf8"),
+          filename: body.filename,
+          mime: prev.mime,
+          note: body.note,
+        });
+        const v = latest(found);
+        return json(route, {
+          version: {
+            version: v.version,
+            filename: v.filename,
+            mime: v.mime,
+            size: v.content.length,
+            sha256: `sha-${found.id}-${v.version}`,
+            created_by: found.profile,
+            captured_via: "edit",
+            note: v.note,
+            created_at: 1_790_000_000 + v.version,
           },
-        ],
-      });
-    }
-    if (path === `/api/channels/${CHANNEL_ID}`) {
-      return json(route, {
-        channel: {
-          id: CHANNEL_ID,
-          name: "Artifacts E2E",
-          description: null,
-          inviteCode: null,
-          mapData: null,
-          mapConfig: null,
-          mapRevision: "fixture",
-          isPublic: true,
-          isMember: true,
-          isOwner: true,
-          hasGateway: true,
-        },
-      });
-    }
-    if (path === "/api/npcs") return json(route, { npcs: [] });
-    if (path === "/api/meetings") return json(route, { minutes: [] });
-    if (path.endsWith("/automation/status")) {
-      return json(route, {
-        pluginStatus: "ready",
-        pluginVersion: "0.8.4",
-        capabilities: ["kanban", "events", "artifacts"],
-        timezone: "Asia/Seoul",
-        boardSlug: "fixture",
-        dispatcherPresent: true,
-        attachments: true,
-        lastPolledAt: null,
-        lastError: null,
-        minVersion: "0.6.0",
-        working: [],
-      });
-    }
-
-    if (options.withKanbanCard) {
-      if (path.endsWith("/kanban/board")) {
-        return json(route, {
-          columns: [
-            {
-              name: "todo",
-              tasks: [{ id: TASK_ID, title: "결과물 카드", status: "todo", assignee: "fixture" }],
-            },
-          ],
-          tenants: [],
-          assignees: ["fixture"],
-          latest_event_id: null,
-          now: "2026-09-18T00:00:00Z",
-          npcs: [{ npcId: "npc-1", npcName: "Fixture NPC", profileName: "sophie", active: true }],
         });
       }
-      if (path.endsWith(`/kanban/tasks/${TASK_ID}`) && method === "GET") {
-        return json(route, {
-          task: { id: TASK_ID, title: "결과물 카드", status: "todo" },
-          comments: [],
-          events: [],
-          attachments: [],
-          links: { parents: [], children: [] },
-          runs: [],
-        });
+
+      const content = path.match(new RegExp(`^${root}/([^/]+)/versions/(\\d+)/content$`));
+      if (content && method === "GET") {
+        const found = state.artifacts.find((a) => a.id === content[1]);
+        const v = found?.versions.find((x) => x.version === Number(content[2]));
+        if (!v) return route.fulfill({ status: 404, body: "not found" });
+        return route.fulfill({ status: 200, contentType: v.mime, body: v.content });
       }
-    }
 
-    if (path === root && method === "GET") {
-      const taskId = url.searchParams.get("taskId");
-      const items = state.artifacts
-        .filter((a) => !taskId || a.taskId === taskId)
-        .map(summaryOf)
-        .sort((a, b) => b.updated_at - a.updated_at);
-      return json(route, { artifacts: items, cursor: "", has_more: false });
-    }
-
-    const single = path.match(new RegExp(`^${root}/([^/]+)$`));
-    if (single) {
-      const found = state.artifacts.find((a) => a.id === single[1]);
-      if (!found) return json(route, { code: "artifact_not_found", message: "not found" }, 404);
-      if (method === "GET") return json(route, detailOf(found));
-      if (method === "DELETE") {
-        state.artifacts = state.artifacts.filter((a) => a.id !== single[1]);
-        return json(route, { ok: true });
-      }
-    }
-
-    const versions = path.match(new RegExp(`^${root}/([^/]+)/versions$`));
-    if (versions && method === "POST") {
-      const found = state.artifacts.find((a) => a.id === versions[1]);
-      if (!found) return json(route, { code: "artifact_not_found", message: "not found" }, 404);
-      const body = request.postDataJSON() as { content: string; filename: string; note?: string };
-      const prev = latest(found);
-      const nextVersion = prev.version + 1;
-      found.versions.push({
-        version: nextVersion,
-        content: Buffer.from(body.content, "utf8"),
-        filename: body.filename,
-        mime: prev.mime,
-        note: body.note,
-      });
-      const v = latest(found);
-      return json(route, {
-        version: {
-          version: v.version,
-          filename: v.filename,
-          mime: v.mime,
-          size: v.content.length,
-          sha256: `sha-${found.id}-${v.version}`,
-          created_by: found.profile,
-          captured_via: "edit",
-          note: v.note,
-          created_at: 1_790_000_000 + v.version,
-        },
-      });
-    }
-
-    const content = path.match(new RegExp(`^${root}/([^/]+)/versions/(\\d+)/content$`));
-    if (content && method === "GET") {
-      const found = state.artifacts.find((a) => a.id === content[1]);
-      const v = found?.versions.find((x) => x.version === Number(content[2]));
-      if (!v) return route.fulfill({ status: 404, body: "not found" });
-      return route.fulfill({ status: 200, contentType: v.mime, body: v.content });
-    }
-
-    return json(route, {});
+      return false;
+    },
   });
 }
 
 async function openGame(page: Page) {
-  await page.goto(`/game?channelId=${CHANNEL_ID}&characterId=${CHARACTER_ID}`);
+  await page.goto(`/game?channelId=${CHANNEL_ID}`);
   await page.locator("canvas").first().waitFor({ state: "visible" });
 }
 

@@ -80,6 +80,27 @@ jobs:
         if: always()
         run: npm run format:check
 
+  game-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e:fixtures
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: game-fixture-traces
+          path: .artifacts/game-fixtures/test-results
+          include-hidden-files: true
+          retention-days: 7
+
   # 런타임 이미지가 실제로 빌드되는지 본다.
   #
   # verify 잡으로는 이 층을 못 본다. 단위 테스트는 .ts 소스를 직접 읽으므로 파일이

@@ -8,7 +8,7 @@ import tarfile
 
 MAX_UNPACKED_BYTES = 300 * 1024 * 1024
 FORBIDDEN_DIRS = {
-    "__tests__", "e2e", "scripts", "docs", ".artifacts", "test-results",
+    "__tests__", "test-setup", "e2e", "scripts", "docs", ".artifacts", "test-results",
     ".superpowers", ".claude", ".codex", ".agents", ".gemini", ".dryforge",
 }
 FORBIDDEN_ROOT_FILES = {"AGENTS.md", "CLAUDE.md", "GEMINI.md"}
@@ -35,6 +35,7 @@ def check(path: pathlib.Path) -> int:
                 (project_parts and project_parts[0] in FORBIDDEN_DIRS)
                 or (project_parts and project_parts[0] in {"src", "tools"} and any(part in FORBIDDEN_DIRS for part in project_parts[1:-1]))
                 or ("node_modules" not in project_parts and any(part in FORBIDDEN_ROOT_FILES for part in project_parts))
+                or ("node_modules" not in project_parts and (re.fullmatch(r"playwright.*\.config\..+", relative[-1]) or relative[-1] == "tsconfig.tsbuildinfo"))
                 or TEST_FILE.search(relative[-1])
             ):
                 bad.append(member.name)
