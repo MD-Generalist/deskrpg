@@ -63,15 +63,14 @@ jobs:
       - run: npm run test
       - run: npm run typecheck
       - run: npm run lint
-      # 공개 npm 에 쓰기 전에 tarball 을 node_modules 에 설치해 기동을 확인한다.
+      # Docker 플랫폼 이미지를 내기 전에 tarball을 검증한다.
       - name: Smoke npm tarball before publishing
         run: |
           smoke_dir="$(mktemp -d)"
-          # prepack 이 next build 를 돌면서 stdout 에 로그를 쏟는다 — --silent 로도 막히지
-          # 않으므로 파일명을 명령 치환으로 받지 않고 디렉터리에서 찾는다.
           npm pack --pack-destination "$smoke_dir" >/dev/null
-          tarball="$(find "$smoke_dir" -maxdepth 1 -name '*.tgz' -print -quit)"
-          [ -n "$tarball" ] || { echo "npm pack 이 tarball 을 만들지 못했습니다." >&2; exit 1; }
+          tarball="$smoke_dir/deskrpg-$(node -p "require('./package.json').version").tgz"
+          test -f "$tarball"
+          python3 scripts/check-npm-tarball.py "$tarball"
           bash scripts/smoke-npm-install.sh "$tarball"
 
   npm:
@@ -91,7 +90,7 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      # prepack 이 next build 를 돈다 — 여기서 따로 빌드하지 않는다.
+      # 실제 npm publish에 넘길 tarball을 검사하고 실행한다.
       - name: Publish deskrpg@${{ needs.verify.outputs.version }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -100,7 +99,13 @@ jobs:
           if npm view "deskrpg@$V" version >/dev/null 2>&1; then
             echo "deskrpg@$V 는 이미 발행돼 있어 건너뜁니다."
           else
-            npm publish --provenance --access public
+            pack_dir="$(mktemp -d)"
+            npm pack --pack-destination "$pack_dir" >/dev/null
+            tarball="$pack_dir/deskrpg-$V.tgz"
+            test -f "$tarball"
+            python3 scripts/check-npm-tarball.py "$tarball"
+            bash scripts/smoke-npm-install.sh "$tarball"
+            npm publish "$tarball" --provenance --access public
           fi
       - name: Wait for registry propagation
         run: |
