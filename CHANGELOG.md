@@ -166,7 +166,7 @@ GitHub Releases will be written later at actual release time.
 
 ### Removed
 
-- Development plans under `docs/superpowers/` are no longer tracked.
+- Internal development plans are no longer tracked.
 
 ### Added
 

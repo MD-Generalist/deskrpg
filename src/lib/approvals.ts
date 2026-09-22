@@ -1,8 +1,6 @@
 /**
  * 실행 전 승인 관문 — 카드를 `blocked` 로 세우고 승인 레코드를 함께 만든다.
  *
- * 설계: `docs/superpowers/specs/2026-09-21-execution-approval-gate-design.md`
- *
  * 왜 `blocked` 인가: Hermes 에서 `initial_status="blocked"` 로 만든 카드는 **sticky** 라
  * `recompute_ready` 가 승격하지 않고 `unblock_task` 만 풀어 준다(실측 2026-09-21).
  * `triage` 는 게이트웨이가 매 틱 자동 분해하므로 대기 자리로 쓸 수 없다.
