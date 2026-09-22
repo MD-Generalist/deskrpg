@@ -349,11 +349,11 @@ test(
     fs.mkdirSync(testArtifacts, { recursive: true });
     const root = fs.mkdtempSync(path.join(testArtifacts, "env-project-"));
     let stopServer = async () => {};
-    let runtime: string | undefined;
+    const runtime = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-real-listener-"));
     t.after(async () => {
       await stopServer();
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 });
-      if (runtime) fs.rmSync(runtime, { recursive: true, force: true });
+      fs.rmSync(runtime, { recursive: true, force: true });
     });
     // Copy the actual entry/config and reference read-only source/dependencies. All env files
     // and Next build output belong to this test, regardless of the developer's local env files.
@@ -378,7 +378,6 @@ test(
     const port = address.port;
     await new Promise<void>((resolve) => portProbe.close(() => resolve()));
 
-    runtime = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-real-listener-"));
     const instanceId = "real-listener-sentinel-test";
     const child = spawnProcess(
       process.execPath,
