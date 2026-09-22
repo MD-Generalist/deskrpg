@@ -18,7 +18,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.922.2` — 내 컴퓨터에서 Docker Compose 명령 하나로 사무실과 Hermes 게이트웨이를 함께 띄웁니다(아래 6번). 포트는 `127.0.0.1`에만 열리고, HTTP에서도 로그인되며, DeskRPG 플러그인이 자동으로 설치됩니다. 앞선 2026.922.1: 직원이 사용자의 언어로 답합니다. 대화·회의 발언·방 응답 모두 묻는 사람의 화면 언어를 따릅니다(새로 채용한 직원이 영어로 답하도록 지시받던 문제를 고쳤습니다). 연결이 끊겨 중단된 보고 호출은 재연결 뒤 다시 부르고, 복귀시킨 직원은 자리에 닿을 때까지 다시 부르지 않으며, Esc 는 가장 위 레이어만 닫습니다 — 칸반·크론 모달을 닫는 Esc 가 뒤의 직원 대화창까지 닫지 않고, 보고 목록은 자기만 닫히며, 업데이트·버그 신고·설문 창도 Esc 로 닫힙니다. 보드 열의 카드 개수 배지가 더 잘 읽힙니다. 기여자용 테스트 수정: README 캡처 서버 테스트가 멈추거나 다른 프로세스에 신호를 보내지 않고, 타임라인 테스트가 날짜가 바뀌어도 깨지지 않습니다. 앞선 2026.921.4: 회의부터 보고까지 이어지는 흐름, 시간순 보고, 탭이 뒤에 있어도 움직이는 직원, 카드별 결과물, 브랜드 색, GitHub Star·설문·버그 리포트.
+- 버전: `v2026.923.1` — 새 업무는 기본 사람 승인, 명시적으로 위임한 업무는 다른 AI 직원이 승인합니다. 승인자와 승인한 제출 결과를 기록합니다. 아래 안내의 플러그인 0.13.0과 정책 지원 Hermes core가 필요합니다.
 
 ## 무엇을 할 수 있나요
 
@@ -210,13 +210,15 @@ DeskRPG에 연결하는 절차는 네 단계입니다.
 [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) 이 필요합니다.
 
 ```bash
-hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref v0.13.0
 hermes plugins enable deskrpg
 # 게이트웨이 재시작 — 라우트는 기동할 때만 붙습니다
 ```
 
 `enable` 은 선택이 아닙니다. 설치만 하고 건너뛰면 모든 플러그인 라우트가 404를 냅니다.
 DeskRPG는 플러그인이 없거나 낡았다고 판단하면 보드·일정 화면에 같은 명령을 그대로 보여줍니다.
+
+**새 카드 생성에는 Hermes의 승인 정책 지원이 필요합니다.** 플러그인 0.13.0은 [단테랩스 Hermes 호환 패치](https://github.com/dandacompany/hermes-agent/tree/deskrpg/mixed-approval-v1) `622a2f793f`(본가 `e2f8a0731bf2` 기반)의 전체 계약이 있을 때만 `kanban_review_policy_v1`을 제공합니다. 본가 공식 릴리스가 아닙니다. core 변경 전 [플러그인의 호환성·백업 안내](https://github.com/dandacompany/deskrpg-hermes-plugin#task-approval-compatibility)를 따르세요. 패치가 없는 환경은 기존 카드와 조회를 유지하지만 새 카드는 만들 수 없습니다. 기존 카드·전역 설정은 자동 변경하지 않습니다. 새 스웜 생성은 native 승인 계약 지원 전까지 일시 중단됩니다.
 
 이제 NPC를 고용할 수 있습니다. NPC는 고용 시점에 Hermes 프로필 하나에 바인딩되며,
 해고하지 않고 나중에 다른 프로필로 다시 연결할 수 있습니다.

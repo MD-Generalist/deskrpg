@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.922.2` — Run the office and a Hermes gateway together on your own computer with one Docker Compose command (Option 6 below) — ports stay on `127.0.0.1`, login works over plain HTTP, and the DeskRPG plugin is installed for you. Earlier 2026.922.1: Staff now answer in your language: every conversation, meeting turn and room reply follows the display language of the person asking (a new hire used to be told to answer in English). Report calls that were cut off by a dropped connection are retried after reconnecting, a staff member you send back is not called again until they are at their desk, and Escape now closes only the topmost layer — a board or cron modal no longer closes the staff chat behind it, the report list closes on its own, and the update, bug report and survey windows close with Escape too. Column count badges on the board are easier to read. Test-suite fixes only for contributors: the README capture server test no longer hangs or signals other processes, and the timeline test no longer breaks when the date changes. Earlier in 2026.921.4: the end-to-end loop from meeting to report, reports in order, background-tab movement, results per card, brand colors, GitHub Star, survey and bug report.
+- Version: `v2026.923.1` — New tasks default to human approval, with explicit delegation to a different AI employee. Approvals record the reviewer and the submitted result. Requires plugin 0.13.0 and the policy-aware Hermes core described below.
 
 ## What You Can Do
 
@@ -211,7 +211,7 @@ Conversations work without it. Kanban boards, the event stream and cron need
 [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) on the gateway host:
 
 ```bash
-hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref v0.13.0
 hermes plugins enable deskrpg
 # restart the gateway — routes are attached only at startup
 ```
@@ -219,6 +219,8 @@ hermes plugins enable deskrpg
 `enable` is not optional: without it every plugin route answers 404 even though the install
 succeeded. DeskRPG shows the same command in the board and schedule screens when it detects the
 plugin is missing or out of date.
+
+**New task creation requires native approval support.** Plugin 0.13.0 exposes `kanban_review_policy_v1` only with the tested [Dante Labs Hermes compatibility patch](https://github.com/dandacompany/hermes-agent/tree/deskrpg/mixed-approval-v1), commit `622a2f793f`, based on upstream `e2f8a0731bf2`. This is not an upstream Hermes release. Follow the [plugin compatibility and backup guidance](https://github.com/dandacompany/deskrpg-hermes-plugin#task-approval-compatibility) before changing core. Unpatched gateways retain legacy cards and reads, but new cards are blocked. Existing cards and global settings are not converted. New swarm creation is temporarily unavailable until its native approval contract is supported.
 
 Now you can hire NPCs. Each NPC is bound to one Hermes profile at hire time, and you can rebind it
 later without firing it.
