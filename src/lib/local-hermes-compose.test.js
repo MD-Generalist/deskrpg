@@ -48,3 +48,12 @@ test("Traefik 라벨과 공개 JWT 기본값이 없다", () => {
   assert.doesNotMatch(compose, /traefik\./);
   assert.match(compose, /JWT_SECRET: \$\{JWT_SECRET:-\}/);
 });
+
+test("모델 키를 Hermes 볼륨의 .env 에 적는다 — 컨테이너 환경변수만으로는 Hermes 가 키를 읽지 않고, 새 직원도 그 파일에서 키를 물려받는다", () => {
+  const block = compose.slice(compose.indexOf("  hermes-plugins:"), compose.indexOf("\n  hermes:"));
+  for (const v of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"]) {
+    assert.match(block, new RegExp(`${v}: \\$\\{${v}:-\\}`));
+  }
+  assert.match(block, /for v in OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY/);
+  assert.match(block, /> \/opt\/data\/\.env/);
+});
