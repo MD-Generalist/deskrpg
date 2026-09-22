@@ -398,6 +398,32 @@ describe("kanban — 스웜", () => {
 });
 
 describe("events — 커서", () => {
+  it("new board k/d positions ignore older events from other boards", async () => {
+    const api = owner();
+    unwrap(await api.kanban.createBoard({ slug: "old", name: "Old" }));
+    unwrap(await api.kanban.createBoard({ slug: "new", name: "New" }));
+    server.pushEvent({ kind: "task.created", board: "old", task_id: "old-task", payload: {} });
+    server.pushEvent({ kind: "task.deleted", board: "old", task_id: "old-delete", payload: {} });
+    const start = unwrap(await api.events.poll({ board: "new" }));
+    const created = server.pushEvent({
+      kind: "task.created",
+      board: "new",
+      task_id: "new-task",
+      payload: {},
+    });
+    const deleted = server.pushEvent({
+      kind: "task.deleted",
+      board: "new",
+      task_id: "new-delete",
+      payload: {},
+    });
+    const page = unwrap(await api.events.poll({ board: "new", cursor: start.cursor }));
+    assert.deepEqual(
+      page.events.map((event) => event.id),
+      [created.id, deleted.id],
+    );
+  });
+
   it("handoff keeps target kanban position and carrier global positions", async () => {
     const api = owner();
     unwrap(await api.kanban.createBoard({ slug: "old", name: "Old" }));

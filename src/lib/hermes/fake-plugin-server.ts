@@ -224,7 +224,6 @@ export async function startFakePluginServer(
   let events: PluginEvent[] = [];
   type EventCursor = { k: number; d: number; c: number; a?: number };
   let cursors = new Map<string, EventCursor>();
-  let cursorSeq = 0;
   let orchestration: OrchestrationSettings = defaultOrchestration(profileNames);
   let cron = new Map<string, CronState>();
   let artifacts = new Map<string, ArtifactRecord>();
@@ -239,7 +238,6 @@ export async function startFakePluginServer(
     currentBoard = null;
     events = [];
     cursors = new Map();
-    cursorSeq = 0;
     orchestration = defaultOrchestration(profileNames);
     cron = new Map();
     artifacts = new Map();
@@ -266,7 +264,9 @@ export async function startFakePluginServer(
   }
 
   function issueCursor(position: EventCursor): string {
-    const token = `c${cursorSeq++}`;
+    // Like the plugin token, this encodes state, so a reset followed by a new
+    // source position cannot accidentally reuse the previous cursor string.
+    const token = `v1.${Buffer.from(JSON.stringify(position)).toString("base64url")}`;
     cursors.set(token, { ...position });
     return token;
   }
@@ -285,9 +285,14 @@ export async function startFakePluginServer(
     return "a";
   }
 
-  function positionNow(): EventCursor {
+  function positionNow(board?: string): EventCursor {
     const p: EventCursor = { k: 0, d: 0, c: 0, a: 0 };
-    for (const event of events) p[lane(event)] = (p[lane(event)] ?? 0) + 1;
+    for (const event of events) {
+      const source = lane(event);
+      if ((source === "k" || source === "d") && board !== undefined && event.board !== board)
+        continue;
+      p[source] = (p[source] ?? 0) + 1;
+    }
     return p;
   }
 
@@ -302,7 +307,8 @@ export async function startFakePluginServer(
       throw badRequest("invalid_field");
     if (!boards.has(body.board)) throw notFound("board_not_found");
     const carrier = cursors.get(body.carrier_cursor);
-    const target = body.board_cursor === null ? positionNow() : cursors.get(body.board_cursor);
+    const target =
+      body.board_cursor === null ? positionNow(body.board) : cursors.get(body.board_cursor);
     if (!carrier || !target) throw badRequest("invalid_handoff_cursor");
     if (carrier.a === undefined) throw new HttpError(409, { error: "carrier_cursor_incomplete" });
     return {
@@ -321,7 +327,7 @@ export async function startFakePluginServer(
     const include = new Set((params.get("include") ?? "").split(",").filter(Boolean));
     // 커서가 없으면 "지금" 토큰만 준다 — 과거 이벤트를 쏟지 않는다.
     if (cursor === null) {
-      const initial = positionNow();
+      const initial = positionNow(board);
       if (!include.has("artifacts") && !include.has("card_proposals")) delete initial.a;
       return {
         status: 200,
@@ -340,9 +346,9 @@ export async function startFakePluginServer(
     let hasMore = false;
     for (const e of events) {
       const source = lane(e);
+      if ((source === "k" || source === "d") && board !== undefined && e.board !== board) continue;
       seen[source] = (seen[source] ?? 0) + 1;
       if (seen[source]! <= (state[source] ?? 0)) continue;
-      if ((source === "k" || source === "d") && board !== undefined && e.board !== board) continue;
       if (source === "a" && !include.has("artifacts") && !include.has("card_proposals")) continue;
       if (source === "a" && e.kind.startsWith("artifact.") && !include.has("artifacts")) continue;
       if (source === "a" && e.kind.startsWith("card_proposal.") && !include.has("card_proposals"))
