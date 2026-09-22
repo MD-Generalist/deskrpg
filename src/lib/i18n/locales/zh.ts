@@ -2216,6 +2216,8 @@ const zh: Record<string, string> = {
   "gateways.editHelp": "更新网关信息，或再次确认连接状态。",
   "gateways.displayName": "显示名称",
   "gateways.rotateToken": "令牌",
+  "gateways.rotateTokenConfirm":
+    "保持 {count} 个办公室的连接并更换令牌？新令牌通过验证后才会保存。",
   "gateways.rotateTokenHint": "如果留空保存，将继续使用现有令牌。",
   "gateways.testSuccess": "网关连接成功。",
   "gateways.saved": "网关已保存。",

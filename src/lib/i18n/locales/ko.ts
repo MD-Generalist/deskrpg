@@ -2285,6 +2285,8 @@ const ko: Record<string, string> = {
   "gateways.editHelp": "게이트웨이 정보를 수정하거나 연결 상태를 다시 확인합니다.",
   "gateways.displayName": "표시 이름",
   "gateways.rotateToken": "토큰",
+  "gateways.rotateTokenConfirm":
+    "연결된 사무실 {count}개의 연결을 유지한 채 토큰을 교체합니다. 새 토큰 검증에 성공해야 저장됩니다. 계속하시겠습니까?",
   "gateways.rotateTokenHint": "토큰을 비워 두면 기존 토큰을 유지합니다.",
   "gateways.testSuccess": "게이트웨이 연결이 확인되었습니다.",
   "gateways.saved": "게이트웨이를 저장했습니다.",

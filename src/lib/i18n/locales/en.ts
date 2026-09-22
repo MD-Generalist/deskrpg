@@ -2293,6 +2293,8 @@ const en: Record<string, string> = {
   "gateways.editHelp": "Update this gateway or verify that the connection still works.",
   "gateways.displayName": "Display name",
   "gateways.rotateToken": "Token",
+  "gateways.rotateTokenConfirm":
+    "Rotate the token while keeping {count} offices connected? The new token must pass validation before it is saved.",
   "gateways.rotateTokenHint": "Leave the token blank to keep the existing token.",
   "gateways.testSuccess": "Gateway connection succeeded.",
   "gateways.saved": "Gateway saved.",

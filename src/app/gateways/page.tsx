@@ -297,6 +297,17 @@ function GatewayManagementPageInner() {
     setError("");
     setNotice("");
     try {
+      if (token.trim()) {
+        const details = await fetch(`/api/gateways/${selectedGateway.id}`);
+        const data = await details.json();
+        if (!details.ok) throw data;
+        if (
+          !window.confirm(
+            t("gateways.rotateTokenConfirm", { count: data.gateway.boundChannelCount ?? 0 }),
+          )
+        )
+          return;
+      }
       const body: Record<string, unknown> = {
         displayName,
         url: baseUrl,

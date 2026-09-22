@@ -2311,6 +2311,8 @@ const ja: Record<string, string> = {
   "gateways.editHelp": "ゲートウェイ情報を更新し、接続状態を再確認します。",
   "gateways.displayName": "表示名",
   "gateways.rotateToken": "トークン",
+  "gateways.rotateTokenConfirm":
+    "{count} 件のオフィスの接続を維持したままトークンを変更しますか？新しいトークンは検証に成功した場合のみ保存されます。",
   "gateways.rotateTokenHint": "空欄のまま保存すると既存トークンを維持します。",
   "gateways.testSuccess": "ゲートウェイ接続を確認しました。",
   "gateways.saved": "ゲートウェイを保存しました。",
