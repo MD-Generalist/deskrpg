@@ -112,3 +112,14 @@ test("회의·1:1·방 세 경로가 같은 해석 함수에 요청자 언어를
   );
   assert.match(room, /loadNpcConfigs\(room\.channelId, deps\.locale\)/);
 });
+
+test("옛 대화의 JSON 등록 지시는 폐기하고 현재 확인 화면을 안내한다", async () => {
+  const { resolveNpcInstructions } = await import("./socket-handlers");
+  for (const config of [{}, { meetingProtocol: "사용자 회의 규칙" }]) {
+    const out = resolveNpcInstructions(config, "ko") ?? "";
+    assert.match(out, /json:task/);
+    assert.match(out, /카드로 등록/);
+    assert.match(out, /폐기/);
+    assert.match(out, /Hermes/);
+  }
+});

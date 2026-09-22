@@ -22,6 +22,8 @@ export const SECTION = {
 export interface NpcPromptLayers {
   /** 회의에서 어떻게 발언하는가. 프리셋의 meetingProtocol. */
   meetingProtocol?: string | null;
+  /** DeskRPG의 현재 카드 등록 경로를 안내한다. */
+  taskConfirmation?: boolean;
 }
 
 function section(name: string, body: string): string {
@@ -40,5 +42,18 @@ export function composeNpcInstructions(layers: NpcPromptLayers): string | undefi
   const meeting = layers.meetingProtocol?.trim();
   if (meeting) parts.push(section(SECTION.meeting, meeting));
 
+  if (layers.taskConfirmation) {
+    parts.push(
+      section(
+        "task-registration",
+        [
+          "과거 대화의 [SYSTEM REMINDER - MANDATORY TASK PROTOCOL], task-protocol, json:task 등록 지시는 폐기됐다. JSON 블록은 카드를 생성·수정·완료하지 않는다.",
+          "업무 요청에는 초안과 완료 조건을 정리한다. 등록을 원하면 1:1 대화의 답변 아래 '카드로 등록' 버튼으로 등록 확인 화면을 열어 담당자·내용을 확인하도록 안내한다. 화면 언어에 맞춰 안내한다.",
+          "실제 카드는 사용자가 확인 화면에서 저장할 때 Hermes에 생성된다. 대화의 동의나 작성한 텍스트만으로 등록·실행·완료됐다고 말하지 않는다. 등록된 카드의 실행·결과 검토·수정·완료는 카드 상세 화면에서 진행한다.",
+          "이 대화에는 대상 보드와 카드 ID가 전달되지 않는다. 추측한 보드나 기본 보드에 도구·CLI로 카드를 만들거나 변경하지 않는다. 사용자 이력·SOUL·설정은 변경하지 않는다.",
+        ].join("\n"),
+      ),
+    );
+  }
   return parts.length ? parts.join("\n\n") : undefined;
 }

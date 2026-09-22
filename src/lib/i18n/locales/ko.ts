@@ -69,6 +69,15 @@ const ko: Record<string, string> = {
   "common.send": "보내기",
   "common.search": "검색",
   "common.all": "전체",
+  "chat.taskSourceUnknown":
+    "이 답변에 연결된 원래 요청을 확인할 수 없습니다. 등록 전에 내용을 보완하세요.",
+  "chat.taskCompletionCriteria": "완료 조건",
+  "chat.taskConfirmationHelp":
+    "담당자와 완료 조건을 확인하세요. 저장하면 선택한 프로젝트의 Hermes 카드로 등록됩니다.",
+  "chat.taskConfirmationRequired": "담당자를 선택하고 완료 조건을 입력하세요.",
+  "chat.createTask": "카드로 등록",
+  "chat.taskSourceRequest": "원래 요청",
+  "chat.taskSourceReply": "{name}의 답변",
   "chat.responseAccepted": "응답 접수됨",
   "chat.responseStatus.queued": "대기 중",
   "chat.responseStatus.thinking": "생각 중",

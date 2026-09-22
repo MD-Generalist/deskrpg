@@ -444,10 +444,13 @@ export function resolveNpcInstructions(
   requestLocale?: string | null,
 ): string | undefined {
   if (typeof oc.meetingProtocol === "string" && oc.meetingProtocol.trim()) {
-    return composeNpcInstructions({ meetingProtocol: oc.meetingProtocol });
+    return composeNpcInstructions({ meetingProtocol: oc.meetingProtocol, taskConfirmation: true });
   }
   const locale = requestLocale || (typeof oc.locale === "string" ? oc.locale : undefined);
-  return composeNpcInstructions({ meetingProtocol: getDefaultMeetingProtocol(locale) });
+  return composeNpcInstructions({
+    meetingProtocol: getDefaultMeetingProtocol(locale),
+    taskConfirmation: true,
+  });
 }
 
 /** 이 소켓을 연 사용자의 화면 언어. 쿠키가 없으면 null. */

@@ -110,6 +110,7 @@ import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
 import ViewSettingsModal from "@/components/ViewSettingsModal";
 import type { NpcMotionConfig } from "@/lib/npc-motion-config";
+import type { ChatTaskDraft } from "@/components/kanban/kanban-view-model";
 import KanbanBoardModal from "@/components/kanban/KanbanBoardModal";
 import { CRON_SOCKET_EVENT } from "@/components/cron/CronPanel";
 import type { PanelBadgeCounts } from "@/components/ChatPanel";
@@ -291,6 +292,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   useEffect(() => installErrorCapture(), []);
   // 칸반 보드(T8). `kanbanRefreshTick` 은 `kanban:event` 마다 오르고, 모달이 디바운스해 재조회한다.
   const [showKanban, setShowKanban] = useState(false);
+  const [chatTaskDraft, setChatTaskDraft] = useState<
+    (ChatTaskDraft & { channelId: string; seq: number }) | null
+  >(null);
   useEffect(() => {
     const open = () => setShowKanban(true);
     EventBus.on("kanban:open", open);
@@ -2402,6 +2406,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     [acknowledgeReports],
   );
   const closeKanban = useCallback(() => {
+    setChatTaskDraft(null);
     setShowKanban(false);
     setKanbanCard(null);
   }, []);
@@ -2753,6 +2758,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         onMarkSeen={markPanelTabSeen}
         cardsRefreshTick={kanbanRefreshTick}
         onOpenAssignedCard={openNoticeCard}
+        onCreateTaskFromChat={(draft) => {
+          if (!channelId) return;
+          setChatTaskDraft({ ...draft, channelId, seq: Date.now() });
+          setKanbanCard(null);
+          setShowKanban(true);
+        }}
         npcArtifactChips={npcArtifactChips}
         onOpenArtifact={openArtifact}
       />
@@ -3487,6 +3498,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       )}
       {showKanban && channelId && (
         <KanbanBoardModal
+          key={`${channelId}:${chatTaskDraft?.seq ?? "board"}`}
+          initialCreateDraft={chatTaskDraft?.channelId === channelId ? chatTaskDraft : undefined}
           channelId={channelId}
           refreshTick={kanbanRefreshTick}
           initialTaskId={kanbanCard?.initialTaskId ?? null}

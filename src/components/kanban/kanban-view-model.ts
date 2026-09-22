@@ -217,6 +217,8 @@ export type TaskFormValues = {
   goalMaxTurns: string;
 };
 
+export type ChatTaskDraft = Pick<TaskFormValues, "title" | "body" | "assigneeNpcId">;
+
 export const EMPTY_TASK_FORM: TaskFormValues = {
   title: "",
   body: "",

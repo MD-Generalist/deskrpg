@@ -38,9 +38,9 @@ function listState(): RoomState {
 }
 
 // 필수 prop 만 채운 뼈대. 목록 뷰의 닫기 동작만 검증한다.
-function panel(roomState: RoomState) {
+function panel(roomState: RoomState, props: Partial<React.ComponentProps<typeof ChatPanel>> = {}) {
   return (
-    <I18nProvider>
+    <I18nProvider initialLocale="ko">
       <ChatPanel
         dialogNpc={null}
         npcMessages={[]}
@@ -59,6 +59,7 @@ function panel(roomState: RoomState) {
         onRoomDelete={() => {}}
         mentionCandidatesFor={() => []}
         onlinePlayers={[]}
+        {...props}
       />
     </I18nProvider>
   );
@@ -1273,4 +1274,108 @@ test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대�
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   });
   assert.equal(closed, 1, "목록이 닫힌 뒤에는 Esc 가 대화창을 닫는다");
+});
+
+test("완성된 답변의 카드 등록 버튼은 직전 요청과 답변을 확인 화면으로 넘긴다", async () => {
+  let draft: { title: string; body: string; assigneeNpcId: string } | undefined;
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "n1", npcName: "직원" },
+      npcMessages: [
+        { id: "original", role: "player", content: "주간 안내를 작성해 주세요" },
+        {
+          responseRequestId: "reply",
+          role: "npc",
+          content: "완료한 일과 다음 주 계획을 알려 주세요.",
+        },
+      ],
+      npcResponses: [
+        {
+          requestId: "reply",
+          sourceMessageId: "original",
+          npcId: "n1",
+          npcName: "직원",
+          status: "complete",
+          content: "완료한 일과 다음 주 계획을 알려 주세요.",
+          updatedAt: 1,
+        },
+      ],
+      onCreateTaskFromChat: (next) => {
+        draft = next;
+      },
+    }),
+  );
+  await click(buttonByText(el, "카드로 등록"));
+  assert.equal(draft?.title, "주간 안내를 작성해 주세요");
+  assert.equal(draft?.assigneeNpcId, "n1");
+  assert.match(draft?.body ?? "", /주간 안내를 작성해 주세요/);
+  assert.match(draft?.body ?? "", /완료한 일과 다음 주 계획/);
+});
+
+test("스트리밍 중 답변에는 카드 등록 버튼을 보이지 않는다", async () => {
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "n1", npcName: "직원" },
+      npcMessages: [{ role: "npc", content: "작성 중" }],
+      isNpcStreaming: true,
+      onCreateTaskFromChat: () => {
+        throw new Error("등록하면 안 된다");
+      },
+    }),
+  );
+  assert.equal(
+    Array.from(el.querySelectorAll("button")).some((b) => b.textContent === "카드로 등록"),
+    false,
+  );
+});
+
+test("연속 요청 이력 A,B,답변A는 요청 식별자로 A에 연결한다", async () => {
+  let draft: { title: string; body: string; assigneeNpcId: string } | undefined;
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "n1", npcName: "직원" },
+      npcMessages: [
+        { id: "a", role: "player", content: "요청 A" },
+        { id: "b", role: "player", content: "요청 B" },
+        { id: "ra", responseRequestId: "r1", role: "npc", content: "A의 답변" },
+      ],
+      npcResponses: [
+        {
+          requestId: "r1",
+          sourceMessageId: "a",
+          npcId: "n1",
+          npcName: "직원",
+          status: "complete",
+          content: "A의 답변",
+          updatedAt: 1,
+        },
+      ],
+      onCreateTaskFromChat: (next) => {
+        draft = next;
+      },
+    }),
+  );
+  await click(buttonByText(el, "카드로 등록"));
+  assert.equal(draft?.title, "요청 A");
+  assert.doesNotMatch(draft?.body ?? "", /요청 B/);
+});
+
+test("연결 정보 없는 과거 답변은 인접 요청을 원문으로 단정하지 않는다", async () => {
+  let body = "";
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "n1", npcName: "직원" },
+      npcMessages: [
+        { role: "player", content: "다른 요청" },
+        { role: "npc", content: "과거 답변" },
+      ],
+      onCreateTaskFromChat: (draft) => {
+        body = draft.body;
+      },
+    }),
+  );
+  await click(buttonByText(el, "카드로 등록"));
+  assert.doesNotMatch(body, /다른 요청/);
+  assert.match(body, /원래 요청을 확인할 수 없습니다/);
+  assert.match(body, /과거 답변/);
 });

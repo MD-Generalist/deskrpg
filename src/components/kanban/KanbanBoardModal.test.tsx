@@ -68,6 +68,7 @@ async function mount(
     debounceMs?: number;
     onConnectGateway?: () => void;
     initialTaskId?: string | null;
+    initialCreateDraft?: { title: string; body: string; assigneeNpcId: string };
     focusRequest?: { taskId: string; seq: number } | null;
     covered?: boolean;
     artifacts?: TaskDrawerArtifacts | null;
@@ -1626,3 +1627,92 @@ test("서브프로젝트 필터는 타임라인에도 먹는다", async () => {
     await f.cleanup();
   }
 });
+
+test("대화 초안은 확인 폼만 열고 취소하면 카드를 등록하지 않는다", async () => {
+  const f = await mount((url) => json(url.includes("/automation/status") ? status() : board()), {
+    initialCreateDraft: { title: "주간 안내", body: "원래 요청\n수정한 초안", assigneeNpcId: "n1" },
+  });
+  try {
+    const title = f.host.querySelector<HTMLInputElement>("#kanban-title");
+    assert.equal(title?.value, "주간 안내");
+    assert.equal(
+      f.host.querySelector<HTMLTextAreaElement>("#kanban-body")?.value,
+      "원래 요청\n수정한 초안",
+    );
+    assert.equal(f.host.querySelector<HTMLSelectElement>("#kanban-assignee")?.value, "n1");
+    assert.equal(
+      f.calls.some((call) => call.startsWith("POST")),
+      false,
+    );
+    await f.click("취소");
+    assert.equal(f.host.querySelector("#kanban-title"), null);
+    assert.equal(
+      f.calls.some((call) => call.startsWith("POST")),
+      false,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("검토 카드 결과는 옛 result보다 최신 Hermes summary를 보여 준다", async () => {
+  const f = await mount(
+    (url) => {
+      if (url.includes("/automation/status")) return json(status());
+      if (url.includes("/kanban/board")) return json(board());
+      return json(
+        detail({
+          id: "t-todo",
+          title: "할 카드",
+          status: "review",
+          result: "지난 결과",
+          latest_summary: "수정 결과 금요일 오후 5시",
+        }),
+      );
+    },
+    { initialTaskId: "t-todo" },
+  );
+  try {
+    const result = Array.from(
+      f.host.querySelectorAll('aside[aria-label="카드 상세"] section'),
+    ).find((node) => node.firstElementChild?.textContent === "결과");
+    assert.match(result?.textContent ?? "", /수정 결과 금요일 오후 5시/);
+    assert.doesNotMatch(result?.textContent ?? "", /지난 결과/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+for (const sample of [
+  { status: "review", result: null, latest_summary: "검토 결과", expected: "검토 결과" },
+  { status: "done", result: "승인된 결과", latest_summary: "실행 요약", expected: "승인된 결과" },
+  { status: "done", result: null, latest_summary: "완료 결과", expected: "완료 결과" },
+  { status: "ready", result: null, latest_summary: "사용자의 수정 요청", expected: "결과 없음" },
+] as const) {
+  test(`카드 결과 표시 ${sample.status}: ${sample.expected}`, async () => {
+    const f = await mount(
+      (url) => {
+        if (url.includes("/automation/status")) return json(status());
+        if (url.includes("/kanban/board")) return json(board());
+        return json(
+          detail({
+            id: "t-todo",
+            title: "할 카드",
+            status: sample.status,
+            result: sample.result,
+            latest_summary: sample.latest_summary,
+          }),
+        );
+      },
+      { initialTaskId: "t-todo" },
+    );
+    try {
+      const result = Array.from(
+        f.host.querySelectorAll('aside[aria-label="카드 상세"] section'),
+      ).find((node) => node.firstElementChild?.textContent === "결과");
+      assert.equal(result?.textContent, `결과${sample.expected}`);
+    } finally {
+      await f.cleanup();
+    }
+  });
+}

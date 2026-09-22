@@ -69,6 +69,15 @@ const en: Record<string, string> = {
   "common.send": "Send",
   "common.search": "Search",
   "common.all": "All",
+  "chat.taskSourceUnknown":
+    "The original request for this reply is unavailable. Add the context before saving.",
+  "chat.taskCompletionCriteria": "Completion criteria",
+  "chat.taskConfirmationHelp":
+    "Confirm the assignee and completion criteria. Saving creates a Hermes task in the selected project.",
+  "chat.taskConfirmationRequired": "Choose an assignee and enter completion criteria.",
+  "chat.createTask": "Create task",
+  "chat.taskSourceRequest": "Original request",
+  "chat.taskSourceReply": "Reply from {name}",
   "chat.responseAccepted": "Response accepted",
   "chat.responseStatus.queued": "Queued",
   "chat.responseStatus.thinking": "Thinking",

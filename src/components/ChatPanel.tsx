@@ -6,6 +6,7 @@ import DialogReportSummary from "./chat/DialogReportSummary";
 import { Pencil, UserMinus, RotateCcw, Undo2 } from "lucide-react";
 import type { NpcChatMessage } from "./NpcDialog";
 import ChatInput from "./ChatInput";
+import type { ChatTaskDraft } from "./kanban/kanban-view-model";
 import ChatBubble from "./ui/ChatBubble";
 import RosterAvatar from "./RosterAvatar";
 import RoomList from "./rooms/RoomList";
@@ -101,6 +102,7 @@ interface ChatPanelProps {
   onMarkSeen?: (tab: "cron" | "cards") => void;
   /** 카드 탭에서 카드를 눌렀다 — 칸반을 그 카드로 지목한다. 없으면 누를 수 없다. */
   onOpenAssignedCard?: (taskId: string) => void;
+  onCreateTaskFromChat?: (draft: ChatTaskDraft) => void;
   /**
    * `kanban:event` 마다 오르는 값(배선의 `kanbanRefreshTick`). 카드 탭이 열려 있을 때만
    * 보드를 다시 읽는다 — 배지와 목록이 같은 트리거를 쓰게 하는 것이 이 prop 의 전부다.
@@ -192,6 +194,7 @@ export default function ChatPanel({
   badges = null,
   onMarkSeen,
   onOpenAssignedCard,
+  onCreateTaskFromChat,
   cardsRefreshTick = 0,
   cardsDebounceMs = CARDS_EVENT_DEBOUNCE_MS,
   npcArtifactChips = [],
@@ -792,6 +795,38 @@ export default function ChatPanel({
                           {msg.content}
                         </ChatBubble>
                       )}
+                      {onCreateTaskFromChat &&
+                        dialogNpc &&
+                        msg.role === "npc" &&
+                        msg.content.trim() &&
+                        !msg.responseTransient &&
+                        !(isNpcStreaming && i === npcMessages.length - 1) && (
+                          <button
+                            type="button"
+                            className="text-xs text-primary underline underline-offset-2"
+                            onClick={() => {
+                              const response = npcResponses.find(
+                                (entry) =>
+                                  entry.requestId === msg.responseRequestId &&
+                                  entry.npcId === dialogNpc.npcId,
+                              );
+                              const request = response
+                                ? npcMessages.find(
+                                    (entry) =>
+                                      entry.role === "player" &&
+                                      entry.id === response.sourceMessageId,
+                                  )?.content
+                                : undefined;
+                              onCreateTaskFromChat({
+                                title: (request || msg.content).split("\n")[0].slice(0, 140),
+                                body: `${t("chat.taskSourceRequest")}\n${request ?? t("chat.taskSourceUnknown")}\n\n${t("chat.taskSourceReply", { name: dialogNpc.npcName })}\n${msg.content}`,
+                                assigneeNpcId: dialogNpc.npcId,
+                              });
+                            }}
+                          >
+                            {t("chat.createTask")}
+                          </button>
+                        )}
                       {msg.role === "player" && (
                         <ResponseProgress
                           responses={responsesForSource(npcResponses, msg.id)}

@@ -233,6 +233,10 @@ export default function TaskDrawer({
 
   const task = detail?.task ?? null;
   const status = task?.status;
+  const resultText =
+    status === "review"
+      ? task?.latest_summary?.trim() || task?.result
+      : task?.result?.trim() || (status === "done" ? task?.latest_summary : undefined);
   const assignees = activeAssigneeOptions(npcs);
   const linkCandidates = boardTasks.filter(
     (candidate) => candidate.id !== taskId && !(detail?.links.parents ?? []).includes(candidate.id),
@@ -539,9 +543,9 @@ export default function TaskDrawer({
             </Section>
 
             <Section title={t("kanban.detail.result")}>
-              {task.result ? (
+              {resultText ? (
                 <pre className="whitespace-pre-wrap break-words font-sans text-text-secondary">
-                  {task.result}
+                  {resultText}
                 </pre>
               ) : (
                 <Empty>{t("kanban.detail.noResult")}</Empty>

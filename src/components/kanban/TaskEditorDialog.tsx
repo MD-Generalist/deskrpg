@@ -21,6 +21,7 @@ interface TaskEditorDialogProps {
   /** 서버 400 메시지 등 — 그대로 보여 준다(R8). */
   serverError: string | null;
   submitting: boolean;
+  confirmChatDraft?: boolean;
   onSubmit: (body: Record<string, unknown>) => void;
   onClose: () => void;
 }
@@ -39,12 +40,15 @@ export default function TaskEditorDialog({
   candidates,
   serverError,
   submitting,
+  confirmChatDraft = false,
   onSubmit,
   onClose,
 }: TaskEditorDialogProps) {
   const t = useT();
   const [values, setValues] = useState<TaskFormValues>(initial);
   const [titleError, setTitleError] = useState(false);
+  const [completionCriteria, setCompletionCriteria] = useState("");
+  const [confirmationError, setConfirmationError] = useState(false);
   const assignees = activeAssigneeOptions(npcs);
 
   const set = <K extends keyof TaskFormValues>(key: K, value: TaskFormValues[K]) =>
@@ -57,7 +61,24 @@ export default function TaskEditorDialog({
       return;
     }
     setTitleError(false);
-    onSubmit(taskFormToBody(values));
+    if (
+      confirmChatDraft &&
+      (!completionCriteria.trim() || !assignees.some((npc) => npc.npcId === values.assigneeNpcId))
+    ) {
+      setConfirmationError(true);
+      return;
+    }
+    setConfirmationError(false);
+    onSubmit(
+      taskFormToBody(
+        confirmChatDraft
+          ? {
+              ...values,
+              body: `${values.body}\n\n${t("chat.taskCompletionCriteria")}\n${completionCriteria.trim()}`,
+            }
+          : values,
+      ),
+    );
   };
 
   const toggleParent = (id: string) =>
@@ -124,6 +145,25 @@ export default function TaskEditorDialog({
             />
           </div>
 
+          {confirmChatDraft && (
+            <div>
+              <p className="mb-2 text-xs text-text-secondary">{t("chat.taskConfirmationHelp")}</p>
+              <label className={LABEL} htmlFor="kanban-completion-criteria">
+                {t("chat.taskCompletionCriteria")} *
+              </label>
+              <textarea
+                id="kanban-completion-criteria"
+                className={`${FIELD} min-h-[64px]`}
+                value={completionCriteria}
+                onChange={(e) => setCompletionCriteria(e.target.value)}
+              />
+              {confirmationError && (
+                <p role="alert" className="text-xs text-danger">
+                  {t("chat.taskConfirmationRequired")}
+                </p>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL} htmlFor="kanban-assignee">

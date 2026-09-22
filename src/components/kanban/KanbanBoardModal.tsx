@@ -48,6 +48,8 @@ import { CopyCommand } from "../CopyCommand";
 
 interface KanbanBoardModalProps {
   channelId: string;
+  /** 대화에서 가져온 초안. 확인 전에는 서버에 등록하지 않는다. */
+  initialCreateDraft?: Pick<TaskFormValues, "title" | "body" | "assigneeNpcId">;
   onConnectGateway?: () => void;
   onClose: () => void;
   /** `kanban:event` 가 올 때마다 1 씩 오른다(GamePageClient 가 소켓을 든다). 디바운스해 재조회. */
@@ -72,7 +74,9 @@ interface KanbanBoardModalProps {
 /** `kanban:event` 연타를 한 번의 재조회로 접는 간격. */
 export const KANBAN_EVENT_DEBOUNCE_MS = 400;
 
-type Editor = { mode: "create" } | { mode: "edit"; task: KanbanTask };
+type Editor =
+  | { mode: "create"; draft?: Pick<TaskFormValues, "title" | "body" | "assigneeNpcId"> }
+  | { mode: "edit"; task: KanbanTask };
 type MoveState =
   | { phase: "idle" }
   | { phase: "active"; taskId: string; source: KanbanTaskStatus; target?: KanbanTaskStatus }
@@ -119,6 +123,7 @@ export default function KanbanBoardModal({
   refreshTick = 0,
   debounceMs = KANBAN_EVENT_DEBOUNCE_MS,
   initialTaskId = null,
+  initialCreateDraft,
   artifacts = null,
   artifactsRefreshTick = 0,
   focusRequest = null,
@@ -139,7 +144,9 @@ export default function KanbanBoardModal({
   const [checklist, setChecklist] = useState<GateBlocker | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId);
-  const [editor, setEditor] = useState<Editor | null>(null);
+  const [editor, setEditor] = useState<Editor | null>(
+    initialCreateDraft ? { mode: "create", draft: initialCreateDraft } : null,
+  );
   const [editorError, setEditorError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -957,13 +964,22 @@ export default function KanbanBoardModal({
         </div>
       </div>
 
-      {editor && (
+      {editor && currentBoard && !blocker && (
         <TaskEditorDialog
           mode={editor.mode}
+          confirmChatDraft={editor.mode === "create" && !!editor.draft}
           initial={
             editor.mode === "edit"
               ? formFromTask(editor.task as KanbanTask & Record<string, unknown>, npcs)
-              : EMPTY_TASK_FORM
+              : {
+                  ...EMPTY_TASK_FORM,
+                  ...editor.draft,
+                  assigneeNpcId: npcs.some(
+                    (npc) => npc.active && npc.npcId === editor.draft?.assigneeNpcId,
+                  )
+                    ? editor.draft!.assigneeNpcId
+                    : "",
+                }
           }
           npcs={npcs}
           candidates={
