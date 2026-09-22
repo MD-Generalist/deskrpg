@@ -348,7 +348,13 @@ test(
     const testArtifacts = path.join(sourceRoot, ".artifacts/readme-capture");
     fs.mkdirSync(testArtifacts, { recursive: true });
     const root = fs.mkdtempSync(path.join(testArtifacts, "env-project-"));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    let stopServer = async () => {};
+    let runtime: string | undefined;
+    t.after(async () => {
+      await stopServer();
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+      if (runtime) fs.rmSync(runtime, { recursive: true, force: true });
+    });
     // Copy the actual entry/config and reference read-only source/dependencies. All env files
     // and Next build output belong to this test, regardless of the developer's local env files.
     for (const file of ["dev-server.ts", "package.json", "tsconfig.json"])
@@ -372,8 +378,7 @@ test(
     const port = address.port;
     await new Promise<void>((resolve) => portProbe.close(() => resolve()));
 
-    const runtime = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-real-listener-"));
-    t.after(() => fs.rmSync(runtime, { recursive: true, force: true }));
+    runtime = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-real-listener-"));
     const instanceId = "real-listener-sentinel-test";
     const child = spawnProcess(
       process.execPath,
@@ -407,7 +412,7 @@ test(
     // 시간 초과로 끊겨도 node:test 는 이 파일의 프로세스가 끝나기를 기다린다. 런처가 SIGTERM 을
     // 넘기면 살아 있는 자식의 파이프가 그 프로세스를 붙잡아 러너 전체가 멈춘다(6시간 멈춤 실측).
     // 그래서 SIGTERM 뒤에 SIGKILL 까지 보내고, 어느 쪽이든 파이프를 닫아 이 파일이 끝나게 한다.
-    t.after(async () => {
+    stopServer = async () => {
       const exited = () => child.exitCode !== null || child.signalCode !== null;
       const waitExit = (ms: number) =>
         new Promise<void>((resolve) => {
@@ -428,7 +433,7 @@ test(
       child.stdout?.destroy();
       child.stderr?.destroy();
       child.unref();
-    });
+    };
 
     // A full test run competes for the machine, so give the dev server a generous budget and stop
     // early when the child dies — waiting out the clock on a crashed server hides the real reason.
