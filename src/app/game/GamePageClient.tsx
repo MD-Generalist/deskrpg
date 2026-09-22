@@ -1,5 +1,6 @@
 "use client";
 
+import SocketConnectionNotice from "@/components/SocketConnectionNotice";
 import { APP_VERSION, LICENSE_URL, REPO_URL } from "@/lib/app-meta";
 import { GrowthStarButton } from "@/components/growth/GrowthStarButton";
 import { UpdateNoticeModal } from "@/components/growth/UpdateNoticeModal";
@@ -2763,6 +2764,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       data-game-meeting={mode === "meeting"}
       className="theme-game ui2-game h-screen w-screen overflow-hidden bg-bg text-text"
     >
+      <SocketConnectionNotice socket={socket} />
       <ConversationWorkspace
         conversationWidth={conversationPanelWidth}
         navigator={

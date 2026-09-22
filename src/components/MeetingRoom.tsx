@@ -19,7 +19,7 @@ import {
 import { selectMeetingNpcs } from "./meeting-room/participants";
 import { EventBus } from "@/game/EventBus";
 import { MeetingSpeakerTracker } from "./meeting-room/speaker-tracker";
-import { computeMeetingTopicRows } from "./meeting-room/start-form";
+import MeetingTopicInput, { canSubmitMeetingTopic } from "./meeting-room/MeetingTopicInput";
 import {
   restoreMeetingChat,
   restoreMeetingExecution,
@@ -753,7 +753,7 @@ export default function MeetingRoom({
   const handleStartDiscussion = useCallback(() => {
     const topic = meetingTopic.trim();
     if (
-      !topic ||
+      !canSubmitMeetingTopic(meetingTopic) ||
       selectedNpcIds.size === 0 ||
       startingMeeting ||
       !socket ||
@@ -885,7 +885,7 @@ export default function MeetingRoom({
   // Collect streaming NPC messages for display
   const streamingEntries = Object.entries(npcStreams);
   const cannotStart =
-    !meetingTopic.trim() ||
+    !canSubmitMeetingTopic(meetingTopic) ||
     startingMeeting ||
     selectedNpcIds.size === 0 ||
     spatial?.phase === "returning" ||
@@ -1046,19 +1046,10 @@ export default function MeetingRoom({
           </div>
         </>
       )}
-      <textarea
+      <MeetingTopicInput
         value={meetingTopic}
-        onChange={(e) => setMeetingTopic(e.target.value.slice(0, 200))}
-        rows={computeMeetingTopicRows(meetingTopic)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            handleStartDiscussion();
-          }
-        }}
-        placeholder={t("meeting.topicPlaceholder")}
-        className="w-full resize-none overflow-y-auto bg-surface-raised text-text px-3 py-2 rounded border border-border focus:ring-2 focus:ring-primary-light focus:border-transparent focus:outline-none text-body leading-relaxed"
-        maxLength={200}
+        onChange={setMeetingTopic}
+        onSubmit={handleStartDiscussion}
       />
     </>
   );
@@ -1449,7 +1440,9 @@ export default function MeetingRoom({
                     data-meeting-start
                     disabled={cannotStart}
                     className={`w-full px-4 py-2 rounded font-semibold text-body ${
-                      meetingTopic.trim() && !startingMeeting && selectedNpcIds.size > 0
+                      canSubmitMeetingTopic(meetingTopic) &&
+                      !startingMeeting &&
+                      selectedNpcIds.size > 0
                         ? "bg-primary hover:bg-primary-hover text-white"
                         : "bg-surface-raised text-text-dim cursor-not-allowed"
                     }`}
@@ -1589,7 +1582,9 @@ export default function MeetingRoom({
                     data-meeting-start
                     disabled={cannotStart}
                     className={`w-full px-4 py-2 rounded font-semibold text-body ${
-                      meetingTopic.trim() && !startingMeeting && selectedNpcIds.size > 0
+                      canSubmitMeetingTopic(meetingTopic) &&
+                      !startingMeeting &&
+                      selectedNpcIds.size > 0
                         ? "bg-primary hover:bg-primary-hover text-white"
                         : "bg-surface-raised text-text-dim cursor-not-allowed"
                     }`}

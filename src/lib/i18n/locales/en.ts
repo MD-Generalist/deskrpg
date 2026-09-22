@@ -1897,6 +1897,10 @@ const en: Record<string, string> = {
   "game.typeNpc": "NPC",
   "game.typePlayer": "Player",
   "game.channelNotFound": "Channel not found",
+  "game.socketOfflinePersistent":
+    "Disconnected. Information on screen may be out of date. Reconnecting automatically.",
+  "game.socketReconnecting": "Connecting to the office…",
+  "game.socketRetry": "Reconnect",
   "game.socketDisconnected": "Real-time connection lost: {reason}",
   "game.socketConnectFailed": "Failed to connect in real time. Refresh and try again.",
   "game.npcGreetingBubble": "Hello! Good to see you.",
@@ -2061,6 +2065,8 @@ const en: Record<string, string> = {
   "meeting.table": "Meeting Table",
   "meeting.startDiscussion": "Start Discussion",
   "meeting.topic": "Meeting Topic",
+  "meeting.topicTooLong":
+    "Shorten the topic to {limit} characters. Your input has not been truncated.",
   "meeting.topicPlaceholder": "Enter the meeting topic",
   "meeting.participants": "Participants",
   "meeting.noNpcs": "No NPCs in this channel",
@@ -2296,6 +2302,8 @@ const en: Record<string, string> = {
   "gateways.editHelp": "Update this gateway or verify that the connection still works.",
   "gateways.displayName": "Display name",
   "gateways.rotateToken": "Token",
+  "gateways.rotateTokenConfirm":
+    "Rotate the token while keeping {count} offices connected? The new token must pass validation before it is saved.",
   "gateways.rotateTokenHint": "Leave the token blank to keep the existing token.",
   "gateways.testSuccess": "Gateway connection succeeded.",
   "gateways.saved": "Gateway saved.",

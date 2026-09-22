@@ -1894,6 +1894,10 @@ const ko: Record<string, string> = {
   "game.typeNpc": "NPC",
   "game.typePlayer": "플레이어",
   "game.channelNotFound": "오피스을 찾을 수 없습니다",
+  "game.socketOfflinePersistent":
+    "연결이 끊어졌습니다. 화면의 상태가 최신이 아닐 수 있습니다. 자동으로 재연결을 시도합니다.",
+  "game.socketReconnecting": "오피스에 연결하는 중입니다…",
+  "game.socketRetry": "다시 연결",
   "game.socketDisconnected": "실시간 연결이 끊겼습니다: {reason}",
   "game.socketConnectFailed": "실시간 연결에 실패했습니다. 새로고침 후 다시 시도하세요.",
   "game.npcGreetingBubble": "안녕하세요! 오늘도 반가워요.",
@@ -2058,6 +2062,7 @@ const ko: Record<string, string> = {
   "meeting.table": "회의 테이블",
   "meeting.startDiscussion": "회의 시작",
   "meeting.topic": "회의 주제",
+  "meeting.topicTooLong": "{limit}자 이하로 줄여 주세요. 입력 내용은 삭제되지 않았습니다.",
   "meeting.topicPlaceholder": "회의 주제를 입력하세요",
   "meeting.participants": "참가자 선택",
   "meeting.noNpcs": "오피스에 NPC가 없습니다",
@@ -2287,6 +2292,8 @@ const ko: Record<string, string> = {
   "gateways.editHelp": "게이트웨이 정보를 수정하거나 연결 상태를 다시 확인합니다.",
   "gateways.displayName": "표시 이름",
   "gateways.rotateToken": "토큰",
+  "gateways.rotateTokenConfirm":
+    "연결된 사무실 {count}개의 연결을 유지한 채 토큰을 교체합니다. 새 토큰 검증에 성공해야 저장됩니다. 계속하시겠습니까?",
   "gateways.rotateTokenHint": "토큰을 비워 두면 기존 토큰을 유지합니다.",
   "gateways.testSuccess": "게이트웨이 연결이 확인되었습니다.",
   "gateways.saved": "게이트웨이를 저장했습니다.",

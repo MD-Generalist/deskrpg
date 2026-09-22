@@ -1912,6 +1912,10 @@ const ja: Record<string, string> = {
   "game.typeNpc": "NPC",
   "game.typePlayer": "プレイヤー",
   "game.channelNotFound": "チャンネルが見つかりません",
+  "game.socketOfflinePersistent":
+    "接続が切れました。画面の情報が古い可能性があります。自動的に再接続します。",
+  "game.socketReconnecting": "オフィスに接続しています…",
+  "game.socketRetry": "再接続",
   "game.socketDisconnected": "リアルタイム接続が切断されました: {reason}",
   "game.socketConnectFailed":
     "リアルタイム接続に失敗しました。再読み込みしてもう一度お試しください。",
@@ -2082,6 +2086,7 @@ const ja: Record<string, string> = {
   "meeting.table": "会議テーブル",
   "meeting.startDiscussion": "会議を開始",
   "meeting.topic": "会議テーマ",
+  "meeting.topicTooLong": "{limit} 文字以内に短くしてください。入力内容は削除されていません。",
   "meeting.topicPlaceholder": "会議テーマを入力",
   "meeting.participants": "参加者を選択",
   "meeting.noNpcs": "チャンネルにNPCがいません",
@@ -2313,6 +2318,8 @@ const ja: Record<string, string> = {
   "gateways.editHelp": "ゲートウェイ情報を更新し、接続状態を再確認します。",
   "gateways.displayName": "表示名",
   "gateways.rotateToken": "トークン",
+  "gateways.rotateTokenConfirm":
+    "{count} 件のオフィスの接続を維持したままトークンを変更しますか？新しいトークンは検証に成功した場合のみ保存されます。",
   "gateways.rotateTokenHint": "空欄のまま保存すると既存トークンを維持します。",
   "gateways.testSuccess": "ゲートウェイ接続を確認しました。",
   "gateways.saved": "ゲートウェイを保存しました。",

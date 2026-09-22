@@ -1,3 +1,4 @@
+import { rotateGatewayToken } from "@/lib/gateway-token-rotation";
 import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
@@ -11,6 +12,7 @@ import {
   getAccessibleGatewayResource,
   getOwnedGatewayResource,
   upsertOwnedGatewayResource,
+  normalizeGatewayBaseUrl,
 } from "@/lib/gateway-resources";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -35,6 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       baseUrl: accessible.resource.baseUrl,
       // 복호화된 키는 응답에 싣지 않는다(하드 게이트 2) — 저장 여부만 알린다.
       hasToken: Boolean(decryptGatewayToken(accessible.resource.tokenEncrypted).trim()),
+      boundChannelCount: accessible.isOwner ? await countChannelBindingsForGateway(id) : undefined,
       ownerUserId: accessible.resource.ownerUserId,
       canEditCredentials: accessible.isOwner,
       isOwner: accessible.isOwner,
@@ -63,7 +66,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ errorCode: "invalid_json", error: "invalid JSON" }, { status: 400 });
   }
 
-  const nextBaseUrl = typeof body.url === "string" && body.url.trim() ? body.url : owned.baseUrl;
+  let nextBaseUrl = owned.baseUrl;
+  try {
+    if (typeof body.url === "string" && body.url.trim())
+      nextBaseUrl = normalizeGatewayBaseUrl(body.url.trim());
+  } catch {
+    return NextResponse.json({ errorCode: "invalid_gateway_url" }, { status: 400 });
+  }
   if (nextBaseUrl !== owned.baseUrl && isManagedSshUrl(nextBaseUrl)) {
     return NextResponse.json(
       { errorCode: "setup_invalid_request", error: "setup_invalid_request" },
@@ -71,32 +80,43 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     );
   }
   const nextToken =
-    typeof body.token === "string" ? body.token : decryptGatewayToken(owned.tokenEncrypted);
+    typeof body.token === "string" && body.token.trim()
+      ? body.token.trim()
+      : decryptGatewayToken(owned.tokenEncrypted);
   const nextDisplayName =
     typeof body.displayName === "string" ? body.displayName : owned.displayName;
   const existingToken = decryptGatewayToken(owned.tokenEncrypted);
-  const isCredentialChanging = nextBaseUrl !== owned.baseUrl || nextToken !== existingToken;
+  const isUrlChanging = nextBaseUrl !== owned.baseUrl;
 
-  if (isCredentialChanging) {
+  if (isUrlChanging) {
     const inUseCount = await countChannelBindingsForGateway(owned.id);
     if (inUseCount > 0) {
       return NextResponse.json(
         {
           errorCode: "gateway_in_use_by_channels",
           error:
-            "This gateway is still bound to channels. Rebind channels before rotating credentials.",
+            "This gateway is still bound to channels. Rebind channels before changing the gateway URL.",
         },
         { status: 409 },
       );
     }
   }
 
-  const updated = await upsertOwnedGatewayResource({
-    ownerUserId: userId,
-    baseUrl: nextBaseUrl,
-    token: nextToken,
-    displayName: nextDisplayName,
-  });
+  const rotation =
+    !isUrlChanging && nextToken !== existingToken
+      ? await rotateGatewayToken(owned, nextToken, nextDisplayName)
+      : null;
+  if (rotation && !rotation.ok) {
+    return NextResponse.json({ errorCode: rotation.errorCode }, { status: 400 });
+  }
+  const updated = rotation?.ok
+    ? rotation.gateway
+    : await upsertOwnedGatewayResource({
+        ownerUserId: userId,
+        baseUrl: nextBaseUrl,
+        token: nextToken,
+        displayName: nextDisplayName,
+      });
 
   if (updated.id !== owned.id) {
     await db.delete(gatewayResources).where(eq(gatewayResources.id, owned.id));
