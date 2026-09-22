@@ -307,6 +307,7 @@ test("칸반·cron 장부 테이블은 PG 와 SQLite 양쪽에 같은 컬럼 집
     "boardSlug",
     "boardNameSyncedAt",
     "eventCursor",
+    "eventCarrierHandoffJson",
     "lastPolledAt",
     "lastError",
     "createdAt",

@@ -1,5 +1,18 @@
 // English translations (default/fallback)
 const en: Record<string, string> = {
+  "errors.event_cursor_handoff_required":
+    "Update the gateway plugin to transfer notification delivery.",
+  "errors.event_carrier_handoff_pending":
+    "Project archiving is being recovered. Please check again shortly.",
+  "errors.event_carrier_handoff_conflict":
+    "The notification handoff record conflicts with the current connection. Ask an administrator to check it.",
+  "errors.event_carrier_origin_unknown":
+    "The previous notification position cannot be determined. Ask an administrator to check it.",
+  "errors.carrier_cursor_incomplete":
+    "The previous cursor has no proposal or artifact position. Ask an administrator to check it.",
+  "errors.invalid_handoff_cursor":
+    "The notification handoff cursor is invalid. The existing position is preserved.",
+
   "meeting.entryWalking": "Walking to the meeting room…",
   "meeting.entryFailed": "Meeting: {reason}",
   "meeting.joining": "Confirming participation…",

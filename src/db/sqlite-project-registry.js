@@ -64,6 +64,7 @@ const REBUILT_BOARDS_TABLE = `
     is_event_carrier INTEGER NOT NULL DEFAULT 0,
     board_name_synced_at TEXT,
     event_cursor TEXT,
+    event_carrier_handoff_json TEXT,
     last_polled_at TEXT,
     last_error TEXT,
     created_at TEXT NOT NULL,
@@ -77,6 +78,8 @@ const BOARD_INDEXES = `
     ON channel_kanban_boards(channel_id, board_slug);
   CREATE UNIQUE INDEX IF NOT EXISTS channel_kanban_boards_carrier_idx
     ON channel_kanban_boards(channel_id) WHERE is_event_carrier;
+  CREATE UNIQUE INDEX IF NOT EXISTS channel_kanban_boards_handoff_idx
+    ON channel_kanban_boards(channel_id) WHERE event_carrier_handoff_json IS NOT NULL;
 `;
 
 const CARRIED_COLUMNS = [
@@ -149,6 +152,13 @@ function ensureProjectRegistry(sqlite) {
     } finally {
       if (fkWasOn) sqlite.pragma("foreign_keys = ON");
     }
+  }
+  // 기존 DB 에는 컬럼을 먼저 보강해야 부분 인덱스를 만들 수 있다.
+  if (
+    tableExists(sqlite, "channel_kanban_boards") &&
+    !hasColumn(sqlite, "channel_kanban_boards", "event_carrier_handoff_json")
+  ) {
+    sqlite.exec("ALTER TABLE channel_kanban_boards ADD COLUMN event_carrier_handoff_json TEXT");
   }
   // 재구축을 했든 안 했든(빈 DB 포함) 인덱스는 늘 보장한다.
   if (tableExists(sqlite, "channel_kanban_boards")) sqlite.exec(BOARD_INDEXES);

@@ -9,6 +9,7 @@
  * 게이트웨이 리소스 소유자 권한은 쓰지 않는다(호스트 운영 설정이 아니다).
  */
 
+import { EventCarrierError } from "./event-carrier-handoff";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { cronError } from "@/lib/cron-access";
@@ -34,7 +35,8 @@ export type ChannelParams = {
 };
 
 function failure(err: unknown): NextResponse {
-  if (err instanceof ProjectRegistryError) return cronError(err.status, err.code, err.message);
+  if (err instanceof ProjectRegistryError || err instanceof EventCarrierError)
+    return cronError(err.status, err.code, err.message);
   const reason = err instanceof Error ? err.message : String(err);
   console.warn(`[project-routes] unexpected failure: ${reason}`);
   return cronError(500, "internal_error", "internal error");

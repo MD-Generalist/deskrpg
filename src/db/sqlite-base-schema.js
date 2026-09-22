@@ -307,6 +307,7 @@ const SQLITE_BASE_SCHEMA = `
       is_event_carrier INTEGER NOT NULL DEFAULT 0,
       board_name_synced_at TEXT,
       event_cursor TEXT,
+    event_carrier_handoff_json TEXT,
       last_polled_at TEXT,
       last_error TEXT,
       created_at TEXT NOT NULL,

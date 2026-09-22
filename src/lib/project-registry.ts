@@ -16,6 +16,13 @@
  * 이미 있고 우리가 만드는 것은 우리 쪽 메타 행뿐이다.
  */
 
+import { withChannelAutomationLock } from "./channel-automation-lock";
+import {
+  EventCarrierError,
+  recoverEventCarrierHandoff,
+  handoffEventCarrier,
+} from "./event-carrier-handoff";
+import { schedulePollNow } from "./automation-poll-trigger";
 import { and, eq } from "drizzle-orm";
 
 import { channelKanbanBoards, channelProjects, channelSubprojects, db, npcs, nowForDb } from "@/db";
@@ -24,6 +31,7 @@ import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
 import {
   ensureChannelBoard,
   ensureChannelCarrier,
+  resolveChannelBoard,
   listChannelBoards,
   newChannelBoardSlug,
   type ChannelBoardRow,
@@ -243,6 +251,21 @@ export type CreateProjectInput = {
  */
 export async function createChannelProject(
   channelId: string,
+  _client: OwnerPluginClient,
+  input: CreateProjectInput,
+): Promise<{ project: ProjectView; subprojects: SubprojectRow[] }> {
+  return withChannelAutomationLock(channelId, async () => {
+    await recoverEventCarrierHandoff(channelId);
+    // The caller's client may have been made before a queued gateway replacement.
+    const resolved = await resolveChannelBoard(channelId);
+    if (!resolved.ok) throw new EventCarrierError(409, resolved.code);
+    if (!resolved.pluginGate.ok) throw new EventCarrierError(428, resolved.pluginGate.code);
+    return createChannelProjectUnlocked(channelId, resolved.ownerClient, input);
+  });
+}
+
+async function createChannelProjectUnlocked(
+  channelId: string,
   client: OwnerPluginClient,
   input: CreateProjectInput,
 ): Promise<{ project: ProjectView; subprojects: SubprojectRow[] }> {
@@ -317,13 +340,28 @@ export type UpdateProjectInput = {
 };
 
 export async function updateChannelProject(
+  ...args: Parameters<typeof updateChannelProjectUnlocked>
+): Promise<ProjectView> {
+  const result = await withChannelAutomationLock(args[0], async () => {
+    await recoverEventCarrierHandoff(args[0]);
+    // 잠금을 기다리는 사이 바인딩이 바뀌었을 수 있다. 요청 전에 만든 클라이언트를 재사용하지 않는다.
+    const resolved = await resolveChannelBoard(args[0]);
+    if (!resolved.ok) throw new EventCarrierError(409, resolved.code);
+    if (!resolved.pluginGate.ok) throw new EventCarrierError(428, resolved.pluginGate.code);
+    return updateChannelProjectUnlocked(args[0], args[1], resolved.ownerClient, args[3]);
+  });
+  schedulePollNow(args[0]);
+  return result;
+}
+
+async function updateChannelProjectUnlocked(
   channelId: string,
   projectId: string,
   client: OwnerPluginClient,
   input: UpdateProjectInput,
 ): Promise<ProjectView> {
   const project = await readProject(channelId, projectId);
-  const board = await readProjectBoard(project);
+  let board = await readProjectBoard(project);
 
   if (input.status !== undefined && !isProjectStatus(input.status))
     throw new ProjectRegistryError(400, "invalid_project_status");
@@ -343,6 +381,10 @@ export async function updateChannelProject(
     meta = patched.data.board;
   }
 
+  if (input.status === "completed" || input.status === "cancelled") {
+    await archiveChannelProjectUnlocked(channelId, projectId, input.status);
+    board = await readProjectBoard(project);
+  }
   const patch: Partial<ProjectRow> = { updatedAt: nowForDb() };
   if (input.status !== undefined) patch.status = input.status;
   if (input.leadNpcId !== undefined) patch.leadNpcId = input.leadNpcId;
@@ -364,25 +406,19 @@ export async function updateChannelProject(
   return viewOf(board, updated, meta);
 }
 
-/**
- * 보관 — Hermes 에 보드 삭제·보관 라우트가 없으므로(플러그인 `routes.py` 는 GET/POST/PATCH 뿐)
- * **우리 쪽 상태 전이**다. 연결 행과 Hermes 보드는 남고 폴링도 계속한다. 보관된 프로젝트의 카드가
- * 아직 돌고 있을 수 있어서이고, 조용히 멈추면 "성공을 보고하면서 아무것도 안 함" 이 된다.
- *
- * 사건 수신 보드를 보관하면 다른 활성 보드로 그 자리를 옮긴다. **옮긴 행의 커서는 그대로 둔다.**
- *
- * 처음엔 버렸는데, 플러그인을 읽어 보니 버릴 이유가 없고 버리면 손해였다(2026-09-21 정정).
- * - `k`(그 보드의 칸반 위치)는 그 행이 폴링해 온 진짜 위치다. 버리면 그 보드의 카드 사건을
- *   한 구간 통째로 놓친다 — 바로 그 "화면은 멀쩡한데 카드만 안 움직이는" 실패다.
- * - `c`(크론)는 비-carrier 행의 커서에도 **있다**. 플러그인의 `collect` 는 `include` 와 무관하게
- *   늘 `cron_tail` 을 돌려 `c` 를 전진시킨다(우리가 그 사건을 버렸을 뿐이다).
- * - `a`(아티팩트)만 없는데, 플러그인이 그 경우를 안전하게 다룬다. `artifact_position` 은 커서에
- *   `a` 키가 없으면 **지금 max(id)** 를 돌려준다(`events.py:663-673`, "과거 사건을 폭포처럼 다시
- *   주지 않는다"). 그래서 승격 뒤 첫 `include=artifacts` 호출이 과거를 재생하지 않는다.
- *
- * 자가 복구(`ensureChannelCarrier`)도 같은 이유로 커서를 유지한다 — 두 경로가 같은 규칙이다.
- */
+/** 보관 시 보드별 k/d는 유지하고 기존 수신 위치 c/a만 플러그인이 인계한다. */
 export async function archiveChannelProject(
+  ...args: Parameters<typeof archiveChannelProjectUnlocked>
+) {
+  const result = await withChannelAutomationLock(args[0], async () => {
+    await recoverEventCarrierHandoff(args[0]);
+    return archiveChannelProjectUnlocked(...args);
+  });
+  schedulePollNow(args[0]);
+  return result;
+}
+
+async function archiveChannelProjectUnlocked(
   channelId: string,
   projectId: string,
   status: "completed" | "cancelled",
@@ -402,30 +438,17 @@ export async function archiveChannelProject(
   let carrierMovedTo: string | null = null;
   if (board.isEventCarrier) {
     const next = stillActive[0];
-    const now = nowForDb();
-    // 순서가 중요하다 — 부분 유니크가 carrier 둘을 거절하므로 먼저 내려놓고 올린다.
-    // 이 레포에서는 트랜잭션으로 묶을 수 없다: better-sqlite3 드라이버가 동기라
-    // `db.transaction` 이 async 콜백을 `Transaction function cannot return a promise` 로 거절한다.
-    // 그래서 두 겹으로 막는다.
-    //   1) 여기 보상 — 올리기가 실패하면 내려놓은 것을 되돌린다.
-    //   2) `ensureChannelCarrier` 자가 복구 — 두 UPDATE **사이에 죽은** 경우는 보상으로 못 막고
-    //      읽는 쪽이 고친다. carrier 0개는 부분 유니크가 막아 주지 않는다.
-    await db
-      .update(channelKanbanBoards)
-      .set({ isEventCarrier: false, updatedAt: now })
-      .where(eq(channelKanbanBoards.id, board.id));
-    try {
-      await db
-        .update(channelKanbanBoards)
-        .set({ isEventCarrier: true, updatedAt: now })
-        .where(eq(channelKanbanBoards.id, next.id));
-    } catch (err) {
-      await db
-        .update(channelKanbanBoards)
-        .set({ isEventCarrier: true, updatedAt: nowForDb() })
-        .where(eq(channelKanbanBoards.id, board.id));
-      throw err;
-    }
+    const resolved = await resolveChannelBoard(channelId);
+    if (!resolved.ok) throw new EventCarrierError(409, resolved.code);
+    if (!resolved.pluginGate.ok) throw new EventCarrierError(428, resolved.pluginGate.code);
+    await handoffEventCarrier({
+      channelId,
+      sourceId: board.id,
+      targetId: next.id,
+      projectId: project.id,
+      status,
+      client: resolved.ownerClient,
+    });
     carrierMovedTo = next.boardSlug;
   }
 

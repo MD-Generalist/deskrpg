@@ -58,6 +58,7 @@ describe("owner client — info", () => {
       "swarm",
       "kanban_views",
       "initial_status",
+      "event_cursor_handoff",
     ]);
     assert.equal(info.timezone, "Asia/Seoul");
     assert.deepEqual(info.kanban, { dispatcher_present: true, attachments: true });
@@ -397,6 +398,112 @@ describe("kanban — 스웜", () => {
 });
 
 describe("events — 커서", () => {
+  it("new board k/d positions ignore older events from other boards", async () => {
+    const api = owner();
+    unwrap(await api.kanban.createBoard({ slug: "old", name: "Old" }));
+    unwrap(await api.kanban.createBoard({ slug: "new", name: "New" }));
+    server.pushEvent({ kind: "task.created", board: "old", task_id: "old-task", payload: {} });
+    server.pushEvent({ kind: "task.deleted", board: "old", task_id: "old-delete", payload: {} });
+    const start = unwrap(await api.events.poll({ board: "new" }));
+    const created = server.pushEvent({
+      kind: "task.created",
+      board: "new",
+      task_id: "new-task",
+      payload: {},
+    });
+    const deleted = server.pushEvent({
+      kind: "task.deleted",
+      board: "new",
+      task_id: "new-delete",
+      payload: {},
+    });
+    const page = unwrap(await api.events.poll({ board: "new", cursor: start.cursor }));
+    assert.deepEqual(
+      page.events.map((event) => event.id),
+      [created.id, deleted.id],
+    );
+  });
+
+  it("handoff keeps target kanban position and carrier global positions", async () => {
+    const api = owner();
+    unwrap(await api.kanban.createBoard({ slug: "old", name: "Old" }));
+    unwrap(await api.kanban.createBoard({ slug: "new", name: "New" }));
+    const source = unwrap(
+      await api.events.poll({ board: "old", include: "artifacts,card_proposals" }),
+    );
+    const target = unwrap(await api.events.poll({ board: "new" }));
+    const kanban = server.pushEvent({
+      kind: "task.created",
+      board: "new",
+      task_id: "new-task",
+      payload: {},
+    });
+    const proposal = server.pushEvent({
+      kind: "card_proposal.created",
+      board: "old",
+      payload: { proposal_id: "p1" },
+    });
+    const artifact = server.pushEvent({ kind: "artifact.created", board: "old", payload: {} });
+    const cron = server.pushEvent({ kind: "cron.run.finished", profile: "sophie", payload: {} });
+    const merged = unwrap(
+      await api.events.handoff({
+        board: "new",
+        board_cursor: target.cursor,
+        carrier_cursor: source.cursor,
+      }),
+    );
+    assert.deepEqual(server.lastRequest()?.json, {
+      board: "new",
+      board_cursor: target.cursor,
+      carrier_cursor: source.cursor,
+    });
+    assert.equal(server.lastRequest()?.path, "/deskrpg/events/handoff");
+    assert.equal(server.lastRequest()?.method, "POST");
+    assert.equal(server.lastRequest()?.auth, `Bearer ${OWNER}`);
+    const received = unwrap(
+      await api.events.poll({
+        board: "new",
+        cursor: merged.cursor,
+        include: "artifacts,card_proposals",
+      }),
+    );
+    assert.deepEqual(
+      received.events.map((e) => e.id),
+      [kanban, proposal, artifact, cron].map((e) => e.id),
+    );
+  });
+
+  it("handoff validates donor, target, board, auth, and old route", async () => {
+    const api = owner();
+    unwrap(await api.kanban.createBoard({ slug: "new", name: "New" }));
+    const legacy = unwrap(await api.events.poll({ board: "new" })).cursor;
+    const valid = unwrap(
+      await api.events.poll({ board: "new", include: "artifacts,card_proposals" }),
+    ).cursor;
+    const request = { board: "new", board_cursor: null, carrier_cursor: valid };
+    assert.ok(unwrap(await api.events.handoff(request)).cursor);
+    for (const [body, status, code] of [
+      [{ ...request, carrier_cursor: legacy }, 409, "carrier_cursor_incomplete"],
+      [{ ...request, carrier_cursor: "bad" }, 400, "invalid_handoff_cursor"],
+      [{ ...request, board_cursor: "bad" }, 400, "invalid_handoff_cursor"],
+      [{ ...request, board: "missing" }, 404, "board_not_found"],
+    ] as const) {
+      const result = await api.events.handoff(body);
+      assert.equal(result.ok, false);
+      if (!result.ok) {
+        assert.equal(result.status, status);
+        assert.equal(result.failure.code, code);
+      }
+    }
+    const wrong = createOwnerPluginClient({ baseUrl: server.baseUrl, ownerToken: SOPHIE });
+    const unauthorized = await wrong.events.handoff(request);
+    assert.equal(unauthorized.ok, false);
+    if (!unauthorized.ok) assert.equal(unauthorized.status, 401);
+    server.setInfo({ capabilities: ["kanban", "cron", "events"] });
+    const absent = await api.events.handoff(request);
+    assert.equal(absent.ok, false);
+    if (!absent.ok) assert.equal(absent.status, 404);
+  });
   it("커서 없이 부르면 빈 목록 + 지금 토큰, 그 다음부터 새 이벤트를 준다", async () => {
     const client = owner();
     unwrap(await client.kanban.createBoard({ slug: "dev", name: "Dev" }));

@@ -1619,3 +1619,19 @@ test("서브프로젝트 필터는 타임라인에도 먹는다", async () => {
     await f.cleanup();
   }
 });
+
+test("인계 복구 오류 배너는 오류 코드 대신 설명을 보여준다", async () => {
+  const f = await mount((url) => {
+    if (url.includes("/automation/status"))
+      return json(status({ lastError: "event_carrier_handoff_pending" }));
+    return json(board());
+  });
+  try {
+    assert.match(
+      f.host.querySelector('[data-banner="lastError"]')?.textContent ?? "",
+      /자동 복구 후/,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
