@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
@@ -1356,6 +1357,14 @@ export default function NpcHireWizard({
                         count: String(created.attendedChannels),
                       })}
                 </p>
+              )}
+              {created?.attendedChannels === 0 && (
+                <Link
+                  href={`/channels/create?gatewayId=${encodeURIComponent(gatewayId)}`}
+                  className="inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+                >
+                  {t("hermes.wizard.result.createOffice")}
+                </Link>
               )}
               {/* 경고는 버튼 줄 밖에 둔다 — 같은 flex 줄에 넣으면 버튼이 눌려 글자가 세로로 꺾인다. */}
               {baseUrl && provider.trim() !== "custom" && (

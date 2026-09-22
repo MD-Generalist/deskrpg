@@ -188,6 +188,8 @@ const en: Record<string, string> = {
   "channels.create.passwordMinError": "Min 8 characters required",
   "channels.create.maxPlayers": "Max Players",
   "channels.create.creating": "Creating...",
+  "channels.create.noGatewayWarning":
+    "Employees cannot join this channel without an AI gateway connection.",
   "channels.create.nameRequired": "Name is required",
   "channels.create.passwordRequired": "Password required for private channels (min 8 chars)",
   "channels.create.failed": "Failed to create channel",
@@ -400,6 +402,7 @@ const en: Record<string, string> = {
     "Couldn't copy the default profile's settings. Pick the AI model in ④.",
   "hermes.wizard.locked.needsProfile": "Create the profile in ① first",
   "hermes.wizard.config.advanced": "Tools & skills (advanced)",
+  "hermes.wizard.result.createOffice": "Create office",
   "hermes.wizard.result.attended": "'{name}' has joined {count} channel(s).",
   "hermes.wizard.result.noChannel":
     "'{name}' is registered. It joins a channel once this gateway is attached to one.",

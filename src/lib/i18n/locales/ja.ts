@@ -192,6 +192,7 @@ const ja: Record<string, string> = {
   "channels.create.passwordMinError": "8文字以上必要です",
   "channels.create.maxPlayers": "最大人数",
   "channels.create.creating": "作成中...",
+  "channels.create.noGatewayWarning": "AIゲートウェイを接続しないと、従業員は出勤できません。",
   "channels.create.nameRequired": "名前を入力してください",
   "channels.create.passwordRequired": "非公開チャンネルにはパスワードが必要です（8文字以上）",
   "channels.create.failed": "チャンネルの作成に失敗しました",
@@ -411,6 +412,7 @@ const ja: Record<string, string> = {
     "デフォルトプロフィールの設定を引き継げませんでした。④でAIモデルを選んでください。",
   "hermes.wizard.locked.needsProfile": "先に①でプロフィールを作成してください",
   "hermes.wizard.config.advanced": "ツール・スキル（詳細）",
+  "hermes.wizard.result.createOffice": "オフィスを作成",
   "hermes.wizard.result.attended": "「{name}」が{count}件のチャンネルに出勤しました。",
   "hermes.wizard.result.noChannel":
     "「{name}」を登録しました。このゲートウェイをチャンネルに接続すると、そのチャンネルに出勤します。",

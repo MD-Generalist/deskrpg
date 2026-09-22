@@ -189,6 +189,7 @@ const ko: Record<string, string> = {
   "channels.create.passwordMinError": "최소 8자 이상 필요합니다",
   "channels.create.maxPlayers": "최대 인원",
   "channels.create.creating": "생성 중...",
+  "channels.create.noGatewayWarning": "AI 게이트웨이를 연결하지 않으면 직원이 출근할 수 없습니다.",
   "channels.create.nameRequired": "이름을 입력해주세요",
   "channels.create.passwordRequired": "비공개 오피스은 비밀번호가 필요합니다 (8자 이상)",
   "channels.create.failed": "오피스 생성에 실패했습니다",
@@ -400,6 +401,7 @@ const ko: Record<string, string> = {
     "기본 프로필 설정을 물려받지 못했습니다. ④ 에서 AI 모델을 직접 고르세요.",
   "hermes.wizard.locked.needsProfile": "먼저 ① 에서 프로필을 만드세요",
   "hermes.wizard.config.advanced": "도구·스킬 (고급)",
+  "hermes.wizard.result.createOffice": "오피스 만들기",
   "hermes.wizard.result.attended": "'{name}' 이(가) 오피스 {count}곳에 출근했습니다.",
   "hermes.wizard.result.noChannel":
     "'{name}' 을(를) 등록했습니다. 이 게이트웨이를 오피스에 연결하면 그 오피스에 출근합니다.",

@@ -90,6 +90,11 @@ test("설정 저장이 선택한 reasoning_effort 를 PUT 본문에 싣는다", 
     await act(async () => {
       configTab.click();
     });
+    assert.equal(
+      [...el.querySelectorAll("a")].some((anchor) => anchor.textContent?.includes("오피스 만들기")),
+      false,
+      "기존 직원은 출근 채널 수가 알려지지 않았으므로 오피스 생성 안내를 보이지 않는다",
+    );
 
     const effortSelect = [...el.querySelectorAll("select")].find((s) =>
       [...s.options].some((o) => o.value === "high"),
@@ -374,6 +379,29 @@ test("단계는 ① 프로필 ② 인격 ③ 외형 ④ AI 모델이고, 옛 배
     }
     root.unmount();
     el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("새 직원의 출근 오피스가 없을 때만 연결된 오피스 생성 링크를 보인다", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const count of [0, 1]) {
+      const { root, el } = await mount(wizardWith(PROFILE_ROUTES(count), []));
+      await createAndOpenModel(el);
+      const link = [...el.querySelectorAll("a")].find((anchor) =>
+        anchor.textContent?.includes("오피스 만들기"),
+      );
+      if (count === 0) {
+        assert.equal(link?.getAttribute("href"), "/channels/create?gatewayId=gw-1");
+      } else {
+        assert.equal(link, undefined);
+      }
+      assert.ok(buttonByText(el, "완료"));
+      await act(async () => root.unmount());
+      el.remove();
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

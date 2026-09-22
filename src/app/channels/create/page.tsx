@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
@@ -56,6 +56,8 @@ export default function CreateChannelPage() {
 
 function CreateChannelPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedGatewayId = searchParams.get("gatewayId");
   const t = useT();
 
   const [name, setName] = useState("");
@@ -77,6 +79,7 @@ function CreateChannelPageInner() {
   const [storedGatewaysLoading, setStoredGatewaysLoading] = useState(false);
   const [storedGatewaysError, setStoredGatewaysError] = useState("");
   const [selectedGatewayId, setSelectedGatewayId] = useState("");
+  const [gatewaySelectionTouched, setGatewaySelectionTouched] = useState(false);
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [gatewayToken, setGatewayToken] = useState("");
   const [showGatewayToken, setShowGatewayToken] = useState(false);
@@ -145,6 +148,15 @@ function CreateChannelPageInner() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (gatewaySelectionTouched || storedGatewaysLoading) return;
+    if (requestedGatewayId && storedGateways.some((gateway) => gateway.id === requestedGatewayId)) {
+      setSelectedGatewayId(requestedGatewayId);
+      setGatewayMode("stored");
+      setGatewayOpen(true);
+    }
+  }, [gatewaySelectionTouched, requestedGatewayId, storedGateways, storedGatewaysLoading]);
 
   useEffect(() => {
     if (gatewayMode !== "stored") return;
@@ -404,6 +416,7 @@ function CreateChannelPageInner() {
                   <button
                     type="button"
                     onClick={() => {
+                      setGatewaySelectionTouched(true);
                       setGatewayMode("direct");
                       resetGatewayTestState();
                     }}
@@ -418,6 +431,7 @@ function CreateChannelPageInner() {
                   <button
                     type="button"
                     onClick={() => {
+                      setGatewaySelectionTouched(true);
                       setGatewayMode("stored");
                       resetGatewayTestState();
                     }}
@@ -442,6 +456,7 @@ function CreateChannelPageInner() {
                       <select
                         value={selectedGatewayId}
                         onChange={(e) => {
+                          setGatewaySelectionTouched(true);
                           setSelectedGatewayId(e.target.value);
                           resetGatewayTestState();
                         }}
@@ -548,6 +563,15 @@ function CreateChannelPageInner() {
               </div>
             )}
           </div>
+
+          {!(
+            (gatewayMode === "stored" && selectedGatewayId) ||
+            (gatewayMode === "direct" && gatewayUrl.trim())
+          ) && (
+            <p className="text-sm text-text-muted" role="status">
+              {t("channels.create.noGatewayWarning")}
+            </p>
+          )}
 
           {error && <p className="text-danger text-sm">{error}</p>}
 
