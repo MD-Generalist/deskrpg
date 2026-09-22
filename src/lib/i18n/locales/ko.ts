@@ -1892,6 +1892,10 @@ const ko: Record<string, string> = {
   "game.typeNpc": "NPC",
   "game.typePlayer": "플레이어",
   "game.channelNotFound": "오피스을 찾을 수 없습니다",
+  "game.socketOfflinePersistent":
+    "연결이 끊어졌습니다. 화면의 상태가 최신이 아닐 수 있습니다. 자동으로 재연결을 시도합니다.",
+  "game.socketReconnecting": "오피스에 연결하는 중입니다…",
+  "game.socketRetry": "다시 연결",
   "game.socketDisconnected": "실시간 연결이 끊겼습니다: {reason}",
   "game.socketConnectFailed": "실시간 연결에 실패했습니다. 새로고침 후 다시 시도하세요.",
   "game.npcGreetingBubble": "안녕하세요! 오늘도 반가워요.",

@@ -1894,6 +1894,10 @@ const en: Record<string, string> = {
   "game.typeNpc": "NPC",
   "game.typePlayer": "Player",
   "game.channelNotFound": "Channel not found",
+  "game.socketOfflinePersistent":
+    "Disconnected. Information on screen may be out of date. Reconnecting automatically.",
+  "game.socketReconnecting": "Connecting to the office…",
+  "game.socketRetry": "Reconnect",
   "game.socketDisconnected": "Real-time connection lost: {reason}",
   "game.socketConnectFailed": "Failed to connect in real time. Refresh and try again.",
   "game.npcGreetingBubble": "Hello! Good to see you.",

@@ -1910,6 +1910,10 @@ const ja: Record<string, string> = {
   "game.typeNpc": "NPC",
   "game.typePlayer": "プレイヤー",
   "game.channelNotFound": "チャンネルが見つかりません",
+  "game.socketOfflinePersistent":
+    "接続が切れました。画面の情報が古い可能性があります。自動的に再接続します。",
+  "game.socketReconnecting": "オフィスに接続しています…",
+  "game.socketRetry": "再接続",
   "game.socketDisconnected": "リアルタイム接続が切断されました: {reason}",
   "game.socketConnectFailed":
     "リアルタイム接続に失敗しました。再読み込みしてもう一度お試しください。",
