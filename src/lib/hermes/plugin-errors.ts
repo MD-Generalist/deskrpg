@@ -116,7 +116,10 @@ function isCodeLikeString(value: string): boolean {
  */
 function extractCodeAndMessage(record: Record<string, unknown>): { code: string; message: string } {
   const errorField = record.error;
-  const reason = typeof record.reason === "string" ? record.reason : "";
+  // Native plugin RequestError uses detail; older profile handlers use reason.
+  const reason =
+    (typeof record.reason === "string" && record.reason) ||
+    (typeof record.detail === "string" ? record.detail : "");
 
   if (errorField && typeof errorField === "object" && !Array.isArray(errorField)) {
     // 401 gateway_auth_error 모양 — 진짜 코드는 안에 있다. 없으면 뭉뚱그린다.

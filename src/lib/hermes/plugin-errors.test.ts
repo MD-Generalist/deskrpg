@@ -390,3 +390,41 @@ describe("스웜 capability 게이트", () => {
     assert.equal(swarmGate(info).ok, true);
   });
 });
+
+describe("mapPluginFailure — native 전이 거절 사유", () => {
+  it("플러그인 detail 문장을 코드와 함께 보존한다", () => {
+    const detail = "human approval is required for this protected task";
+    const got = mapPluginFailure({
+      status: 409,
+      body: { error: "invalid_transition", detail },
+    });
+    assert.ok(got);
+    assert.equal(got.code, "invalid_transition");
+    assert.equal(got.message, detail);
+    assert.equal(got.details.detail, detail);
+  });
+
+  it("기존 reason을 우선하고 구조화 detail을 문자열로 바꾸지 않는다", () => {
+    assert.equal(
+      mapPluginFailure({
+        status: 409,
+        body: {
+          error: "invalid_transition",
+          reason: "기존 설명",
+          detail: "추가 설명",
+        },
+      })?.message,
+      "기존 설명",
+    );
+    assert.equal(
+      mapPluginFailure({
+        status: 409,
+        body: {
+          error: "invalid_transition",
+          detail: { expected: "review" },
+        },
+      })?.message,
+      "invalid_transition",
+    );
+  });
+});
