@@ -944,6 +944,7 @@ test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중
     "swarm",
     "kanban_views",
     "initial_status",
+    "event_cursor_handoff",
   ]);
   assert.equal(body.timezone, "Asia/Seoul");
   assert.equal(body.boardSlug, seed.boardSlug);

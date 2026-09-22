@@ -17,10 +17,15 @@
  *   `ensureChannelBoard` 는 멱등이라 다음 화면 진입·폴링이 그대로 다시 부르면 된다.
  * - 플러그인 계약(0.6.0 + kanban·cron·events)에 못 미치면 칸반 경로를 **건드리지 않는다**
  *   (R31). 판정은 `automation-gate.ts` 의 단일 게이트가 한다 — 크론 REST 도 같은 함수를 쓴다.
- * - 어떤 함수도 호출자에게 던지지 않는다. 바인딩·개명 라우트가 이 모듈의 실패 때문에
- *   실패하면 안 되기 때문이다.
+ * - ensureChannelBoard/syncBoardName은 실패를 결과로 돌린다. 인계 복구 불가는 명시적 오류다.
  */
 
+import { withChannelAutomationLock } from "./channel-automation-lock";
+import {
+  EventCarrierError,
+  recoverEventCarrierHandoff,
+  recordEventCarrierError,
+} from "./event-carrier-handoff";
 import { randomBytes } from "node:crypto";
 
 import { and, eq, ne } from "drizzle-orm";
@@ -106,22 +111,25 @@ export async function listChannelBoards(channelId: string): Promise<ChannelBoard
 }
 
 /**
- * 채널에 사건 수신 보드가 하나도 없으면 하나를 세운다. **읽는 쪽이 고치는 자가 복구**다.
- *
- * 부분 유니크 인덱스는 carrier 가 **둘**인 것은 막지만 **0개**인 것은 막지 못한다. 보관이
- * carrier 를 옮기는 두 UPDATE 사이에 프로세스가 죽으면 그 채널은 크론 사건을 아무도 받지 않고,
- * 화면은 멀쩡한데 카드만 안 움직이는 조용한 실패가 된다. 보상 로직은 "②가 실패했을 때" 만
- * 막고 "①과 ② 사이에 죽었을 때" 는 못 막는다 — 그 경로는 이 함수만 막는다.
- *
- * 규칙은 0017 의 조건부 UPDATE 와 같다: **가장 오래된 보드 하나**. 다만 보관된 프로젝트의 보드는
- * 후보에서 뺀다 — 끝난 일의 보드를 사건 수신 자리로 되살리면 보관의 뜻이 무너진다.
- * 후보가 전부 보관됐으면 그래도 하나는 세운다(아무도 안 받는 것보다 낫다).
+ * 인계 기록이 있으면 먼저 끝낸다. 기록 없이 carrier가 없으면 미초기화 채널만 복구한다.
+ * 저장 커서가 있는 기존 채널에서 옛 수신 위치를 추정하면 미소비 사건을 건너뛸 수 있다.
  */
 export async function ensureChannelCarrier(channelId: string): Promise<ChannelBoardRow | null> {
+  return withChannelAutomationLock(channelId, async () => {
+    await recoverEventCarrierHandoff(channelId);
+    return ensureChannelCarrierUnlocked(channelId);
+  });
+}
+
+async function ensureChannelCarrierUnlocked(channelId: string): Promise<ChannelBoardRow | null> {
   const rows = await listChannelBoards(channelId);
   if (rows.length === 0) return null;
   const current = rows.find((row) => row.isEventCarrier);
   if (current) return current;
+  if (rows.some((row) => row.eventCursor !== null)) {
+    await recordEventCarrierError(channelId, "event_carrier_origin_unknown");
+    throw new EventCarrierError(409, "event_carrier_origin_unknown");
+  }
 
   const archivedLinkIds = new Set(
     (
@@ -227,6 +235,7 @@ async function upsertBoardRow(input: {
   boardNameSyncedAt?: Date | null;
 }): Promise<ChannelBoardRow> {
   await migrateChannelBoardsToGateway(input.channelId, input.gatewayId);
+  await ensureChannelCarrier(input.channelId);
   const now = nowForDb();
   const existing = await getChannelBoardBySlug(input.channelId, input.boardSlug);
 
@@ -280,6 +289,20 @@ async function readChannelName(channelId: string): Promise<string | null> {
  * 한 요청에서 두 번 만들지 않기 위해서다(칸반 접근 제어·폴러).
  */
 export async function ensureChannelBoard(
+  ...args: Parameters<typeof ensureChannelBoardUnlocked>
+): Promise<ChannelBoardResult> {
+  return withChannelAutomationLock(args[0], async () => {
+    try {
+      await recoverEventCarrierHandoff(args[0]);
+      return await ensureChannelBoardUnlocked(...args);
+    } catch (err) {
+      const code = err instanceof EventCarrierError ? err.code : "internal_error";
+      return { ok: false, code, reason: code, row: null };
+    }
+  });
+}
+
+async function ensureChannelBoardUnlocked(
   channelId: string,
   resolved?: ResolvedChannelBoard,
   /**
@@ -290,6 +313,10 @@ export async function ensureChannelBoard(
   requestedSlug?: string,
 ): Promise<ChannelBoardResult> {
   try {
+    if (resolved?.ok) {
+      const binding = await getChannelGatewayBinding(channelId);
+      if (binding?.resource.id !== resolved.binding.resource.id) resolved = undefined;
+    }
     resolved ??= await resolveChannelBoard(channelId);
     if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason, row: null };
 
@@ -338,7 +365,12 @@ export async function ensureChannelBoard(
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(`[kanban-boards] ensureChannelBoard(${channelId}) failed: ${reason}`);
-    return { ok: false, code: "internal_error", reason, row: null };
+    return {
+      ok: false,
+      code: err instanceof EventCarrierError ? err.code : "internal_error",
+      reason,
+      row: null,
+    };
   }
 }
 
@@ -348,6 +380,20 @@ export async function ensureChannelBoard(
  * 뒤처져 있으면 한 바퀴에 한 번 다시 부른다(게이트를 통과한 바퀴에서만).
  */
 export async function syncBoardName(
+  ...args: Parameters<typeof syncBoardNameUnlocked>
+): Promise<ChannelBoardResult> {
+  return withChannelAutomationLock(args[0], async () => {
+    try {
+      await recoverEventCarrierHandoff(args[0]);
+      return await syncBoardNameUnlocked(...args);
+    } catch (err) {
+      const code = err instanceof EventCarrierError ? err.code : "internal_error";
+      return { ok: false, code, reason: code, row: null };
+    }
+  });
+}
+
+async function syncBoardNameUnlocked(
   channelId: string,
   name: string,
   resolved?: ResolvedChannelBoard,
@@ -358,6 +404,10 @@ export async function syncBoardName(
       return { ok: false, code: "no_board", reason: "channel has no board row", row: null };
     }
 
+    if (resolved?.ok) {
+      const binding = await getChannelGatewayBinding(channelId);
+      if (binding?.resource.id !== resolved.binding.resource.id) resolved = undefined;
+    }
     resolved ??= await resolveChannelBoard(channelId);
     if (!resolved.ok)
       return { ok: false, code: resolved.code, reason: resolved.reason, row: existing };
@@ -400,6 +450,11 @@ export async function syncBoardName(
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(`[kanban-boards] syncBoardName(${channelId}) failed: ${reason}`);
-    return { ok: false, code: "internal_error", reason, row: null };
+    return {
+      ok: false,
+      code: err instanceof EventCarrierError ? err.code : "internal_error",
+      reason,
+      row: null,
+    };
   }
 }

@@ -23,6 +23,8 @@
  * 테스트는 앞을 직접 부르고, 서버는 뒤의 프로세스 전역 인스턴스를 쓴다.
  */
 
+import { withChannelAutomationLock } from "@/lib/channel-automation-lock";
+import { EventCarrierError, recoverEventCarrierHandoff } from "@/lib/event-carrier-handoff";
 import { eq } from "drizzle-orm";
 import type { Server } from "socket.io";
 
@@ -381,7 +383,15 @@ async function pollBoardOnce(
  * 않는다(E6). 게이트·오너 클라이언트는 채널당 한 번만 만든다.
  */
 export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Promise<PollOutcome> {
+  return withChannelAutomationLock(channelId, () => pollChannelOnceUnlocked(channelId, deps));
+}
+
+async function pollChannelOnceUnlocked(
+  channelId: string,
+  deps: PollOnceDeps,
+): Promise<PollOutcome> {
   try {
+    await recoverEventCarrierHandoff(channelId);
     const resolved = await deps.resolveBoard(channelId);
     if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
     const gatewayId = resolved.binding.resource.id;
@@ -454,7 +464,11 @@ export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Pr
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(`[automation-poller] ${channelId} poll failed: ${reason}`);
-    return { ok: false, code: "internal_error", reason };
+    return {
+      ok: false,
+      code: err instanceof EventCarrierError ? err.code : "internal_error",
+      reason,
+    };
   }
 }
 
