@@ -1,3 +1,4 @@
+import type { WorkerPluginCreateResult } from "./deskrpg-plugin-types";
 /**
  * 프로필 프로비저닝 — 플러그인이 발급한 키를 **서버에서만** 다룬다.
  *
@@ -13,12 +14,30 @@
 
 import type { CreateProfilePayload } from "./plugin-client";
 
-export type SafeCreateResult = { name: string; keyIssued: boolean; keyError?: string };
+export type SafeCreateResult = {
+  name: string;
+  keyIssued: boolean;
+  keyError?: string;
+  /** 워커 플러그인 적용 결과 — 비밀값이 없어 그대로 내보낸다(채용 완료 화면이 옵트인 안내에 쓴다). */
+  workerPlugin?: WorkerPluginCreateResult;
+};
 
 /** 브라우저로 내보내도 되는 형태. `apiKey` 는 절대 포함하지 않는다. */
 export function stripApiKey(payload: CreateProfilePayload): SafeCreateResult {
   const out: SafeCreateResult = { name: payload.name, keyIssued: payload.keyIssued };
   if (payload.keyError !== undefined) out.keyError = payload.keyError;
+  const wp = payload.workerPlugin;
+  if (wp && typeof wp === "object") {
+    if ("skipped" in wp && wp.skipped === "propagation_disabled")
+      out.workerPlugin = { skipped: wp.skipped };
+    else if ("error" in wp && typeof wp.error === "string") out.workerPlugin = { error: wp.error };
+    else if ("profile" in wp && typeof wp.profile === "string")
+      out.workerPlugin = {
+        profile: wp.profile,
+        link: String(wp.link),
+        enabled: String(wp.enabled),
+      };
+  }
   return out;
 }
 

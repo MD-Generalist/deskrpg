@@ -25,6 +25,7 @@ import {
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
 import { supportsProfileClone } from "@/lib/hermes/plugin-capability";
 import { workerPluginWarning, type WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
+import type { WorkerPropagation } from "@/lib/hermes/deskrpg-plugin-types";
 
 type GatewayShareRow = typeof gatewayShares.$inferSelect;
 
@@ -233,6 +234,9 @@ export async function listAccessibleGatewayResources(userId: string) {
       supportsProfileClone: supportsProfileClone(restorePluginInfo(resource.pluginInfoJson)),
       // 칸반·크론 결과물이 쌓이지 않는 직원. 고치는 것도 소유자만 하므로 소유자에게만 알린다.
       workerPluginWarning: workerPluginWarning(restorePluginInfo(resource.pluginInfoJson)),
+      // 0.16.0 워커 전파 옵트인 상태. 빠진 직원이 없어도 "꺼져 있음" 을 알리려고 따로 싣는다(옛 플러그인은 null).
+      workerPropagation: (restorePluginInfo(resource.pluginInfoJson)?.worker_plugin?.propagation ??
+        null) as WorkerPropagation | null,
       canEditCredentials: true,
       shareRole: null as string | null,
       isOwner: true,
@@ -252,6 +256,7 @@ export async function listAccessibleGatewayResources(userId: string) {
         pluginCheckedAt: resource.pluginCheckedAt,
         dashboardUrl: null as string | null,
         workerPluginWarning: null as WorkerPluginWarning | null,
+        workerPropagation: null as WorkerPropagation | null,
         canEditCredentials: false,
         shareRole: share?.role ?? null,
         isOwner: false,

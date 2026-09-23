@@ -4,6 +4,22 @@ import { describe, it } from "node:test";
 import { attachKeyStorage, stripApiKey } from "./plugin-provision";
 
 describe("stripApiKey", () => {
+  it("워커 플러그인 결과는 알려진 모양만 옮긴다(0.16.0 건너뜀 포함)", () => {
+    const skipped = stripApiKey({
+      name: "noah",
+      keyIssued: true,
+      workerPlugin: { skipped: "propagation_disabled" },
+    });
+    assert.deepEqual(skipped.workerPlugin, { skipped: "propagation_disabled" });
+    const applied = stripApiKey({
+      name: "noah",
+      keyIssued: true,
+      workerPlugin: { profile: "noah", link: "linked", enabled: "added" },
+    });
+    assert.deepEqual(applied.workerPlugin, { profile: "noah", link: "linked", enabled: "added" });
+    assert.equal(stripApiKey({ name: "noah", keyIssued: true }).workerPlugin, undefined);
+  });
+
   it("apiKey 를 응답에서 제거한다", () => {
     // 이 값은 게이트웨이의 한 프로필을 여는 자격증명이다. 브라우저에 닿으면
     // 그 순간부터 우리가 통제할 수 없는 곳(콘솔·확장·에러 리포터)에 남는다.

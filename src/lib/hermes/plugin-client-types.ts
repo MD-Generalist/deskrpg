@@ -1,7 +1,12 @@
 import type { WorkerPluginResult } from "./worker-plugin";
 /** Pure plugin contracts shared by server clients and browser components. */
 import type { PluginFailure } from "./plugin-errors";
-import type { ArtifactDetail, ArtifactPage, ArtifactVersion } from "./deskrpg-plugin-types";
+import type {
+  ArtifactDetail,
+  ArtifactPage,
+  ArtifactVersion,
+  WorkerPluginCreateResult,
+} from "./deskrpg-plugin-types";
 
 export type PluginResponse<T> =
   { ok: true; data: T } | { ok: false; failure: PluginFailure; status: number };
@@ -51,6 +56,8 @@ export type CreateProfilePayload = {
   cloned?: { configKeys: string[]; envKeys: string[]; keyScope: CloneKeyScope };
   needsLogin?: string[];
   cloneError?: string;
+  /** 0.12.0+ 워커 플러그인 적용 결과, 0.16.0 은 옵트인이 꺼져 있으면 `{ skipped }`. */
+  workerPlugin?: WorkerPluginCreateResult;
 };
 
 // ---------------------------------------------------------------------------
