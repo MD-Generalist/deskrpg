@@ -256,6 +256,7 @@ const channelKanbanBoards = sqliteTable(
     isEventCarrier: integer("is_event_carrier", { mode: "boolean" }).notNull().default(false),
     boardNameSyncedAt: text("board_name_synced_at"),
     eventCursor: text("event_cursor"),
+    eventCarrierHandoffJson: text("event_carrier_handoff_json"),
     lastPolledAt: text("last_polled_at"),
     lastError: text("last_error"),
     createdAt: text("created_at").$defaultFn(isoNow).notNull(),
@@ -268,6 +269,9 @@ const channelKanbanBoards = sqliteTable(
     uniqueIndex("channel_kanban_boards_carrier_idx")
       .on(table.channelId)
       .where(sql`${table.isEventCarrier}`),
+    uniqueIndex("channel_kanban_boards_handoff_idx")
+      .on(table.channelId)
+      .where(sql`${table.eventCarrierHandoffJson} IS NOT NULL`),
   ],
 );
 

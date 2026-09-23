@@ -347,6 +347,7 @@ test("폴링 실패는 삼키고 last_error 에 남긴다; 다음 성공이 지�
         ownerClient: {
           ...real.ownerClient,
           events: {
+            ...real.ownerClient.events,
             poll: async () => ({
               ok: false as const,
               status: 0,
@@ -1064,4 +1065,137 @@ test("보드 조회가 실패한 바퀴는 끝난 것으로 표시하지 않는�
     after,
     "성공한 뒤에도 매 바퀴 보드를 조회합니다",
   );
+});
+
+for (const status of ["completed", "cancelled"] as const) {
+  test(`수신 보드 ${status} 인계 첫 폴링은 제안·아티팩트·크론과 대상 칸반·삭제를 보존한다`, async () => {
+    const plugin = await startPlugin();
+    const { channel } = await seedBoundChannel(plugin);
+    const second = await addBoard(channel.id);
+    const { pollChannelOnce } = await import("./automation-poller");
+    const { listChannelBoards } = await import("@/lib/kanban-boards");
+    const { ensureProjectRow, archiveChannelProject } = await import("@/lib/project-registry");
+    const base = await makeDeps();
+    const ids: string[] = [];
+    const h = await makeDeps({
+      pageLimit: 1,
+      ingest: async (id, events, deps) => {
+        ids.push(...events.map((e) => e.id));
+        return base.deps.ingest(id, events, deps);
+      },
+    });
+    // 옛 보드의 k/d가 더 앞선 상태로 시작해야, k/d까지 잘못 인계하는 회귀가 드러난다.
+    for (let n = 0; n < 2; n++)
+      plugin.pushEvent({
+        kind: "task.status",
+        board: slugOf(channel.id),
+        task_id: `old-${n}`,
+        payload: { to: "done" },
+      });
+    plugin.pushEvent({
+      kind: "task.deleted",
+      board: slugOf(channel.id),
+      task_id: "old-deleted",
+      payload: {},
+    });
+    assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+    const source = (await listChannelBoards(channel.id)).find((r) => r.isEventCarrier)!;
+    const project = await ensureProjectRow(source);
+    const events = [
+      plugin.pushEvent({
+        kind: "card_proposal.created",
+        profile: "sophie",
+        payload: {
+          proposal_id: "0123456789abcdef0123456789abcdef",
+          title: "인계 전 제안",
+          profile: "sophie",
+        },
+      }),
+      plugin.pushEvent({
+        kind: "artifact.created",
+        profile: "sophie",
+        payload: {
+          artifact_id: "artifact-handoff",
+          title: "보고서",
+          kind: "document",
+          version: 1,
+          profile: "sophie",
+        },
+      }),
+      plugin.pushEvent({
+        kind: "cron.run.finished",
+        profile: "sophie",
+        job_id: "job-handoff",
+        payload: { profile: "sophie", job_id: "job-handoff", status: "ok", result_text: "끝" },
+      }),
+      plugin.pushEvent({
+        kind: "task.status",
+        board: second,
+        task_id: "task-handoff",
+        payload: {
+          from: "running",
+          to: "done",
+          parent_count: 0,
+          title: "인계 카드",
+          assignee: "sophie",
+        },
+      }),
+      plugin.pushEvent({
+        kind: "task.deleted",
+        board: second,
+        task_id: "deleted-handoff",
+        payload: { title: "삭제됨" },
+      }),
+    ];
+    const result = await archiveChannelProject(channel.id, project.id, status);
+    assert.equal(result.carrierMovedTo, second);
+    assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+    for (const event of events)
+      assert.equal(ids.filter((id) => id === event.id).length, 1, `${event.kind} 누락/중복`);
+    assert.equal(h.roomEmits.filter((e) => e.message.notice?.kind === "card_proposal").length, 1);
+    assert.equal(h.roomEmits.filter((e) => e.message.notice?.kind === "card_done").length, 1);
+    assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+    assert.equal(ids.length, events.length, "다음 바퀴에 인계 사건을 재소비하지 않는다");
+  });
+}
+
+test("새 수신 후보가 먼저 전역 사건을 읽었어도 옛 carrier 위치에서 인계한다", async () => {
+  const plugin = await startPlugin();
+  const { channel } = await seedBoundChannel(plugin);
+  const second = await addBoard(channel.id);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const { listChannelBoards, resolveChannelBoard } = await import("@/lib/kanban-boards");
+  const rows = await listChannelBoards(channel.id);
+  const source = rows.find((r) => r.isEventCarrier)!;
+  const target = rows.find((r) => r.boardSlug === second)!;
+  const resolved = await resolveChannelBoard(channel.id);
+  assert.ok(resolved.ok);
+  // a가 있는 후보 커서에서 전역 사건을 읽고 버린 상황. 대상 k/d를 섞으면 아래 카드도 사라진다.
+  const primed = await resolved.ownerClient.events.poll({
+    board: second,
+    include: "artifacts,card_proposals",
+  });
+  assert.ok(primed.ok);
+  plugin.pushEvent({
+    kind: "card_proposal.created",
+    profile: "sophie",
+    payload: {
+      proposal_id: "0123456789abcdef0123456789abcdef",
+      title: "앞서 읽은 제안",
+      profile: "sophie",
+    },
+  });
+  const ahead = await resolved.ownerClient.events.poll({
+    board: second,
+    cursor: primed.data.cursor,
+    include: "artifacts,card_proposals",
+  });
+  assert.ok(ahead.ok);
+  await h.deps.saveRow(target.id, { eventCursor: ahead.data.cursor, lastError: null });
+  const { ensureProjectRow, archiveChannelProject } = await import("@/lib/project-registry");
+  await archiveChannelProject(channel.id, (await ensureProjectRow(source)).id, "completed");
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.equal(h.roomEmits.filter((e) => e.message.notice?.kind === "card_proposal").length, 1);
 });

@@ -1,3 +1,7 @@
+/** 키를 그대로 두는 저장에서 쓴다 — 주소만으로 내 게이트웨이를 찾는다. */
+
+import { withChannelAutomationLock } from "./channel-automation-lock";
+import { recoverEventCarrierHandoff } from "./event-carrier-handoff";
 import crypto from "node:crypto";
 
 import { and, count, eq, inArray } from "drizzle-orm";
@@ -87,7 +91,6 @@ function buildDefaultGatewayDisplayName(baseUrl: string) {
   }
 }
 
-/** 키를 그대로 두는 저장에서 쓴다 — 주소만으로 내 게이트웨이를 찾는다. */
 async function findOwnedGatewayByBaseUrl(ownerUserId: string, baseUrl: string) {
   const [row] = await db
     .select()
@@ -423,7 +426,16 @@ export async function getChannelGatewayBinding(channelId: string) {
   };
 }
 
-export async function bindGatewayToChannel(input: {
+export async function bindGatewayToChannel(
+  ...args: Parameters<typeof bindGatewayToChannelUnlocked>
+) {
+  return withChannelAutomationLock(args[0].channelId, async () => {
+    await recoverEventCarrierHandoff(args[0].channelId);
+    return bindGatewayToChannelUnlocked(...args);
+  });
+}
+
+async function bindGatewayToChannelUnlocked(input: {
   channelId: string;
   gatewayId: string;
   boundByUserId: string;
@@ -478,7 +490,16 @@ async function ensureChannelBoardAfterBind(channelId: string) {
   }
 }
 
-export async function unbindGatewayFromChannel(channelId: string) {
+export async function unbindGatewayFromChannel(
+  ...args: Parameters<typeof unbindGatewayFromChannelUnlocked>
+) {
+  return withChannelAutomationLock(args[0], async () => {
+    await recoverEventCarrierHandoff(args[0]);
+    return unbindGatewayFromChannelUnlocked(...args);
+  });
+}
+
+async function unbindGatewayFromChannelUnlocked(channelId: string) {
   const existing = await getChannelGatewayBinding(channelId);
   if (!existing) return null;
   await db.delete(channelGatewayBindings).where(eq(channelGatewayBindings.id, existing.binding.id));

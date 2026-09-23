@@ -1,5 +1,18 @@
 // Japanese translations
 const ja: Record<string, string> = {
+  "errors.event_cursor_handoff_required":
+    "通知を引き継ぐにはゲートウェイプラグインを更新してください。",
+  "errors.event_carrier_handoff_pending":
+    "プロジェクトの保管処理を復旧中です。しばらくしてから確認してください。",
+  "errors.event_carrier_handoff_conflict":
+    "通知の引き継ぎ記録が現在の接続と一致しません。管理者に確認してください。",
+  "errors.event_carrier_origin_unknown":
+    "以前の通知受信位置を確認できません。管理者に確認してください。",
+  "errors.carrier_cursor_incomplete":
+    "以前の受信記録に提案・成果物の位置がありません。管理者に確認してください。",
+  "errors.invalid_handoff_cursor":
+    "通知の引き継ぎカーソルを読み取れません。現在の受信位置を維持します。",
+
   "meeting.entryWalking": "会議室へ移動中…",
   "meeting.entryFailed": "会議: {reason}",
   "meeting.joining": "参加を確認中…",

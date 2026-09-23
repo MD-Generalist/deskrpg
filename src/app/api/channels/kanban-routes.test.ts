@@ -949,6 +949,7 @@ test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중
     "kanban_views",
     "initial_status",
     "kanban_review_policy_v1",
+    "event_cursor_handoff",
   ]);
   assert.equal(body.timezone, "Asia/Seoul");
   assert.equal(body.boardSlug, seed.boardSlug);

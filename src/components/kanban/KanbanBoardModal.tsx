@@ -1,4 +1,6 @@
 "use client";
+
+import { getLocalizedMessage } from "@/lib/i18n/error-codes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, KanbanSquare, Plus, RefreshCw, Settings, X } from "lucide-react";
 
@@ -717,7 +719,7 @@ export default function KanbanBoardModal({
   if (status?.lastError) {
     banners.push({
       key: "lastError",
-      text: t("kanban.warning.lastError", { error: status.lastError }),
+      text: t("kanban.warning.lastError", { error: getLocalizedMessage(t, status.lastError) }),
       tone: "error",
     });
   }

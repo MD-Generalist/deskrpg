@@ -1647,3 +1647,19 @@ test("보호 카드의 사람 판단 화면은 AI 검토 의견 대신 승인 �
     await f.cleanup();
   }
 });
+
+test("인계 복구 오류 배너는 오류 코드 대신 설명을 보여준다", async () => {
+  const f = await mount((url) => {
+    if (url.includes("/automation/status"))
+      return json(status({ lastError: "event_carrier_handoff_pending" }));
+    return json(board());
+  });
+  try {
+    assert.match(
+      f.host.querySelector('[data-banner="lastError"]')?.textContent ?? "",
+      /자동 복구 후/,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});

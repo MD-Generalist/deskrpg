@@ -1,6 +1,12 @@
 export type ErrorCode =
   | "review_policy_required"
   | "swarm_review_policy_unsupported"
+  | "event_cursor_handoff_required"
+  | "event_carrier_handoff_pending"
+  | "event_carrier_handoff_conflict"
+  | "event_carrier_origin_unknown"
+  | "carrier_cursor_incomplete"
+  | "invalid_handoff_cursor"
   | "setup_invalid_request"
   | "invalid_credentials"
   | "login_id_password_required"
@@ -219,6 +225,13 @@ export type ErrorCode =
 export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   review_policy_required: "kanban.review.unsupported",
   swarm_review_policy_unsupported: "kanban.review.swarmUnsupported",
+  event_cursor_handoff_required: "errors.event_cursor_handoff_required",
+  event_carrier_handoff_pending: "errors.event_carrier_handoff_pending",
+  event_carrier_handoff_conflict: "errors.event_carrier_handoff_conflict",
+  event_carrier_origin_unknown: "errors.event_carrier_origin_unknown",
+  carrier_cursor_incomplete: "errors.carrier_cursor_incomplete",
+  invalid_handoff_cursor: "errors.invalid_handoff_cursor",
+
   invalid_credentials: "errors.invalidCredentials",
   login_id_password_required: "errors.loginIdPasswordRequired",
   login_id_nickname_password_required: "errors.loginIdNicknamePasswordRequired",

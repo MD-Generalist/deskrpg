@@ -1,5 +1,12 @@
 // Chinese (Simplified) translations
 const zh: Record<string, string> = {
+  "errors.event_cursor_handoff_required": "请更新网关插件以转移通知接收。",
+  "errors.event_carrier_handoff_pending": "正在恢复项目归档操作，请稍后再检查。",
+  "errors.event_carrier_handoff_conflict": "通知转移记录与当前连接不符，请联系管理员检查。",
+  "errors.event_carrier_origin_unknown": "无法确定之前的通知接收位置，请联系管理员检查。",
+  "errors.carrier_cursor_incomplete": "之前的接收记录缺少提案或成果位置，请联系管理员检查。",
+  "errors.invalid_handoff_cursor": "无法读取通知转移游标，将保留现有接收位置。",
+
   "meeting.entryWalking": "正在前往会议室…",
   "meeting.entryFailed": "会议：{reason}",
   "meeting.joining": "正在确认加入…",

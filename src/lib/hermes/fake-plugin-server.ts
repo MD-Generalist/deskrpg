@@ -105,6 +105,8 @@ export type FakePluginServer = {
    * resolve·unresolve 를 부르면 404 다.
    */
   seedCardProposal(proposalId: string): void;
+  /** Upgrade test: remove the artifact position from a valid old carrier cursor. */
+  legacyCursor(cursor: string): string;
   /** 그 제안의 지금 상태 — 테스트가 "한 번만 해소됐는가" 를 본다. 없으면 null. */
   cardProposal(
     proposalId: string,
@@ -206,12 +208,14 @@ export async function startFakePluginServer(
       "kanban_views",
       "initial_status",
       "kanban_review_policy_v1",
+      "event_cursor_handoff",
     ],
     timezone: "Asia/Seoul",
     kanban: { dispatcher_present: true, attachments: true },
     dashboard_url: null,
     ...options.info,
   };
+  const initialInfo = { ...info, capabilities: [...info.capabilities] };
 
   const recorded: RecordedRequest[] = [];
   /** 남은 일회성 장애 주입(경로 접두사 → 남은 실패 횟수). */
@@ -219,7 +223,8 @@ export async function startFakePluginServer(
   let boards = new Map<string, BoardRecord>();
   let currentBoard: string | null = null;
   let events: PluginEvent[] = [];
-  let cursors = new Set<string>();
+  type EventCursor = { k: number; d: number; c: number; a?: number };
+  let cursors = new Map<string, EventCursor>();
   let orchestration: OrchestrationSettings = defaultOrchestration(profileNames);
   let cron = new Map<string, CronState>();
   let artifacts = new Map<string, ArtifactRecord>();
@@ -229,10 +234,11 @@ export async function startFakePluginServer(
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
 
   function reset() {
+    info = { ...initialInfo, capabilities: [...initialInfo.capabilities] };
     boards = new Map();
     currentBoard = null;
     events = [];
-    cursors = new Set();
+    cursors = new Map();
     orchestration = defaultOrchestration(profileNames);
     cron = new Map();
     artifacts = new Map();
@@ -258,10 +264,58 @@ export async function startFakePluginServer(
     return event;
   }
 
-  function issueCursor(index: number): string {
-    const token = `c${index}`;
-    cursors.add(token);
+  function issueCursor(position: EventCursor): string {
+    // Like the plugin token, this encodes state, so a reset followed by a new
+    // source position cannot accidentally reuse the previous cursor string.
+    const token = `v1.${Buffer.from(JSON.stringify(position)).toString("base64url")}`;
+    cursors.set(token, { ...position });
     return token;
+  }
+
+  function legacyCursor(cursor: string): string {
+    const state = cursors.get(cursor);
+    if (!state) throw new Error("unknown test cursor");
+    const { a: _a, ...old } = state;
+    return issueCursor(old);
+  }
+
+  function lane(event: PluginEvent): keyof EventCursor {
+    if (event.kind === "task.deleted") return "d";
+    if (event.kind.startsWith("task.")) return "k";
+    if (event.kind.startsWith("cron.")) return "c";
+    return "a";
+  }
+
+  function positionNow(board?: string): EventCursor {
+    const p: EventCursor = { k: 0, d: 0, c: 0, a: 0 };
+    for (const event of events) {
+      const source = lane(event);
+      if ((source === "k" || source === "d") && board !== undefined && event.board !== board)
+        continue;
+      p[source] = (p[source] ?? 0) + 1;
+    }
+    return p;
+  }
+
+  function handoffEvents(body: Record<string, unknown>): Reply {
+    if (
+      Object.keys(body).some((key) => !["board", "board_cursor", "carrier_cursor"].includes(key)) ||
+      typeof body.board !== "string" ||
+      !SLUG_RE.test(body.board) ||
+      !(body.board_cursor === null || typeof body.board_cursor === "string") ||
+      typeof body.carrier_cursor !== "string"
+    )
+      throw badRequest("invalid_field");
+    if (!boards.has(body.board)) throw notFound("board_not_found");
+    const carrier = cursors.get(body.carrier_cursor);
+    const target =
+      body.board_cursor === null ? positionNow(body.board) : cursors.get(body.board_cursor);
+    if (!carrier || !target) throw badRequest("invalid_handoff_cursor");
+    if (carrier.a === undefined) throw new HttpError(409, { error: "carrier_cursor_incomplete" });
+    return {
+      status: 200,
+      body: { cursor: issueCursor({ k: target.k, d: target.d, c: carrier.c, a: carrier.a }) },
+    };
   }
 
   function pollEvents(params: URLSearchParams): Reply {
@@ -271,32 +325,50 @@ export async function startFakePluginServer(
     const limit = limitRaw ? Number(limitRaw) : DEFAULT_EVENT_LIMIT;
     if (!Number.isInteger(limit) || limit < 1) throw badRequest("invalid_limit");
 
+    const include = new Set((params.get("include") ?? "").split(",").filter(Boolean));
     // 커서가 없으면 "지금" 토큰만 준다 — 과거 이벤트를 쏟지 않는다.
     if (cursor === null) {
+      const initial = positionNow(board);
+      if (!include.has("artifacts") && !include.has("card_proposals")) delete initial.a;
       return {
         status: 200,
-        body: { events: [], cursor: issueCursor(events.length), has_more: false },
+        body: { events: [], cursor: issueCursor(initial), has_more: false },
       };
     }
-    if (!cursors.has(cursor)) throw badRequest("unknown_cursor");
-    const start = Number(cursor.slice(1));
-
-    // 보드 필터: 그 보드의 이벤트와 보드가 없는 전역 이벤트(크론)를 통과시킨다.
-    const matches = (e: PluginEvent) =>
-      board === undefined || e.board === undefined || e.board === board;
+    const saved = cursors.get(cursor);
+    if (!saved) throw badRequest("unknown_cursor");
+    const state: EventCursor = { ...saved };
+    // Legacy tokens gain an artifact position at now on first include (old plugin behavior).
+    if (state.a === undefined && (include.has("artifacts") || include.has("card_proposals"))) {
+      state.a = positionNow().a;
+    }
     const page: PluginEvent[] = [];
-    let index = start;
+    const seen: EventCursor = { k: 0, d: 0, c: 0, a: 0 };
     let hasMore = false;
-    for (; index < events.length; index += 1) {
-      const e = events[index];
-      if (!matches(e)) continue;
+    for (const e of events) {
+      const source = lane(e);
+      if ((source === "k" || source === "d") && board !== undefined && e.board !== board) continue;
+      seen[source] = (seen[source] ?? 0) + 1;
+      if (seen[source]! <= (state[source] ?? 0)) continue;
+      if (source === "a" && !include.has("artifacts") && !include.has("card_proposals")) continue;
+      if (source === "a" && e.kind.startsWith("artifact.") && !include.has("artifacts")) continue;
+      if (source === "a" && e.kind.startsWith("card_proposal.") && !include.has("card_proposals"))
+        continue;
       if (page.length === limit) {
         hasMore = true;
         break;
       }
       page.push(e);
+      state[source] = seen[source];
     }
-    return { status: 200, body: { events: page, cursor: issueCursor(index), has_more: hasMore } };
+    // Each source records what was scanned, including events from another board.
+    if (!hasMore) {
+      state.k = seen.k;
+      state.d = seen.d;
+      state.c = seen.c;
+      if (include.has("artifacts") || include.has("card_proposals")) state.a = seen.a;
+    }
+    return { status: 200, body: { events: page, cursor: issueCursor(state), has_more: hasMore } };
   }
 
   // ---- 칸반 ---------------------------------------------------------------
@@ -1394,6 +1466,12 @@ export async function startFakePluginServer(
 
     if (method === "GET" && pathname === "/deskrpg/info") return { status: 200, body: info };
 
+    if (pathname === "/deskrpg/events/handoff") {
+      if (method !== "POST" || !info.capabilities?.includes("event_cursor_handoff"))
+        throw notFound();
+      return handoffEvents(body);
+    }
+
     if (pathname === "/deskrpg/events") {
       if (method !== "GET") throw notFound();
       return pollEvents(params);
@@ -1710,6 +1788,7 @@ export async function startFakePluginServer(
     lastRequest: () => recorded[recorded.length - 1] ?? null,
     requests: () => [...recorded],
     pushEvent,
+    legacyCursor,
     setTaskLog: (slug, taskId, content) => {
       const board = boards.get(slug);
       if (!board) throw new Error(`unknown board: ${slug}`);

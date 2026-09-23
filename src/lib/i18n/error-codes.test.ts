@@ -467,3 +467,19 @@ test("no locale defines the same key twice", () => {
   }
   assert.deepEqual(dupes, [], `중복 키는 뒤엣것이 이깁니다:\n  ${dupes.join("\n  ")}`);
 });
+
+test("인계 오류는 네 로케일에서 사용자 문장으로 해석된다", () => {
+  const codes = [
+    "event_cursor_handoff_required",
+    "event_carrier_handoff_pending",
+    "event_carrier_handoff_conflict",
+    "event_carrier_origin_unknown",
+    "carrier_cursor_incomplete",
+    "invalid_handoff_cursor",
+  ];
+  for (const code of codes) {
+    const key = ERROR_MESSAGE_KEYS[code as ErrorCode];
+    assert.ok(key, code);
+    for (const locale of [ko, en, ja, zh]) assert.ok(locale[key], `${code}: ${key}`);
+  }
+});

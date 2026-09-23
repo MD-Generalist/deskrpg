@@ -1,5 +1,18 @@
 // Korean translations
 const ko: Record<string, string> = {
+  "errors.event_cursor_handoff_required":
+    "알림을 이어받으려면 게이트웨이 플러그인을 업데이트해야 합니다.",
+  "errors.event_carrier_handoff_pending":
+    "프로젝트 보관을 마무리하는 중입니다. 자동 복구 후 다시 확인해 주세요.",
+  "errors.event_carrier_handoff_conflict":
+    "알림 인계 기록이 현재 연결과 맞지 않습니다. 관리자 확인이 필요합니다.",
+  "errors.event_carrier_origin_unknown":
+    "이전 알림 수신 위치를 확인할 수 없습니다. 관리자 확인이 필요합니다.",
+  "errors.carrier_cursor_incomplete":
+    "이전 수신 기록에 제안·아티팩트 위치가 없습니다. 관리자 확인이 필요합니다.",
+  "errors.invalid_handoff_cursor":
+    "알림 인계 커서를 읽을 수 없습니다. 기존 수신 위치를 유지합니다.",
+
   "meeting.entryWalking": "회의실로 이동 중…",
   "meeting.entryFailed": "회의: {reason}",
   "meeting.joining": "참가 확인 중…",

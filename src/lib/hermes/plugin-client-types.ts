@@ -370,6 +370,12 @@ export type KanbanApi = {
 };
 
 export type EventsApi = {
+  /** 새 수신 보드의 k/d와 이전 수신 보드의 c/a를 서버에서 합성한다. */
+  handoff(body: {
+    board: string;
+    board_cursor: string | null;
+    carrier_cursor: string;
+  }): Promise<PluginResponse<{ cursor: string }>>;
   /**
    * 커서 없이 부르면 이벤트 없이 "지금" 토큰만 돌아온다 — 그 토큰으로 다음 호출부터
    * 새 이벤트를 받는다. 모르는 커서는 400 `unknown_cursor` 로 접힌다.

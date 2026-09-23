@@ -395,7 +395,7 @@ test("사건 수신 보드를 보관하면 그 자리가 다른 보드로 옮겨
   assert.equal(rows.find((r) => r.isEventCarrier)?.boardSlug, secondSlug);
 });
 
-test("사건 수신 자리를 옮겨도 그 보드의 커서는 살려 둔다", async () => {
+test("사건 수신 자리를 옮겨도 대상 보드의 미수신 카드 사건을 받는다", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const created = await routes.projects.POST(
@@ -404,33 +404,48 @@ test("사건 수신 자리를 옮겨도 그 보드의 커서는 살려 둔다", 
   );
   const secondSlug = ((await created.json()) as { project: ProjectView }).project.boardSlug;
 
-  // 둘째 보드가 이미 폴링해 온 위치를 흉내낸다.
+  // 대상 보드의 실제 첫 폴링 토큰을 저장한 뒤, 아직 받지 않은 카드 사건을 만든다.
   const { db, channelKanbanBoards } = await import("@/db");
   const { eq } = await import("drizzle-orm");
+  const { createOwnerPluginClient } = await import("@/lib/hermes/plugin-client");
   const { listChannelBoards } = await import("@/lib/kanban-boards");
+  const events = createOwnerPluginClient({
+    baseUrl: server.baseUrl,
+    ownerToken: OWNER_TOKEN,
+  }).events;
+  const first = await events.poll({ board: secondSlug });
+  assert.ok(first.ok);
+  const pending = server.pushEvent({
+    kind: "task.created",
+    board: secondSlug,
+    task_id: "pending-target-card",
+    payload: { title: "미수신 카드" },
+  });
   const second = (await listChannelBoards(seed.channelId)).find((r) => r.boardSlug === secondSlug);
   assert.ok(second);
   await db
     .update(channelKanbanBoards)
-    .set({ eventCursor: "CURSOR-SECOND" })
+    .set({ eventCursor: first.data.cursor })
     .where(eq(channelKanbanBoards.id, second.id));
 
   const carrier = (await listProjects(routes, seed.ownerId, seed.channelId)).find(
     (p) => p.isEventCarrier,
   );
   assert.ok(carrier);
-  await routes.archive.POST(
+  const archived = await routes.archive.POST(
     req(seed.ownerId, "POST", `${base(seed.channelId)}/${carrier.id}/archive`, {}),
     ctx(seed.channelId, carrier.id),
   );
+  assert.equal(archived.status, 200, await archived.clone().text());
 
   const promoted = (await listChannelBoards(seed.channelId)).find((r) => r.isEventCarrier);
   assert.equal(promoted?.boardSlug, secondSlug);
-  assert.equal(
-    promoted?.eventCursor,
-    "CURSOR-SECOND",
-    "승격하며 커서를 버리면 그 보드의 카드 사건을 한 구간 통째로 놓칩니다 — " +
-      "`a`(아티팩트)가 없는 커서는 플러그인이 '지금'으로 다루므로 버릴 이유가 없습니다",
+  assert.ok(promoted?.eventCursor);
+  const next = await events.poll({ board: secondSlug, cursor: promoted.eventCursor });
+  assert.ok(next.ok);
+  assert.deepEqual(
+    next.data.events.map((event) => event.id),
+    [pending.id],
   );
 });
 

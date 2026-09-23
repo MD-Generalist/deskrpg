@@ -1,0 +1,2 @@
+ALTER TABLE "channel_kanban_boards" ADD COLUMN IF NOT EXISTS "event_carrier_handoff_json" text;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "channel_kanban_boards_handoff_idx" ON "channel_kanban_boards" USING btree ("channel_id") WHERE "channel_kanban_boards"."event_carrier_handoff_json" IS NOT NULL;
