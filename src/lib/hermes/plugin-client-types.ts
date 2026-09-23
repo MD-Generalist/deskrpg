@@ -91,12 +91,153 @@ export type ToolProviderSelectResult = { provider: string; isSet: Record<string,
 
 export type ToolsetsPayload = { platform: string; toolsets: ToolsetRow[] };
 
+/** 0.15.0 NPC 스킬 관리 계약(플러그인 `profile_skill_admin`). */
+export type SkillSource = "local" | "hub" | "bundled" | "external";
+
 export type SkillRow = {
   name: string;
   category: string;
   description: string;
   disabled: boolean;
   essential: boolean;
+  /** 0.15.0+ — 없으면 옛 플러그인. */
+  source?: SkillSource;
+  curatorManaged?: boolean;
+  state?: "active" | "stale";
+  pinned?: boolean;
+  useCount?: number;
+  viewCount?: number;
+  lastUsedAt?: string | null;
+};
+
+export type SkillFileEntry = { path: string; size: number; editable: boolean };
+export type SkillDetail = {
+  skill: {
+    name: string;
+    source: SkillSource;
+    curatorManaged: boolean;
+    pinned: boolean;
+    frontmatter: Record<string, string>;
+  };
+  files: SkillFileEntry[];
+};
+export type SkillFile = { path: string; content: string; hash: string };
+export type ArchivedSkill = { name: string; archivedAt: string | null };
+export type HubSearchResult = {
+  identifier: string;
+  name: string;
+  description: string;
+  source: string;
+  trustLevel: string;
+};
+export type HubPreview = {
+  name: string;
+  identifier: string;
+  description: string;
+  source: string;
+  trustLevel: string;
+  skillMd: string;
+  files: string[];
+  hasScripts: boolean;
+  verdict: string;
+  policy: "allow" | "ask" | "block";
+  policyReason: string;
+};
+export type SkillJob = {
+  jobId: string;
+  kind: "hub_install" | "hub_update" | "curator_run";
+  state: "running" | "succeeded" | "failed";
+  exitCode: number | null;
+  outputTail: string;
+};
+export type CuratorStatus = {
+  enabled: boolean;
+  paused: boolean;
+  intervalHours: number | null;
+  lastRunAt: string | null;
+  minIdleHours: number | null;
+  staleAfterDays: number | null;
+  archiveAfterDays: number | null;
+};
+export type LearningNode = {
+  id: string;
+  label: string;
+  kind: "skill" | "memory";
+  timestamp?: number | null;
+  category?: string;
+};
+export type LearningGraph = {
+  nodes: LearningNode[];
+  edges: { source: string; target: string }[];
+  memory?: unknown[];
+  stats: Record<string, unknown>;
+};
+export type LearningNodeDetail = {
+  id: string;
+  kind: "skill" | "memory";
+  content: string;
+  hash: string;
+};
+
+export type SkillAdminApi = {
+  list(): Promise<PluginResponse<SkillsPayload>>;
+  detail(name: string): Promise<PluginResponse<SkillDetail>>;
+  readFile(name: string, path: string): Promise<PluginResponse<SkillFile>>;
+  writeFile(
+    name: string,
+    body: { path: string; content: string; baseHash: string | null },
+    actor: string,
+  ): Promise<PluginResponse<{ path: string; hash: string }>>;
+  create(
+    body: { name: string; category?: string; content: string },
+    actor: string,
+  ): Promise<PluginResponse<{ name: string }>>;
+  setEnabled(
+    name: string,
+    enabled: boolean,
+    actor: string,
+  ): Promise<PluginResponse<{ name: string; enabled: boolean }>>;
+  setEnabledBulk(
+    body: { enable: string[]; disable: string[] },
+    actor: string,
+  ): Promise<PluginResponse<{ disabled: string[] }>>;
+  setPinned(
+    name: string,
+    pinned: boolean,
+    actor: string,
+  ): Promise<PluginResponse<{ name: string; pinned: boolean }>>;
+  archive(name: string, actor: string): Promise<PluginResponse<{ name: string }>>;
+  listArchived(): Promise<PluginResponse<{ archived: ArchivedSkill[] }>>;
+  restore(name: string, actor: string): Promise<PluginResponse<{ name: string }>>;
+  purge(
+    name: string,
+    actor: string,
+  ): Promise<PluginResponse<{ name: string; ledgerId: string | null }>>;
+  hubSearch(
+    q: string,
+    source?: string,
+  ): Promise<PluginResponse<{ results: HubSearchResult[]; timedOut: string[] }>>;
+  hubPreview(identifier: string): Promise<PluginResponse<HubPreview>>;
+  hubInstall(
+    body: { identifier: string; force?: boolean },
+    actor: string,
+  ): Promise<PluginResponse<{ jobId: string }>>;
+  hubUninstall(name: string, actor: string): Promise<PluginResponse<{ jobId: string }>>;
+  hubUpdate(name: string | null, actor: string): Promise<PluginResponse<{ jobId: string }>>;
+  job(kind: "hub" | "curator", jobId: string): Promise<PluginResponse<SkillJob>>;
+  curator(): Promise<PluginResponse<CuratorStatus>>;
+  setCuratorPaused(paused: boolean, actor: string): Promise<PluginResponse<{ paused: boolean }>>;
+  runCurator(actor: string): Promise<PluginResponse<{ jobId: string }>>;
+  graph(includeMemory: boolean): Promise<PluginResponse<LearningGraph>>;
+  node(id: string): Promise<PluginResponse<LearningNodeDetail>>;
+  putNode(
+    body: { id: string; content: string; baseHash: string },
+    actor: string,
+  ): Promise<PluginResponse<{ id: string; hash: string }>>;
+  deleteNode(
+    body: { id: string; baseHash: string },
+    actor: string,
+  ): Promise<PluginResponse<{ id: string; kind: string; result: string }>>;
 };
 
 export type SkillsPayload = { skills: SkillRow[] };

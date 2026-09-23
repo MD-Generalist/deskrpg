@@ -675,3 +675,7 @@ export type ArtifactEventPayload = {
   task_id?: string | null;
   captured_via?: string;
 };
+
+/** 0.15.0 — NPC 스킬 관리(`/p/{profile}/deskrpg/skills|curator|learning/**`). */
+export const SKILL_ADMIN_MIN_VERSION = "0.15.0";
+export const SKILL_ADMIN_CAPABILITY = "profile_skill_admin";
