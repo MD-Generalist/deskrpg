@@ -19,6 +19,9 @@ import { describePluginVersion } from "@/lib/hermes/plugin-version-view";
 import { setupCopy, setupError, setupHostError, setupStep } from "@/components/gateway/setup-copy";
 import type { WorkerPropagation } from "@/lib/hermes/deskrpg-plugin-types";
 import type { WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
+import WorkerPropagationInheritedNotice, {
+  disableWorkerPropagationRequest,
+} from "./WorkerPropagationInheritedNotice";
 import WorkerPluginLine, { type WorkerPluginApplyResponse } from "./WorkerPluginLine";
 import { enableWorkerPropagationRequest } from "./worker-propagation-request";
 
@@ -82,6 +85,8 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
   const { locale } = useLocale();
   const [busyStep, setBusyStep] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState("");
+  // 갱신이 워커 전파를 켠 채로 이어받았으면 한 번 알린다(잡의 workerPropagationInherited).
+  const [inherited, setInherited] = useState(false);
   const view = describePluginVersion({
     installed: gateway.pluginVersion,
     pluginStatus: gateway.pluginStatus,
@@ -102,7 +107,10 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
         const job = body?.job;
         if (!res.ok || !job) throw body?.errorCode ?? "setup_failed";
         setBusyStep(job.steps?.at(-1) ?? null);
-        if (job.status === "succeeded") break;
+        if (job.status === "succeeded") {
+          setInherited(job.workerPropagationInherited === true);
+          break;
+        }
         if (job.status === "failed" || job.status === "cancelled")
           throw job.error ?? "setup_failed";
       }
@@ -122,31 +130,41 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
         : "text-text-muted";
 
   return (
-    <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-      <span>
-        {t("gateways.pluginVersion")}:{" "}
-        <span className={`font-semibold ${tone}`} data-plugin-version={view.state}>
-          {view.installed ?? t("gateways.pluginVersionUnknown")}
+    <>
+      <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+        <span>
+          {t("gateways.pluginVersion")}:{" "}
+          <span className={`font-semibold ${tone}`} data-plugin-version={view.state}>
+            {view.installed ?? t("gateways.pluginVersionUnknown")}
+          </span>
         </span>
-      </span>
-      <span className="text-text-dim">·</span>
-      <span>
-        {t("gateways.pluginVersionPinned")}: {view.pinned}
-      </span>
-      {view.state === "outdated" && <span>— {t("gateways.pluginVersionOutdated")}</span>}
-      {view.state === "unknown" && <span>— {t("gateways.pluginVersionRecheck")}</span>}
-      {view.state === "outdated" && gateway.isOwner && (
-        <button
-          type="button"
-          onClick={() => void runUpdate()}
-          disabled={busyStep !== null}
-          className="rounded-md bg-surface-raised px-2 py-0.5 text-[11px] font-medium hover:brightness-110 disabled:opacity-60"
-        >
-          {busyStep ? setupStep(setupCopy[locale], busyStep) : t("gateways.pluginVersionUpdateNow")}
-        </button>
+        <span className="text-text-dim">·</span>
+        <span>
+          {t("gateways.pluginVersionPinned")}: {view.pinned}
+        </span>
+        {view.state === "outdated" && <span>— {t("gateways.pluginVersionOutdated")}</span>}
+        {view.state === "unknown" && <span>— {t("gateways.pluginVersionRecheck")}</span>}
+        {view.state === "outdated" && gateway.isOwner && (
+          <button
+            type="button"
+            onClick={() => void runUpdate()}
+            disabled={busyStep !== null}
+            className="rounded-md bg-surface-raised px-2 py-0.5 text-[11px] font-medium hover:brightness-110 disabled:opacity-60"
+          >
+            {busyStep
+              ? setupStep(setupCopy[locale], busyStep)
+              : t("gateways.pluginVersionUpdateNow")}
+          </button>
+        )}
+        {updateError && <span className="text-danger">{updateError}</span>}
+      </p>
+      {inherited && (
+        <WorkerPropagationInheritedNotice
+          turnOff={() => disableWorkerPropagationRequest(gateway.id)}
+          onChanged={onUpdated}
+        />
       )}
-      {updateError && <span className="text-danger">{updateError}</span>}
-    </p>
+    </>
   );
 }
 
