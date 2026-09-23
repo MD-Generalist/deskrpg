@@ -5,7 +5,7 @@
  * 렌더 중 파생하므로(`tabFor`), 한 프레임 동안 옛 직원의 탭이 보이는 일이 없다.
  */
 
-export type NpcPanelTab = "chat" | "cron" | "cards";
+export type NpcPanelTab = "chat" | "cron" | "cards" | "skills";
 
 export type NpcTabState = { npcId: string | null; tab: NpcPanelTab };
 

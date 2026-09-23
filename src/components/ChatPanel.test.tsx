@@ -644,9 +644,9 @@ async function withStubbedFetch<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-test("탭이 셋이다", async () => {
+test("탭이 넷이다(대화·크론·카드·스킬)", async () => {
   const el = await mount(cardsPanel());
-  assert.equal(el.querySelectorAll('[data-testid="npc-dialog-tabs"] [role="tab"]').length, 3);
+  assert.equal(el.querySelectorAll('[data-testid="npc-dialog-tabs"] [role="tab"]').length, 4);
 });
 
 test("미확인 개수가 배지로 보이고 0 이면 배지가 없다", async () => {

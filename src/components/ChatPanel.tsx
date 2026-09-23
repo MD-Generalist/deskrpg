@@ -28,6 +28,7 @@ import { ConversationSessionStore } from "@/app/game/conversation-session";
 import CronPanel, { type CronEventSource } from "./cron/CronPanel";
 import RoomNoticeMessage from "./chat/RoomNoticeMessage";
 import NpcCardsTab from "./chat/NpcCardsTab";
+import NpcSkillsTab from "./skills/NpcSkillsTab";
 import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state";
 import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
 
@@ -100,6 +101,8 @@ interface ChatPanelProps {
   badges?: PanelBadgeCounts | null;
   /** 크론·카드 탭을 골랐다 — 열람 기록(`POST .../panel-reads`)은 배선이 한다. */
   onMarkSeen?: (tab: "cron" | "cards") => void;
+  /** 스킬 탭의 "관리 열기" — 그 직원의 스킬 관리 모달을 연다. 없으면 버튼이 아무 일도 하지 않는다. */
+  onOpenSkillManager?: (npcId: string) => void;
   /** 카드 탭에서 카드를 눌렀다 — 칸반을 그 카드로 지목한다. 없으면 누를 수 없다. */
   onOpenAssignedCard?: (taskId: string) => void;
   onCreateTaskFromChat?: (draft: ChatTaskDraft) => void;
@@ -194,6 +197,7 @@ export default function ChatPanel({
   badges = null,
   onMarkSeen,
   onOpenAssignedCard,
+  onOpenSkillManager,
   onCreateTaskFromChat,
   cardsRefreshTick = 0,
   cardsDebounceMs = CARDS_EVENT_DEBOUNCE_MS,
@@ -209,7 +213,7 @@ export default function ChatPanel({
   const npcTab = tabFor(npcTabState, dialogNpcId);
   const setNpcTab = (tab: NpcPanelTab) => {
     setNpcTabState({ npcId: dialogNpcId, tab });
-    if (tab !== "chat") onMarkSeen?.(tab);
+    if (tab === "cron" || tab === "cards") onMarkSeen?.(tab);
   };
   // 카드 탭의 보드 — 탭을 열 때, 그리고 `kanban:event` 가 올 때 읽는다. 실패하면 **서버가 준 코드를 그대로** 들고 가야
   // `NpcCardsTab` 이 428·409·503 전용 안내를 고를 수 있다(감싸거나 바꾸지 않는다).
@@ -689,8 +693,8 @@ export default function ChatPanel({
                 data-testid="npc-dialog-tabs"
                 className="flex border-b border-border bg-surface/60 text-xs"
               >
-                {(["chat", "cron", "cards"] as const).map((tab) => {
-                  const unseen = tab === "chat" ? 0 : (badges?.[tab] ?? 0);
+                {(["chat", "cron", "cards", "skills"] as const).map((tab) => {
+                  const unseen = tab === "chat" || tab === "skills" ? 0 : (badges?.[tab] ?? 0);
                   return (
                     <button
                       key={tab}
@@ -719,7 +723,15 @@ export default function ChatPanel({
                 })}
               </div>
             )}
-            {cron && npcTab === "cards" ? (
+            {cron && npcTab === "skills" ? (
+              <div className="flex-1 min-h-0">
+                <NpcSkillsTab
+                  channelId={cron.channelId}
+                  npcId={dialogNpc!.npcId}
+                  onOpenManager={() => onOpenSkillManager?.(dialogNpc!.npcId)}
+                />
+              </div>
+            ) : cron && npcTab === "cards" ? (
               <div className="flex-1 min-h-0">
                 <NpcCardsTab
                   npcProfile={cardsNpcProfile}
