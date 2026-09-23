@@ -435,6 +435,20 @@ const zh: Record<string, string> = {
   "hermes.wizard.review.pluginUpdate": "将DeskRPG插件更新到{version}。",
   "hermes.wizard.review.timezone": "将网关时区设置为{timezone}。",
   "hermes.wizard.review.timezoneToggle": "将此浏览器的时区设置到网关",
+  "hermes.wizard.step.settingWorkerPropagation": "保存工作者设置",
+  "hermes.wizard.step.applyingWorkerPlugin": "为员工配置文件应用插件",
+  "hermes.wizard.review.workerPropagation": "工作者插件 — 汇集看板与定时任务的成果(推荐)",
+  "hermes.wizard.review.workerPropagationBody":
+    "开启后,DeskRPG 插件会为每位员工(配置文件)创建 plugins/deskrpg 链接,并在该配置文件 config.yaml 的 plugins.enabled 中加入 deskrpg。新雇用的员工也会自动应用。看板工作者和定时任务的成果要汇集到 DeskRPG 就需要它。此选择保存在 Hermes 根 config.yaml 的 {key} 中;关闭后不再为新员工应用(已创建的链接不会删除)。",
+  "hermes.wizard.review.workerPropagationToggle": "开启工作者插件",
+  "hermes.wizard.error.workerPropagationWriteFailed":
+    "无法保存工作者设置。请检查 Hermes 根 config.yaml 后重试。",
+  "hermes.wizard.warn.workerPluginApplyFailed":
+    "网关已连接,但未能为所有员工应用工作者插件。请在网关页面点击[应用]重试。",
+  "hermes.pluginUpdate.workerPropagationInherited": "此网关原本已开启工作者插件 — 保持开启。",
+  "hermes.pluginUpdate.workerPropagationTurnOff": "关闭",
+  "hermes.pluginUpdate.workerPropagationTurnedOff": "已关闭工作者插件。新雇用的员工将不会应用。",
+  "hermes.pluginUpdate.workerPropagationTurnOffFailed": "无法关闭工作者插件({code})。",
   "hermes.wizard.review.pluginVersion": "插件版本",
   "hermes.wizard.step.installingHermes": "安装Hermes",
   "hermes.wizard.step.creatingProfile": "创建新配置文件",

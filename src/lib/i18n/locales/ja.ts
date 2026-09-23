@@ -476,6 +476,23 @@ const ja: Record<string, string> = {
   "hermes.wizard.review.pluginUpdate": "DeskRPGプラグインを{version}に更新します。",
   "hermes.wizard.review.timezone": "ゲートウェイのタイムゾーンを{timezone}に設定します。",
   "hermes.wizard.review.timezoneToggle": "このブラウザーのタイムゾーンをゲートウェイに設定する",
+  "hermes.wizard.step.settingWorkerPropagation": "ワーカー設定を保存",
+  "hermes.wizard.step.applyingWorkerPlugin": "社員プロファイルにプラグインを適用",
+  "hermes.wizard.review.workerPropagation": "ワーカー適用 — カンバン・cron の成果物を集める(推奨)",
+  "hermes.wizard.review.workerPropagationBody":
+    "オンにすると、DeskRPG プラグインが社員(プロファイル)ごとに plugins/deskrpg リンクを作成し、そのプロファイルの config.yaml の plugins.enabled に deskrpg を追加します。新しく雇う社員にも自動で適用されます。カンバンワーカーや cron の成果物を DeskRPG に集めるには必要です。この選択は Hermes ルートの config.yaml の {key} に保存され、オフにすると新しい社員には適用しません(既存のリンクは削除しません)。",
+  "hermes.wizard.review.workerPropagationToggle": "ワーカー適用をオンにする",
+  "hermes.wizard.error.workerPropagationWriteFailed":
+    "ワーカー設定を保存できませんでした。Hermes ルートの config.yaml を確認してから再試行してください。",
+  "hermes.wizard.warn.workerPluginApplyFailed":
+    "接続は完了しましたが、一部の社員にワーカー適用を完了できませんでした。ゲートウェイ画面の[適用]で再試行してください。",
+  "hermes.pluginUpdate.workerPropagationInherited":
+    "このゲートウェイではワーカー適用がオンでした — そのままオンにします。",
+  "hermes.pluginUpdate.workerPropagationTurnOff": "オフにする",
+  "hermes.pluginUpdate.workerPropagationTurnedOff":
+    "ワーカー適用をオフにしました。新しく雇う社員には適用しません。",
+  "hermes.pluginUpdate.workerPropagationTurnOffFailed":
+    "ワーカー適用をオフにできませんでした({code})。",
   "hermes.wizard.review.pluginVersion": "プラグインバージョン",
   "hermes.wizard.step.installingHermes": "Hermesをインストール",
   "hermes.wizard.step.creatingProfile": "新しいプロファイルを作成",
