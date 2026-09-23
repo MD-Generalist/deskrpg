@@ -237,12 +237,18 @@ export default function SkillDetailPane({
               <button
                 type="button"
                 data-action="archive"
-                disabled={working}
+                disabled={working || detail.skill.pinned}
+                title={detail.skill.pinned ? t("skills.error.skill_pinned") : undefined}
                 onClick={() => setConfirm("archive")}
                 className="rounded px-3 py-1 text-danger hover:bg-surface-raised disabled:opacity-50"
               >
                 {t("skills.archive")}
               </button>
+              {detail.skill.pinned && (
+                <span data-hint="skill-pinned" className="text-[11px] text-text-dim">
+                  {t("skills.error.skill_pinned")}
+                </span>
+              )}
             </>
           )}
           {isHub && (

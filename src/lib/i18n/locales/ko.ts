@@ -3181,6 +3181,7 @@ const ko: Record<string, string> = {
   "skills.error.skill_changed": "다른 곳에서 먼저 바뀌었습니다",
   "skills.error.job_busy": "다른 설치·정리 작업이 진행 중입니다",
   "skills.error.node_changed": "노드가 그사이 바뀌었습니다. 내 변경은 아래에 남아 있습니다",
+  "skills.error.skill_pinned": "고정된 스킬은 보관할 수 없습니다. 먼저 고정을 해제하세요",
   "skills.error.forbidden": "게이트웨이 소유자만 바꿀 수 있습니다",
   "skills.error.skill_write_rejected": "Hermes 가 저장을 거절했습니다: {detail}",
   "skills.error.path_not_editable": "이 파일은 편집할 수 없습니다",

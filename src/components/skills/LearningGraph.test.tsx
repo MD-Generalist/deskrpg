@@ -152,3 +152,24 @@ test("시간 슬라이더를 앞으로 당기면 나중 노드가 사라진다",
   assert.ok(container.querySelector('[data-node="weekly"]'));
   assert.ok(container.querySelector(`[data-node="${MEM_ID}"]`));
 });
+
+test("스킬 노드 삭제가 409 skill_pinned 면 고정 해제 안내", async () => {
+  mockFetch({
+    [GRAPH]: graph(),
+    [`GET ${ROOT}/learning/node?id=weekly`]: {
+      id: "weekly",
+      kind: "skill",
+      content: "x",
+      hash: "s1",
+    },
+    [`DELETE ${ROOT}/learning/node`]: {
+      status: 409,
+      json: { code: "skill_pinned", message: "" },
+    },
+  });
+  await render(view(true));
+  await clickNode("weekly");
+  await click('[data-action="node-delete"]');
+  await click('[data-action="node-delete-confirm"]');
+  assert.ok(text().includes("먼저 고정을 해제하세요"));
+});

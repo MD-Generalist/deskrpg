@@ -7,6 +7,7 @@ const KNOWN = new Set([
   "skill_changed",
   "job_busy",
   "node_changed",
+  "skill_pinned",
   "forbidden",
   "skill_write_rejected",
   "path_not_editable",

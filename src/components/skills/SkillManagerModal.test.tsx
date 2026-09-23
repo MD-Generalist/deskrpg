@@ -268,3 +268,39 @@ test("Hub 스킬 [삭제] 는 확인 뒤 작업을 끝까지 폴링하고 선택
   assert.ok(log.calls.includes(`GET ${ROOT}/hub/installs/u1`));
   assert.equal(removed, 1);
 });
+
+test("고정된 로컬 스킬은 [보관] 이 꺼지고 고정 해제 안내가 보인다", async () => {
+  mockFetch({
+    [`GET ${ROOT}/weekly`]: detail({ pinned: true }),
+    [`GET ${ROOT}/weekly/file?path=SKILL.md`]: file("본문", "h1"),
+  });
+  await render(
+    <SkillDetailPane
+      api={createSkillsApi("ch-1", "n-1")}
+      name="weekly"
+      canManage
+      onChanged={() => {}}
+    />,
+  );
+  assert.equal(($('[data-action="archive"]') as HTMLButtonElement).disabled, true);
+  assert.ok(text().includes("먼저 고정을 해제하세요"));
+  assert.ok(text().includes("고정 해제"));
+});
+
+test("보관이 409 skill_pinned 로 거절되면 같은 안내를 보인다", async () => {
+  mockFetch({
+    ...opened(),
+    [`POST ${ROOT}/weekly/archive`]: { status: 409, json: { code: "skill_pinned", message: "" } },
+  });
+  await render(
+    <SkillDetailPane
+      api={createSkillsApi("ch-1", "n-1")}
+      name="weekly"
+      canManage
+      onChanged={() => {}}
+    />,
+  );
+  await click('[data-action="archive"]');
+  await click('[data-action="confirm-archive"]');
+  assert.ok(text().includes("먼저 고정을 해제하세요"));
+});
