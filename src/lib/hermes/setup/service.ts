@@ -14,6 +14,7 @@ import {
   installHermesHost,
   SetupPackagesMissingError,
   prepareHost,
+  setWorkerPropagationHost,
 } from "./host";
 import { localExecutor, sshExecutor, getSshHosts, sshFailureCode, sshOptions } from "./executor";
 import {
@@ -44,6 +45,13 @@ import {
 import { buildPluginCacheUpdate, buildPluginInfoCacheUpdate } from "../plugin-cache-update";
 import { probeDeskrpgPluginWithInfo } from "../plugin-capability";
 import { verifySetupGateway } from "./verify";
+import { createPluginClient } from "../plugin-client";
+import { applyWorkerPlugin, type ApplyWorkerPluginDeps } from "../worker-plugin";
+import {
+  inheritedWorkerPropagation,
+  runWorkerPropagation,
+  setupWorkerPluginApplies,
+} from "./worker-propagation";
 import type {
   HostTarget,
   PreparedHost,
@@ -68,11 +76,13 @@ const STEPS = new Set([
   "updating_plugin",
   "configuring_api",
   "setting_timezone",
+  "setting_worker_propagation",
   "setting_port",
   "restarting_gateway",
   "verifying_gateway",
   "checking_model",
   "importing_profiles",
+  "applying_worker_plugin",
   "saving_gateway",
 ]);
 /**
@@ -278,6 +288,8 @@ export async function startSetup(
   resumeFrom?: string,
   /** 화면이 대안 포트 제안을 명시적으로 수락했을 때만 온다. */
   setPort?: number,
+  /** 워커 전파 체크박스(플러그인 0.16.0). undefined 면 호스트 설정을 건드리지 않는다. */
+  workerPropagation?: boolean,
 ) {
   const executor = await requireHost(userId, target);
   // 호스트 게이트 + 설치 스위치 + 대상(local·ssh). 대상별 조건은 hermesInstallAllowed 가 판정한다.
@@ -365,6 +377,7 @@ export async function startSetup(
         done,
         setPort,
         hostPlatform(target),
+        workerPropagation,
       );
       const collected = collectSetupWarnings(prepared.warnings, Boolean(installHermes));
       if (collected.length) jobs.update(userId, job.id, { warnings: collected });
@@ -451,6 +464,20 @@ export async function startSetup(
         if ("error" in result) throw new Error("profile_import_failed");
       }
       checkCancelled();
+      // 켜기를 골랐으면 이미 있는 직원에게도 적용한다. 실패해도 연결은 끝난 것이다 — 경고만 남기고,
+      // 게이트웨이 화면의 적용 버튼으로 다시 할 수 있다.
+      if (
+        setupWorkerPluginApplies(workerPropagation, prepared.workerPropagation, capability.info)
+      ) {
+        step("applying_worker_plugin");
+        const applied = await runWorkerPropagationApply(gateway);
+        if (!applied) {
+          const prior = jobs.get(userId, job.id).warnings ?? [];
+          jobs.update(userId, job.id, {
+            warnings: [...new Set([...prior, "worker_plugin_apply_failed"])],
+          });
+        }
+      }
       settle();
       jobs.update(userId, job.id, { status: "succeeded" });
     } catch (error) {
@@ -477,6 +504,96 @@ export async function startSetup(
   });
   return job;
 }
+type GatewayRow = typeof gatewayResources.$inferSelect;
+
+/**
+ * 등록된 게이트웨이의 호스트를 찾는다(소유자만). 주소가 로컬이면 이 서버, SSH 터널이면 그 호스트다.
+ * 컨테이너에서 본 `host.docker.internal` 처럼 명령을 돌릴 방법이 없는 주소는 전용 코드로 던진다.
+ */
+async function resolveGatewayHost(
+  userId: string,
+  gatewayId: string,
+): Promise<{ gateway: GatewayRow; target: HostTarget; port: number }> {
+  const [gateway] = await db
+    .select()
+    .from(gatewayResources)
+    .where(eq(gatewayResources.id, gatewayId))
+    .limit(1);
+  // 남의 게이트웨이 호스트에서 명령을 돌리게 할 수는 없다 — 공유받은 사용자도 안 된다.
+  if (!gateway || gateway.ownerUserId !== userId) throw new Error("setup_not_found");
+  const kind = classifyGatewayHost(gateway.baseUrl);
+  if (kind.mode === "local") return { gateway, target: { mode: "local" }, port: kind.port };
+  if (kind.mode === "ssh") {
+    const ssh = await readSshTransportTarget(gateway.baseUrl);
+    if (!ssh) throw new Error("ssh_unknown_host");
+    return { gateway, target: { mode: "ssh", hostId: ssh.hostId }, port: ssh.remotePort };
+  }
+  throw new Error("plugin_update_unsupported_host");
+}
+
+/**
+ * 기존 적용(`POST /deskrpg/worker-plugin`, 소유자 키)과 그 뒤의 플러그인 정보 캐시 갱신.
+ * 게이트웨이 화면의 적용 버튼·마법사·"설정에서 켜기" 가 같은 것을 쓴다.
+ */
+export function gatewayWorkerPluginDeps(gateway: GatewayRow): ApplyWorkerPluginDeps {
+  // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
+  const token = decryptGatewayToken(gateway.tokenEncrypted);
+  const client = createPluginClient({ baseUrl: gateway.baseUrl, defaultToken: token });
+  return {
+    ensure: () => client.ensureWorkerPlugin(),
+    refreshCache: async () => {
+      const probed = await probeDeskrpgPluginWithInfo({
+        fetchImpl: transportFetch,
+        baseUrl: gateway.baseUrl,
+        // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
+        token,
+      });
+      await db
+        .update(gatewayResources)
+        .set({
+          ...buildPluginCacheUpdate(probed.capability),
+          ...buildPluginInfoCacheUpdate(probed.info),
+        })
+        .where(eq(gatewayResources.id, gateway.id));
+    },
+  };
+}
+
+/** 마법사 끝의 적용. 성공이면 true — 결과 목록은 게이트웨이 화면이 캐시에서 다시 읽는다. */
+async function runWorkerPropagationApply(gateway: GatewayRow): Promise<boolean> {
+  try {
+    return (await applyWorkerPlugin(gatewayWorkerPluginDeps(gateway))).ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * "설정에서 켜기"(게이트웨이 화면)와 이어받기의 [끄기]. 호스트 루트 설정을 쓰고, 켜면 기존 적용까지 한다.
+ * 짧은 동작이라 잡으로 돌리지 않지만, 같은 호스트의 설치·갱신과 겹치지 않게 호스트 잠금을 잡는다.
+ * 게이트웨이를 재시작하지 않는다 — 플러그인은 호출마다 설정을 읽는다(0.16.0 계약).
+ */
+export async function setGatewayWorkerPropagation(
+  userId: string,
+  gatewayId: string,
+  enabled: boolean,
+) {
+  const { gateway, target, port } = await resolveGatewayHost(userId, gatewayId);
+  const executor = await requireHost(userId, target);
+  const platform = hostPlatform(target);
+  const candidate = (await discoverHost(executor, platform)).find((item) => item.port === port);
+  if (!candidate) throw new Error("plugin_update_candidate_not_found");
+  const release = store().lock(JSON.stringify(target));
+  try {
+    return await runWorkerPropagation(enabled, {
+      setFlag: (value) => setWorkerPropagationHost(executor, candidate.id, value, platform),
+      ...gatewayWorkerPluginDeps(gateway),
+    });
+  } finally {
+    release();
+  }
+}
+
 /**
  * 이미 등록해 쓰고 있는 게이트웨이의 **플러그인만** 고정 버전으로 올린다.
  *
@@ -488,37 +605,15 @@ export async function startSetup(
  * 닫고, 끝나면 **플러그인 캐시만** 새로 쓴다 — 토큰·주소·이름은 그대로 둔다.
  */
 export async function startPluginUpdate(userId: string, gatewayId: string) {
-  const [gateway] = await db
-    .select()
-    .from(gatewayResources)
-    .where(eq(gatewayResources.id, gatewayId))
-    .limit(1);
-  // 남의 게이트웨이 호스트에서 명령을 돌리게 할 수는 없다 — 공유받은 사용자도 안 된다.
-  if (!gateway || gateway.ownerUserId !== userId) throw new Error("setup_not_found");
-
-  const kind = classifyGatewayHost(gateway.baseUrl);
-  let target: HostTarget;
-  let port: number;
-  if (kind.mode === "local") {
-    target = { mode: "local" };
-    port = kind.port;
-  } else if (kind.mode === "ssh") {
-    const ssh = await readSshTransportTarget(gateway.baseUrl);
-    if (!ssh) throw new Error("ssh_unknown_host");
-    target = { mode: "ssh", hostId: ssh.hostId };
-    port = ssh.remotePort;
-  } else {
-    // 컨테이너에서 본 `host.docker.internal` 처럼, 주소는 닿아도 그 호스트에서 명령을
-    // 돌릴 방법이 없는 경우다. 화면이 이유를 말하도록 전용 코드로 던진다.
-    throw new Error("plugin_update_unsupported_host");
-  }
-
+  const { gateway, target, port } = await resolveGatewayHost(userId, gatewayId);
   const executor = await requireHost(userId, target);
   const platform = hostPlatform(target);
   const candidates = await discoverHost(executor, platform);
   // 주소의 포트가 이 게이트웨이의 정체다 — 이름표(label)는 호스트마다 다를 수 있다.
   const candidate = candidates.find((item) => item.port === port);
   if (!candidate) throw new Error("plugin_update_candidate_not_found");
+  // 옛 플러그인이 전파해 둔 링크가 있으면 켠 채로 이어받는다. 화면은 잡의 표시를 보고 한 번 알리고 [끄기]를 준다.
+  const inherit = inheritedWorkerPropagation(candidate);
 
   const jobs = store();
   const targetKey = JSON.stringify(target);
@@ -561,7 +656,9 @@ export async function startPluginUpdate(userId: string, gatewayId: string) {
         skipStep,
         undefined,
         platform,
+        inherit ? true : undefined,
       );
+      if (inherit) jobs.update(userId, job.id, { workerPropagationInherited: true });
       // 새 버전이 실제로 서빙되는지 우리 주소로 확인한다(ssh 는 transportFetch 가 터널을 연다).
       const probed = await probeDeskrpgPluginWithInfo({
         fetchImpl: transportFetch,

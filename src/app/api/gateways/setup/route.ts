@@ -175,6 +175,15 @@ export async function POST(req: NextRequest) {
         body.setPort === undefined || body.setPort === null
           ? undefined
           : validateSetupPort(body.setPort);
+      // 워커 전파 체크박스. 없으면 호스트 설정을 건드리지 않는다(옛 화면·URL 연결).
+      if (
+        body.workerPropagation !== undefined &&
+        body.workerPropagation !== null &&
+        typeof body.workerPropagation !== "boolean"
+      )
+        throw new Error("setup_invalid_request");
+      const workerPropagation =
+        typeof body.workerPropagation === "boolean" ? body.workerPropagation : undefined;
       return response(
         {
           job: await startSetup(
@@ -187,6 +196,7 @@ export async function POST(req: NextRequest) {
             installHermes,
             resumeFrom,
             setPort,
+            workerPropagation,
           ),
         },
         202,

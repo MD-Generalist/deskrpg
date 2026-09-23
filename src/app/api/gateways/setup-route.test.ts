@@ -110,3 +110,42 @@ test("시간대를 보내지 않아도 준비 요청은 그대로 진행된다",
   assert.equal((await result.json()).errorCode, "setup_forbidden");
   delete process.env.DESKRPG_HOST_SETUP_ENABLED;
 });
+test("워커 전파 체크박스 값이 불리언이 아니면 호스트를 건드리기 전에 400 이다", async () => {
+  const { POST } = await import("./setup/route");
+  const admin = await user("system_admin");
+  for (const workerPropagation of ["yes", 1, {}]) {
+    const result = await POST(
+      req(admin, {
+        action: "prepare",
+        mode: "local",
+        candidateId: "a".repeat(64),
+        profiles: [],
+        workerPropagation,
+      }),
+    );
+    assert.equal(result.status, 400, JSON.stringify(workerPropagation));
+    assert.equal((await result.json()).errorCode, "setup_invalid_request");
+  }
+});
+test("워커 전파 체크박스 true·false 는 검증을 통과한다", async () => {
+  const { POST } = await import("./setup/route");
+  const admin = await user("system_admin");
+  // 운영자 스위치를 꺼 두어 검증을 지난 뒤 권한 게이트에서 멈추게 한다 — 호스트에는 닿지 않는다.
+  process.env.DESKRPG_HOST_SETUP_ENABLED = "0";
+  try {
+    for (const workerPropagation of [true, false]) {
+      const result = await POST(
+        req(admin, {
+          action: "prepare",
+          mode: "local",
+          candidateId: "a".repeat(64),
+          profiles: [],
+          workerPropagation,
+        }),
+      );
+      assert.equal((await result.json()).errorCode, "setup_forbidden");
+    }
+  } finally {
+    delete process.env.DESKRPG_HOST_SETUP_ENABLED;
+  }
+});

@@ -60,6 +60,11 @@ export type SetupJob = {
    * 화면이 보는 "건너뜀" 은 `completed` 에 있으면서 `steps` 에 없는 단계다.
    */
   completed?: string[];
+  /**
+   * 플러그인 갱신이 옛 버전의 워커 전파(프로필마다 링크)를 보고 운영자 설정을 켠 채로 이어받았다.
+   * 화면은 이것을 보고 "계속 켭니다 [끄기]" 를 한 번 알린다.
+   */
+  workerPropagationInherited?: boolean;
 };
 /** 모델 자격 증명 확인 결과. 판정이 애매하면 언제나 `unknown` 이고 설정을 실패시키지 않는다. */
 export type SetupModelState = "ready" | "missing" | "unknown";

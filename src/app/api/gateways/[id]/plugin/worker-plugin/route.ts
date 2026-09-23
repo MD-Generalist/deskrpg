@@ -1,17 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { eq } from "drizzle-orm";
-
-import { db, gatewayResources } from "@/db";
-import { decryptGatewayToken, getOwnedGatewayResource } from "@/lib/gateway-resources";
-import {
-  buildPluginCacheUpdate,
-  buildPluginInfoCacheUpdate,
-} from "@/lib/hermes/plugin-cache-update";
-import { probeDeskrpgPluginWithInfo } from "@/lib/hermes/plugin-capability";
-import { createPluginClient } from "@/lib/hermes/plugin-client";
+import { getOwnedGatewayResource } from "@/lib/gateway-resources";
 import { sameOriginMutation } from "@/lib/hermes/setup/policy";
-import { transportFetch } from "@/lib/hermes/setup/transport";
+import { gatewayWorkerPluginDeps } from "@/lib/hermes/setup/service";
 import { applyWorkerPlugin } from "@/lib/hermes/worker-plugin";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 import { getUserId } from "@/lib/internal-rpc";
@@ -53,28 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
   }
 
-  // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
-  const token = decryptGatewayToken(resource.tokenEncrypted);
-  const client = createPluginClient({ baseUrl: resource.baseUrl, defaultToken: token });
-
-  const outcome = await applyWorkerPlugin({
-    ensure: () => client.ensureWorkerPlugin(),
-    refreshCache: async () => {
-      const probed = await probeDeskrpgPluginWithInfo({
-        fetchImpl: transportFetch,
-        baseUrl: resource.baseUrl,
-        // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
-        token,
-      });
-      await db
-        .update(gatewayResources)
-        .set({
-          ...buildPluginCacheUpdate(probed.capability),
-          ...buildPluginInfoCacheUpdate(probed.info),
-        })
-        .where(eq(gatewayResources.id, id));
-    },
-  });
+  const outcome = await applyWorkerPlugin(gatewayWorkerPluginDeps(resource));
 
   if (!outcome.ok) {
     // 게이트웨이 프록시 라우트들과 같이 200 + errorCode — Cloudflare 가 5xx 본문을 갈아치운다.
