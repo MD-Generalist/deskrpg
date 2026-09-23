@@ -6,7 +6,7 @@
  * 플러그인을 올릴 때마다 한쪽만 고치면 화면이 거짓말을 했다 — 이제 두 곳이 같은 상수를
  * 읽고, `pin.test.ts` 가 Python 쪽 리터럴과 대조해 어긋남을 막는다.
  */
-export const PLUGIN_PIN = "8e42c8222bd10b6464dd66ac86074a692d5ab869";
-export const PLUGIN_VERSION = "0.15.0";
+export const PLUGIN_PIN = "1e9914a614f17186b6749916031da69ed6b61aa0";
+export const PLUGIN_VERSION = "0.16.0";
 /** 화면에 쓰는 짧은 표기. 커밋 전체를 보여 줄 자리가 없다. */
 export const PLUGIN_PIN_SHORT = PLUGIN_PIN.slice(0, 12);
