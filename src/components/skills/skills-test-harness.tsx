@@ -28,7 +28,10 @@ export const row = (name: string, over: Partial<SkillRow> = {}): SkillRow => ({
 type Reply = Record<string, unknown>;
 export type FetchLog = { calls: string[]; bodies: Record<string, unknown> };
 
-/** `"METHOD path"` → 응답. `{status, json}` 은 그 상태로, 나머지는 JSON 200. 모르는 경로는 404. */
+/**
+ * `"METHOD path"` → 응답. `{status, json}` 은 그 상태로, 나머지는 JSON 200. 모르는 경로는 404.
+ * `delayMs` 가 있으면 그만큼 늦게 답한다(본문에는 싣지 않는다). `routes` 는 참조로 읽으므로 테스트 중에 바꿀 수 있다.
+ */
 export function mockFetch(routes: Record<string, Reply>): FetchLog {
   const log: FetchLog = { calls: [], bodies: {} };
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -36,8 +39,12 @@ export function mockFetch(routes: Record<string, Reply>): FetchLog {
     const key = `${init?.method ?? "GET"} ${url}`;
     log.calls.push(key);
     if (typeof init?.body === "string") log.bodies[key] = JSON.parse(init.body);
-    const reply = routes[key];
-    if (!reply) {
+    const found = routes[key];
+    if (found && typeof found.delayMs === "number") {
+      await new Promise((r) => setTimeout(r, found.delayMs as number));
+    }
+    const { delayMs: _delay, ...reply } = found ?? {};
+    if (!found) {
       return new Response(JSON.stringify({ code: "not_found", message: key }), { status: 404 });
     }
     if (typeof reply.status === "number" && "json" in reply) {

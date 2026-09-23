@@ -3206,6 +3206,12 @@ const en: Record<string, string> = {
   "skills.error.skill_write_rejected": "Hermes rejected the write: {detail}",
   "skills.error.path_not_editable": "This file cannot be edited",
   "skills.error.plugin_upgrade_required": "The plugin needs an upgrade",
+  "skills.hub.loadingPreview": "Loading preview…",
+  "skills.hub.retry": "Retry",
+  "skills.hub.pickResult": "Pick a result to preview it here",
+  "skills.pickSkill": "Pick a skill on the left",
+  "skills.error.timeout": "The gateway took too long to answer. Try again",
+  "skills.error.unreachable": "Could not reach the gateway. Check the connection",
 };
 
 export default en;

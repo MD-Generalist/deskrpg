@@ -3186,6 +3186,12 @@ const ko: Record<string, string> = {
   "skills.error.skill_write_rejected": "Hermes 가 저장을 거절했습니다: {detail}",
   "skills.error.path_not_editable": "이 파일은 편집할 수 없습니다",
   "skills.error.plugin_upgrade_required": "플러그인을 올려야 합니다",
+  "skills.hub.loadingPreview": "미리보기 불러오는 중…",
+  "skills.hub.retry": "다시 시도",
+  "skills.hub.pickResult": "결과를 누르면 여기에 미리보기가 보입니다",
+  "skills.pickSkill": "왼쪽에서 스킬을 고르세요",
+  "skills.error.timeout": "게이트웨이 응답이 늦어 끊겼습니다. 다시 시도하세요",
+  "skills.error.unreachable": "게이트웨이에 닿지 못했습니다. 연결을 확인하세요",
 };
 
 export default ko;

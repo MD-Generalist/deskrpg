@@ -12,6 +12,8 @@ const KNOWN = new Set([
   "skill_write_rejected",
   "path_not_editable",
   "plugin_upgrade_required",
+  "timeout",
+  "unreachable",
 ]);
 
 /** 실패를 화면 문구로. 코드 이름이 그대로 화면에 새지 않게 모르는 코드는 `skills.error.action` 으로 접는다. */

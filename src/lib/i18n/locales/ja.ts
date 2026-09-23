@@ -3221,6 +3221,12 @@ const ja: Record<string, string> = {
   "skills.error.skill_write_rejected": "Hermes が保存を拒否しました: {detail}",
   "skills.error.path_not_editable": "このファイルは編集できません",
   "skills.error.plugin_upgrade_required": "プラグインの更新が必要です",
+  "skills.hub.loadingPreview": "プレビューを読み込み中…",
+  "skills.hub.retry": "再試行",
+  "skills.hub.pickResult": "結果を選ぶとここにプレビューが表示されます",
+  "skills.pickSkill": "左からスキルを選んでください",
+  "skills.error.timeout": "ゲートウェイの応答が遅く、打ち切られました。再試行してください",
+  "skills.error.unreachable": "ゲートウェイに接続できませんでした。接続を確認してください",
 };
 
 export default ja;

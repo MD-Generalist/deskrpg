@@ -3080,6 +3080,12 @@ const zh: Record<string, string> = {
   "skills.error.skill_write_rejected": "Hermes 拒绝了保存: {detail}",
   "skills.error.path_not_editable": "此文件不可编辑",
   "skills.error.plugin_upgrade_required": "需要升级插件",
+  "skills.hub.loadingPreview": "正在加载预览…",
+  "skills.hub.retry": "重试",
+  "skills.hub.pickResult": "点击结果即可在此预览",
+  "skills.pickSkill": "请在左侧选择技能",
+  "skills.error.timeout": "网关响应超时。请重试",
+  "skills.error.unreachable": "无法连接网关。请检查连接",
 };
 
 export default zh;
