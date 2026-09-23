@@ -3192,6 +3192,32 @@ const ko: Record<string, string> = {
   "skills.pickSkill": "왼쪽에서 스킬을 고르세요",
   "skills.error.timeout": "게이트웨이 응답이 늦어 끊겼습니다. 다시 시도하세요",
   "skills.error.unreachable": "게이트웨이에 닿지 못했습니다. 연결을 확인하세요",
+  "gateways.workerPlugin.propagationOff":
+    "이 게이트웨이는 워커 전파가 꺼져 있어, 칸반 워커·크론이 만든 결과물이 모이지 않습니다",
+  "gateways.workerPlugin.propagationWhat":
+    "켜면 플러그인이 각 직원 설정에 플러그인 링크와 활성화 항목을 추가합니다(백업을 남깁니다)",
+  "gateways.workerPlugin.propagationCommand":
+    "게이트웨이 호스트에서 아래 명령을 실행한 뒤 [다시 확인]을 누르세요",
+  "gateways.workerPlugin.propagationEnv":
+    "환경변수 {env}=1 로도 켤 수 있습니다(게이트웨이를 다시 시작해야 적용됩니다)",
+  "gateways.workerPlugin.propagationOwnerOnly": "게이트웨이 소유자가 켤 수 있습니다",
+  "gateways.workerPlugin.enableInSettings": "설정에서 켜기",
+  "gateways.workerPlugin.enabling": "켜는 중…",
+  "gateways.workerPlugin.recheck": "다시 확인",
+  "gateways.workerPlugin.rechecking": "확인 중…",
+  "gateways.workerPlugin.propagationEnabled":
+    "워커 전파를 켰습니다. 크론은 다시 시작해야 반영될 수 있습니다",
+  "gateways.workerPlugin.propagationApplyFailed":
+    "워커 전파는 켰지만 직원에게 적용하지 못했습니다({code}). [적용]을 다시 눌러 주세요",
+  "gateways.workerPlugin.propagationEnableFailed":
+    "설정에서 켜지 못했습니다({code}). 아래 명령으로 직접 켜 주세요",
+  "gateways.workerPlugin.propagationUnsupportedHost":
+    "이 게이트웨이 호스트에서는 DeskRPG 가 설정을 바꿀 수 없습니다. 아래 명령으로 직접 켜 주세요",
+  "hermes.wizard.result.workerPropagationOff":
+    "이 직원의 칸반·크론 결과물은 모이지 않습니다 — 게이트웨이에서 워커 전파가 꺼져 있습니다",
+  "hermes.wizard.result.workerPropagationHow":
+    "게이트웨이 화면에서 켠 뒤 [적용]을 누르면 이 직원에게도 적용됩니다",
+  "hermes.wizard.result.workerPropagationLink": "켜는 방법 보기",
 };
 
 export default ko;

@@ -17,8 +17,10 @@ import { backLinkTarget } from "./return-target";
 import { employeesHref } from "@/components/workspace-navigation";
 import { describePluginVersion } from "@/lib/hermes/plugin-version-view";
 import { setupCopy, setupError, setupHostError, setupStep } from "@/components/gateway/setup-copy";
+import type { WorkerPropagation } from "@/lib/hermes/deskrpg-plugin-types";
 import type { WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
 import WorkerPluginLine, { type WorkerPluginApplyResponse } from "./WorkerPluginLine";
+import { enableWorkerPropagationRequest } from "./worker-propagation-request";
 
 type GatewayRow = {
   id: string;
@@ -38,6 +40,8 @@ type GatewayRow = {
   pluginStatus?: string | null;
   /** 칸반·크론 결과물이 쌓이지 않는 직원. 소유자에게만 내려온다(`worker-plugin.ts`). */
   workerPluginWarning?: WorkerPluginWarning | null;
+  /** 0.16.0 워커 전파 상태 — 소유자 행에만 값이 있다(공유 행·옛 플러그인은 null). */
+  workerPropagation?: WorkerPropagation | null;
 };
 
 type GatewayShare = {
@@ -734,9 +738,12 @@ function GatewayManagementPageInner() {
                   <WorkerPluginLine
                     key={selectedGateway.id}
                     warning={selectedGateway.workerPluginWarning ?? null}
+                    propagation={selectedGateway.workerPropagation ?? null}
                     isOwner={selectedGateway.isOwner === true}
                     apply={() => applyWorkerPluginRequest(selectedGateway.id)}
                     onApplied={() => void loadGateways({ autoSelect: false })}
+                    enablePropagation={() => enableWorkerPropagationRequest(selectedGateway.id)}
+                    onRecheck={() => handleTest(selectedGateway.id)}
                   />
                 )}
 

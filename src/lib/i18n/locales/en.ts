@@ -3212,6 +3212,32 @@ const en: Record<string, string> = {
   "skills.pickSkill": "Pick a skill on the left",
   "skills.error.timeout": "The gateway took too long to answer. Try again",
   "skills.error.unreachable": "Could not reach the gateway. Check the connection",
+  "gateways.workerPlugin.propagationOff":
+    "Worker propagation is off on this gateway, so artifacts made by kanban workers and cron jobs are not collected",
+  "gateways.workerPlugin.propagationWhat":
+    "Turning it on lets the plugin add a plugin link and an enable entry to each employee's settings (with a backup)",
+  "gateways.workerPlugin.propagationCommand":
+    "Run this command on the gateway host, then press [Check again]",
+  "gateways.workerPlugin.propagationEnv":
+    "You can also set the environment variable {env}=1 (takes effect after the gateway restarts)",
+  "gateways.workerPlugin.propagationOwnerOnly": "Only the gateway owner can turn this on",
+  "gateways.workerPlugin.enableInSettings": "Turn on in settings",
+  "gateways.workerPlugin.enabling": "Turning on…",
+  "gateways.workerPlugin.recheck": "Check again",
+  "gateways.workerPlugin.rechecking": "Checking…",
+  "gateways.workerPlugin.propagationEnabled":
+    "Worker propagation is on. Cron jobs may need a restart to pick it up",
+  "gateways.workerPlugin.propagationApplyFailed":
+    "Worker propagation is on, but applying it to employees failed ({code}). Press [Apply] again",
+  "gateways.workerPlugin.propagationEnableFailed":
+    "Could not turn it on from settings ({code}). Turn it on with the command below",
+  "gateways.workerPlugin.propagationUnsupportedHost":
+    "DeskRPG cannot change settings on this gateway host. Turn it on with the command below",
+  "hermes.wizard.result.workerPropagationOff":
+    "Artifacts from this employee's kanban and cron work will not be collected — worker propagation is off on the gateway",
+  "hermes.wizard.result.workerPropagationHow":
+    "Turn it on from the gateway page, then press [Apply] to include this employee",
+  "hermes.wizard.result.workerPropagationLink": "How to turn it on",
 };
 
 export default en;

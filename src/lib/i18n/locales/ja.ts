@@ -3227,6 +3227,32 @@ const ja: Record<string, string> = {
   "skills.pickSkill": "左からスキルを選んでください",
   "skills.error.timeout": "ゲートウェイの応答が遅く、打ち切られました。再試行してください",
   "skills.error.unreachable": "ゲートウェイに接続できませんでした。接続を確認してください",
+  "gateways.workerPlugin.propagationOff":
+    "このゲートウェイではワーカー伝播がオフのため、カンバンのワーカーとクロンが作った成果物は集まりません",
+  "gateways.workerPlugin.propagationWhat":
+    "オンにすると、プラグインが各社員の設定にプラグインのリンクと有効化項目を追加します(バックアップを残します)",
+  "gateways.workerPlugin.propagationCommand":
+    "ゲートウェイのホストで次のコマンドを実行してから[再確認]を押してください",
+  "gateways.workerPlugin.propagationEnv":
+    "環境変数 {env}=1 でもオンにできます(ゲートウェイの再起動後に反映されます)",
+  "gateways.workerPlugin.propagationOwnerOnly": "ゲートウェイの所有者のみオンにできます",
+  "gateways.workerPlugin.enableInSettings": "設定でオンにする",
+  "gateways.workerPlugin.enabling": "オンにしています…",
+  "gateways.workerPlugin.recheck": "再確認",
+  "gateways.workerPlugin.rechecking": "確認中…",
+  "gateways.workerPlugin.propagationEnabled":
+    "ワーカー伝播をオンにしました。クロンは再起動が必要な場合があります",
+  "gateways.workerPlugin.propagationApplyFailed":
+    "ワーカー伝播はオンにしましたが、社員への適用に失敗しました({code})。[適用]をもう一度押してください",
+  "gateways.workerPlugin.propagationEnableFailed":
+    "設定からオンにできませんでした({code})。下のコマンドで直接オンにしてください",
+  "gateways.workerPlugin.propagationUnsupportedHost":
+    "このゲートウェイのホストでは DeskRPG が設定を変更できません。下のコマンドで直接オンにしてください",
+  "hermes.wizard.result.workerPropagationOff":
+    "この社員のカンバン・クロンの成果物は集まりません — ゲートウェイでワーカー伝播がオフです",
+  "hermes.wizard.result.workerPropagationHow":
+    "ゲートウェイ画面でオンにしてから[適用]を押すと、この社員にも適用されます",
+  "hermes.wizard.result.workerPropagationLink": "オンにする方法",
 };
 
 export default ja;

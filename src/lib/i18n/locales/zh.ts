@@ -3086,6 +3086,28 @@ const zh: Record<string, string> = {
   "skills.pickSkill": "请在左侧选择技能",
   "skills.error.timeout": "网关响应超时。请重试",
   "skills.error.unreachable": "无法连接网关。请检查连接",
+  "gateways.workerPlugin.propagationOff":
+    "此网关已关闭工作者传播，看板工作者和定时任务生成的成果不会被收集",
+  "gateways.workerPlugin.propagationWhat":
+    "开启后，插件会在每名员工的设置中添加插件链接和启用项（并保留备份）",
+  "gateways.workerPlugin.propagationCommand": "在网关主机上运行以下命令，然后点击[重新检查]",
+  "gateways.workerPlugin.propagationEnv": "也可以设置环境变量 {env}=1（重启网关后生效）",
+  "gateways.workerPlugin.propagationOwnerOnly": "只有网关所有者可以开启",
+  "gateways.workerPlugin.enableInSettings": "在设置中开启",
+  "gateways.workerPlugin.enabling": "正在开启…",
+  "gateways.workerPlugin.recheck": "重新检查",
+  "gateways.workerPlugin.rechecking": "检查中…",
+  "gateways.workerPlugin.propagationEnabled": "已开启工作者传播。定时任务可能需要重启才能生效",
+  "gateways.workerPlugin.propagationApplyFailed":
+    "已开启工作者传播，但未能应用到员工（{code}）。请再次点击[应用]",
+  "gateways.workerPlugin.propagationEnableFailed":
+    "无法在设置中开启（{code}）。请使用下面的命令手动开启",
+  "gateways.workerPlugin.propagationUnsupportedHost":
+    "DeskRPG 无法修改此网关主机的设置。请使用下面的命令手动开启",
+  "hermes.wizard.result.workerPropagationOff":
+    "此员工的看板和定时任务成果不会被收集 — 网关已关闭工作者传播",
+  "hermes.wizard.result.workerPropagationHow": "在网关页面开启后点击[应用]，即可应用到此员工",
+  "hermes.wizard.result.workerPropagationLink": "查看开启方法",
 };
 
 export default zh;
