@@ -3074,7 +3074,7 @@ const zh: Record<string, string> = {
   "skills.error.action": "请求处理失败",
   "skills.error.skill_changed": "已在其他地方先被修改",
   "skills.error.job_busy": "另一个安装或整理任务正在进行",
-  "skills.error.node_changed": "节点在此期间已更改。已重新加载",
+  "skills.error.node_changed": "节点在此期间已更改。你的修改仍保留在下方",
   "skills.error.forbidden": "只有网关所有者可以更改",
   "skills.error.skill_write_rejected": "Hermes 拒绝了保存: {detail}",
   "skills.error.path_not_editable": "此文件不可编辑",

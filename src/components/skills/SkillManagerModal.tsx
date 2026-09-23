@@ -5,6 +5,7 @@ import { Plus, Sparkles, X } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 import CuratorBar from "./CuratorBar";
+import LearningGraph from "./LearningGraph";
 import SkillAddPane from "./SkillAddPane";
 import SkillArchivePane from "./SkillArchivePane";
 import SkillDetailPane from "./SkillDetailPane";
@@ -364,7 +365,9 @@ export default function SkillManagerModal({
             {tab === "archive" && (
               <SkillArchivePane api={api} canManage={canManage} onChanged={() => void load()} />
             )}
-            {tab === "graph" && <div data-pane="graph" />}
+            {tab === "graph" && (
+              <LearningGraph api={api} canManage={canManage} onChanged={() => void load()} />
+            )}
           </>
         )}
       </div>

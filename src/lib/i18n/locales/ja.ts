@@ -3215,7 +3215,7 @@ const ja: Record<string, string> = {
   "skills.error.action": "リクエストを処理できませんでした",
   "skills.error.skill_changed": "他の場所で先に変更されました",
   "skills.error.job_busy": "別のインストール・整理ジョブが進行中です",
-  "skills.error.node_changed": "ノードがその間に変更されました。再読み込みしました",
+  "skills.error.node_changed": "ノードがその間に変更されました。あなたの変更は下に残っています",
   "skills.error.forbidden": "ゲートウェイの所有者のみ変更できます",
   "skills.error.skill_write_rejected": "Hermes が保存を拒否しました: {detail}",
   "skills.error.path_not_editable": "このファイルは編集できません",

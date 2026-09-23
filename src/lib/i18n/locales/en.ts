@@ -3200,7 +3200,7 @@ const en: Record<string, string> = {
   "skills.error.action": "The request failed",
   "skills.error.skill_changed": "It changed elsewhere first",
   "skills.error.job_busy": "Another install or cleanup job is running",
-  "skills.error.node_changed": "The node changed meanwhile. Reloaded",
+  "skills.error.node_changed": "The node changed meanwhile. Your edits are kept below",
   "skills.error.forbidden": "Only the gateway owner can change this",
   "skills.error.skill_write_rejected": "Hermes rejected the write: {detail}",
   "skills.error.path_not_editable": "This file cannot be edited",
