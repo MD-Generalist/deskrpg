@@ -5,6 +5,7 @@ import {
   type PackageManager,
   type SystemPackage,
 } from "./system-packages";
+import type { WorkerPropagation } from "../deskrpg-plugin-types";
 import type {
   HostExecutor,
   PreparedHost,
@@ -49,6 +50,7 @@ export const HOST_ERROR_CODES = new Set([
   "service_install_failed",
   "timezone_invalid",
   "timezone_write_failed",
+  "worker_propagation_write_failed",
   "port_write_failed",
   "gateway_restart_failed",
   "gateway_verification_failed",
@@ -126,6 +128,7 @@ const STEP_CODES = new Set([
   "updating_plugin",
   "configuring_api",
   "setting_timezone",
+  "setting_worker_propagation",
   "restarting_gateway",
   "verifying_gateway",
 ]);
@@ -185,7 +188,12 @@ function publicCandidate(value: unknown): SetupCandidate {
     ...(typeof item.warning === "string" && WARNING_CODES.has(item.warning)
       ? { warning: item.warning }
       : {}),
+    ...(isPropagation(item.workerPropagation) ? { workerPropagation: item.workerPropagation } : {}),
+    ...(typeof item.workerLinked === "boolean" ? { workerLinked: item.workerLinked } : {}),
   };
+}
+function isPropagation(value: unknown): value is WorkerPropagation {
+  return value === "enabled" || value === "disabled";
 }
 function checkAbort(signal?: AbortSignal) {
   if (signal?.aborted) throw new Error("setup_cancelled");
@@ -206,6 +214,8 @@ async function invoke(
     if (action === "set-timezone") {
       if (option.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-.]+)*$/.test(option))
         throw new Error("timezone_invalid");
+    } else if (action === "set-worker-propagation") {
+      if (option !== "true" && option !== "false") throw new Error("setup_invalid_request");
     } else if (action === "set-port") {
       // 숫자 문자열만 받는다. 범위 판정은 호스트가 또 한다 — 여기서 먼저 잘라 호스트 호출 자체를 막는다.
       const port = Number(option);
@@ -383,6 +393,28 @@ function inspection(body: RecordValue): SetupInspection {
     profiles,
   };
 }
+/**
+ * 워커 전파 운영자 설정을 켜거나 끈다(루트 config 한 키, 되읽기 확인). 돌려주는 값은 **실제 상태**다 —
+ * 끄기를 써도 루트 .env 의 환경변수가 켜 두었으면 `enabled` 다. 게이트웨이를 재시작하지 않는다.
+ */
+export async function setWorkerPropagationHost(
+  execute: HostExecutor,
+  candidateId: string,
+  enabled: boolean,
+  /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
+  platform: string = process.platform,
+): Promise<WorkerPropagation> {
+  const body = await invoke(
+    execute,
+    "set-worker-propagation",
+    candidateId,
+    undefined,
+    enabled ? "true" : "false",
+    platform,
+  );
+  if (!isPropagation(body.propagation)) throw new Error("host_operation_failed");
+  return body.propagation;
+}
 export async function inspectHost(
   execute: HostExecutor,
   candidateId: string,
@@ -421,6 +453,11 @@ export async function prepareHost(
   setPort?: number,
   /** SSH 대상은 언제나 리눅스다 — 로컬 실행일 때만 `process.platform` 을 기본으로 쓴다. */
   platform: string = process.platform,
+  /**
+   * 워커 전파를 이 값으로 맞춘다(마법사 체크박스·갱신의 이어받기). undefined 면 건드리지 않는다.
+   * 이미 그 상태면 아무것도 하지 않는다.
+   */
+  workerPropagation?: boolean,
 ): Promise<PreparedHost> {
   const skip = (step: string) => skipStep?.(step) === true;
   // 서비스를 등록하면 유닛 정의가 생기고 후보 id(정의의 해시)가 바뀐다. 이후 단계는 새 id 를 써야 한다.
@@ -499,11 +536,30 @@ export async function prepareHost(
     Boolean(timezone) && !state.candidate.timezone && !skip("setting_timezone");
   if (configuring) await stage("configuring_api", "configure");
   if (settingTimezone) await stage("setting_timezone", "set-timezone", timezone);
+  let propagation = state.candidate.workerPropagation;
+  const settingPropagation =
+    workerPropagation !== undefined &&
+    propagation !== (workerPropagation ? "enabled" : "disabled") &&
+    !skip("setting_worker_propagation");
+  if (settingPropagation) {
+    const set = await stage(
+      "setting_worker_propagation",
+      "set-worker-propagation",
+      workerPropagation ? "true" : "false",
+    );
+    propagation = isPropagation(set.propagation) ? set.propagation : undefined;
+  }
   // 재시작이 필요한지는 **호스트가 말해 준다**(`changes`). 여기서 "무엇을 했으니 필요하다" 를
   // 따로 추론하면 호스트 판정과 어긋난다. 예전에는 configure·timezone 이 돌 때만 재시작해서,
   // 플러그인만 뒤처진 흔한 경우(최소 버전은 넘지만 핀보다 낮음)에 새 코드가 설치만 되고
   // 옛 코드가 계속 서빙됐다. 조건이 여럿 참이어도 재시작은 한 번이다.
-  const restarting = configuring || settingTimezone || state.changes.includes("restarting_gateway");
+  // 워커 전파는 플러그인이 호출마다 설정을 읽는 것이 계약이지만, 로드 때 읽는 버전이 섞여 있어도
+  // 새 값이 서빙되도록 이미 도는 재시작에 얹는다(조건이 여럿 참이어도 재시작은 한 번이다).
+  const restarting =
+    configuring ||
+    settingTimezone ||
+    settingPropagation ||
+    state.changes.includes("restarting_gateway");
   if (restarting && !skip("restarting_gateway")) await stage("restarting_gateway", "restart");
   const verified = await stage("verifying_gateway", "verify");
   for (const warning of Array.isArray(verified.warnings) ? verified.warnings : [])
@@ -534,7 +590,13 @@ export async function prepareHost(
   // 키를 발급했으면 그 키로 실제 서빙을 확인한다. verify 는 인증에 실패한 프로필을 그냥 뺀다.
   if (provisioned.some((name) => !profiles.some((profile) => profile.name === name)))
     throw new Error("profile_verify_failed");
-  return { baseUrl, token, profiles, ...(warnings.length ? { warnings } : {}) };
+  return {
+    baseUrl,
+    token,
+    profiles,
+    ...(warnings.length ? { warnings } : {}),
+    ...(propagation ? { workerPropagation: propagation } : {}),
+  };
 }
 
 /**

@@ -362,6 +362,9 @@ TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
 LOCK = None
 PORT_MIN = 8642
 PORT_MAX = 8699
+# 플러그인 0.16.0 워커 전파 옵트인. 플러그인은 이 값을 읽기만 한다 — 켜는 것은 운영자(와 이 마법사)다.
+WORKER_ENV = 'DESKRPG_WORKER_PROPAGATION'
+WORKER_TRUTHY = ('1', 'true', 'yes', 'on')
 class Failure(Exception): pass
 def fail(code): raise Failure(code)
 def version_parts(value):
@@ -606,6 +609,28 @@ def plugin(home, cfg):
     if not isinstance(enabled, list) or not isinstance(disabled, list): fail('invalid_host_config')
     return bool(manifests), bool(names.intersection(enabled)) and not bool(names.intersection(disabled)), manifests[0] if manifests else 'deskrpg', versions.get(manifests[0]) if manifests else None
 
+def worker_entry(cfg):
+    # plugins.entries.deskrpg 를 읽기만 한다. 모양이 어긋나면 None — 점검을 막지 않는다.
+    block = cfg.get('plugins')
+    entries = block.get('entries') if isinstance(block, dict) else None
+    entry = entries.get('deskrpg') if isinstance(entries, dict) else None
+    return entry if isinstance(entry, dict) else None
+def worker_propagation(cfg, env):
+    # 플러그인의 propagation_enabled 와 같은 판정: 설정 값 true, 또는 환경변수 1|true|yes|on.
+    # 루트 .env 는 게이트웨이가 뜰 때 환경으로 올라가므로 함께 본다.
+    entry = worker_entry(cfg)
+    if entry is not None and entry.get('worker_propagation') is True: return 'enabled'
+    flag = env.get(WORKER_ENV)
+    if isinstance(flag, str) and flag.strip().lower() in WORKER_TRUTHY: return 'enabled'
+    return 'disabled'
+def worker_linked():
+    # 플러그인이 전파할 때 만드는 프로필별 plugins/deskrpg 링크가 하나라도 있는가. 운영자가 프로필에
+    # 직접 설치한 폴더는 전파의 흔적이 아니므로 세지 않는다.
+    for child, childhome in homes():
+        if child == 'default': continue
+        if (childhome / 'plugins' / 'deskrpg').is_symlink(): return True
+    return False
+
 def candidate(name, home):
     cfg, env, token, port, external = settings(home)
     owner = identity(name, home)
@@ -613,7 +638,7 @@ def candidate(name, home):
     match = re.search(r'^version\s*=\s*"([^"]+)"', read(INSTALL / 'pyproject.toml'), re.M)
     zone = cfg.get('timezone')
     zone = zone.strip() if isinstance(zone, str) else ''
-    public = {'id': owner['id'], 'label': 'Hermes ' + name, 'version': match.group(1) if match else 'unknown', 'service': owner['service'], 'pluginInstalled': installed, 'pluginEnabled': enabled, 'pluginVersion': plugin_version, 'hasToken': bool(token), 'port': port, 'timezone': zone or None}
+    public = {'id': owner['id'], 'label': 'Hermes ' + name, 'version': match.group(1) if match else 'unknown', 'service': owner['service'], 'pluginInstalled': installed, 'pluginEnabled': enabled, 'pluginVersion': plugin_version, 'hasToken': bool(token), 'port': port, 'timezone': zone or None, 'workerPropagation': worker_propagation(cfg, env), 'workerLinked': worker_linked()}
     # A version we cannot read warns but never blocks; a version we can read and that is too low does block.
     warning = owner['warning'] or ('external_secret_provider' if external else None) or ('hermes_version_unknown' if public['version'] == 'unknown' else None)
     if warning: public['warning'] = warning
@@ -803,7 +828,7 @@ def bounded(argv, env):
 def main(action, candidate_id=None, option=None):
     global LOCK
     if ROOT.is_symlink(): fail('unsafe_host_path')
-    if action in ('install','configure','restart','install-service','set-timezone','set-port','create-profile','provision-key'):
+    if action in ('install','configure','restart','install-service','set-timezone','set-port','create-profile','provision-key','set-worker-propagation'):
         # A host-wide advisory lock also protects against a retry from a restarted DeskRPG server.
         # Keep it inherited by the installer until the entire bounded action exits.
         lock_path = ROOT / '.deskrpg-setup.lock'
@@ -1005,6 +1030,27 @@ def main(action, candidate_id=None, option=None):
         except Failure: raise
         except Exception: fail('timezone_write_failed')
         if config(home).get('timezone') != value: fail('timezone_write_failed')
+    elif action == 'set-worker-propagation':
+        # 운영자가 화면에서 고른 값만 여기까지 온다. 루트 설정의 이 한 키만 바꾸고 나머지는 그대로 둔다.
+        if option not in ('true', 'false'): fail('invalid_host_operation')
+        desired = option == 'true'
+        fresh = config(home)
+        # 어긋난 모양(목록·문자열)은 운영자의 것이다 — 덮어쓰지 않고 거절한다.
+        block = mapping(fresh.get('plugins'))
+        entries = mapping(block.get('entries'))
+        entry = mapping(entries.get('deskrpg'))
+        if entry.get('worker_propagation') is not desired:
+            entry['worker_propagation'] = desired
+            entries['deskrpg'] = entry
+            block['entries'] = entries
+            fresh['plugins'] = block
+            try: atomic(home / 'config.yaml', yaml.safe_dump(fresh, sort_keys=False, allow_unicode=True))
+            except Failure: raise
+            except Exception: fail('worker_propagation_write_failed')
+            stored = worker_entry(config(home))
+            if stored is None or stored.get('worker_propagation') is not desired: fail('worker_propagation_write_failed')
+        # 실제 상태를 돌려준다 — 끄기를 써도 .env 변수가 켜 두면 여전히 enabled 다.
+        return {'ok': True, 'propagation': worker_propagation(config(home), envfile(home))}
     elif action == 'configure':
         # Preserve existing config shapes while setting the effective merged API block.
         # gateway 키가 있으나 값이 비어 있으면 setdefault 는 None 을 돌려준다 — 새로 설치한

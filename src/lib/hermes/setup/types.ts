@@ -1,3 +1,5 @@
+import type { WorkerPropagation } from "../deskrpg-plugin-types";
+
 export type SetupMode = "local" | "ssh" | "url";
 export type SetupCandidate = {
   id: string;
@@ -19,6 +21,13 @@ export type SetupCandidate = {
   profiles?: string[];
   /** default 가 멈춘 채 따로 떠 있는 프로필 게이트웨이 — 먼저 멈춰야 연결할 수 있다. */
   profileGateways?: string[];
+  /**
+   * 워커 전파(플러그인 0.16.0) 운영자 설정 — 루트 config 의 `plugins.entries.deskrpg.worker_propagation`
+   * 또는 루트 .env 의 `DESKRPG_WORKER_PROPAGATION`. 모양이 어긋난 값을 받으면 없음.
+   */
+  workerPropagation?: WorkerPropagation;
+  /** 프로필 중 하나라도 플러그인이 전파한 `plugins/deskrpg` 링크를 가졌는가 — 옛 플러그인이 켜 두었던 흔적. */
+  workerLinked?: boolean;
 };
 export type SetupInspection = {
   candidate: SetupCandidate;
@@ -78,6 +87,8 @@ export type PreparedHost = {
   profiles: { name: string; token: string }[];
   /** 실패가 아닌 경고 코드. 서버가 잡에 그대로 싣는다. */
   warnings?: string[];
+  /** 준비가 끝난 뒤의 워커 전파 상태. 호스트가 알려 주지 않았으면 없음. */
+  workerPropagation?: WorkerPropagation;
 };
 export type SetupProvisionRequest = {
   createProfile?: { name: string; description?: string };

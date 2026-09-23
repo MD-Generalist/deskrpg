@@ -8,6 +8,7 @@ import {
   inspectHost,
   installHermesHost,
   prepareHost,
+  setWorkerPropagationHost,
 } from "./host";
 import type { HostExecutor, SetupCandidate } from "./types";
 const candidate: SetupCandidate = {
@@ -960,6 +961,255 @@ test("후보에 시간대가 이미 있으면 설정 단계를 건너뛴다", as
   const steps: string[] = [];
   await prepareHost(f.execute, candidate.id, (s) => steps.push(s), undefined, "Asia/Seoul");
   assert.deepEqual(steps, ["inspecting", "verifying_gateway"]);
+});
+// --- 워커 전파 옵트인(플러그인 0.16.0) ------------------------------------------------
+// 운영자 설정 `plugins.entries.deskrpg.worker_propagation`(또는 루트 .env 의 DESKRPG_WORKER_PROPAGATION)을
+// 마법사가 켜고 끈다. 플러그인은 읽기만 한다. 점검은 "이미 링크된 프로필이 있는가" 를 알려 이어받기를 판단한다.
+test("점검은 워커 전파 상태와 링크된 프로필 유무를 싣는다", () => {
+  const result = fixture(
+    String.raw`
+before = main('discover')['candidates'][0]
+child = ROOT / 'profiles' / 'sophie'
+(child / 'plugins').mkdir(parents=True)
+real = ROOT / 'plugins' / 'deskrpg'
+real.mkdir(parents=True)
+(child / 'plugins' / 'deskrpg').symlink_to(real)
+after = main('discover')['candidates'][0]
+print(json.dumps({'before': [before['workerPropagation'], before['workerLinked']], 'after': [after['workerPropagation'], after['workerLinked']]}))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body.before, ["disabled", false]);
+  assert.deepEqual(result.body.after, ["disabled", true]);
+});
+test("프로필에 직접 설치한 플러그인 폴더는 링크로 세지 않는다", () => {
+  const result = fixture(
+    String.raw`
+(ROOT / 'profiles' / 'sophie' / 'plugins' / 'deskrpg').mkdir(parents=True)
+print(json.dumps(main('discover')['candidates'][0]['workerLinked']))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.equal(result.body, false);
+});
+test("루트 설정 값이나 .env 변수가 켜져 있으면 전파는 enabled 다", () => {
+  const byConfig = fixture(
+    String.raw`print(json.dumps(main('discover')['candidates'][0]['workerPropagation']))`,
+    {
+      config: {
+        gateway: { multiplex_profiles: true },
+        plugins: { entries: { deskrpg: { worker_propagation: true } } },
+      },
+    },
+  );
+  assert.equal(byConfig.body, "enabled");
+  for (const [value, expected] of [
+    ["on", "enabled"],
+    ["TRUE", "enabled"],
+    ["0", "disabled"],
+  ]) {
+    const byEnv = fixture(
+      String.raw`print(json.dumps(main('discover')['candidates'][0]['workerPropagation']))`,
+      {
+        config: { gateway: { multiplex_profiles: true } },
+        env: `DESKRPG_WORKER_PROPAGATION=${value}\n`,
+      },
+    );
+    assert.equal(byEnv.body, expected, value);
+  }
+});
+test("모양이 어긋난 plugins.entries 는 점검을 막지 않고 disabled 로 읽는다", () => {
+  const result = fixture(
+    String.raw`print(json.dumps(main('discover')['candidates'][0]['workerPropagation']))`,
+    { config: { gateway: { multiplex_profiles: true }, plugins: { entries: "oops" } } },
+  );
+  assert.equal(result.body, "disabled");
+});
+test("set-worker-propagation 은 루트 설정에 켜기를 쓰고 기존 키를 보존한다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+out = main('set-worker-propagation', id, 'true')
+stored = config(ROOT)
+print(json.dumps({'out': out, 'plugins': stored.get('plugins'), 'model': stored.get('model')}))
+`,
+    {
+      config: {
+        gateway: { multiplex_profiles: true },
+        model: { default: "keep-me" },
+        plugins: { enabled: ["deskrpg"], entries: { other: { x: 1 }, deskrpg: { note: "keep" } } },
+      },
+    },
+  );
+  assert.deepEqual(result.body.out, { ok: true, propagation: "enabled" });
+  assert.deepEqual(result.body.plugins, {
+    enabled: ["deskrpg"],
+    entries: { other: { x: 1 }, deskrpg: { note: "keep", worker_propagation: true } },
+  });
+  assert.deepEqual(result.body.model, { default: "keep-me" });
+});
+test("set-worker-propagation false 는 끄기를 쓰고, 이미 같은 값이면 쓰지 않는다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+off = main('set-worker-propagation', id, 'false')
+stored = config(ROOT)['plugins']['entries']['deskrpg']['worker_propagation']
+mtime = (ROOT / 'config.yaml').stat().st_mtime_ns
+again = main('set-worker-propagation', id, 'false')
+print(json.dumps({'off': off, 'stored': stored, 'again': again, 'untouched': mtime == (ROOT / 'config.yaml').stat().st_mtime_ns}))
+`,
+    {
+      config: {
+        gateway: { multiplex_profiles: true },
+        plugins: { entries: { deskrpg: { worker_propagation: true } } },
+      },
+    },
+  );
+  assert.deepEqual(result.body.off, { ok: true, propagation: "disabled" });
+  assert.equal(result.body.stored, false);
+  assert.deepEqual(result.body.again, { ok: true, propagation: "disabled" });
+  assert.equal(result.body.untouched, true);
+});
+test("끄기를 써도 .env 변수가 켜 두면 실제 상태 enabled 를 그대로 알린다", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+print(json.dumps(main('set-worker-propagation', id, 'false')))
+`,
+    { config: { gateway: { multiplex_profiles: true } }, env: "DESKRPG_WORKER_PROPAGATION=1\n" },
+  );
+  assert.deepEqual(result.body, { ok: true, propagation: "enabled" });
+});
+test("set-worker-propagation 은 잘못된 값과 어긋난 설정 모양을 거절하고 아무것도 쓰지 않는다", () => {
+  for (const option of ["yes", "", "True", "1"]) {
+    const result = fixture(
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+entry('set-worker-propagation', id, ${JSON.stringify(option)})
+`,
+      { config: { gateway: { multiplex_profiles: true } } },
+    );
+    assert.deepEqual(result.body, { error: "invalid_host_operation" }, option);
+    assert.ok(!result.config.includes("worker_propagation"));
+  }
+  const shaped = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+entry('set-worker-propagation', id, 'true')
+`,
+    { config: { gateway: { multiplex_profiles: true }, plugins: { entries: ["x"] } } },
+  );
+  assert.deepEqual(shaped.body, { error: "invalid_host_config" });
+  assert.ok(!shaped.config.includes("worker_propagation"));
+});
+test("워커 전파를 켜면 설정 단계 뒤 재시작 한 번으로 반영한다", async () => {
+  const ready = {
+    ...candidate,
+    pluginInstalled: true,
+    pluginEnabled: true,
+    pluginVersion: "0.16.0",
+    hasToken: true,
+    workerPropagation: "disabled",
+    workerLinked: false,
+  };
+  const f = fake([
+    { candidate: ready, pluginStatus: "plugin_ready", changes: [] },
+    { ok: true, propagation: "enabled" },
+    { ok: true },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  const prepared = await prepareHost(
+    f.execute,
+    candidate.id,
+    (s) => steps.push(s),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    true,
+  );
+  assert.deepEqual(steps, [
+    "inspecting",
+    "setting_worker_propagation",
+    "restarting_gateway",
+    "verifying_gateway",
+  ]);
+  const inputs = f.calls.map((c) => JSON.parse(c.input!));
+  assert.deepEqual(
+    inputs.map((i) => i.action),
+    ["inspect", "set-worker-propagation", "restart", "verify"],
+  );
+  assert.match(inputs[1].script, /entry\("set-worker-propagation", "a{64}", "true"\)/);
+  assert.equal(prepared.workerPropagation, "enabled");
+});
+test("워커 전파가 이미 원하는 상태면 단계도 재시작도 없다", async () => {
+  const f = fake([
+    {
+      candidate: {
+        ...candidate,
+        pluginInstalled: true,
+        pluginEnabled: true,
+        hasToken: true,
+        workerPropagation: "enabled",
+        workerLinked: true,
+      },
+      pluginStatus: "plugin_ready",
+      changes: [],
+    },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  const prepared = await prepareHost(
+    f.execute,
+    candidate.id,
+    (s) => steps.push(s),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    true,
+  );
+  assert.deepEqual(steps, ["inspecting", "verifying_gateway"]);
+  assert.equal(prepared.workerPropagation, "enabled");
+});
+test("후보는 워커 전파 상태와 링크 유무를 모양 검사 뒤에만 싣는다", async () => {
+  const f = fake([
+    {
+      candidates: [
+        { ...candidate, workerPropagation: "enabled", workerLinked: true },
+        { ...candidate, workerPropagation: "maybe", workerLinked: "yes" },
+      ],
+    },
+  ]);
+  const [good, odd] = await discoverHost(f.execute);
+  assert.equal(good.workerPropagation, "enabled");
+  assert.equal(good.workerLinked, true);
+  assert.equal(odd.workerPropagation, undefined);
+  assert.equal(odd.workerLinked, undefined);
+});
+test("setWorkerPropagationHost 는 true/false 만 보내고 결과 상태를 돌려준다", async () => {
+  const f = fake([{ ok: true, propagation: "disabled" }]);
+  assert.equal(await setWorkerPropagationHost(f.execute, candidate.id, false), "disabled");
+  assert.match(JSON.parse(f.calls[0].input!).script, /"set-worker-propagation", "a{64}", "false"/);
+  const bad = fake([{ ok: true, propagation: "sideways" }]);
+  await assert.rejects(
+    setWorkerPropagationHost(bad.execute, candidate.id, true),
+    /^Error: host_operation_failed$/,
+  );
+  const failing = fake([{ error: "worker_propagation_write_failed" }]);
+  await assert.rejects(
+    setWorkerPropagationHost(failing.execute, candidate.id, true),
+    /^Error: worker_propagation_write_failed$/,
+  );
 });
 test("잘못된 시간대는 호스트를 실행하기 전에 거부한다", async () => {
   const f = fake([
