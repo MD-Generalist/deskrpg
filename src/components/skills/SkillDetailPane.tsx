@@ -7,6 +7,7 @@ import type { SkillDetail } from "@/lib/hermes/plugin-client-types";
 
 import { skillErrorText } from "./skill-error-text";
 import { SkillsApiError, type SkillsApi } from "./skills-api";
+import { useSkillJob } from "./use-skill-job";
 
 export type SkillDetailPaneProps = {
   api: SkillsApi;
@@ -15,6 +16,8 @@ export type SkillDetailPaneProps = {
   onChanged(): void;
   /** 보관·삭제로 이 스킬이 목록에서 빠졌다 — 부모가 선택을 비운다. */
   onRemoved?(): void;
+  /** Hub 삭제 작업 폴링 간격(ms). 테스트에서 줄인다. */
+  pollIntervalMs?: number;
 };
 
 type Confirm = "archive" | "uninstall" | null;
@@ -35,6 +38,7 @@ export default function SkillDetailPane({
   canManage,
   onChanged,
   onRemoved,
+  pollIntervalMs,
 }: SkillDetailPaneProps) {
   const t = useT();
   const [detail, setDetail] = useState<SkillDetail | null>(null);
@@ -48,6 +52,16 @@ export default function SkillDetailPane({
   const [confirm, setConfirm] = useState<Confirm>(null);
   // 파일을 빠르게 바꿔 누를 때 늦게 온 옛 파일이 편집기를 덮지 않게 한다.
   const fileSeq = useRef(0);
+  // Hub 삭제는 설치처럼 202 작업이다 — 끝나야 목록에서 빠진다.
+  const uninstallJob = useSkillJob(api, { intervalMs: pollIntervalMs });
+  const uninstallDone = uninstallJob.state === "succeeded" || uninstallJob.state === "unknown";
+  useEffect(() => {
+    if (!uninstallDone) return;
+    onChanged();
+    onRemoved?.();
+    // 부모 콜백은 매 렌더 새로 만들어진다 — 작업이 끝날 때 한 번만 부른다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uninstallDone]);
 
   const loadFile = useCallback(
     async (p: string) => {
@@ -92,6 +106,7 @@ export default function SkillDetailPane({
   const editable = canManage && Boolean(current?.editable);
   const isLocal = detail.skill.source === "local";
   const isHub = detail.skill.source === "hub";
+  const working = busy || uninstallJob.state === "running";
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -132,13 +147,10 @@ export default function SkillDetailPane({
       onChanged();
       onRemoved?.();
     });
-  const uninstall = () =>
-    run(async () => {
-      await api.hubUninstall(name);
-      setConfirm(null);
-      onChanged();
-      onRemoved?.();
-    });
+  const uninstall = async () => {
+    setConfirm(null);
+    await uninstallJob.start("hub", () => api.hubUninstall(name));
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 p-3 text-sm">
@@ -203,7 +215,7 @@ export default function SkillDetailPane({
             <button
               type="button"
               data-action="save"
-              disabled={busy}
+              disabled={working}
               onClick={() => void save()}
               className="rounded bg-primary px-3 py-1 text-white disabled:opacity-50"
             >
@@ -216,7 +228,7 @@ export default function SkillDetailPane({
               <button
                 type="button"
                 data-action="pin"
-                disabled={busy}
+                disabled={working}
                 onClick={() => void pin()}
                 className="rounded px-3 py-1 text-text hover:bg-surface-raised disabled:opacity-50"
               >
@@ -225,7 +237,7 @@ export default function SkillDetailPane({
               <button
                 type="button"
                 data-action="archive"
-                disabled={busy}
+                disabled={working}
                 onClick={() => setConfirm("archive")}
                 className="rounded px-3 py-1 text-danger hover:bg-surface-raised disabled:opacity-50"
               >
@@ -237,12 +249,22 @@ export default function SkillDetailPane({
             <button
               type="button"
               data-action="uninstall"
-              disabled={busy}
+              disabled={working}
               onClick={() => setConfirm("uninstall")}
               className="rounded px-3 py-1 text-danger hover:bg-surface-raised disabled:opacity-50"
             >
               {t("skills.uninstall")}
             </button>
+          )}
+        </div>
+      )}
+      {uninstallJob.state !== "idle" && (
+        <div data-job-state={uninstallJob.state} className="text-xs text-text">
+          {t(`skills.job.${uninstallJob.state}`)}
+          {uninstallJob.state === "failed" && uninstallJob.job?.outputTail && (
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-surface-raised p-2 text-text-muted">
+              {uninstallJob.job.outputTail}
+            </pre>
           )}
         </div>
       )}
@@ -254,7 +276,7 @@ export default function SkillDetailPane({
           <button
             type="button"
             data-action={confirm === "archive" ? "confirm-archive" : "confirm-uninstall"}
-            disabled={busy}
+            disabled={working}
             onClick={() => void (confirm === "archive" ? archive() : uninstall())}
             className="text-danger disabled:opacity-50"
           >

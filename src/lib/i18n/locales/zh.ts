@@ -2993,6 +2993,7 @@ const zh: Record<string, string> = {
   "skills.group.bundled": "内置·外部",
   "skills.shared": "另有 {count} 个频道也在使用这名员工 — 更改会一并生效",
   "skills.usage": "使用 {use} · 查看 {view}",
+  "skills.lastUsed": "最近使用 {at}",
   "skills.essential": "必需",
   "skills.stale": "久未使用",
   "skills.pinned": "已固定",

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
 
+import SkillDetailPane from "./SkillDetailPane";
 import SkillManagerModal from "./SkillManagerModal";
+import { createSkillsApi } from "./skills-api";
 import {
   $,
   LIST,
@@ -210,4 +212,59 @@ test("Esc 는 닫되, 먼저 처리한 레이어가 있으면(defaultPrevented) 
   });
   await flush();
   assert.equal(closed, 1);
+});
+
+test("initialSkill 로 열면 그 스킬의 상세가 바로 보이고, 보관함 탭에 개수", async () => {
+  mockFetch({
+    ...extras,
+    [LIST]: listBody(),
+    ...opened(),
+    [`GET ${ROOT}/archive`]: { archived: [{ name: "old", archivedAt: null }] },
+  });
+  await render(
+    <SkillManagerModal
+      channelId="ch-1"
+      npcId="n-1"
+      npcName="소피"
+      initialSkill="weekly"
+      onClose={() => {}}
+    />,
+  );
+  assert.equal(($("textarea") as HTMLTextAreaElement).value, "본문");
+  assert.equal($('[data-badge="archive"]').textContent, "1");
+});
+
+test("Hub 스킬 [삭제] 는 확인 뒤 작업을 끝까지 폴링하고 선택을 비운다", async () => {
+  const log = mockFetch({
+    [`GET ${ROOT}/pdf`]: { ...detail({ name: "pdf", source: "hub" }), files: [] },
+    [`GET ${ROOT}/pdf/file?path=SKILL.md`]: file("hub", "h3"),
+    [`POST ${ROOT}/hub/uninstall`]: { jobId: "u1" },
+    [`GET ${ROOT}/hub/installs/u1`]: {
+      jobId: "u1",
+      kind: "hub_update",
+      state: "succeeded",
+      exitCode: 0,
+      outputTail: "",
+    },
+  });
+  let removed = 0;
+  await render(
+    <SkillDetailPane
+      api={createSkillsApi("ch-1", "n-1")}
+      name="pdf"
+      canManage
+      onChanged={() => {}}
+      onRemoved={() => {
+        removed += 1;
+      }}
+      pollIntervalMs={1}
+    />,
+  );
+  assert.equal(container.querySelector('[data-action="pin"]'), null);
+  await click('[data-action="uninstall"]');
+  await click('[data-action="confirm-uninstall"]');
+  await flush();
+  assert.deepEqual(log.bodies[`POST ${ROOT}/hub/uninstall`], { name: "pdf" });
+  assert.ok(log.calls.includes(`GET ${ROOT}/hub/installs/u1`));
+  assert.equal(removed, 1);
 });

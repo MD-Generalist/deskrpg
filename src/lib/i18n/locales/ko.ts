@@ -3096,6 +3096,7 @@ const ko: Record<string, string> = {
   "skills.group.bundled": "번들·외부",
   "skills.shared": "다른 채널 {count}곳에서도 이 직원을 씁니다 — 바꾸면 함께 적용됩니다",
   "skills.usage": "사용 {use} · 조회 {view}",
+  "skills.lastUsed": "최근 사용 {at}",
   "skills.essential": "필수",
   "skills.stale": "오래 안 씀",
   "skills.pinned": "고정됨",

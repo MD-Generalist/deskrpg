@@ -3130,6 +3130,7 @@ const ja: Record<string, string> = {
   "skills.shared":
     "他の {count} チャンネルでもこの社員を使っています — 変更はそちらにも反映されます",
   "skills.usage": "使用 {use} · 閲覧 {view}",
+  "skills.lastUsed": "最終使用 {at}",
   "skills.essential": "必須",
   "skills.stale": "しばらく未使用",
   "skills.pinned": "固定中",

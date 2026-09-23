@@ -3116,6 +3116,7 @@ const en: Record<string, string> = {
   "skills.group.bundled": "Bundled · external",
   "skills.shared": "{count} other channel(s) also use this employee — changes apply there too",
   "skills.usage": "Used {use} · Viewed {view}",
+  "skills.lastUsed": "Last used {at}",
   "skills.essential": "Required",
   "skills.stale": "Unused lately",
   "skills.pinned": "Pinned",

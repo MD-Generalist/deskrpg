@@ -4,6 +4,9 @@ import { Plus, Sparkles, X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
 
+import CuratorBar from "./CuratorBar";
+import SkillAddPane from "./SkillAddPane";
+import SkillArchivePane from "./SkillArchivePane";
 import SkillDetailPane from "./SkillDetailPane";
 import { skillErrorText } from "./skill-error-text";
 import { SkillsApiError, createSkillsApi, type SkillListView, type SkillsApi } from "./skills-api";
@@ -23,6 +26,8 @@ export type SkillManagerModalProps = {
   npcId: string;
   npcName: string;
   onClose(): void;
+  /** 열 때 고를 스킬 — 대화창 [스킬] 탭의 [편집] 에서 온다. */
+  initialSkill?: string | null;
   api?: SkillsApi;
 };
 
@@ -35,6 +40,7 @@ export default function SkillManagerModal({
   npcId,
   npcName,
   onClose,
+  initialSkill = null,
   api: injected,
 }: SkillManagerModalProps) {
   const t = useT();
@@ -45,7 +51,8 @@ export default function SkillManagerModal({
   const [view, setView] = useState<SkillListView | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>("installed");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSkill);
+  const [archivedCount, setArchivedCount] = useState<number | null>(null);
   const [bulk, setBulk] = useState<Bulk | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,6 +61,11 @@ export default function SkillManagerModal({
   const [newDesc, setNewDesc] = useState("");
 
   const load = useCallback(async () => {
+    // 보관함 수는 탭 이름 옆 숫자일 뿐이라 실패해도 목록을 막지 않는다.
+    void api.listArchived().then(
+      (rows) => setArchivedCount(rows.length),
+      () => setArchivedCount(null),
+    );
     try {
       setView(await api.list());
       setLoadError(null);
@@ -144,6 +156,11 @@ export default function SkillManagerModal({
               >
                 {k === "add" && <Plus className="h-3 w-3" />}
                 {k === "add" ? t("skills.add") : t(`skills.tab.${k}`)}
+                {k === "archive" && archivedCount !== null && archivedCount > 0 && (
+                  <span data-badge="archive" className="text-text-dim">
+                    {archivedCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -168,7 +185,7 @@ export default function SkillManagerModal({
           </p>
         ) : !view ? null : (
           <>
-            <div data-slot="curator" />
+            <CuratorBar api={api} canManage={canManage} onRunFinished={() => void load()} />
             {actionError && <p className="px-5 py-1 text-xs text-danger">{actionError}</p>}
             {tab === "installed" && (
               <div className="flex min-h-0 flex-1">
@@ -339,10 +356,14 @@ export default function SkillManagerModal({
                     </button>
                   </div>
                 )}
-                <div data-pane="hub" />
+                {(addMode === "hub" || addMode === "url") && (
+                  <SkillAddPane api={api} mode={addMode} onInstalled={() => void load()} />
+                )}
               </div>
             )}
-            {tab === "archive" && <div data-pane="archive" />}
+            {tab === "archive" && (
+              <SkillArchivePane api={api} canManage={canManage} onChanged={() => void load()} />
+            )}
             {tab === "graph" && <div data-pane="graph" />}
           </>
         )}

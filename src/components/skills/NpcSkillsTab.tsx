@@ -13,7 +13,8 @@ import { groupSkills } from "./skills-view-model";
 export type NpcSkillsTabProps = {
   channelId: string;
   npcId: string;
-  onOpenManager(): void;
+  /** 관리 모달을 연다. `skillName` 이 있으면 그 스킬을 골라 연다(항목의 [편집]). */
+  onOpenManager(skillName?: string): void;
   api?: SkillsApi;
 };
 
@@ -98,7 +99,7 @@ export default function NpcSkillsTab({
           <button
             type="button"
             data-testid="open-skill-manager"
-            onClick={onOpenManager}
+            onClick={() => onOpenManager()}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-surface-raised"
           >
             <Settings2 className="h-3.5 w-3.5" />
@@ -173,7 +174,24 @@ export default function NpcSkillsTab({
                   {t("skills.usage", { use: row.useCount ?? 0, view: row.viewCount ?? 0 })}
                 </p>
                 {open === row.name && (
-                  <p className="pl-9 text-xs text-text-muted">{row.description}</p>
+                  <div className="pl-9 text-xs text-text-muted">
+                    <p>{row.description}</p>
+                    {row.lastUsedAt && (
+                      <p className="text-text-dim">
+                        {t("skills.lastUsed", { at: row.lastUsedAt.slice(0, 10) })}
+                      </p>
+                    )}
+                    {view.capabilityReady && (
+                      <button
+                        type="button"
+                        data-action="edit-in-manager"
+                        onClick={() => onOpenManager(row.name)}
+                        className="mt-1 text-primary"
+                      >
+                        {t(view.canManage ? "skills.edit" : "skills.openManager")}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

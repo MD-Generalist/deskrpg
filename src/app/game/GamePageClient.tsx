@@ -362,9 +362,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [npcActivityKey, setNpcActivityKey] = useState<string | null>(null);
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
   /** 스킬 관리 모달을 연 직원 — 대화창 [스킬] 탭의 "관리 열기" 가 연다. */
-  const [skillManagerNpc, setSkillManagerNpc] = useState<{ npcId: string; npcName: string } | null>(
-    null,
-  );
+  const [skillManagerNpc, setSkillManagerNpc] = useState<{
+    npcId: string;
+    npcName: string;
+    skillName: string | null;
+  } | null>(null);
   // 보고 큐 — 사무실 알림에서 파생한다. 확인 지점만 브라우저에 남긴다(`reportAckKey`).
   const [reportAck, setReportAck] = useState<ReportAck>(EMPTY_REPORT_ACK);
   // 지금 전하러 오는(또는 와서 전하는) 보고. 직원이 아니라 보고 건으로 추적한다 — 같은 직원의
@@ -2763,9 +2765,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         onMarkSeen={markPanelTabSeen}
         cardsRefreshTick={kanbanRefreshTick}
         onOpenAssignedCard={openNoticeCard}
-        onOpenSkillManager={(npcId) =>
+        onOpenSkillManager={(npcId, skillName) =>
           setSkillManagerNpc({
             npcId,
+            skillName: skillName ?? null,
             npcName:
               rosterNpcs.find((npc) => npc.id === npcId)?.name ??
               (dialogNpc?.npcId === npcId ? dialogNpc.npcName : ""),
@@ -3562,6 +3565,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           channelId={channelId}
           npcId={skillManagerNpc.npcId}
           npcName={skillManagerNpc.npcName}
+          initialSkill={skillManagerNpc.skillName}
           onClose={() => setSkillManagerNpc(null)}
         />
       )}

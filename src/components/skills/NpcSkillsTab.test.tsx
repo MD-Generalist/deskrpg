@@ -98,3 +98,22 @@ test("게이트웨이가 끊기면(409) 목록 대신 재연결 안내", async (
   await render(tab());
   assert.ok(text().includes("게이트웨이 연결이 끊겼습니다"));
 });
+
+test("펼친 항목의 [편집] 은 그 스킬 이름으로 관리 모달을 연다", async () => {
+  mockFetch({ [LIST]: view({ canManage: true }) });
+  const opened: (string | undefined)[] = [];
+  await render(
+    <NpcSkillsTab channelId="ch-1" npcId="n-1" onOpenManager={(name) => opened.push(name)} />,
+  );
+  await act(async () =>
+    (container.querySelector('[data-skill-row="weekly"]') as HTMLElement).click(),
+  );
+  await flush();
+  await act(async () =>
+    (container.querySelector('[data-action="edit-in-manager"]') as HTMLElement).click(),
+  );
+  await act(async () =>
+    (container.querySelector('[data-testid="open-skill-manager"]') as HTMLElement).click(),
+  );
+  assert.deepEqual(opened, ["weekly", undefined]);
+});

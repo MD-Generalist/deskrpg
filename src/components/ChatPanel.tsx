@@ -102,7 +102,7 @@ interface ChatPanelProps {
   /** 크론·카드 탭을 골랐다 — 열람 기록(`POST .../panel-reads`)은 배선이 한다. */
   onMarkSeen?: (tab: "cron" | "cards") => void;
   /** 스킬 탭의 "관리 열기" — 그 직원의 스킬 관리 모달을 연다. 없으면 버튼이 아무 일도 하지 않는다. */
-  onOpenSkillManager?: (npcId: string) => void;
+  onOpenSkillManager?: (npcId: string, skillName?: string) => void;
   /** 카드 탭에서 카드를 눌렀다 — 칸반을 그 카드로 지목한다. 없으면 누를 수 없다. */
   onOpenAssignedCard?: (taskId: string) => void;
   onCreateTaskFromChat?: (draft: ChatTaskDraft) => void;
@@ -728,7 +728,7 @@ export default function ChatPanel({
                 <NpcSkillsTab
                   channelId={cron.channelId}
                   npcId={dialogNpc!.npcId}
-                  onOpenManager={() => onOpenSkillManager?.(dialogNpc!.npcId)}
+                  onOpenManager={(skillName) => onOpenSkillManager?.(dialogNpc!.npcId, skillName)}
                 />
               </div>
             ) : cron && npcTab === "cards" ? (
