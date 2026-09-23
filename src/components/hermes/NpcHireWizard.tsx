@@ -20,6 +20,7 @@ import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
 import { profileLoginUrl } from "@/lib/hermes/dashboard-link";
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 import type { CatalogPayload } from "@/lib/hermes/plugin-client-types";
+import type { WorkerPluginCreateResult } from "@/lib/hermes/deskrpg-plugin-types";
 
 import {
   availableSteps,
@@ -57,6 +58,11 @@ type ProvisionedProfile = {
   cloneError?: string;
   /** 복제로 물려받은 설정·키의 **이름**. 값은 오지 않는다. */
   cloned?: { configKeys?: string[]; envKeys?: string[] };
+  /**
+   * 플러그인 0.16.0 — 이 직원 홈에 워커용 플러그인을 둔 결과. 게이트웨이의 워커 전파가 꺼져 있으면
+   * `{skipped: "propagation_disabled"}` 이고, 그 직원의 칸반·크론 결과물은 모이지 않는다. 옛 플러그인은 없다.
+   */
+  workerPlugin?: WorkerPluginCreateResult;
 };
 
 type IdentityPayload = {
@@ -1358,6 +1364,27 @@ export default function NpcHireWizard({
                       })}
                 </p>
               )}
+              {created?.workerPlugin &&
+                "skipped" in created.workerPlugin &&
+                created.workerPlugin.skipped === "propagation_disabled" && (
+                  <div
+                    className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
+                    data-worker-propagation-notice="disabled"
+                  >
+                    <p className="font-semibold text-text">
+                      {t("hermes.wizard.result.workerPropagationOff")}
+                    </p>
+                    <p className="text-text-muted">
+                      {t("hermes.wizard.result.workerPropagationHow")}
+                    </p>
+                    <Link
+                      href={`/gateways?gateway=${encodeURIComponent(gatewayId)}`}
+                      className="inline-block text-primary hover:underline"
+                    >
+                      {t("hermes.wizard.result.workerPropagationLink")}
+                    </Link>
+                  </div>
+                )}
               {created?.attendedChannels === 0 && (
                 <Link
                   href={`/channels/create?gatewayId=${encodeURIComponent(gatewayId)}`}

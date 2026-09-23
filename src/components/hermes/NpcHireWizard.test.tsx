@@ -917,3 +917,56 @@ test("남은 요청 주소를 알리고, 확인해야만 지운다", async () =>
     globalThis.fetch = originalFetch;
   }
 });
+
+test("워커 전파가 꺼진 게이트웨이면 채용 결과에 결과물이 모이지 않는다는 알림과 켜는 방법 링크", async () => {
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  try {
+    const routes = {
+      ...PROFILE_ROUTES(1),
+      "/plugin/profiles": {
+        name: "mia",
+        keyIssued: true,
+        keyStored: true,
+        attendedChannels: 1,
+        workerPlugin: { skipped: "propagation_disabled" },
+      },
+    };
+    const { root, el } = await mount(wizardWith(routes, calls));
+    await createAndOpenModel(el);
+    const notice = el.querySelector('[data-worker-propagation-notice="disabled"]');
+    assert.ok(notice, "알림이 없다");
+    assert.match(notice.textContent ?? "", /칸반·크론 결과물은 모이지 않습니다/);
+    assert.equal(notice.querySelector("a")?.getAttribute("href"), "/gateways?gateway=gw-1");
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("워커 적용이 됐거나 옛 플러그인(workerPlugin 없음)이면 알림이 없다", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const workerPlugin of [{ profile: "mia", link: "created", enabled: "added" }, undefined]) {
+      const calls: FetchCall[] = [];
+      const routes = {
+        ...PROFILE_ROUTES(1),
+        "/plugin/profiles": {
+          name: "mia",
+          keyIssued: true,
+          keyStored: true,
+          attendedChannels: 1,
+          ...(workerPlugin ? { workerPlugin } : {}),
+        },
+      };
+      const { root, el } = await mount(wizardWith(routes, calls));
+      await createAndOpenModel(el);
+      assert.equal(el.querySelector("[data-worker-propagation-notice]"), null);
+      root.unmount();
+      el.remove();
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
