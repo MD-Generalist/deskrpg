@@ -38,8 +38,10 @@ export function parseWorkerPluginReport(value: unknown): WorkerPluginReport | nu
   if (value === null || typeof value !== "object") return null;
   const missing = (value as Record<string, unknown>).missing;
   if (!Array.isArray(missing)) return null;
+  const propagation = (value as Record<string, unknown>).propagation;
   return {
     missing: missing.map(parseGap).filter((g): g is WorkerPluginGap => g !== null),
+    ...(propagation === "enabled" || propagation === "disabled" ? { propagation } : {}),
   };
 }
 

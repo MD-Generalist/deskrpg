@@ -36,6 +36,16 @@ describe("parseWorkerPluginReport", () => {
     });
   });
 
+  it("0.16.0 의 propagation 을 살리고, 모르는 값은 버린다", () => {
+    assert.deepEqual(parseWorkerPluginReport({ missing: [], propagation: "disabled" }), {
+      missing: [],
+      propagation: "disabled",
+    });
+    assert.deepEqual(parseWorkerPluginReport({ missing: [], propagation: "maybe" }), {
+      missing: [],
+    });
+  });
+
   it("옛 플러그인(필드 없음)은 undefined, 판정 실패(null)는 null — 둘을 섞지 않는다", () => {
     assert.equal(parseWorkerPluginReport(undefined), undefined);
     assert.equal(parseWorkerPluginReport(null), null);

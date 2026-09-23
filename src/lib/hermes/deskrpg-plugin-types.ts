@@ -48,7 +48,28 @@ export type WorkerPluginGap = {
   disabled: boolean;
 };
 
-export type WorkerPluginReport = { missing: WorkerPluginGap[] };
+export type WorkerPluginReport = {
+  missing: WorkerPluginGap[];
+  /**
+   * 0.16.0 — 워커 전파 옵트인 상태. `disabled` 면 플러그인이 새 프로필에 링크·활성화를 하지 않고
+   * `POST /deskrpg/worker-plugin` 은 409 `worker_propagation_disabled`. 옛 플러그인에는 키가 없다(undefined).
+   */
+  propagation?: WorkerPropagation;
+};
+
+/** 0.16.0 워커 전파 옵트인. 루트 `config.yaml` 의 설정 키 또는 환경변수로 운영자가 켠다(기본 꺼짐). */
+export type WorkerPropagation = "enabled" | "disabled";
+export const WORKER_PROPAGATION_DISABLED = "worker_propagation_disabled";
+export const WORKER_PROPAGATION_CONFIG_KEY = "plugins.entries.deskrpg.worker_propagation";
+export const WORKER_PROPAGATION_ENV = "DESKRPG_WORKER_PROPAGATION";
+export const WORKER_PROPAGATION_ENABLE_COMMAND = `hermes config set ${WORKER_PROPAGATION_CONFIG_KEY} true`;
+export const WORKER_PROPAGATION_MIN_VERSION = "0.16.0";
+
+/** 프로필 생성 응답의 `workerPlugin` — 적용 결과 또는 0.16.0 의 건너뜀. */
+export type WorkerPluginCreateResult =
+  | { profile: string; link: string; enabled: string }
+  | { skipped: "propagation_disabled" }
+  | { error: string };
 
 // ---------------------------------------------------------------------------
 // A.1 칸반 — 보드·카드
