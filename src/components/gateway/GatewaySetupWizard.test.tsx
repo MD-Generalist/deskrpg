@@ -446,7 +446,12 @@ test("review defaults credentialed profiles on and sends only checked profiles",
         .click(),
     );
     await f.click("연결하기");
-    const boxes = Array.from(f.host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    // 프로필 체크박스만 센다 — 워커 적용 체크박스는 따로 있다.
+    const boxes = Array.from(
+      f.host.querySelectorAll<HTMLInputElement>(
+        'input[type="checkbox"]:not([name="worker-propagation"])',
+      ),
+    );
     assert.equal(boxes.length, 3);
     assert.deepEqual(
       boxes.map((box) => [box.checked, box.disabled]),
@@ -596,12 +601,85 @@ test("시간대 동의를 끄면 prepare 본문에 timezone 을 넣지 않는다
     },
   );
   try {
-    const boxes = Array.from(f.host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    // 워커 적용 체크박스도 같은 화면에 있다 — 시간대 체크박스만 고른다.
+    const boxes = Array.from(
+      f.host.querySelectorAll<HTMLInputElement>(
+        'input[type="checkbox"]:not([name="worker-propagation"])',
+      ),
+    );
     assert.equal(boxes.length, 1);
     assert.equal(boxes[0].checked, true, "기본은 켬이다");
     await act(async () => boxes[0].click());
     await f.click("설치 및 연결");
     assert.equal("timezone" in (prepared ?? {}), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("워커 적용은 공개 문구와 함께 기본 켬으로 보이고 prepare 에 workerPropagation: true 를 싣는다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
+    (body) => {
+      prepared = body;
+    },
+    { ...candidate, workerPropagation: "disabled", workerLinked: false },
+  );
+  try {
+    const text = f.host.textContent!;
+    assert.match(text, /워커 적용 — 칸반·크론 결과물 모으기 \(권장\)/);
+    // 무엇을 바꾸는지와 어디에 저장되는지를 숨기지 않는다.
+    assert.match(text, /plugins\/deskrpg 링크/);
+    assert.match(text, /plugins\.enabled/);
+    assert.match(text, /plugins\.entries\.deskrpg\.worker_propagation/);
+    const box = f.host.querySelector<HTMLInputElement>('input[name="worker-propagation"]')!;
+    assert.equal(box.checked, true, "기본은 켬이다");
+    await f.click("설치 및 연결");
+    assert.equal(prepared?.workerPropagation, true);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("워커 적용을 끄면 prepare 에 workerPropagation: false 를 싣는다", async () => {
+  let prepared: Record<string, unknown> | undefined;
+  const f = await reachReview(
+    { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
+    (body) => {
+      prepared = body;
+    },
+    { ...candidate, workerPropagation: "disabled" },
+  );
+  try {
+    const box = f.host.querySelector<HTMLInputElement>('input[name="worker-propagation"]')!;
+    await act(async () => box.click());
+    await f.click("설치 및 연결");
+    assert.equal(prepared?.workerPropagation, false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("워커 적용 상태가 바뀌면 다른 변경이 없어도 버튼이 설치 및 연결이다", async () => {
+  const f = await reachReview(
+    { pluginStatus: "plugin_ready", changes: [], profiles: [] },
+    undefined,
+    {
+      ...candidate,
+      pluginInstalled: true,
+      pluginEnabled: true,
+      hasToken: true,
+      workerPropagation: "enabled",
+    },
+  );
+  try {
+    const labels = () => Array.from(f.host.querySelectorAll("button")).map((b) => b.textContent);
+    // 이미 켜져 있고 켬을 고른 상태 — 바뀌는 것이 없다.
+    assert.ok(labels().includes("검증 및 연결"));
+    const box = f.host.querySelector<HTMLInputElement>('input[name="worker-propagation"]')!;
+    await act(async () => box.click());
+    assert.ok(labels().includes("설치 및 연결"));
   } finally {
     await f.cleanup();
   }

@@ -19,6 +19,7 @@ import {
   isSetupWarningBlocking,
 } from "./setup-copy";
 import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
+import { WORKER_PROPAGATION_CONFIG_KEY } from "../../lib/hermes/deskrpg-plugin-types";
 import {
   packageManagerFor,
   parseSystemPackages,
@@ -120,6 +121,8 @@ export default function GatewaySetupWizard({
     }
   });
   const [sendTimezone, setSendTimezone] = useState(true);
+  // 워커 적용(플러그인 0.16.0 워커 전파). 기본 켬 — 칸반·크론 결과물이 모이려면 필요하다(권장).
+  const [workerPropagation, setWorkerPropagation] = useState(true);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
 
@@ -373,6 +376,10 @@ export default function GatewaySetupWizard({
   // Offer a zone only when the host has none and the browser actually knows one; never overwrite.
   const timezoneOffer =
     inspection && !inspection.candidate.timezone && browserTimezone ? browserTimezone : null;
+  // 호스트가 지금 상태를 알려 줬고 고른 값과 다르면 바뀌는 것이다. 모르는 호스트면 늘 보낸다.
+  const propagationChange =
+    !!inspection &&
+    inspection.candidate.workerPropagation !== (workerPropagation ? "enabled" : "disabled");
   const changeText = (change: string) =>
     change === "installing_service"
       ? t("hermes.wizard.review.serviceInstall")
@@ -916,6 +923,30 @@ export default function GatewaySetupWizard({
           ) : (
             <p className="text-sm">{c.noChanges}</p>
           )}
+          <fieldset
+            className="space-y-1 rounded-lg border border-border p-3"
+            data-worker-propagation-choice=""
+          >
+            <legend className="px-1 text-sm font-semibold">
+              {t("hermes.wizard.review.workerPropagation")}
+            </legend>
+            <p className="text-xs text-text-muted">
+              {t("hermes.wizard.review.workerPropagationBody", {
+                key: WORKER_PROPAGATION_CONFIG_KEY,
+              })}
+            </p>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1 accent-primary"
+                name="worker-propagation"
+                disabled={busy}
+                checked={workerPropagation}
+                onChange={(event) => setWorkerPropagation(event.target.checked)}
+              />
+              <span>{t("hermes.wizard.review.workerPropagationToggle")}</span>
+            </label>
+          </fieldset>
           <button
             className={button}
             disabled={
@@ -931,6 +962,7 @@ export default function GatewaySetupWizard({
                 candidateId: inspection.candidate.id,
                 profiles: selectedProfiles,
                 ...(timezoneOffer && sendTimezone ? { timezone: timezoneOffer } : {}),
+                workerPropagation,
                 ...(trimmedProfileName
                   ? {
                       createProfile: {
@@ -945,7 +977,11 @@ export default function GatewaySetupWizard({
               })
             }
           >
-            {busy ? c.loading : inspection.changes.length || timezoneOffer ? c.prepare : c.verify}
+            {busy
+              ? c.loading
+              : inspection.changes.length || timezoneOffer || propagationChange
+                ? c.prepare
+                : c.verify}
           </button>
           <button
             className={`${secondary} ml-2`}
