@@ -9,6 +9,14 @@ import {
 import type { LearningGraph, LearningNode } from "@/lib/hermes/plugin-client-types";
 
 type Sim = LearningNode & SimulationNodeDatum;
+
+/** 캔버스 가장자리 여백(px) — 원과 라벨 윗부분이 잘리지 않게. */
+export const GRAPH_PADDING = 16;
+/** 라벨(최대 24자, 10px)이 차지하는 대략의 폭. 이보다 오른쪽 끝에 가까우면 라벨을 왼쪽에 둔다. */
+const LABEL_WIDTH = 160;
+
+/** 오른쪽 끝에 가까운 노드는 라벨을 원 왼쪽으로 뒤집는다 — 여백만으로는 긴 라벨이 잘린다. */
+export const labelOnLeft = (x: number, width: number) => x > width - LABEL_WIDTH;
 export type PlacedNode = LearningNode & { x: number; y: number };
 
 /** FNV-1a 로 id 를 [0,1) 에 흩는다 — 초기 위치를 난수 대신 이것으로 두어 배치가 매번 같다. */
@@ -20,7 +28,7 @@ function seed(id: string): number {
 
 /**
  * 학습 관계도를 2D force 로 배치한다. 결정적이다(초기 위치를 id 해시로, 시뮬레이션은 멈춘 채 `ticks` 번만 돈다).
- * 끝점이 없는 간선은 버리고, 좌표는 캔버스 안으로 자른다. d3 가 간선 객체를 덮어쓰므로 입력은 복사해 넘긴다.
+ * 끝점이 없는 간선은 버리고, 좌표는 캔버스 안쪽(`GRAPH_PADDING` 여백)으로 자른다. d3 가 간선 객체를 덮어쓰므로 입력은 복사해 넘긴다.
  */
 export function layoutGraph(
   graph: LearningGraph,
@@ -46,7 +54,8 @@ export function layoutGraph(
     .force("center", forceCenter(opts.width / 2, opts.height / 2))
     .stop();
   for (let i = 0; i < (opts.ticks ?? 200); i += 1) sim.tick();
-  const clamp = (v: number, max: number) => Math.max(0, Math.min(max, v));
+  const clamp = (v: number, max: number) =>
+    Math.max(GRAPH_PADDING, Math.min(max - GRAPH_PADDING, v));
   return {
     nodes: nodes.map((n) => ({
       id: n.id,

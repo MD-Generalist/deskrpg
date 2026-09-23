@@ -304,3 +304,12 @@ test("보관이 409 skill_pinned 로 거절되면 같은 안내를 보인다", a
   await click('[data-action="confirm-archive"]');
   assert.ok(text().includes("먼저 고정을 해제하세요"));
 });
+
+test("스킬을 고르기 전 오른쪽 칸에 고르라는 안내", async () => {
+  mockFetch({ ...extras, [LIST]: listBody() });
+  await render(modal());
+  assert.ok(text().includes("왼쪽에서 스킬을 고르세요"));
+  mockFetch({ ...extras, [LIST]: listBody(), ...opened() });
+  await click('[data-skill="weekly"]');
+  assert.ok(!text().includes("왼쪽에서 스킬을 고르세요"));
+});

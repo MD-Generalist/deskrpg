@@ -173,3 +173,13 @@ test("스킬 노드 삭제가 409 skill_pinned 면 고정 해제 안내", async 
   await click('[data-action="node-delete-confirm"]');
   assert.ok(text().includes("먼저 고정을 해제하세요"));
 });
+
+test("라벨은 원 옆에 그리고, 오른쪽 끝 노드는 왼쪽으로 뒤집는다", async () => {
+  mockFetch({ [GRAPH]: graph() });
+  await render(view(true));
+  for (const el of Array.from(container.querySelectorAll("g[role=button]"))) {
+    const x = Number(/translate\(([-\d.]+),/.exec(el.getAttribute("transform")!)![1]);
+    const label = el.querySelector("text")!;
+    assert.equal(label.getAttribute("text-anchor"), x > 720 - 160 ? "end" : "start");
+  }
+});

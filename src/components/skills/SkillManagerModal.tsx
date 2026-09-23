@@ -300,6 +300,11 @@ export default function SkillManagerModal({
                   ))}
                 </aside>
                 <main className="min-w-0 flex-1">
+                  {!selected && (
+                    <p data-hint="pick-skill" className="p-5 text-sm text-text-dim">
+                      {t("skills.pickSkill")}
+                    </p>
+                  )}
                   {selected && (
                     <SkillDetailPane
                       key={selected}

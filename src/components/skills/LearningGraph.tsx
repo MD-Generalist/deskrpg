@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "@/lib/i18n";
 import type { LearningGraph as Graph, LearningNodeDetail } from "@/lib/hermes/plugin-client-types";
 
-import { layoutGraph, timeRange, visibleAt } from "./graph-layout";
+import { labelOnLeft, layoutGraph, timeRange, visibleAt } from "./graph-layout";
 import { skillErrorText } from "./skill-error-text";
 import { SkillsApiError, type SkillsApi } from "./skills-api";
 
@@ -150,7 +150,12 @@ export default function LearningGraph({ api, canManage, onChanged }: LearningGra
                     node?.id === n.id ? "stroke-text" : ""
                   }`}
                 />
-                <text x={10} y={4} className="fill-text text-[10px]">
+                <text
+                  x={labelOnLeft(n.x, W) ? -10 : 10}
+                  y={4}
+                  textAnchor={labelOnLeft(n.x, W) ? "end" : "start"}
+                  className="fill-text text-[10px]"
+                >
                   {n.label.slice(0, 24)}
                 </text>
               </g>
