@@ -583,4 +583,6 @@ export type CronApi = {
 export type ProfilePluginClient = {
   profileName: string;
   cron: CronApi;
+  /** 0.15.0 `profile_skill_admin` — 옛 플러그인이면 호출이 404 로 돌아온다. */
+  skills: SkillAdminApi;
 };

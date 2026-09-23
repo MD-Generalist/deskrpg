@@ -41,6 +41,7 @@ import type {
   WorkerLog,
 } from "./deskrpg-plugin-types";
 import { KANBAN_TASK_STATUSES } from "./deskrpg-plugin-types";
+import { createFakeSkillState, routeSkills, type FakeSkillState } from "./fake-skill-routes";
 import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,8 @@ export type FakePluginServer = {
     filename: string;
     body: string | Buffer;
   }): { id: string };
+  /** 그 프로필의 0.15.0 스킬 관리 상태(`fake-skill-routes.ts`). 없으면 빈 상태를 만든다. */
+  skills(profile: string): FakeSkillState;
 };
 
 // ---------------------------------------------------------------------------
@@ -229,6 +232,7 @@ export async function startFakePluginServer(
   let cron = new Map<string, CronState>();
   let artifacts = new Map<string, ArtifactRecord>();
   let cardProposals = new Map<string, CardProposalRecord>();
+  let skillStates = new Map<string, FakeSkillState>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -244,7 +248,17 @@ export async function startFakePluginServer(
     artifacts = new Map();
     faults.length = 0;
     cardProposals = new Map();
+    skillStates = new Map();
     seq = 0;
+  }
+
+  function skillsFor(profile: string): FakeSkillState {
+    let state = skillStates.get(profile);
+    if (!state) {
+      state = createFakeSkillState();
+      skillStates.set(profile, state);
+    }
+    return state;
   }
 
   function cronFor(profile: string): CronState {
@@ -1613,6 +1627,8 @@ export async function startFakePluginServer(
   }
 
   function routeProfile(profile: string, req: ParsedRequest): Reply {
+    const skillReply = routeSkills(skillsFor(profile), req);
+    if (skillReply) return skillReply;
     const { method, pathname, params, json } = req;
     const state = cronFor(profile);
     const rest = pathname.replace(/^\/deskrpg\/cron/, "");
@@ -1802,6 +1818,7 @@ export async function startFakePluginServer(
     },
     seedArtifact,
     seedAttachment,
+    skills: skillsFor,
     seedCardProposal: (proposalId) => {
       cardProposals.set(proposalId, {
         resolvedAt: null,

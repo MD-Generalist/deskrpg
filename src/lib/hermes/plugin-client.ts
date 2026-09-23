@@ -37,6 +37,7 @@ import type {
   PluginResponse,
   ProfilePluginClient,
   RawPluginResponse,
+  SkillAdminApi,
 } from "./plugin-client-types";
 export type {
   PluginResponse,
@@ -492,7 +493,7 @@ export function createOwnerPluginClient(
   };
 }
 
-/** 한 프로필의 키로만 부르는 표면 — `/p/{profile}/deskrpg/cron/*`. */
+/** 한 프로필의 키로만 부르는 표면 — `/p/{profile}/deskrpg/cron/*` 와 스킬 관리(`skills|curator|learning/*`). */
 export function createProfilePluginClient(
   input: TransportInput & { profileName: string; profileToken: string },
 ): ProfilePluginClient {
@@ -523,5 +524,71 @@ export function createProfilePluginClient(
       call(`${root}/blueprints/instantiate`, token, { method: "POST", body }),
   };
 
-  return { profileName: input.profileName, cron };
+  const prof = `/p/${seg(input.profileName)}/deskrpg`;
+  const skill = (name: string, suffix = "") => `${prof}/skills/${seg(name)}${suffix}`;
+  // 변경 요청만 사용자 id 를 싣는다 — 플러그인이 ledger 에 변경자로 남긴다.
+  const as = (actor: string) => ({ headers: { "x-deskrpg-actor": actor } });
+
+  const skills: SkillAdminApi = {
+    list: () => call(`${prof}/skills`, token),
+    detail: (name) => call(skill(name), token),
+    readFile: (name, path) => call(`${skill(name, "/file")}${query({ path })}`, token),
+    writeFile: (name, body, actor) =>
+      call(skill(name, "/file"), token, { method: "PUT", body, ...as(actor) }),
+    create: (body, actor) => call(`${prof}/skills`, token, { method: "POST", body, ...as(actor) }),
+    setEnabled: (name, enabled, actor) =>
+      call(skill(name, "/enabled"), token, { method: "PUT", body: { enabled }, ...as(actor) }),
+    setEnabledBulk: (body, actor) =>
+      call(`${prof}/skills/enabled`, token, { method: "PUT", body, ...as(actor) }),
+    setPinned: (name, pinned, actor) =>
+      call(skill(name, "/pinned"), token, { method: "PUT", body: { pinned }, ...as(actor) }),
+    archive: (name, actor) =>
+      call(skill(name, "/archive"), token, { method: "POST", body: {}, ...as(actor) }),
+    listArchived: () => call(`${prof}/skills/archive`, token),
+    restore: (name, actor) =>
+      call(`${prof}/skills/archive/${seg(name)}/restore`, token, {
+        method: "POST",
+        body: {},
+        ...as(actor),
+      }),
+    purge: (name, actor) =>
+      call(`${prof}/skills/archive/${seg(name)}`, token, { method: "DELETE", ...as(actor) }),
+    hubSearch: (q, source) => call(`${prof}/skills/hub/search${query({ q, source })}`, token),
+    hubPreview: (identifier) => call(`${prof}/skills/hub/preview${query({ identifier })}`, token),
+    hubInstall: (body, actor) =>
+      call(`${prof}/skills/hub/installs`, token, { method: "POST", body, ...as(actor) }),
+    hubUninstall: (name, actor) =>
+      call(`${prof}/skills/hub/uninstall`, token, {
+        method: "POST",
+        body: { name },
+        ...as(actor),
+      }),
+    hubUpdate: (name, actor) =>
+      call(`${prof}/skills/hub/update`, token, {
+        method: "POST",
+        body: name ? { name } : {},
+        ...as(actor),
+      }),
+    job: (kind, jobId) =>
+      call(
+        kind === "hub"
+          ? `${prof}/skills/hub/installs/${seg(jobId)}`
+          : `${prof}/curator/runs/${seg(jobId)}`,
+        token,
+      ),
+    curator: () => call(`${prof}/curator`, token),
+    setCuratorPaused: (paused, actor) =>
+      call(`${prof}/curator/paused`, token, { method: "PUT", body: { paused }, ...as(actor) }),
+    runCurator: (actor) =>
+      call(`${prof}/curator/runs`, token, { method: "POST", body: {}, ...as(actor) }),
+    graph: (includeMemory) =>
+      call(`${prof}/learning/graph${query({ includeMemory: includeMemory ? 1 : 0 })}`, token),
+    node: (id) => call(`${prof}/learning/node${query({ id })}`, token),
+    putNode: (body, actor) =>
+      call(`${prof}/learning/node`, token, { method: "PUT", body, ...as(actor) }),
+    deleteNode: (body, actor) =>
+      call(`${prof}/learning/node`, token, { method: "DELETE", body, ...as(actor) }),
+  };
+
+  return { profileName: input.profileName, cron, skills };
 }
