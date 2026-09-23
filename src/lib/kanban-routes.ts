@@ -616,8 +616,6 @@ export async function dispatchBoard(req: NextRequest, channelId: string) {
 // 스웜 — Hermes `create_swarm` 으로 가는 경로. 토폴로지는 Hermes 가 만든다.
 // ---------------------------------------------------------------------------
 
-type SwarmWorkerInput = { npcId: string; title: string; body?: string; skills?: string[] };
-
 export async function createSwarm(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
