@@ -3617,9 +3617,17 @@ const ja: Record<string, string> = {
     "社員1人がHermesプロフィール1つです。名前を決め、人格を書き、その社員としてモデルにログインします。",
   "profiles.new.sharedGateway": "共有されたゲートウェイです。社員の登録は所有者が行います。",
   "profiles.detail.notFound": "このゲートウェイにその社員はいません。",
-  "profiles.detail.pluginRecheckHint":
-    "プラグインの状態を再確認すると、人格・AIモデルの編集が開く場合があります。",
-  "profiles.detail.pluginRecheck": "再確認",
+  "profiles.detail.pluginRecheck": "ゲートウェイを再確認",
+  "profiles.detail.lock.title": "人格・AI モデルの編集がロックされています",
+  "profiles.detail.lock.plugin_unauthorized":
+    "ゲートウェイに保存されたトークンがオーナーキー（default プロファイルの API_SERVER_KEY）ではないため、DeskRPG プラグインにアクセスできません。ゲートウェイ設定でトークンをオーナーキーに置き換えてください。",
+  "profiles.detail.lock.plugin_absent":
+    "ゲートウェイのマシンに deskrpg プラグインがインストール・有効化されていません。ゲートウェイのホストで下のコマンドを実行し、このアプリが使うバージョンをインストール・有効化してからゲートウェイを再起動してください。",
+  "profiles.detail.lock.unknown":
+    "ゲートウェイに接続できず、プラグインの状態がわかりません。ゲートウェイが起動しているか、ゲートウェイ URL が Hermes API サーバーのポート（既定 8642）を指しているか確認してください。",
+  "profiles.detail.lock.openGateway": "ゲートウェイ設定を開く",
+  "profiles.detail.lock.recheckHint":
+    "対処したら［ゲートウェイを再確認］を押すと、ゲートウェイのプラグイン状態を再検査します。上の［接続テスト］はこの社員のキーだけを確認するため、このロックは解除できません。",
   "profiles.detail.pluginRechecking": "確認中…",
   "profiles.detail.sectionTitle": "人格・外見・AIモデル",
   "character.preview.label": "選択したキャラクター",
