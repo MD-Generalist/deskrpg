@@ -18,6 +18,8 @@ Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](d
 
 Want a VPS for the Docker Manager route? [Get one here](https://hostinger.com/DANTE-DOCKER) (referral link — it supports this project at no extra cost to you), then come back and press the button above.
 
+> **Already running DeskRPG on Hostinger? Replace the compose file once.** Update never reads a new compose file, so the part that installs the Hermes plugin stays as it was on the day you set it up. If your compose file has no `plugin-pin` in it, follow [these four steps](deploy/hostinger/README.md#set-up-before-this-change-replace-the-compose-once); your data is kept.
+
 DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles become employees: they sit at desks, answer when you mention them, hold meetings with turn control, and work kanban cards. **Call them over and read their completion reports in office chat.** Several people can be in the same office at once.
 
 DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you already run, so existing Hermes users bring their profiles as they are — nothing to migrate.

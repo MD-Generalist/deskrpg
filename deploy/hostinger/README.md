@@ -167,7 +167,28 @@ The compose uses `ghcr.io/dandacompany/deskrpg:latest` and `nousresearch/hermes-
 
 Data lives in the named volumes `deskrpg-data` (SQLite, uploads, generated `JWT_SECRET`) and `hermes-data` (`~/.hermes`, logins, plugins) and survives Update; database migrations run at startup. Rolling back to a release older than the one that migrated your database is not guaranteed to work — back up first (hPanel → VPS → Backups).
 
-**Installed before 2026-09-17?** Update never re-reads the compose, so your saved file lacks `:latest`, the plugin service and the dashboard route. Project → **Manage** → **.yaml editor** → replace the contents with the current [`docker-compose.yml`](https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml) → **Save and deploy**. Volumes and the environment box are kept. Do not delete the project to re-import it — deleting removes its volumes.
+### Set up before this change? Replace the compose once
+
+Your office keeps updating, but the part that installs the Hermes plugin stays the way it was on the day you set it up, because Update never reads a new compose file. Replace the compose file once, and after that every Update keeps the plugin matched to your DeskRPG.
+
+You only need this if your compose file does not contain `plugin-pin`.
+
+1. hPanel → VPS → **Docker Manager** → your DeskRPG project → **Manage** → **.yaml editor**.
+2. Search the file (Ctrl+F or ⌘F) for `plugin-pin`. If you find it, you are done.
+3. Select everything, delete it, and paste the contents of the current [`docker-compose.yml`](https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml).
+4. Press **Save and deploy**.
+
+Your data and the Environment box are kept. Do not delete the project to start over — that deletes your data too.
+
+<details>
+<summary>Details</summary>
+
+- Docker Manager's **Update** pulls new images but reuses the compose file you imported, so a fix in the compose itself never reaches you without this step. Installs made before 2026-09-17 also lack `:latest`, the plugin service and the dashboard route; the same replacement adds them.
+- The new compose adds a one-shot `plugin-pin` service: it reads, from the DeskRPG image, the plugin commit that release was tested with. `hermes-plugins` then installs that commit (reinstalling when the installed one differs) and Hermes restarts to serve it. The old compose installed whatever was on the plugin's main branch, and could stay on an old commit for good.
+- Deleting the project removes its named volumes (`deskrpg-data`, `hermes-data`) — your database, uploads, logins and plugins.
+- Afterwards the gateway screen in DeskRPG shows the plugin at the version this app installs; press **Test connection** if it still shows the old one.
+
+</details>
 
 Other options on the project: Restart / View logs / Delete, and **Terminal** for a shell in a container.
 

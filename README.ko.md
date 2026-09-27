@@ -18,6 +18,15 @@ English README: [README.md](README.md)
 
 도커 매니저 경로로 쓸 VPS가 필요하다면 [여기서 받으세요](https://hostinger.com/DANTE-DOCKER) (제휴 링크입니다 — 추가 비용 없이 이 프로젝트를 후원하게 됩니다). 받은 뒤 위 버튼을 누르면 됩니다.
 
+> **이미 Hostinger 에서 DeskRPG 를 쓰고 있다면 compose 파일을 한 번 바꿔 주세요.** Update 는 새 compose 파일을 읽지 않아서, Hermes 플러그인을 설치하는 부분이 처음 설치한 날 그대로 남아요. compose 파일에 `plugin-pin` 이 없다면 아래처럼 바꿔 주세요. 데이터와 환경변수는 그대로 남아요.
+>
+> 1. hPanel → VPS → **Docker Manager** → DeskRPG 프로젝트 → **Manage** → **.yaml editor** 를 열어요.
+> 2. 파일에서 `plugin-pin` 을 찾아요(Ctrl+F 또는 ⌘F). 있으면 여기서 끝이에요.
+> 3. 내용을 모두 지우고 [최신 `docker-compose.yml`](https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml) 내용을 붙여 넣어요.
+> 4. **Save and deploy** 를 눌러요.
+>
+> 다시 시작하려고 프로젝트를 지우지는 마세요. 데이터까지 지워져요. 왜 필요한지는 [자세한 설명](deploy/hostinger/README.md#set-up-before-this-change-replace-the-compose-once)에 있어요.
+
 DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 오피스**입니다. 이미 쓰고 있는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 프로필이 그대로 직원이 됩니다. 자리에 앉아 있다가 지명하면 답하고, 회의실에서 발언권을 주고받고, 칸반 카드를 처리합니다. **NPC를 곁으로 부르고 사무실 채팅에서 완료 보고를 확인하세요.** 여러 사람이 같은 오피스에 동시에 들어올 수 있습니다.
 
 DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 돌리고 있는 Hermes 게이트웨이에 붙기만 하므로, 기존 Hermes 사용자는 옮길 것 없이 프로필 그대로 올라탑니다.
