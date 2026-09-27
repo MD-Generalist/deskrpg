@@ -268,6 +268,8 @@ export async function listAccessibleGatewayResources(
       pluginStatus: resource.pluginStatus,
       pluginVersion: resource.pluginVersion,
       pluginCheckedAt: resource.pluginCheckedAt,
+      // The running plugin commit (0.30.0+), for telling an unreleased build from the pinned one.
+      pluginCommit: restorePluginInfo(resource.pluginInfoJson)?.install?.commit ?? null,
       // The Hermes dashboard is a management screen covering the whole gateway, so only the owner is told about it.
       dashboardUrl: restorePluginInfo(resource.pluginInfoJson)?.dashboard_url ?? null,
       // Only the owner creates employees. The hiring wizard sends `cloneFrom: "default"`
@@ -300,6 +302,7 @@ export async function listAccessibleGatewayResources(
         pluginStatus: resource.pluginStatus,
         pluginVersion: resource.pluginVersion,
         pluginCheckedAt: resource.pluginCheckedAt,
+        pluginCommit: restorePluginInfo(resource.pluginInfoJson)?.install?.commit ?? null,
         dashboardUrl: null as string | null,
         workerPluginWarning: null as WorkerPluginWarning | null,
         workerLaunchWarning: null as WorkerLaunchWarning | null,
