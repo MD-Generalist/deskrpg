@@ -630,7 +630,7 @@ function cardsPanel(
 async function withStubbedFetch<T>(run: () => Promise<T>): Promise<T> {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
-    new Response(JSON.stringify({ columns: [], npcs: [], jobs: [] }), {
+    new Response(JSON.stringify({ columns: [], npcs: [], jobs: [], skills: [] }), {
       status: 200,
     })) as typeof fetch;
   try {
@@ -1527,4 +1527,50 @@ test("a room reply to my own message can be stopped; a reply to someone else's c
     }),
   );
   assert.ok(!otherEl.querySelector('[data-testid="chat-stop"]'));
+});
+
+test("a tab request switches the open employee back to the chat tab and focuses the input", async () => {
+  await withStubbedFetch(async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const root = createRoot(el);
+    await act(async () => {
+      root.render(cardsPanel());
+    });
+    await click(el.querySelector('[role="tab"][data-tab="skills"]')!);
+    assert.equal(
+      el.querySelector('[role="tab"][data-tab="skills"]')?.getAttribute("aria-selected"),
+      "true",
+    );
+
+    // Same employee as before — the NPC did not change, so only the request brings chat back.
+    await act(async () => {
+      root.render(cardsPanel({ npcTabRequest: { npcId: "npc-a", tab: "chat", seq: 1 } }));
+    });
+    assert.equal(
+      el.querySelector('[role="tab"][data-tab="chat"]')?.getAttribute("aria-selected"),
+      "true",
+    );
+    const input = el.querySelector('[data-chat-scope="npc"] textarea');
+    assert.equal(Boolean(input), true);
+    assert.equal(document.activeElement === input, true);
+
+    // Already on chat with focus elsewhere: a new request focuses the input again.
+    (document.activeElement as HTMLElement | null)?.blur();
+    await act(async () => {
+      root.render(cardsPanel({ npcTabRequest: { npcId: "npc-a", tab: "chat", seq: 2 } }));
+    });
+    assert.equal(document.activeElement === input, true);
+
+    // Re-rendering with the same request does not override a tab the user picked afterwards.
+    await click(el.querySelector('[role="tab"][data-tab="cron"]')!);
+    await act(async () => {
+      root.render(cardsPanel({ npcTabRequest: { npcId: "npc-a", tab: "chat", seq: 2 } }));
+    });
+    assert.equal(
+      el.querySelector('[role="tab"][data-tab="cron"]')?.getAttribute("aria-selected"),
+      "true",
+    );
+    await act(async () => root.unmount());
+  });
 });

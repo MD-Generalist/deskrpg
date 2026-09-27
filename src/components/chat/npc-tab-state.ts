@@ -14,3 +14,10 @@ export type NpcTabState = { npcId: string | null; tab: NpcPanelTab };
 export function tabFor(state: NpcTabState, dialogNpcId: string | null): NpcPanelTab {
   return state.npcId === dialogNpcId ? state.tab : "chat";
 }
+
+/**
+ * An outside request to show one tab of an employee's panel — e.g. "ask in chat" from the skill
+ * manager. `seq` makes each request distinct, so asking again for a tab already open still counts
+ * (and refocuses the input) while a re-render with the same request changes nothing.
+ */
+export type NpcTabRequest = { npcId: string; tab: NpcPanelTab; seq: number };
