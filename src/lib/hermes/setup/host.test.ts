@@ -126,6 +126,10 @@ import {
 } from "./host-helper";
 import { PLUGIN_PIN, PLUGIN_VERSION } from "./pin";
 import { setupHostError } from "@/components/gateway/setup-copy";
+import enText from "@/lib/i18n/locales/en";
+import jaText from "@/lib/i18n/locales/ja";
+import koText from "@/lib/i18n/locales/ko";
+import zhText from "@/lib/i18n/locales/zh";
 function fixture(
   script: string,
   initial: { config?: object; env?: string; hermesVersion?: string | null; plugin?: object } = {},
@@ -604,6 +608,19 @@ time.sleep(30)
     }
     rmSync(temp, { recursive: true, force: true });
   }
+});
+test("a host timeout explains that Hermes may still be getting ready, in every locale", () => {
+  for (const [locale, text] of [
+    ["ko", koText],
+    ["en", enText],
+    ["ja", jaText],
+    ["zh", zhText],
+  ] as const)
+    assert.equal(
+      setupHostError(locale, "command_timeout"),
+      text["hermes.wizard.error.commandTimeout"],
+      locale,
+    );
 });
 test("launchd rejects loaded argv that differ from the reviewed disk service definition", () => {
   const result = fixture(String.raw`

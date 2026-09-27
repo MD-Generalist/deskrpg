@@ -509,8 +509,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     missing:
       "Hermes 실행 파일을 찾지 못했습니다. 관리자가 해당 호스트의 Hermes 설치와 실행 경로를 확인한 뒤 다시 검색하세요.",
     ssh: "허용된 SSH 호스트에 연결할 수 없습니다. 관리자가 호스트 별칭·네트워크·키 인증을 확인한 뒤 다시 시도하세요.",
-    timeout:
-      "호스트 작업 시간이 초과되었습니다. 관리자가 호스트와 네트워크 상태를 확인한 뒤 다시 시도하세요.",
+    timeout: koText["hermes.wizard.error.commandTimeout"],
     hermesVersion: koText["hermes.wizard.error.hermesVersionUnsupported"],
     pluginUpdate: koText["hermes.wizard.error.pluginUpdateFailed"],
     pluginUpdateHost: koText["hermes.wizard.error.pluginUpdateUnsupportedHost"],
@@ -577,8 +576,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     missing:
       "The Hermes executable was not found. Ask the administrator to check the host’s Hermes installation and executable path, then discover again.",
     ssh: "Cannot connect to the approved SSH host. Ask the administrator to check the alias, network and key authentication, then retry.",
-    timeout:
-      "The host operation timed out. Ask the administrator to check the host and network, then retry.",
+    timeout: enText["hermes.wizard.error.commandTimeout"],
     hermesVersion: enText["hermes.wizard.error.hermesVersionUnsupported"],
     pluginUpdate: enText["hermes.wizard.error.pluginUpdateFailed"],
     pluginUpdateHost: enText["hermes.wizard.error.pluginUpdateUnsupportedHost"],
@@ -645,8 +643,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     missing:
       "Hermesの実行ファイルが見つかりません。管理者がインストールと実行パスを確認してから再検索してください。",
     ssh: "許可されたSSHホストに接続できません。管理者がホスト別名、ネットワーク、鍵認証を確認してから再試行してください。",
-    timeout:
-      "ホスト処理がタイムアウトしました。管理者がホストとネットワークを確認してから再試行してください。",
+    timeout: jaText["hermes.wizard.error.commandTimeout"],
     hermesVersion: jaText["hermes.wizard.error.hermesVersionUnsupported"],
     pluginUpdate: jaText["hermes.wizard.error.pluginUpdateFailed"],
     pluginUpdateHost: jaText["hermes.wizard.error.pluginUpdateUnsupportedHost"],
@@ -704,7 +701,7 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     config: "发现不安全的主机路径或无效配置。请管理员检查Hermes安装路径、文件权限和配置格式。",
     missing: "未找到Hermes可执行文件。请管理员检查主机上的Hermes安装和执行路径，然后重新搜索。",
     ssh: "无法连接已批准的SSH主机。请管理员检查别名、网络和密钥身份验证，然后重试。",
-    timeout: "主机操作超时。请管理员检查主机和网络，然后重试。",
+    timeout: zhText["hermes.wizard.error.commandTimeout"],
     hermesVersion: zhText["hermes.wizard.error.hermesVersionUnsupported"],
     pluginUpdate: zhText["hermes.wizard.error.pluginUpdateFailed"],
     pluginUpdateHost: zhText["hermes.wizard.error.pluginUpdateUnsupportedHost"],

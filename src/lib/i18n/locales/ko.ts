@@ -511,6 +511,8 @@ const ko: Record<string, string> = {
   "hermes.wizard.review.workerPropagationBody":
     "켜 두면 직원이 혼자 일할 때 한 일이 DeskRPG에 기록되고, 승인이 필요한 업무도 확인을 거쳐요. 새로 뽑는 직원에게도 자동으로 적용돼요.",
   "hermes.wizard.review.workerPropagationToggle": "켜 두기",
+  "hermes.wizard.error.commandTimeout":
+    "호스트 작업이 제시간에 끝나지 않았어요. Hermes가 업데이트나 플러그인 변경 뒤 준비 중일 수 있으니 몇 분 뒤 다시 시도하세요.",
   "hermes.wizard.error.workerLaunchWriteFailed":
     "업무 카드 시작 설정을 저장하지 못했어요. Hermes가 설치된 컴퓨터의 설정 위치(Linux는 ~/.config/systemd/user/hermes-gateway.service.d/, macOS는 ~/.hermes/.env, Windows는 %LOCALAPPDATA%\\hermes\\.env)를 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.error.workerPropagationWriteFailed":
