@@ -161,6 +161,7 @@ import type { ChatResponse } from "@/lib/chat-response";
 import {
   npcPresentationPhases,
   npcResponseFailures,
+  latestFailedRequestId,
   initialChatResponseState,
   reconcileNpcResponseMessages,
   reduceChatResponseState,
@@ -2386,7 +2387,20 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // D08 inputs that only this page knows: who waits on a person (inbox rows), whose last reply failed, who is
   // walking over to report.
   const attentionRows = useAttentionRows(channelId, socket);
-  const npcResponseFailed = useMemo(() => npcResponseFailures(chatResponses), [chatResponses]);
+  // Failures the person has looked at in the 1:1 chat — opening the chat is enough to clear the ❗ (D08).
+  const [seenResponseFailures, setSeenResponseFailures] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  useEffect(() => {
+    if (!dialogNpcId) return;
+    const failed = latestFailedRequestId(chatResponses, dialogNpcId);
+    if (failed)
+      setSeenResponseFailures((prev) => (prev.has(failed) ? prev : new Set(prev).add(failed)));
+  }, [dialogNpcId, chatResponses]);
+  const npcResponseFailed = useMemo(
+    () => npcResponseFailures(chatResponses, seenResponseFailures),
+    [chatResponses, seenResponseFailures],
+  );
   const npcReporting = useMemo(() => new Set(reportQueue.map((item) => item.npcId)), [reportQueue]);
   const stateRoster = useMemo(
     () => rosterNpcs.map((npc) => ({ id: npc.id, profileName: npc.profile?.profileName ?? null })),

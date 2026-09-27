@@ -5,6 +5,7 @@ import type { ChatResponse } from "@/lib/chat-response";
 import {
   npcPresentationPhases,
   npcResponseFailures,
+  latestFailedRequestId,
   initialChatResponseState,
   reconcileNpcResponseMessages,
   reduceChatResponseState,
@@ -280,4 +281,31 @@ test("an employee is marked failed only while their latest response is the faile
   // Trying again replaces the failure as the latest response.
   put({ requestId: "r3", status: "queued", updatedAt: 2 });
   assert.deepEqual([...npcResponseFailures(state)], []);
+});
+
+test("a failure the person has seen in the 1:1 chat no longer marks the employee", () => {
+  let state = initialChatResponseState;
+  const put = (over: Partial<ChatResponse> & Pick<ChatResponse, "requestId">) => {
+    state = reduceChatResponseState(state, {
+      type: "state",
+      scope: "npc",
+      scopeId: over.npcId ?? "npc-1",
+      response: response(over),
+    });
+  };
+  put({ requestId: "r1", status: "failed", updatedAt: 1 });
+  put({ requestId: "r2", npcId: "npc-2", status: "failed", updatedAt: 1 });
+  assert.equal(latestFailedRequestId(state, "npc-1"), "r1");
+  assert.equal(latestFailedRequestId(state, "npc-3"), null);
+
+  const seen = new Set(["r1"]);
+  assert.deepEqual([...npcResponseFailures(state, seen)], ["npc-2"]);
+
+  // A new failure is new news — it marks the employee again until it is seen too.
+  put({ requestId: "r4", status: "failed", updatedAt: 3 });
+  assert.deepEqual([...npcResponseFailures(state, seen)].sort(), ["npc-1", "npc-2"]);
+  assert.equal(latestFailedRequestId(state, "npc-1"), "r4");
+
+  put({ requestId: "r5", status: "complete", updatedAt: 4 });
+  assert.equal(latestFailedRequestId(state, "npc-1"), null, "only a failed latest response counts");
 });

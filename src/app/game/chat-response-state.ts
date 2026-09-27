@@ -176,12 +176,8 @@ export function upsertLegacyNpcChunk(
 
 export { isActive as isActiveChatResponse };
 
-/** Latest record per request, then strongest active phase across rooms and DM. */
-/**
- * Employees whose **latest** response failed. A new request replaces it as the latest, so the mark clears the
- * moment the person tries again — no separate acknowledgement to keep in sync.
- */
-export function npcResponseFailures(state: ChatResponseState): Set<string> {
+/** Each employee's latest response across rooms and DM. */
+function latestResponseByNpc(state: ChatResponseState): Map<string, ChatResponse> {
   const latestByNpc = new Map<string, ChatResponse>();
   for (const responses of [...Object.values(state.rooms), ...Object.values(state.npcs)])
     for (const response of responses) {
@@ -189,11 +185,31 @@ export function npcResponseFailures(state: ChatResponseState): Set<string> {
       if (!prior || response.updatedAt >= prior.updatedAt)
         latestByNpc.set(response.npcId, response);
     }
+  return latestByNpc;
+}
+
+/**
+ * Employees whose **latest** response failed. A new request replaces it as the latest, so the mark clears the
+ * moment the person tries again — no separate acknowledgement to keep in sync. `seen` holds the request ids of
+ * failures the person already looked at in the 1:1 chat; those no longer mark the employee.
+ */
+export function npcResponseFailures(
+  state: ChatResponseState,
+  seen: ReadonlySet<string> = new Set(),
+): Set<string> {
   const failed = new Set<string>();
-  for (const [npcId, response] of latestByNpc) if (response.status === "failed") failed.add(npcId);
+  for (const [npcId, response] of latestResponseByNpc(state))
+    if (response.status === "failed" && !seen.has(response.requestId)) failed.add(npcId);
   return failed;
 }
 
+/** The request id of an employee's latest response when that response failed, else null. */
+export function latestFailedRequestId(state: ChatResponseState, npcId: string): string | null {
+  const latest = latestResponseByNpc(state).get(npcId);
+  return latest?.status === "failed" ? latest.requestId : null;
+}
+
+/** Latest record per request, then strongest active phase across rooms and DM. */
 export function npcPresentationPhases(state: ChatResponseState) {
   const latest = new Map<string, ChatResponse>();
   for (const responses of [...Object.values(state.rooms), ...Object.values(state.npcs)])
