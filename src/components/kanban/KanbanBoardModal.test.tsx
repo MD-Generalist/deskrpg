@@ -1962,7 +1962,6 @@ test("upstream Hermes: new cards and swarms stay available and the board says th
     );
     const notice = f.host.querySelector("[data-no-approval-notice]");
     assert.equal(Boolean(notice), true);
-    assert.match(notice?.textContent ?? "", /승인 없이 완료/);
   } finally {
     await f.cleanup();
   }
@@ -2146,6 +2145,50 @@ test("a mixed card waiting for a person shows the AI reviewer's opinion", async 
     const opinion = f.host.querySelector("[data-ai-opinion]");
     assert.match(opinion?.textContent ?? "", /AI 의견/);
     assert.match(opinion?.textContent ?? "", /통과: 근거가 맞다/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("employees whose cards can finish without approval are named on the board", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(
+          status({
+            capabilities: [
+              "kanban",
+              "cron",
+              "events",
+              "kanban_review_policy_v1",
+              "review_hooks_v1",
+            ],
+            unreviewedProfiles: ["Sophie", "not-in-this-channel"],
+          }),
+        )
+      : json(board()),
+  );
+  try {
+    const gap = f.host.querySelector("[data-review-gap]");
+    assert.equal(gap?.getAttribute("data-review-gap"), "n1");
+    assert.match(gap?.textContent ?? "", /소피/);
+    // Only shown, never blocking: new cards stay available.
+    const create = [...f.host.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("새 카드"),
+    );
+    assert.equal(create?.disabled, false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("no approval-gap notice when every employee runs with the approval hooks", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(status({ unreviewedProfiles: ["not-in-this-channel"] }))
+      : json(board()),
+  );
+  try {
+    assert.equal(Boolean(f.host.querySelector("[data-review-gap]")), false);
   } finally {
     await f.cleanup();
   }

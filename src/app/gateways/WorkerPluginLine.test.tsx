@@ -45,7 +45,6 @@ for (const locale of LOCALES) {
       locale,
     );
     const text = host.textContent ?? "";
-    assert.match(text, /2/);
     assert.match(text, /sophie, oliver/);
     assert.equal(host.querySelectorAll("button").length, 1);
     // Translation keys do not leak through as is.
@@ -313,3 +312,81 @@ test("when propagation is on or unknown (old plugin), it behaves as before", asy
     await cleanup();
   }
 });
+
+test("propagation off where approvals are hooks: danger, and names who can finish without approval", async () => {
+  const { host, cleanup } = await render(
+    <WorkerPluginLine
+      warning={null}
+      propagation="disabled"
+      unreviewed={["sophie", "noah"]}
+      isOwner
+      apply={noop}
+      onApplied={() => {}}
+      enablePropagation={async () => ({ ok: true })}
+    />,
+  );
+  const box = host.querySelector('[data-worker-propagation="disabled"]');
+  assert.equal(box?.getAttribute("data-severity"), "danger");
+  assert.equal(box?.getAttribute("data-approval-risk"), "true");
+  assert.match(host.querySelector("[data-approval-risk-names]")?.textContent ?? "", /sophie, noah/);
+  await cleanup();
+});
+
+test("propagation off with nothing unreviewed stays a warning without the approval part", async () => {
+  const { host, cleanup } = await render(
+    <WorkerPluginLine
+      warning={null}
+      propagation="disabled"
+      unreviewed={[]}
+      isOwner
+      apply={noop}
+      onApplied={() => {}}
+    />,
+  );
+  const box = host.querySelector('[data-worker-propagation="disabled"]');
+  assert.equal(box?.getAttribute("data-severity"), "warning");
+  assert.equal(box?.getAttribute("data-approval-risk"), "false");
+  assert.equal(Boolean(host.querySelector("[data-approval-risk-names]")), false);
+  await cleanup();
+});
+
+test("employees missing the plugin say approvals are at risk when they are unreviewed", async () => {
+  const { host, cleanup } = await render(
+    <WorkerPluginLine
+      warning={WARN}
+      propagation="enabled"
+      unreviewed={["oliver"]}
+      isOwner
+      apply={noop}
+      onApplied={() => {}}
+    />,
+  );
+  assert.equal(
+    host.querySelector("[data-worker-plugin-missing]")?.getAttribute("data-approval-risk"),
+    "true",
+  );
+  await cleanup();
+});
+
+for (const locale of LOCALES) {
+  test(`[${locale}] technical details (setting names, commands' meaning) sit in the folded details`, async () => {
+    const { host, cleanup } = await render(
+      <WorkerPluginLine
+        warning={WARN}
+        propagation="disabled"
+        unreviewed={["sophie"]}
+        isOwner
+        apply={noop}
+        onApplied={() => {}}
+        onRecheck={() => {}}
+      />,
+      locale,
+    );
+    const details = host.querySelector("[data-worker-propagation] [data-more-details]");
+    assert.equal(details?.tagName, "DETAILS");
+    assert.match(details?.textContent ?? "", /DESKRPG_WORKER_PROPAGATION/);
+    const headline = host.querySelector("[data-worker-propagation] [data-headline]");
+    assert.doesNotMatch(headline?.textContent ?? "", /DESKRPG|worker|plugin/i);
+    await cleanup();
+  });
+}

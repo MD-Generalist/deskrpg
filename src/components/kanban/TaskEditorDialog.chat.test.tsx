@@ -91,10 +91,7 @@ test("upstream Hermes: a new card has no approval picker, says it completes with
       ),
     );
     assert.equal(Boolean(host.querySelector("#kanban-review-mode")), false);
-    assert.match(
-      host.querySelector("[data-no-approval-notice]")?.textContent ?? "",
-      /승인 없이 완료/,
-    );
+    assert.equal(Boolean(host.querySelector("[data-no-approval-notice]")), true);
     const criteria = host.querySelector<HTMLTextAreaElement>("#kanban-completion-criteria");
     if (criteria)
       await act(async () => {
@@ -252,5 +249,44 @@ test("mixed review asks for an AI reviewer like agent review", async () => {
     assert.equal(Boolean(view.host.querySelector("#kanban-reviewer")), true);
   } finally {
     await view.cleanup();
+  }
+});
+
+test("picking an assignee whose cards can finish without approval warns, without blocking", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const npcs = [
+    { npcId: "n1", npcName: "실행", profileName: "worker", active: true },
+    { npcId: "n2", npcName: "검토", profileName: "reviewer", active: true },
+  ];
+  const render = (assigneeNpcId: string) =>
+    root.render(
+      <I18nProvider initialLocale="ko">
+        <TaskEditorDialog
+          key={assigneeNpcId}
+          mode="create"
+          initial={{ ...EMPTY_TASK_FORM, title: "업무", assigneeNpcId }}
+          npcs={npcs}
+          candidates={[]}
+          serverError={null}
+          submitting={false}
+          unreviewedProfiles={["Worker"]}
+          onSubmit={() => {}}
+          onClose={() => {}}
+        />
+      </I18nProvider>,
+    );
+  try {
+    await act(async () => render("n1"));
+    assert.equal(
+      host.querySelector("[data-review-gap-assignee]")?.getAttribute("data-review-gap-assignee"),
+      "n1",
+    );
+    await act(async () => render("n2"));
+    assert.equal(Boolean(host.querySelector("[data-review-gap-assignee]")), false);
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
   }
 });

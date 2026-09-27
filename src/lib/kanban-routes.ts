@@ -45,6 +45,7 @@ import {
   SWARM_REVIEW_POLICY_MIN_VERSION,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
+import { unreviewedProfiles } from "@/lib/hermes/review-hooks";
 import {
   supportsBoardAttachmentList,
   supportsMixedReview,
@@ -1073,6 +1074,8 @@ export async function getAutomationStatus(req: NextRequest, channelId: string) {
     boardSlug: boardRow?.boardSlug ?? channelBoardSlug(channelId),
     dispatcherPresent: info?.kanban.dispatcher_present ?? false,
     attachments: info?.kanban.attachments ?? false,
+    // Assignees whose cards can finish without their approval policy (the hooks don't run in their worker).
+    unreviewedProfiles: unreviewedProfiles(info),
     lastPolledAt: isoOrNull(boardRow?.lastPolledAt),
     lastError: boardRow?.lastError ?? null,
     minVersion: AUTOMATION_MIN_PLUGIN_VERSION,

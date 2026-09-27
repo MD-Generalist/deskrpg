@@ -18,6 +18,7 @@
  */
 
 import { parseWorkerLaunchReport } from "./worker-launch";
+import { parseReviewHooksReport } from "./review-hooks";
 import { parseWorkerPluginReport } from "./worker-plugin";
 import type { PluginFreshnessMarks, PluginInfo } from "./deskrpg-plugin-types";
 import { REVIEW_HOOKS_CAPABILITY, SWARM_REVIEW_POLICY_CAPABILITY } from "./deskrpg-plugin-types";
@@ -99,6 +100,7 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
 
   const workerPlugin = parseWorkerPluginReport(record.worker_plugin);
   const workerLaunch = parseWorkerLaunchReport(kanbanRecord.worker_launch);
+  const reviewHooks = parseReviewHooksReport(kanbanRecord.review_hooks);
 
   return {
     plugin: PLUGIN_NAME,
@@ -110,6 +112,7 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
       attachments: kanbanRecord.attachments === true,
       // Absent on old plugins — keep "unknown" apart from a failed check (null).
       ...(workerLaunch === undefined ? {} : { worker_launch: workerLaunch }),
+      ...(reviewHooks === undefined ? {} : { review_hooks: reviewHooks }),
     },
     dashboard_url: httpUrlOrNull(record.dashboard_url),
     // Do not create the key for old plugin bodies — distinguish "field absent" from "verdict failed (null)".

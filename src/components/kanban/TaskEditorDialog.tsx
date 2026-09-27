@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { isUnreviewed } from "@/lib/hermes/review-hooks";
 import { X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
@@ -26,6 +27,8 @@ interface TaskEditorDialogProps {
   /** The gateway enforces "AI review, then a person" (plugin hooks). */
   mixedSupported?: boolean;
   assigneeLocked?: boolean;
+  /** Profiles whose cards can finish without their approval policy — warned about, never blocked. */
+  unreviewedProfiles?: readonly string[];
   onSubmit: (body: Record<string, unknown>) => void;
   onClose: () => void;
 }
@@ -48,6 +51,7 @@ export default function TaskEditorDialog({
   reviewSupported = true,
   mixedSupported = false,
   assigneeLocked = false,
+  unreviewedProfiles = [],
   onSubmit,
   onClose,
 }: TaskEditorDialogProps) {
@@ -219,6 +223,15 @@ export default function TaskEditorDialog({
             </div>
           </div>
 
+          {implementer && isUnreviewed(implementer.profileName, unreviewedProfiles) && (
+            <p
+              data-review-gap-assignee={implementer.npcId}
+              role="status"
+              className="text-xs text-danger"
+            >
+              {t("kanban.reviewGap.assignee", { name: implementer.npcName })}
+            </p>
+          )}
           {mode === "create" && !reviewSupported && (
             <p data-no-approval-notice role="status" className="text-xs text-npc-dark">
               {t("kanban.review.noApproval")}

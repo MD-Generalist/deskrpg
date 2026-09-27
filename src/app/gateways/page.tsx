@@ -59,6 +59,8 @@ type GatewayRow = {
   workerPropagation?: WorkerPropagation | null;
   /** Kanban workers that cannot start on this gateway. Sent only to the owner (`worker-launch.ts`). */
   workerLaunchWarning?: WorkerLaunchWarning | null;
+  /** Employees whose cards can finish without approval. Sent only to the owner (`review-hooks.ts`). */
+  unreviewedProfiles?: string[];
 };
 
 /** The gateway connection test result. The old name was PairingState, but pairing (OpenClaw device
@@ -778,6 +780,7 @@ function GatewayManagementPageInner() {
                     key={selectedGateway.id}
                     warning={selectedGateway.workerPluginWarning ?? null}
                     propagation={selectedGateway.workerPropagation ?? null}
+                    unreviewed={selectedGateway.unreviewedProfiles ?? []}
                     isOwner={selectedGateway.isOwner === true}
                     apply={() => applyWorkerPluginRequest(selectedGateway.id)}
                     onApplied={() => void loadGateways({ autoSelect: false })}

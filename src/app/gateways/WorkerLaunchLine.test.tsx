@@ -84,3 +84,16 @@ test("[다시 확인] rechecks the gateway", async () => {
   assert.equal(rechecked, 1);
   await cleanup();
 });
+
+for (const locale of LOCALES) {
+  test(`[${locale}] the visible part is plain; HERMES_BIN and the drop-in file sit in the folded details`, async () => {
+    const { host, cleanup } = await render(<WorkerLaunchLine warning={UNSET} isOwner />, locale);
+    const headline = host.querySelector("[data-worker-launch] [data-headline]");
+    assert.doesNotMatch(headline?.textContent ?? "", /HERMES_BIN|worker|systemd/i);
+    const details = host.querySelector("[data-worker-launch] [data-more-details]");
+    assert.equal(details?.tagName, "DETAILS");
+    assert.match(details?.textContent ?? "", /HERMES_BIN/);
+    assert.match(details?.textContent ?? "", /hermes-bin\.conf/);
+    await cleanup();
+  });
+}

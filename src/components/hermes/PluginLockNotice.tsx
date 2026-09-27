@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { CopyCommand } from "@/components/CopyCommand";
+import { MoreDetails } from "@/components/MoreDetails";
 import { PINNED_PLUGIN_SETUP_COMMAND } from "@/lib/hermes/plugin-install-command";
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 import { useT } from "@/lib/i18n";
@@ -30,7 +31,9 @@ export default function PluginLockNotice({
       data-plugin-lock={status}
       className="space-y-2 rounded-xl border border-npc/40 bg-npc/10 p-4 text-sm"
     >
-      <p className="font-semibold text-npc-dark">{t("profiles.detail.lock.title")}</p>
+      <p data-headline className="font-semibold text-npc-dark">
+        {t("profiles.detail.lock.title")}
+      </p>
       <p className="text-text">{t(`profiles.detail.lock.${status}`)}</p>
       {status === "plugin_absent" ? (
         <CopyCommand command={PINNED_PLUGIN_SETUP_COMMAND} />
@@ -42,6 +45,9 @@ export default function PluginLockNotice({
           {t("profiles.detail.lock.openGateway")}
         </Link>
       )}
+      <MoreDetails className="text-xs">
+        <p>{t(`profiles.detail.lock.details.${status}`)}</p>
+      </MoreDetails>
       <div className="flex flex-wrap items-center gap-2 border-t border-npc/20 pt-2">
         <span className="min-w-0 flex-1 text-xs text-text-muted">
           {t("profiles.detail.lock.recheckHint")}

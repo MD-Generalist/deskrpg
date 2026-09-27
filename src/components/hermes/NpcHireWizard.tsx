@@ -839,7 +839,7 @@ export default function NpcHireWizard({
       {lockedGroups.length > 0 && (
         <ul data-step-locks className="-mt-3 mb-4 space-y-0.5 text-xs text-text-muted">
           {lockedGroups.map(({ reason, steps: lockedSteps }) => (
-            <li key={reason}>
+            <li key={reason} data-reason={reason}>
               <span className="font-semibold">
                 {lockedSteps.map((step) => t(`hermes.wizard.step.${step}`)).join(" · ")}
               </span>
