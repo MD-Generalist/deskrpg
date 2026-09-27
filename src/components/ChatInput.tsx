@@ -16,6 +16,8 @@ interface ChatInputProps {
   cooldown?: boolean;
   maxLength?: number;
   autoFocus?: boolean;
+  /** With `autoFocus`, a new value focuses the input again (e.g. the panel was asked to show it). */
+  focusKey?: number;
   showFileUpload?: boolean;
   /** Accent color. Only pre-defined brand-token classes can be chosen — see `chat-accent.ts`. */
   accent?: ChatAccent;
@@ -41,6 +43,7 @@ export default function ChatInput({
   cooldown = false,
   maxLength = 500,
   autoFocus = false,
+  focusKey,
   showFileUpload = false,
   accent = "npc",
   mentionCandidates,
@@ -81,7 +84,7 @@ export default function ChatInput({
     if (autoFocus && !disabled && textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [autoFocus, disabled]);
+  }, [autoFocus, disabled, focusKey]);
 
   // Re-focus when cooldown/disabled ends
   useEffect(() => {

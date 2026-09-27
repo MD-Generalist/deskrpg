@@ -165,7 +165,7 @@ export type HubPreview = {
 };
 export type SkillJob = {
   jobId: string;
-  kind: "hub_install" | "hub_update" | "curator_run";
+  kind: "hub_install" | "hub_update" | "hub_uninstall" | "curator_run";
   state: "running" | "succeeded" | "failed";
   exitCode: number | null;
   outputTail: string;

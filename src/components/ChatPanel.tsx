@@ -33,7 +33,12 @@ import NpcQuestionStack from "./npc-question/NpcQuestionStack";
 import type { ToolApprovalSocket } from "./approvals/use-tool-approvals";
 import NpcConnectorsTab from "./connectors/NpcConnectorsTab";
 import NpcSkillsTab from "./skills/NpcSkillsTab";
-import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state";
+import {
+  tabFor,
+  type NpcPanelTab,
+  type NpcTabRequest,
+  type NpcTabState,
+} from "./chat/npc-tab-state";
 import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
 import { formatMention } from "@/lib/conversation/mention";
 
@@ -114,6 +119,8 @@ interface ChatPanelProps {
   onMarkSeen?: (tab: "cron" | "cards") => void;
   /** "Open management" in the skills tab — opens that employee's skill management modal. Without it, the button does nothing. */
   onOpenSkillManager?: (npcId: string, skillName?: string) => void;
+  /** Shows a tab of that employee's panel (and focuses the input when it is chat). Latest request wins. */
+  npcTabRequest?: NpcTabRequest | null;
   /** "Manage" in the connectors tab — opens that employee's connector manager, optionally on one server. */
   onOpenConnectorManager?: (npcId: string, serverName?: string) => void;
   /** Opens an NPC's unattended run policy modal (from the [Connectors] tab, owner only). */
@@ -219,6 +226,7 @@ export default function ChatPanel({
   onMarkSeen,
   onOpenAssignedCard,
   onOpenSkillManager,
+  npcTabRequest = null,
   onOpenConnectorManager,
   onOpenApprovalPolicy,
   approvalSocket,
@@ -233,6 +241,12 @@ export default function ChatPanel({
   // The NPC DM's tab — remembers which NPC the selection is for too, and returns to the chat tab
   // when the NPC changes (derived during render, not reset via an effect).
   const [npcTabState, setNpcTabState] = useState<NpcTabState>({ npcId: null, tab: "chat" });
+  // Applied during render, like the NPC switch above: a new request replaces the stored tab once.
+  const [appliedTabRequest, setAppliedTabRequest] = useState(0);
+  if (npcTabRequest && npcTabRequest.seq !== appliedTabRequest) {
+    setAppliedTabRequest(npcTabRequest.seq);
+    setNpcTabState({ npcId: npcTabRequest.npcId, tab: npcTabRequest.tab });
+  }
   const dialogNpcId = dialogNpc?.npcId ?? null;
   const npcTab = tabFor(npcTabState, dialogNpcId);
   const setNpcTab = (tab: NpcPanelTab) => {
@@ -968,6 +982,7 @@ export default function ChatPanel({
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
                   disabled={!!npcChatInputDisabled}
                   scope="npc"
+                  focusKey={appliedTabRequest}
                   disabledPlaceholder={
                     npcChatInputDisabled
                       ? (npcChatDisabledPlaceholder ?? t("chat.disconnected"))

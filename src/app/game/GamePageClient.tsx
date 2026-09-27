@@ -96,6 +96,7 @@ import {
 } from "@/game/npc-placement-request";
 import ReportBadge from "@/components/report/ReportBadge";
 import ChatPanel from "@/components/ChatPanel";
+import type { NpcTabRequest } from "@/components/chat/npc-tab-state";
 import ConversationPane from "@/components/conversation/ConversationPane";
 import ConversationWorkspace from "@/components/conversation/ConversationWorkspace";
 import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
@@ -374,6 +375,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // NPC dialog state — all managed here, ChatPanel is pure display
   const [npcActivityKey, setNpcActivityKey] = useState<string | null>(null);
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
+  // "Ask in chat" from the skill manager must land on the chat tab even for the employee already open.
+  const [npcTabRequest, setNpcTabRequest] = useState<NpcTabRequest | null>(null);
   /** The employee whose skill management modal is open — opened by "관리 열기" in the dialog's [스킬] tab. */
   const [skillManagerNpc, setSkillManagerNpc] = useState<{
     npcId: string;
@@ -2994,6 +2997,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         onMarkSeen={markPanelTabSeen}
         cardsRefreshTick={kanbanRefreshTick}
         onOpenAssignedCard={openNoticeCard}
+        npcTabRequest={npcTabRequest}
         onOpenSkillManager={(npcId, skillName) =>
           setSkillManagerNpc({
             npcId,
@@ -3825,6 +3829,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             const { npcId, npcName } = skillManagerNpc;
             setSkillManagerNpc(null);
             handleSelectNpc(npcId, npcName);
+            setNpcTabRequest((prev) => ({ npcId, tab: "chat", seq: (prev?.seq ?? 0) + 1 }));
           }}
         />
       )}
