@@ -298,7 +298,7 @@ test("a Compose Hermes shown to someone it was shared with gets no command", asy
   });
   await renderPage();
   assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "compose-viewer");
-  assert.equal(host.querySelector("[data-plugin-update]"), null);
+  assert.ok(!host.querySelector("[data-plugin-update]"));
 });
 
 test("a gateway on another host keeps the host guidance and no Compose command", async () => {
@@ -309,5 +309,5 @@ test("a gateway on another host keeps the host guidance and no Compose command",
   });
   await renderPage();
   assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "host");
-  assert.equal(host.querySelector("[data-plugin-update]"), null);
+  assert.ok(!host.querySelector("[data-plugin-update]"));
 });
