@@ -241,7 +241,7 @@ test("Hub skill [delete] confirms, polls the job to completion, then clears the 
     [`POST ${ROOT}/hub/uninstall`]: { jobId: "u1" },
     [`GET ${ROOT}/hub/installs/u1`]: {
       jobId: "u1",
-      kind: "hub_update",
+      kind: "hub_uninstall",
       state: "succeeded",
       exitCode: 0,
       outputTail: "",
