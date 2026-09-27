@@ -481,6 +481,10 @@ const en: Record<string, string> = {
     "No Hermes on that host uses this gateway\u2019s port. Check whether the gateway address changed or Hermes is stopped.",
   "hermes.wizard.error.serviceInstallFailed":
     "The gateway could not be registered as a service. Ask the administrator to run hermes gateway install on the host and read its output, then check again.",
+  "hermes.wizard.error.serviceContainerRefused":
+    "This server is inside a container, so Hermes can't be set up to start on its own there. Connect a server that isn't a container (a VPS or PC).",
+  "hermes.wizard.error.serviceContainerRefusedDetails":
+    "Hermes refuses to install a user-scope systemd service (hermes gateway install) inside a container. If you must use a container, run hermes gateway run as the container's main process, or on a container with systemd as PID 1 register a system service with sudo hermes gateway install --system --run-as-user <user>, then connect with 'Connect by gateway address'.",
   "hermes.wizard.error.windowsScheduledTaskMissing":
     "This Windows host has no scheduled task for the gateway; it is registered only in the Startup folder. DeskRPG cannot stop or restart it that way, so plugin updates and setting changes are blocked. Check Task Scheduler for the Hermes gateway task. If it is missing, run hermes gateway install on that host again to register it as a scheduled task, then check again.",
   "hermes.wizard.error.hostOutputTooLarge":

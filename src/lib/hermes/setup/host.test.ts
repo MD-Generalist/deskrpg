@@ -963,6 +963,29 @@ entry('install-service',id)
   );
   assert.deepEqual(result.body, { error: "service_install_failed" });
 });
+test("upstream's container refusal gets its own code; other install failures stay generic", () => {
+  // hermes_cli/gateway.py refuses a user-scope unit inside a container. The generic code told the admin
+  // to run the same command by hand, which fails the same way.
+  const run = (output: string) =>
+    fixture(
+      MANUAL +
+        String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+out = ${JSON.stringify(output)}.encode()
+subprocess.Popen = lambda argv, **kwargs: type('Result',(),{'stdout':io.BytesIO(out), 'wait':lambda self:1})()
+entry('install-service',id)
+`,
+      { config: { gateway: { multiplex_profiles: true } } },
+    ).body;
+  assert.deepEqual(
+    run("✗ Refusing to install a user-scope systemd gateway service inside a container.\n"),
+    { error: "service_container_refused" },
+  );
+  assert.deepEqual(run("Failed to connect to bus: No medium found\n"), {
+    error: "service_install_failed",
+  });
+});
 test("on Windows a gateway without its scheduled task fails with the Windows-specific code", () => {
   // Upstream falls back to a Startup-folder entry when it cannot register the scheduled task. That entry
   // cannot be stopped, so the generic "no managed service" copy gave the user no way out.

@@ -488,6 +488,10 @@ const ja: Record<string, string> = {
     "このゲートウェイと同じポートを使う Hermes をホストで見つけられませんでした。アドレスの変更や Hermes の停止を確認してください。",
   "hermes.wizard.error.serviceInstallFailed":
     "ゲートウェイをサービスとして登録できませんでした。管理者がホストでhermes gateway installを実行し、結果を確認してから再確認してください。",
+  "hermes.wizard.error.serviceContainerRefused":
+    "このサーバーはコンテナの中にあるため、Hermes を自動で起動するサービスとして登録できません。コンテナではないサーバー（VPS・PC）を接続してください。",
+  "hermes.wizard.error.serviceContainerRefusedDetails":
+    "Hermes はコンテナの中ではユーザースコープの systemd サービス（hermes gateway install）をインストールしません。どうしてもコンテナを使う場合は、コンテナのメインプロセスとして hermes gateway run を実行するか、systemd が PID 1 のコンテナで sudo hermes gateway install --system --run-as-user <ユーザー> でシステムサービスを登録し、「ゲートウェイURLで接続」で接続してください。",
   "hermes.wizard.error.windowsScheduledTaskMissing":
     "この Windows ホストにはゲートウェイのスケジュールタスクがなく、スタートアップフォルダーにだけ登録されています。この状態では DeskRPG がゲートウェイを停止・再起動できないため、プラグインの更新と設定変更ができません。タスクスケジューラで Hermes ゲートウェイのタスクがあるか確認し、なければそのホストで hermes gateway install を再実行してスケジュールタスクとして登録してから、もう一度確認してください。",
   "hermes.wizard.error.hostOutputTooLarge":

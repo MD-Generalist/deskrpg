@@ -1277,7 +1277,11 @@ def main(action, candidate_id=None, option=None):
         if not needs_service(owner): return {'ok': True}
         assert_port_owned(public, owner)
         env = {**os.environ, 'HERMES_HOME': str(home)}
-        if bounded(hermes_argv('--profile', name, 'gateway', 'install'), env)[0]:
+        code, output = bounded(hermes_argv('--profile', name, 'gateway', 'install'), env)
+        if code:
+            # Upstream refuses a user-scope unit inside a container (hermes_cli/gateway.py
+            # refuses_container_user_scope_install). Only the code leaves this process, never the output.
+            if b'inside a container' in output: fail('service_container_refused')
             fail('service_install_failed')
         fresh = identity(name, home)
         if needs_service(fresh): fail('windows_scheduled_task_missing' if sys.platform == 'win32' else 'service_install_failed')

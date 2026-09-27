@@ -799,6 +799,7 @@ for (const [code, expected] of [
   ["hermes_version_unsupported", /0\.21\.1 이상이 필요합니다[\s\S]*hermes update/],
   ["plugin_update_failed", /갱신하지 못했습니다[\s\S]*권한을 확인/],
   ["service_install_failed", /서비스로 등록하지 못했습니다[\s\S]*hermes gateway install/],
+  ["service_container_refused", /컨테이너 안이라서[\s\S]*컨테이너가 아닌 서버/],
   ["timezone_invalid", /IANA 형식이 아닙니다[\s\S]*Asia\/Seoul/],
   ["timezone_write_failed", /시간대를 쓰지 못했습니다[\s\S]*쓰기 권한/],
 ] as const) {
@@ -828,6 +829,11 @@ for (const [code, expected] of [
         .join("\n");
       assert.match(alerts, expected);
       assert.doesNotMatch(alerts, new RegExp(code));
+      // The container refusal keeps the plain notice short; the commands live in folded details.
+      assert.equal(
+        !!f.host.querySelector("[data-more-details] [data-container-refusal-details]"),
+        code === "service_container_refused",
+      );
     } finally {
       await f.cleanup();
     }
