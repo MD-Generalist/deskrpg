@@ -1,14 +1,12 @@
-# DeskRPG + Hermes on one VPS, measured on Hostinger. Why, and update/pin/rollback:
-# deploy/hostinger/README.md.
+# DeskRPG + Hermes on one VPS (Hostinger). Why, update/pin/rollback: deploy/hostinger/README.md.
 #
-# - Keep at REPO ROOT, under 8192 chars (Docker Manager limits); .env.example stays
-#   comment-free (copied verbatim into the Environment box).
+# - Keep at REPO ROOT, <= 8192 chars (Docker Manager); .env.example stays comment-free
+#   (copied verbatim into the Environment box).
 # - Deploy this, then Traefik from the hPanel banner, then set TRAEFIK_HOST.
 # - Never declare `traefik-proxy`: `traefik-connect` joins it at runtime (both Traefik
 #   shapes). Run `docker compose up -d` without a service name so it runs again.
 #
-# Environment: HERMES_API_KEY and TRAEFIK_HOST are required; every variable is explained in
-# deploy/hostinger/README.md step 2-1.
+# Required: HERMES_API_KEY, TRAEFIK_HOST; all variables: README step 2-1.
 
 services:
   deskrpg:
@@ -33,7 +31,7 @@ services:
       - traefik.enable=true
       # Bridge-mode Traefik dials the `traefik-proxy` IP.
       - traefik.docker.network=traefik-proxy
-      # /socket.io → 3001, everything else → Next.js 3000 (same origin).
+      # /socket.io -> 3001, everything else -> Next.js 3000 (same origin).
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.rule=Host(`${COMPOSE_PROJECT_NAME:-deskrpg}.${TRAEFIK_HOST:-localhost}`) && PathPrefix(`/socket.io`)
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.entrypoints=websecure
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.tls.certresolver=letsencrypt
@@ -48,7 +46,7 @@ services:
       - traefik.http.services.${COMPOSE_PROJECT_NAME:-deskrpg}.loadbalancer.server.port=3000
 
   # One-shot: join deskrpg + hermes to a bridge-mode Traefik's `traefik-proxy`.
-  # Read-write socket (host-root equivalent); runs this script and exits.
+  # Read-write socket (host-root equivalent); runs once and exits.
   traefik-connect:
     image: docker:29-cli
     restart: "no"
@@ -71,8 +69,8 @@ services:
           done
         done
 
-  # One-shots before Hermes: plugin-pin reads this image's plugin commit (a new one restarts
-  # Hermes); hermes-plugins installs it, keeps the old one on failure, and enables it.
+  # One-shots before Hermes: plugin-pin reads this image's plugin commit (new: restarts Hermes);
+  # hermes-plugins disables, reinstalls, enables it; a failure keeps the old one.
   plugin-pin:
     image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
     restart: "no"
@@ -114,12 +112,13 @@ services:
           printf '%s=%s\n' "$$v" "$$val" >> /tmp/env.next
           cat /tmp/env.next > /opt/data/.env
         done
-        u=https://github.com/dandacompany/deskrpg-hermes-plugin; d=/opt/data/plugins/deskrpg
-        pin=$$(cat /pin/ref 2>/dev/null || true)
-        if [ -n "$$pin" ] && [ "$$(git -c safe.directory='*' -C $$d rev-parse HEAD 2>/dev/null)" != "$$pin" ]; then
-          hermes plugins install $$u --ref "$$pin" --force || [ -d $$d ]
-        elif [ ! -d $$d ]; then hermes plugins install $$u; fi
-        hermes plugins enable deskrpg
+        u=https://github.com/dandacompany/deskrpg-hermes-plugin; d=/opt/data/plugins/deskrpg; p="hermes plugins"
+        pin=$$(cat /pin/ref 2>/dev/null || true); h=$$(git -c safe.directory='*' -C $$d rev-parse HEAD 2>/dev/null || true)
+        if [ -n "$$pin" ] && [ "$$h" != "$$pin" ]; then
+          $$p disable deskrpg || true
+          $$p install $$u --ref "$$pin" --force --no-enable || [ -d $$d ]
+        elif [ ! -d $$d ]; then $$p install $$u --no-enable; fi
+        $$p enable deskrpg || { [ -n "$$h" ] && $$p install $$u --ref "$$h" --force --no-deps && $$p enable deskrpg; }
 
   # API at http://hermes:8642 (internal); dashboard only with a password.
   hermes:

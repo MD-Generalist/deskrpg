@@ -37,11 +37,12 @@ test("the DeskRPG image default is :latest — the docker manager's update just 
 
 test("installs and enables the DeskRPG plugin before hermes — without it, gateway connection can't get past the profile list", () => {
   assert.match(compose, /^ {2}hermes-plugins:/m);
-  assert.match(compose, /hermes plugins install/);
-  assert.match(compose, /hermes plugins enable deskrpg/);
+  assert.match(compose, /p="hermes plugins"/);
+  assert.match(compose, /\$\$p enable deskrpg/);
   // Installs at the DeskRPG image's pin and reinstalls with --force when the installed commit differs —
-  // `plugins update` would follow the plugin's main branch and cannot move an install made with --ref.
-  assert.match(compose, /hermes plugins install \$\$u --ref "\$\$pin" --force/);
+  // `plugins update` would follow the plugin's main branch and cannot move an install made with --ref. The call
+  // order is pinned in hermes/setup/plugin-reinstall-scripts.test.ts.
+  assert.match(compose, /\$\$p install \$\$u --ref "\$\$pin" --force --no-enable/);
   assert.doesNotMatch(compose, /hermes plugins update deskrpg/);
   assert.match(compose, /hermes-plugins:\s*\n\s*condition: service_completed_successfully/);
 });

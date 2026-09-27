@@ -44,6 +44,8 @@ services:
 
   # Same key/UID as hermes: without API_SERVER_KEY the image writes a random key to the
   # volume's .env, which then overrides HERMES_API_KEY (DeskRPG gets 401).
+  # Disable, reinstall, enable: upstream does not replace an ENABLED plugin with Python deps
+  # without a terminal. A failed install or enable keeps (or puts back) the old commit.
   hermes-plugins:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
     restart: "no"
@@ -76,12 +78,13 @@ services:
           printf '%s=%s\n' "$$v" "$$val" >> /tmp/env.next
           cat /tmp/env.next > /opt/data/.env
         done
-        u=https://github.com/dandacompany/deskrpg-hermes-plugin; d=/opt/data/plugins/deskrpg
-        pin=$$(cat /pin/ref 2>/dev/null || true)
-        if [ -n "$$pin" ] && [ "$$(git -c safe.directory='*' -C $$d rev-parse HEAD 2>/dev/null)" != "$$pin" ]; then
-          hermes plugins install $$u --ref "$$pin" --force || [ -d $$d ]
-        elif [ ! -d $$d ]; then hermes plugins install $$u; fi
-        hermes plugins enable deskrpg
+        u=https://github.com/dandacompany/deskrpg-hermes-plugin; d=/opt/data/plugins/deskrpg; p="hermes plugins"
+        pin=$$(cat /pin/ref 2>/dev/null || true); h=$$(git -c safe.directory='*' -C $$d rev-parse HEAD 2>/dev/null || true)
+        if [ -n "$$pin" ] && [ "$$h" != "$$pin" ]; then
+          $$p disable deskrpg || true
+          $$p install $$u --ref "$$pin" --force --no-enable || [ -d $$d ]
+        elif [ ! -d $$d ]; then $$p install $$u --no-enable; fi
+        $$p enable deskrpg || { [ -n "$$h" ] && $$p install $$u --ref "$$h" --force --no-deps && $$p enable deskrpg; }
 
   # API server stays on the compose network (http://hermes:8642); only the dashboard is
   # published, and only when a password is set.

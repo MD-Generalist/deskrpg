@@ -55,7 +55,7 @@ test("both Compose stacks read the plugin pin from the DeskRPG image, and their 
     const plugins = text.slice(text.indexOf("  hermes-plugins:"), text.indexOf("\n  hermes:"));
     assert.match(plugins, /plugin-pin:\s*\n\s*condition: service_completed_successfully/, file);
     assert.match(plugins, /- plugin-pin:\/pin:ro/, file);
-    assert.match(plugins, /hermes plugins install \$\$u --ref "\$\$pin" --force/, file);
+    assert.match(plugins, /\$\$p install \$\$u --ref "\$\$pin" --force --no-enable/, file);
     assert.doesNotMatch(text, /hermes plugins update/, file);
     // A new image (Update, rollback) re-runs the one-shots; Hermes must restart to serve what they installed.
     const hermes = text.slice(text.indexOf("\n  hermes:"));
@@ -77,5 +77,5 @@ test("the all-in-one image reads the plugin pin from the installed DeskRPG packa
   const line = /^PIN="\$\((sed -n .*"\$PIN_FILE") 2>\/dev\/null \|\| true\)"$/m.exec(text);
   assert.ok(line, "no pin sed in the init script");
   assert.equal(readPinWith(line[1]), PLUGIN_PIN);
-  assert.match(text, /hermes plugins install "\$PLUGIN_SOURCE" --ref "\$PIN" --force/);
+  assert.match(text, /hermes plugins install "\$PLUGIN_SOURCE" --ref "\$PIN" --force --no-enable/);
 });
