@@ -1891,6 +1891,9 @@ const ko: Record<string, string> = {
   "game.aiConnected": "AI 연결됨",
   "game.aiConfigured": "AI 설정됨",
   "game.aiGateway": "AI 연결",
+  "game.aiGatewayDown": "AI 연결 끊김",
+  "game.aiGatewayDownHint":
+    "AI 직원 서버에 닿지 않아 직원 상태를 알 수 없어요. 눌러서 연결 설정을 확인해 보세요.",
   "game.gatewayConnect": "연결하기",
   "game.channel": "오피스",
   "game.notifications": "알림",

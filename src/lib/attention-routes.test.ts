@@ -350,3 +350,45 @@ test("cron, blocked-run and approval rows carry ISO times", async () => {
   for (const row of rows)
     assert.match(String(row.at), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, row.kind);
 });
+
+test("a card waiting for a person's decision names its implementer; other review cards are not looked up", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  const make = async (title: string) => {
+    const res = await ctx.client.kanban.createTask(ctx.boardSlug, { title }, ownerId);
+    assert.ok(res.ok);
+    return res.data.task.id;
+  };
+  const waiting = await make("사람 판단 대기");
+  const reviewing = await make("AI 검토 중");
+  const review = (state: string) => ({
+    policy: { version: 1 as const, mode: "mixed" as const, reviewer_profile: "oliver" },
+    policy_revision: 1,
+    submission: null,
+    review_round: 1,
+    state: state as "human_required",
+    reason: null,
+    approval: null,
+  });
+  server.seedTaskHistory(ctx.boardSlug, waiting, {
+    patch: { status: "review", assignee: undefined, review: review("human_required") },
+    events: [
+      { kind: "review_requested", payload: { implementer: "sophie" } },
+      { kind: "review_requested", payload: { implementer: "oliver" } },
+    ],
+  });
+  server.seedTaskHistory(ctx.boardSlug, reviewing, {
+    patch: { status: "review", assignee: "oliver", review: review("reviewing") },
+  });
+
+  const { getAttentionInbox } = await import("@/lib/attention-routes");
+  const sent = server.requests().length;
+  const body = await (await getAttentionInbox(get(ownerId, channelId), channelId)).json();
+  const byId = new Map(body.rows.map((row: { id: string }) => [row.id, row]));
+  assert.equal((byId.get(waiting) as { implementer?: string }).implementer, "sophie");
+  assert.equal((byId.get(reviewing) as { implementer?: string }).implementer, undefined);
+  const detailReads = server
+    .requests()
+    .slice(sent)
+    .filter((r) => r.method === "GET" && /\/deskrpg\/kanban\/tasks\//.test(r.path));
+  assert.equal(detailReads.length, 1, "only the waiting card's detail is read");
+});

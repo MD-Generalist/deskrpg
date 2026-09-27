@@ -103,7 +103,7 @@ import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
 import { ToolApprovalsProvider } from "@/components/approvals/ToolApprovalsProvider";
 import NpcStatesBridge, { type NpcStatesById } from "./NpcStatesBridge";
 import { useAttentionRows } from "./use-attention-rows";
-import type { NpcConnection } from "@/lib/npc-state-map";
+import { gatewayBadge, type NpcConnection } from "@/lib/npc-state-map";
 import { useMeetingEntry } from "@/components/meeting-room/use-meeting-entry";
 import "@/components/meeting-room/meeting-mode.css";
 import { buildDmThreadEntries, needsCallBeforeDmSend, type DmThread } from "@/lib/dm-threads";
@@ -161,6 +161,7 @@ import type { ChatResponse } from "@/lib/chat-response";
 import {
   npcPresentationPhases,
   npcResponseFailures,
+  latestFailedRequestId,
   initialChatResponseState,
   reconcileNpcResponseMessages,
   reduceChatResponseState,
@@ -2386,7 +2387,20 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // D08 inputs that only this page knows: who waits on a person (inbox rows), whose last reply failed, who is
   // walking over to report.
   const attentionRows = useAttentionRows(channelId, socket);
-  const npcResponseFailed = useMemo(() => npcResponseFailures(chatResponses), [chatResponses]);
+  // Failures the person has looked at in the 1:1 chat — opening the chat is enough to clear the ❗ (D08).
+  const [seenResponseFailures, setSeenResponseFailures] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  useEffect(() => {
+    if (!dialogNpcId) return;
+    const failed = latestFailedRequestId(chatResponses, dialogNpcId);
+    if (failed)
+      setSeenResponseFailures((prev) => (prev.has(failed) ? prev : new Set(prev).add(failed)));
+  }, [dialogNpcId, chatResponses]);
+  const npcResponseFailed = useMemo(
+    () => npcResponseFailures(chatResponses, seenResponseFailures),
+    [chatResponses, seenResponseFailures],
+  );
   const npcReporting = useMemo(() => new Set(reportQueue.map((item) => item.npcId)), [reportQueue]);
   const stateRoster = useMemo(
     () => rosterNpcs.map((npc) => ({ id: npc.id, profileName: npc.profile?.profileName ?? null })),
@@ -2883,6 +2897,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // claimed either way.
   const npcConnection: NpcConnection =
     socketEverConnected.current && !socketConnected ? "socket_down" : gatewayHealth;
+  const headerGatewayBadge = gatewayBadge(Boolean(channel?.hasGateway), npcConnection);
   // NPC candidates for the cron screen — only active ones from the roster, names are profile display names (the roster already has them).
   const cronNpcs = rosterNpcs
     .filter((npc) => npc.active)
@@ -3228,12 +3243,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
 
         {/* Right: grouped controls */}
         <div className="header-controls">
-          {/* Gateway status */}
-          {channel?.hasGateway ? (
+          {/* Gateway status — bound, and whether it is reachable right now (D08) */}
+          {headerGatewayBadge === "connected" ? (
             <button
               onClick={() => openChannelSettings("gateway")}
-              title={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
-              aria-label={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
+              title={t("game.aiGateway")}
+              aria-label={t("game.aiGateway")}
+              data-gateway-badge="connected"
               className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-info/10 border border-info/20 text-caption text-info hover:bg-info/20"
             >
               <span className="w-2 h-2 rounded-full bg-info" />
@@ -3242,11 +3258,26 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 AI
               </span>
             </button>
+          ) : headerGatewayBadge === "unreachable" ? (
+            <button
+              onClick={() => openChannelSettings("gateway")}
+              title={t("game.aiGatewayDownHint")}
+              aria-label={t("game.aiGatewayDownHint")}
+              data-gateway-badge="unreachable"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-danger/10 border border-danger/30 text-caption text-danger hover:bg-danger/20"
+            >
+              <span className="w-2 h-2 rounded-full bg-danger" />
+              <span className="header-full-label">{t("game.aiGatewayDown")}</span>
+              <span className="header-mobile-label" aria-hidden="true">
+                AI !
+              </span>
+            </button>
           ) : (
             <button
               onClick={() => openChannelSettings("gateway")}
-              title={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
-              aria-label={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
+              title={t("game.gatewayConnect")}
+              aria-label={t("game.gatewayConnect")}
+              data-gateway-badge="connect"
               className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-npc/10 border border-npc/20 text-caption text-npc-dark hover:bg-npc/20"
             >
               <span className="w-2 h-2 rounded-full bg-npc" />

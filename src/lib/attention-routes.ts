@@ -22,6 +22,7 @@ import { readJsonObject } from "@/lib/api-body";
 import { cronError } from "@/lib/cron-access";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { resolveKanbanChannelContext } from "@/lib/kanban-access";
+import { reviewImplementer } from "@/lib/review-implementer";
 
 /**
  * A row time as ISO 8601. PG hands back a `Date` (and `String(Date)` is "Sun Sep 20 2026 …"),
@@ -130,6 +131,9 @@ async function recentBlockedRuns(
   return out;
 }
 
+/** Card details read per inbox load to name who waits on a decision — bounds the cost on a crowded board. */
+const MAX_DECISION_LOOKUPS = 20;
+
 /** GET — only what needs a human answer. */
 export async function getAttentionInbox(req: NextRequest, channelId: string) {
   const resolved = await resolveKanbanChannelContext({ userId: getUserId(req), channelId });
@@ -167,18 +171,31 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
       continue;
     }
     anyBoardOk = true;
+    const waiting: { card: AttentionInboxInput["cards"][number]; reviewer: string | null }[] = [];
     for (const column of board.data.columns)
       for (const task of column.tasks) {
         const ms = taskTimeMs(task.created_at);
-        cardsBySlug.push({
+        const card = {
           id: task.id,
           status: task.status,
           title: task.title,
           at: ms === null ? null : new Date(ms).toISOString(),
           failures: task.consecutive_failures,
           assignee: task.assignee ?? null,
-        });
+        };
+        cardsBySlug.push(card);
+        if (task.review?.state === "human_required")
+          waiting.push({ card, reviewer: task.review.policy.reviewer_profile });
       }
+    // A card waiting for a person's decision has no assignee; its detail says who did the work (D08 ✋).
+    // Only these cards are read — a failed read just leaves the card without a name.
+    await Promise.all(
+      waiting.slice(0, MAX_DECISION_LOOKUPS).map(async ({ card, reviewer }) => {
+        const detail = await ctx.client.kanban.getTask(slug, card.id).catch(() => null);
+        if (detail?.ok)
+          Object.assign(card, { implementer: reviewImplementer(detail.data, reviewer) });
+      }),
+    );
   }
   if (!anyBoardOk)
     return NextResponse.json({ rows: [], counts: countNeedsAttention([], new Set()) });

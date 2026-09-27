@@ -98,6 +98,19 @@ export type FakePluginServer = {
   /** Pushes an event into the unified event stream (the server fills id and ts). */
   pushEvent(event: Omit<PluginEvent, "id" | "ts"> & { ts?: number }): PluginEvent;
   setTaskLog(board: string, taskId: string, content: string): void;
+  /**
+   * Plants what the real plugin derives and this fake does not: card fields such as `review` (the approval store's
+   * state), card events (e.g. `review_requested` with its `implementer`) and runs by other profiles.
+   */
+  seedTaskHistory(
+    board: string,
+    taskId: string,
+    history: {
+      patch?: Partial<KanbanTaskFull>;
+      events?: { kind: string; payload: Record<string, unknown> }[];
+      runs?: Omit<KanbanRun, "id">[];
+    },
+  ): void;
   /** Replaces one run's `metadata` (what a worker leaves on `kanban_complete`). */
   setRunMetadata(
     board: string,
@@ -2037,6 +2050,13 @@ export async function startFakePluginServer(
       const board = boards.get(slug);
       if (!board) throw new Error(`unknown board: ${slug}`);
       board.logs.set(taskId, content);
+    },
+    seedTaskHistory: (slug, taskId, history) => {
+      const record = boards.get(slug)?.tasks.get(taskId);
+      if (!record) throw new Error(`unknown task: ${slug}/${taskId}`);
+      if (history.patch) Object.assign(record.task, history.patch);
+      for (const event of history.events ?? []) recordTaskEvent(record, event.kind, event.payload);
+      for (const run of history.runs ?? []) record.runs.push({ id: nextId("run"), ...run });
     },
     setRunMetadata: (slug, taskId, runId, metadata) => {
       const run = boards

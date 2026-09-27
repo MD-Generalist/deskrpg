@@ -1898,6 +1898,9 @@ const en: Record<string, string> = {
   "game.aiConnected": "AI Connected",
   "game.aiConfigured": "AI Configured",
   "game.aiGateway": "AI Gateway",
+  "game.aiGatewayDown": "AI disconnected",
+  "game.aiGatewayDownHint":
+    "We can't reach the AI staff server, so employee status is unknown. Click to check the connection settings.",
   "game.gatewayConnect": "Connect",
   "game.channel": "Channel",
   "game.notifications": "Notifications",
