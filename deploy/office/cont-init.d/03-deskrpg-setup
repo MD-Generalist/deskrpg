@@ -77,19 +77,25 @@ fi
 # The plugin commit the installed DeskRPG was released with, read from its own pin file. The package
 # is refreshed from npm above, so the plugin follows it: reinstall whenever the installed commit differs
 # (`plugins update` would follow the plugin's main branch and never moves an install made with --ref).
+# Upstream does not replace an ENABLED plugin with Python dependencies without a terminal ("Reinstall
+# declined"), so: disable, reinstall without enabling, enable (enable prepares the dependencies). A failed
+# install leaves the old commit in place; a new commit that cannot be enabled is put back to the old one.
 PLUGIN_DIR="$HERMES_HOME/plugins/deskrpg"
 PIN_FILE="$(npm root -g 2>/dev/null || true)/deskrpg/src/lib/hermes/setup/pin.ts"
 PIN="$(sed -n 's/^export const PLUGIN_PIN = "\([0-9a-f]\{40\}\)";$/\1/p' "$PIN_FILE" 2>/dev/null || true)"
 HEAD="$(git -c safe.directory='*' -C "$PLUGIN_DIR" rev-parse HEAD 2>/dev/null || true)"
 if [ -n "$PIN" ] && [ "$HEAD" != "$PIN" ]; then
     log "칸반·크론 플러그인을 이 DeskRPG 가 쓰는 버전으로 맞추는 중"
-    hermes plugins install "$PLUGIN_SOURCE" --ref "$PIN" --force >/dev/null 2>&1 \
+    hermes plugins disable deskrpg >/dev/null 2>&1 || true
+    hermes plugins install "$PLUGIN_SOURCE" --ref "$PIN" --force --no-enable >/dev/null 2>&1 \
         || log "경고: 플러그인 설치 실패 — 설치돼 있던 버전으로 계속한다"
 elif [ ! -d "$PLUGIN_DIR" ]; then
     log "칸반·크론 플러그인을 설치하는 중"
-    hermes plugins install "$PLUGIN_SOURCE" >/dev/null 2>&1 || log "경고: 플러그인 설치 실패 — 대화는 되지만 칸반·크론은 꺼진다"
+    hermes plugins install "$PLUGIN_SOURCE" --no-enable >/dev/null 2>&1 || log "경고: 플러그인 설치 실패 — 대화는 되지만 칸반·크론은 꺼진다"
 fi
-if [ -d "$PLUGIN_DIR" ]; then
+if [ -d "$PLUGIN_DIR" ] && ! hermes plugins enable deskrpg >/dev/null 2>&1 && [ -n "$HEAD" ]; then
+    log "경고: 새 플러그인을 켜지 못했다 — 설치돼 있던 버전으로 되돌린다"
+    hermes plugins install "$PLUGIN_SOURCE" --ref "$HEAD" --force --no-deps >/dev/null 2>&1 || true
     hermes plugins enable deskrpg >/dev/null 2>&1 || true
 fi
 
