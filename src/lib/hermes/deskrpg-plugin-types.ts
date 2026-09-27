@@ -26,7 +26,15 @@ export type PluginInfo = {
   version: string;
   capabilities: string[];
   timezone: string | null;
-  kanban: { dispatcher_present: boolean; attachments: boolean };
+  kanban: {
+    dispatcher_present: boolean;
+    attachments: boolean;
+    /**
+     * 0.28.1 — Whether Hermes can start kanban workers from this gateway. Old plugins lack the key (undefined), and a
+     * failed check is null. The two are not mixed.
+     */
+    worker_launch?: WorkerLaunchReport | null;
+  };
   /**
    * 0.7.1 — Public URL of the Hermes dashboard. null if the dashboard is off or has no URL.
    * The parser keeps only http(s). Older plugins and existing caches lack the key, so it's optional.
@@ -40,6 +48,22 @@ export type PluginInfo = {
 };
 
 /** Worker plugin status for one employee. `link`: linked · missing · other. */
+/**
+ * 0.28.1 `kanban.worker_launch`. Hermes starts a kanban worker with `$HERMES_BIN` if set, else as
+ * `<gateway python> -m hermes_cli.main` without the gateway's PYTHONPATH — which cannot import Hermes on the upstream
+ * PM runtime. `ok: null` means the plugin could not tell.
+ */
+export type WorkerLaunchReason = "hermes_bin_unset" | "hermes_bin_missing" | "probe_failed";
+
+export type WorkerLaunchReport = {
+  ok: boolean | null;
+  reason: WorkerLaunchReason | null;
+  /** The gateway's `HERMES_BIN`, when set. */
+  hermes_bin: string | null;
+  /** What to set `HERMES_BIN` to: the checkout's PM launcher, else `hermes` on the gateway's PATH. */
+  launcher: string | null;
+};
+
 export type WorkerPluginGap = {
   profile: string;
   link: string;
