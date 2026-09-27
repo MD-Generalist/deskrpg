@@ -2266,6 +2266,13 @@ const zh: Record<string, string> = {
   "gateways.pluginContainer.details": "查看详情",
   "gateways.pluginContainer.detailsBody":
     "Hermes 与 DeskRPG 运行在同一个 Docker Compose 中。此命令会下载新插件并重启 Hermes 容器。如果启动时用了 -f 或 --env-file，请加上相同的选项。仅运行 docker compose up -d 不会应用新版本。",
+  "gateways.oldCompose.notice": "此连接是用旧的安装文件设置的，因此一直在获取尚未发布的插件。",
+  "gateways.oldCompose.todo": "请重新获取一次安装文件。方法在“查看详情”中。",
+  "gateways.oldCompose.todoViewer": "请告诉创建此连接的人重新获取安装文件。",
+  "gateways.oldCompose.hostinger": "如果在 Hostinger 上使用，请替换一次 compose 文件。",
+  "gateways.oldCompose.hostingerLink": "查看替换方法",
+  "gateways.oldCompose.cloned":
+    "如果是克隆仓库（git clone）使用的，请在该文件夹中运行下面的命令。如果启动时用了其他 -f 或 --env-file 选项，请改用它们。",
   "gateways.pluginVersionRecheck": "点击连接测试进行确认。",
   "gateways.pluginVersionUpdateNow": "立即更新",
   "gateways.workerPlugin.missing": "{names} 独自完成的工作没有被记录。",

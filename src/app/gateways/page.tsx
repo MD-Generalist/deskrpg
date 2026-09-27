@@ -26,6 +26,11 @@ import {
   composeServiceHost,
 } from "@/lib/hermes/setup/gateway-host-target";
 import { CopyCommand } from "@/components/CopyCommand";
+import {
+  CLONED_COMPOSE_UPDATE_COMMAND,
+  HOSTINGER_COMPOSE_REPLACE_URL,
+  isOldComposeInstall,
+} from "@/lib/hermes/compose-install";
 import { setupCopy, setupError, setupHostError, setupStep } from "@/components/gateway/setup-copy";
 import type { WorkerPropagation } from "@/lib/hermes/deskrpg-plugin-types";
 import type { WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
@@ -53,6 +58,8 @@ type GatewayRow = {
   /** The installed version seen by the last probe. `/api/gateways` serves it from the cache. */
   pluginVersion?: string | null;
   pluginStatus?: string | null;
+  /** The running plugin commit (0.30.0+), null when unknown. */
+  pluginCommit?: string | null;
   /** Employees whose kanban/cron artifacts do not accumulate. Sent only to the owner (`worker-plugin.ts`). */
   workerPluginWarning?: WorkerPluginWarning | null;
   /** 0.16.0 worker propagation state — only owner rows have a value (shared rows and old plugins are null). */
@@ -108,6 +115,14 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
   // A Hermes container next to DeskRPG (`http://hermes:8642`): the app cannot reach its shell, and there is no
   // host install to update either — the plugin moves through Compose.
   const composeService = composeServiceHost(gateway.baseUrl);
+  // Set up from an older compose file: the plugin comes from its main branch, so the Compose command above would only
+  // pull it again. The one fix is taking the new compose file once; that notice replaces the update affordances.
+  const oldCompose = isOldComposeInstall({
+    baseUrl: gateway.baseUrl,
+    pluginStatus: gateway.pluginStatus,
+    pluginVersion: gateway.pluginVersion,
+    pluginCommit: gateway.pluginCommit,
+  });
 
   // Updating runs commands on the host and takes long, so it runs as a job — using the same job query as the wizard.
   const runUpdate = async () => {
@@ -166,7 +181,7 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
         <span>
           {t("gateways.pluginVersionPinned")}: {view.pinned}
         </span>
-        {view.state === "outdated" && (
+        {view.state === "outdated" && !oldCompose && (
           <span
             data-plugin-outdated-hint={
               !composeService ? "host" : gateway.isOwner ? "compose" : "compose-viewer"
@@ -183,7 +198,7 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
           </span>
         )}
         {view.state === "unknown" && <span>— {t("gateways.pluginVersionRecheck")}</span>}
-        {view.state === "outdated" && gateway.isOwner && (
+        {view.state === "outdated" && gateway.isOwner && !oldCompose && (
           <button
             type="button"
             data-action="plugin-update"
@@ -204,7 +219,7 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
             </span>
           )}
       </p>
-      {view.state === "outdated" && composeService && gateway.isOwner && (
+      {view.state === "outdated" && composeService && gateway.isOwner && !oldCompose && (
         <details className="-mt-3 mb-4 text-xs text-text-muted" data-plugin-update="compose">
           <summary className="cursor-pointer select-none">
             {t("gateways.pluginContainer.details")}
@@ -214,6 +229,39 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
             <CopyCommand command={composePluginUpdateCommand(composeService)} />
           </div>
         </details>
+      )}
+      {oldCompose && (
+        <div
+          className="-mt-3 mb-4 space-y-1.5 rounded-lg border border-border bg-surface p-2.5 text-xs text-text-muted"
+          data-plugin-compose-install={gateway.isOwner ? "old" : "old-viewer"}
+        >
+          <p>
+            {t("gateways.oldCompose.notice")}{" "}
+            {t(gateway.isOwner ? "gateways.oldCompose.todo" : "gateways.oldCompose.todoViewer")}
+          </p>
+          {gateway.isOwner && (
+            <details>
+              <summary className="cursor-pointer select-none">
+                {t("gateways.pluginContainer.details")}
+              </summary>
+              <div className="mt-1.5 space-y-1.5">
+                <p>
+                  {t("gateways.oldCompose.hostinger")}{" "}
+                  <a
+                    href={HOSTINGER_COMPOSE_REPLACE_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    {t("gateways.oldCompose.hostingerLink")}
+                  </a>
+                </p>
+                <p>{t("gateways.oldCompose.cloned")}</p>
+                <CopyCommand command={CLONED_COMPOSE_UPDATE_COMMAND} />
+              </div>
+            </details>
+          )}
+        </div>
       )}
       {inherited && (
         <WorkerPropagationInheritedNotice

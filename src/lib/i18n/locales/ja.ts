@@ -2369,6 +2369,17 @@ const ja: Record<string, string> = {
   "gateways.pluginContainer.details": "詳しく見る",
   "gateways.pluginContainer.detailsBody":
     "Hermes は DeskRPG と同じ Docker Compose の中で動いています。このコマンドはプラグインを新しく取得し、Hermes コンテナを再起動します。起動時に -f や --env-file を使った場合は、同じオプションを付けてください。docker compose up -d だけでは新しいバージョンは反映されません。",
+  "gateways.oldCompose.notice":
+    "この接続は以前のインストールファイルで設定されたため、まだリリースされていないプラグインを受け取り続けています。",
+  "gateways.oldCompose.todo":
+    "インストールファイルを一度取り直してください。方法は「詳しく見る」にあります。",
+  "gateways.oldCompose.todoViewer":
+    "この接続を作った人に、インストールファイルを取り直すよう伝えてください。",
+  "gateways.oldCompose.hostinger":
+    "Hostinger で使っている場合は、compose ファイルを一度差し替えてください。",
+  "gateways.oldCompose.hostingerLink": "差し替え方を見る",
+  "gateways.oldCompose.cloned":
+    "リポジトリを取得して（git clone）使っている場合は、そのフォルダで下のコマンドを実行してください。起動時に別の -f や --env-file を使った場合は、それに置き換えてください。",
   "gateways.pluginVersionRecheck": "接続テストを押すと確認します。",
   "gateways.pluginVersionUpdateNow": "今すぐ更新",
   "gateways.workerPlugin.missing": "{names} が一人で進めた仕事が記録されていません。",

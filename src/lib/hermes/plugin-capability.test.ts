@@ -517,3 +517,20 @@ describe("capability freshness markers", () => {
     assert.equal(pluginInfoCacheOutdated(null, { started_at: 1 }), true);
   });
 });
+
+describe("install commit (0.30.0)", () => {
+  const base = { plugin: "deskrpg", version: "0.30.0", capabilities: [] };
+  it("keeps a 40-character commit, reads any other shape as unknown, and adds no key for older plugins", () => {
+    const commit = "a".repeat(40);
+    assert.deepEqual(parsePluginInfo({ ...base, install: { commit } })?.install, { commit });
+    assert.deepEqual(parsePluginInfo({ ...base, install: { commit: "main" } })?.install, {
+      commit: null,
+    });
+    assert.deepEqual(parsePluginInfo({ ...base, install: { commit: null } })?.install, {
+      commit: null,
+    });
+    assert.equal(parsePluginInfo({ ...base, install: "x" })?.install, null);
+    const old = parsePluginInfo(base);
+    assert.ok(old && !("install" in old));
+  });
+});

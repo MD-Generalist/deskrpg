@@ -56,6 +56,12 @@ export type PluginInfo = {
   capabilities_fingerprint?: string;
   /** 0.29.0 — When the gateway process loaded the plugin (epoch seconds). Absent on older plugins. */
   started_at?: number;
+  /**
+   * 0.30.0 — The plugin commit that is running (read from its checkout when the plugin loaded). The version string of
+   * an unreleased build from the plugin's main branch usually equals the latest release, so only the commit tells it
+   * apart from the pinned one. Absent on older plugins; `commit` is null when the checkout could not be read.
+   */
+  install?: { commit: string | null } | null;
 };
 
 /** Worker plugin status for one employee. `link`: linked · missing · other. */

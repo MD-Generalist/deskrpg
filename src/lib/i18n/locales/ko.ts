@@ -2346,6 +2346,15 @@ const ko: Record<string, string> = {
   "gateways.pluginContainer.details": "자세히 보기",
   "gateways.pluginContainer.detailsBody":
     "Hermes 가 DeskRPG 와 같은 Docker Compose 안에서 돌고 있어요. 이 명령은 플러그인을 새로 받고 Hermes 컨테이너를 다시 시작해요. 처음 띄울 때 -f 나 --env-file 옵션을 썼다면 똑같이 붙여 주세요. docker compose up -d 만으로는 새 버전이 적용되지 않아요.",
+  "gateways.oldCompose.notice":
+    "이 연결은 예전 설치 파일로 설치돼서, 아직 출시되지 않은 플러그인을 계속 받고 있어요.",
+  "gateways.oldCompose.todo": "설치 파일을 한 번 새로 받아 주세요. 방법은 '자세히 보기'에 있어요.",
+  "gateways.oldCompose.todoViewer":
+    "이 연결을 만든 사람에게 설치 파일을 새로 받아 달라고 알려 주세요.",
+  "gateways.oldCompose.hostinger": "Hostinger 에서 쓰고 있다면 compose 파일을 한 번 바꿔 주세요.",
+  "gateways.oldCompose.hostingerLink": "바꾸는 방법 보기",
+  "gateways.oldCompose.cloned":
+    "저장소를 받아서(git clone) 쓰고 있다면 그 폴더에서 아래 명령을 실행해 주세요. 처음 띄울 때 다른 -f 나 --env-file 옵션을 썼다면 그것으로 바꿔 주세요.",
   "gateways.pluginVersionRecheck": "연결 테스트를 누르면 확인합니다.",
   "gateways.pluginVersionUpdateNow": "지금 갱신",
   "gateways.workerPlugin.missing": "{names} 직원은 혼자 일할 때 한 일이 기록되지 않아요.",

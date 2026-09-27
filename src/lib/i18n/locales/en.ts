@@ -2356,6 +2356,15 @@ const en: Record<string, string> = {
   "gateways.pluginContainer.details": "Show details",
   "gateways.pluginContainer.detailsBody":
     "Hermes runs in the same Docker Compose project as DeskRPG. This command downloads the new plugin and restarts the Hermes container. If you started it with -f or --env-file, add the same options. docker compose up -d alone does not apply the new version.",
+  "gateways.oldCompose.notice":
+    "This connection was set up from an older install file, so it keeps getting an unreleased plugin.",
+  "gateways.oldCompose.todo": "Get the install file again once. 'Show details' explains how.",
+  "gateways.oldCompose.todoViewer":
+    "Ask the person who set up this connection to get the install file again.",
+  "gateways.oldCompose.hostinger": "On Hostinger, replace the compose file once.",
+  "gateways.oldCompose.hostingerLink": "See how",
+  "gateways.oldCompose.cloned":
+    "If you cloned the repository (git clone), run the command below in that folder. If you started it with different -f or --env-file options, use those instead.",
   "gateways.pluginVersionRecheck": "Run Test connection to check.",
   "gateways.pluginVersionUpdateNow": "Update now",
   "gateways.workerPlugin.missing": "Work that {names} do on their own isn't being recorded.",

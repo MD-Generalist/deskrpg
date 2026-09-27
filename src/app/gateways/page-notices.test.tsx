@@ -14,7 +14,7 @@ import { SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.s
 
 import { I18nProvider } from "@/lib/i18n/context";
 
-import { PLUGIN_VERSION } from "@/lib/hermes/setup/pin";
+import { PLUGIN_PIN, PLUGIN_VERSION } from "@/lib/hermes/setup/pin";
 
 import GatewayManagementPage from "./page";
 
@@ -310,4 +310,67 @@ test("a gateway on another host keeps the host guidance and no Compose command",
   await renderPage();
   assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "host");
   assert.ok(!host.querySelector("[data-plugin-update]"));
+});
+
+test("an old-compose Hermes gets the replace-once notice instead of the update command", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [
+        gateway({
+          baseUrl: "http://hermes:8642",
+          pluginVersion: "0.1.0",
+          pluginCommit: "f".repeat(40),
+        }),
+      ],
+    },
+  });
+  await renderPage();
+  assert.equal(
+    host
+      .querySelector("[data-plugin-compose-install]")
+      ?.getAttribute("data-plugin-compose-install"),
+    "old",
+  );
+  assert.match(
+    host.querySelector("[data-plugin-compose-install] details")?.textContent ?? "",
+    /git pull/,
+  );
+  assert.equal(host.querySelector("[data-plugin-update]"), null);
+  assert.equal(host.querySelector('[data-action="plugin-update"]'), null);
+  assert.equal(host.querySelector("[data-plugin-outdated-hint]"), null);
+});
+
+test("an old-compose Hermes shown to someone it was shared with gets no steps", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [
+        gateway({
+          baseUrl: "http://hermes:8642",
+          pluginVersion: PLUGIN_VERSION,
+          pluginCommit: "f".repeat(40),
+          isOwner: false,
+        }),
+      ],
+    },
+  });
+  await renderPage();
+  const notice = host.querySelector("[data-plugin-compose-install]");
+  assert.equal(notice?.getAttribute("data-plugin-compose-install"), "old-viewer");
+  assert.equal(notice?.querySelector("details"), null);
+});
+
+test("a Compose Hermes on the pinned commit shows no old-compose notice", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [
+        gateway({
+          baseUrl: "http://hermes:8642",
+          pluginVersion: PLUGIN_VERSION,
+          pluginCommit: PLUGIN_PIN,
+        }),
+      ],
+    },
+  });
+  await renderPage();
+  assert.equal(host.querySelector("[data-plugin-compose-install]"), null);
 });

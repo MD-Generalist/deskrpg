@@ -118,7 +118,15 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
     // Do not create the key for old plugin bodies — distinguish "field absent" from "verdict failed (null)".
     ...(workerPlugin === undefined ? {} : { worker_plugin: workerPlugin }),
     ...readFreshnessMarks(record),
+    ...(record.install === undefined ? {} : { install: parseInstallReport(record.install) }),
   };
+}
+
+/** `install` block: only a 40-character lowercase hex commit is kept; any other shape reads as "could not tell". */
+function parseInstallReport(value: unknown): PluginInfo["install"] {
+  if (typeof value !== "object" || value === null) return null;
+  const commit = (value as Record<string, unknown>).commit;
+  return { commit: typeof commit === "string" && /^[0-9a-f]{40}$/.test(commit) ? commit : null };
 }
 
 /** Keeps only well-formed markers — an unknown shape is treated as "not reported". */
