@@ -474,7 +474,7 @@ const en: Record<string, string> = {
   "hermes.wizard.error.hermesVersionUnsupported":
     "Hermes 0.21.1 or newer is required. Run hermes update on the server, then check again.",
   "hermes.wizard.error.pluginUpdateFailed":
-    "The DeskRPG plugin could not be updated to the new version. Ask the administrator to check host network access and write permission on the plugin directory, then check again.",
+    "Couldn't update the DeskRPG connector to the new version. The version you had is still on, so everything keeps working as before. Try again in a moment; if it keeps failing, check the internet connection of the computer where Hermes is installed.",
   "hermes.wizard.error.pluginUpdateUnsupportedHost":
     "This app cannot run commands on the host where this gateway runs — container deployments are one such case. Register the host over SSH, or update the plugin on the host and then run Test connection.",
   "hermes.wizard.error.pluginUpdateCandidateNotFound":

@@ -472,7 +472,7 @@ const ko: Record<string, string> = {
   "hermes.wizard.error.hermesVersionUnsupported":
     "Hermes 0.21.1 이상이 필요합니다. 서버에서 hermes update 를 실행해 올린 뒤 다시 확인하세요.",
   "hermes.wizard.error.pluginUpdateFailed":
-    "DeskRPG 플러그인을 새 버전으로 갱신하지 못했습니다. 관리자가 호스트의 네트워크와 플러그인 디렉터리 쓰기 권한을 확인한 뒤 다시 확인하세요.",
+    "DeskRPG 연결 도구를 새 버전으로 올리지 못했어요. 쓰던 버전은 그대로 켜져 있어서 지금처럼 쓸 수 있어요. 잠시 뒤 다시 시도하고, 계속 안 되면 Hermes가 설치된 컴퓨터의 인터넷 연결을 확인하세요.",
   "hermes.wizard.error.pluginUpdateUnsupportedHost":
     "이 게이트웨이가 도는 호스트에서는 앱이 명령을 돌릴 수 없습니다. 컨테이너로 배포한 경우가 그렇습니다 — 호스트를 SSH 로 등록하거나, 호스트에서 직접 플러그인을 올린 뒤 연결 테스트를 누르세요.",
   "hermes.wizard.error.pluginUpdateCandidateNotFound":
