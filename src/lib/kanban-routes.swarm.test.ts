@@ -265,6 +265,17 @@ test("if the plugin cannot do swarm, getBlackboard also returns 428", async () =
   assert.deepEqual(body.missing, ["swarm"]);
 });
 
+test("a gateway that gained swarm under the same plugin version is re-probed instead of held at 428", async () => {
+  const { getBlackboard } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"], {
+    capabilities: ["kanban", "cron", "events"],
+  });
+  // The cache was filled without swarm; the gateway now has it (a core swap keeps the plugin version).
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "swarm"] });
+  const res = await getBlackboard(getRequest(ctx, "any-task-id"), ctx.channelId, "any-task-id");
+  assert.notEqual(res.status, 428);
+});
+
 test("returns the blackboard as-is", async () => {
   const { getBlackboard } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"]);

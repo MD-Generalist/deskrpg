@@ -1973,3 +1973,107 @@ test("a run's sources are read from its worker session with that profile's key",
   assert.equal(missing.body.code, "run_not_found");
   server.reset();
 });
+
+// The cached capabilities can trail the gateway under the same plugin version (a core swap, a plugin setting).
+// Before refusing for a missing capability the route re-probes once; a plugin 428 refreshes the cache too.
+const PATCHED = ["kanban", "cron", "events", "kanban_review_policy_v1"];
+const UPSTREAM_HOOKS = ["kanban", "cron", "events", "review_hooks_v1"];
+const NO_POLICIES = ["kanban", "cron", "events"];
+const infoProbeCount = () => server.requests().filter((r) => r.path === "/deskrpg/info").length;
+
+test("capability change under the same version: a refused mixed policy is re-checked and then accepted", async () => {
+  server.reset();
+  server.setInfo({ capabilities: PATCHED });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
+  // The core is swapped to upstream: same plugin version, hooks instead of the patch.
+  server.setInfo({ capabilities: UPSTREAM_HOOKS });
+  const probes = infoProbeCount();
+  const res = await createTask(routes, seed.ownerId, seed.channelId, {
+    assignee: seed.npcId,
+    reviewPolicy: { mode: "mixed", reviewerNpcId: seed.extras[0].npcId },
+  });
+  assert.equal(res.status, 201);
+  assert.equal(infoProbeCount(), probes + 1);
+  assert.deepEqual(lastCreatedPolicy(), { version: 1, mode: "mixed", reviewer_profile: "noah" });
+  // The cache now holds the fresh answer: the automation status shows it without another probe.
+  const status = await routes.status.GET(
+    req(seed.ownerId, "GET", `http://localhost/api/channels/${seed.channelId}/automation/status`),
+    ctx(seed.channelId),
+  );
+  const body = await status.json();
+  assert.ok(JSON.stringify(body).includes("review_hooks_v1"));
+  assert.ok(!JSON.stringify(body).includes("kanban_review_policy_v1"));
+});
+
+test("capability change under the same version: a requested policy is re-checked before the 428", async () => {
+  server.reset();
+  server.setInfo({ capabilities: NO_POLICIES });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  server.setInfo({ capabilities: UPSTREAM_HOOKS });
+  const res = await createTask(routes, seed.ownerId, seed.channelId, {
+    reviewPolicy: { mode: "human" },
+  });
+  assert.equal(res.status, 201);
+  assert.deepEqual(lastCreatedPolicy(), { version: 1, mode: "human", reviewer_profile: null });
+});
+
+test("a gateway that really lacks the capability is still refused, and re-probed at most once per window", async () => {
+  server.reset();
+  server.setInfo({ capabilities: NO_POLICIES });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const probes = infoProbeCount();
+  for (let i = 0; i < 2; i++) {
+    const res = await createTask(routes, seed.ownerId, seed.channelId, {
+      reviewPolicy: { mode: "human" },
+    });
+    assert.equal(res.status, 428);
+  }
+  assert.equal(infoProbeCount(), probes + 1);
+});
+
+test("the plugin refusing our default policy refreshes the cache and the card is created without one", async () => {
+  server.reset();
+  server.setInfo({ capabilities: PATCHED });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  // The gateway lost approval policies (core swapped back without the patch) but the cache still says patched.
+  server.setInfo({ capabilities: NO_POLICIES });
+  const before = server.requests().length;
+  const res = await createTask(routes, seed.ownerId, seed.channelId);
+  assert.equal(res.status, 201);
+  const posts = server
+    .requests()
+    .slice(before)
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"));
+  assert.deepEqual(
+    posts.map((r) => r.status),
+    [428, 201],
+  );
+  assert.equal("review_policy" in (posts[1].json as Record<string, unknown>), false);
+  // Refreshed: the next card goes out without a policy at once.
+  const next = server.requests().length;
+  assert.equal((await createTask(routes, seed.ownerId, seed.channelId)).status, 201);
+  assert.equal(
+    server
+      .requests()
+      .slice(next)
+      .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?")).length,
+    1,
+  );
+});
+
+test("a policy the caller asked for is never dropped when the plugin refuses it", async () => {
+  server.reset();
+  server.setInfo({ capabilities: PATCHED });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  server.setInfo({ capabilities: NO_POLICIES });
+  const res = await createTask(routes, seed.ownerId, seed.channelId, {
+    reviewPolicy: { mode: "human" },
+  });
+  assert.equal(res.status, 428);
+  assert.equal(res.body.code, "review_policy_required");
+});
