@@ -327,10 +327,16 @@ export async function installHermesHost(
   signal?: AbortSignal,
   /** The SSH target is always Linux — `process.platform` is the default only for local runs. */
   platform: string = process.platform,
+  /**
+   * `reinstall`: the user chose to reinstall over an install that stopped halfway. The host moves that folder aside,
+   * and only when nothing in it runs — a working Hermes is refused as before.
+   */
+  options: { reinstall?: boolean } = {},
 ): Promise<{ installerDigest: string; milestones: string[] }> {
   checkAbort(signal);
   try {
-    const launch = hostLaunch(platform, "install", HOST_INSTALLER);
+    const code = (options.reinstall ? "REINSTALL = True\n" : "") + HOST_INSTALLER;
+    const launch = hostLaunch(platform, "install", code);
     const result = await execute(launch.command, launch.args, {
       timeoutMs: 600_000,
       signal,
@@ -393,10 +399,20 @@ export async function discoverHost(
   /** The SSH target is always Linux — `process.platform` is the default only for local runs. */
   platform: string = process.platform,
 ): Promise<SetupCandidate[]> {
+  return (await discoverHostState(execute, platform)).candidates;
+}
+/**
+ * Discovery plus whether an install stopped halfway: the Hermes folder is there but nothing in it runs. The screen
+ * then offers to reinstall instead of an install the host would refuse.
+ */
+export async function discoverHostState(
+  execute: HostExecutor,
+  platform: string = process.platform,
+): Promise<{ candidates: SetupCandidate[]; incomplete: boolean }> {
   const body = await invoke(execute, "discover", undefined, undefined, undefined, platform);
   if (!Array.isArray(body.candidates) || body.candidates.length > 256)
     throw new Error("host_operation_failed");
-  return body.candidates.map(publicCandidate);
+  return { candidates: body.candidates.map(publicCandidate), incomplete: body.incomplete === true };
 }
 function inspection(body: RecordValue): SetupInspection {
   if (

@@ -84,6 +84,8 @@ export default function GatewaySetupWizard({
   const [registering, setRegistering] = useState(false);
   const [detailOpen, setDetailOpen] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<SetupCandidate[]>([]);
+  // The host has a Hermes folder from an install that stopped halfway — offer a reinstall instead of an install.
+  const [incomplete, setIncomplete] = useState(false);
   const [inspection, setInspection] = useState<SetupInspection | null>(null);
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
   const [job, setJob] = useState<WizardJob | null>(null);
@@ -225,13 +227,14 @@ export default function GatewaySetupWizard({
     setPortCandidateId(null);
     void run(
       (signal) =>
-        request<{ candidates: SetupCandidate[] }>(
+        request<{ candidates: SetupCandidate[]; incomplete?: boolean }>(
           { action: "discover", mode: targetMode, ...(targetMode === "ssh" ? { hostId } : {}) },
           "",
           signal,
         ),
       (data) => {
         setCandidates(data.candidates);
+        setIncomplete(data.incomplete === true);
         setDiscovered(true);
       },
     );
@@ -667,24 +670,36 @@ export default function GatewaySetupWizard({
             <p role="status">{c.discovering}</p>
           ) : (
             <>
-              {discovered && !candidates.length && <p>{c.empty}</p>}
+              {discovered && !candidates.length && !incomplete && <p>{c.empty}</p>}
               {installOffered &&
                 (canInstallHermes ? (
-                  <article className="rounded-lg border border-primary/40 bg-bg p-4">
+                  <article
+                    className="rounded-lg border border-primary/40 bg-bg p-4"
+                    data-install-offer={incomplete ? "reinstall" : "install"}
+                  >
                     <h3 className="font-semibold">
                       {t(
-                        mode === "ssh"
-                          ? "hermes.wizard.install.titleSsh"
-                          : "hermes.wizard.install.title",
+                        incomplete
+                          ? "hermes.wizard.reinstall.title"
+                          : mode === "ssh"
+                            ? "hermes.wizard.install.titleSsh"
+                            : "hermes.wizard.install.title",
                       )}
                     </h3>
                     <p className="mt-1 text-sm text-text-muted">
                       {t(
-                        mode === "ssh"
-                          ? "hermes.wizard.install.bodySsh"
-                          : "hermes.wizard.install.body",
+                        incomplete
+                          ? "hermes.wizard.reinstall.body"
+                          : mode === "ssh"
+                            ? "hermes.wizard.install.bodySsh"
+                            : "hermes.wizard.install.body",
                       )}
                     </p>
+                    {incomplete && (
+                      <MoreDetails className="mt-2 text-xs">
+                        <p>{t("hermes.wizard.reinstall.details")}</p>
+                      </MoreDetails>
+                    )}
                     <label className="mt-3 flex items-start gap-2 text-sm">
                       <input
                         type="checkbox"
@@ -703,6 +718,7 @@ export default function GatewaySetupWizard({
                     </label>
                     <button
                       className={`${button} mt-3`}
+                      data-action="install-hermes"
                       disabled={busy || !installConsent}
                       onClick={() =>
                         void run(
@@ -710,7 +726,13 @@ export default function GatewaySetupWizard({
                             // The route doesn't know an action called install-hermes — installation is
                             // the installHermes flag on prepare. There's no candidate before installing, so candidateId is left empty.
                             request<{ job: WizardJob }>(
-                              { action: "prepare", installHermes: true, profiles: [], ...target },
+                              {
+                                action: "prepare",
+                                installHermes: true,
+                                ...(incomplete ? { reinstall: true } : {}),
+                                profiles: [],
+                                ...target,
+                              },
                               "",
                               signal,
                             ),
@@ -721,7 +743,11 @@ export default function GatewaySetupWizard({
                         )
                       }
                     >
-                      {t("hermes.wizard.install.start")}
+                      {t(
+                        incomplete
+                          ? "hermes.wizard.reinstall.start"
+                          : "hermes.wizard.install.start",
+                      )}
                     </button>
                   </article>
                 ) : (

@@ -645,6 +645,12 @@ const ja: Record<string, string> = {
   "hermes.wizard.ssh.errors.keyChanged":
     "確認後にホストキーが変わりました。もう一度確認してください。",
   "hermes.wizard.ssh.errors.invalid": "ホスト・ポート・ユーザーの形式が正しくありません。",
+  "hermes.wizard.reinstall.title": "以前の Hermes のインストールが途中で止まっています",
+  "hermes.wizard.reinstall.body":
+    "残ったファイルのせいで新しくインストールできません。［もう一度インストール］を押すと、残ったフォルダーを別に保管してから最初からインストールし直します。",
+  "hermes.wizard.reinstall.details":
+    "残ったフォルダー（hermes-agent）は削除せず、hermes-agent.incomplete-<日付> という名前に変えておきます。中の Hermes が正常に動く場合は、移動もインストールもしません。",
+  "hermes.wizard.reinstall.start": "もう一度インストール",
   "hermes.wizard.install.titleSsh": "接続したサーバーに Hermes をインストールしますか？",
   "hermes.wizard.install.bodySsh":
     "このサーバーで Hermes が見つかりませんでした。公式インストールスクリプトを SSH でダウンロードして実行します（sudo なしでホームにインストール）。数分かかることがあります。モデルへのログインはインストール後に行います。",

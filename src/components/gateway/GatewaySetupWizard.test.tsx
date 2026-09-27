@@ -846,6 +846,7 @@ async function reachEmptyDiscovery(
   caps: Record<string, unknown>,
   sent?: string[],
   bodies?: Record<string, unknown>[],
+  discovery: Record<string, unknown> = { candidates: [] },
 ) {
   const f = await fixture(async (_url, init) => {
     if (!init?.body) return response({ ...capabilities, ...caps });
@@ -853,7 +854,7 @@ async function reachEmptyDiscovery(
     const { action } = body;
     sent?.push(action);
     bodies?.push(body);
-    if (action === "discover") return response({ candidates: [] });
+    if (action === "discover") return response(discovery);
     return response({ job: { id: "j", status: "running", steps: ["installing_hermes"] } });
   });
   await act(async () =>
@@ -863,6 +864,49 @@ async function reachEmptyDiscovery(
   );
   return f;
 }
+
+test("an install that stopped halfway is offered a reinstall, which asks the host to set the old folder aside", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const f = await reachEmptyDiscovery({ canInstallHermes: true }, [], bodies, {
+    candidates: [],
+    incomplete: true,
+  });
+  try {
+    const offer = f.host.querySelector("[data-install-offer]");
+    assert.equal(offer?.getAttribute("data-install-offer"), "reinstall");
+    await act(async () =>
+      f.host.querySelector<HTMLInputElement>('input[name="install-consent"]')!.click(),
+    );
+    await act(async () =>
+      offer!.querySelector<HTMLButtonElement>('[data-action="install-hermes"]')!.click(),
+    );
+    const prepare = bodies.find((body) => body.action === "prepare");
+    assert.equal(prepare?.installHermes, true);
+    assert.equal(prepare?.reinstall, true);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("a host with no Hermes at all keeps the plain install offer, without reinstall", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const f = await reachEmptyDiscovery({ canInstallHermes: true }, [], bodies);
+  try {
+    assert.equal(
+      f.host.querySelector("[data-install-offer]")?.getAttribute("data-install-offer"),
+      "install",
+    );
+    await act(async () =>
+      f.host.querySelector<HTMLInputElement>('input[name="install-consent"]')!.click(),
+    );
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('[data-action="install-hermes"]')!.click(),
+    );
+    assert.equal("reinstall" in (bodies.find((body) => body.action === "prepare") ?? {}), false);
+  } finally {
+    await f.cleanup();
+  }
+});
 
 test("when the install gate is off, shows the enable command instead of an install offer", async () => {
   const f = await reachEmptyDiscovery({ canInstallHermes: false });
