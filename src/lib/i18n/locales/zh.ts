@@ -3707,7 +3707,7 @@ const zh: Record<string, string> = {
   "approvalPolicy.readOnly": "只有网关所有者可以更改",
   "approvalPolicy.sharedWarning": "也会应用到雇用了该员工的其他 {n} 个频道",
   "approvalPolicy.workerPropagationOff":
-    "目前命令被拦截时不会通知您，需要审批的任务也可能未经确认就完成。在连接页面点击［开启］即可修复。",
+    "目前命令被拦截时不会通知您。在连接页面点击［开启］即可修复。",
   "approvalPolicy.cron.title": "定时任务中的危险命令",
   "approvalPolicy.cron.hint": "当定时任务尝试运行危险命令时",
   "approvalPolicy.single.title": "看板与单次运行中的危险命令",

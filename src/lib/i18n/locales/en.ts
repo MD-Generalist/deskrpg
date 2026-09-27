@@ -3876,7 +3876,7 @@ const en: Record<string, string> = {
   "approvalPolicy.sharedWarning":
     "Also applies in {n} other channel(s) that hired this staff member",
   "approvalPolicy.workerPropagationOff":
-    "Right now you won't be notified when a command is blocked, and tasks that need approval can finish unchecked. Press [Turn on] on the connection screen to fix it.",
+    "Right now you won't be notified when a command is blocked. Press [Turn on] on the connection screen to fix it.",
   "approvalPolicy.cron.title": "Dangerous commands in cron jobs",
   "approvalPolicy.cron.hint": "When a scheduled job tries to run a dangerous command",
   "approvalPolicy.single.title": "Dangerous commands in kanban and one-shot runs",

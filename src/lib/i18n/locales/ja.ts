@@ -3899,7 +3899,7 @@ const ja: Record<string, string> = {
   "approvalPolicy.readOnly": "ゲートウェイの所有者だけが変更できます",
   "approvalPolicy.sharedWarning": "このスタッフを雇用している他の {n} チャンネルにも適用されます",
   "approvalPolicy.workerPropagationOff":
-    "いまはコマンドが止められても通知が来ず、承認が必要な業務も確認なしで終わることがあります。接続画面で［オンにする］を押すと直ります。",
+    "いまはコマンドが止められても通知が来ません。接続画面で［オンにする］を押すと直ります。",
   "approvalPolicy.cron.title": "クロン中の危険なコマンド",
   "approvalPolicy.cron.hint": "予約ジョブが危険なコマンドを実行しようとしたとき",
   "approvalPolicy.single.title": "カンバン・単発実行中の危険なコマンド",

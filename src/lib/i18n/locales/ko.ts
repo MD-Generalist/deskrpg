@@ -3862,7 +3862,7 @@ const ko: Record<string, string> = {
   "approvalPolicy.readOnly": "게이트웨이 소유자만 바꿀 수 있습니다",
   "approvalPolicy.sharedWarning": "이 직원을 고용한 다른 채널 {n}곳에도 같이 적용됩니다",
   "approvalPolicy.workerPropagationOff":
-    "지금은 명령이 막혀도 알림이 오지 않고, 승인이 필요한 업무도 확인 없이 끝날 수 있어요. 연결 화면에서 [켜기]를 누르면 고쳐져요.",
+    "지금은 명령이 막혀도 알림이 오지 않아요. 연결 화면에서 [켜기]를 누르면 고쳐져요.",
   "approvalPolicy.cron.title": "크론 중 위험 명령",
   "approvalPolicy.cron.hint": "예약 작업이 위험한 명령을 실행하려 할 때",
   "approvalPolicy.single.title": "칸반·단발 실행 중 위험 명령",
