@@ -1916,6 +1916,14 @@ const en: Record<string, string> = {
   "game.aiGatewayDown": "AI disconnected",
   "game.aiGatewayDownHint":
     "We can't reach the AI staff server, so employee status is unknown. Click to check the connection settings.",
+  "gateway.restart.stopped": "The AI staff server has stopped, so your employees can't answer.",
+  "gateway.restart.pressToRestart": "Press Restart and we'll turn it back on.",
+  "gateway.restart.button": "Restart",
+  "gateway.restart.running": "Turning it back on…",
+  "gateway.restart.succeeded": "It's back on. Your employees will return in a moment.",
+  "gateway.restart.runCommand":
+    "Please turn the gateway back on from the computer where Hermes is installed.",
+  "gateway.restart.askOwner": "Ask the owner of this gateway to turn it back on.",
   "game.gatewayConnect": "Connect",
   "game.channel": "Channel",
   "game.notifications": "Notifications",
