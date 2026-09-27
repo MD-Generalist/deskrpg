@@ -23,17 +23,6 @@
  */
 export type ReviewHooksReport = { propagation: boolean; profiles_without_plugin: string[] };
 
-/**
- * On an upstream PM runtime the dispatcher starts workers with `sys.executable -m hermes_cli.main` after stripping
- * PYTHONPATH, which fails unless `HERMES_BIN` points at the launcher.
- */
-export type WorkerLaunchReport = {
-  ok: boolean | null;
-  reason: null | "hermes_bin_unset" | "hermes_bin_missing" | "probe_failed";
-  hermes_bin: string | null;
-  launcher: string | null;
-};
-
 export type PluginInfo = {
   plugin: "deskrpg";
   version: string;
@@ -44,7 +33,10 @@ export type PluginInfo = {
     attachments: boolean;
     /** Approval hooks coverage: profiles that would run without the plugin (0.27.0+). null = could not tell. */
     review_hooks?: ReviewHooksReport | null;
-    /** Whether the gateway can start kanban workers (0.28.1+). Missing or null = unknown. */
+    /**
+     * 0.28.1 — Whether Hermes can start kanban workers from this gateway. Old plugins lack the key (undefined), and a
+     * failed check is null. The two are not mixed.
+     */
     worker_launch?: WorkerLaunchReport | null;
   };
   /**
@@ -60,6 +52,22 @@ export type PluginInfo = {
 };
 
 /** Worker plugin status for one employee. `link`: linked · missing · other. */
+/**
+ * 0.28.1 `kanban.worker_launch`. Hermes starts a kanban worker with `$HERMES_BIN` if set, else as
+ * `<gateway python> -m hermes_cli.main` without the gateway's PYTHONPATH — which cannot import Hermes on the upstream
+ * PM runtime. `ok: null` means the plugin could not tell.
+ */
+export type WorkerLaunchReason = "hermes_bin_unset" | "hermes_bin_missing" | "probe_failed";
+
+export type WorkerLaunchReport = {
+  ok: boolean | null;
+  reason: WorkerLaunchReason | null;
+  /** The gateway's `HERMES_BIN`, when set. */
+  hermes_bin: string | null;
+  /** What to set `HERMES_BIN` to: the checkout's PM launcher, else `hermes` on the gateway's PATH. */
+  launcher: string | null;
+};
+
 export type WorkerPluginGap = {
   profile: string;
   link: string;

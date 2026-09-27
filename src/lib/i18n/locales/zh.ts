@@ -3374,6 +3374,14 @@ const zh: Record<string, string> = {
   "gateways.workerPlugin.propagationOwnerOnly": "只有网关所有者可以开启",
   "gateways.workerPlugin.enableInSettings": "在设置中开启",
   "gateways.workerPlugin.enabling": "正在开启…",
+  "gateways.workerLaunch.blocked": "此网关无法启动看板工作进程,卡片会在未执行的情况下被放弃",
+  "gateways.workerLaunch.unset":
+    "Hermes 运行在新的运行方式(PM 运行时)上,但网关服务没有设置 HERMES_BIN。工作进程无法加载 Hermes,会立即退出。",
+  "gateways.workerLaunch.missing": "无法运行网关服务的 HERMES_BIN({path})。",
+  "gateways.workerLaunch.command":
+    "在网关主机上运行以下命令:它会在 {file} 中设置 HERMES_BIN 并重启网关(Linux systemd 用户服务)。",
+  "gateways.workerLaunch.noLauncher":
+    "未找到可建议的 Hermes 可执行文件。请在网关服务的环境中将 HERMES_BIN 设置为 Hermes 可执行文件路径并重启。",
   "gateways.workerPlugin.recheck": "重新检查",
   "gateways.workerPlugin.rechecking": "检查中…",
   "gateways.workerPlugin.propagationEnabled": "已开启工作者传播。定时任务可能需要重启才能生效",

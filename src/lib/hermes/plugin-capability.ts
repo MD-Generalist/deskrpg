@@ -17,6 +17,7 @@
  * `buildPluginCacheUpdate` was pulled out into `plugin-cache-update.ts` (server-only).
  */
 
+import { parseWorkerLaunchReport } from "./worker-launch";
 import { parseWorkerPluginReport } from "./worker-plugin";
 import type { PluginInfo } from "./deskrpg-plugin-types";
 import { REVIEW_HOOKS_CAPABILITY, SWARM_REVIEW_POLICY_CAPABILITY } from "./deskrpg-plugin-types";
@@ -97,6 +98,7 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
       : {};
 
   const workerPlugin = parseWorkerPluginReport(record.worker_plugin);
+  const workerLaunch = parseWorkerLaunchReport(kanbanRecord.worker_launch);
 
   return {
     plugin: PLUGIN_NAME,
@@ -106,6 +108,8 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
     kanban: {
       dispatcher_present: kanbanRecord.dispatcher_present === true,
       attachments: kanbanRecord.attachments === true,
+      // Absent on old plugins — keep "unknown" apart from a failed check (null).
+      ...(workerLaunch === undefined ? {} : { worker_launch: workerLaunch }),
     },
     dashboard_url: httpUrlOrNull(record.dashboard_url),
     // Do not create the key for old plugin bodies — distinguish "field absent" from "verdict failed (null)".
