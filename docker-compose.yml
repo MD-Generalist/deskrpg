@@ -7,13 +7,8 @@
 # - Never declare `traefik-proxy`: `traefik-connect` joins it at runtime (both Traefik
 #   shapes). Run `docker compose up -d` without a service name so it runs again.
 #
-# Environment (all optional unless noted):
-#   HERMES_API_KEY    REQUIRED — Hermes API server key; DeskRPG's gateway token
-#   TRAEFIK_HOST      REQUIRED, not injected — srvNNNNNN.hstgr.cloud
-#   HERMES_DASHBOARD_PASSWORD  opens deskrpg-hermes.<TRAEFIK_HOST> (user admin)
-#   JWT_SECRET        generated into deskrpg-data if empty
-#   OPENROUTER/ANTHROPIC/OPENAI_API_KEY — or ChatGPT login
-#   DESKRPG_IMAGE     :latest so Update upgrades; pin with :<release tag> (plugin follows)
+# Environment: HERMES_API_KEY and TRAEFIK_HOST are required; every variable is explained in
+# deploy/hostinger/README.md step 2-1.
 
 services:
   deskrpg:

@@ -11,6 +11,8 @@ const compose = fs.readFileSync(path.join(ROOT, "docker-compose.yml"), "utf8");
 
 test("is 8192 characters or fewer — the docker manager API rejects longer content", () => {
   assert.ok(compose.length <= 8192, `현재 ${compose.length}자`);
+  // Whether Docker Manager counts characters or bytes is not known — hold both, with room for the next edit.
+  assert.ok(Buffer.byteLength(compose) <= 7900, `현재 ${Buffer.byteLength(compose)} bytes`);
 });
 
 test("does not declare traefik-proxy as a network — external breaks host-mode Traefik, and creating it breaks bridge-mode Traefik", () => {
