@@ -38,6 +38,13 @@ export function packageManagerFor(distro: unknown): PackageManager | null {
   return typeof distro === "string" ? (MANAGERS[distro] ?? null) : null;
 }
 
+/** A package manager name as stored on a setup job (already resolved from the distro). null if unknown. */
+export function parsePackageManager(value: unknown): PackageManager | null {
+  return value === "apt" || value === "dnf" || value === "pacman" || value === "macos"
+    ? value
+    : null;
+}
+
 export function parseSystemPackages(value: unknown): SystemPackage[] {
   const words = typeof value === "string" ? value.trim().split(/\s+/) : [];
   return SYSTEM_PACKAGES.filter((p) => words.includes(p));

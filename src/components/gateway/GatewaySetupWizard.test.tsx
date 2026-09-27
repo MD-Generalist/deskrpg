@@ -1353,6 +1353,33 @@ test("an unknown install-progress code renders nothing, and only known codes ren
   }
 });
 
+test("missing system packages show the install command for the host's package manager", async () => {
+  // The job carries the package manager the server resolved (apt), not the distro id.
+  const f = await prepareFlow((action) => {
+    if (action === "prepare")
+      return response({
+        job: {
+          id: "j",
+          status: "failed",
+          steps: ["installing_hermes"],
+          error: "system_packages_missing",
+          missingPackages: ["curl", "git", "libatomic"],
+          packageManager: "apt",
+        },
+      });
+    return undefined;
+  });
+  try {
+    assert.match(
+      f.host.textContent!,
+      /sudo apt-get update && sudo apt-get install -y curl git libatomic1/,
+    );
+    assert.doesNotMatch(f.host.textContent!, /패키지 관리자를 알 수 없습니다/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("elapsed time ticks up while installation is running", async () => {
   const running = { id: "j", status: "running", steps: ["installing_hermes"] };
   const f = await fixture(async (url, init) => {
