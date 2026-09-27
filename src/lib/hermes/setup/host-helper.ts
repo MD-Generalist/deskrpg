@@ -113,6 +113,9 @@ try:
     root = root / 'hermes-agent'
     folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
     argv = None
+    # How to ask the found Hermes for its version: an install that stopped halfway leaves a folder, sometimes even
+    # a Python, but nothing that answers this.
+    probe = None
     # On Windows install.ps1 mints hermes.exe (hermes_cli/_launchers.py). A hermes.cmd shim (no distlib) is not used:
     # it is a batch file, and running it here would put the payload through cmd.exe.
     launcher = root / '.hermes' / 'bin' / ('hermes.exe' if WINDOWS else 'hermes')
@@ -143,11 +146,21 @@ try:
                 'exec(compile(sys.stdin.read(), \'<deskrpg-host-helper>\', \'exec\'), {\'__name__\': \'__main__\'})',
             ])
             argv = [str(python), '-I', '-c', prelude]
+            probe = [str(launcher), '--version']
     if argv is None:
         python = next((root / folder / folder_name / exe for folder in ('venv', '.venv') if (root / folder / folder_name / exe).is_file()), None)
-        if python is not None: argv = [str(python), '-']
+        if python is not None:
+            argv = [str(python), '-']
+            probe = [str(python), '-m', 'hermes_cli.main', '--version']
+    def runs():
+        try: return subprocess.run(probe, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(root), timeout=60).returncode == 0
+        except Exception: return False
+    # Discovery tells a half-finished install (the folder is there, no Hermes runs) apart from no install at all:
+    # the installer refuses an existing folder unless asked to reinstall.
+    incomplete = {'candidates': [], 'incomplete': True}
     if argv is None:
-        print(json.dumps({'candidates': []} if payload['action'] == 'discover' else {'error': 'hermes_not_found'}))
+        if payload['action'] == 'discover': print(json.dumps(incomplete if root.exists() or root.is_symlink() else {'candidates': []}))
+        else: print(json.dumps({'error': 'hermes_not_found'}))
     else:
         spawn = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {'start_new_session': True}
         # Pass encoding='utf-8' explicitly. Without it the child's stdin/stdout use the same ANSI
@@ -160,7 +173,7 @@ try:
         # answer with a short named error instead of a reply that would never arrive whole.
         limit = payload.get('max_output', 262144)
         if child.returncode:
-            print(json.dumps({'error': 'host_operation_failed'}))
+            print(json.dumps(incomplete if payload['action'] == 'discover' and not runs() else {'error': 'host_operation_failed'}))
         elif len(data) > limit:
             print(json.dumps(spill(data, payload.get('max_spill', 262144)) if payload.get('spill') else {'error': 'host_output_too_large'}))
         else:
@@ -369,7 +382,7 @@ export function hostLaunch(
  * Install output is neither stored nor returned — only the last 8KiB is kept in memory for failure classification.
  */
 export const HOST_INSTALLER = String.raw`
-import hashlib, json, os, pathlib, stat, subprocess, sys, tempfile, threading, urllib.request
+import hashlib, json, os, pathlib, stat, subprocess, sys, tempfile, threading, time, urllib.request
 WINDOWS = sys.platform == 'win32'
 INSTALLER_URL = 'https://hermes-agent.nousresearch.com/install.ps1' if WINDOWS else 'https://hermes-agent.nousresearch.com/install.sh'
 INSTALLER_SUFFIX = '.ps1' if WINDOWS else '.sh'
@@ -400,12 +413,24 @@ def note(line):
 def out(value):
     sys.stdout.write(json.dumps(value))
     raise SystemExit(0)
+# Set to True (prepended by the caller) when the user chose to reinstall over an install that stopped halfway.
+REINSTALL = globals().get('REINSTALL') is True
+def runnable():
+    # Does anything in the existing folder answer '--version'? The same check as after a fresh install below.
+    folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
+    python = next((INSTALL / folder / folder_name / exe for folder in ('venv', '.venv') if (INSTALL / folder / folder_name / exe).is_file()), None)
+    launcher = INSTALL / '.hermes' / 'bin' / ('hermes.exe' if WINDOWS else 'hermes')
+    if python is None and not launcher.is_file(): return False
+    argv = [str(python), '-m', 'hermes_cli.main', '--version'] if python is not None else [str(launcher), '--version']
+    try: return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120).returncode == 0
+    except Exception: return False
 try:
     ROOT = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
     INSTALL = ROOT / 'hermes-agent'
     if ROOT.is_symlink() or (ROOT.exists() and not ROOT.is_dir()): out({'error': 'unsafe_host_path'})
-    # Upgrade/reinstall is out of scope for this path. If it already exists, never touch it.
-    if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
+    # Upgrading is out of scope for this path. An existing folder is never touched, except a half-finished one the
+    # user chose to reinstall over (checked again under the lock).
+    if (INSTALL.exists() or INSTALL.is_symlink()) and not REINSTALL: out({'error': 'hermes_already_installed'})
     ROOT.mkdir(parents=True, exist_ok=True)
     lock_path = ROOT / '.deskrpg-setup.lock'
     if WINDOWS:
@@ -438,7 +463,14 @@ try:
             out({'error': 'host_busy'})
     lock = os.fdopen(fd, 'w')
     # Check once more after taking the lock — a competing install may have just finished.
-    if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
+    reinstalled = False
+    if INSTALL.exists() or INSTALL.is_symlink():
+        if not REINSTALL or INSTALL.is_symlink() or not INSTALL.is_dir() or runnable(): out({'error': 'hermes_already_installed'})
+        # Moved aside, not deleted: whatever the failed install left (and anything the user put there) stays.
+        backup = ROOT / ('hermes-agent.incomplete-' + time.strftime('%Y%m%d-%H%M%S'))
+        try: INSTALL.rename(backup)
+        except OSError: out({'error': 'hermes_install_failed'})
+        reinstalled = True
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with opener.open(INSTALLER_URL, timeout=30) as response:
@@ -497,7 +529,7 @@ try:
     if python is None and not launcher.is_file(): out({'error': 'hermes_install_failed'})
     probe = subprocess.run([str(python), '-m', 'hermes_cli.main', '--version'] if python is not None else [str(launcher), '--version'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
     if probe.returncode: out({'error': 'hermes_install_failed'})
-    out({'ok': True, 'installerDigest': digest, 'milestones': milestones})
+    out({'ok': True, 'installerDigest': digest, 'milestones': milestones, **({'reinstalled': True} if reinstalled else {})})
 except SystemExit:
     raise
 except Exception:

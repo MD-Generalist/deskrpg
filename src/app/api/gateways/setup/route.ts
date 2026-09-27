@@ -139,8 +139,7 @@ export async function POST(req: NextRequest) {
       body.mode === "local"
         ? { mode: "local" }
         : { mode: "ssh", hostId: typeof body.hostId === "string" ? body.hostId : "" };
-    if (body.action === "discover")
-      return response({ candidates: await discoverSetupHost(userId, target) });
+    if (body.action === "discover") return response(await discoverSetupHost(userId, target));
     // Before install the candidate does not exist — only then may candidateId be empty, and the server finds it again after install.
     const installHermes = body.action === "prepare" && body.installHermes === true;
     if (
@@ -200,6 +199,8 @@ export async function POST(req: NextRequest) {
             resumeFrom,
             setPort,
             workerPropagation,
+            // Only with an install: reinstall over an install that stopped halfway.
+            installHermes && body.reinstall === true,
           ),
         },
         202,

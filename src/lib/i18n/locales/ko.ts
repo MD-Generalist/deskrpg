@@ -636,6 +636,12 @@ const ko: Record<string, string> = {
   "hermes.wizard.ssh.errors.noTools": "DeskRPG 서버에 ssh 도구가 없습니다.",
   "hermes.wizard.ssh.errors.keyChanged": "호스트 키가 확인한 뒤 바뀌었습니다. 다시 확인하세요.",
   "hermes.wizard.ssh.errors.invalid": "호스트·포트·사용자 형식이 올바르지 않습니다.",
+  "hermes.wizard.reinstall.title": "예전에 하던 Hermes 설치가 중간에 멈춰 있어요",
+  "hermes.wizard.reinstall.body":
+    "남은 파일 때문에 새로 설치할 수 없는 상태예요. [다시 설치]를 누르면 남은 폴더를 따로 보관해 두고 처음부터 다시 설치해요.",
+  "hermes.wizard.reinstall.details":
+    "남은 폴더(hermes-agent)는 지우지 않고 hermes-agent.incomplete-<날짜> 이름으로 바꿔 둬요. 그 안의 Hermes가 제대로 실행되면 옮기지 않고 설치도 하지 않아요.",
+  "hermes.wizard.reinstall.start": "다시 설치",
   "hermes.wizard.install.titleSsh": "연결한 서버에 Hermes 를 설치할까요?",
   "hermes.wizard.install.bodySsh":
     "이 서버에서 Hermes 를 찾지 못했습니다. 공식 설치 스크립트를 SSH 로 내려받아 실행합니다(sudo 없이 사용자 홈에 설치). 몇 분 걸릴 수 있습니다. 모델 제공자 로그인은 설치 뒤 따로 합니다.",

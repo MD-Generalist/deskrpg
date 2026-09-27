@@ -639,6 +639,12 @@ const en: Record<string, string> = {
   "hermes.wizard.ssh.errors.noTools": "The DeskRPG server has no ssh tools.",
   "hermes.wizard.ssh.errors.keyChanged": "The host key changed after you checked it. Check again.",
   "hermes.wizard.ssh.errors.invalid": "Host, port or user is not valid.",
+  "hermes.wizard.reinstall.title": "A previous Hermes install stopped halfway",
+  "hermes.wizard.reinstall.body":
+    "The leftover files block a new install. Press [Reinstall] to keep the leftover folder aside and install again from the start.",
+  "hermes.wizard.reinstall.details":
+    "The leftover folder (hermes-agent) is not deleted; it is renamed to hermes-agent.incomplete-<date>. If the Hermes in it actually runs, nothing is moved and nothing is installed.",
+  "hermes.wizard.reinstall.start": "Reinstall",
   "hermes.wizard.install.titleSsh": "Install Hermes on the connected server?",
   "hermes.wizard.install.bodySsh":
     "Hermes wasn't found on this server. DeskRPG downloads and runs the official installer over SSH (into your home directory, no sudo). It can take a few minutes. Model sign-in comes after installation.",

@@ -3181,3 +3181,63 @@ test("discovery and the installer accept the Windows launcher .exe", () => {
   assert.ok(!HOST_BOOTSTRAP.includes("if not WINDOWS and launcher.is_file()"));
   assert.ok(HOST_INSTALLER.includes("('hermes.exe' if WINDOWS else 'hermes')"));
 });
+
+// Reinstalling over an install that stopped halfway. The installer only moves the old folder aside (never deletes
+// it) and only when nothing in it runs: a working Hermes is never touched, even when asked.
+const HALF = String.raw`
+import time
+leftover = pathlib.Path.home() / '.hermes' / 'hermes-agent'
+(leftover / 'half.txt').write_text('left from the failed install')
+probes = []
+real_popen = subprocess.Popen
+def reinstall_popen(argv, **kwargs):
+    observed['entries'] = sorted(p.name for p in (pathlib.Path.home() / '.hermes').iterdir())
+    return real_popen(argv, **kwargs)
+subprocess.Popen = reinstall_popen
+def probe_run(argv, **kwargs):
+    probes.append(list(argv))
+    observed['probes'] = probes
+    record()
+    return type('Result',(),{'returncode': OLD_PROBE if len(probes) == 1 else 0})()
+subprocess.run = probe_run
+`;
+function reinstall(options: { reinstall: boolean; oldProbe: number; oldPython?: boolean }) {
+  const setup = options.oldPython
+    ? String.raw`
+(leftover / 'venv' / 'bin').mkdir(parents=True)
+(leftover / 'venv' / 'bin' / 'python').write_text('')
+`
+    : "";
+  const script =
+    (options.reinstall ? "REINSTALL = True\n" : "") +
+    stubs() +
+    HALF.replace("OLD_PROBE", String(options.oldProbe)) +
+    setup +
+    // fake_popen creates venv/bin without exist_ok; the leftover must be gone by then.
+    "";
+  return installer(script, true);
+}
+test("reinstall moves a half-finished Hermes folder aside and installs again", () => {
+  const result = reinstall({ reinstall: true, oldProbe: 1, oldPython: true });
+  assert.equal(result.body.ok, true);
+  assert.equal(result.body.reinstalled, true);
+  const backups = result.observed.entries.filter((name: string) =>
+    name.startsWith("hermes-agent.incomplete-"),
+  );
+  assert.equal(backups.length, 1);
+  assert.ok(!result.observed.entries.includes("hermes-agent"), "the old folder is out of the way");
+});
+test("reinstall over a folder with nothing to run needs no version check", () => {
+  const result = reinstall({ reinstall: true, oldProbe: 0 });
+  assert.equal(result.body.ok, true);
+  assert.equal(result.body.reinstalled, true);
+});
+test("reinstall never touches a Hermes that runs", () => {
+  const result = reinstall({ reinstall: true, oldProbe: 0, oldPython: true });
+  assert.deepEqual(result.body, { error: "hermes_already_installed" });
+  assert.equal(result.observed?.entries, undefined, "the installer never ran");
+});
+test("without the reinstall choice an existing folder is still refused", () => {
+  const result = reinstall({ reinstall: false, oldProbe: 1, oldPython: true });
+  assert.deepEqual(result.body, { error: "hermes_already_installed" });
+});

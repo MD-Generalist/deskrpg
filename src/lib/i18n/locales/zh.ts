@@ -600,6 +600,12 @@ const zh: Record<string, string> = {
   "hermes.wizard.ssh.errors.noTools": "DeskRPG 服务器上没有 ssh 工具。",
   "hermes.wizard.ssh.errors.keyChanged": "确认后主机密钥发生了变化。请重新检查。",
   "hermes.wizard.ssh.errors.invalid": "主机、端口或用户格式不正确。",
+  "hermes.wizard.reinstall.title": "之前的 Hermes 安装中途停止了",
+  "hermes.wizard.reinstall.body":
+    "残留文件导致无法重新安装。点击［重新安装］会先把残留文件夹另存，再从头安装。",
+  "hermes.wizard.reinstall.details":
+    "残留文件夹（hermes-agent）不会删除，而是改名为 hermes-agent.incomplete-<日期>。如果其中的 Hermes 能正常运行，则不会移动，也不会安装。",
+  "hermes.wizard.reinstall.start": "重新安装",
   "hermes.wizard.install.titleSsh": "要在已连接的服务器上安装 Hermes 吗？",
   "hermes.wizard.install.bodySsh":
     "在此服务器上未找到 Hermes。DeskRPG 将通过 SSH 下载并运行官方安装脚本（无需 sudo，安装到用户主目录）。可能需要几分钟。模型登录在安装后单独进行。",

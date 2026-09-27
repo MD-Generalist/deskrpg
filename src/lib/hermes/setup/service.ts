@@ -12,6 +12,7 @@ import {
   discoverHost,
   inspectHost,
   installHermesHost,
+  discoverHostState,
   SetupPackagesMissingError,
   prepareHost,
   setWorkerPropagationHost,
@@ -224,7 +225,7 @@ function hostPlatform(target: HostTarget): string {
   return target.mode === "ssh" ? "linux" : process.platform;
 }
 export async function discoverSetupHost(userId: string, target: HostTarget) {
-  return discoverHost(await requireHost(userId, target), hostPlatform(target));
+  return discoverHostState(await requireHost(userId, target), hostPlatform(target));
 }
 export async function inspectSetupHost(userId: string, target: HostTarget, candidateId: string) {
   return inspectHost(await requireHost(userId, target), candidateId, hostPlatform(target));
@@ -294,6 +295,8 @@ export async function startSetup(
   setPort?: number,
   /** Worker propagation checkbox (plugin 0.16.0). If undefined, host settings are left untouched. */
   workerPropagation?: boolean,
+  /** With installHermes: reinstall over an install that stopped halfway (the host moves the old folder aside). */
+  reinstall?: boolean,
 ) {
   const executor = await requireHost(userId, target);
   // Host gate + install switch + target (local·ssh). Per-target conditions are decided by hermesInstallAllowed.
@@ -354,6 +357,7 @@ export async function startSetup(
             executor,
             controller.signal,
             hostPlatform(target),
+            { reinstall: reinstall === true },
           );
           jobs.update(userId, job.id, {
             installerDigest,
