@@ -24,6 +24,7 @@ import KanbanTimeline from "./KanbanTimeline";
 import KanbanViewToolbar from "./KanbanViewToolbar";
 import SwarmDialog, { type SwarmSubmit } from "./SwarmDialog";
 import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
+import { isUnreviewed } from "@/lib/hermes/review-hooks";
 import TaskEditorDialog from "./TaskEditorDialog";
 import { restoreKanbanMoveResultFocus, type KanbanMoveEvent } from "./kanban-card-move";
 import { applyFilter, filterRunsByVisibleTasks, hasActiveFilter } from "@/lib/kanban-view-state";
@@ -618,6 +619,12 @@ export default function KanbanBoardModal({
   // If the plugin can't do swarm, the button is hidden entirely — better than clicking it and seeing a 428.
   const review = reviewSupport(status?.capabilities);
   const reviewSupported = review.policies;
+  const unreviewed = useMemo(() => status?.unreviewedProfiles ?? [], [status]);
+  // Employees here whose worker runs without the approval hooks — their policy cards can finish unchecked.
+  const reviewGapNpcs = useMemo(
+    () => (reviewSupported ? npcs.filter((npc) => isUnreviewed(npc.profileName, unreviewed)) : []),
+    [npcs, reviewSupported, unreviewed],
+  );
   // Upstream Hermes has no approval-policy contract: cards and swarms are still created (Hermes' own
   // behaviour), and the board says their results complete without approval.
   const swarmSupported = status?.capabilities?.includes("swarm") ?? false;
@@ -1131,8 +1138,20 @@ export default function KanbanBoardModal({
           {t("kanban.review.noApproval")}
         </p>
       )}
+      {currentBoard && reviewGapNpcs.length > 0 && (
+        <p
+          data-review-gap={reviewGapNpcs.map((npc) => npc.npcId).join(" ")}
+          role="status"
+          className="px-5 py-2 text-xs text-danger"
+        >
+          {t("kanban.reviewGap.board", {
+            names: reviewGapNpcs.map((npc) => npc.npcName).join(", "),
+          })}
+        </p>
+      )}
       {editor && currentBoard && !blocker && (
         <TaskEditorDialog
+          unreviewedProfiles={reviewSupported ? unreviewed : []}
           mode={editor.mode}
           reviewSupported={reviewSupported}
           mixedSupported={review.mixed}

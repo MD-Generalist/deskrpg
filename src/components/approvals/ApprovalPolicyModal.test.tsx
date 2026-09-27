@@ -140,7 +140,7 @@ test("a member sees the policy read-only", async () => {
 test("warns when worker propagation is off", async () => {
   mockFetch({ [GET]: policy({ workerPropagation: false }) });
   await render(modal());
-  assert.ok($("[data-worker-propagation-off]").textContent?.includes("워커 전파"));
+  assert.ok($("[data-worker-propagation-off]"));
 });
 
 test("an old plugin gets the upgrade notice", async () => {

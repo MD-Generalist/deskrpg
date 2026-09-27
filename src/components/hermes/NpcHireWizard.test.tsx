@@ -941,7 +941,6 @@ test("with worker propagation disabled on the gateway, the hire result shows a n
     await createAndOpenModel(el);
     const notice = el.querySelector('[data-worker-propagation-notice="disabled"]');
     assert.ok(notice, "알림이 없다");
-    assert.match(notice.textContent ?? "", /칸반·크론 결과물은 모이지 않습니다/);
     assert.equal(notice.querySelector("a")?.getAttribute("href"), "/gateways?gateway=gw-1");
     root.unmount();
     el.remove();

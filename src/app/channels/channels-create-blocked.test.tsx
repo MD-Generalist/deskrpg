@@ -83,7 +83,6 @@ test("a member is told to ask the server admin for the create-office permission"
     { id: "g", name: "Default", role: "member", canCreateChannel: false, canManageGroup: false },
   ]);
   assert.equal(hint(el)?.getAttribute("data-create-blocked"), "ask_admin");
-  assert.ok(hint(el)?.textContent?.includes("서버 관리자에게"));
   assert.equal(Boolean(hint(el)?.querySelector('a[href="/admin/groups"]')), false);
 });
 

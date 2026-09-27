@@ -57,6 +57,8 @@ export type AutomationStatus = {
   boardSlug: string;
   dispatcherPresent: boolean;
   attachments: boolean;
+  /** Profiles whose cards can finish without approval (`review_hooks_v1` gateways). Absent on old servers. */
+  unreviewedProfiles?: string[];
   lastPolledAt: string | null;
   lastError: string | null;
   minVersion: string;

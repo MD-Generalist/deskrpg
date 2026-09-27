@@ -17,6 +17,8 @@
 import { useState } from "react";
 
 import { CopyCommand } from "@/components/CopyCommand";
+import { MoreDetails } from "@/components/MoreDetails";
+import { isUnreviewed } from "@/lib/hermes/review-hooks";
 import { useT } from "@/lib/i18n";
 import {
   WORKER_PROPAGATION_DISABLED,
@@ -54,6 +56,7 @@ type EnableState =
 export default function WorkerPluginLine({
   warning,
   propagation,
+  unreviewed = [],
   isOwner,
   apply,
   onApplied,
@@ -63,6 +66,11 @@ export default function WorkerPluginLine({
   warning: WorkerPluginWarning | null;
   /** 0.16.0 worker propagation state. `null`/`undefined` means unknown (old plugin, shared row) — behaves as before. */
   propagation?: WorkerPropagation | null;
+  /**
+   * Profiles whose kanban work runs without the approval hooks (`review_hooks_v1`), so a card waiting for
+   * approval can finish without it. Non-empty turns the notice into a danger.
+   */
+  unreviewed?: readonly string[];
   isOwner: boolean;
   apply: () => Promise<WorkerPluginApplyResponse>;
   onApplied: () => void;
@@ -82,6 +90,9 @@ export default function WorkerPluginLine({
     enableState.kind !== "enabled" &&
     enableState.kind !== "applyFailed" &&
     (propagation === "disabled" || result?.kind === "propagationDisabled");
+
+  const approvalRisk = unreviewed.length > 0;
+  const missingAtRisk = Boolean(warning?.fixable.some((name) => isUnreviewed(name, unreviewed)));
 
   if (!warning && !result && !propagationOff && enableState.kind === "idle") return null;
 
@@ -157,12 +168,18 @@ export default function WorkerPluginLine({
   return (
     <div className="-mt-3 mb-4 space-y-1 text-xs text-text-muted" data-worker-plugin-line="">
       {warning && (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="font-semibold text-npc-dark">
-            {t("gateways.workerPlugin.missing", {
-              count: warning.fixable.length,
-              names: warning.fixable.join(", "),
-            })}
+        <p
+          className="flex flex-wrap items-center gap-x-2 gap-y-1"
+          data-worker-plugin-missing
+          data-approval-risk={String(missingAtRisk)}
+        >
+          <span className={`font-semibold ${missingAtRisk ? "text-danger" : "text-npc-dark"}`}>
+            {t(
+              missingAtRisk
+                ? "gateways.workerPlugin.missingApprovals"
+                : "gateways.workerPlugin.missing",
+              { count: warning.fixable.length, names: warning.fixable.join(", ") },
+            )}
           </span>
           {/* With propagation off, [적용] ends in 409 — show how to turn it on instead. */}
           {isOwner && !propagationOff && (
@@ -175,10 +192,15 @@ export default function WorkerPluginLine({
               >
                 {busy ? t("gateways.workerPlugin.applying") : t("gateways.workerPlugin.apply")}
               </button>
-              <span>{t("gateways.workerPlugin.whatChanges")}</span>
+              <span>{t("gateways.workerPlugin.applyAction")}</span>
             </>
           )}
         </p>
+      )}
+      {warning && isOwner && !propagationOff && (
+        <MoreDetails>
+          <p>{t("gateways.workerPlugin.whatChanges")}</p>
+        </MoreDetails>
       )}
       {warning && warning.disabledByOperator.length > 0 && (
         <p className="text-text-dim">
@@ -189,15 +211,35 @@ export default function WorkerPluginLine({
       )}
       {propagationOff && (
         <div
-          className="space-y-1.5 rounded-lg border border-border bg-surface p-2.5"
+          className={`space-y-1.5 rounded-lg border p-2.5 ${
+            approvalRisk ? "border-danger/40 bg-danger/10" : "border-border bg-surface"
+          }`}
           data-worker-propagation="disabled"
+          data-severity={approvalRisk ? "danger" : "warning"}
+          data-approval-risk={String(approvalRisk)}
         >
-          <p className="font-semibold text-npc-dark">{t("gateways.workerPlugin.propagationOff")}</p>
-          <p>{t("gateways.workerPlugin.propagationWhat")}</p>
+          <p
+            data-headline
+            className={`font-semibold ${approvalRisk ? "text-danger" : "text-npc-dark"}`}
+          >
+            {t(
+              approvalRisk
+                ? "gateways.workerPlugin.propagationOffApprovals"
+                : "gateways.workerPlugin.propagationOff",
+            )}
+          </p>
+          {approvalRisk && (
+            <p data-approval-risk-names>
+              {t("gateways.workerPlugin.approvalRiskNames", { names: unreviewed.join(", ") })}
+            </p>
+          )}
           {!isOwner ? (
             <p className="text-text-dim">{t("gateways.workerPlugin.propagationOwnerOnly")}</p>
           ) : (
             <>
+              {enablePropagation && enableState.kind !== "failed" && (
+                <p>{t("gateways.workerPlugin.propagationAction")}</p>
+              )}
               {enablePropagation && enableState.kind !== "failed" && (
                 <button
                   type="button"
@@ -224,9 +266,6 @@ export default function WorkerPluginLine({
                 <>
                   <p>{t("gateways.workerPlugin.propagationCommand")}</p>
                   <CopyCommand command={WORKER_PROPAGATION_ENABLE_COMMAND} />
-                  <p className="text-text-dim">
-                    {t("gateways.workerPlugin.propagationEnv", { env: WORKER_PROPAGATION_ENV })}
-                  </p>
                   {onRecheck && (
                     <button
                       type="button"
@@ -244,6 +283,12 @@ export default function WorkerPluginLine({
               )}
             </>
           )}
+          <MoreDetails>
+            <p>{t("gateways.workerPlugin.propagationWhat")}</p>
+            {isOwner && (
+              <p>{t("gateways.workerPlugin.propagationEnv", { env: WORKER_PROPAGATION_ENV })}</p>
+            )}
+          </MoreDetails>
         </div>
       )}
       {enableState.kind === "enabled" && (

@@ -228,11 +228,11 @@ const ja: Record<string, string> = {
   "channels.create.group": "グループ",
   "channels.create.noAvailableGroups": "チャンネルを作成するには利用可能なグループが必要です。",
   "channels.create.blocked.no_group":
-    "所属しているグループがないため、オフィスを作成できません。グループの招待コードを受け取っている場合は、グループに参加してください。",
+    "まだどのグループにも入っていないため、オフィスを作成できません。招待コードがあれば［グループに参加］を押してください。",
   "channels.create.blocked.ask_admin":
-    "このアカウントには「オフィス作成」の権限がありません。このサーバーの管理者に権限を依頼してください。既存のオフィスには参加コードで入れます。",
+    "このアカウントにはオフィスを作成する権限がありません。このサーバーの管理者に「オフィス作成」の権限を頼んでください。",
   "channels.create.blocked.grant_yourself":
-    "グループの権限で「オフィス作成」がオフになっています。グループの権限設定でオンにするとオフィスを作成できます。",
+    "グループ設定でオフィス作成がオフになっています。［グループの権限設定を開く］でオンにしてください。",
   "channels.create.blocked.openPermissions": "グループの権限設定を開く",
   "channels.privateChannel": "非公開チャンネル",
   "admin.groups.title": "グループアクセス管理",
@@ -364,11 +364,9 @@ const ja: Record<string, string> = {
   "hermes.probe.not_found": "このゲートウェイに見つかりません",
   "hermes.probe.unknown": "確認できません",
   "hermes.plugin.locked.unauthorized":
-    "このゲートウェイのトークンがデフォルトキーではありません。キーを交換してください。",
-  "hermes.plugin.locked.absent":
-    "このゲートウェイマシンにdeskrpgプラグインがインストールされていません。",
-  "hermes.plugin.locked.unknown":
-    "プラグインの状態を確認できません。ゲートウェイ接続を再テストしてください。",
+    "DeskRPG が Hermes につなぐときのキーが管理者用ではありません。",
+  "hermes.plugin.locked.absent": "Hermes に DeskRPG の接続ツールがまだ入っていません。",
+  "hermes.plugin.locked.unknown": "いま Hermes につながりません。",
   "hermes.picker.toolsets": "使用するツール",
   "hermes.picker.clarifyNote":
     "NPC が確認を必要とするときは、会話に選択肢カードで尋ねます（Hermes の clarify ツールは会話で動かないため非表示です）。",
@@ -2357,14 +2355,13 @@ const ja: Record<string, string> = {
   "gateways.pluginVersionOutdated": "が古いです。ホストで更新してから接続テストを押してください。",
   "gateways.pluginVersionRecheck": "接続テストを押すと確認します。",
   "gateways.pluginVersionUpdateNow": "今すぐ更新",
-  "gateways.workerPlugin.missing":
-    "カンバン・クロンで行った作業の成果物がたまらない社員 {count}人 — {names}",
+  "gateways.workerPlugin.missing": "{names} が一人で進めた仕事が記録されていません。",
   "gateways.workerPlugin.apply": "適用",
   "gateways.workerPlugin.applying": "適用中…",
   "gateways.workerPlugin.whatChanges":
-    "各社員の設定にプラグイン項目を追加し、バックアップを残します",
+    "［適用］は各社員の Hermes 設定に DeskRPG プラグインの項目を追加します。元の設定はバックアップします。",
   "gateways.workerPlugin.disabledByOperator":
-    "{names}: 運用者がプラグインを無効にしているため適用しません",
+    "{names} は管理者が意図的にオフにしているため、変更しません。",
   "gateways.workerPlugin.applied":
     "適用しました。カンバンの作業は次のカードから反映されます。クロンはインストール方法によってはゲートウェイの再起動が必要です。",
   "gateways.workerPlugin.failed": "{name}: {reason}",
@@ -3243,7 +3240,7 @@ const ja: Record<string, string> = {
   "kanban.review.reviewerRequired": "実行担当とは別の出勤中スタッフを選択してください。",
   "kanban.review.help": "結果提出後、選択した承認者が確認すると完了します。",
   "kanban.review.noApproval":
-    "このゲートウェイでは承認なしで完了します。従業員が結果を提出するとすぐ完了になります（Hermesの既定動作）。",
+    "この Hermes には承認の段階がないため、社員が結果を出すと確認なしですぐ完了します。",
   "kanban.review.unsupported":
     "新しい業務の登録には承認ポリシー対応のHermesとプラグインが必要です。",
   "kanban.review.swarmUnsupported":
@@ -3550,19 +3547,17 @@ const ja: Record<string, string> = {
   "skills.pickSkill": "左からスキルを選んでください",
   "skills.error.timeout": "ゲートウェイの応答が遅く、打ち切られました。再試行してください",
   "skills.error.unreachable": "ゲートウェイに接続できませんでした。接続を確認してください",
-  "gateways.workerPlugin.propagationOff":
-    "このゲートウェイではワーカー伝播がオフのため、カンバンのワーカーとクロンが作った成果物は集まりません",
+  "gateways.workerPlugin.propagationOff": "いまは、社員が一人で進めた仕事が記録されません。",
   "gateways.workerPlugin.propagationWhat":
-    "オンにすると、プラグインが各社員の設定にプラグインのリンクと有効化項目を追加します(バックアップを残します)",
+    "オンにすると、各社員の Hermes 設定にプラグインをつないで有効にします（元の設定はバックアップします）。Hermes での設定名は worker propagation です。",
   "gateways.workerPlugin.propagationCommand":
-    "ゲートウェイのホストで次のコマンドを実行してから[再確認]を押してください",
+    "このコマンドを Hermes が入っているコンピューターで実行してから、［再確認］を押してください。",
   "gateways.workerPlugin.propagationEnv":
-    "環境変数 {env}=1 でもオンにできます(ゲートウェイの再起動後に反映されます)",
-  "gateways.workerPlugin.propagationOwnerOnly": "ゲートウェイの所有者のみオンにできます",
-  "gateways.workerPlugin.enableInSettings": "設定でオンにする",
+    "環境変数 {env}=1 でもオンにできます（Hermes の再起動後に反映されます）。",
+  "gateways.workerPlugin.propagationOwnerOnly": "この接続を登録した人だけがオンにできます。",
+  "gateways.workerPlugin.enableInSettings": "オンにする",
   "gateways.workerPlugin.enabling": "オンにしています…",
-  "gateways.workerLaunch.blocked":
-    "このゲートウェイではカンバンワーカーが起動できず、カードは実行されないまま打ち切られます",
+  "gateways.workerLaunch.blocked": "いまは、社員に任せた業務カードが始まらずに止まってしまいます。",
   "gateways.workerLaunch.unset":
     "Hermes が新しい実行方式(PM ランタイム)で動いていますが、ゲートウェイサービスに HERMES_BIN がありません。ワーカーは Hermes を読み込めずすぐに終了します。",
   "gateways.workerLaunch.missing": "ゲートウェイサービスの HERMES_BIN({path})を実行できません。",
@@ -3570,21 +3565,41 @@ const ja: Record<string, string> = {
     "ゲートウェイホストで次のコマンドを実行すると、{file} に HERMES_BIN を設定してゲートウェイを再起動します(Linux の systemd ユーザーサービス)。",
   "gateways.workerLaunch.noLauncher":
     "提案できる Hermes 実行ファイルが見つかりませんでした。ゲートウェイサービスの環境で HERMES_BIN を Hermes 実行ファイルのパスに設定し、再起動してください。",
+  "common.moreDetails": "詳しく見る",
+  "gateways.workerPlugin.missingApprovals":
+    "{names} が一人で進めた仕事は記録されず、承認が必要な業務も確認なしで終わることがあります。",
+  "gateways.workerPlugin.applyAction": "［適用］を押すと直ります。",
+  "gateways.workerPlugin.propagationOffApprovals":
+    "いまは、社員が一人で進めた仕事が記録されず、承認が必要な業務も確認なしで終わることがあります。",
+  "gateways.workerPlugin.approvalRiskNames": "確認なしで終わる可能性がある社員：{names}",
+  "gateways.workerPlugin.propagationAction": "［オンにする］を押すとすぐ直ります。",
+  "gateways.workerLaunch.action":
+    "このコマンドを Hermes が入っているコンピューターで実行してから、［再確認］を押してください。",
+  "gateways.workerLaunch.noLauncherAction":
+    "Hermes をインストールした人にこの画面を見せて、確認を頼んでください。",
+  "profiles.detail.lock.details.plugin_unauthorized":
+    "接続に保存したトークンを default プロファイルの API_SERVER_KEY に置き換えてください。ほかのプロファイルのキーでは DeskRPG プラグインにアクセスできません。",
+  "profiles.detail.lock.details.plugin_absent":
+    "このコマンドは、このアプリが使うバージョンの deskrpg プラグインをインストールして有効にし、Hermes ゲートウェイを再起動します。すでに入っていれば有効にするだけです。",
+  "profiles.detail.lock.details.unknown":
+    "接続アドレス（ゲートウェイ URL）は Hermes API サーバーのポート（既定 8642）を指す必要があります。ダッシュボードのアドレスではありません。",
+  "kanban.reviewGap.board":
+    "{names} の業務は、承認が必要でも確認なしで終わることがあります。接続画面で［オンにする］を押すと直ります。",
+  "kanban.reviewGap.assignee": "{name} に任せると、承認が必要でも確認なしで終わることがあります。",
   "gateways.workerPlugin.recheck": "再確認",
   "gateways.workerPlugin.rechecking": "確認中…",
   "gateways.workerPlugin.propagationEnabled":
-    "ワーカー伝播をオンにしました。クロンは再起動が必要な場合があります",
+    "オンにしました。予約ジョブ（cron）は Hermes の再起動後に反映される場合があります。",
   "gateways.workerPlugin.propagationApplyFailed":
-    "ワーカー伝播はオンにしましたが、社員への適用に失敗しました({code})。[適用]をもう一度押してください",
+    "オンにしましたが、社員にはまだ適用できていません（{code}）。［適用］をもう一度押してください。",
   "gateways.workerPlugin.propagationEnableFailed":
-    "設定からオンにできませんでした({code})。下のコマンドで直接オンにしてください",
+    "自動でオンにできませんでした（{code}）。下のコマンドで直接オンにしてください。",
   "gateways.workerPlugin.propagationUnsupportedHost":
-    "このゲートウェイのホストでは DeskRPG が設定を変更できません。下のコマンドで直接オンにしてください",
-  "hermes.wizard.result.workerPropagationOff":
-    "この社員のカンバン・クロンの成果物は集まりません — ゲートウェイでワーカー伝播がオフです",
+    "このコンピューターでは DeskRPG が代わりにオンにできません。下のコマンドで直接オンにしてください。",
+  "hermes.wizard.result.workerPropagationOff": "この社員が一人で進めた仕事は、まだ記録されません。",
   "hermes.wizard.result.workerPropagationHow":
-    "ゲートウェイ画面でオンにしてから[適用]を押すと、この社員にも適用されます",
-  "hermes.wizard.result.workerPropagationLink": "オンにする方法",
+    "接続画面で［オンにする］を押すと、この社員にも適用されます。",
+  "hermes.wizard.result.workerPropagationLink": "直し方を見る",
   // --- content-i18n:A ---
   "meeting.cardAcceptance": "完了条件: {acceptance}",
   "meeting.cardSource": "出典: 議事録 {id} — {topic}",
@@ -3617,17 +3632,17 @@ const ja: Record<string, string> = {
     "社員1人がHermesプロフィール1つです。名前を決め、人格を書き、その社員としてモデルにログインします。",
   "profiles.new.sharedGateway": "共有されたゲートウェイです。社員の登録は所有者が行います。",
   "profiles.detail.notFound": "このゲートウェイにその社員はいません。",
-  "profiles.detail.pluginRecheck": "ゲートウェイを再確認",
-  "profiles.detail.lock.title": "人格・AI モデルの編集がロックされています",
+  "profiles.detail.pluginRecheck": "接続を再確認",
+  "profiles.detail.lock.title": "いまはこの社員の人格と AI モデルを変更できません。",
   "profiles.detail.lock.plugin_unauthorized":
-    "ゲートウェイに保存されたトークンがオーナーキー（default プロファイルの API_SERVER_KEY）ではないため、DeskRPG プラグインにアクセスできません。ゲートウェイ設定でトークンをオーナーキーに置き換えてください。",
+    "DeskRPG が Hermes につなぐときのキーが管理者用ではありません。［接続設定を開く］で管理者用のキーに変えてください。",
   "profiles.detail.lock.plugin_absent":
-    "ゲートウェイのマシンに deskrpg プラグインがインストール・有効化されていません。ゲートウェイのホストで下のコマンドを実行し、このアプリが使うバージョンをインストール・有効化してからゲートウェイを再起動してください。",
+    "Hermes に DeskRPG の接続ツールがまだ入っていません。このコマンドを Hermes が入っているコンピューターで実行してください。",
   "profiles.detail.lock.unknown":
-    "ゲートウェイに接続できず、プラグインの状態がわかりません。ゲートウェイが起動しているか、ゲートウェイ URL が Hermes API サーバーのポート（既定 8642）を指しているか確認してください。",
-  "profiles.detail.lock.openGateway": "ゲートウェイ設定を開く",
+    "いま Hermes につながりません。Hermes が起動しているか確認し、［接続設定を開く］でアドレスを確かめてください。",
+  "profiles.detail.lock.openGateway": "接続設定を開く",
   "profiles.detail.lock.recheckHint":
-    "対処したら［ゲートウェイを再確認］を押すと、ゲートウェイのプラグイン状態を再検査します。上の［接続テスト］はこの社員のキーだけを確認するため、このロックは解除できません。",
+    "直したら［接続を再確認］を押してください。上の［接続テスト］では解除されません。",
   "profiles.detail.pluginRechecking": "確認中…",
   "profiles.detail.sectionTitle": "人格・外見・AIモデル",
   "character.preview.label": "選択したキャラクター",
@@ -3884,7 +3899,7 @@ const ja: Record<string, string> = {
   "approvalPolicy.readOnly": "ゲートウェイの所有者だけが変更できます",
   "approvalPolicy.sharedWarning": "このスタッフを雇用している他の {n} チャンネルにも適用されます",
   "approvalPolicy.workerPropagationOff":
-    "ブロック通知にはワーカー伝播が必要です。現在はコマンドがブロックされても通知されません。",
+    "いまはコマンドが止められても通知が来ず、承認が必要な業務も確認なしで終わることがあります。接続画面で［オンにする］を押すと直ります。",
   "approvalPolicy.cron.title": "クロン中の危険なコマンド",
   "approvalPolicy.cron.hint": "予約ジョブが危険なコマンドを実行しようとしたとき",
   "approvalPolicy.single.title": "カンバン・単発実行中の危険なコマンド",

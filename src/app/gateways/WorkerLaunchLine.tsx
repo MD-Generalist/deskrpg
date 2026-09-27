@@ -10,6 +10,7 @@
 import { useState } from "react";
 
 import { CopyCommand } from "@/components/CopyCommand";
+import { MoreDetails } from "@/components/MoreDetails";
 import { useT } from "@/lib/i18n";
 import {
   WORKER_LAUNCH_DROP_IN,
@@ -47,20 +48,29 @@ export default function WorkerLaunchLine({
       className="-mt-3 mb-4 space-y-1.5 rounded-lg border border-border bg-surface p-2.5 text-xs text-text-muted"
       data-worker-launch={warning.reason}
     >
-      <p className="font-semibold text-npc-dark">{t("gateways.workerLaunch.blocked")}</p>
-      <p>
-        {warning.reason === "hermes_bin_missing"
-          ? t("gateways.workerLaunch.missing", { path: warning.hermesBin ?? "" })
-          : t("gateways.workerLaunch.unset")}
+      <p data-headline className="font-semibold text-npc-dark">
+        {t("gateways.workerLaunch.blocked")}
       </p>
       {command ? (
         <>
-          <p>{t("gateways.workerLaunch.command", { file: WORKER_LAUNCH_DROP_IN })}</p>
+          <p>{t("gateways.workerLaunch.action")}</p>
           <CopyCommand command={command} />
         </>
       ) : (
-        <p>{t("gateways.workerLaunch.noLauncher")}</p>
+        <p>{t("gateways.workerLaunch.noLauncherAction")}</p>
       )}
+      <MoreDetails>
+        <p>
+          {warning.reason === "hermes_bin_missing"
+            ? t("gateways.workerLaunch.missing", { path: warning.hermesBin ?? "" })
+            : t("gateways.workerLaunch.unset")}
+        </p>
+        <p>
+          {command
+            ? t("gateways.workerLaunch.command", { file: WORKER_LAUNCH_DROP_IN })
+            : t("gateways.workerLaunch.noLauncher")}
+        </p>
+      </MoreDetails>
       {onRecheck && (
         <button
           type="button"

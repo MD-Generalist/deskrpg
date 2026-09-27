@@ -26,6 +26,7 @@ import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
 import { shouldReprobePlugin, supportsProfileClone } from "@/lib/hermes/plugin-capability";
 import { forceReprobePluginInfo } from "@/lib/automation-gate";
 import { workerLaunchWarning, type WorkerLaunchWarning } from "@/lib/hermes/worker-launch";
+import { unreviewedProfiles } from "@/lib/hermes/review-hooks";
 import { workerPluginWarning, type WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
 import type { WorkerPropagation } from "@/lib/hermes/deskrpg-plugin-types";
 
@@ -277,6 +278,8 @@ export async function listAccessibleGatewayResources(
       // Kanban workers that cannot start on this gateway (upstream PM runtime without HERMES_BIN). The fix is on the
       // host, which only the owner runs — so only the owner is told.
       workerLaunchWarning: workerLaunchWarning(restorePluginInfo(resource.pluginInfoJson)),
+      // Employees whose cards can finish without the approval they were given — also fixed on the host, owner only.
+      unreviewedProfiles: unreviewedProfiles(restorePluginInfo(resource.pluginInfoJson)),
       // The 0.16.0 worker-propagation opt-in state. Carried separately so "it's off" is surfaced even with no missing employees (null on an older plugin).
       workerPropagation: (restorePluginInfo(resource.pluginInfoJson)?.worker_plugin?.propagation ??
         null) as WorkerPropagation | null,
@@ -300,6 +303,7 @@ export async function listAccessibleGatewayResources(
         dashboardUrl: null as string | null,
         workerPluginWarning: null as WorkerPluginWarning | null,
         workerLaunchWarning: null as WorkerLaunchWarning | null,
+        unreviewedProfiles: [] as string[],
         workerPropagation: null as WorkerPropagation | null,
         canEditCredentials: false,
         shareRole: share?.role ?? null,
