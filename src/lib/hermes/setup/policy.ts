@@ -107,6 +107,8 @@ const SAFE_CODES = new Set([
   "service_install_failed",
   "service_container_refused",
   "windows_scheduled_task_missing",
+  // A remote SSH host that answers as Windows — setup drives remote hosts as Linux only.
+  "remote_windows_unsupported",
   "host_output_too_large",
   "host_spill_cleanup_failed",
   "timezone_invalid",

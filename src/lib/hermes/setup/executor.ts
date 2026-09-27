@@ -10,7 +10,7 @@ import { chmodSync, mkdtempSync } from "node:fs";
 import path from "node:path";
 import { tmpdir, userInfo } from "node:os";
 import { managedSsh } from "./ssh-hosts";
-import { systemSsh, systemSshArgs } from "./system-ssh";
+import { isWindowsReply, SYSTEM_PROBE_COMMAND, systemSsh, systemSshArgs } from "./system-ssh";
 import { isWindows } from "./platform";
 import type { HostExecutor } from "./types";
 
@@ -480,6 +480,24 @@ export function scpSource(dest: string, remotePath: string): string {
   return `${host}:${windows ? "/" + remotePath.replace(/\\/g, "/") : remotePath}`;
 }
 
+/**
+ * Whether a registered SSH host is Windows. Setup drives remote hosts as Linux, so a Windows host fails with a generic
+ * error; this tells the user why. The probe goes as a raw remote command (see `SYSTEM_PROBE_COMMAND`). An unreachable
+ * host is not a Windows verdict.
+ */
+export async function sshRemoteIsWindows(
+  hostId: string,
+  execute: HostExecutor = localExecutor,
+): Promise<boolean> {
+  assertSshHost(hostId);
+  const route = sshRoute(hostId);
+  const result = await execute(
+    "ssh",
+    [...route.args, ...route.options, "-T", "--", route.dest, SYSTEM_PROBE_COMMAND],
+    { timeoutMs: 20_000 },
+  );
+  return result.code === 0 && isWindowsReply(result.stdout);
+}
 export function sshExecutor(
   hostId: string,
   execute: HostExecutor = localExecutor,
