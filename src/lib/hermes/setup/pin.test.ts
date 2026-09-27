@@ -30,3 +30,20 @@ test("the plugin install command in both READMEs uses the pinned commit", () => 
     for (const ref of refs) assert.equal(ref, PLUGIN_PIN, `${file} installs ${ref}`);
   }
 });
+
+test("the Docker with Hermes compose installs the pinned plugin commit by default", () => {
+  // The compose files are fetched from master and copied into users' servers; a pin bump that forgets them
+  // puts a different plugin under a released DeskRPG than the one it was tested with.
+  const root = path.resolve(import.meta.dirname, "../../../..");
+  for (const file of ["docker/docker-compose.hermes.yml"]) {
+    const text = readFileSync(path.join(root, file), "utf8");
+    const refs = [...text.matchAll(/DESKRPG_PLUGIN_REF:\s*\$\{DESKRPG_PLUGIN_REF:-([^}]*)\}/g)].map(
+      (m) => m[1],
+    );
+    assert.deepEqual(
+      refs,
+      [PLUGIN_PIN],
+      `${file} installs ${refs.join(", ") || "no pinned commit"}`,
+    );
+  }
+});

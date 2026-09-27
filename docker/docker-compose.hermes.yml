@@ -39,6 +39,8 @@ services:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
       API_SERVER_KEY: ${HERMES_API_KEY:?set HERMES_API_KEY in your env file}
+      # Full commit SHA; equals PLUGIN_PIN in src/lib/hermes/setup/pin.ts.
+      DESKRPG_PLUGIN_REF: ${DESKRPG_PLUGIN_REF:-cd2f4bda29f742d67732581c383f8e163798f5eb}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -60,10 +62,12 @@ services:
           printf '%s=%s\n' "$$v" "$$val" >> /tmp/env.next
           cat /tmp/env.next > /opt/data/.env
         done
-        if hermes plugins list --plain --no-bundled | grep -q ' deskrpg$$'; then
-          hermes plugins update deskrpg || echo "plugin update failed; keeping installed version"
-        else
-          hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
+        # Install the plugin commit DeskRPG pins. `plugins update` follows main and never moves a --ref
+        # install, so reinstall whenever the commit differs; keep an existing install if that fails.
+        pin=$$(printenv DESKRPG_PLUGIN_REF); d=/opt/data/plugins/deskrpg
+        if [ "$$(git -c safe.directory='*' -C $$d rev-parse HEAD 2>/dev/null)" != "$$pin" ]; then
+          hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref "$$pin" --force ||
+            [ -d $$d ]
         fi
         hermes plugins enable deskrpg
 
