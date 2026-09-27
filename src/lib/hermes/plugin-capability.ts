@@ -19,7 +19,7 @@
 
 import { parseWorkerLaunchReport } from "./worker-launch";
 import { parseWorkerPluginReport } from "./worker-plugin";
-import type { PluginInfo } from "./deskrpg-plugin-types";
+import type { PluginFreshnessMarks, PluginInfo } from "./deskrpg-plugin-types";
 import { REVIEW_HOOKS_CAPABILITY, SWARM_REVIEW_POLICY_CAPABILITY } from "./deskrpg-plugin-types";
 import { PLUGIN_VERSION } from "./setup/pin";
 
@@ -114,7 +114,39 @@ export function parsePluginInfo(body: unknown): PluginInfo | null {
     dashboard_url: httpUrlOrNull(record.dashboard_url),
     // Do not create the key for old plugin bodies — distinguish "field absent" from "verdict failed (null)".
     ...(workerPlugin === undefined ? {} : { worker_plugin: workerPlugin }),
+    ...readFreshnessMarks(record),
   };
+}
+
+/** Keeps only well-formed markers — an unknown shape is treated as "not reported". */
+export function readFreshnessMarks(record: Record<string, unknown>): PluginFreshnessMarks {
+  const fingerprint = record.capabilities_fingerprint;
+  const startedAt = record.started_at;
+  return {
+    ...(typeof fingerprint === "string" && fingerprint !== ""
+      ? { capabilities_fingerprint: fingerprint }
+      : {}),
+    ...(typeof startedAt === "number" && Number.isFinite(startedAt)
+      ? { started_at: startedAt }
+      : {}),
+  };
+}
+
+/**
+ * Whether a response from the gateway says the cached `/deskrpg/info` no longer describes it: the
+ * capability fingerprint moved (a core swap with the same plugin version) or the gateway restarted
+ * (other info fields may have changed). A response without markers (older plugin) never triggers a
+ * reprobe, and a cache that predates the markers is refreshed once.
+ */
+export function pluginInfoCacheOutdated(cached: PluginInfo | null, response: object): boolean {
+  const seen = readFreshnessMarks(response as Record<string, unknown>);
+  if (seen.capabilities_fingerprint === undefined && seen.started_at === undefined) return false;
+  if (cached === null) return true;
+  return (
+    (seen.capabilities_fingerprint !== undefined &&
+      seen.capabilities_fingerprint !== cached.capabilities_fingerprint) ||
+    (seen.started_at !== undefined && seen.started_at !== cached.started_at)
+  );
 }
 
 /** This value is used as a link (href) — only http(s) passes so schemes like `javascript:` never reach the screen. */
