@@ -123,13 +123,13 @@ const ko: Record<string, string> = {
     "이 값은 지금 한 번만 보입니다. 본인에게 직접 전달하세요. 다음 로그인에서 변경해야 합니다.",
   "gateChecklist.title": "이 동작에는 준비가 필요합니다",
   "gateChecklist.step.gateway": "게이트웨이 연결",
-  "gateChecklist.step.ownerKey": "리스너 소유자 키",
+  "gateChecklist.step.ownerKey": "관리자용 키",
   "gateChecklist.step.plugin": "DeskRPG 플러그인 설치",
   "gateChecklist.step.version": "플러그인 버전",
   "gateChecklist.hint.gateway":
     "이 오피스에 연결된 게이트웨이가 없습니다. 연결 화면에서 먼저 등록하세요.",
   "gateChecklist.hint.ownerKey":
-    "게이트웨이에 넣은 키를 플러그인이 거부했습니다. 프로필 키가 아니라 리스너 소유자 키(API_SERVER_KEY)여야 합니다.",
+    "DeskRPG가 쓰는 키가 관리자용 키가 아니라서 Hermes가 거절했어요. 연결 화면에서 관리자용 키로 바꿔 주세요.",
   "gateChecklist.hint.plugin":
     "게이트웨이 호스트에서 아래 명령을 실행한 뒤 Hermes API 서버를 다시 시작하세요.",
   "gateChecklist.hint.version":
@@ -494,25 +494,24 @@ const ko: Record<string, string> = {
   "hermes.wizard.review.pluginUpdate": "DeskRPG 플러그인을 {version} 으로 올립니다.",
   "hermes.wizard.review.timezone": "게이트웨이 시간대를 {timezone} 으로 설정합니다.",
   "hermes.wizard.review.timezoneToggle": "이 브라우저의 시간대를 게이트웨이에 넣기",
-  "hermes.wizard.step.settingWorkerLaunch": "칸반 워커 실행 설정(HERMES_BIN)",
-  "hermes.wizard.step.settingWorkerPropagation": "워커 적용 설정 저장",
-  "hermes.wizard.step.applyingWorkerPlugin": "직원 프로필에 워커 적용",
-  "hermes.wizard.review.workerPropagation": "워커 적용 — 칸반·크론 결과물 모으기 (권장)",
+  "hermes.wizard.step.settingWorkerLaunch": "업무 카드가 시작되도록 설정",
+  "hermes.wizard.step.settingWorkerPropagation": "직원 기록 설정 저장",
+  "hermes.wizard.step.applyingWorkerPlugin": "직원들에게 적용",
+  "hermes.wizard.review.workerPropagation": "직원이 혼자 한 일도 기록하기 (권장)",
   "hermes.wizard.review.workerPropagationBody":
-    "켜면 DeskRPG 플러그인이 직원(프로필)마다 plugins/deskrpg 링크를 만들고, 그 프로필 config.yaml 의 plugins.enabled 에 deskrpg 를 추가합니다. 새로 고용하는 직원에게도 자동으로 적용됩니다. 칸반 워커·크론이 만든 결과물이 DeskRPG 에 모이려면 필요합니다. 이 선택은 Hermes 루트 config.yaml 의 {key} 에 저장되며, 끄면 새 직원에게 적용하지 않습니다(이미 만든 링크는 지우지 않습니다).",
-  "hermes.wizard.review.workerPropagationToggle": "워커 적용 켜기",
+    "켜 두면 직원이 혼자 일할 때 한 일이 DeskRPG에 기록되고, 승인이 필요한 업무도 확인을 거쳐요. 새로 뽑는 직원에게도 자동으로 적용돼요.",
+  "hermes.wizard.review.workerPropagationToggle": "켜 두기",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "칸반 워커 실행 설정을 저장하지 못했습니다. Linux는 ~/.config/systemd/user/hermes-gateway.service.d/, macOS는 ~/.hermes/.env 를 확인한 뒤 다시 시도하세요.",
+    "업무 카드 시작 설정을 저장하지 못했어요. Hermes가 설치된 컴퓨터의 설정 위치(Linux는 ~/.config/systemd/user/hermes-gateway.service.d/, macOS는 ~/.hermes/.env)를 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.error.workerPropagationWriteFailed":
-    "워커 적용 설정을 저장하지 못했습니다. Hermes 루트 config.yaml 을 확인한 뒤 다시 시도하세요.",
+    "직원 기록 설정을 저장하지 못했어요. Hermes 설정 파일(config.yaml)을 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.warn.workerPluginApplyFailed":
-    "연결은 끝났지만 일부 직원에게 워커 적용을 마치지 못했습니다. 게이트웨이 화면의 [적용] 으로 다시 시도하세요.",
+    "연결은 끝났지만 일부 직원에게 아직 적용하지 못했어요. 연결 화면에서 [적용]을 누르세요.",
   "hermes.pluginUpdate.workerPropagationInherited":
-    "이 게이트웨이는 워커 적용이 켜져 있었습니다 — 계속 켭니다.",
+    "직원이 혼자 한 일 기록이 켜져 있었으니 계속 켜 둘게요.",
   "hermes.pluginUpdate.workerPropagationTurnOff": "끄기",
-  "hermes.pluginUpdate.workerPropagationTurnedOff":
-    "워커 적용을 껐습니다. 새로 고용하는 직원에게는 적용하지 않습니다.",
-  "hermes.pluginUpdate.workerPropagationTurnOffFailed": "워커 적용을 끄지 못했습니다({code}).",
+  "hermes.pluginUpdate.workerPropagationTurnedOff": "껐어요. 새로 뽑는 직원에게는 적용하지 않아요.",
+  "hermes.pluginUpdate.workerPropagationTurnOffFailed": "끄지 못했어요({code}).",
   "hermes.wizard.review.pluginVersion": "플러그인 버전",
   "hermes.wizard.step.installingHermes": "Hermes 설치",
   "hermes.wizard.step.creatingProfile": "새 프로필 만들기",
@@ -2307,7 +2306,7 @@ const ko: Record<string, string> = {
   "gateways.onboarding.step2Body":
     "아래 폼에는 API 서버 주소(예: {example})와 인증 키가 필요합니다.",
   "gateways.onboarding.step2OwnerKeyWarning":
-    "반드시 리스너 소유자 키(API_SERVER_KEY)를 넣으세요. 프로필 키만으로는 칸반·크론·사건 스트림이 막힙니다.",
+    "관리자용 키를 넣어 주세요. 다른 키로는 업무 카드와 예약 작업이 움직이지 않아요.",
   "gateways.onboarding.step3Title": "칸반·크론을 쓰려면 DeskRPG 플러그인을 설치합니다",
   "gateways.onboarding.step3Body":
     "게이트웨이 호스트에서 아래 명령을 실행한 뒤 Hermes API 서버를 다시 시작하세요.",
@@ -3033,17 +3032,18 @@ const ko: Record<string, string> = {
   "kanban.swarm.title": "스웜 시작",
   "kanban.swarm.goal": "목표",
   "kanban.swarm.goalPlaceholder": "무엇을 끝내고 싶은가요?",
-  "kanban.swarm.workers": "워커",
+  "kanban.swarm.workers": "함께 일할 직원",
   "kanban.swarm.workerTitle": "맡길 일",
-  "kanban.swarm.addWorker": "워커 추가",
-  "kanban.swarm.removeWorker": "이 워커 빼기",
+  "kanban.swarm.addWorker": "직원 추가",
+  "kanban.swarm.removeWorker": "이 직원 빼기",
   "kanban.swarm.verifier": "검증자",
   "kanban.swarm.synthesizer": "종합자",
   "kanban.swarm.submit": "스웜 시작",
-  "kanban.swarm.hint": "워커들이 동시에 일하고, 전부 끝나면 검증자가, 그다음 종합자가 깨어납니다.",
+  "kanban.swarm.hint":
+    "여러 직원이 동시에 일하고, 모두 끝나면 검증자가 확인한 뒤 종합자가 결과를 정리해요.",
   "kanban.swarm.error.goal": "목표를 적어 주세요.",
-  "kanban.swarm.error.workers": "워커가 최소 한 명 필요합니다.",
-  "kanban.swarm.error.workerTitle": "각 워커에게 맡길 일을 적어 주세요.",
+  "kanban.swarm.error.workers": "함께 일할 직원이 한 명 이상 필요해요.",
+  "kanban.swarm.error.workerTitle": "각 직원에게 맡길 일을 적어 주세요.",
   "kanban.swarm.unsupported": "이 게이트웨이의 플러그인은 스웜을 지원하지 않습니다.",
   "kanban.blackboard": "공유 블랙보드",
   "kanban.refresh": "새로고침",
@@ -3148,7 +3148,7 @@ const ko: Record<string, string> = {
   "kanban.run.attempt": "{n}번째 시도",
   "kanban.run.end.running": "실행 중",
   "kanban.run.end.stopped": "사람이 중단함",
-  "kanban.run.end.lost": "워커 응답이 끊겨 회수됨",
+  "kanban.run.end.lost": "직원 응답이 끊겨 다시 대기로 돌림",
   "kanban.run.end.moved": "카드를 옮겨 멈춤",
   "kanban.run.details": "자세히",
   "kanban.run.made.changedFiles": "바꾼 파일",
@@ -3571,6 +3571,12 @@ const ko: Record<string, string> = {
   "kanban.reviewGap.board":
     "{names} 직원의 업무는 승인이 필요해도 확인 없이 끝날 수 있어요. 연결 화면에서 [켜기]를 누르면 고쳐져요.",
   "kanban.reviewGap.assignee": "{name} 직원에게 맡기면 승인이 필요해도 확인 없이 끝날 수 있어요.",
+  "hermes.wizard.review.workerPropagationDetails":
+    "켜면 DeskRPG 플러그인이 직원(프로필)마다 plugins/deskrpg 링크를 만들고, 그 프로필 config.yaml의 plugins.enabled에 deskrpg를 추가해요. 이 선택은 Hermes 루트 config.yaml의 {key}에 저장돼요. 끄면 새 직원에게는 적용하지 않고, 이미 만든 링크는 그대로 둬요.",
+  "gateChecklist.hint.ownerKeyDetails":
+    "관리자용 키는 Hermes default 프로필의 API_SERVER_KEY 값이에요(리스너 소유자 키). 다른 프로필의 키로는 DeskRPG 플러그인에 접근할 수 없어요.",
+  "gateways.onboarding.step2OwnerKeyDetails":
+    "Hermes default 프로필의 API_SERVER_KEY 값(리스너 소유자 키)이에요. 프로필 키만으로는 칸반·크론·사건 스트림이 막혀요.",
   "gateways.workerPlugin.recheck": "다시 확인",
   "gateways.workerPlugin.rechecking": "확인 중…",
   "gateways.workerPlugin.propagationEnabled":

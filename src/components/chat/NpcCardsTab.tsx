@@ -17,6 +17,7 @@
  * tell why. The error text reuses the `@/lib/gate-failure` classification and
  * `wizard-error-codes` messages that cron and Kanban already use.
  */
+import { MoreDetails } from "@/components/MoreDetails";
 import { useMemo } from "react";
 
 import { useT } from "@/lib/i18n";
@@ -147,6 +148,9 @@ function CardsErrorNotice({ code }: { code: string }) {
       return (
         <Notice tone="warn" title={t("gateChecklist.step.ownerKey")}>
           <p className="text-text-muted">{t("gateChecklist.hint.ownerKey")}</p>
+          <MoreDetails>
+            <p>{t("gateChecklist.hint.ownerKeyDetails")}</p>
+          </MoreDetails>
         </Notice>
       );
     case "plugin_upgrade_required":

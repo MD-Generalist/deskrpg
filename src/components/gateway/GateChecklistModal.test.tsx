@@ -39,19 +39,14 @@ test("only the blocked step gets a remedy — plugin not installed", async () =>
   const { el, root } = await render({ kind: "plugin_absent", command: "install me" });
   const text = el.textContent ?? "";
   // All four steps are visible.
-  for (const step of [
-    "게이트웨이 연결",
-    "리스너 소유자 키",
-    "DeskRPG 플러그인 설치",
-    "플러그인 버전",
-  ]) {
+  for (const step of ["게이트웨이 연결", "관리자용 키", "DeskRPG 플러그인 설치", "플러그인 버전"]) {
     assert.ok(text.includes(step), `${step} 가 없다`);
   }
   // Only the blocked step's guidance and command are visible.
   assert.ok(text.includes("Hermes API 서버를 다시 시작"));
   assert.ok(text.includes("install me"));
   // Other steps' guidance is not visible.
-  assert.ok(!text.includes("리스너 소유자 키(API_SERVER_KEY)여야"));
+  assert.ok(!text.includes("API_SERVER_KEY"));
   await cleanup(root, el);
 });
 

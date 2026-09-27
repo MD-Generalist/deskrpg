@@ -142,16 +142,16 @@ test("after a plugin update inherits worker propagation, '계속 켭니다 [끄�
   );
   const notice = host.querySelector("[data-worker-propagation-inherited]");
   assert.ok(notice, "재조회 뒤 '계속 켭니다' 알림이 사라졌다");
-  assert.match(notice.textContent ?? "", /계속 켭니다/);
+  assert.equal(notice.getAttribute("data-state"), "on");
 
   await click([...notice.querySelectorAll("button")].find((b) => b.textContent === "끄기"));
   await flush();
   assert.deepEqual(log.bodies["POST /api/gateways/gw-1/plugin/worker-propagation"], [
     { enabled: false },
   ]);
-  assert.match(
-    host.querySelector("[data-worker-propagation-inherited]")?.textContent ?? "",
-    /워커 적용을 껐습니다/,
+  assert.equal(
+    host.querySelector("[data-worker-propagation-inherited]")?.getAttribute("data-state"),
+    "turned-off",
   );
 });
 
