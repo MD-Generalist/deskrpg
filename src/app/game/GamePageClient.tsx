@@ -102,6 +102,7 @@ import ConversationWorkspace from "@/components/conversation/ConversationWorkspa
 import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
 import { ToolApprovalsProvider } from "@/components/approvals/ToolApprovalsProvider";
 import NpcStatesBridge, { type NpcStatesById } from "./NpcStatesBridge";
+import GatewayRestartNotice from "@/components/gateway/GatewayRestartNotice";
 import { useAttentionRows } from "./use-attention-rows";
 import { gatewayBadge, type NpcConnection } from "@/lib/npc-state-map";
 import { useMeetingEntry } from "@/components/meeting-room/use-meeting-entry";
@@ -3259,19 +3260,28 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               </span>
             </button>
           ) : headerGatewayBadge === "unreachable" ? (
-            <button
-              onClick={() => openChannelSettings("gateway")}
-              title={t("game.aiGatewayDownHint")}
-              aria-label={t("game.aiGatewayDownHint")}
-              data-gateway-badge="unreachable"
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-danger/10 border border-danger/30 text-caption text-danger hover:bg-danger/20"
-            >
-              <span className="w-2 h-2 rounded-full bg-danger" />
-              <span className="header-full-label">{t("game.aiGatewayDown")}</span>
-              <span className="header-mobile-label" aria-hidden="true">
-                AI !
-              </span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => openChannelSettings("gateway")}
+                title={t("game.aiGatewayDownHint")}
+                aria-label={t("game.aiGatewayDownHint")}
+                data-gateway-badge="unreachable"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-danger/10 border border-danger/30 text-caption text-danger hover:bg-danger/20"
+              >
+                <span className="w-2 h-2 rounded-full bg-danger" />
+                <span className="header-full-label">{t("game.aiGatewayDown")}</span>
+                <span className="header-mobile-label" aria-hidden="true">
+                  AI !
+                </span>
+              </button>
+              {/* The gateway itself stopped answering (not just this screen's socket, not a rejected key): offer the
+                  way back — [다시 시작] where allowed, otherwise the command to run. */}
+              {gatewayHealth === "unreachable" && gatewayId && (
+                <div className="absolute right-0 top-full z-50 mt-2">
+                  <GatewayRestartNotice gatewayId={gatewayId} />
+                </div>
+              )}
+            </div>
           ) : (
             <button
               onClick={() => openChannelSettings("gateway")}

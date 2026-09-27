@@ -1927,6 +1927,14 @@ const ja: Record<string, string> = {
   "game.aiGatewayDown": "AI 接続切れ",
   "game.aiGatewayDownHint":
     "AI スタッフのサーバーにつながらないため、スタッフの状態がわかりません。クリックして接続設定を確認してください。",
+  "gateway.restart.stopped": "AI スタッフのサーバーが止まっているため、スタッフが返答できません。",
+  "gateway.restart.pressToRestart": "［再起動］を押すともう一度起動します。",
+  "gateway.restart.button": "再起動",
+  "gateway.restart.running": "起動し直しています…",
+  "gateway.restart.succeeded": "起動しました。まもなくスタッフが戻ります。",
+  "gateway.restart.runCommand":
+    "Hermes をインストールしたコンピューターでゲートウェイを起動し直してください。",
+  "gateway.restart.askOwner": "このゲートウェイの持ち主に起動し直すよう伝えてください。",
   "game.gatewayConnect": "接続する",
   "game.channel": "チャンネル",
   "game.notifications": "通知",

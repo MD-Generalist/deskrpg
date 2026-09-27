@@ -1910,6 +1910,13 @@ const ko: Record<string, string> = {
   "game.aiGatewayDown": "AI 연결 끊김",
   "game.aiGatewayDownHint":
     "AI 직원 서버에 닿지 않아 직원 상태를 알 수 없어요. 눌러서 연결 설정을 확인해 보세요.",
+  "gateway.restart.stopped": "AI 직원 서버가 멈춰 있어서 직원들이 대답하지 못해요.",
+  "gateway.restart.pressToRestart": "[다시 시작]을 누르면 다시 켜 볼게요.",
+  "gateway.restart.button": "다시 시작",
+  "gateway.restart.running": "다시 켜는 중이에요…",
+  "gateway.restart.succeeded": "다시 켰어요. 잠시 뒤 직원들이 돌아와요.",
+  "gateway.restart.runCommand": "Hermes 가 설치된 컴퓨터에서 게이트웨이를 다시 켜 주세요.",
+  "gateway.restart.askOwner": "이 게이트웨이 주인에게 다시 켜 달라고 알려 주세요.",
   "game.gatewayConnect": "연결하기",
   "game.channel": "오피스",
   "game.notifications": "알림",
