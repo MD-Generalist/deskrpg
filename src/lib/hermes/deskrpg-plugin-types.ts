@@ -782,6 +782,22 @@ export type ArtifactEventPayload = {
 export const SKILL_ADMIN_MIN_VERSION = "0.15.0";
 export const SKILL_ADMIN_CAPABILITY = "profile_skill_admin";
 
+/**
+ * Per-feature skill capabilities. Upstream Hermes can drop one internal without taking the others down, so each
+ * screen checks its own. `profile_skill_admin` is still announced when all five are on.
+ * - read: GET skills/{n}, skills/{n}/file, skills/archive
+ * - edit: create, SKILL.md edit, enable, pin, archive, restore
+ * - hub: hub search/preview/install/uninstall/update (runs the documented Hermes CLI)
+ * - curator: curator status, pause, runs (documented Hermes CLI)
+ * - learning graph: learning/graph, learning/node
+ * Reference-file edits and single-skill purge are gone: 410 `skill_reference_edit_removed` / `skill_purge_removed`.
+ */
+export const SKILL_READ_CAPABILITY = "profile_skill_read";
+export const SKILL_EDIT_CAPABILITY = "profile_skill_edit";
+export const SKILL_HUB_CAPABILITY = "profile_skill_hub";
+export const CURATOR_CAPABILITY = "profile_curator";
+export const LEARNING_GRAPH_CAPABILITY = "profile_learning_graph";
+
 /** 0.17.0 — NPC MCP connector management (`/p/{profile}/deskrpg/mcp/**`). */
 export const MCP_ADMIN_MIN_VERSION = "0.17.0";
 export const MCP_ADMIN_CAPABILITY = "profile_mcp_admin";
