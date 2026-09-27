@@ -225,7 +225,7 @@ DeskRPG에 연결하는 절차는 네 단계입니다.
 [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) 이 필요합니다.
 
 ```bash
-hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref eb5ec30d2e14df2e325b73b5e68fe78032fb9417
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref 4ca517bda247cb7b53e13fe4da4aa9272a847702
 hermes plugins enable deskrpg
 # 게이트웨이 재시작 — 라우트는 기동할 때만 붙습니다
 ```

@@ -14,6 +14,7 @@ const REASONS: readonly WorkerLaunchReason[] = [
   "hermes_bin_unset",
   "hermes_bin_missing",
   "probe_failed",
+  "assignee_dependent",
 ];
 
 /** Where the fix goes on a Linux host: a drop-in beside the unit `hermes gateway install` writes. */

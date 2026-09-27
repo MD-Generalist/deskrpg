@@ -64,7 +64,12 @@ export type PluginInfo = {
  * `<gateway python> -m hermes_cli.main` without the gateway's PYTHONPATH — which cannot import Hermes on the upstream
  * PM runtime. `ok: null` means the plugin could not tell.
  */
-export type WorkerLaunchReason = "hermes_bin_unset" | "hermes_bin_missing" | "probe_failed";
+export type WorkerLaunchReason =
+  | "hermes_bin_unset"
+  | "hermes_bin_missing"
+  | "probe_failed"
+  /** 0.29.1 — a standalone profile gateway where some assignees can start workers and others cannot. */
+  | "assignee_dependent";
 
 export type WorkerLaunchReport = {
   ok: boolean | null;
