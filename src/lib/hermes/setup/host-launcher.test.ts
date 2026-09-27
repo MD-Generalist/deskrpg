@@ -22,7 +22,19 @@ function sandbox() {
   const bin = path.join(root, "bin");
   mkdirSync(home);
   mkdirSync(bin);
-  for (const tool of ["sh", "mkdir", "rm", "mktemp", "cat", "chmod", "id", "uname", "tr", "cut"]) {
+  for (const tool of [
+    "sh",
+    "mkdir",
+    "rm",
+    "mktemp",
+    "cat",
+    "chmod",
+    "id",
+    "uname",
+    "tr",
+    "cut",
+    "sed",
+  ]) {
     const found = ["/bin", "/usr/bin"].map((d) => path.join(d, tool)).find((p) => existsSync(p));
     if (found) symlinkSync(found, path.join(bin, tool));
   }
@@ -63,6 +75,33 @@ test("runs with the Hermes venv python when present", { skip: posixOnly }, () =>
   try {
     s.script(path.join(s.home, ".hermes/hermes-agent/venv/bin/python"), 'echo "venv:$2"');
     s.script(path.join(s.bin, "python3"), 'echo "system:$2"');
+    assert.equal(s.run("run").trim(), "venv:CODE");
+  } finally {
+    s.done();
+  }
+});
+
+test("prefers the upstream PM runtime python over a leftover venv", { skip: posixOnly }, () => {
+  const s = sandbox();
+  try {
+    const runtime = path.join(s.home, ".hermes/tools/python/bin/python3");
+    s.script(runtime, 'echo "pm:$2"');
+    s.script(
+      path.join(s.home, ".hermes/hermes-agent/.hermes/bin/hermes"),
+      `[ "$1" = --print-runtime-command ] && echo '["${runtime}", "-I", "-c", "boot"]'`,
+    );
+    s.script(path.join(s.home, ".hermes/hermes-agent/venv/bin/python"), 'echo "venv:$2"');
+    assert.equal(s.run("run").trim(), "pm:CODE");
+  } finally {
+    s.done();
+  }
+});
+
+test("falls back to the venv when the PM launcher prints no runtime", { skip: posixOnly }, () => {
+  const s = sandbox();
+  try {
+    s.script(path.join(s.home, ".hermes/hermes-agent/.hermes/bin/hermes"), "exit 1");
+    s.script(path.join(s.home, ".hermes/hermes-agent/venv/bin/python"), 'echo "venv:$2"');
     assert.equal(s.run("run").trim(), "venv:CODE");
   } finally {
     s.done();

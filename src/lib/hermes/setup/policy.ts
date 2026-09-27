@@ -111,6 +111,7 @@ const SAFE_CODES = new Set([
   "timezone_invalid",
   "timezone_write_failed",
   "worker_propagation_write_failed",
+  "worker_launch_write_failed",
   "port_write_failed",
   "plugin_security_review_required",
   "plugin_source_unavailable",
