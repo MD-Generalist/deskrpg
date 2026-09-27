@@ -1755,6 +1755,13 @@ export async function startFakePluginServer(
       return { status: 200, body: renderBoard(board, params.get("include_archived") === "true") };
     }
     if (pathname === "/deskrpg/kanban/tasks" && method === "POST") {
+      // Like the plugin: a policy on a Hermes that can enforce none is refused, never stored and ignored.
+      const policies =
+        info.capabilities?.includes("kanban_review_policy_v1") ||
+        info.capabilities?.includes("review_hooks_v1");
+      if (!policies && body && typeof body === "object" && "review_policy" in body) {
+        return { status: 428, body: { error: "review_policy_required" } };
+      }
       return createTask(boardOf(params), body, req.headers["x-deskrpg-actor"] ?? null);
     }
     if (pathname === "/deskrpg/kanban/dispatch" && method === "POST") {
