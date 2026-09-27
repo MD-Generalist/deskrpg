@@ -566,6 +566,7 @@ const en: Record<string, string> = {
   "hermes.wizard.packages.missing": "Missing:",
   "hermes.wizard.packages.curl": "curl",
   "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.libatomic": "libatomic (Node.js runtime library)",
   "hermes.wizard.packages.cxx": "C++ compiler",
   "hermes.wizard.packages.unknownDistro":
     "Unknown package manager on this server. Install the packages above with its package manager.",

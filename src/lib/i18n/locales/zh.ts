@@ -529,6 +529,7 @@ const zh: Record<string, string> = {
   "hermes.wizard.packages.missing": "缺少：",
   "hermes.wizard.packages.curl": "curl",
   "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.libatomic": "libatomic（Node.js 运行库）",
   "hermes.wizard.packages.cxx": "C++编译器",
   "hermes.wizard.packages.unknownDistro":
     "无法识别此服务器的包管理器。请用服务器的包管理器安装上述软件包。",

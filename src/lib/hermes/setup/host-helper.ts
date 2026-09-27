@@ -182,14 +182,45 @@ except Exception:
 export const HOST_LAUNCHER = String.raw`
 mode=$1
 code=$2
-# Before installing, check system packages that need sudo. If root or passwordless sudo, the install script installs them itself.
-# Otherwise stop here — rather than failing midway after minutes of downloading, show the admin a one-line command (system-packages.ts).
+# Before installing, check the system packages the Hermes install script requires but will not install: it only checks
+# for git and curl (install.sh stage_prerequisites) and stops if either is missing. With root or passwordless sudo,
+# install them here with the package manager; otherwise, or if that fails, stop before minutes of downloading and show
+# the admin a one-line command (system-packages.ts).
 if [ "$mode" = install ]; then
-  miss=""
-  command -v curl >/dev/null 2>&1 || miss="$miss curl"
-  { command -v git >/dev/null 2>&1 && git --version >/dev/null 2>&1; } || miss="$miss git"
-  command -v g++ >/dev/null 2>&1 || command -v clang++ >/dev/null 2>&1 || miss="$miss cxx"
-  if [ -n "$miss" ] && [ "$(id -u)" != 0 ] && ! sudo -n true >/dev/null 2>&1; then
+  # The Node.js runtime the installer fetches on Linux links libatomic.so.1, which minimal images lack; the
+  # installer does not check it and fails late with a generic error.
+  missing() {
+    miss=""
+    command -v curl >/dev/null 2>&1 || miss="$miss curl"
+    { command -v git >/dev/null 2>&1 && git --version >/dev/null 2>&1; } || miss="$miss git"
+    if [ "$(uname -s)" = Linux ]; then
+      found=""
+      for f in /lib/libatomic.so.1 /lib64/libatomic.so.1 /usr/lib/libatomic.so.1 /usr/lib64/libatomic.so.1 \
+        /lib/*/libatomic.so.1 /usr/lib/*/libatomic.so.1; do [ -e "$f" ] && found=1 && break; done
+      [ -n "$found" ] || miss="$miss libatomic"
+    fi
+  }
+  # Package names per manager; keep in step with system-packages.ts.
+  names() {
+    for p in $miss; do
+      case "$1:$p" in apt:libatomic) printf ' libatomic1';; dnf:libatomic) printf ' libatomic';;
+        pacman:libatomic) printf ' gcc-libs';; *) printf ' %s' "$p";; esac
+    done
+  }
+  missing
+  if [ -n "$miss" ]; then
+    as=""; [ "$(id -u)" = 0 ] || as="sudo -n"
+    if [ -z "$as" ] || sudo -n true >/dev/null 2>&1; then
+      if command -v apt-get >/dev/null 2>&1; then
+        $as env DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1
+        $as env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $(names apt) ca-certificates >/dev/null 2>&1
+      elif command -v dnf >/dev/null 2>&1; then $as dnf install -y -q $(names dnf) >/dev/null 2>&1
+      elif command -v pacman >/dev/null 2>&1; then $as pacman -Sy --noconfirm $(names pacman) >/dev/null 2>&1
+      fi
+      missing
+    fi
+  fi
+  if [ -n "$miss" ]; then
     if [ "$(uname -s)" = Darwin ]; then distro=macos
     else distro=$( (. /etc/os-release >/dev/null 2>&1 && printf '%s' "$ID") | tr -cd 'a-z0-9_-' | cut -c1-32); fi
     printf '{"error": "system_packages_missing", "packages": "%s", "distro": "%s"}' "$miss" "$distro"
@@ -442,8 +473,8 @@ try:
         diagnostic = tail.decode('utf-8', errors='replace').lower()
         if 'could not resolve host' in diagnostic or 'failed to connect' in diagnostic or 'connection refused' in diagnostic:
             out({'error': 'hermes_installer_unavailable'})
-        # git leaves this sentence when the install script tries to install it with sudo and fails (install.sh check_git text).
-        if 'could not install git automatically' in diagnostic: out({'error': 'git_missing'})
+        # install.sh stage_prerequisites text; older installers said they could not install git automatically.
+        if 'git is required' in diagnostic or 'could not install git automatically' in diagnostic: out({'error': 'git_missing'})
         out({'error': 'hermes_install_failed'})
     folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
     python = next((INSTALL / folder / folder_name / exe for folder in ('venv', '.venv') if (INSTALL / folder / folder_name / exe).is_file()), None)
@@ -995,10 +1026,12 @@ def service_failure(owner):
         return 'windows_scheduled_task_missing'
     return owner['warning'] or 'managed_service_required'
 
-def preflight(name, home, item):
+def preflight(name, home, item, service_planned=False):
     public, owner, cfg, token, plugin_name = item
     if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
-    if not owner['command']: fail(service_failure(owner))
+    # Inspect plans installing_service for a host without a unit, and that stage runs before prepare re-checks
+    # here — so a missing unit is not a reason to block the review (a fresh install always lacks one).
+    if not owner['command'] and not (service_planned and needs_service(owner)): fail(service_failure(owner))
     if settings(home)[4]:
         listening = assert_port_owned(public,owner)
         code, models = request(public['port'],token,'/v1/models') if token and listening else (0,None)
@@ -1133,10 +1166,12 @@ def main(action, candidate_id=None, option=None):
                 if suggestion is not None: conflict.suggestion = suggestion
             raise
         status, warning = probe(public,token) if listening else ('unknown','gateway_unreachable')
+        # A missing unit is what the planned installing_service stage fixes, not a reason to stop the review.
+        if public.get('warning') == 'managed_service_required' and needs_service(owner): public.pop('warning', None)
         if warning and 'warning' not in public: public['warning'] = warning
         preparation_safe = False
         try:
-            preflight(name,home,item)
+            preflight(name,home,item,service_planned=True)
             preparation_safe = True
             if public.get('warning') == 'external_secret_provider':
                 public.pop('warning',None)
