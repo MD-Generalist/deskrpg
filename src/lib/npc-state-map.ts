@@ -80,3 +80,15 @@ export function npcStates(input: NpcStateInput): NpcStateKind[] {
 export function primaryNpcState(input: NpcStateInput): NpcStateKind | null {
   return npcStates(input)[0] ?? null;
 }
+
+/**
+ * The header's "AI connection" badge: offer to connect when no gateway is bound, and say so when the bound one
+ * cannot be reached — the same verdict that greys out the employees, so the header and the office agree.
+ */
+export function gatewayBadge(
+  hasGateway: boolean,
+  connection: NpcConnection,
+): "connect" | "connected" | "unreachable" {
+  if (!hasGateway) return "connect";
+  return isConnectionUnknown(connection) ? "unreachable" : "connected";
+}

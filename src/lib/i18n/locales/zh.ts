@@ -1833,6 +1833,8 @@ const zh: Record<string, string> = {
   "game.aiConnected": "AI 已连接",
   "game.aiConfigured": "AI 已设置",
   "game.aiGateway": "AI 连接",
+  "game.aiGatewayDown": "AI 连接中断",
+  "game.aiGatewayDownHint": "无法连接 AI 员工服务器，暂时不知道员工状态。点击查看连接设置。",
   "game.gatewayConnect": "连接",
   "game.channel": "频道",
   "game.notifications": "通知",

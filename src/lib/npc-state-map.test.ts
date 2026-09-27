@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { npcStates, primaryNpcState, type NpcStateInput } from "./npc-state-map";
+import { gatewayBadge, npcStates, primaryNpcState, type NpcStateInput } from "./npc-state-map";
 
 const idle: NpcStateInput = {
   connection: "ok",
@@ -65,4 +65,13 @@ test("when the gateway can't be seen, live states are dropped but what waits on 
 
 test("before the first gateway verdict nothing is claimed unknown", () => {
   assert.deepEqual(npcStates({ ...idle, connection: null, workingCount: 1 }), ["working"]);
+});
+
+test("the header's AI badge follows the connection, not just whether a gateway is bound", () => {
+  assert.equal(gatewayBadge(false, "ok"), "connect");
+  assert.equal(gatewayBadge(false, "unreachable"), "connect", "nothing bound: offer to connect");
+  assert.equal(gatewayBadge(true, null), "connected", "before the first verdict, no alarm");
+  assert.equal(gatewayBadge(true, "ok"), "connected");
+  for (const connection of ["unreachable", "unauthorized", "unknown", "socket_down"] as const)
+    assert.equal(gatewayBadge(true, connection), "unreachable", connection);
 });

@@ -41,10 +41,7 @@ test("with only the reviewer's runs, or no policy reviewer, the latest run's pro
 test("nothing to go on is null", () => {
   assert.equal(reviewImplementer({ events: [], runs: [] }, "oliver"), null);
   assert.equal(
-    reviewImplementer(
-      { events: [{ ...submitted("", 1) }], runs: [{ id: "r", status: "done" }] },
-      null,
-    ),
+    reviewImplementer({ events: [submitted("", 1)], runs: [{ profile: " " }] }, null),
     null,
   );
 });

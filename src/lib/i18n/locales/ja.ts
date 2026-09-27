@@ -1910,6 +1910,9 @@ const ja: Record<string, string> = {
   "game.aiConnected": "AI接続済み",
   "game.aiConfigured": "AI設定済み",
   "game.aiGateway": "AI 接続",
+  "game.aiGatewayDown": "AI 接続切れ",
+  "game.aiGatewayDownHint":
+    "AI スタッフのサーバーにつながらないため、スタッフの状態がわかりません。クリックして接続設定を確認してください。",
   "game.gatewayConnect": "接続する",
   "game.channel": "チャンネル",
   "game.notifications": "通知",
