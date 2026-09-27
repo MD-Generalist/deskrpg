@@ -2992,3 +2992,167 @@ entry('set-worker-launch', main('discover')['candidates'][0]['id'])
   );
   assert.deepEqual(result.body, { error: "worker_launch_write_failed" });
 });
+
+// Upstream's PM runtime on Windows (upstream main 10b24064dd, code-read, not yet measured): install.ps1 mints the
+// launcher at hermes-agent\.hermes\bin\hermes.exe (hermes_cli/_launchers.py ensure_install_launchers), and
+// 'hermes gateway install' registers the Hermes_Gateway task running wscript on a .vbs whose sh.Run line starts the
+// PM store python as '<python> -m hermes_cli.main [--profile X] gateway run' (gateway_windows.py _gateway_run_argv).
+// The helper itself runs on that store python (bootstrap --print-runtime-command), so sys.executable is it.
+const PM_SCHTASKS = String.raw`
+sys.platform = 'win32'
+identity = production_identity
+LAUNCHER = INSTALL / '.hermes' / 'bin' / 'hermes.exe'
+LAUNCHER.parent.mkdir(parents=True, exist_ok=True)
+LAUNCHER.write_text('')
+PM_RUNTIME = True
+def write_task(name, home, argv=None):
+    task = 'Hermes_Gateway' + ('_' + name if name != 'default' else '')
+    folder = home / 'gateway-service'
+    folder.mkdir(parents=True, exist_ok=True)
+    line = subprocess.list2cmdline(argv or ([sys.executable, '-m', 'hermes_cli.main'] + (['--profile', name] if name != 'default' else []) + ['gateway', 'run']))
+    vbs = folder / (task + '.vbs')
+    vbs.write_text('Set sh = CreateObject("WScript.Shell")\nSet env = sh.Environment("Process")\nenv.Item("HERMES_HOME") = "' + str(home).replace('"', '""') + '"\nsh.Run "' + line.replace('"', '""') + '", 0, False\n')
+    tasks[task] = '<Task><Actions Context="Author"><Exec><Command>wscript.exe</Command><Arguments>//B //Nologo "' + str(vbs) + '"</Arguments></Exec></Actions></Task>'
+    return task
+tasks = {}
+def schtasks(argv, timeout=8, env=None):
+    if argv[:2] == ['schtasks', '/Query'] and argv[3] in tasks:
+        return type('Result',(),{'returncode':0,'stdout':tasks[argv[3]]})()
+    return type('Result',(),{'returncode':1,'stdout':''})()
+run = schtasks
+`;
+test("PM runtime on Windows — upstream's scheduled task is recognized and HERMES_BIN is read from the Hermes .env", () => {
+  const result = fixture(
+    PM_SCHTASKS +
+      String.raw`
+write_task('default', ROOT)
+bare = identity('default', ROOT)
+(ROOT / '.env').write_text('HERMES_BIN=' + str(LAUNCHER) + '\n')
+own = identity('default', ROOT)
+(ROOT / '.env').write_text('HERMES_BIN=' + str(LAUNCHER.with_suffix('.cmd')) + '\n')
+shim = identity('default', ROOT)
+sophie = ROOT / 'profiles' / 'sophie'
+sophie.mkdir(parents=True)
+write_task('sophie', sophie)
+profile = identity('sophie', sophie)
+print(json.dumps({k: {'warning': v['warning'], 'launch': v['launch'], 'service': v['service']} for k, v in (('bare',bare),('own',own),('shim',shim),('profile',profile))}))
+`,
+  );
+  assert.deepEqual(result.body.bare, {
+    warning: null,
+    launch: "missing",
+    service: "Hermes_Gateway",
+  });
+  assert.deepEqual(result.body.own, { warning: null, launch: "ok", service: "Hermes_Gateway" });
+  // Hermes ignores a .cmd/.bat HERMES_BIN on Windows and falls back to the module form, so it is not "ok".
+  assert.deepEqual(result.body.shim, {
+    warning: null,
+    launch: "missing",
+    service: "Hermes_Gateway",
+  });
+  assert.deepEqual(result.body.profile, {
+    warning: null,
+    launch: "missing",
+    service: "Hermes_Gateway_sophie",
+  });
+});
+test("PM runtime on Windows — a task running another interpreter is not the upstream service", () => {
+  const result = fixture(
+    PM_SCHTASKS +
+      String.raw`
+write_task('default', ROOT, ['C:/Python312/python.exe', '-m', 'hermes_cli.main', 'gateway', 'run'])
+print(json.dumps(identity('default', ROOT)['warning']))
+`,
+  );
+  assert.equal(result.body, "service_identity_mismatch");
+});
+test("PM runtime on Windows — the drained restart goes through the launcher, not bare python -m", () => {
+  const result = fixture(
+    PM_SCHTASKS +
+      String.raw`
+write_task('sophie', ROOT / 'profiles' / 'sophie')
+cli_drains = lambda: True
+owner = identity('sophie', ROOT / 'profiles' / 'sophie')
+print(json.dumps({'command': owner['command'], 'launcher': str(LAUNCHER)}))
+`,
+  );
+  assert.deepEqual(result.body.command, [
+    result.body.launcher,
+    "--profile",
+    "sophie",
+    "gateway",
+    "restart",
+  ]);
+});
+test("PM runtime on Windows — inspection plans the worker launch step and a restart", () => {
+  const result = fixture(
+    PM_SCHTASKS +
+      String.raw`
+write_task('default', ROOT)
+assert_port_owned = lambda public, owner: True
+print(json.dumps(main('inspect', main('discover')['candidates'][0]['id'])['changes']))
+`,
+    {
+      config: { gateway: { multiplex_profiles: true } },
+      plugin: { name: "deskrpg", version: PLUGIN_VERSION },
+    },
+  );
+  assert.ok(result.body.includes("setting_worker_launch"));
+  assert.ok(result.body.includes("restarting_gateway"));
+});
+test("PM runtime on Windows — set-worker-launch has Hermes write HERMES_BIN (the .exe) to its .env, once", () => {
+  const result = fixture(
+    PM_SCHTASKS +
+      String.raw`
+write_task('default', ROOT)
+import io
+calls = []
+def hermes(argv, **kwargs):
+    calls.append(argv)
+    env_file = pathlib.Path(kwargs['env']['HERMES_HOME']) / '.env'
+    env_file.write_text(env_file.read_text() + argv[-2] + '=' + argv[-1] + '\n')
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = hermes
+first = main('set-worker-launch', main('discover')['candidates'][0]['id'])
+second = main('set-worker-launch', main('discover')['candidates'][0]['id'])
+print(json.dumps({'first':first,'second':second,'calls':calls,'launcher':str(LAUNCHER)}))
+`,
+    { env: "API_SERVER_KEY=existing-valid-token-12345\n" },
+  );
+  assert.deepEqual(result.body.first, { ok: true, changed: true });
+  assert.deepEqual(result.body.second, { ok: true, changed: false });
+  assert.deepEqual(result.body.calls, [
+    [
+      result.body.launcher,
+      "--profile",
+      "default",
+      "config",
+      "set",
+      "HERMES_BIN",
+      result.body.launcher,
+    ],
+  ]);
+  assert.ok(result.body.launcher.endsWith("hermes.exe"));
+});
+test("on Windows the PM launcher is the .exe — a .cmd shim cannot be HERMES_BIN", () => {
+  const result = fixture(String.raw`
+sys.platform = 'win32'
+windows = str(pm_launcher().relative_to(INSTALL))
+sys.platform = 'linux'
+posix = str(pm_launcher().relative_to(INSTALL))
+print(json.dumps({'windows': windows, 'posix': posix}))
+`);
+  assert.deepEqual(result.body, { windows: ".hermes/bin/hermes.exe", posix: ".hermes/bin/hermes" });
+});
+test("the win32 launcher tries the PM runtime python before a leftover venv, and only through the .exe", () => {
+  const pm = HOST_LAUNCHER_PS.indexOf(".hermes\\bin\\hermes.exe");
+  assert.ok(pm > 0);
+  assert.ok(HOST_LAUNCHER_PS.indexOf("--print-runtime-command") > pm);
+  assert.ok(pm < HOST_LAUNCHER_PS.indexOf("foreach ($f in @('venv', '.venv'))"));
+  assert.ok(!HOST_LAUNCHER_PS.includes("hermes.cmd"));
+});
+test("discovery and the installer accept the Windows launcher .exe", () => {
+  assert.ok(HOST_BOOTSTRAP.includes("('hermes.exe' if WINDOWS else 'hermes')"));
+  assert.ok(!HOST_BOOTSTRAP.includes("if not WINDOWS and launcher.is_file()"));
+  assert.ok(HOST_INSTALLER.includes("('hermes.exe' if WINDOWS else 'hermes')"));
+});
