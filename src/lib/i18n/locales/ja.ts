@@ -3575,6 +3575,10 @@ const ja: Record<string, string> = {
   "gateways.workerLaunch.missing": "ゲートウェイサービスの HERMES_BIN({path})を実行できません。",
   "gateways.workerLaunch.command":
     "ゲートウェイホストで次のコマンドを実行すると、{file} に HERMES_BIN を設定してゲートウェイを再起動します(Linux の systemd ユーザーサービス)。",
+  "gateways.workerLaunch.commandMac":
+    "上のコマンドは Hermes の設定ファイル({file})に HERMES_BIN を書き込み、Hermes を再起動します(macOS)。launchd のサービスファイルには入れません。Hermes が再起動のたびにそのファイルを書き直すためです。",
+  "gateways.workerLaunch.windows":
+    "Windows 用のコマンドはまだありません。{file} に HERMES_BIN={launcher} の 1 行を追加して、Hermes を再起動してください。パスは hermes.exe にしてください(.cmd は使われません)。",
   "gateways.workerLaunch.noLauncher":
     "提案できる Hermes 実行ファイルが見つかりませんでした。ゲートウェイサービスの環境で HERMES_BIN を Hermes 実行ファイルのパスに設定し、再起動してください。",
   "common.moreDetails": "詳しく見る",

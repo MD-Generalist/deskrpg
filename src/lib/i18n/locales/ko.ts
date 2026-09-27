@@ -3544,6 +3544,10 @@ const ko: Record<string, string> = {
   "gateways.workerLaunch.missing": "게이트웨이 서비스의 HERMES_BIN({path})을 실행할 수 없습니다.",
   "gateways.workerLaunch.command":
     "게이트웨이 호스트에서 아래 명령을 실행하면 {file}에 HERMES_BIN을 설정하고 게이트웨이를 재시작합니다(Linux systemd 사용자 서비스 기준).",
+  "gateways.workerLaunch.commandMac":
+    "위 명령은 Hermes 설정 파일({file})에 HERMES_BIN을 적고 Hermes를 다시 시작해요(macOS). launchd 서비스 파일에는 넣지 않아요. Hermes가 다시 시작할 때마다 그 파일을 새로 써서 사라지거든요.",
+  "gateways.workerLaunch.windows":
+    "Windows용 명령은 아직 없어요. {file}에 HERMES_BIN={launcher} 한 줄을 넣고 Hermes를 다시 시작해 주세요. 경로는 hermes.exe여야 해요(.cmd는 쓰이지 않아요).",
   "gateways.workerLaunch.noLauncher":
     "제안할 Hermes 실행 파일을 찾지 못했습니다. 게이트웨이 서비스 환경에 HERMES_BIN을 Hermes 실행 파일 경로로 설정한 뒤 재시작하세요.",
   "common.moreDetails": "자세히 보기",

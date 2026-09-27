@@ -3404,6 +3404,10 @@ const zh: Record<string, string> = {
   "gateways.workerLaunch.missing": "无法运行网关服务的 HERMES_BIN({path})。",
   "gateways.workerLaunch.command":
     "在网关主机上运行以下命令:它会在 {file} 中设置 HERMES_BIN 并重启网关(Linux systemd 用户服务)。",
+  "gateways.workerLaunch.commandMac":
+    "上面的命令会把 HERMES_BIN 写入 Hermes 设置文件({file})并重启 Hermes(macOS)。不要写进 launchd 服务文件:Hermes 每次重启都会重写那个文件。",
+  "gateways.workerLaunch.windows":
+    "暂时还没有 Windows 的命令。请在 {file} 中添加一行 HERMES_BIN={launcher},然后重启 Hermes。路径必须是 hermes.exe(.cmd 不会被使用)。",
   "gateways.workerLaunch.noLauncher":
     "未找到可建议的 Hermes 可执行文件。请在网关服务的环境中将 HERMES_BIN 设置为 Hermes 可执行文件路径并重启。",
   "common.moreDetails": "查看详情",

@@ -3551,6 +3551,10 @@ const en: Record<string, string> = {
   "gateways.workerLaunch.missing": "The gateway service's HERMES_BIN ({path}) can't be run.",
   "gateways.workerLaunch.command":
     "Run this on the gateway host: it sets HERMES_BIN in {file} and restarts the gateway (Linux, systemd user service).",
+  "gateways.workerLaunch.commandMac":
+    "The command above writes HERMES_BIN into the Hermes settings file ({file}) and restarts Hermes (macOS). It doesn't go in the launchd service file: Hermes rewrites that file on every restart.",
+  "gateways.workerLaunch.windows":
+    "There's no command for Windows yet. Add the line HERMES_BIN={launcher} to {file} and restart Hermes. The path must be hermes.exe (a .cmd isn't used).",
   "gateways.workerLaunch.noLauncher":
     "No Hermes launcher was found to suggest. Set HERMES_BIN to the Hermes executable in the gateway service's environment and restart it.",
   "common.moreDetails": "More details",

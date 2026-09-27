@@ -9,7 +9,10 @@ import { parsePluginInfo } from "./plugin-capability";
 import {
   WORKER_LAUNCH_DROP_IN,
   parseWorkerLaunchReport,
+  workerLaunchFix,
   workerLaunchFixCommand,
+  workerLaunchFixFor,
+  workerLaunchHost,
   workerLaunchWarning,
 } from "./worker-launch";
 
@@ -115,6 +118,86 @@ test(
     assert.equal(
       readFileSync(calls, "utf8"),
       "--user daemon-reload\n--user restart hermes-gateway\n",
+    );
+  },
+);
+
+test("the host OS is read from the launcher path", () => {
+  assert.equal(workerLaunchHost(LAUNCHER), "linux");
+  assert.equal(workerLaunchHost("/Users/dante/.hermes/hermes-agent/.hermes/bin/hermes"), "macos");
+  assert.equal(
+    workerLaunchHost("C:\\Users\\dante\\AppData\\Local\\hermes\\bin\\hermes.exe"),
+    "windows",
+  );
+  assert.equal(workerLaunchHost("D:/hermes/bin/hermes.exe"), "windows");
+  assert.equal(workerLaunchHost("\\\\server\\share\\hermes.exe"), "windows");
+});
+
+test("Linux keeps the systemd drop-in command", () => {
+  assert.deepEqual(workerLaunchFix(LAUNCHER), {
+    host: "linux",
+    file: WORKER_LAUNCH_DROP_IN,
+    command: workerLaunchFixCommand(LAUNCHER),
+  });
+});
+
+test("Windows gets no command yet — only the file to edit", () => {
+  const fix = workerLaunchFix("C:\\Users\\u\\AppData\\Local\\hermes\\bin\\hermes.exe");
+  assert.deepEqual(fix, { host: "windows", file: "%LOCALAPPDATA%\\hermes\\.env", command: null });
+});
+
+test("no fix without a launcher", () => {
+  assert.equal(workerLaunchFix(null), null);
+});
+
+test("a macOS launcher gets the .env command", () => {
+  const launcher = "/Users/dante/.hermes/hermes-agent/.hermes/bin/hermes";
+  assert.deepEqual(workerLaunchFix(launcher), workerLaunchFixFor("macos", launcher));
+  assert.equal(workerLaunchFix(launcher)?.file, "~/.hermes/.env");
+});
+
+test(
+  "macOS sets HERMES_BIN in the Hermes .env through the launcher, then restarts the gateway",
+  { skip: process.platform === "win32" },
+  () => {
+    const home = mkdtempSync(path.join(tmpdir(), "worker-launch-mac-"));
+    const calls = path.join(home, "calls.log");
+    // A launcher path with a space and a quote must reach Hermes as one argument.
+    const dir = path.join(home, "it's a", ".hermes", "bin");
+    mkdirSync(dir, { recursive: true });
+    const odd = path.join(dir, "hermes");
+    writeFileSync(
+      odd,
+      `#!/bin/sh\nfor a in "$@"; do printf '%s|' "$a" >> '${calls}'; done\necho >> '${calls}'\n`,
+    );
+    chmodSync(odd, 0o755);
+    const fix = workerLaunchFixFor("macos", odd);
+    assert.ok(fix.command);
+    execFileSync("/bin/sh", ["-c", fix.command], {
+      env: { HOME: home, PATH: "/usr/bin:/bin" } as unknown as NodeJS.ProcessEnv,
+    });
+    assert.equal(
+      readFileSync(calls, "utf8"),
+      `--profile|default|config|set|HERMES_BIN|${odd}|\n--profile|default|gateway|restart|\n`,
+    );
+  },
+);
+
+test(
+  "macOS does not run the restart when setting the value fails",
+  { skip: process.platform === "win32" },
+  () => {
+    const home = mkdtempSync(path.join(tmpdir(), "worker-launch-mac-fail-"));
+    const calls = path.join(home, "calls.log");
+    const launcher = path.join(home, "hermes");
+    writeFileSync(launcher, `#!/bin/sh\necho "$*" >> '${calls}'\nexit 3\n`);
+    chmodSync(launcher, 0o755);
+    const fix = workerLaunchFixFor("macos", launcher);
+    assert.ok(fix.command);
+    assert.throws(() => execFileSync("/bin/sh", ["-c", fix.command!], { stdio: "ignore" }));
+    assert.equal(
+      readFileSync(calls, "utf8"),
+      `--profile default config set HERMES_BIN ${launcher}\n`,
     );
   },
 );
