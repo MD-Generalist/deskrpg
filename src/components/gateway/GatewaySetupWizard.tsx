@@ -1055,6 +1055,13 @@ export default function GatewaySetupWizard({
               {errorMessage(job.error)}
             </p>
           )}
+          {job.error === "service_container_refused" && (
+            <MoreDetails className="text-xs">
+              <p data-container-refusal-details="">
+                {t("hermes.wizard.error.serviceContainerRefusedDetails")}
+              </p>
+            </MoreDetails>
+          )}
           {job.error === "system_packages_missing" &&
             (() => {
               const packages = parseSystemPackages((job.missingPackages ?? []).join(" "));

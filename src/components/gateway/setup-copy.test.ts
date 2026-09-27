@@ -73,6 +73,7 @@ test("a new error code returns guidance text in all four languages without the r
     "hermes_version_unsupported",
     "plugin_update_failed",
     "service_install_failed",
+    "service_container_refused",
     "timezone_invalid",
     "timezone_write_failed",
   ]) {
