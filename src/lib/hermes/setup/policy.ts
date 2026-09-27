@@ -99,6 +99,8 @@ const SAFE_CODES = new Set([
   "hermes_version_unsupported",
   "plugin_install_failed",
   "plugin_update_failed",
+  // The plugin's Python dependencies could not be prepared (pm repair, then disable and enable).
+  "plugin_dependencies_missing",
   // Update-only — the address is reachable but commands can't run on that host (e.g. a host address seen from a
   // container).
   "plugin_update_unsupported_host",

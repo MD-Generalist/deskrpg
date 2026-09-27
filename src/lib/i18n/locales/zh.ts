@@ -457,6 +457,8 @@ const zh: Record<string, string> = {
     "暂不支持远程连接 Windows 电脑。请在那台 Windows 上安装 DeskRPG，然后用［本地连接］连接。",
   "hermes.wizard.error.remoteWindowsDetails":
     "DeskRPG 会把通过 SSH 连接的服务器当作 Linux 并发送设置命令。此服务器以 Windows（OpenSSH）响应，无法执行这些命令。在那台 Windows 上安装 DeskRPG 后，可以通过［本地连接］使用同样的设置向导。",
+  "hermes.wizard.error.pluginDependenciesMissing":
+    "未能准备 DeskRPG 连接工具所需的组件。请在安装了 Hermes 的电脑上运行 hermes pm repair，重启 Hermes，然后在此页面重试。",
   "hermes.wizard.error.windowsScheduledTaskMissing":
     "此 Windows 主机上没有网关的计划任务，只在启动文件夹中注册了。在这种状态下 DeskRPG 无法停止或重启网关，因此插件更新和设置更改会被阻止。请在任务计划程序中确认是否有 Hermes 网关任务；如果没有，请在该主机上重新运行 hermes gateway install 将其注册为计划任务，然后再检查。",
   "hermes.wizard.error.hostOutputTooLarge":

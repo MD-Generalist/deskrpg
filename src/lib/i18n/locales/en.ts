@@ -489,6 +489,8 @@ const en: Record<string, string> = {
     "Remote connections to Windows computers aren't supported yet. Install DeskRPG on that Windows computer and connect with [Local connection].",
   "hermes.wizard.error.remoteWindowsDetails":
     "DeskRPG treats a server reached over SSH as Linux and sends it Linux setup commands. This server answered as Windows (OpenSSH), so it can't run them. With DeskRPG installed on that Windows computer, the same setup wizard works through [Local connection].",
+  "hermes.wizard.error.pluginDependenciesMissing":
+    "Couldn't prepare the parts the DeskRPG connector needs. On the computer where Hermes is installed, run hermes pm repair, restart Hermes, then try again here.",
   "hermes.wizard.error.windowsScheduledTaskMissing":
     "This Windows host has no scheduled task for the gateway; it is registered only in the Startup folder. DeskRPG cannot stop or restart it that way, so plugin updates and setting changes are blocked. Check Task Scheduler for the Hermes gateway task. If it is missing, run hermes gateway install on that host again to register it as a scheduled task, then check again.",
   "hermes.wizard.error.hostOutputTooLarge":
