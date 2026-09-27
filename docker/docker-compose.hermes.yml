@@ -30,11 +30,26 @@ services:
     volumes:
       - deskrpg-data:/app/data
 
+  # One-shot: the plugin commit this DeskRPG image was released with, for hermes-plugins. A new
+  # commit (a new or rolled-back image) also restarts Hermes so it serves the reinstalled plugin.
+  plugin-pin:
+    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
+    restart: "no"
+    user: root
+    entrypoint: ["sh", "-c"]
+    command:
+      - sed -n 's/^export const PLUGIN_PIN = "\([0-9a-f]\{40\}\)";$$/\1/p' src/lib/hermes/setup/pin.ts > /pin/ref
+    volumes:
+      - plugin-pin:/pin
+
   # Same key/UID as hermes: without API_SERVER_KEY the image writes a random key to the
   # volume's .env, which then overrides HERMES_API_KEY (DeskRPG gets 401).
   hermes-plugins:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
     restart: "no"
+    depends_on:
+      plugin-pin:
+        condition: service_completed_successfully
     environment:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
@@ -44,6 +59,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - hermes-data:/opt/data
+      - plugin-pin:/pin:ro
     # Hermes reads provider keys from /opt/data/.env, not from the container environment
     # (a key passed only as env leaves every profile on "Provider authentication failed"),
     # and a new employee inherits the key from that file when it is hired.
@@ -60,11 +76,11 @@ services:
           printf '%s=%s\n' "$$v" "$$val" >> /tmp/env.next
           cat /tmp/env.next > /opt/data/.env
         done
-        if hermes plugins list --plain --no-bundled | grep -q ' deskrpg$$'; then
-          hermes plugins update deskrpg || echo "plugin update failed; keeping installed version"
-        else
-          hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
-        fi
+        u=https://github.com/dandacompany/deskrpg-hermes-plugin; d=/opt/data/plugins/deskrpg
+        pin=$$(cat /pin/ref 2>/dev/null || true)
+        if [ -n "$$pin" ] && [ "$$(git -c safe.directory='*' -C $$d rev-parse HEAD 2>/dev/null)" != "$$pin" ]; then
+          hermes plugins install $$u --ref "$$pin" --force || [ -d $$d ]
+        elif [ ! -d $$d ]; then hermes plugins install $$u; fi
         hermes plugins enable deskrpg
 
   # API server stays on the compose network (http://hermes:8642); only the dashboard is
@@ -76,6 +92,9 @@ services:
     depends_on:
       hermes-plugins:
         condition: service_completed_successfully
+      plugin-pin:
+        condition: service_completed_successfully
+        restart: true
     ports:
       - "127.0.0.1:9119:9119"
     environment:
@@ -98,3 +117,4 @@ services:
 volumes:
   deskrpg-data:
   hermes-data:
+  plugin-pin:

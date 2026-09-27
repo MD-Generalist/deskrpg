@@ -4,7 +4,7 @@
 # 여기서 하는 일은 넷이다. 모두 없을 때만 만들고, 사람이 정한 값은 덮어쓰지 않는다.
 #   1) DeskRPG 런타임(~/.deskrpg 대신 /opt/data/deskrpg)을 만들고 비밀키를 채운다
 #   2) Hermes API 서버를 켜고 키를 만든다 — DeskRPG 가 붙을 문이다
-#   3) DeskRPG 플러그인을 깔고 활성화한다 — 칸반·크론·사건 스트림이 이걸로 돈다
+#   3) DeskRPG 플러그인을 이 DeskRPG 의 핀으로 깔고 활성화한다 — 칸반·크론·사건 스트림이 이걸로 돈다
 #   4) 원하면 둘 다 최신으로 올린다
 set -e
 
@@ -74,11 +74,22 @@ if ! grep -q "^API_SERVER_KEY=..*" "$HERMES_HOME/.env" 2>/dev/null; then
 fi
 
 # ── 4. DeskRPG 플러그인 ──────────────────────────────────────────────
-if [ ! -d "$HERMES_HOME/plugins/deskrpg" ]; then
+# The plugin commit the installed DeskRPG was released with, read from its own pin file. The package
+# is refreshed from npm above, so the plugin follows it: reinstall whenever the installed commit differs
+# (`plugins update` would follow the plugin's main branch and never moves an install made with --ref).
+PLUGIN_DIR="$HERMES_HOME/plugins/deskrpg"
+PIN_FILE="$(npm root -g 2>/dev/null || true)/deskrpg/src/lib/hermes/setup/pin.ts"
+PIN="$(sed -n 's/^export const PLUGIN_PIN = "\([0-9a-f]\{40\}\)";$/\1/p' "$PIN_FILE" 2>/dev/null || true)"
+HEAD="$(git -c safe.directory='*' -C "$PLUGIN_DIR" rev-parse HEAD 2>/dev/null || true)"
+if [ -n "$PIN" ] && [ "$HEAD" != "$PIN" ]; then
+    log "칸반·크론 플러그인을 이 DeskRPG 가 쓰는 버전으로 맞추는 중"
+    hermes plugins install "$PLUGIN_SOURCE" --ref "$PIN" --force >/dev/null 2>&1 \
+        || log "경고: 플러그인 설치 실패 — 설치돼 있던 버전으로 계속한다"
+elif [ ! -d "$PLUGIN_DIR" ]; then
     log "칸반·크론 플러그인을 설치하는 중"
     hermes plugins install "$PLUGIN_SOURCE" >/dev/null 2>&1 || log "경고: 플러그인 설치 실패 — 대화는 되지만 칸반·크론은 꺼진다"
 fi
-if [ -d "$HERMES_HOME/plugins/deskrpg" ]; then
+if [ -d "$PLUGIN_DIR" ]; then
     hermes plugins enable deskrpg >/dev/null 2>&1 || true
 fi
 

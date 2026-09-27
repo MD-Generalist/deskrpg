@@ -9,7 +9,7 @@ Traefik gives the office its HTTPS address, but hPanel shows the _"Enable HTTPS 
 1. Press **Deploy Traefik** on the banner under the project list (it asks only for `ACME_EMAIL`).
 2. Press **Update** on the DeskRPG project once so `traefik-connect` runs against the new Traefik (only bridge-mode Traefik needs it; host mode routes immediately). If `TRAEFIK_HOST` was left empty in step 2-1, fill it in **Manage** → Environment → **Save and deploy** instead — it is required (step 3).
 
-After the DeskRPG deploy the project shows three containers: `deskrpg` and `hermes` running, and `traefik-connect` **exited** — that one-shot is supposed to be stopped. A VPS that already has Traefik shows no banner; just press Update.
+After the DeskRPG deploy `deskrpg` and `hermes` are running, and the one-shots `traefik-connect`, `plugin-pin` and `hermes-plugins` show **exited** — they are supposed to stop. A VPS that already has Traefik shows no banner; just press Update.
 
 ### Both Traefik shapes work (measured 2026-09-17)
 
@@ -129,7 +129,9 @@ docker compose exec hermes hermes config unset model.base_url   # otherwise the 
 
 ## 4-2. The DeskRPG plugin installs itself
 
-DeskRPG reads the Hermes profile list, kanban, cron and events through [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin). Without it a gateway connection is saved but never reaches the profile list, and on a VPS the offered **Install via SSH** button is disabled. So the compose runs a one-shot `hermes-plugins` service before Hermes starts: it installs the plugin (or updates it when already installed — a second `install` exits 1), enables it, and exits. Nothing to type.
+DeskRPG reads the Hermes profile list, kanban, cron and events through [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin). Without it a gateway connection is saved but never reaches the profile list, and on a VPS the offered **Install via SSH** button is disabled. So the compose runs two one-shots before Hermes starts. `plugin-pin` reads, from the DeskRPG image itself, the plugin commit that release was tested with; `hermes-plugins` installs that commit — reinstalling whenever the installed one differs, and keeping it if the install fails — enables it, and exits. Nothing to type.
+
+The pin comes from the image, not from this compose, because Update never re-reads the compose: a commit written here would freeze at the day you imported it. With the image as the source, **Update** and a rollback through `DESKRPG_IMAGE` (step 7) bring the matching plugin along, and a new pin also restarts Hermes so it serves the reinstalled plugin (measured 2026-09-27: 2026.927.1 → 2026.926.3 → 2026.927.1 served 0.28.2 → 0.24.4 → 0.28.2).
 
 `hermes-plugins` gets the same `API_SERVER_KEY` as `hermes`. Without it the image generates a random key into the volume's `.env`, which then overrides `HERMES_API_KEY` and DeskRPG gets 401 — found while testing this service (2026-09-17). Verify from the project folder:
 
