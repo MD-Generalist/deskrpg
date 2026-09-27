@@ -5,6 +5,7 @@ import { Lock } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import type { SkillDetail } from "@/lib/hermes/plugin-client-types";
 
+import { hubUpdateOutcome } from "./hub-update-outcome";
 import { skillErrorText } from "./skill-error-text";
 import { SkillsApiError, type SkillsApi } from "./skills-api";
 import { useSkillJob } from "./use-skill-job";
@@ -13,14 +14,14 @@ export type SkillDetailPaneProps = {
   api: SkillsApi;
   name: string;
   canManage: boolean;
-  /** Hub uninstall runs the Hermes CLI — off when this Hermes can't. */
+  /** Hub update and uninstall run the Hermes CLI — off when this Hermes can't. */
   hubEnabled?: boolean;
   /** Opens this employee's 1:1 chat, where reference files get changed. */
   onAskInChat?(): void;
   onChanged(): void;
   /** Archiving or deleting removed this skill from the list — the parent clears its selection. */
   onRemoved?(): void;
-  /** Poll interval (ms) for the Hub uninstall job. Shortened in tests. */
+  /** Poll interval (ms) for the Hub update and uninstall jobs. Shortened in tests. */
   pollIntervalMs?: number;
 };
 
@@ -71,6 +72,12 @@ export default function SkillDetailPane({
   // Hub uninstall is a 202 job like install — it must finish before it drops off the list.
   const uninstallJob = useSkillJob(api, { intervalMs: pollIntervalMs });
   const uninstallDone = uninstallJob.state === "succeeded" || uninstallJob.state === "unknown";
+  // Hub update is a job too; "nothing newer" also succeeds, so the outcome comes from its output.
+  const updateJob = useSkillJob(api, { intervalMs: pollIntervalMs });
+  const updateOutcome =
+    updateJob.state === "succeeded" && updateJob.job
+      ? hubUpdateOutcome(updateJob.job.outputTail)
+      : null;
   useEffect(() => {
     if (!uninstallDone) return;
     onChanged();
@@ -78,6 +85,22 @@ export default function SkillDetailPane({
     // The parent callback is recreated every render — call it only once, when the job finishes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uninstallDone]);
+
+  const updated = updateOutcome === "updated";
+  useEffect(() => {
+    if (!updated) return;
+    void (async () => {
+      try {
+        setDetail(await api.detail(name));
+        await loadFile("SKILL.md");
+      } catch (e) {
+        setError(skillErrorText(t, e));
+      }
+    })();
+    onChanged();
+    // Runs once per finished update, like the uninstall effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updated]);
 
   const loadFile = useCallback(
     async (p: string) => {
@@ -124,7 +147,7 @@ export default function SkillDetailPane({
   const editable = canManage && Boolean(current && fileEditable(current));
   const isLocal = detail.skill.source === "local";
   const isHub = detail.skill.source === "hub";
-  const working = busy || uninstallJob.state === "running";
+  const working = busy || uninstallJob.state === "running" || updateJob.state === "running";
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -165,6 +188,7 @@ export default function SkillDetailPane({
       onChanged();
       onRemoved?.();
     });
+  const update = () => void updateJob.start("hub", () => api.hubUpdate(name));
   const uninstall = async () => {
     setConfirm(null);
     await uninstallJob.start("hub", () => api.hubUninstall(name));
@@ -290,6 +314,17 @@ export default function SkillDetailPane({
           {isHub && hubEnabled && (
             <button
               type="button"
+              data-action="hub-update"
+              disabled={working}
+              onClick={update}
+              className="rounded px-3 py-1 text-text hover:bg-surface-raised disabled:opacity-50"
+            >
+              {t("skills.hubUpdate")}
+            </button>
+          )}
+          {isHub && hubEnabled && (
+            <button
+              type="button"
               data-action="uninstall"
               disabled={working}
               onClick={() => setConfirm("uninstall")}
@@ -297,6 +332,24 @@ export default function SkillDetailPane({
             >
               {t("skills.uninstall")}
             </button>
+          )}
+        </div>
+      )}
+      {updateJob.state !== "idle" && (
+        <div
+          data-update-state={updateJob.state}
+          data-update-outcome={updateOutcome ?? undefined}
+          className="text-xs text-text"
+        >
+          {updateJob.state === "running"
+            ? t("skills.hubUpdate.running")
+            : updateOutcome
+              ? t(`skills.hubUpdate.${updateOutcome}`)
+              : t(`skills.job.${updateJob.state}`)}
+          {updateJob.state === "failed" && updateJob.job?.outputTail && (
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-surface-raised p-2 text-text-muted">
+              {updateJob.job.outputTail}
+            </pre>
           )}
         </div>
       )}

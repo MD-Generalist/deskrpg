@@ -370,3 +370,139 @@ test("screens whose feature is off are hidden while the rest keep working", asyn
   assert.ok(!container.querySelector('[data-add="hub"]'), "no hub install");
   assert.ok($('[data-add="new"]'), "new skill still offered");
 });
+
+const hubDetail = () => ({
+  [`GET ${ROOT}/pdf`]: { ...detail({ name: "pdf", source: "hub" }), files: [] },
+  [`GET ${ROOT}/pdf/file?path=SKILL.md`]: file("hub", "h3"),
+});
+const updateJob = (outputTail: string, state = "succeeded") => ({
+  jobId: "up1",
+  kind: "hub_update",
+  state,
+  exitCode: state === "succeeded" ? 0 : 1,
+  outputTail,
+});
+
+test("Hub skill [update] shows progress, then 'no update' when Hermes had nothing newer", async () => {
+  const log = mockFetch({
+    ...hubDetail(),
+    [`POST ${ROOT}/hub/update`]: { jobId: "up1", delayMs: 20 },
+    [`GET ${ROOT}/hub/installs/up1`]: updateJob("No updates available.\n"),
+  });
+  let changed = 0;
+  await render(
+    <SkillDetailPane
+      api={createSkillsApi("ch-1", "n-1")}
+      name="pdf"
+      canManage
+      onChanged={() => {
+        changed += 1;
+      }}
+      pollIntervalMs={1}
+    />,
+  );
+  await click('[data-action="hub-update"]');
+  assert.equal($("[data-update-state]").getAttribute("data-update-state"), "running");
+  assert.equal(($('[data-action="hub-update"]') as HTMLButtonElement).disabled, true);
+  await new Promise((r) => setTimeout(r, 30));
+  await flush();
+  assert.deepEqual(log.bodies[`POST ${ROOT}/hub/update`], { name: "pdf" });
+  assert.equal($("[data-update-state]").getAttribute("data-update-outcome"), "none");
+  assert.ok(text().includes("업데이트 없음"));
+  assert.equal(changed, 0, "nothing changed, so the list is not reloaded");
+});
+
+test("Hub skill [update] that installed a newer version reloads the skill and the list", async () => {
+  const log = mockFetch({
+    ...hubDetail(),
+    [`POST ${ROOT}/hub/update`]: { jobId: "up1" },
+    [`GET ${ROOT}/hub/installs/up1`]: updateJob("Updating: pdf\nUpdated 1 skill(s).\n"),
+  });
+  let changed = 0;
+  await render(
+    <SkillDetailPane
+      api={createSkillsApi("ch-1", "n-1")}
+      name="pdf"
+      canManage
+      onChanged={() => {
+        changed += 1;
+      }}
+      pollIntervalMs={1}
+    />,
+  );
+  const detailReads = () => log.calls.filter((c) => c === `GET ${ROOT}/pdf`).length;
+  const before = detailReads();
+  await click('[data-action="hub-update"]');
+  await flush();
+  assert.equal($("[data-update-state]").getAttribute("data-update-outcome"), "updated");
+  assert.equal(detailReads(), before + 1);
+  assert.equal(changed, 1);
+});
+
+test("Hub skill [update] reports local edits it kept, and a failure shows the output", async () => {
+  mockFetch({
+    ...hubDetail(),
+    [`POST ${ROOT}/hub/update`]: { jobId: "up1" },
+    [`GET ${ROOT}/hub/installs/up1`]: updateJob(
+      "Skipping: pdf — you have local edits (update would overwrite them).\n",
+    ),
+  });
+  await render(
+    <SkillDetailPane
+      api={createSkillsApi("ch-1", "n-1")}
+      name="pdf"
+      canManage
+      onChanged={() => {}}
+      pollIntervalMs={1}
+    />,
+  );
+  await click('[data-action="hub-update"]');
+  await flush();
+  assert.equal($("[data-update-state]").getAttribute("data-update-outcome"), "kept_local");
+
+  mockFetch({
+    ...hubDetail(),
+    [`POST ${ROOT}/hub/update`]: { jobId: "up1" },
+    [`GET ${ROOT}/hub/installs/up1`]: updateJob("network down", "failed"),
+  });
+  await render(
+    <SkillDetailPane
+      key="second"
+      api={createSkillsApi("ch-1", "n-1")}
+      name="pdf"
+      canManage
+      onChanged={() => {}}
+      pollIntervalMs={1}
+    />,
+  );
+  await click('[data-action="hub-update"]');
+  await flush();
+  assert.equal($("[data-update-state]").getAttribute("data-update-state"), "failed");
+  assert.ok(text().includes("network down"));
+});
+
+test("[update] is only offered for Hub skills, and not when Hub is off or the viewer can't manage", async () => {
+  mockFetch({ ...hubDetail(), ...opened() });
+  const pane = (key: string, over: Partial<React.ComponentProps<typeof SkillDetailPane>>) => (
+    <SkillDetailPane
+      key={key}
+      api={createSkillsApi("ch-1", "n-1")}
+      name="pdf"
+      canManage
+      onChanged={() => {}}
+      {...over}
+    />
+  );
+  await render(pane("p0", { name: "weekly" }));
+  await flush();
+  assert.equal(Boolean(container.querySelector('[data-action="hub-update"]')), false);
+  await render(pane("p1", { hubEnabled: false }));
+  await flush();
+  assert.equal(Boolean(container.querySelector('[data-action="hub-update"]')), false);
+  await render(pane("p2", { canManage: false }));
+  await flush();
+  assert.equal(Boolean(container.querySelector('[data-action="hub-update"]')), false);
+  await render(pane("p3", {}));
+  await flush();
+  assert.equal(Boolean(container.querySelector('[data-action="hub-update"]')), true);
+});
