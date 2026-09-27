@@ -39,6 +39,7 @@ import { managedSsh } from "./ssh-hosts";
 import {
   readSshConfigHosts,
   systemSsh,
+  SYSTEM_PROBE_COMMAND,
   systemSshArgs,
   systemSshAvailable,
   validateSystemTarget,
@@ -205,7 +206,7 @@ export async function sshSystemAdd(userId: string, input: Record<string, unknown
       "-T",
       "--",
       target.target,
-      "true",
+      SYSTEM_PROBE_COMMAND,
     ],
     { timeoutMs: 20_000 },
   );
