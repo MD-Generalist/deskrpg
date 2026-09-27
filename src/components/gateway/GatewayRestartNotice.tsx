@@ -119,7 +119,7 @@ export default function GatewayRestartNotice({
       data-restart-state={state}
       data-restart-reason={reason}
       data-restart-error={error ?? undefined}
-      className="max-w-xs space-y-2 rounded-md border border-danger/30 bg-surface p-3 text-sm shadow-lg"
+      className="w-72 max-w-[calc(100vw-2rem)] space-y-2 rounded-md border border-danger/30 bg-surface p-3 text-sm shadow-lg"
     >
       <p>{t("gateway.restart.stopped")}</p>
       {support.canRestart ? (
