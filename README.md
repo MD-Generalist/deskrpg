@@ -24,7 +24,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.926.3` — Employees can ask you a question with choices in 1:1 chat and wait for your answer, also from Needs you. The office shows each employee's real state — awaiting approval, stuck after repeated failures, unreachable gateway — on name tags and in poses. Results show how they were made and which pages and files the session read. Cards list their runs as attempts with a cause. Import a profile that already exists in Hermes. Only a gateway's owner changes an employee's persona or model. Requires plugin 0.24.4 and the policy-aware Hermes core described below.
+- Version: `v2026.927.1` — Runs on upstream Hermes without a patched core. Cards and swarms carry a human, AI or AI-then-person approval policy that the plugin enforces with Hermes hooks, and an employee can never approve its own work. Approvals made outside DeskRPG are marked as such. NPC skill management keeps working on upstream Hermes (Hub jobs run the documented Hermes CLI); reference files are edited by asking the employee in chat. The setup wizard handles upstream's package-manager install and warns when kanban workers cannot start. Requires plugin 0.28.2.
 
 ## What You Can Do
 
@@ -226,7 +226,7 @@ hermes plugins enable deskrpg
 succeeded. DeskRPG shows the same command in the board and schedule screens when it detects the
 plugin is missing or out of date.
 
-**New task creation requires native approval support.** Since 0.13.1 the plugin exposes `kanban_review_policy_v1` only with the tested [Dante Labs Hermes compatibility patch](https://github.com/dandacompany/hermes-agent/tree/deskrpg/mixed-approval-v1), commit `622a2f793f`, based on upstream `e2f8a0731bf2`. This is not an upstream Hermes release. Follow the [plugin compatibility and backup guidance](https://github.com/dandacompany/deskrpg-hermes-plugin#task-approval-compatibility) before changing core. Unpatched gateways retain legacy cards and reads, but new cards are blocked. Existing cards and global settings are not converted. With plugin 0.25.0 or later on that core, new swarms can also be created on approval-policy boards (`swarm_review_policy`); a gateway that lacks it refuses them.
+**Approval policies work on upstream Hermes.** From plugin 0.27.0 the plugin enforces card approval (capability `review_hooks_v1`) with documented Hermes hooks and a plugin-owned store, without changing Hermes core: an implementer cannot finish its own card, a card waiting for a person sits in `review` with no assignee, and the reviewer never approves work it did itself. Gateways without the capability create cards without a policy, and the board says they complete without approval. On upstream's package-manager install, set `HERMES_BIN` to the Hermes launcher so kanban workers can start (the setup wizard does this on Linux, and the gateway page shows the command otherwise). If you ran the earlier Dante Labs compatibility patch, follow the plugin's [steps for moving off the patched core](https://github.com/dandacompany/deskrpg-hermes-plugin#moving-an-install-off-the-patched-core).
 
 Now you can hire NPCs. Each NPC is bound to one Hermes profile at hire time, and you can rebind it
 later without firing it.
