@@ -206,7 +206,13 @@ const zh: Record<string, string> = {
   "channels.create.failed": "创建频道失败",
   "channels.create.group": "群组",
   "channels.create.noAvailableGroups": "创建频道前需要至少一个可用群组。",
-  "channels.create.unavailableHint": "只有在至少有一个可用群组时才能创建频道。",
+  "channels.create.blocked.no_group":
+    "您不属于任何群组，因此无法创建办公室。如果收到了群组邀请码，请加入该群组。",
+  "channels.create.blocked.ask_admin":
+    "此账号没有“创建办公室”权限。请向此服务器的管理员申请该权限。您仍可以用加入码进入已有的办公室。",
+  "channels.create.blocked.grant_yourself":
+    "群组权限中已关闭“创建办公室”。在群组权限设置中开启后即可创建办公室。",
+  "channels.create.blocked.openPermissions": "打开群组权限设置",
   "channels.privateChannel": "私密频道",
   "admin.groups.title": "群组访问管理",
   "admin.groups.subtitle": "集中查看成员、邀请、加入请求、权限和用户覆盖。",
@@ -3434,8 +3440,17 @@ const zh: Record<string, string> = {
     "一名员工就是一个 Hermes 配置文件。设定名字，写下人格，然后以该员工身份登录模型。",
   "profiles.new.sharedGateway": "这是与你共享的网关，员工由所有者登记。",
   "profiles.detail.notFound": "此网关上没有该员工。",
-  "profiles.detail.pluginRecheckHint": "重新检查插件状态后，可能会解锁人格和 AI 模型编辑。",
-  "profiles.detail.pluginRecheck": "重新检查",
+  "profiles.detail.pluginRecheck": "重新检查网关",
+  "profiles.detail.lock.title": "人格与 AI 模型编辑已锁定",
+  "profiles.detail.lock.plugin_unauthorized":
+    "网关保存的令牌不是所有者密钥（default 配置的 API_SERVER_KEY），因此无法访问 DeskRPG 插件。请在网关设置中将令牌替换为所有者密钥。",
+  "profiles.detail.lock.plugin_absent":
+    "网关所在机器上未安装并启用 deskrpg 插件。请在网关主机上运行下面的命令，安装并启用本应用使用的版本，然后重启网关。",
+  "profiles.detail.lock.unknown":
+    "无法连接网关，插件状态未知。请确认网关正在运行，且网关 URL 指向 Hermes API 服务器端口（默认 8642）。",
+  "profiles.detail.lock.openGateway": "打开网关设置",
+  "profiles.detail.lock.recheckHint":
+    "处理后点击［重新检查网关］以再次检查网关的插件状态。上方的［连接测试］只检查此员工的密钥，无法解除此锁定。",
   "profiles.detail.pluginRechecking": "检查中…",
   "profiles.detail.sectionTitle": "人格、外观与 AI 模型",
   "character.preview.label": "已选角色",

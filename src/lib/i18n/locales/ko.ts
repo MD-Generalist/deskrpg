@@ -224,8 +224,13 @@ const ko: Record<string, string> = {
   "channels.create.failed": "오피스 생성에 실패했습니다",
   "channels.create.group": "그룹",
   "channels.create.noAvailableGroups": "오피스을 만들려면 사용할 수 있는 그룹이 필요합니다.",
-  "channels.create.unavailableHint":
-    "생성 가능한 그룹이 하나 이상 있어야 오피스을 만들 수 있습니다.",
+  "channels.create.blocked.no_group":
+    "속한 그룹이 없어 오피스를 만들 수 없습니다. 그룹 초대 코드를 받았다면 그룹에 참여하세요.",
+  "channels.create.blocked.ask_admin":
+    "이 계정에는 '오피스 만들기' 권한이 없습니다. 이 서버 관리자에게 '오피스 만들기' 권한을 요청하세요. 이미 있는 오피스에는 참여 코드로 들어갈 수 있습니다.",
+  "channels.create.blocked.grant_yourself":
+    "그룹 권한에서 '오피스 만들기'가 꺼져 있습니다. 그룹 권한 설정에서 켜면 오피스를 만들 수 있습니다.",
+  "channels.create.blocked.openPermissions": "그룹 권한 설정 열기",
   "channels.privateChannel": "비공개 오피스",
   "admin.groups.title": "그룹 접근 관리",
   "admin.groups.subtitle": "멤버, 초대, 가입 요청, 권한, 사용자 오버라이드를 한 곳에서 관리합니다.",
@@ -3577,9 +3582,17 @@ const ko: Record<string, string> = {
     "직원 한 명이 Hermes 프로필 하나입니다. 이름을 정하고, 인격을 적고, 그 직원으로 모델에 로그인합니다.",
   "profiles.new.sharedGateway": "공유받은 게이트웨이입니다. 직원 등록은 소유자가 합니다.",
   "profiles.detail.notFound": "이 게이트웨이에 그 직원이 없습니다.",
-  "profiles.detail.pluginRecheckHint":
-    "플러그인 상태를 다시 확인하면 인격·AI 모델 편집이 열릴 수 있습니다.",
-  "profiles.detail.pluginRecheck": "다시 확인",
+  "profiles.detail.pluginRecheck": "게이트웨이 다시 확인",
+  "profiles.detail.lock.title": "인격·AI 모델 편집이 잠겨 있습니다",
+  "profiles.detail.lock.plugin_unauthorized":
+    "게이트웨이에 저장된 토큰이 소유자 키(default 프로필의 API_SERVER_KEY)가 아니라서 DeskRPG 플러그인에 접근할 수 없습니다. 게이트웨이 설정에서 토큰을 소유자 키로 바꾸세요.",
+  "profiles.detail.lock.plugin_absent":
+    "게이트웨이 머신에 deskrpg 플러그인이 설치·활성화돼 있지 않습니다. 게이트웨이 호스트에서 아래 명령을 실행해 이 앱이 쓰는 버전을 설치·활성화하고 게이트웨이를 다시 시작하세요.",
+  "profiles.detail.lock.unknown":
+    "게이트웨이에 연결하지 못해 플러그인 상태를 알 수 없습니다. 게이트웨이가 켜져 있는지, 게이트웨이 URL이 Hermes API 서버 포트(기본 8642)를 가리키는지 확인하세요.",
+  "profiles.detail.lock.openGateway": "게이트웨이 설정 열기",
+  "profiles.detail.lock.recheckHint":
+    "조치한 뒤 [게이트웨이 다시 확인]을 누르면 게이트웨이의 플러그인 상태를 다시 검사합니다. 위의 [연결 테스트]는 이 직원의 키만 확인하므로 이 잠금을 풀지 못합니다.",
   "profiles.detail.pluginRechecking": "확인 중…",
   "profiles.detail.sectionTitle": "인격·외형·AI 모델",
   "character.preview.label": "선택한 캐릭터",

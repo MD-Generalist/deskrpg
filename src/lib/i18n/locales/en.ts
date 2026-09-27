@@ -225,8 +225,13 @@ const en: Record<string, string> = {
   "channels.create.failed": "Failed to create channel",
   "channels.create.group": "Group",
   "channels.create.noAvailableGroups": "You need an available group before creating a channel.",
-  "channels.create.unavailableHint":
-    "Channel creation is unavailable until you have at least one eligible group.",
+  "channels.create.blocked.no_group":
+    "You are not in any group, so you can't create an office. If you received a group invite code, join the group.",
+  "channels.create.blocked.ask_admin":
+    "This account doesn't have the 'Create office' permission. Ask this server's administrator to grant it. You can still join existing offices with a join code.",
+  "channels.create.blocked.grant_yourself":
+    "'Create office' is turned off in your group's permissions. Turn it on in the group permission settings to create an office.",
+  "channels.create.blocked.openPermissions": "Open group permissions",
   "channels.privateChannel": "Private Channel",
   "admin.groups.title": "Group Access",
   "admin.groups.subtitle":
@@ -3584,9 +3589,17 @@ const en: Record<string, string> = {
     "One employee is one Hermes profile. Name it, write its persona, then sign that employee in to a model.",
   "profiles.new.sharedGateway": "This gateway is shared with you; its owner registers employees.",
   "profiles.detail.notFound": "No such employee on this gateway.",
-  "profiles.detail.pluginRecheckHint":
-    "Re-check the plugin to unlock persona and AI model editing.",
-  "profiles.detail.pluginRecheck": "Re-check",
+  "profiles.detail.pluginRecheck": "Re-check gateway",
+  "profiles.detail.lock.title": "Persona and AI model editing is locked",
+  "profiles.detail.lock.plugin_unauthorized":
+    "The gateway's saved token is not the owner key (the default profile's API_SERVER_KEY), so the DeskRPG plugin can't be reached. Replace the token with the owner key in the gateway settings.",
+  "profiles.detail.lock.plugin_absent":
+    "The deskrpg plugin is not installed and enabled on the gateway machine. Run the command below on the gateway host to install and enable the version this app uses, then restart the gateway.",
+  "profiles.detail.lock.unknown":
+    "The gateway could not be reached, so the plugin state is unknown. Check that the gateway is running and that the gateway URL points at the Hermes API server port (8642 by default).",
+  "profiles.detail.lock.openGateway": "Open gateway settings",
+  "profiles.detail.lock.recheckHint":
+    "After fixing it, press [Re-check gateway] to check the gateway's plugin again. The [Connection test] above only checks this employee's key, so it can't lift this lock.",
   "profiles.detail.pluginRechecking": "Checking…",
   "profiles.detail.sectionTitle": "Persona, appearance & AI model",
   "character.preview.label": "Selected character",

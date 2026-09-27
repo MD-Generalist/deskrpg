@@ -787,6 +787,15 @@ export default function NpcHireWizard({
   const providerAwaitingAuth = Boolean(selectedProviderRow && !selectedProviderRow.authenticated);
   const catalogModels = catalog?.models[provider] ?? [];
   // Put the stored model first even if it's not in the list, so the dropdown never silently clears it.
+  const lockedGroups = steps.reduce<{ reason: string; steps: WizardStep[] }[]>((groups, s) => {
+    // Only the plugin causes — "make the profile first" stays in the "Next" tooltip (a guided flow,
+    // not a blocker the user has to go and fix elsewhere).
+    if (!s.lockedReason?.startsWith("hermes.plugin.locked.")) return groups;
+    const group = groups.find((g) => g.reason === s.lockedReason);
+    if (group) group.steps.push(s.step);
+    else groups.push({ reason: s.lockedReason, steps: [s.step] });
+    return groups;
+  }, []);
   const modelOptions =
     catalogModels.length > 0 && model && !catalogModels.includes(model)
       ? [model, ...catalogModels]
@@ -826,6 +835,20 @@ export default function NpcHireWizard({
           </button>
         ))}
       </div>
+      {/* The plugin lock reasons as text, not only tooltips — touch screens have no hover. */}
+      {lockedGroups.length > 0 && (
+        <ul data-step-locks className="-mt-3 mb-4 space-y-0.5 text-xs text-text-muted">
+          {lockedGroups.map(({ reason, steps: lockedSteps }) => (
+            <li key={reason}>
+              <span className="font-semibold">
+                {lockedSteps.map((step) => t(`hermes.wizard.step.${step}`)).join(" · ")}
+              </span>
+              {" — "}
+              {t(reason)}
+            </li>
+          ))}
+        </ul>
+      )}
       {showCloseConfirm && created && (
         <div className="mb-4 space-y-2 rounded-lg border border-npc/40 bg-npc/10 p-3">
           <p className="text-sm font-semibold text-npc-dark">

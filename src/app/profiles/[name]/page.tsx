@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import NpcHireWizard from "@/components/hermes/NpcHireWizard";
+import PluginLockNotice from "@/components/hermes/PluginLockNotice";
 import { profileStatusLabel } from "@/components/hermes/profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "@/components/hermes/profile-status-style";
 import type { PluginStatus } from "@/lib/hermes/plugin-capability";
@@ -259,22 +260,12 @@ function EmployeeDetailContent() {
           <>
             {/* Persona, model, login — steps ②③ of the hiring wizard are that employee's editor. */}
             {sections.includes("persona") && pluginChecked && pluginStatus !== "plugin_ready" && (
-              <div
-                data-plugin-recheck
-                className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-3 text-sm text-text-muted"
-              >
-                <span className="flex-1">{t("profiles.detail.pluginRecheckHint")}</span>
-                <button
-                  type="button"
-                  onClick={() => void recheckPlugin()}
-                  disabled={recheckingPlugin}
-                  className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80 disabled:opacity-60"
-                >
-                  {recheckingPlugin
-                    ? t("profiles.detail.pluginRechecking")
-                    : t("profiles.detail.pluginRecheck")}
-                </button>
-              </div>
+              <PluginLockNotice
+                status={pluginStatus}
+                gatewayId={gatewayId}
+                rechecking={recheckingPlugin}
+                onRecheck={() => void recheckPlugin()}
+              />
             )}
             {sections.includes("persona") && (
               <section className="rounded-xl border border-border bg-surface p-5">
