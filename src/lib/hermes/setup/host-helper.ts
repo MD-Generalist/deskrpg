@@ -947,6 +947,39 @@ def ensure_plugin_dependencies(name, home, folder, env):
         if not missing_dependencies(home, folder): return
     fail('plugin_dependencies_missing')
 
+def plugin_revision(folder):
+    """The commit an installed git plugin is on ('hermes plugins install' keeps its .git), or None."""
+    try: done = run(['git', '-c', 'safe.directory=*', '-C', str(folder), 'rev-parse', 'HEAD'], timeout=15)
+    except Exception: return None
+    value = done.stdout.strip() if done.returncode == 0 else ''
+    return value if re.fullmatch(r'[0-9a-f]{40}', value) else None
+def install_failure(output, fallback):
+    """The fixed code for a failed plugin install. A blocked security scan is never bypassed."""
+    diagnostic = output.decode('utf-8', errors='replace').lower()
+    if 'blocked' in diagnostic and ('security' in diagnostic or 'scan' in diagnostic): return 'plugin_security_review_required'
+    if 'repository not found' in diagnostic or 'could not resolve host' in diagnostic: return 'plugin_source_unavailable'
+    return fallback
+def update_plugin(name, home, folder, env):
+    """Moves an enabled plugin to the pinned commit with public commands only, no terminal needed.
+    Upstream refuses a non-interactive 'install --force' of an ENABLED plugin whose python_dependencies need
+    consent ('Reinstall declined', plugins_transaction publish_plugin); a DISABLED plugin is replaced without that
+    consent, and 'plugins enable' admits its dependencies without a terminal. So: disable, reinstall without
+    enabling, enable. A failed step leaves the version that was there enabled again: a failed reinstall never
+    replaced it, and a new version that cannot be enabled is swapped back to the recorded commit first."""
+    plugins = hermes_argv('--profile', name, 'plugins')
+    previous = plugin_revision(home / 'plugins' / folder)
+    if bounded(plugins + ['disable', folder], env)[0]: fail('plugin_update_failed')
+    code, output = bounded(plugins + ['install', SOURCE, '--ref', PIN, '--force', '--no-enable'], env)
+    if code:
+        bounded(plugins + ['enable', folder], env)
+        fail(install_failure(output, 'plugin_update_failed'))
+    code, unused = bounded(plugins + ['enable', folder], env)
+    if code or not plugin(home, config(home))[1]:
+        # A disabled plugin can take --no-deps; the old version's dependencies come back with enable.
+        if previous: bounded(plugins + ['install', SOURCE, '--ref', previous, '--force', '--no-deps'], env)
+        bounded(plugins + ['enable', folder], env)
+        fail('plugin_update_failed')
+
 def plugin(home, cfg):
     manifests = []
     versions = {}
@@ -1420,22 +1453,17 @@ def main(action, candidate_id=None, option=None):
         updating = False
         if not public['pluginInstalled']: argv += ['install', SOURCE, '--ref', PIN, '--enable']
         elif version_below(public['pluginVersion'], PLUGIN_VERSION):
-            # --force removes the stale copy and reinstalls the pinned ref. It is not a scan bypass:
-            # a blocked security scan still fails with plugin_security_review_required below.
+            # Disable, reinstall the pinned ref with --force, enable (update_plugin). --force is not a scan bypass:
+            # a blocked security scan still fails with plugin_security_review_required.
             updating = True
-            argv += ['install', SOURCE, '--ref', PIN, '--force', '--enable']
+            update_plugin(name, home, plugin_name, env)
+            argv = None
         elif not public['pluginEnabled']: argv += ['enable', plugin_name]
         # Installed, enabled and current: only its dependencies may still need preparing (below).
         else: argv = None
         code, output = bounded(argv, env) if argv else (0, b'')
         failure_code = 'plugin_update_failed' if updating else 'plugin_install_failed'
-        if code:
-            diagnostic = output.decode('utf-8', errors='replace').lower()
-            if 'blocked' in diagnostic and ('security' in diagnostic or 'scan' in diagnostic):
-                fail('plugin_security_review_required')
-            if 'repository not found' in diagnostic or 'could not resolve host' in diagnostic:
-                fail('plugin_source_unavailable')
-            fail(failure_code)
+        if code: fail(install_failure(output, failure_code))
         installed, enabled, installed_name, installed_version = plugin(home,config(home))
         if installed and not enabled and installed_name:
             # Upstream's installer asks consent for a plugin's Python dependencies and, with nobody to answer

@@ -827,73 +827,113 @@ print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
     assert.ok(!result.body.changes.includes("installing_plugin"));
   }
 });
-test("updating an outdated plugin reinstalls the pinned commit with --force and re-reads the version to confirm", () => {
-  const result = fixture(
-    String.raw`
-id = main('discover')['candidates'][0]['id']
+// Updating an enabled plugin on upstream's PM runtime: a non-interactive `install --force` of an ENABLED plugin is
+// refused ("Reinstall declined: dependency install skipped (non-interactive)", plugins_transaction.py publish_plugin),
+// while a DISABLED one is replaced without dependency consent and `plugins enable` admits its dependencies without a
+// TTY (measured on Linux PM, 0.30.0 -> 0.30.1). So: disable, install --force --no-enable, enable — and on a failed
+// step put the old version back the same way.
+const UPDATE = String.raw`
 import io
-calls = []
-def fake_install(argv, **kwargs):
-    calls.append(argv)
-    assert kwargs['env']['HERMES_HOME'] == str(ROOT)
-    (ROOT / 'plugins' / 'deskrpg' / 'plugin.yaml').write_text(json.dumps({'name':'deskrpg','version':PLUGIN_VERSION}))
-    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
-subprocess.Popen = fake_install
-result = main('install',id)
-print(json.dumps({'result':result,'argv':calls[0][-6:]}))
+hermes_log = []
+behaviour = {'install': 0, 'enable_new': 0, 'disable': 0, 'diagnostic': b''}
+def cfg_enabled(on):
+    cfg = json.loads((ROOT / 'config.yaml').read_text())
+    plugins = cfg.setdefault('plugins', {})
+    names = [n for n in plugins.get('enabled', []) if n != 'deskrpg']
+    plugins['enabled'] = names + (['deskrpg'] if on else [])
+    (ROOT / 'config.yaml').write_text(json.dumps(cfg))
+def fake_hermes(argv, **kwargs):
+    words = argv[argv.index('plugins') + 1:] if 'plugins' in argv else argv[1:]
+    hermes_log.append(words)
+    manifest = ROOT / 'plugins' / 'deskrpg' / 'plugin.yaml'
+    code, out = 0, b''
+    if words[0] == 'disable':
+        code = behaviour['disable']
+        if not code: cfg_enabled(False)
+    elif words[0] == 'enable':
+        installed = json.loads(manifest.read_text())['version']
+        code = behaviour['enable_new'] if installed == PLUGIN_VERSION else 0
+        if not code: cfg_enabled(True)
+    elif words[0] == 'install':
+        enabled = 'deskrpg' in json.loads((ROOT / 'config.yaml').read_text()).get('plugins', {}).get('enabled', [])
+        ref = words[words.index('--ref') + 1]
+        if enabled: code, out = 1, b'Reinstall declined: dependency install skipped (non-interactive)'
+        elif ref == PIN and behaviour['install']: code, out = behaviour['install'], behaviour['diagnostic']
+        else: manifest.write_text(json.dumps({'name':'deskrpg','version': PLUGIN_VERSION if ref == PIN else '0.5.0'}))
+    return type('Result',(),{'stdout':io.BytesIO(out), 'wait':lambda self, c=code: c})()
+subprocess.Popen = fake_hermes
+plugin_revision = lambda folder: 'a' * 40
+`;
+const OUTDATED = {
+  config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
+  plugin: { name: "deskrpg", version: "0.5.0" },
+};
+function update(setup = "") {
+  return fixture(
+    UPDATE +
+      setup +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+try: result = main('install', id)
+except Failure as error: result = {'error': str(error)}
+cfg = json.loads((ROOT / 'config.yaml').read_text())
+version = json.loads((ROOT / 'plugins' / 'deskrpg' / 'plugin.yaml').read_text())['version']
+print(json.dumps({'result': result, 'calls': hermes_log, 'enabled': 'deskrpg' in cfg['plugins']['enabled'], 'version': version}))
 `,
-    {
-      config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
-      plugin: { name: "deskrpg", version: "0.5.0" },
-    },
+    OUTDATED,
   );
-  assert.deepEqual(result.body.result, { ok: true });
-  assert.deepEqual(result.body.argv, [
-    "install",
-    "https://github.com/dandacompany/deskrpg-hermes-plugin",
-    "--ref",
-    PLUGIN_PIN,
-    "--force",
-    "--enable",
-  ]);
+}
+const ref = (words: string[]) => words[words.indexOf("--ref") + 1];
+test("an update disables, reinstalls the pinned commit without enabling, then enables", () => {
+  const { body } = update();
+  assert.deepEqual(body.result, { ok: true });
+  assert.deepEqual(
+    body.calls.map((words: string[]) => words[0]),
+    ["disable", "install", "enable"],
+  );
+  assert.equal(ref(body.calls[1]), PLUGIN_PIN);
+  assert.ok(body.calls[1].includes("--force") && body.calls[1].includes("--no-enable"));
+  assert.ok(!body.calls[1].includes("--enable"));
+  assert.equal(body.version, PLUGIN_VERSION);
+  assert.equal(body.enabled, true);
 });
-test("a failed update reports only plugin_update_failed and --force does not bypass the security scan", () => {
+test("a failed reinstall re-enables the version that was there, and keeps the scan verdict", () => {
   for (const [diagnostic, expected] of [
     ["unexpected secret=private", "plugin_update_failed"],
     ["Security scan: BLOCKED. secret=private", "plugin_security_review_required"],
   ] as const) {
-    const result = fixture(
-      String.raw`
-id = main('discover')['candidates'][0]['id']
-import io
-def fake_install(argv, **kwargs):
-    assert '--force' in argv
-    return type('Result',(),{'stdout':io.BytesIO(DIAGNOSTIC.encode()), 'wait':lambda self:1})()
-subprocess.Popen = fake_install
-entry('install',id)
-`.replace("DIAGNOSTIC", JSON.stringify(diagnostic)),
-      {
-        config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
-        plugin: { name: "deskrpg", version: "0.5.0" },
-      },
+    const { body } = update(
+      `behaviour['install'] = 1\nbehaviour['diagnostic'] = ${JSON.stringify(diagnostic)}.encode()\n`,
     );
-    assert.deepEqual(result.body, { error: expected });
+    assert.deepEqual(body.result, { error: expected });
+    assert.deepEqual(
+      body.calls.map((words: string[]) => words[0]),
+      ["disable", "install", "enable"],
+    );
+    assert.equal(body.version, "0.5.0");
+    assert.equal(body.enabled, true, "the old version is enabled again");
   }
 });
-test("treats it as an update failure when the update command succeeds but the version is unchanged", () => {
-  const result = fixture(
-    String.raw`
-id = main('discover')['candidates'][0]['id']
-import io
-subprocess.Popen = lambda argv, **kwargs: type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
-entry('install',id)
-`,
-    {
-      config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
-      plugin: { name: "deskrpg", version: "0.5.0" },
-    },
+test("when the new version cannot be enabled, the old commit is reinstalled and enabled", () => {
+  const { body } = update("behaviour['enable_new'] = 1\n");
+  assert.deepEqual(body.result, { error: "plugin_update_failed" });
+  assert.deepEqual(
+    body.calls.map((words: string[]) => words[0]),
+    ["disable", "install", "enable", "install", "enable"],
   );
-  assert.deepEqual(result.body, { error: "plugin_update_failed" });
+  assert.equal(ref(body.calls[3]), "a".repeat(40));
+  assert.ok(body.calls[3].includes("--no-deps"));
+  assert.equal(body.version, "0.5.0");
+  assert.equal(body.enabled, true);
+});
+test("an update that cannot even disable the plugin changes nothing", () => {
+  const { body } = update("behaviour['disable'] = 1\n");
+  assert.deepEqual(body.result, { error: "plugin_update_failed" });
+  assert.deepEqual(
+    body.calls.map((words: string[]) => words[0]),
+    ["disable"],
+  );
+  assert.equal(body.enabled, true);
 });
 const MANUAL = String.raw`
 state = {'installed': False}

@@ -481,7 +481,7 @@ const ja: Record<string, string> = {
   "hermes.wizard.error.hermesVersionUnsupported":
     "Hermes 0.21.1以上が必要です。サーバーでhermes updateを実行してから再確認してください。",
   "hermes.wizard.error.pluginUpdateFailed":
-    "DeskRPGプラグインを新しいバージョンに更新できませんでした。管理者がホストのネットワークとプラグインディレクトリの書き込み権限を確認してから再確認してください。",
+    "DeskRPG の接続ツールを新しいバージョンに更新できませんでした。使っていたバージョンはそのまま有効なので、これまでどおり使えます。しばらくしてからもう一度試し、続けて失敗する場合は Hermes が入っているコンピューターのインターネット接続を確認してください。",
   "hermes.wizard.error.pluginUpdateUnsupportedHost":
     "このゲートウェイが動くホストではアプリがコマンドを実行できません（コンテナ配備など）。ホストを SSH で登録するか、ホスト側でプラグインを更新してから接続テストを押してください。",
   "hermes.wizard.error.pluginUpdateCandidateNotFound":

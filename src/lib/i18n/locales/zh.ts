@@ -442,7 +442,7 @@ const zh: Record<string, string> = {
   "hermes.wizard.error.hermesVersionUnsupported":
     "需要Hermes 0.21.1或更高版本。请在服务器上执行hermes update，然后重新检查。",
   "hermes.wizard.error.pluginUpdateFailed":
-    "未能将DeskRPG插件更新到新版本。请管理员检查主机网络和插件目录的写入权限，然后重新检查。",
+    "未能将 DeskRPG 连接工具更新到新版本。原来的版本仍在启用，可以照常使用。请稍后重试；如果仍然失败，请检查安装了 Hermes 的电脑的网络连接。",
   "hermes.wizard.error.pluginUpdateUnsupportedHost":
     "应用无法在此网关所在的主机上执行命令（容器部署即属此类）。请通过 SSH 注册该主机，或在主机上更新插件后点击连接测试。",
   "hermes.wizard.error.pluginUpdateCandidateNotFound":

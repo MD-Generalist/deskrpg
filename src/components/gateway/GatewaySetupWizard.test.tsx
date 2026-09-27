@@ -797,7 +797,7 @@ test("new job steps show as Korean labels and never leak the raw code", async ()
 
 for (const [code, expected] of [
   ["hermes_version_unsupported", /0\.21\.1 이상이 필요합니다[\s\S]*hermes update/],
-  ["plugin_update_failed", /갱신하지 못했습니다[\s\S]*권한을 확인/],
+  ["plugin_update_failed", /새 버전으로 올리지 못했어요[\s\S]*그대로 켜져/],
   ["service_install_failed", /서비스로 등록하지 못했습니다[\s\S]*hermes gateway install/],
   ["service_container_refused", /컨테이너 안이라서[\s\S]*컨테이너가 아닌 서버/],
   ["timezone_invalid", /IANA 형식이 아닙니다[\s\S]*Asia\/Seoul/],
