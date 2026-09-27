@@ -5,18 +5,15 @@
  *
  * On the upstream PM runtime, Hermes starts each worker with a command that cannot import Hermes unless the gateway
  * service sets `HERMES_BIN`, so every card is given up without running. DeskRPG does not change the host's service
- * here: it says what is wrong and gives the command to run on the gateway host, then [다시 확인].
+ * here: it says what is wrong and gives the command for the gateway host's OS (read from the launcher path), then
+ * [다시 확인].
  */
 import { useState } from "react";
 
 import { CopyCommand } from "@/components/CopyCommand";
 import { MoreDetails } from "@/components/MoreDetails";
 import { useT } from "@/lib/i18n";
-import {
-  WORKER_LAUNCH_DROP_IN,
-  workerLaunchFixCommand,
-  type WorkerLaunchWarning,
-} from "@/lib/hermes/worker-launch";
+import { workerLaunchFix, type WorkerLaunchWarning } from "@/lib/hermes/worker-launch";
 
 export default function WorkerLaunchLine({
   warning,
@@ -32,7 +29,8 @@ export default function WorkerLaunchLine({
   const [rechecking, setRechecking] = useState(false);
   if (!warning || !isOwner) return null;
 
-  const command = workerLaunchFixCommand(warning.launcher);
+  const fix = workerLaunchFix(warning.launcher);
+  const command = fix?.command ?? null;
   const recheck = async () => {
     if (!onRecheck) return;
     setRechecking(true);
@@ -47,6 +45,7 @@ export default function WorkerLaunchLine({
     <div
       className="-mt-3 mb-4 space-y-1.5 rounded-lg border border-border bg-surface p-2.5 text-xs text-text-muted"
       data-worker-launch={warning.reason}
+      data-worker-launch-host={fix?.host}
     >
       <p data-headline className="font-semibold text-npc-dark">
         {t("gateways.workerLaunch.blocked")}
@@ -66,9 +65,19 @@ export default function WorkerLaunchLine({
             : t("gateways.workerLaunch.unset")}
         </p>
         <p>
-          {command
-            ? t("gateways.workerLaunch.command", { file: WORKER_LAUNCH_DROP_IN })
-            : t("gateways.workerLaunch.noLauncher")}
+          {!fix
+            ? t("gateways.workerLaunch.noLauncher")
+            : fix.host === "windows"
+              ? t("gateways.workerLaunch.windows", {
+                  file: fix.file,
+                  launcher: warning.launcher ?? "",
+                })
+              : t(
+                  fix.host === "macos"
+                    ? "gateways.workerLaunch.commandMac"
+                    : "gateways.workerLaunch.command",
+                  { file: fix.file },
+                )}
         </p>
       </MoreDetails>
       {onRecheck && (

@@ -505,7 +505,7 @@ const en: Record<string, string> = {
     "When on, the DeskRPG plugin creates a plugins/deskrpg link in every employee (profile) and adds deskrpg to that profile's plugins.enabled in config.yaml. Newly hired employees get it automatically. Kanban workers and cron jobs need it for their results to reach DeskRPG. The choice is stored as {key} in the Hermes root config.yaml; turning it off stops new employees from getting it (existing links are not removed).",
   "hermes.wizard.review.workerPropagationToggle": "Turn on the worker plugin",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "Could not save how kanban workers start. Check ~/.config/systemd/user/hermes-gateway.service.d/ and try again.",
+    "Could not save how kanban workers start. Check ~/.config/systemd/user/hermes-gateway.service.d/ on Linux or ~/.hermes/.env on macOS, and try again.",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "Could not save the worker setting. Check the Hermes root config.yaml and try again.",
   "hermes.wizard.warn.workerPluginApplyFailed":
@@ -3551,6 +3551,10 @@ const en: Record<string, string> = {
   "gateways.workerLaunch.missing": "The gateway service's HERMES_BIN ({path}) can't be run.",
   "gateways.workerLaunch.command":
     "Run this on the gateway host: it sets HERMES_BIN in {file} and restarts the gateway (Linux, systemd user service).",
+  "gateways.workerLaunch.commandMac":
+    "The command above writes HERMES_BIN into the Hermes settings file ({file}) and restarts Hermes (macOS). It doesn't go in the launchd service file: Hermes rewrites that file on every restart.",
+  "gateways.workerLaunch.windows":
+    "There's no command for Windows yet. Add the line HERMES_BIN={launcher} to {file} and restart Hermes. The path must be hermes.exe (a .cmd isn't used).",
   "gateways.workerLaunch.noLauncher":
     "No Hermes launcher was found to suggest. Set HERMES_BIN to the Hermes executable in the gateway service's environment and restart it.",
   "common.moreDetails": "More details",

@@ -2826,3 +2826,169 @@ test("an install that leaves upstream's PM launcher and no venv counts as instal
   assert.equal(result.body.ok, true);
   assert.deepEqual(result.observed.probe, ["--version"]);
 });
+
+// Upstream's PM runtime on macOS (measured 2026-09-27, upstream main d25bbd01b): `hermes gateway install` writes a
+// plist whose ProgramArguments run the launcher through osascript (Local Network identity) and the stderr timestamper.
+// The shape below is copied from that plist, not built by the helper, so the test pins upstream's format.
+const PM_LAUNCHD = String.raw`
+sys.platform = 'darwin'
+identity = production_identity
+LAUNCHER.parent.mkdir(parents=True, exist_ok=True)
+LAUNCHER.write_text('')
+PM_RUNTIME = True
+def upstream_args(name, home):
+    logs = home / 'logs'
+    profile = ' --profile ' + name if name != 'default' else ''
+    shell = 'exec ' + str(LAUNCHER) + ' --run-module hermes_cli.stderr_timestamp --error-log ' + str(logs / 'gateway.error.log') + ' -- ' + str(LAUNCHER) + profile + ' gateway run --external-supervisor >> ' + str(logs / 'gateway.log') + ' 2>> ' + str(logs / 'gateway.error.log')
+    return ['/usr/bin/osascript', '-l', 'JavaScript', '-e', 'ObjC.import("stdlib"); const status=$.system("' + shell + '"); const signal=status & 127; $.exit(status === -1 ? 1 : signal === 0 ? (status >> 8) & 255 : 128 + signal);']
+agents = pathlib.Path.home() / 'Library' / 'LaunchAgents'
+agents.mkdir(parents=True)
+def write_plist(name, home, args=None):
+    label = 'ai.hermes.gateway' + ('' if name == 'default' else '-' + name)
+    env = {'PATH': '/usr/bin:/bin', 'HERMES_HOME': str(home), 'HERMES_SUPERVISED_CHILD': '1'}
+    (agents / (label + '.plist')).write_bytes(plistlib.dumps({'Label': label, 'ProgramArguments': args or upstream_args(name, home), 'EnvironmentVariables': env, 'RunAtLoad': True, 'ExitTimeOut': 60}))
+    return label
+def launchctl(argv, timeout=8, env=None):
+    if argv[1:2] == ['print'] and argv[2].startswith('gui/'):
+        label = argv[2].split('/')[-1]
+        data = plistlib.loads((agents / (label + '.plist')).read_bytes())
+        text = 'arguments = {\n' + '\n'.join(data['ProgramArguments']) + '\n}\nHERMES_HOME => ' + data['EnvironmentVariables']['HERMES_HOME'] + '\npid = 321\n'
+        return type('Result',(),{'returncode':0,'stdout':text})()
+    return type('Result',(),{'returncode':113,'stdout':''})()
+run = launchctl
+`;
+test("PM runtime on macOS — upstream's launchd plist is recognized and HERMES_BIN is read from the Hermes .env", () => {
+  const result = fixture(
+    PM_LAUNCHD +
+      String.raw`
+write_plist('default', ROOT)
+bare = identity('default', ROOT)
+(ROOT / '.env').write_text('HERMES_BIN=' + str(LAUNCHER) + '\n')
+own = identity('default', ROOT)
+(ROOT / '.env').write_text('HERMES_BIN=/elsewhere/hermes\n')
+other = identity('default', ROOT)
+sophie = ROOT / 'profiles' / 'sophie'
+sophie.mkdir(parents=True)
+write_plist('sophie', sophie)
+profile = identity('sophie', sophie)
+print(json.dumps({k: {'warning': v['warning'], 'launch': v['launch'], 'command': v['command']} for k, v in (('bare',bare),('own',own),('other',other),('profile',profile))}))
+`,
+  );
+  const kick = (label: string) => [
+    "launchctl",
+    "kickstart",
+    "-k",
+    `gui/${process.getuid!()}/${label}`,
+  ];
+  assert.deepEqual(result.body.bare, {
+    warning: null,
+    launch: "missing",
+    command: kick("ai.hermes.gateway"),
+  });
+  assert.deepEqual(result.body.own, {
+    warning: null,
+    launch: "ok",
+    command: kick("ai.hermes.gateway"),
+  });
+  assert.deepEqual(result.body.other, {
+    warning: null,
+    launch: "missing",
+    command: kick("ai.hermes.gateway"),
+  });
+  assert.deepEqual(result.body.profile, {
+    warning: null,
+    launch: "missing",
+    command: kick("ai.hermes.gateway-sophie"),
+  });
+});
+test("PM runtime on macOS — a plist that runs anything else is not the upstream service", () => {
+  const result = fixture(
+    PM_LAUNCHD +
+      String.raw`
+args = upstream_args('default', ROOT)
+args[-1] = args[-1].replace('gateway run', 'gateway run --replace')
+write_plist('default', ROOT, args)
+tampered = identity('default', ROOT)['warning']
+write_plist('default', ROOT, [str(LAUNCHER), 'gateway', 'run'])
+bare_launcher = identity('default', ROOT)['warning']
+write_plist('default', ROOT, upstream_args('sophie', ROOT))
+wrong_profile = identity('default', ROOT)['warning']
+print(json.dumps([tampered, bare_launcher, wrong_profile]))
+`,
+  );
+  assert.deepEqual(result.body, [
+    "service_identity_mismatch",
+    "service_identity_mismatch",
+    "service_identity_mismatch",
+  ]);
+});
+test("PM runtime on macOS — inspection plans the worker launch step and a restart", () => {
+  const result = fixture(
+    PM_LAUNCHD +
+      String.raw`
+write_plist('default', ROOT)
+assert_port_owned = lambda public, owner: True
+print(json.dumps(main('inspect', main('discover')['candidates'][0]['id'])['changes']))
+`,
+    {
+      config: { gateway: { multiplex_profiles: true } },
+      plugin: { name: "deskrpg", version: PLUGIN_VERSION },
+    },
+  );
+  assert.ok(result.body.includes("setting_worker_launch"));
+  assert.ok(result.body.includes("restarting_gateway"));
+});
+test("PM runtime on macOS — set-worker-launch has Hermes write HERMES_BIN to its .env, once", () => {
+  const result = fixture(
+    PM_LAUNCHD +
+      String.raw`
+write_plist('default', ROOT)
+import io
+calls = []
+def hermes(argv, **kwargs):
+    calls.append({'argv': argv, 'home': kwargs['env'].get('HERMES_HOME')})
+    # What upstream's 'config set' does with an UPPER_SNAKE name: write it to <HERMES_HOME>/.env.
+    env_file = pathlib.Path(kwargs['env']['HERMES_HOME']) / '.env'
+    env_file.write_text(env_file.read_text() + argv[-2] + '=' + argv[-1] + '\n')
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = hermes
+first = main('set-worker-launch', main('discover')['candidates'][0]['id'])
+second = main('set-worker-launch', main('discover')['candidates'][0]['id'])
+print(json.dumps({'first':first,'second':second,'calls':calls,'launcher':str(LAUNCHER),'root':str(ROOT)}))
+`,
+    { env: "API_SERVER_KEY=existing-valid-token-12345\n" },
+  );
+  assert.deepEqual(result.body.first, { ok: true, changed: true });
+  assert.deepEqual(result.body.second, { ok: true, changed: false });
+  assert.deepEqual(result.body.calls, [
+    {
+      argv: [
+        result.body.launcher,
+        "--profile",
+        "default",
+        "config",
+        "set",
+        "HERMES_BIN",
+        result.body.launcher,
+      ],
+      home: result.body.root,
+    },
+  ]);
+  assert.equal(
+    result.env,
+    `API_SERVER_KEY=existing-valid-token-12345\nHERMES_BIN=${result.body.launcher}\n`,
+  );
+  // Nothing is written into the plist: Hermes would overwrite it on the next restart.
+});
+test("PM runtime on macOS — set-worker-launch fails when Hermes did not store the value", () => {
+  const result = fixture(
+    PM_LAUNCHD +
+      String.raw`
+write_plist('default', ROOT)
+import io
+subprocess.Popen = lambda argv, **kwargs: type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+entry('set-worker-launch', main('discover')['candidates'][0]['id'])
+`,
+  );
+  assert.deepEqual(result.body, { error: "worker_launch_write_failed" });
+});

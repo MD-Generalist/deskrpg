@@ -511,7 +511,7 @@ const ja: Record<string, string> = {
     "オンにすると、DeskRPG プラグインが社員(プロファイル)ごとに plugins/deskrpg リンクを作成し、そのプロファイルの config.yaml の plugins.enabled に deskrpg を追加します。新しく雇う社員にも自動で適用されます。カンバンワーカーや cron の成果物を DeskRPG に集めるには必要です。この選択は Hermes ルートの config.yaml の {key} に保存され、オフにすると新しい社員には適用しません(既存のリンクは削除しません)。",
   "hermes.wizard.review.workerPropagationToggle": "ワーカー適用をオンにする",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "カンバンワーカーの起動設定を保存できませんでした。~/.config/systemd/user/hermes-gateway.service.d/ を確認してから再試行してください。",
+    "カンバンワーカーの起動設定を保存できませんでした。Linux は ~/.config/systemd/user/hermes-gateway.service.d/、macOS は ~/.hermes/.env を確認してから再試行してください。",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "ワーカー設定を保存できませんでした。Hermes ルートの config.yaml を確認してから再試行してください。",
   "hermes.wizard.warn.workerPluginApplyFailed":
@@ -3575,6 +3575,10 @@ const ja: Record<string, string> = {
   "gateways.workerLaunch.missing": "ゲートウェイサービスの HERMES_BIN({path})を実行できません。",
   "gateways.workerLaunch.command":
     "ゲートウェイホストで次のコマンドを実行すると、{file} に HERMES_BIN を設定してゲートウェイを再起動します(Linux の systemd ユーザーサービス)。",
+  "gateways.workerLaunch.commandMac":
+    "上のコマンドは Hermes の設定ファイル({file})に HERMES_BIN を書き込み、Hermes を再起動します(macOS)。launchd のサービスファイルには入れません。Hermes が再起動のたびにそのファイルを書き直すためです。",
+  "gateways.workerLaunch.windows":
+    "Windows 用のコマンドはまだありません。{file} に HERMES_BIN={launcher} の 1 行を追加して、Hermes を再起動してください。パスは hermes.exe にしてください(.cmd は使われません)。",
   "gateways.workerLaunch.noLauncher":
     "提案できる Hermes 実行ファイルが見つかりませんでした。ゲートウェイサービスの環境で HERMES_BIN を Hermes 実行ファイルのパスに設定し、再起動してください。",
   "common.moreDetails": "詳しく見る",

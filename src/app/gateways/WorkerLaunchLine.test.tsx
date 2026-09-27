@@ -97,3 +97,41 @@ for (const locale of LOCALES) {
     await cleanup();
   });
 }
+
+const MAC_LAUNCHER = "/Users/u/.hermes/hermes-agent/.hermes/bin/hermes";
+const WIN_LAUNCHER = "C:\\Users\\u\\AppData\\Local\\hermes\\bin\\hermes.exe";
+
+for (const locale of LOCALES) {
+  test(`[${locale}] a macOS gateway gets the .env command, not the systemd one`, async () => {
+    const { host, cleanup } = await render(
+      <WorkerLaunchLine warning={{ ...UNSET, launcher: MAC_LAUNCHER }} isOwner />,
+      locale,
+    );
+    const line = host.querySelector("[data-worker-launch]");
+    assert.equal(line?.getAttribute("data-worker-launch-host"), "macos");
+    const command = host.querySelector("pre")?.textContent ?? "";
+    assert.ok(command.includes(`config set HERMES_BIN '${MAC_LAUNCHER}'`));
+    assert.ok(command.includes("gateway restart"));
+    assert.ok(!(line?.textContent ?? "").includes("systemctl"));
+    assert.ok(!(line?.textContent ?? "").includes("hermes-bin.conf"));
+    const details = host.querySelector("[data-worker-launch] [data-more-details]");
+    assert.ok((details?.textContent ?? "").includes("~/.hermes/.env"));
+    assert.doesNotMatch(host.querySelector("[data-headline]")?.textContent ?? "", /HERMES_BIN/);
+    await cleanup();
+  });
+
+  test(`[${locale}] a Windows gateway gets no command; the file and launcher sit in the details`, async () => {
+    const { host, cleanup } = await render(
+      <WorkerLaunchLine warning={{ ...UNSET, launcher: WIN_LAUNCHER }} isOwner />,
+      locale,
+    );
+    const line = host.querySelector("[data-worker-launch]");
+    assert.equal(line?.getAttribute("data-worker-launch-host"), "windows");
+    assert.ok(!host.querySelector("pre"), "no command to copy");
+    const details = host.querySelector("[data-worker-launch] [data-more-details]");
+    assert.ok((details?.textContent ?? "").includes("%LOCALAPPDATA%\\hermes\\.env"));
+    assert.ok((details?.textContent ?? "").includes(WIN_LAUNCHER));
+    assert.ok(!(line?.textContent ?? "").includes("systemctl"));
+    await cleanup();
+  });
+}

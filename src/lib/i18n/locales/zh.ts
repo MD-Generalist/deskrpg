@@ -471,7 +471,7 @@ const zh: Record<string, string> = {
     "开启后,DeskRPG 插件会为每位员工(配置文件)创建 plugins/deskrpg 链接,并在该配置文件 config.yaml 的 plugins.enabled 中加入 deskrpg。新雇用的员工也会自动应用。看板工作者和定时任务的成果要汇集到 DeskRPG 就需要它。此选择保存在 Hermes 根 config.yaml 的 {key} 中;关闭后不再为新员工应用(已创建的链接不会删除)。",
   "hermes.wizard.review.workerPropagationToggle": "开启工作者插件",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "无法保存看板工作进程的启动设置。请检查 ~/.config/systemd/user/hermes-gateway.service.d/ 后重试。",
+    "无法保存看板工作进程的启动设置。请检查 ~/.config/systemd/user/hermes-gateway.service.d/(Linux)或 ~/.hermes/.env(macOS)后重试。",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "无法保存工作者设置。请检查 Hermes 根 config.yaml 后重试。",
   "hermes.wizard.warn.workerPluginApplyFailed":
@@ -3404,6 +3404,10 @@ const zh: Record<string, string> = {
   "gateways.workerLaunch.missing": "无法运行网关服务的 HERMES_BIN({path})。",
   "gateways.workerLaunch.command":
     "在网关主机上运行以下命令:它会在 {file} 中设置 HERMES_BIN 并重启网关(Linux systemd 用户服务)。",
+  "gateways.workerLaunch.commandMac":
+    "上面的命令会把 HERMES_BIN 写入 Hermes 设置文件({file})并重启 Hermes(macOS)。不要写进 launchd 服务文件:Hermes 每次重启都会重写那个文件。",
+  "gateways.workerLaunch.windows":
+    "暂时还没有 Windows 的命令。请在 {file} 中添加一行 HERMES_BIN={launcher},然后重启 Hermes。路径必须是 hermes.exe(.cmd 不会被使用)。",
   "gateways.workerLaunch.noLauncher":
     "未找到可建议的 Hermes 可执行文件。请在网关服务的环境中将 HERMES_BIN 设置为 Hermes 可执行文件路径并重启。",
   "common.moreDetails": "查看详情",
