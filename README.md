@@ -225,7 +225,7 @@ Conversations work without it. Kanban boards, the event stream and cron need
 [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) on the gateway host:
 
 ```bash
-hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref 4ca517bda247cb7b53e13fe4da4aa9272a847702
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref 1f10087ae64f26643874628646bb26da44e3a7a1
 hermes plugins enable deskrpg
 # restart the gateway — routes are attached only at startup
 ```
