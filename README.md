@@ -156,6 +156,12 @@ docker compose --env-file .env.hermes -f docker/docker-compose.hermes.yml up -d
 
 Open `http://localhost:3102`, then add a gateway with URL `http://hermes:8642` and the `HERMES_API_KEY` value as the token. The DeskRPG plugin is installed and enabled for you. Without a model provider key the gateway does not start. Set `HERMES_DASHBOARD_PASSWORD` to also open the Hermes dashboard on `http://localhost:9119`.
 
+To update the plugin later (the gateway screen shows when it is behind), recreate the Hermes service — this pulls the plugin and restarts Hermes; a plain `up -d` leaves the running gateway on the old plugin:
+
+```bash
+docker compose --env-file .env.hermes -f docker/docker-compose.hermes.yml up -d --force-recreate hermes
+```
+
 ### Environment
 
 Important environment variables:

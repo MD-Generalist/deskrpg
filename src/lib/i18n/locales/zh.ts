@@ -2249,6 +2249,12 @@ const zh: Record<string, string> = {
   "gateways.pluginVersionPinned": "此应用安装的版本",
   "gateways.pluginVersionUnknown": "未确认",
   "gateways.pluginVersionOutdated": "已过期。请在主机上更新后点击连接测试。",
+  "gateways.pluginVersionOutdatedContainer":
+    "已过期。此网关是与 DeskRPG 在同一 Docker Compose 中运行的 Hermes 容器——请在启动它的位置运行下面的命令，然后点击连接测试。",
+  "gateways.pluginContainerCommandHint":
+    "它会拉取插件并重新启动 Hermes。请加上启动时使用的 -f 和 --env-file 选项。仅运行 up -d 时，正在运行的 Hermes 仍使用旧插件。",
+  "gateways.pluginUpdateContainerHermes":
+    "应用无法在 Hermes 容器内运行命令。请运行上面的命令，然后点击连接测试。",
   "gateways.pluginVersionRecheck": "点击连接测试进行确认。",
   "gateways.pluginVersionUpdateNow": "立即更新",
   "gateways.workerPlugin.missing":

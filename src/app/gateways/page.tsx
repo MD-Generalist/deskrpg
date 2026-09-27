@@ -21,6 +21,11 @@ import { planGatewayDelete } from "./gateway-delete-plan";
 import { backLinkTarget } from "./return-target";
 import { employeesHref } from "@/components/workspace-navigation";
 import { describePluginVersion } from "@/lib/hermes/plugin-version-view";
+import {
+  composePluginUpdateCommand,
+  composeServiceHost,
+} from "@/lib/hermes/setup/gateway-host-target";
+import { CopyCommand } from "@/components/CopyCommand";
 import { setupCopy, setupError, setupHostError, setupStep } from "@/components/gateway/setup-copy";
 import type { WorkerPropagation } from "@/lib/hermes/deskrpg-plugin-types";
 import type { WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
@@ -96,6 +101,9 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
     installed: gateway.pluginVersion,
     pluginStatus: gateway.pluginStatus,
   });
+  // A Hermes container next to DeskRPG (`http://hermes:8642`): the app cannot reach its shell, and there is no
+  // host install to update either — the plugin moves through Compose.
+  const composeService = composeServiceHost(gateway.baseUrl);
 
   // Updating runs commands on the host and takes long, so it runs as a job — using the same job query as the wizard.
   const runUpdate = async () => {
@@ -122,7 +130,10 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
       onUpdated();
     } catch (code) {
       setUpdateError({
-        text: setupHostError(locale, code) ?? setupError(setupCopy[locale], code),
+        text:
+          composeService && code === "plugin_update_unsupported_host"
+            ? t("gateways.pluginUpdateContainerHermes")
+            : (setupHostError(locale, code) ?? setupError(setupCopy[locale], code)),
         version: gateway.pluginVersion ?? null,
       });
     } finally {
@@ -150,7 +161,16 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
         <span>
           {t("gateways.pluginVersionPinned")}: {view.pinned}
         </span>
-        {view.state === "outdated" && <span>— {t("gateways.pluginVersionOutdated")}</span>}
+        {view.state === "outdated" && (
+          <span>
+            —{" "}
+            {t(
+              composeService
+                ? "gateways.pluginVersionOutdatedContainer"
+                : "gateways.pluginVersionOutdated",
+            )}
+          </span>
+        )}
         {view.state === "unknown" && <span>— {t("gateways.pluginVersionRecheck")}</span>}
         {view.state === "outdated" && gateway.isOwner && (
           <button
@@ -170,6 +190,15 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
             <span className="text-danger">{updateError.text}</span>
           )}
       </p>
+      {view.state === "outdated" && composeService && gateway.isOwner && (
+        <div
+          className="-mt-3 mb-4 space-y-1.5 text-xs text-text-muted"
+          data-plugin-update="compose"
+        >
+          <CopyCommand command={composePluginUpdateCommand(composeService)} />
+          <p>{t("gateways.pluginContainerCommandHint")}</p>
+        </div>
+      )}
       {inherited && (
         <WorkerPropagationInheritedNotice
           turnOff={() => disableWorkerPropagationRequest(gateway.id)}

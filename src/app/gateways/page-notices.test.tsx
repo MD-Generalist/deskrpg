@@ -262,3 +262,37 @@ test("a refused update's error goes away once the connection test finds the plug
     "최신이 됐는데 거절 문구가 남았다",
   );
 });
+
+test("a Compose Hermes (http://hermes:8642) gets the Compose command, and the refused update says to run it", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [gateway({ baseUrl: "http://hermes:8642", pluginVersion: "0.1.0" })],
+    },
+    "POST /api/gateways/gw-1/plugin/update": {
+      __status: 400,
+      errorCode: "plugin_update_unsupported_host",
+    },
+  });
+  await renderPage();
+  const text = () => host.textContent ?? "";
+  assert.match(text(), /Docker Compose 에서 도는 Hermes 컨테이너/);
+  assert.match(text(), /docker compose up -d --force-recreate hermes/);
+  assert.doesNotMatch(text(), /호스트에서 플러그인을 올린 뒤/);
+
+  await click(buttonByText("지금 갱신"));
+  await flush();
+  assert.match(text(), /Hermes 컨테이너 안에서 명령을 돌릴 수 없습니다/);
+  assert.doesNotMatch(text(), /호스트를 SSH 로 등록하거나/);
+});
+
+test("a gateway on another host keeps the host guidance and no Compose command", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [gateway({ baseUrl: "http://host.docker.internal:8642", pluginVersion: "0.1.0" })],
+    },
+  });
+  await renderPage();
+  const text = host.textContent ?? "";
+  assert.match(text, /호스트에서 플러그인을 올린 뒤/);
+  assert.doesNotMatch(text, /docker compose/);
+});

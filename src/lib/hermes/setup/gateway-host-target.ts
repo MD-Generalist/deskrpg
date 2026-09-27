@@ -39,3 +39,30 @@ export function classifyGatewayHost(baseUrl: string): GatewayHostKind {
   }
   return { mode: "unsupported" };
 }
+
+/**
+ * The Compose service name when the gateway is a Hermes container on the same Compose network as DeskRPG —
+ * `http://hermes:8642` in the "Docker with Hermes" and Hostinger compose files. A single-label, non-loopback
+ * hostname only resolves inside a container network. null for anything else (`host.docker.internal`, a real
+ * host, an IP address, localhost).
+ */
+export function composeServiceHost(baseUrl: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return null;
+  }
+  const host = url.hostname;
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(host) || isLoopbackHostname(host)) return null;
+  return host;
+}
+
+/**
+ * What updates the plugin of a Compose Hermes: the one-shot `hermes-plugins` service pulls it, and Hermes only
+ * serves the new code after it starts again — a plain `up -d` leaves the running gateway on the old version.
+ * Recreating the Hermes service does both, since Compose re-runs its one-shot dependency first.
+ */
+export function composePluginUpdateCommand(service: string): string {
+  return `docker compose up -d --force-recreate ${service}`;
+}

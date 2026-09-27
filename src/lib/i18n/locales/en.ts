@@ -2341,6 +2341,12 @@ const en: Record<string, string> = {
   "gateways.pluginVersionUnknown": "not checked",
   "gateways.pluginVersionOutdated":
     "is out of date. Update it on the host, then run Test connection.",
+  "gateways.pluginVersionOutdatedContainer":
+    "is out of date. This gateway is a Hermes container in the same Docker Compose project as DeskRPG — run the command below where you started it, then run Test connection.",
+  "gateways.pluginContainerCommandHint":
+    "It pulls the plugin and starts Hermes again. Add the -f and --env-file options you started it with. A plain up -d leaves the running Hermes on the old plugin.",
+  "gateways.pluginUpdateContainerHermes":
+    "This app cannot run commands inside the Hermes container. Run the command above, then run Test connection.",
   "gateways.pluginVersionRecheck": "Run Test connection to check.",
   "gateways.pluginVersionUpdateNow": "Update now",
   "gateways.workerPlugin.missing":

@@ -2355,6 +2355,12 @@ const ja: Record<string, string> = {
   "gateways.pluginVersionPinned": "このアプリが入れるバージョン",
   "gateways.pluginVersionUnknown": "未確認",
   "gateways.pluginVersionOutdated": "が古いです。ホストで更新してから接続テストを押してください。",
+  "gateways.pluginVersionOutdatedContainer":
+    "が古いです。このゲートウェイは DeskRPG と同じ Docker Compose で動く Hermes コンテナです。起動した場所で下のコマンドを実行してから接続テストを押してください。",
+  "gateways.pluginContainerCommandHint":
+    "プラグインを取得して Hermes を起動し直します。起動時に使った -f・--env-file オプションをそのまま付けてください。up -d だけでは実行中の Hermes は古いプラグインのままです。",
+  "gateways.pluginUpdateContainerHermes":
+    "アプリは Hermes コンテナ内でコマンドを実行できません。上のコマンドを実行してから接続テストを押してください。",
   "gateways.pluginVersionRecheck": "接続テストを押すと確認します。",
   "gateways.pluginVersionUpdateNow": "今すぐ更新",
   "gateways.workerPlugin.missing":
