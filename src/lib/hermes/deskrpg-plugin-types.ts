@@ -21,12 +21,32 @@
  * `timezone` can be `null` because plugins before 0.6.0 don't send that field —
  * the parser (`parsePluginInfo`) folds old bodies into this shape too and keeps them in the cache.
  */
+export type ReviewHooksReport = { propagation: boolean; profiles_without_plugin: string[] };
+
+/**
+ * On an upstream PM runtime the dispatcher starts workers with `sys.executable -m hermes_cli.main` after stripping
+ * PYTHONPATH, which fails unless `HERMES_BIN` points at the launcher.
+ */
+export type WorkerLaunchReport = {
+  ok: boolean | null;
+  reason: null | "hermes_bin_unset" | "hermes_bin_missing" | "probe_failed";
+  hermes_bin: string | null;
+  launcher: string | null;
+};
+
 export type PluginInfo = {
   plugin: "deskrpg";
   version: string;
   capabilities: string[];
   timezone: string | null;
-  kanban: { dispatcher_present: boolean; attachments: boolean };
+  kanban: {
+    dispatcher_present: boolean;
+    attachments: boolean;
+    /** Approval hooks coverage: profiles that would run without the plugin (0.27.0+). null = could not tell. */
+    review_hooks?: ReviewHooksReport | null;
+    /** Whether the gateway can start kanban workers (0.28.1+). Missing or null = unknown. */
+    worker_launch?: WorkerLaunchReport | null;
+  };
   /**
    * 0.7.1 — Public URL of the Hermes dashboard. null if the dashboard is off or has no URL.
    * The parser keeps only http(s). Older plugins and existing caches lack the key, so it's optional.
