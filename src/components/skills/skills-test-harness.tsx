@@ -71,6 +71,39 @@ export async function flush() {
   }
 }
 
+/**
+ * Waits until `ready()` holds, letting timers and effects run between checks. Polling jobs chain
+ * several timers and fetches, so a fixed number of ticks is not enough on a loaded machine; this
+ * waits for the state itself and fails with `what` when it never comes.
+ */
+export async function waitFor(ready: () => boolean, what: string, tries = 500) {
+  for (let i = 0; i < tries; i += 1) {
+    if (ready()) return;
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 1));
+    });
+  }
+  throw new Error(`timed out waiting for ${what}`);
+}
+
+/**
+ * Holds one route's response until `release()` — for asserting the in-between state without
+ * racing a delay.
+ */
+export function holdFetch(key: string) {
+  const inner = globalThis.fetch;
+  let release!: () => void;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (`${init?.method ?? "GET"} ${url}` === key) await gate;
+    return inner(input, init);
+  }) as typeof fetch;
+  return { release };
+}
+
 export async function render(element: ReactElement) {
   if (!root) {
     container = document.createElement("div");

@@ -13,11 +13,13 @@ import {
   click,
   container,
   flush,
+  holdFetch,
   mockFetch,
   render,
   row,
   text,
   type,
+  waitFor,
 } from "./skills-test-harness";
 
 const listBody = (canManage = true) => ({
@@ -375,6 +377,10 @@ const hubDetail = () => ({
   [`GET ${ROOT}/pdf`]: { ...detail({ name: "pdf", source: "hub" }), files: [] },
   [`GET ${ROOT}/pdf/file?path=SKILL.md`]: file("hub", "h3"),
 });
+const updateState = () =>
+  container.querySelector("[data-update-state]")?.getAttribute("data-update-state") ?? null;
+const outcome = () =>
+  container.querySelector("[data-update-state]")?.getAttribute("data-update-outcome") ?? null;
 const updateJob = (outputTail: string, state = "succeeded") => ({
   jobId: "up1",
   kind: "hub_update",
@@ -386,9 +392,10 @@ const updateJob = (outputTail: string, state = "succeeded") => ({
 test("Hub skill [update] shows progress, then 'no update' when Hermes had nothing newer", async () => {
   const log = mockFetch({
     ...hubDetail(),
-    [`POST ${ROOT}/hub/update`]: { jobId: "up1", delayMs: 20 },
+    [`POST ${ROOT}/hub/update`]: { jobId: "up1" },
     [`GET ${ROOT}/hub/installs/up1`]: updateJob("No updates available.\n"),
   });
+  const post = holdFetch(`POST ${ROOT}/hub/update`);
   let changed = 0;
   await render(
     <SkillDetailPane
@@ -404,8 +411,8 @@ test("Hub skill [update] shows progress, then 'no update' when Hermes had nothin
   await click('[data-action="hub-update"]');
   assert.equal($("[data-update-state]").getAttribute("data-update-state"), "running");
   assert.equal(($('[data-action="hub-update"]') as HTMLButtonElement).disabled, true);
-  await new Promise((r) => setTimeout(r, 30));
-  await flush();
+  post.release();
+  await waitFor(() => outcome() !== null, "the update outcome");
   assert.deepEqual(log.bodies[`POST ${ROOT}/hub/update`], { name: "pdf" });
   assert.equal($("[data-update-state]").getAttribute("data-update-outcome"), "none");
   assert.ok(text().includes("업데이트 없음"));
@@ -433,7 +440,7 @@ test("Hub skill [update] that installed a newer version reloads the skill and th
   const detailReads = () => log.calls.filter((c) => c === `GET ${ROOT}/pdf`).length;
   const before = detailReads();
   await click('[data-action="hub-update"]');
-  await flush();
+  await waitFor(() => updateState() !== "running", "the update job to finish");
   assert.equal($("[data-update-state]").getAttribute("data-update-outcome"), "updated");
   assert.equal(detailReads(), before + 1);
   assert.equal(changed, 1);
@@ -457,7 +464,7 @@ test("Hub skill [update] reports local edits it kept, and a failure shows the ou
     />,
   );
   await click('[data-action="hub-update"]');
-  await flush();
+  await waitFor(() => updateState() !== "running", "the update job to finish");
   assert.equal($("[data-update-state]").getAttribute("data-update-outcome"), "kept_local");
 
   mockFetch({
@@ -476,7 +483,7 @@ test("Hub skill [update] reports local edits it kept, and a failure shows the ou
     />,
   );
   await click('[data-action="hub-update"]');
-  await flush();
+  await waitFor(() => updateState() !== "running", "the update job to finish");
   assert.equal($("[data-update-state]").getAttribute("data-update-state"), "failed");
   assert.ok(text().includes("network down"));
 });
