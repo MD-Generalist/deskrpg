@@ -2019,12 +2019,98 @@ const CHECK_MODEL = String.raw`
 id = main('discover')['candidates'][0]['id']
 print(json.dumps(main('check-model', id)))
 `;
-test("the check result is unknown when the model provider is not in the config", () => {
-  // No basis to decide means no decision. The command isn't even called.
-  const result = fixture(authStub("raise AssertionError('must not run')") + CHECK_MODEL, {
-    config: { gateway: {} },
+// What upstream prints for any provider outside its registry: a call here would turn the result into missing.
+const NO_AUTH = authStub(
+  "return type('R',(),{'returncode':0,'stdout':'custom: logged out','stderr':''})()",
+);
+test("missing when the config names no provider, model or endpoint at all", () => {
+  // A fresh install before `hermes model` has nothing to chat with. The command isn't even called.
+  const result = fixture(NO_AUTH + CHECK_MODEL, { config: { gateway: {} } });
+  assert.deepEqual(result.body, { ok: true, model: "missing" });
+});
+test("unknown when only a model name is set and the provider is left to auto", () => {
+  // Hermes may still resolve a provider from environment keys, so this is not a reason to warn.
+  const result = fixture(NO_AUTH + CHECK_MODEL, {
+    config: { model: { default: "gpt-5", provider: "auto" } },
   });
   assert.deepEqual(result.body, { ok: true, model: "unknown" });
+});
+for (const provider of ["custom", "ollama", "vllm", "local"]) {
+  test(`a ${provider} endpoint with a base URL and model name is ready without a login check`, () => {
+    // Custom and local endpoints have no login, so `hermes auth status` always says logged out for them.
+    const result = fixture(NO_AUTH + CHECK_MODEL, {
+      config: {
+        model: { default: "qwen2.5-coder:32b", provider, base_url: "http://localhost:11434/v1" },
+      },
+    });
+    assert.deepEqual(result.body, { ok: true, model: "ready" });
+  });
+}
+test("a base URL with no provider counts as a custom endpoint", () => {
+  const result = fixture(NO_AUTH + CHECK_MODEL, {
+    config: { model: { default: "qwen3.5:9b", base_url: "http://localhost:8080/v1" } },
+  });
+  assert.deepEqual(result.body, { ok: true, model: "ready" });
+});
+test("a custom endpoint missing its base URL or model name is unknown, not missing", () => {
+  for (const model of [
+    { provider: "custom", default: "qwen" },
+    { provider: "custom", base_url: "http://localhost:8000/v1" },
+  ]) {
+    const result = fixture(NO_AUTH + CHECK_MODEL, { config: { model } });
+    assert.deepEqual(result.body, { ok: true, model: "unknown" });
+  }
+});
+test("a named custom provider is ready when its entry has an endpoint", () => {
+  const providers = { "my-local": { api: "http://localhost:11434/v1" } };
+  for (const provider of ["my-local", "custom:my-local"]) {
+    const result = fixture(NO_AUTH + CHECK_MODEL, {
+      config: { model: { default: "qwen", provider }, providers },
+    });
+    assert.deepEqual(result.body, { ok: true, model: "ready" });
+  }
+  const legacy = fixture(NO_AUTH + CHECK_MODEL, {
+    config: {
+      model: { default: "qwen", provider: "custom:gpu" },
+      custom_providers: [{ name: "gpu", base_url: "https://gpu.example/v1" }],
+    },
+  });
+  assert.deepEqual(legacy.body, { ok: true, model: "ready" });
+});
+test("a named custom provider whose entry is missing is unknown", () => {
+  const result = fixture(NO_AUTH + CHECK_MODEL, {
+    config: { model: { default: "qwen", provider: "custom:gone" } },
+  });
+  assert.deepEqual(result.body, { ok: true, model: "unknown" });
+});
+test("LM Studio runs without a key, so a model name alone makes it ready", () => {
+  const result = fixture(NO_AUTH + CHECK_MODEL, {
+    config: { model: { default: "qwen", provider: "lmstudio" } },
+  });
+  assert.deepEqual(result.body, { ok: true, model: "ready" });
+});
+test("providers whose login the auth command cannot report are unknown", () => {
+  // OpenRouter, auto and moa sit outside the Hermes provider registry, so auth status says logged out for them.
+  for (const provider of ["openrouter", "auto", "moa"]) {
+    const result = fixture(NO_AUTH + CHECK_MODEL, {
+      config: { model: { default: "some/model", provider } },
+    });
+    assert.deepEqual(result.body, { ok: true, model: "unknown" });
+  }
+});
+test("a custom endpoint's key is neither required nor echoed", () => {
+  const result = fixture(NO_AUTH + CHECK_MODEL, {
+    config: {
+      model: {
+        default: "m",
+        provider: "custom",
+        base_url: "https://api.example/v1",
+        api_key: "sk-secret-token",
+      },
+    },
+  });
+  assert.deepEqual(result.body, { ok: true, model: "ready" });
+  assert.ok(!JSON.stringify(result.body).includes("sk-secret-token"));
 });
 test("ready when the output contains logged in and the exit code is 0", () => {
   // The observed output is one line: 'openai-codex: logged in'.

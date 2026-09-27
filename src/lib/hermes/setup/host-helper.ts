@@ -587,6 +587,52 @@ os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 NAME = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
 # Only check the shape of the model provider name (measured value: 'openai-codex'). If it's not the shape, don't judge — unknown.
 PROVIDER = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
+# Provider ids that route to Hermes' generic custom endpoint, which has no login (hermes_cli/auth.py alias table:
+# local, ollama, vllm, llamacpp, llama.cpp, llama-cpp -> custom). The auth command reports them as logged out.
+CUSTOM_ALIASES = {'custom','local','ollama','vllm','llamacpp','llama.cpp','llama-cpp'}
+# Runtime identities outside the provider registry (is_runtime_provider_routable). The auth command
+# always reports them as logged out, so its answer says nothing about whether chat works.
+UNREPORTED = {'auto','openrouter','moa'}
+# LM Studio is a registry provider that runs without a key (auth.py uses a no-auth placeholder).
+KEYLESS = {'lmstudio','lm-studio','lm_studio'}
+def text(value):
+    return value.strip() if isinstance(value, str) else ''
+def named_endpoint(cfg, name):
+    """Whether config.yaml defines a providers:/custom_providers: entry for name with an endpoint URL."""
+    entries = cfg.get('providers')
+    entry = entries.get(name) if isinstance(entries, dict) else None
+    if isinstance(entry, dict):
+        return any(text(entry.get(k)) for k in ('api','base_url','url'))
+    legacy = cfg.get('custom_providers')
+    for entry in legacy if isinstance(legacy, list) else []:
+        if isinstance(entry, dict) and text(entry.get('name')).lower() == name and text(entry.get('base_url')):
+            return True
+    return False
+def model_state(cfg, home):
+    """ready / missing / unknown for the profile's chat model. Key values are never read or returned."""
+    block = cfg.get('model')
+    block = block if isinstance(block, dict) else {}
+    provider = text(block.get('provider')) or text(cfg.get('provider'))
+    provider = provider.lower()
+    model = text(block.get('default')) or text(block.get('model')) or text(cfg.get('model'))
+    base_url = text(block.get('base_url'))
+    if not provider and not model and not base_url: return 'missing'
+    if provider and not PROVIDER.fullmatch(provider): return 'unknown'
+    # A base URL with no provider pin is Hermes' bare custom endpoint.
+    if provider in CUSTOM_ALIASES or (not provider and base_url):
+        return 'ready' if base_url and model else 'unknown'
+    if provider.startswith('custom:'):
+        return 'ready' if model and named_endpoint(cfg, provider[len('custom:'):]) else 'unknown'
+    if provider in KEYLESS: return 'ready' if model else 'unknown'
+    if not provider or provider in UNREPORTED: return 'unknown'
+    if named_endpoint(cfg, provider): return 'ready' if model else 'unknown'
+    try:
+        auth = run(hermes_argv('auth', 'status', provider), timeout=45, env={**os.environ, 'HERMES_HOME': str(home)})
+    except Exception:
+        return 'unknown'
+    # Measured output is one line: 'openai-codex: logged in'. The raw text is neither stored nor returned.
+    if auth.returncode == 0 and 'logged in' in (auth.stdout or '').lower(): return 'ready'
+    return 'missing'
 RESERVED = {'hermes','test','tmp','root','sudo'}
 # Excluded from names the wizard can newly create or issue keys for. 'default' is handled by configure.
 RESERVED_PROFILE = RESERVED | {'default'}
@@ -1313,20 +1359,7 @@ def main(action, candidate_id=None, option=None):
     public, owner, cfg, token, plugin_name = item
     if action == 'check-model':
         # Only check whether credentials exist. No result fails the setup — if ambiguous, it's unknown.
-        block = cfg.get('model')
-        provider = block.get('provider') if isinstance(block, dict) else None
-        if not isinstance(provider, str) or not provider.strip(): provider = cfg.get('provider')
-        provider = provider.strip() if isinstance(provider, str) else ''
-        if not provider or not PROVIDER.fullmatch(provider): return {'ok': True, 'model': 'unknown'}
-        try:
-            auth = run(hermes_argv('auth', 'status', provider), timeout=45, env={**os.environ, 'HERMES_HOME': str(home)})
-        except Exception:
-            return {'ok': True, 'model': 'unknown'}
-        # Measured output is one line: 'openai-codex: logged in'. The raw text is neither stored nor returned.
-        # Naming it probe would shadow the module function probe() as a local inside main (measured: 6 tests failed).
-        if auth.returncode == 0 and 'logged in' in (auth.stdout or '').lower():
-            return {'ok': True, 'model': 'ready'}
-        return {'ok': True, 'model': 'missing'}
+        return {'ok': True, 'model': model_state(cfg, home)}
     if action == 'set-port':
         # Only ports the operator explicitly accepted on screen get here. Ownership judgment is left alone —
         # only this profile's .env is edited, and the following restart step actually applies it.
