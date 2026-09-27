@@ -489,12 +489,15 @@ const ko: Record<string, string> = {
   "hermes.wizard.review.pluginUpdate": "DeskRPG 플러그인을 {version} 으로 올립니다.",
   "hermes.wizard.review.timezone": "게이트웨이 시간대를 {timezone} 으로 설정합니다.",
   "hermes.wizard.review.timezoneToggle": "이 브라우저의 시간대를 게이트웨이에 넣기",
+  "hermes.wizard.step.settingWorkerLaunch": "칸반 워커 실행 설정(HERMES_BIN)",
   "hermes.wizard.step.settingWorkerPropagation": "워커 적용 설정 저장",
   "hermes.wizard.step.applyingWorkerPlugin": "직원 프로필에 워커 적용",
   "hermes.wizard.review.workerPropagation": "워커 적용 — 칸반·크론 결과물 모으기 (권장)",
   "hermes.wizard.review.workerPropagationBody":
     "켜면 DeskRPG 플러그인이 직원(프로필)마다 plugins/deskrpg 링크를 만들고, 그 프로필 config.yaml 의 plugins.enabled 에 deskrpg 를 추가합니다. 새로 고용하는 직원에게도 자동으로 적용됩니다. 칸반 워커·크론이 만든 결과물이 DeskRPG 에 모이려면 필요합니다. 이 선택은 Hermes 루트 config.yaml 의 {key} 에 저장되며, 끄면 새 직원에게 적용하지 않습니다(이미 만든 링크는 지우지 않습니다).",
   "hermes.wizard.review.workerPropagationToggle": "워커 적용 켜기",
+  "hermes.wizard.error.workerLaunchWriteFailed":
+    "칸반 워커 실행 설정을 저장하지 못했습니다. ~/.config/systemd/user/hermes-gateway.service.d/ 를 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "워커 적용 설정을 저장하지 못했습니다. Hermes 루트 config.yaml 을 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.warn.workerPluginApplyFailed":

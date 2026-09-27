@@ -2599,3 +2599,230 @@ test("the helper puts the Hermes install root first on sys.path before importing
   assert.ok(insert < HOST_HELPER.indexOf("from agent.secret_scope import load_env_file"));
   assert.ok(HOST_HELPER.indexOf("INSTALL = ROOT / 'hermes-agent'") < insert);
 });
+
+// Upstream's PM runtime: no venv, a launcher at hermes-agent/.hermes/bin/hermes, and a systemd unit that runs it.
+// The fake systemctl reads the unit folder back, so what the helper writes is what the next check sees.
+const PM_SYSTEMD = String.raw`
+sys.platform = 'linux'
+identity = production_identity
+LAUNCHER.parent.mkdir(parents=True, exist_ok=True)
+LAUNCHER.write_text('')
+PM_RUNTIME = True
+unit = pathlib.Path.home() / '.config' / 'systemd' / 'user' / 'hermes-gateway.service'
+unit.parent.mkdir(parents=True)
+unit.write_text('[Service]\nExecStart="' + str(LAUNCHER) + '" "gateway" "run"\nEnvironment="HERMES_HOME=' + str(ROOT) + '"\n')
+dropins = unit.parent / 'hermes-gateway.service.d'
+reloads = []
+def systemctl(argv,timeout=8,env=None):
+    if 'daemon-reload' in argv:
+        reloads.append(argv)
+        return type('Result',(),{'returncode':0,'stdout':''})()
+    files = sorted(str(p) for p in dropins.glob('*.conf')) if dropins.is_dir() else []
+    env_line = 'HERMES_HOME=' + str(ROOT)
+    for f in files:
+        m = re.search(r'Environment="HERMES_BIN=(.+)"', pathlib.Path(f).read_text())
+        if m: env_line += ' HERMES_BIN=' + m.group(1)
+    text = 'FragmentPath=' + str(unit) + '\nDropInPaths=' + ' '.join(files) + '\nMainPID=123\nEnvironment=' + env_line + '\nExecStart={ path=' + str(LAUNCHER) + ' ; argv[]=' + shlex.join([str(LAUNCHER),'gateway','run']) + ' ; }\n'
+    return type('Result',(),{'returncode':0,'stdout':text})()
+run = systemctl
+`;
+test("PM runtime — the upstream unit is recognized and reports whether HERMES_BIN is set", () => {
+  const result = fixture(
+    PM_SYSTEMD +
+      String.raw`
+bare = identity('default', ROOT)
+dropins.mkdir()
+(dropins / WORKER_LAUNCH_DROPIN).write_text(worker_launch_dropin_text())
+own = identity('default', ROOT)
+(dropins / WORKER_LAUNCH_DROPIN).write_text(worker_launch_dropin_text() + 'ExecStart=\n')
+edited = identity('default', ROOT)
+(dropins / WORKER_LAUNCH_DROPIN).write_text(worker_launch_dropin_text())
+(dropins / 'other.conf').write_text('[Service]\n')
+foreign = identity('default', ROOT)
+print(json.dumps({k: {'warning': v['warning'], 'launch': v['launch']} for k, v in (('bare',bare),('own',own),('edited',edited),('foreign',foreign))}))
+`,
+  );
+  assert.deepEqual(result.body.bare, { warning: null, launch: "missing" });
+  assert.deepEqual(result.body.own, { warning: null, launch: "ok" });
+  // Any other drop-in, or ours with anything added, can change how the gateway starts.
+  assert.deepEqual(result.body.edited, { warning: "service_identity_mismatch", launch: null });
+  assert.deepEqual(result.body.foreign, { warning: "service_identity_mismatch", launch: null });
+});
+test("PM runtime — a venv-style unit is not accepted as the upstream service", () => {
+  const result = fixture(
+    PM_SYSTEMD +
+      String.raw`
+unit.write_text('[Service]\nExecStart=' + shlex.join([sys.executable,'-m','hermes_cli.main','gateway','run']) + '\nEnvironment="HERMES_HOME=' + str(ROOT) + '"\n')
+print(json.dumps(identity('default', ROOT)['warning']))
+`,
+  );
+  assert.equal(result.body, "service_identity_mismatch");
+});
+test("PM runtime — the drop-in escapes the launcher path for systemd", () => {
+  const result = fixture(String.raw`
+LAUNCHER = pathlib.Path('/home/a "b"/.hermes/hermes-agent/.hermes/bin/hermes')
+print(json.dumps(worker_launch_dropin_text()))
+`);
+  assert.ok(
+    result.body.includes(
+      'Environment="HERMES_BIN=/home/a \\"b\\"/.hermes/hermes-agent/.hermes/bin/hermes"',
+    ),
+  );
+});
+test("PM runtime — inspection plans the worker launch step and a restart", () => {
+  const result = fixture(
+    PM_SYSTEMD +
+      String.raw`
+assert_port_owned = lambda public, owner: True
+print(json.dumps(main('inspect', main('discover')['candidates'][0]['id'])['changes']))
+`,
+    {
+      config: { gateway: { multiplex_profiles: true } },
+      plugin: { name: "deskrpg", version: PLUGIN_VERSION },
+    },
+  );
+  assert.ok(result.body.includes("setting_worker_launch"));
+  assert.ok(result.body.includes("restarting_gateway"));
+});
+test("PM runtime — set-worker-launch writes the wizard's drop-in once and reloads systemd", () => {
+  const result = fixture(
+    PM_SYSTEMD +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+first = main('set-worker-launch', id)
+text = (dropins / WORKER_LAUNCH_DROPIN).read_text()
+second = main('set-worker-launch', main('discover')['candidates'][0]['id'])
+print(json.dumps({'first':first,'second':second,'text':text,'reloads':len(reloads),'launcher':str(LAUNCHER)}))
+`,
+  );
+  assert.deepEqual(result.body.first, { ok: true, changed: true });
+  assert.deepEqual(result.body.second, { ok: true, changed: false });
+  assert.equal(result.body.reloads, 1);
+  assert.ok(result.body.text.startsWith("[Service]\n"));
+  assert.ok(result.body.text.includes(`Environment="HERMES_BIN=${result.body.launcher}"`));
+});
+test("set-worker-launch is refused off the PM runtime", () => {
+  const result = fixture(String.raw`
+PM_RUNTIME = False
+entry('set-worker-launch', main('discover')['candidates'][0]['id'])
+`);
+  assert.deepEqual(result.body, { error: "invalid_host_operation" });
+});
+test("the Hermes version comes from upstream's version info when pyproject says 0.0.0", () => {
+  const result = fixture(
+    String.raw`
+sys.modules['hermes_cli'] = types.ModuleType('hermes_cli')
+sys.modules['hermes_cli.version_info'] = types.SimpleNamespace(get_version_info=lambda: types.SimpleNamespace(derived_version='0.21.5+3115.g10938a7'))
+stamped = hermes_version()
+sys.modules['hermes_cli.version_info'] = types.SimpleNamespace(get_version_info=lambda: types.SimpleNamespace(derived_version='0.0.0+1'))
+unstamped = hermes_version()
+print(json.dumps({'stamped':stamped,'unstamped':unstamped}))
+`,
+    { hermesVersion: "0.0.0" },
+  );
+  assert.deepEqual(result.body, { stamped: "0.21.5+3115.g10938a7", unstamped: "unknown" });
+});
+test("PM runtime — Hermes CLI commands go through the launcher", () => {
+  const result = fixture(String.raw`
+PM_RUNTIME = True
+pm = hermes_argv('--profile', 'default', 'gateway', 'install')
+PM_RUNTIME = False
+venv = hermes_argv('--profile', 'default', 'gateway', 'install')
+print(json.dumps({'pm':pm,'venv':venv[1:],'launcher':str(LAUNCHER)}))
+`);
+  assert.deepEqual(result.body.pm, [
+    result.body.launcher,
+    "--profile",
+    "default",
+    "gateway",
+    "install",
+  ]);
+  assert.deepEqual(result.body.venv, [
+    "-m",
+    "hermes_cli.main",
+    "--profile",
+    "default",
+    "gateway",
+    "install",
+  ]);
+});
+test("a plugin left installed but disabled by the non-interactive install is enabled, then checked again", () => {
+  const result = fixture(
+    String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+calls = []
+def fake(argv, **kwargs):
+    calls.append(argv[argv.index('plugins')+1:])
+    folder = ROOT / 'plugins' / 'deskrpg'
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'plugin.yaml').write_text(json.dumps({'name':'deskrpg','version':PLUGIN_VERSION}))
+    if 'enable' in argv:
+        cfg = json.loads((ROOT / 'config.yaml').read_text())
+        cfg.setdefault('plugins', {})['enabled'] = ['deskrpg']
+        (ROOT / 'config.yaml').write_text(json.dumps(cfg))
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = fake
+result = main('install', id)
+print(json.dumps({'result':result,'calls':[c[0] for c in calls]}))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body.calls, ["install", "enable"]);
+  assert.equal(result.body.result.ok, true);
+});
+test("the worker launch step runs after the service install and forces one restart", async () => {
+  const f = fake([
+    {
+      candidate,
+      pluginStatus: "plugin_absent",
+      changes: [
+        "installing_service",
+        "setting_worker_launch",
+        "installing_plugin",
+        "configuring_api",
+        "restarting_gateway",
+        "verifying_gateway",
+      ],
+    },
+    { ok: true },
+    { ok: true, changed: true },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
+  assert.deepEqual(steps, [
+    "inspecting",
+    "installing_service",
+    "setting_worker_launch",
+    "installing_plugin",
+    "configuring_api",
+    "restarting_gateway",
+    "verifying_gateway",
+  ]);
+  assert.deepEqual(
+    f.calls.map((c) => JSON.parse(c.input!).action),
+    [
+      "inspect",
+      "install-service",
+      "set-worker-launch",
+      "install",
+      "configure",
+      "restart",
+      "verify",
+    ],
+  );
+});
+test("an install that leaves upstream's PM launcher and no venv counts as installed", () => {
+  const pm = stubs()
+    .replace("'hermes-agent' / 'venv' / 'bin'", "'hermes-agent' / '.hermes' / 'bin'")
+    .replace("(venv / 'python').write_text('')", "(venv / 'hermes').write_text('')");
+  const result = installer(pm);
+  assert.equal(result.body.ok, true);
+  assert.deepEqual(result.observed.probe, ["--version"]);
+});

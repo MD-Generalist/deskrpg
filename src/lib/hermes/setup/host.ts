@@ -65,6 +65,7 @@ export const HOST_ERROR_CODES = new Set([
   "timezone_invalid",
   "timezone_write_failed",
   "worker_propagation_write_failed",
+  "worker_launch_write_failed",
   "port_write_failed",
   "gateway_restart_failed",
   "gateway_verification_failed",
@@ -146,6 +147,7 @@ const STEP_CODES = new Set([
   "configuring_api",
   "setting_timezone",
   "setting_worker_propagation",
+  "setting_worker_launch",
   "restarting_gateway",
   "verifying_gateway",
 ]);
@@ -556,6 +558,11 @@ export async function prepareHost(
     if (typeof installed.candidateId === "string" && installed.candidateId.length === 64)
       candidateId = installed.candidateId;
   }
+  // Upstream's PM runtime on systemd: kanban workers start only with HERMES_BIN on the gateway service. The host
+  // names the step when its unit (existing, or the one just installed) lacks it; the restart below applies it.
+  const settingWorkerLaunch =
+    state.changes.includes("setting_worker_launch") && !skip("setting_worker_launch");
+  if (settingWorkerLaunch) await stage("setting_worker_launch", "set-worker-launch");
   const pluginStep = state.changes.includes("updating_plugin")
     ? "updating_plugin"
     : !state.candidate.pluginInstalled || !state.candidate.pluginEnabled
@@ -596,6 +603,7 @@ export async function prepareHost(
     configuring ||
     settingTimezone ||
     settingPropagation ||
+    settingWorkerLaunch ||
     state.changes.includes("restarting_gateway");
   if (restarting && !skip("restarting_gateway")) await stage("restarting_gateway", "restart");
   const verified = await stage("verifying_gateway", "verify");

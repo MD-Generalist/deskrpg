@@ -77,6 +77,7 @@ const STEPS = new Set([
   "configuring_api",
   "setting_timezone",
   "setting_worker_propagation",
+  "setting_worker_launch",
   "setting_port",
   "restarting_gateway",
   "verifying_gateway",
