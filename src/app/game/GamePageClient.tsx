@@ -3820,6 +3820,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           npcName={skillManagerNpc.npcName}
           initialSkill={skillManagerNpc.skillName}
           onClose={() => setSkillManagerNpc(null)}
+          onAskInChat={() => {
+            // Reference files are changed by asking the employee — close the manager and open their chat.
+            const { npcId, npcName } = skillManagerNpc;
+            setSkillManagerNpc(null);
+            handleSelectNpc(npcId, npcName);
+          }}
         />
       )}
 

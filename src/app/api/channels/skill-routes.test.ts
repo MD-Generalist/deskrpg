@@ -279,3 +279,99 @@ test("responses carry no profile key", async () => {
   assert.equal(text.includes("profile-key-1234567890"), false);
   assert.equal(text.includes("gateway-owner-key"), false);
 });
+
+const PER_FEATURE = (...caps: string[]) => ({
+  capabilities: ["kanban", "cron", "events", "profile_skills", ...caps],
+  version: "0.27.0",
+});
+
+async function withInfo<T>(
+  info: { capabilities: string[]; version: string },
+  fn: () => Promise<T>,
+) {
+  server.setInfo(info);
+  try {
+    return await fn();
+  } finally {
+    server.setInfo(FULL_INFO);
+  }
+}
+
+test("each screen follows its own capability — hub and curator off leave the rest working", async () => {
+  await withInfo(
+    PER_FEATURE("profile_skill_read", "profile_skill_edit", "profile_learning_graph"),
+    async () => {
+      const { owner, channel, npc } = await seed();
+      const list = await (await call(owner.id, "GET", channel.id, npc.id, [])).json();
+      assert.deepEqual(list.features, {
+        read: true,
+        edit: true,
+        hub: false,
+        curator: false,
+        graph: true,
+      });
+      assert.equal(list.canManage, true);
+      assert.equal(list.profileName, "sophie");
+      assert.equal((await call(owner.id, "GET", channel.id, npc.id, ["archive"])).status, 200);
+      assert.equal(
+        (await call(owner.id, "GET", channel.id, npc.id, ["learning", "graph"])).status,
+        200,
+      );
+      const hub = await call(
+        owner.id,
+        "GET",
+        channel.id,
+        npc.id,
+        ["hub", "search"],
+        undefined,
+        "?q=x",
+      );
+      assert.equal(hub.status, 428);
+      const body = await hub.json();
+      assert.equal(body.code, "skill_feature_unavailable");
+      assert.deepEqual(body.missing, ["profile_skill_hub"]);
+      assert.equal((await call(owner.id, "GET", channel.id, npc.id, ["curator"])).status, 428);
+    },
+  );
+});
+
+test("a plugin announcing only the combined skill capability counts as every feature on", async () => {
+  const { owner, channel, npc } = await seed();
+  const list = await (await call(owner.id, "GET", channel.id, npc.id, [])).json();
+  assert.deepEqual(list.features, {
+    read: true,
+    edit: true,
+    hub: true,
+    curator: true,
+    graph: true,
+  });
+});
+
+test("reference files are read-only: writing one is 410 and never reaches the plugin; SKILL.md still saves", async () => {
+  const { owner, channel, npc } = await seed();
+  server.skills("sophie").seed("weekly");
+  const before = server.requests().length;
+  const ref = await call(owner.id, "PUT", channel.id, npc.id, ["weekly", "file"], {
+    path: "references/notes.md",
+    content: "x",
+    baseHash: null,
+  });
+  assert.equal(ref.status, 410);
+  assert.equal((await ref.json()).code, "skill_reference_edit_removed");
+  assert.equal(server.requests().length, before, "no plugin call");
+  const main = await call(owner.id, "PUT", channel.id, npc.id, ["weekly", "file"], {
+    path: "SKILL.md",
+    content: "---\nname: weekly\n---\nbody",
+    baseHash: null,
+  });
+  assert.notEqual(main.status, 410);
+});
+
+test("purging one archived skill is gone: 410 and no plugin call", async () => {
+  const { owner, channel, npc } = await seed();
+  const before = server.requests().length;
+  const res = await call(owner.id, "DELETE", channel.id, npc.id, ["archive", "weekly"]);
+  assert.equal(res.status, 410);
+  assert.equal((await res.json()).code, "skill_purge_removed");
+  assert.equal(server.requests().length, before);
+});

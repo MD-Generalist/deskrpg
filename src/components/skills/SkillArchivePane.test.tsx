@@ -3,17 +3,7 @@ import test from "node:test";
 
 import SkillArchivePane from "./SkillArchivePane";
 import { createSkillsApi } from "./skills-api";
-import {
-  $,
-  ROOT,
-  cleanup,
-  click,
-  container,
-  mockFetch,
-  render,
-  text,
-  type,
-} from "./skills-test-harness";
+import { $, ROOT, cleanup, click, container, mockFetch, render, text } from "./skills-test-harness";
 
 const ARCHIVE = `GET ${ROOT}/archive`;
 const archived = { archived: [{ name: "weekly", archivedAt: "2026-09-20T10:00:00Z" }] };
@@ -22,6 +12,7 @@ const pane = (canManage: boolean) => (
   <SkillArchivePane
     api={createSkillsApi("ch-1", "n-1")}
     canManage={canManage}
+    profileName="sophie"
     onChanged={() => {}}
   />
 );
@@ -40,20 +31,11 @@ test("shows the list and date; [Restore] sends POST …/archive/weekly/restore t
   assert.deepEqual(log.calls, [ARCHIVE, `POST ${ROOT}/archive/weekly/restore`, ARCHIVE]);
 });
 
-test("[Permanently delete] enables the confirm button only on an exact name match, then sends DELETE …/archive/weekly", async () => {
-  const log = mockFetch({
-    [ARCHIVE]: archived,
-    [`DELETE ${ROOT}/archive/weekly`]: { name: "weekly", ledgerId: "l1" },
-  });
+test("there is no single permanent delete; the Hermes dashboard and CLI are named instead", async () => {
+  mockFetch({ [ARCHIVE]: archived });
   await render(pane(true));
-  await click('[data-action="purge"]');
-  assert.ok(text().includes("Hermes CLI"));
-  assert.equal(($('[data-action="confirm-purge"]') as HTMLButtonElement).disabled, true);
-  await type('[name="purge-name"]', "week");
-  assert.equal(($('[data-action="confirm-purge"]') as HTMLButtonElement).disabled, true);
-  await type('[name="purge-name"]', "weekly");
-  await click('[data-action="confirm-purge"]');
-  assert.ok(log.calls.includes(`DELETE ${ROOT}/archive/weekly`));
+  assert.equal(Boolean(container.querySelector('[data-action="purge"]')), false);
+  assert.ok($("[data-purge-hint]").textContent?.includes("hermes -p sophie curator purge"));
 });
 
 test("members have no restore/permanently-delete buttons", async () => {

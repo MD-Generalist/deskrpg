@@ -10,12 +10,13 @@ import { cronError, pluginFailureResponse } from "@/lib/cron-access";
 import type { PluginResponse } from "@/lib/hermes/plugin-client-types";
 import { getUserId } from "@/lib/internal-rpc";
 import {
-  requireCapability,
+  requireFeature,
   requireOwner,
   resolveSkillContext,
   sharedChannelCount,
   type SkillContext,
 } from "@/lib/skill-access";
+import type { SkillFeature } from "@/lib/skill-features";
 
 type Access = "member" | "owner";
 type HandlerArgs = { args: string[]; body: Record<string, unknown>; sp: URLSearchParams };
@@ -25,6 +26,8 @@ type Row = {
   /** `*` matches one path-segment argument. */
   pattern: string[];
   access: Access;
+  /** The capability this route needs — one screen can be off while the others work. */
+  feature: SkillFeature;
   handler: Handler;
   /** Success status code — 202 for a call that starts a job, 201 for creation. Defaults to 200. */
   okStatus?: number;
@@ -41,6 +44,7 @@ const ROWS: Row[] = [
     method: "PUT",
     pattern: ["enabled"],
     access: "owner",
+    feature: "edit",
     handler: (c, a) =>
       c.client.skills.setEnabledBulk(
         { enable: strList(a.body.enable), disable: strList(a.body.disable) },
@@ -51,24 +55,34 @@ const ROWS: Row[] = [
     method: "GET",
     pattern: ["archive"],
     access: "member",
+    feature: "read",
     handler: (c) => c.client.skills.listArchived(),
   },
   {
     method: "POST",
     pattern: ["archive", "*", "restore"],
     access: "owner",
+    feature: "edit",
     handler: (c, a) => c.client.skills.restore(a.args[0], c.userId),
   },
   {
     method: "DELETE",
     pattern: ["archive", "*"],
     access: "owner",
-    handler: (c, a) => c.client.skills.purge(a.args[0], c.userId),
+    feature: "edit",
+    // Upstream Hermes only purges archived skills in bulk (`curator purge --days`); single purge is gone.
+    handler: async () =>
+      cronError(
+        410,
+        "skill_purge_removed",
+        "Purge archived skills from the Hermes dashboard or CLI",
+      ),
   },
   {
     method: "GET",
     pattern: ["hub", "search"],
     access: "owner",
+    feature: "hub",
     handler: (c, a) =>
       c.client.skills.hubSearch(a.sp.get("q") ?? "", a.sp.get("source") ?? undefined),
   },
@@ -76,12 +90,14 @@ const ROWS: Row[] = [
     method: "GET",
     pattern: ["hub", "preview"],
     access: "owner",
+    feature: "hub",
     handler: (c, a) => c.client.skills.hubPreview(a.sp.get("identifier") ?? ""),
   },
   {
     method: "POST",
     pattern: ["hub", "installs"],
     access: "owner",
+    feature: "hub",
     okStatus: 202,
     handler: (c, a) =>
       c.client.skills.hubInstall(
@@ -93,12 +109,14 @@ const ROWS: Row[] = [
     method: "GET",
     pattern: ["hub", "installs", "*"],
     access: "owner",
+    feature: "hub",
     handler: (c, a) => c.client.skills.job("hub", a.args[0]),
   },
   {
     method: "POST",
     pattern: ["hub", "uninstall"],
     access: "owner",
+    feature: "hub",
     okStatus: 202,
     handler: (c, a) => c.client.skills.hubUninstall(str(a.body.name), c.userId),
   },
@@ -106,6 +124,7 @@ const ROWS: Row[] = [
     method: "POST",
     pattern: ["hub", "update"],
     access: "owner",
+    feature: "hub",
     okStatus: 202,
     handler: (c, a) => c.client.skills.hubUpdate(str(a.body.name) || null, c.userId),
   },
@@ -113,18 +132,21 @@ const ROWS: Row[] = [
     method: "GET",
     pattern: ["curator"],
     access: "member",
+    feature: "curator",
     handler: (c) => c.client.skills.curator(),
   },
   {
     method: "PUT",
     pattern: ["curator", "paused"],
     access: "owner",
+    feature: "curator",
     handler: (c, a) => c.client.skills.setCuratorPaused(a.body.paused === true, c.userId),
   },
   {
     method: "POST",
     pattern: ["curator", "runs"],
     access: "owner",
+    feature: "curator",
     okStatus: 202,
     handler: (c) => c.client.skills.runCurator(c.userId),
   },
@@ -132,6 +154,7 @@ const ROWS: Row[] = [
     method: "GET",
     pattern: ["curator", "runs", "*"],
     access: "owner",
+    feature: "curator",
     handler: (c, a) => c.client.skills.job("curator", a.args[0]),
   },
   {
@@ -139,12 +162,14 @@ const ROWS: Row[] = [
     method: "GET",
     pattern: ["learning", "graph"],
     access: "member",
+    feature: "graph",
     handler: (c) => c.client.skills.graph(c.isGatewayOwner),
   },
   {
     method: "GET",
     pattern: ["learning", "node"],
     access: "member",
+    feature: "graph",
     handler: async (c, a) => {
       const id = a.sp.get("id") ?? "";
       if (id.startsWith("memory:")) {
@@ -158,6 +183,7 @@ const ROWS: Row[] = [
     method: "PUT",
     pattern: ["learning", "node"],
     access: "owner",
+    feature: "graph",
     handler: (c, a) =>
       c.client.skills.putNode(
         { id: str(a.body.id), content: str(a.body.content), baseHash: str(a.body.baseHash) },
@@ -168,6 +194,7 @@ const ROWS: Row[] = [
     method: "DELETE",
     pattern: ["learning", "node"],
     access: "owner",
+    feature: "graph",
     handler: (c, a) =>
       c.client.skills.deleteNode({ id: str(a.body.id), baseHash: str(a.body.baseHash) }, c.userId),
   },
@@ -175,6 +202,7 @@ const ROWS: Row[] = [
     method: "POST",
     pattern: [],
     access: "owner",
+    feature: "edit",
     okStatus: 201,
     handler: (c, a) =>
       c.client.skills.create(
@@ -190,45 +218,58 @@ const ROWS: Row[] = [
     method: "GET",
     pattern: ["*"],
     access: "member",
+    feature: "read",
     handler: (c, a) => c.client.skills.detail(a.args[0]),
   },
   {
     method: "GET",
     pattern: ["*", "file"],
     access: "member",
+    feature: "read",
     handler: (c, a) => c.client.skills.readFile(a.args[0], a.sp.get("path") ?? ""),
   },
   {
     method: "PUT",
     pattern: ["*", "file"],
     access: "owner",
-    handler: (c, a) =>
-      c.client.skills.writeFile(
-        a.args[0],
-        {
-          path: str(a.body.path),
-          content: str(a.body.content),
-          baseHash: typeof a.body.baseHash === "string" ? a.body.baseHash : null,
-        },
-        c.userId,
-      ),
+    feature: "edit",
+    handler: async (c, a) =>
+      str(a.body.path) !== "SKILL.md"
+        ? // Reference files have no documented write path upstream — the NPC edits them when asked in chat.
+          cronError(
+            410,
+            "skill_reference_edit_removed",
+            "Ask the employee in chat to change a reference file",
+          )
+        : c.client.skills.writeFile(
+            a.args[0],
+            {
+              path: str(a.body.path),
+              content: str(a.body.content),
+              baseHash: typeof a.body.baseHash === "string" ? a.body.baseHash : null,
+            },
+            c.userId,
+          ),
   },
   {
     method: "PUT",
     pattern: ["*", "enabled"],
     access: "owner",
+    feature: "edit",
     handler: (c, a) => c.client.skills.setEnabled(a.args[0], a.body.enabled === true, c.userId),
   },
   {
     method: "PUT",
     pattern: ["*", "pinned"],
     access: "owner",
+    feature: "edit",
     handler: (c, a) => c.client.skills.setPinned(a.args[0], a.body.pinned === true, c.userId),
   },
   {
     method: "POST",
     pattern: ["*", "archive"],
     access: "owner",
+    feature: "edit",
     handler: (c, a) => c.client.skills.archive(a.args[0], c.userId),
   },
 ];
@@ -286,15 +327,21 @@ export async function handleSkillRoute(
     if (!res.ok) return pluginFailureResponse(res);
     return NextResponse.json({
       skills: res.data.skills,
-      canManage: ctx.isGatewayOwner && ctx.capabilityReady,
+      canManage: ctx.isGatewayOwner && ctx.features.edit,
+      isGatewayOwner: ctx.isGatewayOwner,
       capabilityReady: ctx.capabilityReady,
+      features: ctx.features,
+      // For the CLI line shown where a removed action used to be (`hermes -p <profile> curator purge`).
+      profileName: ctx.profileName,
       sharedChannelCount: await sharedChannelCount(ctx),
     });
   }
 
   const found = match(req.method, path);
   if (!found) return cronError(404, "not_found", "Unknown skill route");
-  const gate = requireCapability(ctx) ?? (found.row.access === "owner" ? requireOwner(ctx) : null);
+  const gate =
+    requireFeature(ctx, found.row.feature) ??
+    (found.row.access === "owner" ? requireOwner(ctx) : null);
   if (gate) return gate;
   const body = await readBody(req);
   const out = await found.row.handler(ctx, {

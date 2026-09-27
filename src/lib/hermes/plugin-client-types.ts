@@ -229,10 +229,6 @@ export type SkillAdminApi = {
   archive(name: string, actor: string): Promise<PluginResponse<{ name: string }>>;
   listArchived(): Promise<PluginResponse<{ archived: ArchivedSkill[] }>>;
   restore(name: string, actor: string): Promise<PluginResponse<{ name: string }>>;
-  purge(
-    name: string,
-    actor: string,
-  ): Promise<PluginResponse<{ name: string; ledgerId: string | null }>>;
   hubSearch(
     q: string,
     source?: string,

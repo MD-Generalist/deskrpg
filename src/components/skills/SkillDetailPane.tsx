@@ -13,6 +13,10 @@ export type SkillDetailPaneProps = {
   api: SkillsApi;
   name: string;
   canManage: boolean;
+  /** Hub uninstall runs the Hermes CLI — off when this Hermes can't. */
+  hubEnabled?: boolean;
+  /** Opens this employee's 1:1 chat, where reference files get changed. */
+  onAskInChat?(): void;
   onChanged(): void;
   /** Archiving or deleting removed this skill from the list — the parent clears its selection. */
   onRemoved?(): void;
@@ -21,6 +25,15 @@ export type SkillDetailPaneProps = {
 };
 
 type Confirm = "archive" | "uninstall" | null;
+
+/** Executable code — locked for its own reason, not because it is a reference file. */
+const isCode = (path: string) => path.startsWith("scripts/") || path.startsWith("assets/");
+
+/**
+ * Only SKILL.md is edited here. Other files (references, templates) have no documented write path in
+ * upstream Hermes — the employee changes them when asked in chat.
+ */
+const isReference = (path: string) => path !== "SKILL.md" && !isCode(path);
 
 /** Why a file is locked — executable code (`scripts/`·`assets/`), or read-only due to its origin. */
 const lockReason = (path: string) =>
@@ -37,6 +50,8 @@ export default function SkillDetailPane({
   api,
   name,
   canManage,
+  hubEnabled = true,
+  onAskInChat,
   onChanged,
   onRemoved,
   pollIntervalMs,
@@ -104,7 +119,9 @@ export default function SkillDetailPane({
     return error ? <p className="p-3 text-xs text-danger">{error}</p> : null;
   }
   const current = detail.files.find((f) => f.path === path);
-  const editable = canManage && Boolean(current?.editable);
+  const fileEditable = (f: { path: string; editable: boolean }) =>
+    f.editable && f.path === "SKILL.md";
+  const editable = canManage && Boolean(current && fileEditable(current));
   const isLocal = detail.skill.source === "local";
   const isHub = detail.skill.source === "hub";
   const working = busy || uninstallJob.state === "running";
@@ -170,15 +187,15 @@ export default function SkillDetailPane({
             <button
               type="button"
               data-file={f.path}
-              data-locked={String(!f.editable)}
+              data-locked={String(!fileEditable(f))}
               onClick={() => void loadFile(f.path)}
-              title={f.editable ? undefined : t(lockReason(f.path))}
+              title={fileEditable(f) ? undefined : t(lockReason(f.path))}
               className={`flex items-center gap-1 ${
                 f.path === path ? "text-primary" : "text-text-muted"
               } hover:text-text`}
             >
               {f.path}
-              {!f.editable && <Lock className="h-3 w-3" aria-label={t(lockReason(f.path))} />}
+              {!fileEditable(f) && <Lock className="h-3 w-3" aria-label={t(lockReason(f.path))} />}
             </button>
           </li>
         ))}
@@ -197,8 +214,26 @@ export default function SkillDetailPane({
         </div>
       )}
       {error && <p className="text-xs text-danger">{error}</p>}
-      {canManage && current && !current.editable && (
-        <p className="text-[11px] text-text-dim">{t(lockReason(current.path))}</p>
+      {current && isReference(current.path) ? (
+        <p data-reference-hint className="text-[11px] text-text-dim">
+          {t("skills.reference.readOnly")}{" "}
+          {onAskInChat && (
+            <button
+              type="button"
+              data-action="ask-in-chat"
+              onClick={onAskInChat}
+              className="text-primary"
+            >
+              {t("skills.reference.askInChat")}
+            </button>
+          )}
+        </p>
+      ) : (
+        canManage &&
+        current &&
+        !fileEditable(current) && (
+          <p className="text-[11px] text-text-dim">{t(lockReason(current.path))}</p>
+        )
       )}
       <textarea
         value={text}
@@ -252,7 +287,7 @@ export default function SkillDetailPane({
               )}
             </>
           )}
-          {isHub && (
+          {isHub && hubEnabled && (
             <button
               type="button"
               data-action="uninstall"

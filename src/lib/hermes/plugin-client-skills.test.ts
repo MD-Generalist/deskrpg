@@ -87,16 +87,11 @@ test("Hub install, job lookup, curator and relationship graph paths", async () =
   assert.equal(server.lastRequest()!.method, "DELETE");
 });
 
-test("archive→restore→permanent delete paths", async () => {
+test("archive→restore paths", async () => {
   server.skills("sophie").seed("old");
   assert.ok((await client().skills.archive("old", "u-1")).ok);
   const archived = await client().skills.listArchived();
   assert.ok(archived.ok);
   assert.ok(archived.data.archived.some((a) => a.name === "old"));
   assert.ok((await client().skills.restore("old", "u-1")).ok);
-  assert.ok((await client().skills.archive("old", "u-1")).ok);
-  const purged = await client().skills.purge("old", "u-1");
-  assert.ok(purged.ok);
-  assert.equal(server.lastRequest()!.path, "/p/sophie/deskrpg/skills/archive/old");
-  assert.equal(server.lastRequest()!.method, "DELETE");
 });

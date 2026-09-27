@@ -313,3 +313,60 @@ test("before picking a skill, the right pane shows a prompt to pick one", async 
   await click('[data-skill="weekly"]');
   assert.ok(!text().includes("왼쪽에서 스킬을 고르세요"));
 });
+
+test("a reference file is read-only even when the plugin marks it editable, and points to the chat", async () => {
+  const asked: string[] = [];
+  mockFetch({
+    ...extras,
+    [LIST]: listBody(),
+    [`GET ${ROOT}/weekly`]: {
+      ...detail(),
+      files: [
+        { path: "SKILL.md", size: 10, editable: true },
+        { path: "references/guide.md", size: 5, editable: true },
+      ],
+    },
+    [`GET ${ROOT}/weekly/file?path=SKILL.md`]: file("본문", "h1"),
+    [`GET ${ROOT}/weekly/file?path=references%2Fguide.md`]: {
+      path: "references/guide.md",
+      content: "guide",
+      hash: "h5",
+    },
+  });
+  await render(
+    <SkillManagerModal
+      channelId="ch-1"
+      npcId="n-1"
+      npcName="소피"
+      onClose={() => {}}
+      onAskInChat={() => asked.push("chat")}
+    />,
+  );
+  await click('[data-skill="weekly"]');
+  assert.ok($('[data-action="save"]'), "SKILL.md still saves");
+  await click('[data-file="references/guide.md"]');
+  assert.equal(($("textarea") as HTMLTextAreaElement).readOnly, true);
+  assert.ok(!container.querySelector('[data-action="save"]'));
+  assert.match($("[data-reference-hint]").textContent ?? "", /대화로 수정을 요청/);
+  await click('[data-action="ask-in-chat"]');
+  assert.deepEqual(asked, ["chat"]);
+});
+
+test("screens whose feature is off are hidden while the rest keep working", async () => {
+  mockFetch({
+    ...extras,
+    [LIST]: {
+      ...listBody(),
+      features: { read: true, edit: true, hub: false, curator: false, graph: false },
+      profileName: "sophie",
+    },
+    ...opened(),
+  });
+  await render(modal());
+  assert.ok(!container.querySelector("[data-curator-bar]"), "no curator bar");
+  assert.ok(!container.querySelector('[data-tab="graph"]'), "no graph tab");
+  assert.ok($('[data-tab="archive"]'));
+  await click('[data-tab="add"]');
+  assert.ok(!container.querySelector('[data-add="hub"]'), "no hub install");
+  assert.ok($('[data-add="new"]'), "new skill still offered");
+});

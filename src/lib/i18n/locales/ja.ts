@@ -3521,6 +3521,15 @@ const ja: Record<string, string> = {
   "skills.error.forbidden": "ゲートウェイの所有者のみ変更できます",
   "skills.error.skill_write_rejected": "Hermes が保存を拒否しました: {detail}",
   "skills.error.path_not_editable": "このファイルは編集できません",
+  "skills.purge.elsewhere":
+    "アーカイブしたスキルを完全に削除するには、Hermes ダッシュボードを使うか次のコマンドを実行してください:",
+  "skills.reference.readOnly":
+    "参考ファイルはここでは編集できません。この従業員にチャットで修正を依頼してください。",
+  "skills.reference.askInChat": "チャットで依頼",
+  "skills.error.skill_reference_edit_removed":
+    "参考ファイルの修正は従業員にチャットで依頼してください",
+  "skills.error.skill_purge_removed": "完全削除は Hermes ダッシュボードか CLI で行ってください",
+  "skills.error.skill_feature_unavailable": "この Hermes ではこの機能を使えません",
   "skills.error.plugin_upgrade_required": "プラグインの更新が必要です",
   "skills.hub.loadingPreview": "プレビューを読み込み中…",
   "skills.hub.retry": "再試行",

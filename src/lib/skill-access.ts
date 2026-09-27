@@ -12,15 +12,24 @@ import { and, countDistinct, eq, ne } from "drizzle-orm";
 import type { NextResponse } from "next/server";
 
 import { db, hermesProfiles, npcs } from "@/db";
+import { forceReprobePluginInfo } from "@/lib/automation-gate";
 import {
   cronError,
   gateError,
-  hasPluginCapability,
   resolveCronChannelContext,
   resolveNpcProfileClient,
+  type CronChannelContext,
 } from "@/lib/cron-access";
+import { decryptGatewayToken } from "@/lib/gateway-resources";
 import { SKILL_ADMIN_CAPABILITY, SKILL_ADMIN_MIN_VERSION } from "@/lib/hermes/deskrpg-plugin-types";
 import type { ProfilePluginClient } from "@/lib/hermes/plugin-client-types";
+import {
+  noSkillManagement,
+  SKILL_FEATURE_CAPABILITY,
+  skillFeaturesOf,
+  type SkillFeature,
+  type SkillFeatures,
+} from "@/lib/skill-features";
 
 export type SkillContext = {
   userId: string;
@@ -28,7 +37,9 @@ export type SkillContext = {
   npcId: string;
   profileName: string;
   isGatewayOwner: boolean;
+  /** Any skill management at all (a plugin new enough). Each screen still checks its own feature. */
   capabilityReady: boolean;
+  features: SkillFeatures;
   client: ProfilePluginClient;
   gatewayId: string;
 };
@@ -55,19 +66,51 @@ export async function resolveSkillContext(input: {
       npcId: input.npcId,
       profileName: npc.value.profile.profileName,
       isGatewayOwner: channel.ctx.gateway.ownerUserId === channel.ctx.userId,
-      capabilityReady: await hasPluginCapability(channel.ctx, SKILL_ADMIN_CAPABILITY),
+      ...(await resolveFeatures(channel.ctx)),
       client: npc.value.client,
       gatewayId: channel.ctx.gateway.id,
     },
   };
 }
 
-export function requireCapability(ctx: Pick<SkillContext, "capabilityReady">): NextResponse | null {
-  if (ctx.capabilityReady) return null;
-  return gateError(
-    "plugin_upgrade_required",
-    `deskrpg-hermes-plugin ${SKILL_ADMIN_MIN_VERSION}+ required`,
-    { minVersion: SKILL_ADMIN_MIN_VERSION, missing: [SKILL_ADMIN_CAPABILITY] },
+/**
+ * The features from the cached plugin info. If one is off, the gateway is probed once more — it may have been
+ * upgraded since the cache was filled — instead of once per missing feature.
+ */
+async function resolveFeatures(
+  channel: Pick<CronChannelContext, "gateway" | "info">,
+): Promise<{ features: SkillFeatures; capabilityReady: boolean }> {
+  let features = skillFeaturesOf(channel.info.capabilities);
+  if (Object.values(features).some((on) => !on)) {
+    const fresh = await forceReprobePluginInfo(
+      channel.gateway,
+      decryptGatewayToken(channel.gateway.tokenEncrypted),
+    );
+    if (fresh) features = skillFeaturesOf(fresh.capabilities);
+  }
+  return { features, capabilityReady: !noSkillManagement(features) };
+}
+
+/**
+ * 428 when this route's feature is off. A plugin with no skill management at all needs an upgrade; a newer one
+ * that turned only this feature off is running on a Hermes that can't serve it — upgrading the plugin won't help.
+ */
+export function requireFeature(
+  ctx: Pick<SkillContext, "features">,
+  feature: SkillFeature,
+): NextResponse | null {
+  if (ctx.features[feature]) return null;
+  if (noSkillManagement(ctx.features))
+    return gateError(
+      "plugin_upgrade_required",
+      `deskrpg-hermes-plugin ${SKILL_ADMIN_MIN_VERSION}+ required`,
+      { minVersion: SKILL_ADMIN_MIN_VERSION, missing: [SKILL_ADMIN_CAPABILITY] },
+    );
+  return cronError(
+    428,
+    "skill_feature_unavailable",
+    `This Hermes can't serve ${feature} for skills`,
+    { missing: [SKILL_FEATURE_CAPABILITY[feature]] },
   );
 }
 

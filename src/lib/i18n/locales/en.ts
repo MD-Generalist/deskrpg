@@ -3493,6 +3493,14 @@ const en: Record<string, string> = {
   "skills.error.forbidden": "Only the gateway owner can change this",
   "skills.error.skill_write_rejected": "Hermes rejected the write: {detail}",
   "skills.error.path_not_editable": "This file cannot be edited",
+  "skills.purge.elsewhere":
+    "To permanently delete archived skills, use the Hermes dashboard or run:",
+  "skills.reference.readOnly":
+    "Reference files can't be edited here. Ask this employee in chat to change them.",
+  "skills.reference.askInChat": "Ask in chat",
+  "skills.error.skill_reference_edit_removed": "Ask the employee in chat to change reference files",
+  "skills.error.skill_purge_removed": "Permanently delete from the Hermes dashboard or CLI",
+  "skills.error.skill_feature_unavailable": "This Hermes can't provide this feature",
   "skills.error.plugin_upgrade_required": "The plugin needs an upgrade",
   "skills.hub.loadingPreview": "Loading preview…",
   "skills.hub.retry": "Retry",

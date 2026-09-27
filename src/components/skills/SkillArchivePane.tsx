@@ -10,20 +10,24 @@ import type { SkillsApi } from "./skills-api";
 export type SkillArchivePaneProps = {
   api: SkillsApi;
   canManage: boolean;
-  /** A restore or purge changed the list (installed count / archive count). */
+  /** The employee's Hermes profile — named in the CLI line for purging. */
+  profileName?: string | null;
+  /** A restore changed the list (installed count / archive count). */
   onChanged(): void;
 };
 
 /**
- * Archive pane — restores or permanently purges archived local skills. Purging is only enabled
- * once the skill name is typed exactly (the original stays in the Hermes ledger and can only be
- * revived via CLI).
+ * Archive pane — restores archived local skills. Upstream Hermes only purges archived skills in bulk, so
+ * permanent deletion is left to its dashboard or CLI, which the pane names.
  */
-export default function SkillArchivePane({ api, canManage, onChanged }: SkillArchivePaneProps) {
+export default function SkillArchivePane({
+  api,
+  canManage,
+  profileName,
+  onChanged,
+}: SkillArchivePaneProps) {
   const t = useT();
   const [rows, setRows] = useState<ArchivedSkill[] | null>(null);
-  const [purging, setPurging] = useState<string | null>(null);
-  const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +60,14 @@ export default function SkillArchivePane({ api, canManage, onChanged }: SkillArc
     <div className="min-h-0 flex-1 overflow-y-auto p-5 text-sm">
       {error && <p className="mb-2 text-xs text-danger">{error}</p>}
       {rows?.length === 0 && <p className="text-text-dim">{t("skills.archiveEmpty")}</p>}
+      {rows && rows.length > 0 && (
+        <p data-purge-hint className="mb-3 max-w-2xl text-xs text-text-muted">
+          {t("skills.purge.elsewhere")}{" "}
+          <code className="rounded bg-surface-raised px-1">
+            hermes -p {profileName || "<profile>"} curator purge
+          </code>
+        </p>
+      )}
       <ul className="max-w-2xl divide-y divide-border">
         {rows?.map((r) => (
           <li key={r.name} className="flex flex-wrap items-center gap-3 py-2">
@@ -64,65 +76,15 @@ export default function SkillArchivePane({ api, canManage, onChanged }: SkillArc
               <span className="text-xs text-text-muted">{r.archivedAt.slice(0, 10)}</span>
             )}
             {canManage && (
-              <>
-                <button
-                  type="button"
-                  data-action="restore"
-                  disabled={busy}
-                  onClick={() => void run(() => api.restore(r.name))}
-                  className="text-primary disabled:opacity-50"
-                >
-                  {t("skills.restore")}
-                </button>
-                <button
-                  type="button"
-                  data-action="purge"
-                  disabled={busy}
-                  onClick={() => {
-                    setPurging(r.name);
-                    setTyped("");
-                  }}
-                  className="text-danger disabled:opacity-50"
-                >
-                  {t("skills.purge")}
-                </button>
-              </>
-            )}
-            {canManage && purging === r.name && (
-              <div className="w-full rounded border border-border p-2 text-xs">
-                <p className="text-text">{t("skills.purge.confirm")}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <input
-                    name="purge-name"
-                    value={typed}
-                    onChange={(e) => setTyped(e.target.value)}
-                    placeholder={r.name}
-                    aria-label={t("skills.purge.confirm")}
-                    className="rounded bg-surface-raised px-2 py-1 text-text"
-                  />
-                  <button
-                    type="button"
-                    data-action="confirm-purge"
-                    disabled={busy || typed !== r.name}
-                    onClick={() =>
-                      void run(async () => {
-                        await api.purge(r.name);
-                        setPurging(null);
-                      })
-                    }
-                    className="text-danger disabled:opacity-50"
-                  >
-                    {t("skills.purge")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPurging(null)}
-                    className="text-text-muted"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                data-action="restore"
+                disabled={busy}
+                onClick={() => void run(() => api.restore(r.name))}
+                className="text-primary disabled:opacity-50"
+              >
+                {t("skills.restore")}
+              </button>
             )}
           </li>
         ))}

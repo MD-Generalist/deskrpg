@@ -15,6 +15,7 @@ import type {
   SkillJob,
   SkillRow,
 } from "@/lib/hermes/plugin-client-types";
+import type { SkillFeatures } from "@/lib/skill-features";
 
 export class SkillsApiError extends Error {
   readonly status: number;
@@ -34,6 +35,10 @@ export type SkillListView = {
   canManage: boolean;
   capabilityReady: boolean;
   sharedChannelCount: number;
+  /** Per-feature switches. An older server omits them — every feature then follows `capabilityReady`. */
+  features?: SkillFeatures;
+  isGatewayOwner?: boolean;
+  profileName?: string;
 };
 
 async function fail(res: Response): Promise<SkillsApiError> {
@@ -89,9 +94,6 @@ export function createSkillsApi(channelId: string, npcId: string, fetchImpl: typ
     listArchived: async () => (await req<{ archived: ArchivedSkill[] }>("GET", "archive")).archived,
     restore: async (name: string) => {
       await req("POST", `archive/${seg(name)}/restore`, {});
-    },
-    purge: async (name: string) => {
-      await req("DELETE", `archive/${seg(name)}`);
     },
     hubSearch: async (q: string) =>
       (await req<{ results: HubSearchResult[] }>("GET", `hub/search${qs({ q })}`)).results,

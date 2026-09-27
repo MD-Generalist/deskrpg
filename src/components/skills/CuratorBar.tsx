@@ -81,7 +81,10 @@ export default function CuratorBar({
       : t("skills.curator.on");
 
   return (
-    <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-5 py-1.5 text-xs text-text-muted">
+    <div
+      data-curator-bar
+      className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-5 py-1.5 text-xs text-text-muted"
+    >
       <span>
         {t("skills.curator.status", {
           state,

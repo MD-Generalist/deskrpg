@@ -30,6 +30,8 @@ export type SkillManagerModalProps = {
   /** Skill to preselect when opening — comes from [Edit] on the chat window's [Skills] tab. */
   initialSkill?: string | null;
   api?: SkillsApi;
+  /** Opens this employee's 1:1 chat — where reference files get changed now. */
+  onAskInChat?(): void;
 };
 
 /**
@@ -44,6 +46,7 @@ export default function SkillManagerModal({
   onClose,
   initialSkill = null,
   api: injected,
+  onAskInChat,
 }: SkillManagerModalProps) {
   const t = useT();
   const api = useMemo(
@@ -128,9 +131,24 @@ export default function SkillManagerModal({
     });
 
   const canManage = view?.canManage ?? false;
-  const tabs: Tab[] = canManage
-    ? ["installed", "archive", "graph", "add"]
-    : ["installed", "archive", "graph"];
+  // An older server sends no per-feature switches: then everything follows the single capability.
+  const features = view?.features ?? {
+    read: view?.capabilityReady ?? false,
+    edit: view?.capabilityReady ?? false,
+    hub: view?.capabilityReady ?? false,
+    curator: view?.capabilityReady ?? false,
+    graph: view?.capabilityReady ?? false,
+  };
+  const isOwner = view?.isGatewayOwner ?? canManage;
+  const addModes = (["new", "hub", "url"] as const).filter((m) =>
+    m === "new" ? canManage : isOwner && features.hub,
+  );
+  const tabs: Tab[] = [
+    "installed",
+    ...(features.read ? (["archive"] as const) : []),
+    ...(features.graph ? (["graph"] as const) : []),
+    ...(addModes.length > 0 ? (["add"] as const) : []),
+  ];
   const all = view?.skills ?? [];
   const bulkCount = bulk ? bulk.enable.length + bulk.disable.length : 0;
 
@@ -195,7 +213,9 @@ export default function SkillManagerModal({
           </p>
         ) : !view ? null : (
           <>
-            <CuratorBar api={api} canManage={canManage} onRunFinished={() => void load()} />
+            {features.curator && (
+              <CuratorBar api={api} canManage={isOwner} onRunFinished={() => void load()} />
+            )}
             {actionError && <p className="px-5 py-1 text-xs text-danger">{actionError}</p>}
             {tab === "installed" && (
               <div className="flex min-h-0 flex-1">
@@ -320,6 +340,8 @@ export default function SkillManagerModal({
                       api={api}
                       name={selected}
                       canManage={canManage}
+                      hubEnabled={isOwner && features.hub}
+                      onAskInChat={onAskInChat}
                       onChanged={() => void load()}
                       onRemoved={() => setSelected(null)}
                     />
@@ -327,10 +349,10 @@ export default function SkillManagerModal({
                 </main>
               </div>
             )}
-            {tab === "add" && canManage && (
+            {tab === "add" && addModes.length > 0 && (
               <div className="min-h-0 flex-1 overflow-y-auto p-5 text-sm">
                 <div className="mb-3 flex gap-3">
-                  {(["new", "hub", "url"] as const).map((m) => (
+                  {addModes.map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -377,7 +399,12 @@ export default function SkillManagerModal({
               </div>
             )}
             {tab === "archive" && (
-              <SkillArchivePane api={api} canManage={canManage} onChanged={() => void load()} />
+              <SkillArchivePane
+                api={api}
+                canManage={canManage}
+                profileName={view.profileName}
+                onChanged={() => void load()}
+              />
             )}
             {tab === "graph" && (
               <LearningGraph api={api} canManage={canManage} onChanged={() => void load()} />

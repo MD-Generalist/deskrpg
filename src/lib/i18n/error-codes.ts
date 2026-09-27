@@ -1,4 +1,7 @@
 export type ErrorCode =
+  | "skill_reference_edit_removed"
+  | "skill_purge_removed"
+  | "skill_feature_unavailable"
   | "review_policy_required"
   | "swarm_review_policy_unsupported"
   | "event_cursor_handoff_required"
@@ -229,6 +232,9 @@ export type ErrorCode =
 
 /** Every registered error code → translation key. The coverage guard scans this whole table. */
 export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
+  skill_reference_edit_removed: "skills.error.skill_reference_edit_removed",
+  skill_purge_removed: "skills.error.skill_purge_removed",
+  skill_feature_unavailable: "skills.error.skill_feature_unavailable",
   review_policy_required: "kanban.review.unsupported",
   swarm_review_policy_unsupported: "kanban.review.swarmUnsupported",
   event_cursor_handoff_required: "errors.event_cursor_handoff_required",

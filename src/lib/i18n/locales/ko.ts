@@ -3487,6 +3487,14 @@ const ko: Record<string, string> = {
   "skills.error.forbidden": "게이트웨이 소유자만 바꿀 수 있습니다",
   "skills.error.skill_write_rejected": "Hermes 가 저장을 거절했습니다: {detail}",
   "skills.error.path_not_editable": "이 파일은 편집할 수 없습니다",
+  "skills.purge.elsewhere":
+    "보관한 스킬을 영구 삭제하려면 Hermes 대시보드를 쓰거나 다음 명령을 실행하세요:",
+  "skills.reference.readOnly":
+    "참고 파일은 여기서 고칠 수 없어요. 이 직원에게 대화로 수정을 요청하세요.",
+  "skills.reference.askInChat": "대화로 요청하기",
+  "skills.error.skill_reference_edit_removed": "참고 파일은 직원에게 대화로 수정을 요청하세요",
+  "skills.error.skill_purge_removed": "영구 삭제는 Hermes 대시보드나 CLI에서 하세요",
+  "skills.error.skill_feature_unavailable": "이 Hermes에서는 이 기능을 쓸 수 없습니다",
   "skills.error.plugin_upgrade_required": "플러그인을 올려야 합니다",
   "skills.hub.loadingPreview": "미리보기 불러오는 중…",
   "skills.hub.retry": "다시 시도",

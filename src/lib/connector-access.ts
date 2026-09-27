@@ -17,7 +17,7 @@ import {
 import { MCP_ADMIN_CAPABILITY, MCP_ADMIN_MIN_VERSION } from "@/lib/hermes/deskrpg-plugin-types";
 import type { SkillContext } from "@/lib/skill-access";
 
-export type ConnectorContext = SkillContext & { channel: CronChannelContext };
+export type ConnectorContext = Omit<SkillContext, "features"> & { channel: CronChannelContext };
 
 type Result<T> = ({ ok: true } & T) | { ok: false; response: NextResponse };
 
