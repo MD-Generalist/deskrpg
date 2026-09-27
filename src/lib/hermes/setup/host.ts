@@ -57,6 +57,7 @@ export const HOST_ERROR_CODES = new Set([
   "plugin_identity_ambiguous",
   "plugin_install_failed",
   "plugin_update_failed",
+  "plugin_dependencies_missing",
   "plugin_security_review_required",
   "plugin_source_unavailable",
   "hermes_version_unsupported",
@@ -580,13 +581,15 @@ export async function prepareHost(
   const settingWorkerLaunch =
     state.changes.includes("setting_worker_launch") && !skip("setting_worker_launch");
   if (settingWorkerLaunch) await stage("setting_worker_launch", "set-worker-launch");
+  // An enabled plugin can still need the step: the host names enabling_plugin when its Python dependencies are
+  // missing from the tree the gateway boots into, and the install action prepares them.
   const pluginStep = state.changes.includes("updating_plugin")
     ? "updating_plugin"
-    : !state.candidate.pluginInstalled || !state.candidate.pluginEnabled
-      ? state.candidate.pluginInstalled
+    : !state.candidate.pluginInstalled
+      ? "installing_plugin"
+      : !state.candidate.pluginEnabled || state.changes.includes("enabling_plugin")
         ? "enabling_plugin"
-        : "installing_plugin"
-      : null;
+        : null;
   if (pluginStep && !skip(pluginStep)) await stage(pluginStep, "install");
   const configuring =
     (state.pluginStatus !== "plugin_ready" || state.changes.includes("configuring_api")) &&

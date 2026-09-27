@@ -125,6 +125,7 @@ import {
   hostLaunch,
 } from "./host-helper";
 import { PLUGIN_PIN, PLUGIN_VERSION } from "./pin";
+import { setupHostError } from "@/components/gateway/setup-copy";
 function fixture(
   script: string,
   initial: { config?: object; env?: string; hermesVersion?: string | null; plugin?: object } = {},
@@ -3240,4 +3241,141 @@ test("reinstall never touches a Hermes that runs", () => {
 test("without the reinstall choice an existing folder is still refused", () => {
   const result = reinstall({ reinstall: false, oldProbe: 1, oldPython: true });
   assert.deepEqual(result.body, { error: "hermes_already_installed" });
+});
+
+// The plugin's python_dependencies (PyYAML) must be in the tree the gateway boots into. Upstream prepares them
+// only when a plugin is admitted (`plugins enable`); the wizard checks the result in a fresh process the way the
+// gateway starts, and prepares them with public commands when they are missing (dev5, WinServer PM: the gateway
+// logged "declares Python dependencies that are not installed: PyYAML").
+const DEPS = String.raw`
+import io
+PM_RUNTIME = True
+LAUNCHER.parent.mkdir(parents=True, exist_ok=True)
+LAUNCHER.write_text('')
+state = {'present': False, 'fix_on': None}
+calls = []
+def fake_hermes(argv, **kwargs):
+    calls.append(argv[1:])
+    tail = ' '.join(argv[-2:])
+    if state['fix_on'] and state['fix_on'] in ' '.join(argv): state['present'] = True
+    return type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+subprocess.Popen = fake_hermes
+dependency_probe = lambda deps, home: [] if state['present'] else list(deps)
+`;
+const WITH_DEPS = {
+  config: { gateway: { multiplex_profiles: true }, plugins: { enabled: ["deskrpg"] } },
+  plugin: { name: "deskrpg", version: PLUGIN_VERSION, python_dependencies: ["PyYAML>=6,<7"] },
+};
+test("inspection plans the plugin step and a restart when an enabled plugin's dependencies are missing", () => {
+  const result = fixture(
+    DEPS +
+      String.raw`
+# The fixture's service identity is venv-shaped; the PM worker-launch planning is covered elsewhere.
+PM_RUNTIME = False
+assert_port_owned = lambda public, owner: True
+missing = main('inspect', main('discover')['candidates'][0]['id'])['changes']
+state['present'] = True
+present = main('inspect', main('discover')['candidates'][0]['id'])['changes']
+print(json.dumps({'missing': missing, 'present': present}))
+`,
+    WITH_DEPS,
+  );
+  assert.ok(result.body.missing.includes("enabling_plugin"));
+  assert.ok(result.body.missing.includes("restarting_gateway"));
+  assert.ok(!result.body.present.includes("enabling_plugin"));
+});
+test("the plugin step prepares missing dependencies with pm repair first, then stops", () => {
+  const result = fixture(
+    DEPS +
+      String.raw`
+state['fix_on'] = 'pm repair'
+print(json.dumps({'result': main('install', main('discover')['candidates'][0]['id']), 'calls': calls}))
+`,
+    WITH_DEPS,
+  );
+  assert.deepEqual(result.body.result, { ok: true });
+  assert.deepEqual(result.body.calls, [["pm", "repair"]]);
+});
+test("when pm repair does not bring them back, the plugin is re-admitted with disable and enable", () => {
+  const result = fixture(
+    DEPS +
+      String.raw`
+state['fix_on'] = 'plugins enable'
+print(json.dumps({'result': main('install', main('discover')['candidates'][0]['id']), 'calls': calls}))
+`,
+    WITH_DEPS,
+  );
+  assert.deepEqual(result.body.result, { ok: true });
+  assert.deepEqual(result.body.calls, [
+    ["pm", "repair"],
+    ["--profile", "default", "plugins", "disable", "deskrpg"],
+    ["--profile", "default", "plugins", "enable", "deskrpg"],
+  ]);
+});
+test("dependencies that cannot be prepared fail with their own code", () => {
+  const result = fixture(
+    DEPS +
+      String.raw`
+entry('install', main('discover')['candidates'][0]['id'])
+`,
+    WITH_DEPS,
+  );
+  assert.deepEqual(result.body, { error: "plugin_dependencies_missing" });
+});
+test("off the PM runtime there is no pm repair — only the re-admission", () => {
+  const result = fixture(
+    DEPS +
+      String.raw`
+PM_RUNTIME = False
+state['fix_on'] = 'plugins enable'
+main('install', main('discover')['candidates'][0]['id'])
+print(json.dumps(calls))
+`,
+    WITH_DEPS,
+  );
+  assert.deepEqual(
+    result.body.map((argv: string[]) => argv.slice(-2)),
+    [
+      ["disable", "deskrpg"],
+      ["enable", "deskrpg"],
+    ],
+  );
+});
+test("the dependency probe runs like the gateway boots and names only what is missing", () => {
+  const result = fixture(String.raw`
+print(json.dumps({'missing': dependency_probe(['deskrpg-no-such-dist>=1', 'not a requirement!'], ROOT), 'none': dependency_probe([], ROOT)}))
+`);
+  assert.deepEqual(result.body, { missing: ["deskrpg-no-such-dist>=1"], none: [] });
+});
+test("an enabled plugin whose dependencies are missing still gets the plugin step, then a restart", async () => {
+  const ready = {
+    ...candidate,
+    pluginInstalled: true,
+    pluginEnabled: true,
+    pluginVersion: PLUGIN_VERSION,
+    hasToken: true,
+  };
+  const f = fake([
+    {
+      candidate: ready,
+      pluginStatus: "plugin_ready",
+      changes: ["enabling_plugin", "configuring_api", "restarting_gateway", "verifying_gateway"],
+    },
+    { ok: true },
+    { ok: true },
+    { ok: true },
+    {
+      prepared: { baseUrl: "http://127.0.0.1:8642", token: "existing-private-token", profiles: [] },
+    },
+  ]);
+  const steps: string[] = [];
+  await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
+  assert.ok(steps.includes("enabling_plugin"));
+  assert.deepEqual(
+    f.calls.map((c) => JSON.parse(c.input!).action),
+    ["inspect", "install", "configure", "restart", "verify"],
+  );
+});
+test("missing plugin dependencies reach the screen as their own code", () => {
+  assert.equal(setupHostError("ko", "plugin_dependencies_missing") !== undefined, true);
 });

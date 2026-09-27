@@ -897,6 +897,56 @@ def identity(name, home):
     digest = hashlib.sha256((str(INSTALL.resolve()) + '\0' + str(home) + '\0' + service + '\0' + definition).encode()).hexdigest()
     return {'id': digest, 'service': service, 'command': command, 'env': restart_env, 'pid': pid, 'warning': warning, 'stop': stop, 'launch': launch, 'path': path if sys.platform.startswith('linux') else None}
 
+# Checks, in a fresh process, which requirements the gateway's Python would not find. hermes_bootstrap selects the
+# committed dependency tree at boot (pm/environments.py activate_dependencies) and never switches a running process,
+# so this helper's own process cannot tell after an install. Stdlib only; a missing hermes_bootstrap (old installs)
+# leaves the interpreter's own packages, which is what such a gateway runs with too.
+DEPENDENCY_CHECK = '\n'.join([
+    'import json, re, sys, importlib.metadata as metadata',
+    'try:',
+    '    import hermes_bootstrap',
+    'except ImportError:',
+    '    pass',
+    'REQUIREMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\\s*(\\[[A-Za-z0-9,._ -]*\\])?\\s*((===|[<>=!~]=?)\\s*[A-Za-z0-9.*+!_-]+\\s*(,\\s*(===|[<>=!~]=?)\\s*[A-Za-z0-9.*+!_-]+\\s*)*)?(;.*)?")',
+    'missing = []',
+    'for requirement in json.loads(sys.argv[1]):',
+    '    if not isinstance(requirement, str) or not REQUIREMENT.fullmatch(requirement.strip()): continue',
+    '    name = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", requirement.strip()).group(0)',
+    '    try: metadata.version(name)',
+    '    except metadata.PackageNotFoundError: missing.append(requirement)',
+    'print(json.dumps(missing))',
+])
+def dependency_probe(deps, home):
+    """The requirements among deps the gateway would not find, or None when the check itself could not run."""
+    if not deps: return []
+    try:
+        done = subprocess.run([sys.executable, '-c', DEPENDENCY_CHECK, json.dumps(deps)], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=60, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(home), 'PYTHONPATH': str(INSTALL)})
+        result = json.loads(done.stdout) if done.returncode == 0 else None
+    except Exception: return None
+    return [item for item in result if isinstance(item, str)] if isinstance(result, list) else None
+def missing_dependencies(home, folder):
+    """The plugin's declared python_dependencies the gateway would not find. [] when none are declared or all are
+    there; None when unknown (never read as missing)."""
+    if not folder: return []
+    try: data = yaml.safe_load(read(home / 'plugins' / folder / 'plugin.yaml')) or {}
+    except Exception: return None
+    deps = data.get('python_dependencies') if isinstance(data, dict) else None
+    deps = [item for item in deps if isinstance(item, str)] if isinstance(deps, list) else []
+    return dependency_probe(deps, home)
+def ensure_plugin_dependencies(name, home, folder, env):
+    """Prepares missing plugin dependencies with Hermes's public commands, checking again after each: 'pm repair'
+    rebuilds the recorded dependency tree (PM runtime), then disable and enable re-admit the plugin, which is when
+    upstream installs a plugin's python_dependencies."""
+    if not missing_dependencies(home, folder): return
+    attempts = ([[hermes_argv('pm', 'repair')]] if PM_RUNTIME else []) + [[
+        hermes_argv('--profile', name, 'plugins', 'disable', folder),
+        hermes_argv('--profile', name, 'plugins', 'enable', folder),
+    ]]
+    for attempt in attempts:
+        for argv in attempt: bounded(argv, env)
+        if not missing_dependencies(home, folder): return
+    fail('plugin_dependencies_missing')
+
 def plugin(home, cfg):
     manifests = []
     versions = {}
@@ -1287,9 +1337,10 @@ def main(action, candidate_id=None, option=None):
         if not public['pluginInstalled']: changes.append('installing_plugin')
         elif version_below(public['pluginVersion'], PLUGIN_VERSION): changes.append('updating_plugin')
         elif not public['pluginEnabled']: changes.append('enabling_plugin')
+        elif missing_dependencies(home, plugin(home, cfg)[2]): changes.append('enabling_plugin')
         gateway = mapping(cfg.get('gateway'))
         # A replaced plugin or a freshly registered unit only takes effect after the gateway restarts.
-        if status != 'plugin_ready' or (name == 'default' and not cfg.get('multiplex_profiles',gateway.get('multiplex_profiles',False))) or 'updating_plugin' in changes or 'installing_service' in changes or 'setting_worker_launch' in changes:
+        if status != 'plugin_ready' or (name == 'default' and not cfg.get('multiplex_profiles',gateway.get('multiplex_profiles',False))) or 'updating_plugin' in changes or 'enabling_plugin' in changes or 'installing_service' in changes or 'setting_worker_launch' in changes:
             changes.extend(['configuring_api','restarting_gateway','verifying_gateway'])
         available = profile_names(cfg) if name == 'default' else [(name,home)]
         profiles = []
@@ -1374,8 +1425,9 @@ def main(action, candidate_id=None, option=None):
             updating = True
             argv += ['install', SOURCE, '--ref', PIN, '--force', '--enable']
         elif not public['pluginEnabled']: argv += ['enable', plugin_name]
-        else: return {'ok': True}
-        code, output = bounded(argv, env)
+        # Installed, enabled and current: only its dependencies may still need preparing (below).
+        else: argv = None
+        code, output = bounded(argv, env) if argv else (0, b'')
         failure_code = 'plugin_update_failed' if updating else 'plugin_install_failed'
         if code:
             diagnostic = output.decode('utf-8', errors='replace').lower()
@@ -1393,6 +1445,8 @@ def main(action, candidate_id=None, option=None):
             installed, enabled, installed_name, installed_version = plugin(home,config(home))
         if not installed or not enabled: fail(failure_code)
         if updating and version_below(installed_version, PLUGIN_VERSION): fail('plugin_update_failed')
+        ensure_plugin_dependencies(name, home, installed_name, env)
+        if not plugin(home,config(home))[1]: fail(failure_code)
     elif action == 'set-timezone':
         value = option if isinstance(option, str) else ''
         if not value or len(value) > 64 or not TIMEZONE.fullmatch(value): fail('timezone_invalid')

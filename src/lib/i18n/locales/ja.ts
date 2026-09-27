@@ -496,6 +496,8 @@ const ja: Record<string, string> = {
     "Windows コンピューターへのリモート接続はまだ対応していません。その Windows に DeskRPG をインストールし、［ローカル接続］でつないでください。",
   "hermes.wizard.error.remoteWindowsDetails":
     "DeskRPG は SSH でつないだサーバーを Linux とみなし、設定コマンドを送ります。このサーバーは Windows（OpenSSH）として応答したため、そのコマンドを実行できません。その Windows に DeskRPG をインストールすれば、同じ設定ウィザードを［ローカル接続］で使えます。",
+  "hermes.wizard.error.pluginDependenciesMissing":
+    "DeskRPG の接続ツールに必要な部品を準備できませんでした。Hermes が入っているコンピューターで hermes pm repair を実行し、Hermes を再起動してから、この画面でもう一度お試しください。",
   "hermes.wizard.error.windowsScheduledTaskMissing":
     "この Windows ホストにはゲートウェイのスケジュールタスクがなく、スタートアップフォルダーにだけ登録されています。この状態では DeskRPG がゲートウェイを停止・再起動できないため、プラグインの更新と設定変更ができません。タスクスケジューラで Hermes ゲートウェイのタスクがあるか確認し、なければそのホストで hermes gateway install を再実行してスケジュールタスクとして登録してから、もう一度確認してください。",
   "hermes.wizard.error.hostOutputTooLarge":
