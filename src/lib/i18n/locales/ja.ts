@@ -571,6 +571,7 @@ const ja: Record<string, string> = {
   "hermes.wizard.packages.missing": "不足:",
   "hermes.wizard.packages.curl": "curl",
   "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.libatomic": "libatomic（Node.js ランタイムライブラリ）",
   "hermes.wizard.packages.cxx": "C++コンパイラ",
   "hermes.wizard.packages.unknownDistro":
     "このサーバーのパッケージマネージャーが分かりません。上のパッケージをサーバーのパッケージマネージャーでインストールしてください。",

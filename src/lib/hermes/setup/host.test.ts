@@ -915,6 +915,8 @@ print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
   );
   assert.deepEqual(result.body.changes.slice(0, 2), ["installing_service", "installing_plugin"]);
   assert.ok(result.body.changes.includes("restarting_gateway"));
+  // The unit the plan registers is not a blocker for the review (a fresh install always lacks one).
+  assert.notEqual(result.body.candidate.warning, "managed_service_required");
 });
 test("service install calls only the Hermes CLI and never writes the unit file directly", () => {
   const result = fixture(

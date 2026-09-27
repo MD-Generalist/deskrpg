@@ -22,7 +22,7 @@ import {
 import { PLUGIN_PIN_SHORT, PLUGIN_VERSION } from "../../lib/hermes/setup/pin";
 import { WORKER_PROPAGATION_CONFIG_KEY } from "../../lib/hermes/deskrpg-plugin-types";
 import {
-  packageManagerFor,
+  parsePackageManager,
   parseSystemPackages,
   systemPackagesCommand,
 } from "../../lib/hermes/setup/system-packages";
@@ -1058,8 +1058,9 @@ export default function GatewaySetupWizard({
           {job.error === "system_packages_missing" &&
             (() => {
               const packages = parseSystemPackages((job.missingPackages ?? []).join(" "));
+              // The job already holds the resolved manager (apt·dnf·…), not the distro id.
               const command = systemPackagesCommand(
-                packageManagerFor(job.packageManager),
+                parsePackageManager(job.packageManager),
                 packages,
               );
               return (

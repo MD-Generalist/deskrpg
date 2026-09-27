@@ -1,17 +1,17 @@
 /**
- * System packages Hermes install needs but that can't be installed without sudo — curl, git, C++ compiler.
+ * System packages the Hermes install requires but will not install itself — curl, git and (Linux) libatomic.
  *
- * The Hermes install script (install.sh) fetches Python, uv and Node into the user's home itself, but tries to
- * install git and a C++ compiler via the package manager (`check_git`, `check_cxx_compiler`; with `set -e` it stops
- * if they're missing). As root or with passwordless sudo it installs them itself; otherwise we stop early here and
- * show the admin a one-line command.
- * DeskRPG does not take sudo passwords.
+ * The current install script (install.sh `stage_prerequisites`) only checks for git and curl and stops if either is
+ * missing; it fetches Python, uv and Node into the user's home itself and needs no compiler, but that Node links
+ * libatomic.so.1, which minimal Linux images lack and the script does not check. As root or with
+ * passwordless sudo the launcher installs them with the package manager; otherwise we stop early and show the admin a
+ * one-line command. DeskRPG does not take sudo passwords.
  *
- * The job keeps only codes (`curl`, `git`, `cxx`) and the package manager name. The command string is built by the
- * screen from this table.
+ * `cxx` stays in the list only so a job recorded by an older DeskRPG still renders; nothing reports it any more.
+ * The job keeps only codes and the package manager name. The command string is built by the screen from this table.
  * The client imports this too — no node modules are used.
  */
-export const SYSTEM_PACKAGES = ["curl", "git", "cxx"] as const;
+export const SYSTEM_PACKAGES = ["curl", "git", "libatomic", "cxx"] as const;
 export type SystemPackage = (typeof SYSTEM_PACKAGES)[number];
 export type PackageManager = "apt" | "dnf" | "pacman" | "macos";
 
@@ -38,15 +38,22 @@ export function packageManagerFor(distro: unknown): PackageManager | null {
   return typeof distro === "string" ? (MANAGERS[distro] ?? null) : null;
 }
 
+/** A package manager name as stored on a setup job (already resolved from the distro). null if unknown. */
+export function parsePackageManager(value: unknown): PackageManager | null {
+  return value === "apt" || value === "dnf" || value === "pacman" || value === "macos"
+    ? value
+    : null;
+}
+
 export function parseSystemPackages(value: unknown): SystemPackage[] {
   const words = typeof value === "string" ? value.trim().split(/\s+/) : [];
   return SYSTEM_PACKAGES.filter((p) => words.includes(p));
 }
 
 const NAMES: Record<Exclude<PackageManager, "macos">, Record<SystemPackage, string>> = {
-  apt: { curl: "curl", git: "git", cxx: "build-essential" },
-  dnf: { curl: "curl", git: "git", cxx: "gcc-c++" },
-  pacman: { curl: "curl", git: "git", cxx: "base-devel" },
+  apt: { curl: "curl", git: "git", libatomic: "libatomic1", cxx: "build-essential" },
+  dnf: { curl: "curl", git: "git", libatomic: "libatomic", cxx: "gcc-c++" },
+  pacman: { curl: "curl", git: "git", libatomic: "gcc-libs", cxx: "base-devel" },
 };
 
 /** Command the admin runs once on the target server. null for unknown distros (the screen shows only package

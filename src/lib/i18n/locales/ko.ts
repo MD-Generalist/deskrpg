@@ -561,6 +561,7 @@ const ko: Record<string, string> = {
   "hermes.wizard.packages.missing": "빠진 패키지:",
   "hermes.wizard.packages.curl": "curl",
   "hermes.wizard.packages.git": "git",
+  "hermes.wizard.packages.libatomic": "libatomic(Node.js 런타임 라이브러리)",
   "hermes.wizard.packages.cxx": "C++ 컴파일러",
   "hermes.wizard.packages.unknownDistro":
     "이 서버의 패키지 관리자를 알 수 없습니다. 위 패키지를 서버의 패키지 관리자로 설치하세요.",
