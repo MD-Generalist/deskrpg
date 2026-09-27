@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,7 @@ import {
   createSystemSsh,
   parseSshConfigHosts,
   readSshConfigHosts,
+  SYSTEM_PROBE_COMMAND,
   systemSshArgs,
   systemSshAvailable,
   validateSystemTarget,
@@ -106,4 +108,11 @@ test("system host args carry only the selection without -F, and the list stays i
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test("the add-host probe is a command every remote shell runs — cmd has no `true`", () => {
+  // A Windows OpenSSH host runs the remote command through cmd.exe, where `true` is "not recognized" (exit 1),
+  // which the wizard then reported as an unreachable server (2026-09-27, WinServer).
+  assert.equal(SYSTEM_PROBE_COMMAND, "exit 0");
+  assert.equal(spawnSync("/bin/sh", ["-c", SYSTEM_PROBE_COMMAND]).status, 0);
 });

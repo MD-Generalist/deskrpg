@@ -152,6 +152,12 @@ export function labelOf(host: Omit<SystemHost, "id" | "label" | "addedAt">): str
 }
 
 /** Arguments when calling via system SSH — reads the server user's config as-is, without `-F`. */
+/**
+ * The remote command that proves a new host answers. It must run in every shell OpenSSH can hand it to: cmd.exe on a
+ * Windows host has no `true` (exit 1, read as an unreachable server), while `exit 0` works in cmd, PowerShell and sh.
+ */
+export const SYSTEM_PROBE_COMMAND = "exit 0";
+
 export function systemSshArgs(host: SystemHost): string[] {
   return [
     ...(host.port ? ["-p", String(host.port)] : []),
