@@ -335,9 +335,9 @@ test("an old-compose Hermes gets the replace-once notice instead of the update c
     host.querySelector("[data-plugin-compose-install] details")?.textContent ?? "",
     /git pull/,
   );
-  assert.equal(host.querySelector("[data-plugin-update]"), null);
-  assert.equal(host.querySelector('[data-action="plugin-update"]'), null);
-  assert.equal(host.querySelector("[data-plugin-outdated-hint]"), null);
+  assert.ok(!host.querySelector("[data-plugin-update]"));
+  assert.ok(!host.querySelector('[data-action="plugin-update"]'));
+  assert.ok(!host.querySelector("[data-plugin-outdated-hint]"));
 });
 
 test("an old-compose Hermes shown to someone it was shared with gets no steps", async () => {
@@ -356,7 +356,7 @@ test("an old-compose Hermes shown to someone it was shared with gets no steps", 
   await renderPage();
   const notice = host.querySelector("[data-plugin-compose-install]");
   assert.equal(notice?.getAttribute("data-plugin-compose-install"), "old-viewer");
-  assert.equal(notice?.querySelector("details"), null);
+  assert.ok(!notice?.querySelector("details"));
 });
 
 test("a Compose Hermes on the pinned commit shows no old-compose notice", async () => {
@@ -372,5 +372,5 @@ test("a Compose Hermes on the pinned commit shows no old-compose notice", async 
     },
   });
   await renderPage();
-  assert.equal(host.querySelector("[data-plugin-compose-install]"), null);
+  assert.ok(!host.querySelector("[data-plugin-compose-install]"));
 });
