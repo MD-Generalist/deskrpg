@@ -10,6 +10,7 @@ import {
   parseSshConfigHosts,
   readSshConfigHosts,
   SYSTEM_PROBE_COMMAND,
+  isWindowsReply,
   systemSshArgs,
   systemSshAvailable,
   validateSystemTarget,
@@ -110,9 +111,14 @@ test("system host args carry only the selection without -F, and the list stays i
   }
 });
 
-test("the add-host probe is a command every remote shell runs — cmd has no `true`", () => {
-  // A Windows OpenSSH host runs the remote command through cmd.exe, where `true` is "not recognized" (exit 1),
-  // which the wizard then reported as an unreachable server (2026-09-27, WinServer).
-  assert.equal(SYSTEM_PROBE_COMMAND, "exit 0");
-  assert.equal(spawnSync("/bin/sh", ["-c", SYSTEM_PROBE_COMMAND]).status, 0);
+test("the add-host probe runs in every remote shell and tells Windows apart", () => {
+  // A Windows OpenSSH host runs the remote command through cmd.exe (or PowerShell), which has no `true` — it once
+  // exited 1 there and read as an unreachable server (2026-09-27, WinServer). `echo` runs everywhere, and only on
+  // Windows does either %OS% (cmd) or $env:OS (PowerShell) expand to Windows_NT.
+  const sh = spawnSync("/bin/sh", ["-c", SYSTEM_PROBE_COMMAND], { encoding: "utf8" });
+  assert.equal(sh.status, 0);
+  assert.equal(isWindowsReply(sh.stdout), false);
+  assert.equal(isWindowsReply("Windows_NT $env:OS\r\n"), true); // cmd.exe
+  assert.equal(isWindowsReply("%OS%\r\nWindows_NT\r\n"), true); // PowerShell
+  assert.equal(isWindowsReply(""), false);
 });

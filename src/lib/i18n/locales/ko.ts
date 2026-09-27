@@ -483,6 +483,10 @@ const ko: Record<string, string> = {
     "이 서버는 컨테이너 안이라서 Hermes 를 자동으로 켜지는 서비스로 등록할 수 없어요. 컨테이너가 아닌 서버(VPS·PC)를 연결해 주세요.",
   "hermes.wizard.error.serviceContainerRefusedDetails":
     "Hermes 는 컨테이너 안에서 사용자 범위 systemd 서비스(hermes gateway install)를 설치하지 않아요. 컨테이너를 꼭 써야 한다면 컨테이너 주 프로세스로 hermes gateway run 을 실행하거나, systemd 가 PID 1 인 컨테이너에서 sudo hermes gateway install --system --run-as-user <사용자> 로 시스템 서비스를 등록한 뒤 '게이트웨이 주소로 연결'로 연결하세요.",
+  "hermes.wizard.error.remoteWindows":
+    "Windows 컴퓨터는 원격 연결을 아직 지원하지 않아요. 그 Windows에 DeskRPG를 설치하고 [로컬 연결]로 연결하세요.",
+  "hermes.wizard.error.remoteWindowsDetails":
+    "DeskRPG는 SSH로 연결한 서버를 Linux로 보고 설치·설정 명령을 보내요. 이 서버는 Windows(OpenSSH)로 응답해서 그 명령을 실행할 수 없어요. 그 Windows에 DeskRPG를 설치하면 같은 설정 마법사를 [로컬 연결]로 쓸 수 있어요.",
   "hermes.wizard.error.windowsScheduledTaskMissing":
     "이 Windows 호스트에는 게이트웨이의 예약 작업이 없고 시작 프로그램 폴더에만 등록돼 있습니다. 이 상태에서는 DeskRPG 가 게이트웨이를 멈추거나 다시 시작할 수 없어 플러그인 갱신과 설정 변경이 막힙니다. 작업 스케줄러에서 Hermes 게이트웨이 예약 작업이 있는지 확인하고, 없으면 그 호스트에서 hermes gateway install 을 다시 실행해 예약 작업으로 등록한 뒤 다시 확인하세요.",
   "hermes.wizard.error.hostOutputTooLarge":

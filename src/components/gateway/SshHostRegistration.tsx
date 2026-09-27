@@ -11,6 +11,7 @@
  *
  * Admin-only (the server decides). No password is accepted.
  */
+import RemoteWindowsNotice, { REMOTE_WINDOWS_UNSUPPORTED } from "./RemoteWindowsNotice";
 import { useEffect, useState, type JSX } from "react";
 
 import { CopyCommand } from "@/components/CopyCommand";
@@ -210,12 +211,16 @@ function SystemSshRegistration({
           </button>
         )}
       </div>
-      {Boolean(error) && (
-        <p role="alert" className="text-sm text-danger">
-          {SYSTEM_ERROR_KEYS[code]
-            ? t(SYSTEM_ERROR_KEYS[code])
-            : setupError(setupCopy[locale], errorCode(error))}
-        </p>
+      {code === REMOTE_WINDOWS_UNSUPPORTED ? (
+        <RemoteWindowsNotice />
+      ) : (
+        Boolean(error) && (
+          <p role="alert" className="text-sm text-danger">
+            {SYSTEM_ERROR_KEYS[code]
+              ? t(SYSTEM_ERROR_KEYS[code])
+              : setupError(setupCopy[locale], errorCode(error))}
+          </p>
+        )
       )}
     </div>
   );

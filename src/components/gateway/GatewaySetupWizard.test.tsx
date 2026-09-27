@@ -1758,3 +1758,27 @@ test("the container reason shows as one line, and the detailed circumstances app
     await f.cleanup();
   }
 });
+
+test("discovery on a remote Windows host shows the remote-Windows notice instead of a generic failure", async () => {
+  const f = await fixture(async (_url, init) => {
+    if (!init?.body) return response({ ...capabilities, canInstallHermes: true });
+    const body = JSON.parse(String(init.body));
+    if (body.action === "discover")
+      return new Response(JSON.stringify({ errorCode: "remote_windows_unsupported" }), {
+        status: 400,
+      });
+    return response({});
+  });
+  try {
+    await act(async () =>
+      Array.from(f.host.querySelectorAll("button"))
+        .find((b) => b.textContent?.includes("로컬 연결"))!
+        .click(),
+    );
+    const notice = f.host.querySelector("[data-remote-windows]");
+    assert.equal(Boolean(notice), true);
+    assert.equal(notice?.querySelector("[data-more-details]")?.tagName, "DETAILS");
+  } finally {
+    await f.cleanup();
+  }
+});

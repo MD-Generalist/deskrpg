@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { SYSTEM_PROBE_COMMAND } from "./system-ssh";
 import { EventEmitter } from "node:events";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +11,7 @@ import {
   createExecutor,
   getSshHosts,
   sshExecutor,
+  sshRemoteIsWindows,
   quoteShellArg,
   killProcessTree,
   secureStdioDir,
@@ -404,4 +406,20 @@ test("scpSource brackets an IPv6 literal so scp does not read its first colon as
     scpSource("[2001:db8::1]", "/tmp/deskrpg-spill-a/f"),
     "[2001:db8::1]:/tmp/deskrpg-spill-a/f",
   );
+});
+
+test("a remote Windows host is told apart with the raw probe, unquoted so PowerShell expands it too", async () => {
+  process.env.DESKRPG_SETUP_SSH_HOSTS = "test-host";
+  let recorded: string[] = [];
+  const reply =
+    (stdout: string, code = 0) =>
+    async (_command: string, args: string[]) => {
+      recorded = args;
+      return { stdout, stderr: "", code };
+    };
+  assert.equal(await sshRemoteIsWindows("test-host", reply("Windows_NT $env:OS\r\n")), true);
+  assert.equal(recorded.at(-1), SYSTEM_PROBE_COMMAND);
+  assert.equal(await sshRemoteIsWindows("test-host", reply("%OS% :OS\n")), false);
+  // An unreachable host is not a Windows verdict.
+  assert.equal(await sshRemoteIsWindows("test-host", reply("", 255)), false);
 });

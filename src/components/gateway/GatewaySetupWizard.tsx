@@ -1,5 +1,6 @@
 "use client";
 
+import RemoteWindowsNotice, { REMOTE_WINDOWS_UNSUPPORTED } from "./RemoteWindowsNotice";
 import { MoreDetails } from "@/components/MoreDetails";
 import { useEffect, useRef, useState } from "react";
 import { Globe, Monitor, Server, Terminal } from "lucide-react";
@@ -531,11 +532,19 @@ export default function GatewaySetupWizard({
           {c.back}
         </button>
       )}
-      {errorCode != null && (
-        <p role="alert" className="mt-4 rounded-lg border border-danger/30 p-3 text-sm text-danger">
-          {errorMessage(errorCode)}
-        </p>
-      )}
+      {errorCode != null &&
+        (errorCode === REMOTE_WINDOWS_UNSUPPORTED ? (
+          <div className="mt-4 rounded-lg border border-danger/30 p-3">
+            <RemoteWindowsNotice />
+          </div>
+        ) : (
+          <p
+            role="alert"
+            className="mt-4 rounded-lg border border-danger/30 p-3 text-sm text-danger"
+          >
+            {errorMessage(errorCode)}
+          </p>
+        ))}
       {/* The suggestion is display-only. The server only edits `.env` when this button is clicked explicitly. */}
       {portSuggestion !== null && portCandidateId && screen !== "job" && (
         <article className="mt-4 rounded-lg border border-primary/40 bg-bg p-4">

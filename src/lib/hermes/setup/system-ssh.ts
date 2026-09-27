@@ -153,10 +153,17 @@ export function labelOf(host: Omit<SystemHost, "id" | "label" | "addedAt">): str
 
 /** Arguments when calling via system SSH — reads the server user's config as-is, without `-F`. */
 /**
- * The remote command that proves a new host answers. It must run in every shell OpenSSH can hand it to: cmd.exe on a
- * Windows host has no `true` (exit 1, read as an unreachable server), while `exit 0` works in cmd, PowerShell and sh.
+ * The remote command that proves a new host answers, and says whether it is Windows. It must run in every shell
+ * OpenSSH can hand it to: cmd.exe on a Windows host has no `true` (exit 1, once read as an unreachable server).
+ * `echo` runs in cmd, PowerShell and sh, and only on Windows does %OS% (cmd) or $env:OS (PowerShell) expand to
+ * Windows_NT; sh prints both literally. Sent as is — quoting it for sh would stop PowerShell expanding it.
  */
-export const SYSTEM_PROBE_COMMAND = "exit 0";
+export const SYSTEM_PROBE_COMMAND = "echo %OS% $env:OS";
+
+/** Whether a reply to `SYSTEM_PROBE_COMMAND` came from Windows. Setup drives remote hosts as Linux only. */
+export function isWindowsReply(stdout: string): boolean {
+  return /\bWindows_NT\b/.test(stdout);
+}
 
 export function systemSshArgs(host: SystemHost): string[] {
   return [

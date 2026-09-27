@@ -17,7 +17,14 @@ import {
   prepareHost,
   setWorkerPropagationHost,
 } from "./host";
-import { localExecutor, sshExecutor, getSshHosts, sshFailureCode, sshOptions } from "./executor";
+import {
+  localExecutor,
+  sshExecutor,
+  sshRemoteIsWindows,
+  getSshHosts,
+  sshFailureCode,
+  sshOptions,
+} from "./executor";
 import {
   ensureSshTunnel,
   readSshTransportTarget,
@@ -38,6 +45,7 @@ import { hasCommandIn, hermesRootPath, venvPythonPath } from "./platform";
 import { managedSsh } from "./ssh-hosts";
 import {
   readSshConfigHosts,
+  isWindowsReply,
   systemSsh,
   SYSTEM_PROBE_COMMAND,
   systemSshArgs,
@@ -212,6 +220,8 @@ export async function sshSystemAdd(userId: string, input: Record<string, unknown
   );
   if (probe.code === 255) throw new Error(sshFailureCode(probe.stderr));
   if (probe.code !== 0) throw new Error("ssh_connection_failed");
+  // Setup drives remote hosts as Linux; a Windows host would only fail later with a generic error. Not saved.
+  if (isWindowsReply(probe.stdout)) throw new Error("remote_windows_unsupported");
   const host = await systemSsh().add(target);
   return { host: { id: host.id, label: host.label } };
 }
@@ -226,7 +236,22 @@ function hostPlatform(target: HostTarget): string {
   return target.mode === "ssh" ? "linux" : process.platform;
 }
 export async function discoverSetupHost(userId: string, target: HostTarget) {
-  return discoverHostState(await requireHost(userId, target), hostPlatform(target));
+  const executor = await requireHost(userId, target);
+  try {
+    return await discoverHostState(executor, hostPlatform(target));
+  } catch (error) {
+    // A host registered by key (never probed) that turns out to be Windows fails the Linux launcher with a generic
+    // error. Say why instead — only on that failure, so a working discovery costs no extra round trip.
+    if (
+      target.mode === "ssh" &&
+      target.hostId &&
+      error instanceof Error &&
+      error.message === "host_operation_failed" &&
+      (await sshRemoteIsWindows(target.hostId).catch(() => false))
+    )
+      throw new Error("remote_windows_unsupported");
+    throw error;
+  }
 }
 export async function inspectSetupHost(userId: string, target: HostTarget, candidateId: string) {
   return inspectHost(await requireHost(userId, target), candidateId, hostPlatform(target));

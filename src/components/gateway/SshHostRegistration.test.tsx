@@ -113,3 +113,40 @@ test("when the server is unreachable, tells you what to check", async () => {
     globalThis.fetch = original;
   }
 });
+
+test("a host that answers as Windows gets the plain remote-Windows notice, with details folded", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    if (body.action === "ssh-system-info")
+      return new Response(JSON.stringify({ available: true, aliases: [] }), { status: 200 });
+    return new Response(JSON.stringify({ errorCode: "remote_windows_unsupported" }), {
+      status: 400,
+    });
+  }) as typeof fetch;
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <I18nProvider initialLocale="ko">
+          <SshHostRegistration onRegistered={() => {}} />
+        </I18nProvider>,
+      ),
+    );
+    await act(async () =>
+      setValue(host.querySelector<HTMLInputElement>('input[name="ssh-system-target"]')!, "winbox"),
+    );
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>("[data-ssh-system] button")!.click(),
+    );
+    const notice = host.querySelector("[data-remote-windows]");
+    assert.equal(Boolean(notice), true);
+    assert.equal(notice?.querySelector("[data-more-details]")?.tagName, "DETAILS");
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+    globalThis.fetch = original;
+  }
+});

@@ -453,6 +453,10 @@ const zh: Record<string, string> = {
     "这台服务器在容器中，无法把 Hermes 注册为自动启动的服务。请连接不是容器的服务器（VPS 或电脑）。",
   "hermes.wizard.error.serviceContainerRefusedDetails":
     "Hermes 不会在容器中安装用户级 systemd 服务（hermes gateway install）。如果必须使用容器，请将 hermes gateway run 作为容器主进程运行，或在 systemd 为 PID 1 的容器中用 sudo hermes gateway install --system --run-as-user <用户> 注册系统服务，然后通过“通过网关地址连接”进行连接。",
+  "hermes.wizard.error.remoteWindows":
+    "暂不支持远程连接 Windows 电脑。请在那台 Windows 上安装 DeskRPG，然后用［本地连接］连接。",
+  "hermes.wizard.error.remoteWindowsDetails":
+    "DeskRPG 会把通过 SSH 连接的服务器当作 Linux 并发送设置命令。此服务器以 Windows（OpenSSH）响应，无法执行这些命令。在那台 Windows 上安装 DeskRPG 后，可以通过［本地连接］使用同样的设置向导。",
   "hermes.wizard.error.windowsScheduledTaskMissing":
     "此 Windows 主机上没有网关的计划任务，只在启动文件夹中注册了。在这种状态下 DeskRPG 无法停止或重启网关，因此插件更新和设置更改会被阻止。请在任务计划程序中确认是否有 Hermes 网关任务；如果没有，请在该主机上重新运行 hermes gateway install 将其注册为计划任务，然后再检查。",
   "hermes.wizard.error.hostOutputTooLarge":
