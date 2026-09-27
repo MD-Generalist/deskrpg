@@ -37,8 +37,10 @@ test("installs and enables the DeskRPG plugin before hermes — without it, gate
   assert.match(compose, /^ {2}hermes-plugins:/m);
   assert.match(compose, /hermes plugins install/);
   assert.match(compose, /hermes plugins enable deskrpg/);
-  // Calling install again on an already-installed plugin exits 1 — must branch to update based on install state.
-  assert.match(compose, /hermes plugins update deskrpg/);
+  // Installs at the DeskRPG image's pin and reinstalls with --force when the installed commit differs —
+  // `plugins update` would follow the plugin's main branch and cannot move an install made with --ref.
+  assert.match(compose, /hermes plugins install \$\$u --ref "\$\$pin" --force/);
+  assert.doesNotMatch(compose, /hermes plugins update deskrpg/);
   assert.match(compose, /hermes-plugins:\s*\n\s*condition: service_completed_successfully/);
 });
 

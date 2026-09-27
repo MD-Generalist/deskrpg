@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -31,19 +32,50 @@ test("the plugin install command in both READMEs uses the pinned commit", () => 
   }
 });
 
-test("the Docker with Hermes compose installs the pinned plugin commit by default", () => {
-  // The compose files are fetched from master and copied into users' servers; a pin bump that forgets them
-  // puts a different plugin under a released DeskRPG than the one it was tested with.
+/** Runs the `sed` a deployment uses to read the pin, against this repo's pin.ts. */
+function readPinWith(script: string): string {
+  const pinFile = path.resolve(import.meta.dirname, "pin.ts");
+  return execFileSync("sh", ["-c", script], { env: { ...process.env, PIN_FILE: pinFile } })
+    .toString()
+    .trim();
+}
+
+test("both Compose stacks read the plugin pin from the DeskRPG image, and their sed yields PLUGIN_PIN", () => {
+  // Hostinger's Update never re-reads the compose, so a commit written into it would freeze; the image moves
+  // with every Update and rollback, so the pin comes from the image's own pin.ts.
   const root = path.resolve(import.meta.dirname, "../../../..");
-  for (const file of ["docker/docker-compose.hermes.yml"]) {
+  for (const file of ["docker-compose.yml", "docker/docker-compose.hermes.yml"]) {
     const text = readFileSync(path.join(root, file), "utf8");
-    const refs = [...text.matchAll(/DESKRPG_PLUGIN_REF:\s*\$\{DESKRPG_PLUGIN_REF:-([^}]*)\}/g)].map(
-      (m) => m[1],
-    );
-    assert.deepEqual(
-      refs,
-      [PLUGIN_PIN],
-      `${file} installs ${refs.join(", ") || "no pinned commit"}`,
+    const line = /^ {6}- (sed -n .*src\/lib\/hermes\/setup\/pin\.ts) > \/pin\/ref$/m.exec(text);
+    assert.ok(line, `${file} has no plugin-pin step`);
+    const script = line[1]
+      .replaceAll("$$", "$")
+      .replace("src/lib/hermes/setup/pin.ts", '"$PIN_FILE"');
+    assert.equal(readPinWith(script), PLUGIN_PIN, file);
+    const plugins = text.slice(text.indexOf("  hermes-plugins:"), text.indexOf("\n  hermes:"));
+    assert.match(plugins, /plugin-pin:\s*\n\s*condition: service_completed_successfully/, file);
+    assert.match(plugins, /- plugin-pin:\/pin:ro/, file);
+    assert.match(plugins, /hermes plugins install \$\$u --ref "\$\$pin" --force/, file);
+    assert.doesNotMatch(text, /hermes plugins update/, file);
+    // A new image (Update, rollback) re-runs the one-shots; Hermes must restart to serve what they installed.
+    const hermes = text.slice(text.indexOf("\n  hermes:"));
+    assert.match(
+      hermes,
+      /plugin-pin:\s*\n\s*condition: service_completed_successfully\s*\n\s*restart: true/,
+      file,
     );
   }
+});
+
+test("the all-in-one image reads the plugin pin from the installed DeskRPG package", () => {
+  const root = path.resolve(import.meta.dirname, "../../../..");
+  const text = readFileSync(path.join(root, "deploy/office/cont-init.d/03-deskrpg-setup"), "utf8");
+  assert.match(
+    text,
+    /PIN_FILE="\$\(npm root -g[^)]*\)\/deskrpg\/src\/lib\/hermes\/setup\/pin\.ts"/,
+  );
+  const line = /^PIN="\$\((sed -n .*"\$PIN_FILE") 2>\/dev\/null \|\| true\)"$/m.exec(text);
+  assert.ok(line, "no pin sed in the init script");
+  assert.equal(readPinWith(line[1]), PLUGIN_PIN);
+  assert.match(text, /hermes plugins install "\$PLUGIN_SOURCE" --ref "\$PIN" --force/);
 });

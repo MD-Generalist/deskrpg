@@ -1,20 +1,19 @@
-# DeskRPG + Hermes on one VPS. Every rule here was measured on Hostinger — the why,
-# and update/pin/rollback steps, live in deploy/hostinger/README.md.
+# DeskRPG + Hermes on one VPS, measured on Hostinger. Why, and update/pin/rollback:
+# deploy/hostinger/README.md.
 #
-# - Keep at REPO ROOT and under 8192 chars (Docker Manager limits); keep .env.example
+# - Keep at REPO ROOT, under 8192 chars (Docker Manager limits); .env.example stays
 #   comment-free (copied verbatim into the Environment box).
 # - Deploy this, then Traefik from the hPanel banner, then set TRAEFIK_HOST.
-# - Never declare a `traefik-proxy` network: `traefik-connect` joins it at runtime so both
-#   Traefik shapes (host mode / bridge network) work. After edits run `docker compose up -d`
-#   with no service name so it runs again.
+# - Never declare `traefik-proxy`: `traefik-connect` joins it at runtime (both Traefik
+#   shapes). Run `docker compose up -d` without a service name so it runs again.
 #
 # Environment (all optional unless noted):
 #   HERMES_API_KEY    REQUIRED — Hermes API server key; DeskRPG's gateway token
 #   TRAEFIK_HOST      REQUIRED, not injected — srvNNNNNN.hstgr.cloud
-#   HERMES_DASHBOARD_PASSWORD  opens https://deskrpg-hermes.<TRAEFIK_HOST> (user admin)
-#   JWT_SECRET        leave as-is; generated into deskrpg-data. A value you set wins
-#   OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY — or ChatGPT login instead
-#   DESKRPG_IMAGE     default :latest so Update upgrades; pin with :<release tag>
+#   HERMES_DASHBOARD_PASSWORD  opens deskrpg-hermes.<TRAEFIK_HOST> (user admin)
+#   JWT_SECRET        generated into deskrpg-data if empty
+#   OPENROUTER/ANTHROPIC/OPENAI_API_KEY — or ChatGPT login
+#   DESKRPG_IMAGE     :latest so Update upgrades; pin with :<release tag> (plugin follows)
 
 services:
   deskrpg:
@@ -25,20 +24,19 @@ services:
     environment:
       DB_TYPE: sqlite
       SQLITE_PATH: /app/data/deskrpg.db
-      # Must be inside the volume so the generated JWT_SECRET survives an Update.
+      # In the volume so a generated JWT_SECRET survives Update.
       DESKRPG_HOME: /app/data/home
-      # No default — every install would sign with the same public key.
+      # No default: a shared default would be a public signing key.
       JWT_SECRET: ${JWT_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       INTERNAL_HOSTNAME: 0.0.0.0
-      # Host-level setup from the web UI stays off on a VPS.
-      # Open to admins by default. Set 0 to turn off.
+      # Web UI host setup: admins by default, 0 turns it off.
       DESKRPG_HOST_SETUP_ENABLED: ${DESKRPG_HOST_SETUP_ENABLED:-1}
     volumes:
       - deskrpg-data:/app/data
     labels:
       - traefik.enable=true
-      # Bridge-mode Traefik must dial the `traefik-proxy` IP, not the project network one.
+      # Bridge-mode Traefik dials the `traefik-proxy` IP.
       - traefik.docker.network=traefik-proxy
       # /socket.io → 3001, everything else → Next.js 3000 (same origin).
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}-ws.rule=Host(`${COMPOSE_PROJECT_NAME:-deskrpg}.${TRAEFIK_HOST:-localhost}`) && PathPrefix(`/socket.io`)
@@ -54,8 +52,8 @@ services:
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.service=${COMPOSE_PROJECT_NAME:-deskrpg}
       - traefik.http.services.${COMPOSE_PROJECT_NAME:-deskrpg}.loadbalancer.server.port=3000
 
-  # One-shot: join deskrpg + hermes to `traefik-proxy` if a bridge-mode Traefik made it.
-  # Read-write socket (host-root equivalent): runs only this script, then exits.
+  # One-shot: join deskrpg + hermes to a bridge-mode Traefik's `traefik-proxy`.
+  # Read-write socket (host-root equivalent); runs this script and exits.
   traefik-connect:
     image: docker:29-cli
     restart: "no"
@@ -78,13 +76,25 @@ services:
           done
         done
 
-  # One-shot before Hermes: install or update, then enable deskrpg-hermes-plugin — without
-  # it DeskRPG cannot list profiles. Re-`install` exits 1, hence the update branch.
+  # One-shots before Hermes: plugin-pin reads this image's plugin commit (a new one restarts
+  # Hermes); hermes-plugins installs it, keeps the old one on failure, and enables it.
+  plugin-pin:
+    image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
+    restart: "no"
+    user: root
+    entrypoint: ["sh", "-c"]
+    command:
+      - sed -n 's/^export const PLUGIN_PIN = "\([0-9a-f]\{40\}\)";$$/\1/p' src/lib/hermes/setup/pin.ts > /pin/ref
+    volumes:
+      - plugin-pin:/pin
+
   hermes-plugins:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
     restart: "no"
-    # Same key/UID as hermes: without API_SERVER_KEY the image writes a random key to
-    # the volume's .env, which then overrides HERMES_API_KEY (DeskRPG gets 401).
+    depends_on:
+      plugin-pin:
+        condition: service_completed_successfully
+    # Same key as hermes, or the image writes its own into .env and DeskRPG gets 401.
     environment:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
@@ -94,7 +104,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - hermes-data:/opt/data
-    # Hermes reads provider keys from /opt/data/.env, not the env: copy the non-empty ones.
+      - plugin-pin:/pin:ro
+    # Hermes reads provider keys only from /opt/data/.env: copy the non-empty ones.
     command:
       - sh
       - -c
@@ -108,15 +119,14 @@ services:
           printf '%s=%s\n' "$$v" "$$val" >> /tmp/env.next
           cat /tmp/env.next > /opt/data/.env
         done
-        if hermes plugins list --plain --no-bundled | grep -q ' deskrpg$$'; then
-          hermes plugins update deskrpg || echo "plugin update failed; keeping installed version"
-        else
-          hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin
-        fi
+        u=https://github.com/dandacompany/deskrpg-hermes-plugin; d=/opt/data/plugins/deskrpg
+        pin=$$(cat /pin/ref 2>/dev/null || true)
+        if [ -n "$$pin" ] && [ "$$(git -c safe.directory='*' -C $$d rev-parse HEAD 2>/dev/null)" != "$$pin" ]; then
+          hermes plugins install $$u --ref "$$pin" --force || [ -d $$d ]
+        elif [ ! -d $$d ]; then hermes plugins install $$u; fi
         hermes plugins enable deskrpg
 
-  # API server at http://hermes:8642 (internal). Dashboard only with a password: without
-  # auth Hermes refuses a public bind and s6 restart-loops it.
+  # API at http://hermes:8642 (internal); dashboard only with a password.
   hermes:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
     restart: unless-stopped
@@ -124,6 +134,9 @@ services:
     depends_on:
       hermes-plugins:
         condition: service_completed_successfully
+      plugin-pin:
+        condition: service_completed_successfully
+        restart: true
     environment:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
@@ -152,3 +165,4 @@ services:
 volumes:
   deskrpg-data:
   hermes-data:
+  plugin-pin:

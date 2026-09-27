@@ -38,7 +38,7 @@ test("installs and enables the plugin before the gateway", () => {
   assert.match(compose, /hermes plugins enable deskrpg/);
   // Installs at the release pin and reinstalls with --force when the installed commit differs — `plugins update`
   // would follow the plugin's main branch and cannot move an install made with --ref.
-  assert.match(compose, /hermes plugins install \S+ --ref "\$\$pin" --force/);
+  assert.match(compose, /hermes plugins install \$\$u --ref "\$\$pin" --force/);
   assert.doesNotMatch(compose, /hermes plugins update deskrpg/);
   assert.match(compose, /hermes-plugins:\s*\n\s*condition: service_completed_successfully/);
 });
