@@ -471,7 +471,7 @@ const zh: Record<string, string> = {
     "开启后,DeskRPG 插件会为每位员工(配置文件)创建 plugins/deskrpg 链接,并在该配置文件 config.yaml 的 plugins.enabled 中加入 deskrpg。新雇用的员工也会自动应用。看板工作者和定时任务的成果要汇集到 DeskRPG 就需要它。此选择保存在 Hermes 根 config.yaml 的 {key} 中;关闭后不再为新员工应用(已创建的链接不会删除)。",
   "hermes.wizard.review.workerPropagationToggle": "开启工作者插件",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "无法保存看板工作进程的启动设置。请检查 ~/.config/systemd/user/hermes-gateway.service.d/ 后重试。",
+    "无法保存看板工作进程的启动设置。请检查 ~/.config/systemd/user/hermes-gateway.service.d/(Linux)或 ~/.hermes/.env(macOS)后重试。",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "无法保存工作者设置。请检查 Hermes 根 config.yaml 后重试。",
   "hermes.wizard.warn.workerPluginApplyFailed":

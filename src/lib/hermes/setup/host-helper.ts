@@ -477,12 +477,24 @@ INSTALL = ROOT / 'hermes-agent'
 LAUNCHER = INSTALL / '.hermes' / 'bin' / 'hermes'
 PM_RUNTIME = not WINDOWS and LAUNCHER.is_file()
 # Kanban workers start as '$HERMES_BIN -p <profile> ...' when it is set, else as '<gateway python> -m hermes_cli.main'
-# without the gateway's PYTHONPATH, which cannot import Hermes on the PM runtime. The wizard sets it in this one
-# systemd drop-in, and the service check accepts exactly this drop-in and no other.
+# without the gateway's PYTHONPATH, which cannot import Hermes on the PM runtime. On systemd the wizard sets it in this
+# one drop-in, and the service check accepts exactly this drop-in and no other. On macOS it goes into the Hermes .env
+# instead (see set-worker-launch).
 WORKER_LAUNCH_DROPIN = 'hermes-bin.conf'
 def worker_launch_dropin_text():
     value = str(LAUNCHER).replace('\\', '\\\\').replace('"', '\\"')
     return '[Service]\n# Written by the DeskRPG setup wizard: kanban workers start through the Hermes launcher.\nEnvironment="HERMES_BIN=' + value + '"\n'
+def pm_launchd_arguments(name, home):
+    """ProgramArguments of the plist upstream's 'hermes gateway install' writes on the PM runtime
+    (hermes_cli/gateway_launchd.py generate_launchd_plist): osascript gives the job a Local Network identity and runs
+    the launcher through the stderr timestamper, logging under <home>/logs."""
+    logs = home / 'logs'
+    stdout_log, stderr_log = str(logs / 'gateway.log'), str(logs / 'gateway.error.log')
+    profile = ['--profile', name] if name != 'default' else []
+    command = [str(LAUNCHER), '--run-module', 'hermes_cli.stderr_timestamp', '--error-log', stderr_log, '--', str(LAUNCHER)] + profile + ['gateway', 'run', '--external-supervisor']
+    shell = 'exec ' + shlex.join(command) + ' >> ' + shlex.quote(stdout_log) + ' 2>> ' + shlex.quote(stderr_log)
+    script = 'ObjC.import("stdlib"); const status=$.system(' + json.dumps(shell) + '); const signal=status & 127; $.exit(status === -1 ? 1 : signal === 0 ? (status >> 8) & 255 : 128 + signal);'
+    return ['/usr/bin/osascript', '-l', 'JavaScript', '-e', script]
 def hermes_argv(*args):
     """A Hermes CLI command: the PM launcher, or the old venv interpreter with -m."""
     return ([str(LAUNCHER)] if PM_RUNTIME else [sys.executable, '-m', 'hermes_cli.main']) + list(args)
@@ -653,17 +665,17 @@ def identity(name, home):
             env = data.get('EnvironmentVariables', {})
             valid = data.get('Label') == label and env.get('HERMES_HOME') == str(home)
             if PM_RUNTIME:
-                # Upstream's PM unit runs the launcher itself: <launcher> [--profile <name>] gateway run.
-                valid = valid and args == [str(LAUNCHER)] + (['--profile', name] if name != 'default' else []) + ['gateway', 'run']
+                # Upstream's PM plist, argument for argument (the profile is inside the osascript program).
+                valid = valid and args == pm_launchd_arguments(name, home)
             else:
                 valid = valid and len(args) >= 4
                 valid = valid and pathlib.Path(args[0]).parent.resolve() == pathlib.Path(python).parent.resolve() and pathlib.Path(args[0]).name in ('python', 'python3', pathlib.Path(python).name) and 'gateway' in args and 'run' in args
                 valid = valid and 'hermes_cli.main' in args
+                expected_profile = ['--profile', name] if name != 'default' else []
+                for flag in ('--profile', '-p'):
+                    if flag in args and (name == 'default' or args[args.index(flag)+1:args.index(flag)+2] != [name]): valid = False
+                if expected_profile and '--profile' not in args and '-p' not in args: valid = False
             valid = valid and not any(k.startswith(('API_SERVER_', 'GATEWAY_MULTIPLEX')) for k in env)
-            expected_profile = ['--profile', name] if name != 'default' else []
-            for flag in ('--profile', '-p'):
-                if flag in args and (name == 'default' or args[args.index(flag)+1:args.index(flag)+2] != [name]): valid = False
-            if expected_profile and '--profile' not in args and '-p' not in args: valid = False
             service = label
             if valid:
                 matches = []
@@ -694,6 +706,8 @@ def identity(name, home):
                         warning = None
                     else: warning = 'managed_service_required'
                 else: warning = 'service_identity_mismatch' if found_unmatched else 'service_identity_ambiguous'
+                # The gateway loads <home>/.env into its environment at start; that is where the wizard puts it.
+                if PM_RUNTIME and command: launch = 'ok' if envfile(home).get('HERMES_BIN') == str(LAUNCHER) else 'missing'
             else: warning = 'service_identity_mismatch'
     elif sys.platform.startswith('linux'):
         service = 'hermes-gateway' + suffix + '.service'
@@ -1053,6 +1067,33 @@ def bounded(argv, env):
         child.stdout.close()
     return code, output
 
+def set_worker_launch(name, home):
+    """The set-worker-launch action (PM runtime): point HERMES_BIN at the launcher so kanban workers can start.
+    Reads the service again: install-service may have just written it."""
+    if not (PM_RUNTIME and (sys.platform.startswith('linux') or sys.platform == 'darwin')): fail('invalid_host_operation')
+    owner = identity(name, home)
+    if not owner['command'] or owner['launch'] is None: fail(service_failure(owner))
+    if owner['launch'] == 'ok': return {'ok': True, 'changed': False}
+    if sys.platform == 'darwin':
+        # Not in the plist: Hermes rewrites it whenever it differs from what it generates, which is on every
+        # 'hermes gateway start' and 'restart' (refresh_launchd_plist_if_needed; measured: an added HERMES_BIN was
+        # gone after one restart). Hermes's own 'config set' stores an UPPER_SNAKE name in <home>/.env, which the
+        # gateway loads into its environment at start. The restart step applies it.
+        if bounded(hermes_argv('--profile', name, 'config', 'set', 'HERMES_BIN', str(LAUNCHER)), {**os.environ, 'HERMES_HOME': str(home)})[0]:
+            fail('worker_launch_write_failed')
+        if identity(name, home)['launch'] != 'ok': fail('worker_launch_write_failed')
+        return {'ok': True, 'changed': True}
+    folder = owner['path'].parent / (owner['service'] + '.d')
+    if folder.is_symlink() or (folder.exists() and not folder.is_dir()): fail('unsafe_host_path')
+    folder.mkdir(mode=0o755, exist_ok=True)
+    try: atomic(folder / WORKER_LAUNCH_DROPIN, worker_launch_dropin_text())
+    except Failure: raise
+    except Exception: fail('worker_launch_write_failed')
+    if run(['systemctl', '--user', 'daemon-reload'], timeout=30).returncode: fail('worker_launch_write_failed')
+    # The restart step makes the gateway run with it; here only confirm systemd sees exactly our value.
+    if identity(name, home)['launch'] != 'ok': fail('worker_launch_write_failed')
+    return {'ok': True, 'changed': True}
+
 def main(action, candidate_id=None, option=None):
     global LOCK
     if ROOT.is_symlink(): fail('unsafe_host_path')
@@ -1144,8 +1185,9 @@ def main(action, candidate_id=None, option=None):
         except Failure as error: public['warning'] = str(error)
         changes = []
         if needs_service(owner): changes.append('installing_service')
-        # PM runtime on systemd: kanban workers need HERMES_BIN — missing on a unit upstream just wrote or will write.
-        if PM_RUNTIME and sys.platform.startswith('linux') and (owner['launch'] == 'missing' or needs_service(owner)):
+        # PM runtime on systemd or launchd: kanban workers need HERMES_BIN — missing on a service upstream just wrote or
+        # will write.
+        if PM_RUNTIME and (sys.platform.startswith('linux') or sys.platform == 'darwin') and (owner['launch'] == 'missing' or needs_service(owner)):
             changes.append('setting_worker_launch')
         if not public['pluginInstalled']: changes.append('installing_plugin')
         elif version_below(public['pluginVersion'], PLUGIN_VERSION): changes.append('updating_plugin')
@@ -1268,22 +1310,7 @@ def main(action, candidate_id=None, option=None):
         except Exception: fail('timezone_write_failed')
         if config(home).get('timezone') != value: fail('timezone_write_failed')
     elif action == 'set-worker-launch':
-        # PM runtime on a systemd host: point HERMES_BIN at the launcher in the wizard's drop-in, so kanban workers
-        # can start. Read the unit again: install-service may have just written it.
-        if not (PM_RUNTIME and sys.platform.startswith('linux')): fail('invalid_host_operation')
-        owner = identity(name, home)
-        if not owner['command'] or owner['launch'] is None: fail(service_failure(owner))
-        if owner['launch'] == 'ok': return {'ok': True, 'changed': False}
-        folder = owner['path'].parent / (owner['service'] + '.d')
-        if folder.is_symlink() or (folder.exists() and not folder.is_dir()): fail('unsafe_host_path')
-        folder.mkdir(mode=0o755, exist_ok=True)
-        try: atomic(folder / WORKER_LAUNCH_DROPIN, worker_launch_dropin_text())
-        except Failure: raise
-        except Exception: fail('worker_launch_write_failed')
-        if run(['systemctl', '--user', 'daemon-reload'], timeout=30).returncode: fail('worker_launch_write_failed')
-        # The restart step makes the gateway run with it; here only confirm systemd sees exactly our value.
-        if identity(name, home)['launch'] != 'ok': fail('worker_launch_write_failed')
-        return {'ok': True, 'changed': True}
+        return set_worker_launch(name, home)
     elif action == 'set-worker-propagation':
         # Only values the operator picked on screen get here. Change only this one key in the root config and leave the rest.
         if option not in ('true', 'false'): fail('invalid_host_operation')

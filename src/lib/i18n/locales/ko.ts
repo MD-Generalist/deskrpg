@@ -502,7 +502,7 @@ const ko: Record<string, string> = {
     "켜면 DeskRPG 플러그인이 직원(프로필)마다 plugins/deskrpg 링크를 만들고, 그 프로필 config.yaml 의 plugins.enabled 에 deskrpg 를 추가합니다. 새로 고용하는 직원에게도 자동으로 적용됩니다. 칸반 워커·크론이 만든 결과물이 DeskRPG 에 모이려면 필요합니다. 이 선택은 Hermes 루트 config.yaml 의 {key} 에 저장되며, 끄면 새 직원에게 적용하지 않습니다(이미 만든 링크는 지우지 않습니다).",
   "hermes.wizard.review.workerPropagationToggle": "워커 적용 켜기",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "칸반 워커 실행 설정을 저장하지 못했습니다. ~/.config/systemd/user/hermes-gateway.service.d/ 를 확인한 뒤 다시 시도하세요.",
+    "칸반 워커 실행 설정을 저장하지 못했습니다. Linux는 ~/.config/systemd/user/hermes-gateway.service.d/, macOS는 ~/.hermes/.env 를 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "워커 적용 설정을 저장하지 못했습니다. Hermes 루트 config.yaml 을 확인한 뒤 다시 시도하세요.",
   "hermes.wizard.warn.workerPluginApplyFailed":

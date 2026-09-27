@@ -505,7 +505,7 @@ const en: Record<string, string> = {
     "When on, the DeskRPG plugin creates a plugins/deskrpg link in every employee (profile) and adds deskrpg to that profile's plugins.enabled in config.yaml. Newly hired employees get it automatically. Kanban workers and cron jobs need it for their results to reach DeskRPG. The choice is stored as {key} in the Hermes root config.yaml; turning it off stops new employees from getting it (existing links are not removed).",
   "hermes.wizard.review.workerPropagationToggle": "Turn on the worker plugin",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "Could not save how kanban workers start. Check ~/.config/systemd/user/hermes-gateway.service.d/ and try again.",
+    "Could not save how kanban workers start. Check ~/.config/systemd/user/hermes-gateway.service.d/ on Linux or ~/.hermes/.env on macOS, and try again.",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "Could not save the worker setting. Check the Hermes root config.yaml and try again.",
   "hermes.wizard.warn.workerPluginApplyFailed":
