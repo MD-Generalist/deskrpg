@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreDetails } from "@/components/MoreDetails";
 import { useEffect, useRef, useState } from "react";
 import { Globe, Monitor, Server, Terminal } from "lucide-react";
 import { useLocale, useT } from "../../lib/i18n";
@@ -939,10 +940,15 @@ export default function GatewaySetupWizard({
               {t("hermes.wizard.review.workerPropagation")}
             </legend>
             <p className="text-xs text-text-muted">
-              {t("hermes.wizard.review.workerPropagationBody", {
-                key: WORKER_PROPAGATION_CONFIG_KEY,
-              })}
+              {t("hermes.wizard.review.workerPropagationBody")}
             </p>
+            <MoreDetails className="text-xs">
+              <p>
+                {t("hermes.wizard.review.workerPropagationDetails", {
+                  key: WORKER_PROPAGATION_CONFIG_KEY,
+                })}
+              </p>
+            </MoreDetails>
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -1166,9 +1172,14 @@ export default function GatewaySetupWizard({
                 onChange={(event) => (setter as (value: string) => void)(event.target.value)}
               />
               {type === "password" && (
-                <p className="mt-1 text-xs text-text-muted">
-                  {t("gateways.onboarding.step2OwnerKeyWarning")}
-                </p>
+                <>
+                  <p className="mt-1 text-xs text-text-muted">
+                    {t("gateways.onboarding.step2OwnerKeyWarning")}
+                  </p>
+                  <MoreDetails className="mt-1 text-xs">
+                    <p>{t("gateways.onboarding.step2OwnerKeyDetails")}</p>
+                  </MoreDetails>
+                </>
               )}
             </label>
           ))}

@@ -123,13 +123,13 @@ const en: Record<string, string> = {
     "Shown once. Hand it over directly — they must change it at the next sign-in.",
   "gateChecklist.title": "This action needs some setup first",
   "gateChecklist.step.gateway": "Gateway connected",
-  "gateChecklist.step.ownerKey": "Listener owner key",
+  "gateChecklist.step.ownerKey": "Administrator key",
   "gateChecklist.step.plugin": "DeskRPG plugin installed",
   "gateChecklist.step.version": "Plugin version",
   "gateChecklist.hint.gateway":
     "No gateway is bound to this office. Register one on the connection screen first.",
   "gateChecklist.hint.ownerKey":
-    "The plugin rejected the key stored for this gateway. It must be the listener owner key (API_SERVER_KEY), not a profile key.",
+    "Hermes refused the key DeskRPG uses because it isn't the administrator key. Switch to the administrator key on the connection screen.",
   "gateChecklist.hint.plugin": "Run this on the gateway host, then restart the Hermes API server.",
   "gateChecklist.hint.version":
     "The installed plugin is older than {minVersion}. Run the same command, then restart the Hermes API server.",
@@ -496,27 +496,25 @@ const en: Record<string, string> = {
   "hermes.wizard.review.pluginUpdate": "Update the DeskRPG plugin to {version}.",
   "hermes.wizard.review.timezone": "Set the gateway time zone to {timezone}.",
   "hermes.wizard.review.timezoneToggle": "Send this browser's time zone to the gateway",
-  "hermes.wizard.step.settingWorkerLaunch": "Set how kanban workers start (HERMES_BIN)",
-  "hermes.wizard.step.settingWorkerPropagation": "Save the worker setting",
-  "hermes.wizard.step.applyingWorkerPlugin": "Apply the plugin to employee profiles",
+  "hermes.wizard.step.settingWorkerLaunch": "Set up so task cards can start",
+  "hermes.wizard.step.settingWorkerPropagation": "Save the employee work-record setting",
+  "hermes.wizard.step.applyingWorkerPlugin": "Apply to employees",
   "hermes.wizard.review.workerPropagation":
-    "Worker plugin — collect kanban and cron results (recommended)",
+    "Also record work employees do on their own (recommended)",
   "hermes.wizard.review.workerPropagationBody":
-    "When on, the DeskRPG plugin creates a plugins/deskrpg link in every employee (profile) and adds deskrpg to that profile's plugins.enabled in config.yaml. Newly hired employees get it automatically. Kanban workers and cron jobs need it for their results to reach DeskRPG. The choice is stored as {key} in the Hermes root config.yaml; turning it off stops new employees from getting it (existing links are not removed).",
-  "hermes.wizard.review.workerPropagationToggle": "Turn on the worker plugin",
+    "When on, work employees do on their own is recorded in DeskRPG, and tasks that need approval go through the check. New employees get it automatically.",
+  "hermes.wizard.review.workerPropagationToggle": "Keep it on",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "Could not save how kanban workers start. Check ~/.config/systemd/user/hermes-gateway.service.d/ on Linux or ~/.hermes/.env on macOS, and try again.",
+    "Couldn't save the setting that lets task cards start. Check the settings location on the computer where Hermes is installed (~/.config/systemd/user/hermes-gateway.service.d/ on Linux, ~/.hermes/.env on macOS), then try again.",
   "hermes.wizard.error.workerPropagationWriteFailed":
-    "Could not save the worker setting. Check the Hermes root config.yaml and try again.",
+    "Couldn't save the employee work-record setting. Check the Hermes settings file (config.yaml), then try again.",
   "hermes.wizard.warn.workerPluginApplyFailed":
-    "The gateway is connected, but the worker plugin could not be applied to every employee. Retry with [Apply] on the gateway screen.",
+    "Connected, but it couldn't be applied to some employees yet. Press [Apply] on the connection screen.",
   "hermes.pluginUpdate.workerPropagationInherited":
-    "This gateway had the worker plugin on — it stays on.",
+    "Recording employees' own work was on, so it stays on.",
   "hermes.pluginUpdate.workerPropagationTurnOff": "Turn off",
-  "hermes.pluginUpdate.workerPropagationTurnedOff":
-    "The worker plugin is off. New employees will not get it.",
-  "hermes.pluginUpdate.workerPropagationTurnOffFailed":
-    "Could not turn off the worker plugin ({code}).",
+  "hermes.pluginUpdate.workerPropagationTurnedOff": "Turned off. New employees won't get it.",
+  "hermes.pluginUpdate.workerPropagationTurnOffFailed": "Couldn't turn it off ({code}).",
   "hermes.wizard.review.pluginVersion": "Plugin version",
   "hermes.wizard.step.installingHermes": "Install Hermes",
   "hermes.wizard.step.creatingProfile": "Create the new profile",
@@ -2317,7 +2315,7 @@ const en: Record<string, string> = {
   "gateways.onboarding.step2Body":
     "The form below needs the API server address (for example {example}) and an auth key.",
   "gateways.onboarding.step2OwnerKeyWarning":
-    "Use the listener owner key (API_SERVER_KEY). A profile-only key blocks Kanban, cron and the event stream.",
+    "Enter the administrator key. With any other key, task cards and scheduled jobs won't work.",
   "gateways.onboarding.step3Title": "Install the DeskRPG plugin for Kanban and cron",
   "gateways.onboarding.step3Body":
     "Run the command below on the gateway host, then restart the Hermes API server.",
@@ -3033,18 +3031,18 @@ const en: Record<string, string> = {
   "kanban.swarm.title": "Start a swarm",
   "kanban.swarm.goal": "Goal",
   "kanban.swarm.goalPlaceholder": "What should be finished?",
-  "kanban.swarm.workers": "Workers",
+  "kanban.swarm.workers": "Employees working together",
   "kanban.swarm.workerTitle": "Assignment",
-  "kanban.swarm.addWorker": "Add worker",
-  "kanban.swarm.removeWorker": "Remove this worker",
+  "kanban.swarm.addWorker": "Add employee",
+  "kanban.swarm.removeWorker": "Remove this employee",
   "kanban.swarm.verifier": "Verifier",
   "kanban.swarm.synthesizer": "Synthesizer",
   "kanban.swarm.submit": "Start swarm",
   "kanban.swarm.hint":
-    "Workers run in parallel; the verifier wakes when they all finish, then the synthesizer.",
+    "Several employees work at the same time; when they all finish, the verifier checks and then the synthesizer puts the results together.",
   "kanban.swarm.error.goal": "Enter a goal.",
-  "kanban.swarm.error.workers": "At least one worker is required.",
-  "kanban.swarm.error.workerTitle": "Give every worker an assignment.",
+  "kanban.swarm.error.workers": "Add at least one employee.",
+  "kanban.swarm.error.workerTitle": "Write what each employee should do.",
   "kanban.swarm.unsupported": "This gateway's plugin does not support swarms.",
   "kanban.blackboard": "Shared blackboard",
   "kanban.refresh": "Refresh",
@@ -3149,7 +3147,7 @@ const en: Record<string, string> = {
   "kanban.run.attempt": "Attempt {n}",
   "kanban.run.end.running": "Running",
   "kanban.run.end.stopped": "Stopped by a person",
-  "kanban.run.end.lost": "Worker stopped responding — reclaimed",
+  "kanban.run.end.lost": "Employee stopped responding — put back to waiting",
   "kanban.run.end.moved": "Stopped because the card was moved",
   "kanban.run.details": "Details",
   "kanban.run.made.changedFiles": "Changed files",
@@ -3575,6 +3573,12 @@ const en: Record<string, string> = {
     "Tasks for {names} can finish without the approval they need. Press [Turn on] on the connection screen to fix it.",
   "kanban.reviewGap.assignee":
     "If you give this to {name}, it can finish without the approval it needs.",
+  "hermes.wizard.review.workerPropagationDetails":
+    "When on, the DeskRPG plugin creates a plugins/deskrpg link in every employee (profile) and adds deskrpg to that profile's plugins.enabled in config.yaml. The choice is stored as {key} in the Hermes root config.yaml. Turning it off only stops new employees from getting it; existing links stay.",
+  "gateChecklist.hint.ownerKeyDetails":
+    "The administrator key is the Hermes default profile's API_SERVER_KEY (the listener owner key). Other profiles' keys can't reach the DeskRPG plugin.",
+  "gateways.onboarding.step2OwnerKeyDetails":
+    "It's the Hermes default profile's API_SERVER_KEY (the listener owner key). A profile-only key blocks Kanban, cron and the event stream.",
   "gateways.workerPlugin.recheck": "Check again",
   "gateways.workerPlugin.rechecking": "Checking…",
   "gateways.workerPlugin.propagationEnabled":

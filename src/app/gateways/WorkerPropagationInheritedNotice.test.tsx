@@ -60,7 +60,10 @@ test("pressing turn off sends the request, and afterwards shows the result text 
   assert.equal(calls, 1);
   assert.equal(changed, 1);
   assert.equal(host.querySelectorAll("button").length, 0);
-  assert.match(host.textContent!, /워커 적용을 껐습니다/);
+  assert.equal(
+    host.querySelector("[data-worker-propagation-inherited]")?.getAttribute("data-state"),
+    "turned-off",
+  );
   await cleanup();
 });
 

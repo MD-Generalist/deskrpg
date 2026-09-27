@@ -124,13 +124,13 @@ const ja: Record<string, string> = {
     "表示は一度だけです。本人に直接渡してください。次回のログインで変更が必要です。",
   "gateChecklist.title": "この操作には準備が必要です",
   "gateChecklist.step.gateway": "ゲートウェイ接続",
-  "gateChecklist.step.ownerKey": "リスナー所有者キー",
+  "gateChecklist.step.ownerKey": "管理者用キー",
   "gateChecklist.step.plugin": "DeskRPG プラグインのインストール",
   "gateChecklist.step.version": "プラグインのバージョン",
   "gateChecklist.hint.gateway":
     "このオフィスにゲートウェイが接続されていません。まず接続画面で登録してください。",
   "gateChecklist.hint.ownerKey":
-    "ゲートウェイに設定したキーがプラグインに拒否されました。プロフィールキーではなく、リスナー所有者キー（API_SERVER_KEY）が必要です。",
+    "DeskRPG が使うキーが管理者用ではないため、Hermes に拒否されました。接続画面で管理者用のキーに変えてください。",
   "gateChecklist.hint.plugin":
     "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
   "gateChecklist.hint.version":
@@ -503,26 +503,25 @@ const ja: Record<string, string> = {
   "hermes.wizard.review.pluginUpdate": "DeskRPGプラグインを{version}に更新します。",
   "hermes.wizard.review.timezone": "ゲートウェイのタイムゾーンを{timezone}に設定します。",
   "hermes.wizard.review.timezoneToggle": "このブラウザーのタイムゾーンをゲートウェイに設定する",
-  "hermes.wizard.step.settingWorkerLaunch": "カンバンワーカーの起動設定(HERMES_BIN)",
-  "hermes.wizard.step.settingWorkerPropagation": "ワーカー設定を保存",
-  "hermes.wizard.step.applyingWorkerPlugin": "社員プロファイルにプラグインを適用",
-  "hermes.wizard.review.workerPropagation": "ワーカー適用 — カンバン・cron の成果物を集める(推奨)",
+  "hermes.wizard.step.settingWorkerLaunch": "業務カードが始まるように設定",
+  "hermes.wizard.step.settingWorkerPropagation": "社員の記録設定を保存",
+  "hermes.wizard.step.applyingWorkerPlugin": "社員に適用",
+  "hermes.wizard.review.workerPropagation": "社員が一人で進めた仕事も記録する（推奨）",
   "hermes.wizard.review.workerPropagationBody":
-    "オンにすると、DeskRPG プラグインが社員(プロファイル)ごとに plugins/deskrpg リンクを作成し、そのプロファイルの config.yaml の plugins.enabled に deskrpg を追加します。新しく雇う社員にも自動で適用されます。カンバンワーカーや cron の成果物を DeskRPG に集めるには必要です。この選択は Hermes ルートの config.yaml の {key} に保存され、オフにすると新しい社員には適用しません(既存のリンクは削除しません)。",
-  "hermes.wizard.review.workerPropagationToggle": "ワーカー適用をオンにする",
+    "オンにすると、社員が一人で進めた仕事が DeskRPG に記録され、承認が必要な業務も確認を通ります。新しく雇う社員にも自動で適用されます。",
+  "hermes.wizard.review.workerPropagationToggle": "オンにしておく",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "カンバンワーカーの起動設定を保存できませんでした。Linux は ~/.config/systemd/user/hermes-gateway.service.d/、macOS は ~/.hermes/.env を確認してから再試行してください。",
+    "業務カードを始める設定を保存できませんでした。Hermes が入っているコンピューターの設定場所（Linux は ~/.config/systemd/user/hermes-gateway.service.d/、macOS は ~/.hermes/.env）を確認してから、もう一度お試しください。",
   "hermes.wizard.error.workerPropagationWriteFailed":
-    "ワーカー設定を保存できませんでした。Hermes ルートの config.yaml を確認してから再試行してください。",
+    "社員の記録設定を保存できませんでした。Hermes の設定ファイル（config.yaml）を確認してから、もう一度お試しください。",
   "hermes.wizard.warn.workerPluginApplyFailed":
-    "接続は完了しましたが、一部の社員にワーカー適用を完了できませんでした。ゲートウェイ画面の[適用]で再試行してください。",
+    "接続は完了しましたが、一部の社員にはまだ適用できていません。接続画面で［適用］を押してください。",
   "hermes.pluginUpdate.workerPropagationInherited":
-    "このゲートウェイではワーカー適用がオンでした — そのままオンにします。",
+    "社員が一人で進めた仕事の記録がオンだったので、そのままオンにします。",
   "hermes.pluginUpdate.workerPropagationTurnOff": "オフにする",
   "hermes.pluginUpdate.workerPropagationTurnedOff":
-    "ワーカー適用をオフにしました。新しく雇う社員には適用しません。",
-  "hermes.pluginUpdate.workerPropagationTurnOffFailed":
-    "ワーカー適用をオフにできませんでした({code})。",
+    "オフにしました。新しく雇う社員には適用しません。",
+  "hermes.pluginUpdate.workerPropagationTurnOffFailed": "オフにできませんでした（{code}）。",
   "hermes.wizard.review.pluginVersion": "プラグインバージョン",
   "hermes.wizard.step.installingHermes": "Hermesをインストール",
   "hermes.wizard.step.creatingProfile": "新しいプロファイルを作成",
@@ -2330,7 +2329,7 @@ const ja: Record<string, string> = {
   "gateways.onboarding.step2Body":
     "下のフォームには API サーバーのアドレス（例: {example}）と認証キーが必要です。",
   "gateways.onboarding.step2OwnerKeyWarning":
-    "必ずリスナー所有者キー（API_SERVER_KEY）を入力してください。プロフィールキーだけではカンバン・cron・イベントストリームが使えません。",
+    "管理者用のキーを入れてください。ほかのキーでは業務カードや予約ジョブが動きません。",
   "gateways.onboarding.step3Title": "カンバンと cron を使うには DeskRPG プラグインを入れます",
   "gateways.onboarding.step3Body":
     "ゲートウェイのホストで次のコマンドを実行し、Hermes API サーバーを再起動してください。",
@@ -3061,17 +3060,18 @@ const ja: Record<string, string> = {
   "kanban.swarm.title": "スウォームを開始",
   "kanban.swarm.goal": "目標",
   "kanban.swarm.goalPlaceholder": "何を終わらせたいですか?",
-  "kanban.swarm.workers": "ワーカー",
+  "kanban.swarm.workers": "一緒に働く社員",
   "kanban.swarm.workerTitle": "任せる作業",
-  "kanban.swarm.addWorker": "ワーカーを追加",
-  "kanban.swarm.removeWorker": "このワーカーを外す",
+  "kanban.swarm.addWorker": "社員を追加",
+  "kanban.swarm.removeWorker": "この社員を外す",
   "kanban.swarm.verifier": "検証者",
   "kanban.swarm.synthesizer": "統合者",
   "kanban.swarm.submit": "スウォーム開始",
-  "kanban.swarm.hint": "ワーカーが並行して作業し、全員終わると検証者が、続いて統合者が起動します。",
+  "kanban.swarm.hint":
+    "複数の社員が同時に働き、全員が終わると検証者が確認し、そのあと統合者が結果をまとめます。",
   "kanban.swarm.error.goal": "目標を入力してください。",
-  "kanban.swarm.error.workers": "ワーカーが最低1人必要です。",
-  "kanban.swarm.error.workerTitle": "各ワーカーに任せる作業を入力してください。",
+  "kanban.swarm.error.workers": "一緒に働く社員が一人以上必要です。",
+  "kanban.swarm.error.workerTitle": "各社員に任せる仕事を書いてください。",
   "kanban.swarm.unsupported": "このゲートウェイのプラグインはスウォームに対応していません。",
   "kanban.blackboard": "共有ブラックボード",
   "kanban.refresh": "更新",
@@ -3176,7 +3176,7 @@ const ja: Record<string, string> = {
   "kanban.run.attempt": "{n} 回目の試行",
   "kanban.run.end.running": "実行中",
   "kanban.run.end.stopped": "手動で中断",
-  "kanban.run.end.lost": "ワーカーの応答が途絶えて回収",
+  "kanban.run.end.lost": "社員の応答が途切れたため待機に戻しました",
   "kanban.run.end.moved": "カードの移動で停止",
   "kanban.run.details": "詳細",
   "kanban.run.made.changedFiles": "変更したファイル",
@@ -3598,6 +3598,12 @@ const ja: Record<string, string> = {
   "kanban.reviewGap.board":
     "{names} の業務は、承認が必要でも確認なしで終わることがあります。接続画面で［オンにする］を押すと直ります。",
   "kanban.reviewGap.assignee": "{name} に任せると、承認が必要でも確認なしで終わることがあります。",
+  "hermes.wizard.review.workerPropagationDetails":
+    "オンにすると、DeskRPG プラグインが社員（プロファイル）ごとに plugins/deskrpg リンクを作り、そのプロファイルの config.yaml の plugins.enabled に deskrpg を追加します。この選択は Hermes ルートの config.yaml の {key} に保存されます。オフにしても新しい社員に適用しなくなるだけで、作成済みのリンクは残ります。",
+  "gateChecklist.hint.ownerKeyDetails":
+    "管理者用キーは Hermes の default プロファイルの API_SERVER_KEY（リスナー所有者キー）です。ほかのプロファイルのキーでは DeskRPG プラグインにアクセスできません。",
+  "gateways.onboarding.step2OwnerKeyDetails":
+    "Hermes の default プロファイルの API_SERVER_KEY（リスナー所有者キー）です。プロファイルのキーだけではカンバン・cron・イベントストリームが止まります。",
   "gateways.workerPlugin.recheck": "再確認",
   "gateways.workerPlugin.rechecking": "確認中…",
   "gateways.workerPlugin.propagationEnabled":

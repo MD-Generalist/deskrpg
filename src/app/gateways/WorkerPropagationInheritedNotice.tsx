@@ -73,6 +73,7 @@ export default function WorkerPropagationInheritedNotice({
     <p
       className="-mt-3 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted"
       data-worker-propagation-inherited=""
+      data-state={done ? "turned-off" : "on"}
     >
       {done ? (
         <span className="text-success">{t("hermes.pluginUpdate.workerPropagationTurnedOff")}</span>

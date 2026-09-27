@@ -628,8 +628,9 @@ test("worker propagation appears on by default with its public copy and carries 
   );
   try {
     const text = f.host.textContent!;
-    assert.match(text, /워커 적용 — 칸반·크론 결과물 모으기 \(권장\)/);
-    // Does not hide what's changing or where it's saved.
+    assert.ok(f.host.querySelector("[data-worker-propagation-choice] legend"));
+    // Does not hide what's changing or where it's saved — it sits in the folded details.
+    assert.ok(f.host.querySelector("[data-worker-propagation-choice] [data-more-details]"));
     assert.match(text, /plugins\/deskrpg 링크/);
     assert.match(text, /plugins\.enabled/);
     assert.match(text, /plugins\.entries\.deskrpg\.worker_propagation/);

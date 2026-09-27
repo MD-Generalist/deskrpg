@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreDetails } from "@/components/MoreDetails";
 import Link from "next/link";
 
 import Modal from "@/components/ui/Modal";
@@ -76,6 +77,11 @@ export default function GateChecklistModal({
                         ? t(step.hintKey, { minVersion: blocker.minVersion })
                         : t(step.hintKey)}
                     </p>
+                    {blocker.kind === "plugin_unauthorized" && (
+                      <MoreDetails>
+                        <p>{t("gateChecklist.hint.ownerKeyDetails")}</p>
+                      </MoreDetails>
+                    )}
                     {(blocker.kind === "plugin_absent" ||
                       blocker.kind === "plugin_upgrade_required") && (
                       <CopyCommand command={blocker.command} />
