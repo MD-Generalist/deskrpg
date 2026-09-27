@@ -227,8 +227,13 @@ const ja: Record<string, string> = {
   "channels.create.failed": "チャンネルの作成に失敗しました",
   "channels.create.group": "グループ",
   "channels.create.noAvailableGroups": "チャンネルを作成するには利用可能なグループが必要です。",
-  "channels.create.unavailableHint":
-    "チャンネル作成には、少なくとも1つの利用可能なグループが必要です。",
+  "channels.create.blocked.no_group":
+    "所属しているグループがないため、オフィスを作成できません。グループの招待コードを受け取っている場合は、グループに参加してください。",
+  "channels.create.blocked.ask_admin":
+    "このアカウントには「オフィス作成」の権限がありません。このサーバーの管理者に権限を依頼してください。既存のオフィスには参加コードで入れます。",
+  "channels.create.blocked.grant_yourself":
+    "グループの権限で「オフィス作成」がオフになっています。グループの権限設定でオンにするとオフィスを作成できます。",
+  "channels.create.blocked.openPermissions": "グループの権限設定を開く",
   "channels.privateChannel": "非公開チャンネル",
   "admin.groups.title": "グループアクセス管理",
   "admin.groups.subtitle":

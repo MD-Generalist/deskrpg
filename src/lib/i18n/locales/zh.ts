@@ -206,7 +206,13 @@ const zh: Record<string, string> = {
   "channels.create.failed": "创建频道失败",
   "channels.create.group": "群组",
   "channels.create.noAvailableGroups": "创建频道前需要至少一个可用群组。",
-  "channels.create.unavailableHint": "只有在至少有一个可用群组时才能创建频道。",
+  "channels.create.blocked.no_group":
+    "您不属于任何群组，因此无法创建办公室。如果收到了群组邀请码，请加入该群组。",
+  "channels.create.blocked.ask_admin":
+    "此账号没有“创建办公室”权限。请向此服务器的管理员申请该权限。您仍可以用加入码进入已有的办公室。",
+  "channels.create.blocked.grant_yourself":
+    "群组权限中已关闭“创建办公室”。在群组权限设置中开启后即可创建办公室。",
+  "channels.create.blocked.openPermissions": "打开群组权限设置",
   "channels.privateChannel": "私密频道",
   "admin.groups.title": "群组访问管理",
   "admin.groups.subtitle": "集中查看成员、邀请、加入请求、权限和用户覆盖。",

@@ -224,8 +224,13 @@ const ko: Record<string, string> = {
   "channels.create.failed": "오피스 생성에 실패했습니다",
   "channels.create.group": "그룹",
   "channels.create.noAvailableGroups": "오피스을 만들려면 사용할 수 있는 그룹이 필요합니다.",
-  "channels.create.unavailableHint":
-    "생성 가능한 그룹이 하나 이상 있어야 오피스을 만들 수 있습니다.",
+  "channels.create.blocked.no_group":
+    "속한 그룹이 없어 오피스를 만들 수 없습니다. 그룹 초대 코드를 받았다면 그룹에 참여하세요.",
+  "channels.create.blocked.ask_admin":
+    "이 계정에는 '오피스 만들기' 권한이 없습니다. 이 서버 관리자에게 '오피스 만들기' 권한을 요청하세요. 이미 있는 오피스에는 참여 코드로 들어갈 수 있습니다.",
+  "channels.create.blocked.grant_yourself":
+    "그룹 권한에서 '오피스 만들기'가 꺼져 있습니다. 그룹 권한 설정에서 켜면 오피스를 만들 수 있습니다.",
+  "channels.create.blocked.openPermissions": "그룹 권한 설정 열기",
   "channels.privateChannel": "비공개 오피스",
   "admin.groups.title": "그룹 접근 관리",
   "admin.groups.subtitle": "멤버, 초대, 가입 요청, 권한, 사용자 오버라이드를 한 곳에서 관리합니다.",

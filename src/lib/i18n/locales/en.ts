@@ -225,8 +225,13 @@ const en: Record<string, string> = {
   "channels.create.failed": "Failed to create channel",
   "channels.create.group": "Group",
   "channels.create.noAvailableGroups": "You need an available group before creating a channel.",
-  "channels.create.unavailableHint":
-    "Channel creation is unavailable until you have at least one eligible group.",
+  "channels.create.blocked.no_group":
+    "You are not in any group, so you can't create an office. If you received a group invite code, join the group.",
+  "channels.create.blocked.ask_admin":
+    "This account doesn't have the 'Create office' permission. Ask this server's administrator to grant it. You can still join existing offices with a join code.",
+  "channels.create.blocked.grant_yourself":
+    "'Create office' is turned off in your group's permissions. Turn it on in the group permission settings to create an office.",
+  "channels.create.blocked.openPermissions": "Open group permissions",
   "channels.privateChannel": "Private Channel",
   "admin.groups.title": "Group Access",
   "admin.groups.subtitle":

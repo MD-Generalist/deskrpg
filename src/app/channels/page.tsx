@@ -12,6 +12,7 @@ import { Lock, X } from "lucide-react";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
 import RosterAvatar from "@/components/RosterAvatar";
 import environmentThumbnails from "@/game/three/office-environment-thumbnails.json";
+import { createBlockedReason } from "./create-blocked";
 
 interface Channel {
   id: string;
@@ -46,6 +47,7 @@ interface GroupOption {
   role?: GroupMemberRole;
   canCreateChannel?: boolean;
   canManageGroup?: boolean;
+  canManagePermissions?: boolean;
 }
 
 export default function ChannelsPage() {
@@ -217,7 +219,8 @@ function ChannelsPageInner() {
   };
 
   const closeJoinDialog = () => setJoinDialog(null);
-  const canCreateChannels = availableGroups.some((group) => group.canCreateChannel);
+  const blockedReason = createBlockedReason(availableGroups);
+  const canCreateChannels = blockedReason === null;
   const canManageGroups = availableGroups.some((group) => group.canManageGroup);
 
   if (loading) {
@@ -272,7 +275,7 @@ function ChannelsPageInner() {
                 type="button"
                 disabled
                 className="cursor-not-allowed whitespace-nowrap rounded bg-surface-raised px-4 py-2 font-semibold text-text-dim opacity-60"
-                title={t("channels.create.unavailableHint")}
+                title={t(`channels.create.blocked.${blockedReason}`)}
               >
                 {t("channels.createChannel")}
               </button>
@@ -280,9 +283,30 @@ function ChannelsPageInner() {
           </div>
         </div>
 
-        {!canCreateChannels && (
-          <div className="mb-6 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-muted">
-            {t("channels.create.unavailableHint")}
+        {blockedReason && (
+          <div
+            data-create-blocked={blockedReason}
+            className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-muted"
+          >
+            <span className="min-w-0 flex-1">{t(`channels.create.blocked.${blockedReason}`)}</span>
+            {blockedReason === "no_group" && (
+              <button
+                type="button"
+                data-action="join-group"
+                onClick={() => setJoinDialog("group")}
+                className="whitespace-nowrap rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold text-text hover:bg-surface-raised/80"
+              >
+                {t("channels.groupInviteJoin")}
+              </button>
+            )}
+            {blockedReason === "grant_yourself" && (
+              <Link
+                href="/admin/groups"
+                className="whitespace-nowrap rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold text-text hover:bg-surface-raised/80"
+              >
+                {t("channels.create.blocked.openPermissions")}
+              </Link>
+            )}
           </div>
         )}
 
