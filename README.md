@@ -26,7 +26,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.927.1` — Runs on upstream Hermes without a patched core. Cards and swarms carry a human, AI or AI-then-person approval policy that the plugin enforces with Hermes hooks, and an employee can never approve its own work. Approvals made outside DeskRPG are marked as such. NPC skill management keeps working on upstream Hermes (Hub jobs run the documented Hermes CLI); reference files are edited by asking the employee in chat. The setup wizard handles upstream's package-manager install and warns when kanban workers cannot start. Requires plugin 0.28.2.
+- Version: `v2026.928.1` — Windows and upstream package-manager installs stay up: the plugin no longer blocks the Hermes gateway while DeskRPG checks it (a Windows gateway used to deadlock and stop). The setup wizard prepares the plugin's Python dependencies and updates the plugin in a way upstream Hermes accepts without a terminal, and container startup does the same. When a gateway DeskRPG can reach stops answering, its owner gets a [Restart] button. Custom and local models no longer trigger a missing-provider warning, and a host step that runs out of time says Hermes may still be getting ready. Hostinger installs from before this release: paste the new compose file once ([Hostinger guide, "Replace the compose once"](deploy/hostinger/README.md#set-up-before-this-change-replace-the-compose-once)). Requires plugin 0.30.2.
 
 ## What You Can Do
 

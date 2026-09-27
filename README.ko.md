@@ -33,7 +33,7 @@ DeskRPG는 에이전트 런타임을 따로 담고 있지 않습니다. 이미 �
 
 - 웹사이트: [https://deskrpg.com](https://deskrpg.com) (운영 중)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v2026.927.1` — 패치한 core 없이 본가 Hermes 에서 동작합니다. 카드와 스웜에 사람·AI·AI 뒤 사람 승인 정책을 붙이고, 플러그인이 Hermes 훅으로 이를 지킵니다. 직원은 자기 작업을 스스로 승인할 수 없습니다. DeskRPG 밖에서 완료된 카드는 따로 표시합니다. 본가 Hermes 에서도 NPC 스킬 관리가 동작합니다(허브 작업은 문서화된 Hermes CLI 로 실행). 참고 파일은 직원에게 대화로 수정을 요청합니다. 설치 마법사가 본가의 패키지 매니저 설치를 다루고, 칸반 워커를 띄울 수 없으면 경고합니다. 플러그인 0.28.2 가 필요합니다.
+- 버전: `v2026.928.1` — Windows 와 본가 패키지 매니저 설치에서 게이트웨이가 멈추지 않습니다. DeskRPG 가 상태를 확인할 때 플러그인이 Hermes 게이트웨이를 붙잡지 않습니다(Windows 게이트웨이가 교착으로 멈추던 문제). 설치 마법사가 플러그인에 필요한 Python 부품을 준비하고, 터미널 없이도 본가 Hermes 가 받아들이는 방식으로 플러그인을 올립니다. 컨테이너 시작도 같은 방식입니다. DeskRPG 가 닿을 수 있는 게이트웨이가 응답하지 않으면 주인에게 [다시 시작] 버튼이 보입니다. 직접 지정한 모델·로컬 모델에 '모델 제공자 없음' 경고가 뜨지 않고, 호스트 작업이 시간 안에 끝나지 않으면 Hermes 가 준비 중일 수 있다고 알려 줍니다. 이 릴리스 전에 Hostinger 로 설치했다면 새 설치 파일(compose)을 한 번 붙여 넣어 주세요([Hostinger 안내의 "Replace the compose once"](deploy/hostinger/README.md#set-up-before-this-change-replace-the-compose-once) 참고). 플러그인 0.30.2 가 필요합니다.
 
 ## 무엇을 할 수 있나요
 
