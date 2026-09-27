@@ -2330,6 +2330,15 @@ const ko: Record<string, string> = {
   "gateways.pluginVersionUnknown": "확인되지 않음",
   "gateways.pluginVersionOutdated":
     "뒤처져 있습니다. 호스트에서 플러그인을 올린 뒤 연결 테스트를 누르세요.",
+  "gateways.pluginContainer.outdated":
+    "새 버전으로 올려야 일부 기능이 제대로 동작해요. 서버에서 '자세히 보기'의 명령을 한 번 실행한 뒤 [연결 테스트]를 눌러 주세요.",
+  "gateways.pluginContainer.outdatedViewer":
+    "새 버전으로 올려야 일부 기능이 제대로 동작해요. 이 연결을 만든 사람에게 올려 달라고 알려 주세요.",
+  "gateways.pluginContainer.refused":
+    "이 화면에서는 바로 올릴 수 없어요. 서버에서 '자세히 보기'의 명령을 실행한 뒤 [연결 테스트]를 눌러 주세요.",
+  "gateways.pluginContainer.details": "자세히 보기",
+  "gateways.pluginContainer.detailsBody":
+    "Hermes 가 DeskRPG 와 같은 Docker Compose 안에서 돌고 있어요. 이 명령은 플러그인을 새로 받고 Hermes 컨테이너를 다시 시작해요. 처음 띄울 때 -f 나 --env-file 옵션을 썼다면 똑같이 붙여 주세요. docker compose up -d 만으로는 새 버전이 적용되지 않아요.",
   "gateways.pluginVersionRecheck": "연결 테스트를 누르면 확인합니다.",
   "gateways.pluginVersionUpdateNow": "지금 갱신",
   "gateways.workerPlugin.missing":

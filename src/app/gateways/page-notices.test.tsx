@@ -262,3 +262,52 @@ test("a refused update's error goes away once the connection test finds the plug
     "최신이 됐는데 거절 문구가 남았다",
   );
 });
+
+const attr = (selector: string, name: string) =>
+  host.querySelector(selector)?.getAttribute(name) ?? null;
+
+test("a Compose Hermes (http://hermes:8642) gets the Compose command, and the refused update points to it", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [gateway({ baseUrl: "http://hermes:8642", pluginVersion: "0.1.0" })],
+    },
+    "POST /api/gateways/gw-1/plugin/update": {
+      __status: 400,
+      errorCode: "plugin_update_unsupported_host",
+    },
+  });
+  await renderPage();
+  assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "compose");
+  const details = host.querySelector('details[data-plugin-update="compose"]');
+  assert.ok(details, "the command sits in a collapsed details block");
+  assert.equal(details.hasAttribute("open"), false);
+  assert.match(details.textContent ?? "", /docker compose up -d --force-recreate hermes/);
+
+  await click(host.querySelector('[data-action="plugin-update"]'));
+  await flush();
+  assert.equal(attr("[data-plugin-update-error]", "data-plugin-update-error"), "compose");
+});
+
+test("a Compose Hermes shown to someone it was shared with gets no command", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [
+        gateway({ baseUrl: "http://hermes:8642", pluginVersion: "0.1.0", isOwner: false }),
+      ],
+    },
+  });
+  await renderPage();
+  assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "compose-viewer");
+  assert.equal(host.querySelector("[data-plugin-update]"), null);
+});
+
+test("a gateway on another host keeps the host guidance and no Compose command", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [gateway({ baseUrl: "http://host.docker.internal:8642", pluginVersion: "0.1.0" })],
+    },
+  });
+  await renderPage();
+  assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "host");
+  assert.equal(host.querySelector("[data-plugin-update]"), null);
+});

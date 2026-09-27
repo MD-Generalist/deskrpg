@@ -2341,6 +2341,15 @@ const en: Record<string, string> = {
   "gateways.pluginVersionUnknown": "not checked",
   "gateways.pluginVersionOutdated":
     "is out of date. Update it on the host, then run Test connection.",
+  "gateways.pluginContainer.outdated":
+    "Some features need the newer version to work properly. Run the command under 'Show details' once on your server, then press [Test connection].",
+  "gateways.pluginContainer.outdatedViewer":
+    "Some features need the newer version to work properly. Ask the person who set up this connection to update it.",
+  "gateways.pluginContainer.refused":
+    "This screen can't update it directly. Run the command under 'Show details' on your server, then press [Test connection].",
+  "gateways.pluginContainer.details": "Show details",
+  "gateways.pluginContainer.detailsBody":
+    "Hermes runs in the same Docker Compose project as DeskRPG. This command downloads the new plugin and restarts the Hermes container. If you started it with -f or --env-file, add the same options. docker compose up -d alone does not apply the new version.",
   "gateways.pluginVersionRecheck": "Run Test connection to check.",
   "gateways.pluginVersionUpdateNow": "Update now",
   "gateways.workerPlugin.missing":
