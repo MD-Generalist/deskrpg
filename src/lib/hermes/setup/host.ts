@@ -558,8 +558,8 @@ export async function prepareHost(
     if (typeof installed.candidateId === "string" && installed.candidateId.length === 64)
       candidateId = installed.candidateId;
   }
-  // Upstream's PM runtime on systemd: kanban workers start only with HERMES_BIN on the gateway service. The host
-  // names the step when its unit (existing, or the one just installed) lacks it; the restart below applies it.
+  // Upstream's PM runtime: kanban workers start only with HERMES_BIN set for the gateway (a systemd drop-in, or the
+  // Hermes .env on macOS and Windows). The host names the step when the service lacks it; the restart applies it.
   const settingWorkerLaunch =
     state.changes.includes("setting_worker_launch") && !skip("setting_worker_launch");
   if (settingWorkerLaunch) await stage("setting_worker_launch", "set-worker-launch");

@@ -511,7 +511,7 @@ const ja: Record<string, string> = {
     "オンにすると、社員が一人で進めた仕事が DeskRPG に記録され、承認が必要な業務も確認を通ります。新しく雇う社員にも自動で適用されます。",
   "hermes.wizard.review.workerPropagationToggle": "オンにしておく",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "業務カードを始める設定を保存できませんでした。Hermes が入っているコンピューターの設定場所（Linux は ~/.config/systemd/user/hermes-gateway.service.d/、macOS は ~/.hermes/.env）を確認してから、もう一度お試しください。",
+    "業務カードを始める設定を保存できませんでした。Hermes が入っているコンピューターの設定場所（Linux は ~/.config/systemd/user/hermes-gateway.service.d/、macOS は ~/.hermes/.env、Windows は %LOCALAPPDATA%\\hermes\\.env）を確認してから、もう一度お試しください。",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "社員の記録設定を保存できませんでした。Hermes の設定ファイル（config.yaml）を確認してから、もう一度お試しください。",
   "hermes.wizard.warn.workerPluginApplyFailed":

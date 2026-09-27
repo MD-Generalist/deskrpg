@@ -113,8 +113,10 @@ try:
     root = root / 'hermes-agent'
     folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
     argv = None
-    launcher = root / '.hermes' / 'bin' / 'hermes'
-    if not WINDOWS and launcher.is_file():
+    # On Windows install.ps1 mints hermes.exe (hermes_cli/_launchers.py). A hermes.cmd shim (no distlib) is not used:
+    # it is a batch file, and running it here would put the payload through cmd.exe.
+    launcher = root / '.hermes' / 'bin' / ('hermes.exe' if WINDOWS else 'hermes')
+    if launcher.is_file():
         # Upstream's PM runtime: its launcher names the managed Python it runs Hermes with. The helper starts there
         # the way the launcher starts Hermes (hermes_bootstrap selects the dependency environment), with stdout sent
         # to stderr while that runs so nothing it prints lands in our JSON reply. It comes before the venv: a host
@@ -271,7 +273,8 @@ exec "$py" -c "$code"
  * They are deleted from the process environment as soon as they're read — the Python child launched next has no
  * reason to inherit the code body.
  *
- * Selection order: Hermes venv Python → python on PATH → (install only) Python fetched with uv.
+ * Selection order: the PM runtime Python (`hermes-agent\.hermes\bin\hermes.exe --print-runtime-command`) → Hermes venv
+ * Python → python on PATH → (install only) Python fetched with uv.
  * Unlike the POSIX version there's no system package pre-check — install.ps1 fetches PortableGit, uv, Python, and Node
  * itself, so neither sudo nor a package manager is needed (confirmed in upstream scripts/install.ps1).
  * The Windows venv Python is `Scripts\python.exe` (upstream gateway_windows.py:1457,1475).
@@ -292,6 +295,17 @@ if (-not $home2 -or -not (Test-Path -LiteralPath $home2 -PathType Container)) { 
 $base = $env:LOCALAPPDATA
 if (-not $base) { $base = Join-Path (Join-Path $home2 'AppData') 'Local' }
 $root = Join-Path $base 'hermes'
+# Upstream's PM runtime (install.ps1): the launcher names the managed Python it runs Hermes with. It comes first: a host
+# moved to the PM runtime can still have its old, no longer used venv. Only the .exe; a .cmd shim is a batch file.
+$pm = Join-Path (Join-Path $root 'hermes-agent') '.hermes\bin\hermes.exe'
+if (Test-Path -LiteralPath $pm -PathType Leaf) {
+  $runtime = $null
+  try {
+    $printed = (& $pm --print-runtime-command 2>$null | Out-String)
+    if ($LASTEXITCODE -eq 0 -and $printed) { $runtime = @($printed | ConvertFrom-Json) }
+  } catch { $runtime = $null }
+  if ($runtime -and $runtime.Count -gt 0 -and $runtime[0] -is [string] -and (Test-Path -LiteralPath $runtime[0] -PathType Leaf)) { Run $runtime[0] }
+}
 foreach ($f in @('venv', '.venv')) {
   $p = Join-Path (Join-Path (Join-Path $root 'hermes-agent') $f) 'Scripts\python.exe'
   if (Test-Path -LiteralPath $p -PathType Leaf) { Run $p }
@@ -479,7 +493,7 @@ try:
     folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
     python = next((INSTALL / folder / folder_name / exe for folder in ('venv', '.venv') if (INSTALL / folder / folder_name / exe).is_file()), None)
     # Upstream's current installer sets up the PM runtime: no venv, a launcher that runs Hermes with its dependencies.
-    launcher = INSTALL / '.hermes' / 'bin' / 'hermes'
+    launcher = INSTALL / '.hermes' / 'bin' / ('hermes.exe' if WINDOWS else 'hermes')
     if python is None and not launcher.is_file(): out({'error': 'hermes_install_failed'})
     probe = subprocess.run([str(python), '-m', 'hermes_cli.main', '--version'] if python is not None else [str(launcher), '--version'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(INSTALL), env={**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
     if probe.returncode: out({'error': 'hermes_install_failed'})
@@ -505,12 +519,17 @@ INSTALL = ROOT / 'hermes-agent'
 # Upstream's PM runtime: no venv, a managed Python, and this launcher, which runs Hermes with its dependencies
 # (it is what 'hermes gateway install' puts in ExecStart). Where it exists it is what Hermes runs on, even if an old
 # venv is still there from before the move.
-LAUNCHER = INSTALL / '.hermes' / 'bin' / 'hermes'
-PM_RUNTIME = not WINDOWS and LAUNCHER.is_file()
+def pm_launcher():
+    """Upstream's PM launcher. On Windows install.ps1 mints hermes.exe (hermes_cli/_launchers.py); a hermes.cmd minted
+    when distlib is missing does not count: Hermes ignores a .cmd/.bat HERMES_BIN on Windows and falls back to the
+    module form (kanban_db_dispatch _hermes_path_argv), so only the .exe can serve as the launcher."""
+    return INSTALL / '.hermes' / 'bin' / ('hermes.exe' if sys.platform == 'win32' else 'hermes')
+LAUNCHER = pm_launcher()
+PM_RUNTIME = LAUNCHER.is_file()
 # Kanban workers start as '$HERMES_BIN -p <profile> ...' when it is set, else as '<gateway python> -m hermes_cli.main'
 # without the gateway's PYTHONPATH, which cannot import Hermes on the PM runtime. On systemd the wizard sets it in this
-# one drop-in, and the service check accepts exactly this drop-in and no other. On macOS it goes into the Hermes .env
-# instead (see set-worker-launch).
+# one drop-in, and the service check accepts exactly this drop-in and no other. On macOS and Windows it goes into the
+# Hermes .env instead (see set-worker-launch).
 WORKER_LAUNCH_DROPIN = 'hermes-bin.conf'
 def worker_launch_dropin_text():
     value = str(LAUNCHER).replace('\\', '\\\\').replace('"', '\\"')
@@ -652,7 +671,9 @@ def windows_restart(task, name, home, python):
     # to be gone and starts it again. Use it when the installed Hermes has it; otherwise keep /End + /Run.
     # Returns (command, env, stop seconds).
     if cli_drains():
-        command = [python, '-m', 'hermes_cli.main'] + (['--profile', name] if name != 'default' else []) + ['gateway', 'restart']
+        restart = (['--profile', name] if name != 'default' else []) + ['gateway', 'restart']
+        # On the PM runtime a bare 'python -m' misses the dependency environment the launcher selects.
+        command = hermes_argv(*restart) if PM_RUNTIME else [python, '-m', 'hermes_cli.main'] + restart
         # The CLI prints non-ASCII status marks; on a cp949 pipe that would raise mid-restart.
         env = {**os.environ, 'HERMES_HOME': str(home), 'PYTHONUTF8': '1', 'PYTHONIOENCODING': 'utf-8'}
         return command, env, WINDOWS_RESTART_SECONDS
@@ -778,7 +799,7 @@ def identity(name, home):
                 warning = None
                 if PM_RUNTIME: launch = 'ok' if service_env.get('HERMES_BIN') == str(LAUNCHER) else 'missing'
             else: warning = 'service_identity_mismatch'
-    elif WINDOWS:
+    elif sys.platform == 'win32':
         # Upstream gateway_windows.py naming convention. The task name has the profile name as a suffix, and
         # both the task and the Startup folder fallback launch <HERMES_HOME>/gateway-service/<task name>.vbs.
         # The .cmd in the same place is a compatibility leftover from upstream, not what actually runs — look at the .vbs.
@@ -833,6 +854,12 @@ def identity(name, home):
                 if registered.returncode == 0 and re.fullmatch(r'[A-Za-z0-9_-]+', task):
                     command, restart_env, stop = windows_restart(task, name, home, python)
                     warning = None
+                    # PM runtime: the task keeps running the store python (upstream _gateway_run_argv), so HERMES_BIN
+                    # goes where the gateway reads it at start, the Hermes .env, as on macOS. A .cmd value is ignored
+                    # by Hermes on Windows, so only the launcher .exe counts.
+                    if PM_RUNTIME:
+                        configured = envfile(home).get('HERMES_BIN')
+                        launch = 'ok' if configured and same_path(configured, LAUNCHER) else 'missing'
                 else: warning = 'managed_service_required'
             else: warning = 'service_identity_mismatch'
     digest = hashlib.sha256((str(INSTALL.resolve()) + '\0' + str(home) + '\0' + service + '\0' + definition).encode()).hexdigest()
@@ -1103,12 +1130,13 @@ def bounded(argv, env):
 def set_worker_launch(name, home):
     """The set-worker-launch action (PM runtime): point HERMES_BIN at the launcher so kanban workers can start.
     Reads the service again: install-service may have just written it."""
-    if not (PM_RUNTIME and (sys.platform.startswith('linux') or sys.platform == 'darwin')): fail('invalid_host_operation')
+    if not (PM_RUNTIME and (sys.platform.startswith('linux') or sys.platform in ('darwin', 'win32'))): fail('invalid_host_operation')
     owner = identity(name, home)
     if not owner['command'] or owner['launch'] is None: fail(service_failure(owner))
     if owner['launch'] == 'ok': return {'ok': True, 'changed': False}
-    if sys.platform == 'darwin':
-        # Not in the plist: Hermes rewrites it whenever it differs from what it generates, which is on every
+    if sys.platform in ('darwin', 'win32'):
+        # Windows: the scheduled task's .vbs is regenerated by 'hermes gateway install', so the .env is the one place
+        # that survives. macOS — not in the plist: Hermes rewrites it whenever it differs from what it generates, which is on every
         # 'hermes gateway start' and 'restart' (refresh_launchd_plist_if_needed; measured: an added HERMES_BIN was
         # gone after one restart). Hermes's own 'config set' stores an UPPER_SNAKE name in <home>/.env, which the
         # gateway loads into its environment at start. The restart step applies it.
@@ -1222,7 +1250,7 @@ def main(action, candidate_id=None, option=None):
         if needs_service(owner): changes.append('installing_service')
         # PM runtime on systemd or launchd: kanban workers need HERMES_BIN — missing on a service upstream just wrote or
         # will write.
-        if PM_RUNTIME and (sys.platform.startswith('linux') or sys.platform == 'darwin') and (owner['launch'] == 'missing' or needs_service(owner)):
+        if PM_RUNTIME and (sys.platform.startswith('linux') or sys.platform in ('darwin', 'win32')) and (owner['launch'] == 'missing' or needs_service(owner)):
             changes.append('setting_worker_launch')
         if not public['pluginInstalled']: changes.append('installing_plugin')
         elif version_below(public['pluginVersion'], PLUGIN_VERSION): changes.append('updating_plugin')

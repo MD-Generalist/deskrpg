@@ -471,7 +471,7 @@ const zh: Record<string, string> = {
     "开启后，员工独自完成的工作会记录到 DeskRPG，需要审批的任务也会经过确认。新招的员工也会自动应用。",
   "hermes.wizard.review.workerPropagationToggle": "保持开启",
   "hermes.wizard.error.workerLaunchWriteFailed":
-    "无法保存让任务卡启动的设置。请检查安装 Hermes 的电脑上的设置位置（Linux 为 ~/.config/systemd/user/hermes-gateway.service.d/，macOS 为 ~/.hermes/.env），然后重试。",
+    "无法保存让任务卡启动的设置。请检查安装 Hermes 的电脑上的设置位置（Linux 为 ~/.config/systemd/user/hermes-gateway.service.d/，macOS 为 ~/.hermes/.env，Windows 为 %LOCALAPPDATA%\\hermes\\.env），然后重试。",
   "hermes.wizard.error.workerPropagationWriteFailed":
     "无法保存员工工作记录设置。请检查 Hermes 设置文件（config.yaml），然后重试。",
   "hermes.wizard.warn.workerPluginApplyFailed":
