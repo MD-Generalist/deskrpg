@@ -179,6 +179,11 @@ try:
         else:
             sys.stdout.buffer.write(data)
             sys.stdout.buffer.flush()
+except subprocess.TimeoutExpired:
+    # Named like a transport timeout, not a generic failure. A PM Hermes whose dependencies went stale (a plugin
+    # removed, an update) rebuilds them on its next launch, and the helper is such a launch: that can take minutes.
+    terminate_owned()
+    print(json.dumps({'error': 'command_timeout'}))
 except Exception:
     terminate_owned()
     print(json.dumps({'error': 'host_operation_failed'}))

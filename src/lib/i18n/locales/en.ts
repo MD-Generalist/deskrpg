@@ -514,6 +514,8 @@ const en: Record<string, string> = {
   "hermes.wizard.review.workerPropagationBody":
     "When on, work employees do on their own is recorded in DeskRPG, and tasks that need approval go through the check. New employees get it automatically.",
   "hermes.wizard.review.workerPropagationToggle": "Keep it on",
+  "hermes.wizard.error.commandTimeout":
+    "The host did not finish in time. Hermes may still be getting ready after an update or a plugin change, so try again in a few minutes.",
   "hermes.wizard.error.workerLaunchWriteFailed":
     "Couldn't save the setting that lets task cards start. Check the settings location on the computer where Hermes is installed (~/.config/systemd/user/hermes-gateway.service.d/ on Linux, ~/.hermes/.env on macOS, %LOCALAPPDATA%\\hermes\\.env on Windows), then try again.",
   "hermes.wizard.error.workerPropagationWriteFailed":
