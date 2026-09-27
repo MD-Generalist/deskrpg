@@ -2341,12 +2341,15 @@ const en: Record<string, string> = {
   "gateways.pluginVersionUnknown": "not checked",
   "gateways.pluginVersionOutdated":
     "is out of date. Update it on the host, then run Test connection.",
-  "gateways.pluginVersionOutdatedContainer":
-    "is out of date. This gateway is a Hermes container in the same Docker Compose project as DeskRPG — run the command below where you started it, then run Test connection.",
-  "gateways.pluginContainerCommandHint":
-    "It pulls the plugin and starts Hermes again. Add the -f and --env-file options you started it with. A plain up -d leaves the running Hermes on the old plugin.",
-  "gateways.pluginUpdateContainerHermes":
-    "This app cannot run commands inside the Hermes container. Run the command above, then run Test connection.",
+  "gateways.pluginContainer.outdated":
+    "Some features need the newer version to work properly. Run the command under 'Show details' once on your server, then press [Test connection].",
+  "gateways.pluginContainer.outdatedViewer":
+    "Some features need the newer version to work properly. Ask the person who set up this connection to update it.",
+  "gateways.pluginContainer.refused":
+    "This screen can't update it directly. Run the command under 'Show details' on your server, then press [Test connection].",
+  "gateways.pluginContainer.details": "Show details",
+  "gateways.pluginContainer.detailsBody":
+    "Hermes runs in the same Docker Compose project as DeskRPG. This command downloads the new plugin and restarts the Hermes container. If you started it with -f or --env-file, add the same options. docker compose up -d alone does not apply the new version.",
   "gateways.pluginVersionRecheck": "Run Test connection to check.",
   "gateways.pluginVersionUpdateNow": "Update now",
   "gateways.workerPlugin.missing":

@@ -92,9 +92,11 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
   // The error remembers which installed version it was about. Once a recheck (connection test,
   // reload) shows another version or no longer an outdated one, it no longer applies — a user
   // who upgraded on the host by hand must not keep seeing "the app cannot run commands here".
-  const [updateError, setUpdateError] = useState<{ text: string; version: string | null } | null>(
-    null,
-  );
+  const [updateError, setUpdateError] = useState<{
+    text: string;
+    kind: "compose" | "other";
+    version: string | null;
+  } | null>(null);
   // If the update inherited worker propagation turned on, say so once (the job's workerPropagationInherited).
   const [inherited, setInherited] = useState(false);
   const view = describePluginVersion({
@@ -132,8 +134,9 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
       setUpdateError({
         text:
           composeService && code === "plugin_update_unsupported_host"
-            ? t("gateways.pluginUpdateContainerHermes")
+            ? t("gateways.pluginContainer.refused")
             : (setupHostError(locale, code) ?? setupError(setupCopy[locale], code)),
+        kind: composeService && code === "plugin_update_unsupported_host" ? "compose" : "other",
         version: gateway.pluginVersion ?? null,
       });
     } finally {
@@ -162,12 +165,18 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
           {t("gateways.pluginVersionPinned")}: {view.pinned}
         </span>
         {view.state === "outdated" && (
-          <span>
+          <span
+            data-plugin-outdated-hint={
+              !composeService ? "host" : gateway.isOwner ? "compose" : "compose-viewer"
+            }
+          >
             —{" "}
             {t(
-              composeService
-                ? "gateways.pluginVersionOutdatedContainer"
-                : "gateways.pluginVersionOutdated",
+              !composeService
+                ? "gateways.pluginVersionOutdated"
+                : gateway.isOwner
+                  ? "gateways.pluginContainer.outdated"
+                  : "gateways.pluginContainer.outdatedViewer",
             )}
           </span>
         )}
@@ -175,6 +184,7 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
         {view.state === "outdated" && gateway.isOwner && (
           <button
             type="button"
+            data-action="plugin-update"
             onClick={() => void runUpdate()}
             disabled={busyStep !== null}
             className="rounded-md bg-surface-raised px-2 py-0.5 text-[11px] font-medium hover:brightness-110 disabled:opacity-60"
@@ -187,17 +197,21 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
         {updateError &&
           view.state === "outdated" &&
           updateError.version === (gateway.pluginVersion ?? null) && (
-            <span className="text-danger">{updateError.text}</span>
+            <span className="text-danger" data-plugin-update-error={updateError.kind}>
+              {updateError.text}
+            </span>
           )}
       </p>
       {view.state === "outdated" && composeService && gateway.isOwner && (
-        <div
-          className="-mt-3 mb-4 space-y-1.5 text-xs text-text-muted"
-          data-plugin-update="compose"
-        >
-          <CopyCommand command={composePluginUpdateCommand(composeService)} />
-          <p>{t("gateways.pluginContainerCommandHint")}</p>
-        </div>
+        <details className="-mt-3 mb-4 text-xs text-text-muted" data-plugin-update="compose">
+          <summary className="cursor-pointer select-none">
+            {t("gateways.pluginContainer.details")}
+          </summary>
+          <div className="mt-1.5 space-y-1.5">
+            <p>{t("gateways.pluginContainer.detailsBody")}</p>
+            <CopyCommand command={composePluginUpdateCommand(composeService)} />
+          </div>
+        </details>
       )}
       {inherited && (
         <WorkerPropagationInheritedNotice

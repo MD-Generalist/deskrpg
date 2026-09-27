@@ -263,7 +263,10 @@ test("a refused update's error goes away once the connection test finds the plug
   );
 });
 
-test("a Compose Hermes (http://hermes:8642) gets the Compose command, and the refused update says to run it", async () => {
+const attr = (selector: string, name: string) =>
+  host.querySelector(selector)?.getAttribute(name) ?? null;
+
+test("a Compose Hermes (http://hermes:8642) gets the Compose command, and the refused update points to it", async () => {
   mockFetch({
     "GET /api/gateways?refreshPlugin=1": {
       gateways: [gateway({ baseUrl: "http://hermes:8642", pluginVersion: "0.1.0" })],
@@ -274,15 +277,28 @@ test("a Compose Hermes (http://hermes:8642) gets the Compose command, and the re
     },
   });
   await renderPage();
-  const text = () => host.textContent ?? "";
-  assert.match(text(), /Docker Compose 에서 도는 Hermes 컨테이너/);
-  assert.match(text(), /docker compose up -d --force-recreate hermes/);
-  assert.doesNotMatch(text(), /호스트에서 플러그인을 올린 뒤/);
+  assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "compose");
+  const details = host.querySelector('details[data-plugin-update="compose"]');
+  assert.ok(details, "the command sits in a collapsed details block");
+  assert.equal(details.hasAttribute("open"), false);
+  assert.match(details.textContent ?? "", /docker compose up -d --force-recreate hermes/);
 
-  await click(buttonByText("지금 갱신"));
+  await click(host.querySelector('[data-action="plugin-update"]'));
   await flush();
-  assert.match(text(), /Hermes 컨테이너 안에서 명령을 돌릴 수 없습니다/);
-  assert.doesNotMatch(text(), /호스트를 SSH 로 등록하거나/);
+  assert.equal(attr("[data-plugin-update-error]", "data-plugin-update-error"), "compose");
+});
+
+test("a Compose Hermes shown to someone it was shared with gets no command", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": {
+      gateways: [
+        gateway({ baseUrl: "http://hermes:8642", pluginVersion: "0.1.0", isOwner: false }),
+      ],
+    },
+  });
+  await renderPage();
+  assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "compose-viewer");
+  assert.equal(host.querySelector("[data-plugin-update]"), null);
 });
 
 test("a gateway on another host keeps the host guidance and no Compose command", async () => {
@@ -292,7 +308,6 @@ test("a gateway on another host keeps the host guidance and no Compose command",
     },
   });
   await renderPage();
-  const text = host.textContent ?? "";
-  assert.match(text, /호스트에서 플러그인을 올린 뒤/);
-  assert.doesNotMatch(text, /docker compose/);
+  assert.equal(attr("[data-plugin-outdated-hint]", "data-plugin-outdated-hint"), "host");
+  assert.equal(host.querySelector("[data-plugin-update]"), null);
 });
