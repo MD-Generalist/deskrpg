@@ -49,6 +49,13 @@ export type PluginInfo = {
    * lack the key (undefined), and a failed check is null. The two are not mixed.
    */
   worker_plugin?: WorkerPluginReport | null;
+  /**
+   * 0.29.0 — Order-independent hash of `capabilities`. The same plugin version can report a different
+   * list after a Hermes core swap, so the cache is refreshed when this moves. Absent on older plugins.
+   */
+  capabilities_fingerprint?: string;
+  /** 0.29.0 — When the gateway process loaded the plugin (epoch seconds). Absent on older plugins. */
+  started_at?: number;
 };
 
 /** Worker plugin status for one employee. `link`: linked · missing · other. */
@@ -568,7 +575,13 @@ export type EventsPage = {
   events: PluginEvent[];
   cursor: string;
   has_more: boolean;
-};
+} & PluginFreshnessMarks;
+
+/**
+ * 0.29.0 — The `/deskrpg/info` values `/deskrpg/events` also carries, so the poller can spot a changed
+ * gateway on a call it already makes. Both are absent on older plugins.
+ */
+export type PluginFreshnessMarks = Pick<PluginInfo, "capabilities_fingerprint" | "started_at">;
 
 // ---------------------------------------------------------------------------
 // A.2 Cron — /p/{profile}/deskrpg/cron

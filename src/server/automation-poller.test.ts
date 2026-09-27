@@ -1201,3 +1201,48 @@ test("hands over from the old carrier position even if the new receiving candida
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
   assert.equal(h.roomEmits.filter((e) => e.message.notice?.kind === "card_proposal").length, 1);
 });
+
+test("a capability change behind the same plugin version refreshes the cached info on the next poll", async () => {
+  // A Hermes core swap keeps the plugin version but drops a capability. The events page carries the
+  // fingerprint, so the poller refreshes the cache without waiting out the hour — and without an
+  // extra request while nothing changes.
+  const plugin = await startPlugin();
+  plugin.setInfo({ capabilities_fingerprint: "fp-before", started_at: 100 });
+  const { channel, gateway } = await seedBoundChannel(plugin);
+  const { pollChannelOnce } = await import("./automation-poller");
+  const h = await makeDeps();
+  const infoCalls = () => plugin.requests().filter((r) => r.path === "/deskrpg/info").length;
+  const cachedInfo = async () => {
+    const { db, gatewayResources } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const { restorePluginInfo } = await import("@/lib/hermes/plugin-cache-update");
+    const [row] = await db
+      .select()
+      .from(gatewayResources)
+      .where(eq(gatewayResources.id, gateway.id));
+    return restorePluginInfo(row.pluginInfoJson);
+  };
+
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  const steady = infoCalls();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.equal(infoCalls(), steady, "unchanged markers add no request");
+  assert.ok((await cachedInfo())?.capabilities.includes("swarm"));
+
+  const current = await (
+    await fetch(`${plugin.baseUrl}/deskrpg/info`, {
+      headers: { authorization: `Bearer ${OWNER_TOKEN}` },
+    })
+  ).json();
+  plugin.setInfo({
+    capabilities: (current.capabilities as string[]).filter((c) => c !== "swarm"),
+    capabilities_fingerprint: "fp-after",
+  });
+  const beforeChange = infoCalls();
+  assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
+  assert.equal(infoCalls(), beforeChange + 1, "one reprobe when the fingerprint moves");
+  const refreshed = await cachedInfo();
+  assert.equal(refreshed?.capabilities_fingerprint, "fp-after");
+  assert.ok(!refreshed?.capabilities.includes("swarm"), "the cached verdict follows the gateway");
+});

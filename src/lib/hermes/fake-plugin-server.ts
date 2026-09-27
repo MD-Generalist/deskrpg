@@ -411,6 +411,16 @@ export async function startFakePluginServer(
     };
   }
 
+  /** Like the 0.29.0 plugin, events pages repeat the info markers — only when the fake's info has them. */
+  function freshnessMarks() {
+    return {
+      ...(info.capabilities_fingerprint !== undefined
+        ? { capabilities_fingerprint: info.capabilities_fingerprint }
+        : {}),
+      ...(info.started_at !== undefined ? { started_at: info.started_at } : {}),
+    };
+  }
+
   function pollEvents(params: URLSearchParams): Reply {
     const board = params.get("board") ?? undefined;
     const cursor = params.get("cursor");
@@ -425,7 +435,7 @@ export async function startFakePluginServer(
       if (!include.has("artifacts") && !include.has("card_proposals")) delete initial.a;
       return {
         status: 200,
-        body: { events: [], cursor: issueCursor(initial), has_more: false },
+        body: { events: [], cursor: issueCursor(initial), has_more: false, ...freshnessMarks() },
       };
     }
     const saved = cursors.get(cursor);
@@ -462,7 +472,10 @@ export async function startFakePluginServer(
       state.c = seen.c;
       if (include.has("artifacts") || include.has("card_proposals")) state.a = seen.a;
     }
-    return { status: 200, body: { events: page, cursor: issueCursor(state), has_more: hasMore } };
+    return {
+      status: 200,
+      body: { events: page, cursor: issueCursor(state), has_more: hasMore, ...freshnessMarks() },
+    };
   }
 
   // ---- Kanban -----------------------------------------------------------

@@ -8,6 +8,7 @@ import {
   isMissingPluginRoute,
   meetsAutomationContract,
   parsePluginInfo,
+  pluginInfoCacheOutdated,
   probeDeskrpgPlugin,
   probeDeskrpgPluginWithInfo,
   resolvePluginStatusFromCache,
@@ -470,4 +471,49 @@ it("review hooks count as policy support; mixed review needs the hooks", () => {
     true,
   );
   assert.equal(reviewSupport(undefined).policies, false);
+});
+
+describe("capability freshness markers", () => {
+  const base = { plugin: "deskrpg", version: "0.29.0", capabilities: ["kanban"] };
+
+  it("parsePluginInfo keeps well-formed markers and drops malformed ones", () => {
+    const kept = parsePluginInfo({ ...base, capabilities_fingerprint: "abc", started_at: 100 });
+    assert.equal(kept?.capabilities_fingerprint, "abc");
+    assert.equal(kept?.started_at, 100);
+    const dropped = parsePluginInfo({ ...base, capabilities_fingerprint: 7, started_at: "x" });
+    assert.ok(dropped && !("capabilities_fingerprint" in dropped) && !("started_at" in dropped));
+  });
+
+  it("flags a moved fingerprint or a restart, and nothing else", () => {
+    const cached = parsePluginInfo({ ...base, capabilities_fingerprint: "a", started_at: 1 });
+    assert.equal(
+      pluginInfoCacheOutdated(cached, { capabilities_fingerprint: "a", started_at: 1 }),
+      false,
+    );
+    assert.equal(
+      pluginInfoCacheOutdated(cached, { capabilities_fingerprint: "b", started_at: 1 }),
+      true,
+    );
+    assert.equal(
+      pluginInfoCacheOutdated(cached, { capabilities_fingerprint: "a", started_at: 2 }),
+      true,
+    );
+  });
+
+  it("an older plugin without markers never triggers a reprobe", () => {
+    const cached = parsePluginInfo(base);
+    assert.equal(
+      pluginInfoCacheOutdated(cached, { events: [], cursor: "c", has_more: false }),
+      false,
+    );
+    assert.equal(pluginInfoCacheOutdated(null, {}), false);
+  });
+
+  it("a cache written before the plugin reported markers is refreshed once", () => {
+    assert.equal(
+      pluginInfoCacheOutdated(parsePluginInfo(base), { capabilities_fingerprint: "a" }),
+      true,
+    );
+    assert.equal(pluginInfoCacheOutdated(null, { started_at: 1 }), true);
+  });
 });

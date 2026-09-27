@@ -43,6 +43,10 @@ import {
 import type { RoomMessage } from "@/lib/chat-rooms-policy";
 import { CARRIER_INCLUDE } from "@/lib/event-carrier-handoff";
 import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
+import { forceReprobePluginInfo, type GatewayResourceRow } from "@/lib/automation-gate";
+import { decryptGatewayToken } from "@/lib/gateway-resources";
+import { pluginInfoCacheOutdated } from "@/lib/hermes/plugin-capability";
+import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
 import { broadcastRoomMessage } from "./room-socket";
 import { healthFromPollOutcome, recordGatewayHealth } from "./gateway-health";
 import {
@@ -106,6 +110,12 @@ export type PollOnceDeps = {
     ownerClient?: Pick<OwnerPluginClient, "kanban">;
   }): IngestDeps;
   ingest: typeof ingest;
+  /**
+   * Re-reads `/deskrpg/info` into the gateway cache. Called only when an events page says the cached
+   * info is outdated (capability fingerprint or start time moved), so steady-state polling adds no
+   * request. Throttled per gateway by the implementation.
+   */
+  refreshPluginInfo(resource: GatewayResourceRow): Promise<unknown>;
   pageLimit: number;
   maxPages: number;
 };
@@ -214,6 +224,9 @@ export function createDefaultPollDeps(
         emitRoomMessage: emit.emitRoomMessage,
       }),
     ingest,
+    refreshPluginInfo: (resource) =>
+      // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
+      forceReprobePluginInfo(resource, decryptGatewayToken(resource.tokenEncrypted)),
     pageLimit: POLL_DEFAULTS.pageLimit,
     maxPages: POLL_DEFAULTS.maxPages,
   };
@@ -340,6 +353,7 @@ async function pollBoardOnce(
   let pages = 0;
   let events = 0;
   const errors: string[] = [];
+  let checkedFreshness = false;
 
   while (pages < deps.maxPages) {
     pages += 1;
@@ -372,6 +386,16 @@ async function pollBoardOnce(
         reason: res.failure.message,
         status: res.status,
       };
+    }
+
+    if (!checkedFreshness) {
+      checkedFreshness = true;
+      // A core swap keeps the plugin version but can change capabilities; the page carries the
+      // markers, so an outdated cache is refreshed now instead of waiting out the hour. Never fails the tick.
+      const resource = resolved.binding.resource;
+      if (pluginInfoCacheOutdated(restorePluginInfo(resource.pluginInfoJson), res.data)) {
+        await deps.refreshPluginInfo(resource).catch(() => null);
+      }
     }
 
     if (cursor === null) {
