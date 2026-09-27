@@ -3513,6 +3513,15 @@ const ko: Record<string, string> = {
   "gateways.workerPlugin.propagationOwnerOnly": "게이트웨이 소유자가 켤 수 있습니다",
   "gateways.workerPlugin.enableInSettings": "설정에서 켜기",
   "gateways.workerPlugin.enabling": "켜는 중…",
+  "gateways.workerLaunch.blocked":
+    "이 게이트웨이에서는 칸반 워커가 시작되지 못해, 카드가 실행되지 않고 포기됩니다",
+  "gateways.workerLaunch.unset":
+    "Hermes가 새 실행 방식(PM 런타임)으로 도는데 게이트웨이 서비스에 HERMES_BIN이 없습니다. 워커가 Hermes를 불러오지 못하고 바로 종료됩니다.",
+  "gateways.workerLaunch.missing": "게이트웨이 서비스의 HERMES_BIN({path})을 실행할 수 없습니다.",
+  "gateways.workerLaunch.command":
+    "게이트웨이 호스트에서 아래 명령을 실행하면 {file}에 HERMES_BIN을 설정하고 게이트웨이를 재시작합니다(Linux systemd 사용자 서비스 기준).",
+  "gateways.workerLaunch.noLauncher":
+    "제안할 Hermes 실행 파일을 찾지 못했습니다. 게이트웨이 서비스 환경에 HERMES_BIN을 Hermes 실행 파일 경로로 설정한 뒤 재시작하세요.",
   "gateways.workerPlugin.recheck": "다시 확인",
   "gateways.workerPlugin.rechecking": "확인 중…",
   "gateways.workerPlugin.propagationEnabled":

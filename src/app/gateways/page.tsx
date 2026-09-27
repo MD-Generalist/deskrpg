@@ -27,6 +27,8 @@ import type { WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
 import WorkerPropagationInheritedNotice, {
   disableWorkerPropagationRequest,
 } from "./WorkerPropagationInheritedNotice";
+import WorkerLaunchLine from "./WorkerLaunchLine";
+import type { WorkerLaunchWarning } from "@/lib/hermes/worker-launch";
 import WorkerPluginLine, { type WorkerPluginApplyResponse } from "./WorkerPluginLine";
 import { enableWorkerPropagationRequest } from "./worker-propagation-request";
 
@@ -50,6 +52,8 @@ type GatewayRow = {
   workerPluginWarning?: WorkerPluginWarning | null;
   /** 0.16.0 worker propagation state — only owner rows have a value (shared rows and old plugins are null). */
   workerPropagation?: WorkerPropagation | null;
+  /** Kanban workers that cannot start on this gateway. Sent only to the owner (`worker-launch.ts`). */
+  workerLaunchWarning?: WorkerLaunchWarning | null;
 };
 
 /** The gateway connection test result. The old name was PairingState, but pairing (OpenClaw device
@@ -735,6 +739,15 @@ function GatewayManagementPageInner() {
                     apply={() => applyWorkerPluginRequest(selectedGateway.id)}
                     onApplied={() => void loadGateways({ autoSelect: false })}
                     enablePropagation={() => enableWorkerPropagationRequest(selectedGateway.id)}
+                    onRecheck={() => handleTest(selectedGateway.id)}
+                  />
+                )}
+
+                {selectedGateway && (
+                  <WorkerLaunchLine
+                    key={`launch-${selectedGateway.id}`}
+                    warning={selectedGateway.workerLaunchWarning ?? null}
+                    isOwner={selectedGateway.isOwner === true}
                     onRecheck={() => handleTest(selectedGateway.id)}
                   />
                 )}

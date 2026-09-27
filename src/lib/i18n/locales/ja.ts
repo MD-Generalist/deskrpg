@@ -3548,6 +3548,15 @@ const ja: Record<string, string> = {
   "gateways.workerPlugin.propagationOwnerOnly": "ゲートウェイの所有者のみオンにできます",
   "gateways.workerPlugin.enableInSettings": "設定でオンにする",
   "gateways.workerPlugin.enabling": "オンにしています…",
+  "gateways.workerLaunch.blocked":
+    "このゲートウェイではカンバンワーカーが起動できず、カードは実行されないまま打ち切られます",
+  "gateways.workerLaunch.unset":
+    "Hermes が新しい実行方式(PM ランタイム)で動いていますが、ゲートウェイサービスに HERMES_BIN がありません。ワーカーは Hermes を読み込めずすぐに終了します。",
+  "gateways.workerLaunch.missing": "ゲートウェイサービスの HERMES_BIN({path})を実行できません。",
+  "gateways.workerLaunch.command":
+    "ゲートウェイホストで次のコマンドを実行すると、{file} に HERMES_BIN を設定してゲートウェイを再起動します(Linux の systemd ユーザーサービス)。",
+  "gateways.workerLaunch.noLauncher":
+    "提案できる Hermes 実行ファイルが見つかりませんでした。ゲートウェイサービスの環境で HERMES_BIN を Hermes 実行ファイルのパスに設定し、再起動してください。",
   "gateways.workerPlugin.recheck": "再確認",
   "gateways.workerPlugin.rechecking": "確認中…",
   "gateways.workerPlugin.propagationEnabled":

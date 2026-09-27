@@ -250,3 +250,54 @@ describe("listAccessibleGatewayResources — refreshPlugin", () => {
     }
   });
 });
+
+// Kanban workers that cannot start (upstream PM runtime without HERMES_BIN) are fixed on the host, which only the
+// owner runs — the owner's row carries the warning, a shared user's does not.
+describe("listAccessibleGatewayResources — workerLaunchWarning", () => {
+  const launchInfo = JSON.stringify({
+    plugin: "deskrpg",
+    version: "0.28.1",
+    capabilities: ["kanban"],
+    kanban: {
+      dispatcher_present: true,
+      attachments: true,
+      worker_launch: {
+        ok: false,
+        reason: "hermes_bin_unset",
+        hermes_bin: null,
+        launcher: "/home/u/.hermes/hermes-agent/.hermes/bin/hermes",
+      },
+    },
+  });
+
+  test("the owner sees why workers cannot start; a shared user does not", async () => {
+    const owner = await seedUser("launch-owner");
+    const sharedUser = await seedUser("launch-shared");
+    const { db, gatewayResources, gatewayShares } = await loadDb();
+    const [gateway] = await db
+      .insert(gatewayResources)
+      .values({
+        ownerUserId: owner.id,
+        displayName: "PM Runtime Gateway",
+        baseUrl: "http://gw-pm-runtime.test",
+        tokenEncrypted: encryptGatewayToken("gateway-key-launch-000001"),
+        pluginStatus: "plugin_ready",
+        pluginInfoJson: launchInfo,
+      })
+      .returning();
+    await db
+      .insert(gatewayShares)
+      .values({ gatewayId: gateway.id, userId: sharedUser.id, role: "use" });
+    const warningOf = (row: object) =>
+      (row as { workerLaunchWarning?: unknown }).workerLaunchWarning;
+
+    const [own] = await listAccessibleGatewayResources(owner.id);
+    assert.deepEqual(warningOf(own), {
+      reason: "hermes_bin_unset",
+      launcher: "/home/u/.hermes/hermes-agent/.hermes/bin/hermes",
+      hermesBin: null,
+    });
+    const [shared] = await listAccessibleGatewayResources(sharedUser.id);
+    assert.equal(warningOf(shared), null);
+  });
+});

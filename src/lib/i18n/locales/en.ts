@@ -3519,6 +3519,15 @@ const en: Record<string, string> = {
   "gateways.workerPlugin.propagationOwnerOnly": "Only the gateway owner can turn this on",
   "gateways.workerPlugin.enableInSettings": "Turn on in settings",
   "gateways.workerPlugin.enabling": "Turning on…",
+  "gateways.workerLaunch.blocked":
+    "Kanban workers can't start on this gateway, so cards are given up without running",
+  "gateways.workerLaunch.unset":
+    "Hermes runs on its new runtime (PM) and the gateway service has no HERMES_BIN. Workers can't load Hermes and exit at once.",
+  "gateways.workerLaunch.missing": "The gateway service's HERMES_BIN ({path}) can't be run.",
+  "gateways.workerLaunch.command":
+    "Run this on the gateway host: it sets HERMES_BIN in {file} and restarts the gateway (Linux, systemd user service).",
+  "gateways.workerLaunch.noLauncher":
+    "No Hermes launcher was found to suggest. Set HERMES_BIN to the Hermes executable in the gateway service's environment and restart it.",
   "gateways.workerPlugin.recheck": "Check again",
   "gateways.workerPlugin.rechecking": "Checking…",
   "gateways.workerPlugin.propagationEnabled":
