@@ -63,6 +63,11 @@ type AttentionRowBase = {
   failures?: number;
   /** On a card row: the Hermes profile the card is assigned to, when it has one. */
   assignee?: string;
+  /**
+   * On a review row whose approval policy now waits for a person's decision (`review.state` `human_required`):
+   * the Hermes profile that did the work. Such a card has no assignee while it waits.
+   */
+  implementer?: string;
 };
 
 export type AttentionRow =
@@ -81,6 +86,8 @@ export type AttentionInboxInput = {
     failures?: number;
     /** The card's assignee (Hermes profile). */
     assignee?: string | null;
+    /** Who did the work on a card waiting for a person's decision (`review.state` `human_required`). */
+    implementer?: string | null;
   }[];
   approvals: readonly {
     id: string;
@@ -150,6 +157,7 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
         requestedBy: null,
         count: 1,
         ...(card.assignee ? { assignee: card.assignee } : {}),
+        ...(card.implementer ? { implementer: card.implementer } : {}),
       });
   }
   for (const cron of input.cronFailures)

@@ -55,3 +55,44 @@ test("a plain block, a person's own request and an unknown profile count for nob
   ];
   assert.deepEqual(npcAttentionById({ rows, roster, toolApprovals: {} }), {});
 });
+
+test("a card waiting for a person's decision puts its implementer's hand up", () => {
+  const rows: AttentionRow[] = [
+    { ...base, kind: "review", id: "t1", title: "t", requestedBy: null, implementer: "sophie" },
+    // A card merely in review (no decision pending on a person) is not a hand up.
+    { ...base, kind: "review", id: "t2", title: "t", requestedBy: null, assignee: "oliver" },
+  ];
+  assert.deepEqual(npcAttentionById({ rows, roster, toolApprovals: {} }), {
+    "n-sophie": { approvals: 1, failedCards: 0 },
+  });
+});
+
+test("an unattended run blocked on an approval puts that employee's hand up", () => {
+  const blocked = {
+    ...base,
+    kind: "approval_blocked" as const,
+    title: "t",
+    requestedBy: null,
+    npcName: "Oliver",
+    source: "kanban" as const,
+    blockKind: "command" as const,
+    tool: "terminal",
+    command: "rm -r x",
+    patternKey: null,
+    patternDescription: null,
+    mcpServer: null,
+    jobName: null,
+    taskTitle: "t",
+    subtitle: "rm -r x",
+    canAllowlist: true,
+  };
+  const rows: AttentionRow[] = [
+    { ...blocked, id: "m1", messageId: "m1", npcId: "n-oliver" },
+    { ...blocked, id: "m2", messageId: "m2", npcId: "n-oliver" },
+    // An employee no longer in this channel's roster counts for nobody.
+    { ...blocked, id: "m3", messageId: "m3", npcId: "n-gone" },
+  ];
+  assert.deepEqual(npcAttentionById({ rows, roster, toolApprovals: {} }), {
+    "n-oliver": { approvals: 2, failedCards: 0 },
+  });
+});
