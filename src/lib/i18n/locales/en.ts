@@ -345,6 +345,23 @@ const en: Record<string, string> = {
   "gateway.profile.import.rotate": "Replace the key and import",
   "gateway.profile.import.done": "Imported '{name}'. Set its appearance and display name.",
   "gateway.profile.import.setup": "Set up",
+  "gateway.profile.import.all": "Import all ({count})",
+  "gateway.profile.import.importingAll": "Importing them one at a time…",
+  "gateway.profile.import.select": "Include {name} in the import",
+  "gateway.profile.import.summary.imported":
+    "Imported {count}. Set their appearance and display names in the employee list.",
+  "gateway.profile.import.summary.keyed":
+    "Skipped {count} that already have a key. You can decide on each one below.",
+  "gateway.profile.import.summary.failed":
+    "{count} couldn't be imported. Check the reason under each profile.",
+  "gateway.profile.import.summary.notTried":
+    "{count} weren't tried because of a gateway problem. Fix it, then press again.",
+  "gateway.profile.import.keyed.title": "Profiles that need a new key to import",
+  "gateway.profile.import.keyed.hint":
+    "These profiles already have a key. Replacing it cuts off anything else that used it, so press each one only if that's OK.",
+  "gateway.profile.import.notice":
+    "This gateway's Hermes has {count} profiles that aren't employees yet.",
+  "gateway.profile.import.noticeOpen": "Open the import screen",
   "gateway.profile.import.keyNote":
     "If a profile already has a key, we ask before replacing it. Replacing it cuts off anything else that used the old key.",
   "gateway.profile.import.keyDetails":

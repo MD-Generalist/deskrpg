@@ -11,9 +11,11 @@ import {
   text,
 } from "../skills/skills-test-harness";
 import HermesProfileImport from "./HermesProfileImport";
+import ImportableProfilesNotice from "./ImportableProfilesNotice";
 
 const GW = "gw-1";
 const LIST = `GET /api/gateways/${GW}/plugin/profiles/importable`;
+const BULK = `POST /api/gateways/${GW}/plugin/profiles/importable`;
 const IMPORT = `POST /api/gateways/${GW}/plugin/profiles/vps-sam/import`;
 const imported = {
   status: 201,
@@ -117,4 +119,108 @@ test("an older plugin points at manual registration instead", async () => {
   await click("[data-import-profile=vps-sam]");
   assert.match(text(), /플러그인을 업데이트해야 합니다/);
   assert.ok(!container.querySelector("[data-import-rotate]"));
+});
+
+const THREE = { profiles: ["ann", "bo", "cy"].map((name) => ({ name, description: "" })) };
+
+test("import all sends every checked profile, and unchecking one leaves it out", async () => {
+  const log = mockFetch({
+    [LIST]: THREE,
+    [BULK]: {
+      results: [
+        { name: "ann", status: "imported", attendedChannels: 1 },
+        { name: "cy", status: "imported", attendedChannels: 1 },
+      ],
+    },
+  });
+  let refreshed = 0;
+  await render(<HermesProfileImport gatewayId={GW} onImported={() => (refreshed += 1)} />);
+  await click("[data-import-select=bo]");
+  await click("[data-import-all]");
+  assert.deepEqual(log.bodies[BULK], { names: ["ann", "cy"] });
+  assert.equal(refreshed, 1);
+  assert.ok(!container.querySelector("[data-import-profile=ann]"));
+  assert.ok($("[data-import-profile=bo]"), "the unchecked profile stays in the list");
+  assert.ok($("[data-import-summary]"));
+  assert.ok(!container.querySelector("[data-import-keyed]"));
+});
+
+test("profiles that already have a key are skipped into their own section, rotated only one by one", async () => {
+  const routes: Record<string, unknown> = {
+    [LIST]: THREE,
+    [BULK]: {
+      results: [
+        { name: "ann", status: "imported", attendedChannels: 1 },
+        { name: "bo", status: "key_exists" },
+        { name: "cy", status: "key_exists" },
+      ],
+    },
+  };
+  const log = mockFetch(routes as never);
+  await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
+  await click("[data-import-all]");
+  assert.deepEqual(log.bodies[BULK], { names: ["ann", "bo", "cy"] }, "no rotate in bulk");
+  assert.ok($("[data-import-keyed]"));
+  assert.ok($("[data-import-rotate=bo]"));
+  assert.ok($("[data-import-rotate=cy]"));
+  assert.ok(!container.querySelector("[data-import-profile=bo]"));
+
+  const ROTATE_BO = `POST /api/gateways/${GW}/plugin/profiles/bo/import`;
+  routes[ROTATE_BO] = { status: 201, json: { profile: {}, attendedChannels: 1, rotated: true } };
+  await click("[data-import-rotate=bo]");
+  assert.deepEqual(log.bodies[ROTATE_BO], { rotate: true });
+  assert.ok(!container.querySelector("[data-import-rotate=bo]"));
+  assert.ok($("[data-import-rotate=cy]"));
+});
+
+test("a partial failure keeps what was imported and shows each failure on its row", async () => {
+  mockFetch({
+    [LIST]: THREE,
+    [BULK]: {
+      results: [
+        { name: "ann", status: "imported", attendedChannels: 1 },
+        { name: "bo", status: "failed", errorCode: "gateway_auth_failed" },
+        { name: "cy", status: "not_tried" },
+      ],
+    },
+  });
+  await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
+  await click("[data-import-all]");
+  assert.ok(!container.querySelector("[data-import-profile=ann]"));
+  assert.ok($("[data-import-row-error=bo]"));
+  assert.ok($("[data-import-profile=cy]"));
+  assert.ok(!container.querySelector("[data-import-row-error=cy]"));
+  assert.ok($("[data-import-summary]"));
+});
+
+test("a refused bulk import (not the owner) reports it without touching the list", async () => {
+  mockFetch({
+    [LIST]: THREE,
+    [BULK]: { status: 403, json: { errorCode: "forbidden", error: "forbidden" } },
+  });
+  await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
+  await click("[data-import-all]");
+  assert.ok($("[data-import-profile=ann]"));
+  assert.ok(!container.querySelector("[data-import-summary]"));
+  assert.notEqual(text().trim(), "");
+});
+
+test("the setup wizard's notice counts importable profiles and links to the import section", async () => {
+  mockFetch({ [LIST]: THREE });
+  await render(<ImportableProfilesNotice gatewayId={GW} />);
+  assert.equal($("[data-importable-notice]")?.getAttribute("data-importable-notice"), "3");
+  assert.match(
+    $("[data-importable-notice] a")?.getAttribute("href") ?? "",
+    /gateway=gw-1#profile-import$/,
+  );
+
+  await cleanup();
+  mockFetch({ [LIST]: { profiles: [] } });
+  await render(<ImportableProfilesNotice gatewayId={GW} />);
+  assert.equal(text().trim(), "");
+
+  await cleanup();
+  mockFetch({ [LIST]: { errorCode: "gateway_auth_failed", error: "gateway_auth_failed" } });
+  await render(<ImportableProfilesNotice gatewayId={GW} />);
+  assert.equal(text().trim(), "");
 });

@@ -343,6 +343,23 @@ const ko: Record<string, string> = {
   "gateway.profile.import.rotate": "새 키로 바꾸고 가져오기",
   "gateway.profile.import.done": "'{name}' 을(를) 가져왔습니다. 외형과 표시 이름을 정해 주세요.",
   "gateway.profile.import.setup": "설정하기",
+  "gateway.profile.import.all": "모두 가져오기 ({count}개)",
+  "gateway.profile.import.importingAll": "한 명씩 차례로 가져오는 중…",
+  "gateway.profile.import.select": "{name} 가져오기에 넣기",
+  "gateway.profile.import.summary.imported":
+    "{count}개를 가져왔어요. 외형과 표시 이름은 직원 목록에서 정해 주세요.",
+  "gateway.profile.import.summary.keyed":
+    "{count}개는 이미 키가 있어서 건너뛰었어요. 아래에서 하나씩 정할 수 있어요.",
+  "gateway.profile.import.summary.failed":
+    "{count}개는 가져오지 못했어요. 프로필마다 적힌 이유를 확인해 주세요.",
+  "gateway.profile.import.summary.notTried":
+    "{count}개는 게이트웨이 문제로 시도하지 못했어요. 문제를 해결한 뒤 다시 눌러 주세요.",
+  "gateway.profile.import.keyed.title": "키를 바꿔야 가져올 수 있는 프로필",
+  "gateway.profile.import.keyed.hint":
+    "이 프로필들은 이미 키가 있어요. 키를 바꾸면 그 키를 쓰던 다른 연동이 끊기니, 바꿔도 될 때만 하나씩 눌러 주세요.",
+  "gateway.profile.import.notice":
+    "이 게이트웨이의 Hermes 에 아직 직원이 아닌 프로필이 {count}개 있어요.",
+  "gateway.profile.import.noticeOpen": "가져오기 화면 열기",
   "gateway.profile.import.keyNote":
     "이미 키가 있는 프로필은 바꿀지 먼저 물어요. 키를 바꾸면 그 키를 쓰던 다른 연동은 끊겨요.",
   "gateway.profile.import.keyDetails":
