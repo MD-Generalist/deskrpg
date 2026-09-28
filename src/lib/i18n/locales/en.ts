@@ -339,12 +339,36 @@ const en: Record<string, string> = {
   "gateway.profile.status.unknown": "Not tested",
   "gateway.profile.import.title": "Import employees already in Hermes",
   "gateway.profile.import.hint":
-    "Profiles in this gateway's Hermes that are not employees yet. Importing issues and stores a new key, and the employee clocks into the connected offices.",
+    "These profiles are in this gateway's Hermes but aren't employees yet. Importing makes and stores a new key, and the employee clocks into the connected offices.",
   "gateway.profile.import.button": "Import",
   "gateway.profile.import.importing": "Importing…",
   "gateway.profile.import.rotate": "Replace the key and import",
   "gateway.profile.import.done": "Imported '{name}'. Set its appearance and display name.",
   "gateway.profile.import.setup": "Set up",
+  "gateway.profile.import.keyNote":
+    "If a profile already has a key, we ask before replacing it. Replacing it cuts off anything else that used the old key.",
+  "gateway.profile.import.keyDetails":
+    "On the Hermes server, the new key is written to that profile folder's .env file as API_SERVER_KEY. DeskRPG keeps the new key encrypted on its server and never reads the old key.",
+  "gateway.profile.import.empty":
+    "There are no profiles to import. Every profile on this gateway is already an employee, or only the default profile exists.",
+  "gateway.profile.import.reload": "Reload",
+  "gateway.profile.import.failure.ownerKey":
+    "This gateway isn't connected with the admin key, so Hermes won't show its profile list. Switch to the admin key in the gateway's connection settings.",
+  "gateway.profile.import.failure.ownerKeyDetails":
+    "The profile list only opens at the gateway's base address (/deskrpg/profiles) with the Hermes default profile's API_SERVER_KEY (the listener owner key). The key registered now may belong to another profile, or be an old key that has since changed.",
+  "gateway.profile.import.failure.plugin":
+    "The gateway's DeskRPG plugin can't provide the profile list. Update the plugin to the latest version.",
+  "gateway.profile.import.failure.pluginDetails":
+    "The plugin has no GET /deskrpg/profiles, or answered in an unexpected way. Until you update, you can add employees with the advanced manual registration below.",
+  "gateway.profile.import.failure.offline":
+    "We couldn't reach the gateway, so the profile list didn't load. Check that the gateway is running, then reload.",
+  "gateway.profile.import.failure.offlineDetails":
+    "The DeskRPG server couldn't reach the gateway address, or timed out waiting for an answer.",
+  "gateway.profile.import.failure.other":
+    "We couldn't load the Hermes profile list. Reload in a moment.",
+  "gateway.profile.import.failure.otherDetails":
+    "If it keeps happening, send the error code below to your admin.",
+  "gateway.profile.import.failure.code": "Error code: {code}",
   "hermes.discovery.optIn": "Read this machine's Hermes profiles",
   "hermes.discovery.registerSelected": "Register selected",
   "hermes.discovery.listTitle": "Profiles found on this machine",

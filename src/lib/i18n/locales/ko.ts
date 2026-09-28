@@ -337,12 +337,36 @@ const ko: Record<string, string> = {
   "gateway.profile.status.unknown": "테스트 안 함",
   "gateway.profile.import.title": "Hermes 에 있는 직원 가져오기",
   "gateway.profile.import.hint":
-    "이 게이트웨이의 Hermes 에는 있지만 아직 직원이 아닌 프로필입니다. 가져오면 새 키를 발급해 저장하고, 연결된 오피스에 출근합니다.",
+    "이 게이트웨이의 Hermes 에는 있지만 아직 직원이 아닌 프로필이에요. 가져오면 새 키를 만들어 저장하고, 연결된 오피스에 출근해요.",
   "gateway.profile.import.button": "가져오기",
   "gateway.profile.import.importing": "가져오는 중…",
   "gateway.profile.import.rotate": "새 키로 바꾸고 가져오기",
   "gateway.profile.import.done": "'{name}' 을(를) 가져왔습니다. 외형과 표시 이름을 정해 주세요.",
   "gateway.profile.import.setup": "설정하기",
+  "gateway.profile.import.keyNote":
+    "이미 키가 있는 프로필은 바꿀지 먼저 물어요. 키를 바꾸면 그 키를 쓰던 다른 연동은 끊겨요.",
+  "gateway.profile.import.keyDetails":
+    "새 키는 Hermes 서버에서 그 프로필 폴더의 .env 파일에 API_SERVER_KEY 로 적혀요. DeskRPG 는 새 키를 암호화해 서버에만 보관하고, 원래 있던 키 값은 읽지 않아요.",
+  "gateway.profile.import.empty":
+    "가져올 프로필이 없어요. 이 게이트웨이의 프로필이 모두 이미 직원이거나 기본(default) 프로필뿐이에요.",
+  "gateway.profile.import.reload": "다시 불러오기",
+  "gateway.profile.import.failure.ownerKey":
+    "이 게이트웨이가 관리자용 키로 연결되지 않아 Hermes 의 프로필 목록을 볼 수 없어요. 게이트웨이 연결 설정에서 관리자용 키로 바꿔 주세요.",
+  "gateway.profile.import.failure.ownerKeyDetails":
+    "프로필 목록은 게이트웨이 기본 주소(/deskrpg/profiles)에서 Hermes default 프로필의 API_SERVER_KEY(리스너 소유자 키)로만 열려요. 지금 등록된 키는 다른 프로필의 키이거나 바뀐 뒤의 옛 키일 수 있어요.",
+  "gateway.profile.import.failure.plugin":
+    "게이트웨이의 DeskRPG 플러그인이 프로필 목록을 알려 주지 못해요. 플러그인을 최신 버전으로 업데이트해 주세요.",
+  "gateway.profile.import.failure.pluginDetails":
+    "플러그인에 GET /deskrpg/profiles 가 없거나 예상과 다른 응답이 왔어요. 업데이트 전까지는 아래 고급 수동 등록으로 직원을 추가할 수 있어요.",
+  "gateway.profile.import.failure.offline":
+    "게이트웨이에 연결되지 않아 프로필 목록을 불러오지 못했어요. 게이트웨이가 켜져 있는지 확인한 뒤 다시 불러와 주세요.",
+  "gateway.profile.import.failure.offlineDetails":
+    "DeskRPG 서버가 게이트웨이 주소에 닿지 못했거나 응답을 기다리다 시간이 지났어요.",
+  "gateway.profile.import.failure.other":
+    "Hermes 의 프로필 목록을 불러오지 못했어요. 잠시 뒤 다시 불러와 주세요.",
+  "gateway.profile.import.failure.otherDetails":
+    "계속 같으면 아래 오류 코드를 관리자에게 알려 주세요.",
+  "gateway.profile.import.failure.code": "오류 코드: {code}",
   "hermes.discovery.optIn": "이 머신의 Hermes 프로필 읽기",
   "hermes.discovery.registerSelected": "선택한 프로필 등록",
   "hermes.discovery.listTitle": "이 머신에서 찾은 프로필",

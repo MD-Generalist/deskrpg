@@ -4,10 +4,35 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { employeeDetailHref } from "@/app/profiles/hire-navigation";
+import { MoreDetails } from "@/components/MoreDetails";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 
 type Importable = { name: string; description: string };
+
+/** Why the list could not be read, grouped by what the owner can do about it. */
+type FailureKind = "owner-key" | "plugin" | "offline" | "other";
+
+const FAILURE_KINDS: Record<string, FailureKind> = {
+  // Hermes refused the key: the gateway was registered with a profile key or an old key.
+  gateway_auth_failed: "owner-key",
+  unauthorized: "owner-key",
+  plugin_update_required: "plugin",
+  plugin_upgrade_required: "plugin",
+  malformed_response: "plugin",
+  unreachable: "offline",
+  timeout: "offline",
+};
+
+const FAILURE_KEYS: Record<FailureKind, string> = {
+  "owner-key": "ownerKey",
+  plugin: "plugin",
+  offline: "offline",
+  other: "other",
+};
+
+type Listing =
+  { state: "loading" } | { state: "loaded" } | { state: "failed"; kind: FailureKind; code: string };
 
 /**
  * Profiles that already live in this gateway's Hermes but are not employees yet — made on the
@@ -25,19 +50,28 @@ export default function HermesProfileImport({
 }) {
   const t = useT();
   const [rows, setRows] = useState<Importable[]>([]);
+  const [listing, setListing] = useState<Listing>({ state: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   const [needsRotate, setNeedsRotate] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [done, setDone] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    let code = "connection_failed";
     try {
       const res = await fetch(`/api/gateways/${gatewayId}/plugin/profiles/importable`);
       const data = await res.json().catch(() => ({}));
-      setRows(!data.errorCode && Array.isArray(data.profiles) ? data.profiles : []);
+      if (!data.errorCode && res.ok && Array.isArray(data.profiles)) {
+        setRows(data.profiles);
+        setListing({ state: "loaded" });
+        return;
+      }
+      code = typeof data.errorCode === "string" ? data.errorCode : "malformed_response";
     } catch {
-      setRows([]);
+      // The DeskRPG server itself was not reached; keep the generic code.
     }
+    setRows([]);
+    setListing({ state: "failed", kind: FAILURE_KINDS[code] ?? "other", code });
   }, [gatewayId]);
 
   useEffect(() => {
@@ -74,12 +108,50 @@ export default function HermesProfileImport({
     }
   };
 
-  if (rows.length === 0 && !done && !error) return null;
+  if (listing.state === "loading") return null;
+
+  const failureKey = listing.state === "failed" ? FAILURE_KEYS[listing.kind] : null;
 
   return (
     <div className="space-y-2 border-t border-border pt-4">
       <h3 className="text-sm font-semibold">{t("gateway.profile.import.title")}</h3>
-      <p className="text-xs text-text-muted">{t("gateway.profile.import.hint")}</p>
+      {listing.state === "failed" ? (
+        <div
+          data-import-failure={listing.kind}
+          role="status"
+          className="space-y-2 rounded-lg border border-border bg-bg p-3 text-xs"
+        >
+          <p className="text-text">{t(`gateway.profile.import.failure.${failureKey}`)}</p>
+          <MoreDetails>
+            <p>{t(`gateway.profile.import.failure.${failureKey}Details`)}</p>
+            <p data-import-failure-code="">
+              {t("gateway.profile.import.failure.code", { code: listing.code })}
+            </p>
+          </MoreDetails>
+          <button
+            type="button"
+            data-import-reload=""
+            onClick={() => void load()}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised"
+          >
+            {t("gateway.profile.import.reload")}
+          </button>
+        </div>
+      ) : rows.length === 0 && !done ? (
+        <p data-import-empty="" className="text-xs text-text-muted">
+          {t("gateway.profile.import.empty")}
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-text-muted">{t("gateway.profile.import.hint")}</p>
+          <p data-import-key-note="" className="text-xs text-text-muted">
+            {t("gateway.profile.import.keyNote")}
+          </p>
+          <MoreDetails className="text-xs">
+            <p data-import-key-details="">{t("gateway.profile.import.keyDetails")}</p>
+          </MoreDetails>
+        </>
+      )}
       {rows.map((row) => (
         <div
           key={row.name}

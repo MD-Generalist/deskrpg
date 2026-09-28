@@ -315,12 +315,34 @@ const zh: Record<string, string> = {
   "gateway.profile.status.unknown": "尚未测试",
   "gateway.profile.import.title": "导入 Hermes 中已有的员工",
   "gateway.profile.import.hint":
-    "这些配置文件在此网关的 Hermes 中，但还不是员工。导入时会签发并保存新密钥，员工随即到已连接的办公室上班。",
+    "这些配置文件在此网关的 Hermes 中，但还不是员工。导入时会生成并保存新密钥，员工随即到已连接的办公室上班。",
   "gateway.profile.import.button": "导入",
   "gateway.profile.import.importing": "正在导入…",
   "gateway.profile.import.rotate": "更换密钥并导入",
   "gateway.profile.import.done": "已导入“{name}”。请设置外观和显示名称。",
   "gateway.profile.import.setup": "去设置",
+  "gateway.profile.import.keyNote":
+    "如果配置文件已有密钥，会先询问是否替换。替换后，使用旧密钥的其他集成会断开。",
+  "gateway.profile.import.keyDetails":
+    "新密钥会以 API_SERVER_KEY 写入 Hermes 服务器上该配置文件文件夹的 .env 文件。DeskRPG 只在服务器上加密保存新密钥，不会读取原有密钥的值。",
+  "gateway.profile.import.empty":
+    "没有可导入的配置文件。此网关的配置文件都已是员工，或只有默认（default）配置文件。",
+  "gateway.profile.import.reload": "重新加载",
+  "gateway.profile.import.failure.ownerKey":
+    "此网关没有使用管理员密钥连接，因此无法查看 Hermes 的配置文件列表。请在网关连接设置中换成管理员密钥。",
+  "gateway.profile.import.failure.ownerKeyDetails":
+    "配置文件列表只能在网关基础地址（/deskrpg/profiles）用 Hermes default 配置文件的 API_SERVER_KEY（监听器所有者密钥）打开。当前登记的密钥可能属于其他配置文件，或是已更换前的旧密钥。",
+  "gateway.profile.import.failure.plugin":
+    "网关的 DeskRPG 插件无法提供配置文件列表。请把插件更新到最新版本。",
+  "gateway.profile.import.failure.pluginDetails":
+    "插件没有 GET /deskrpg/profiles，或返回了意外的响应。更新前可以用下方的高级手动登记添加员工。",
+  "gateway.profile.import.failure.offline":
+    "无法连接网关，配置文件列表没有加载。请确认网关正在运行，然后重新加载。",
+  "gateway.profile.import.failure.offlineDetails":
+    "DeskRPG 服务器无法访问网关地址，或等待响应超时。",
+  "gateway.profile.import.failure.other": "无法加载 Hermes 的配置文件列表。请稍后重新加载。",
+  "gateway.profile.import.failure.otherDetails": "如果一直如此，请把下面的错误代码告诉管理员。",
+  "gateway.profile.import.failure.code": "错误代码：{code}",
   "hermes.discovery.optIn": "读取此设备上的 Hermes 配置文件",
   "hermes.discovery.registerSelected": "注册所选配置文件",
   "hermes.discovery.listTitle": "在此机器上找到的配置文件",
