@@ -19,7 +19,11 @@ setupThrowawaySqlite("profile-import-route-test");
 type KeyReply = { status: number; body: unknown };
 
 /** A plugin stand-in: lists profiles and answers the key route with `keyReply`. */
-async function startPlugin(opts: { profiles: string[]; keyReply: (rotate: boolean) => KeyReply }) {
+async function startPlugin(opts: {
+  profiles: string[];
+  keyReply: (rotate: boolean) => KeyReply;
+  listReply?: KeyReply;
+}) {
   const seen: { method: string; url: string; auth: string; body: string }[] = [];
   const server = http.createServer((req, res) => {
     let body = "";
@@ -36,6 +40,14 @@ async function startPlugin(opts: { profiles: string[]; keyReply: (rotate: boolea
         res.end(JSON.stringify(json));
       };
       if (req.method === "GET" && req.url === "/deskrpg/profiles") {
+        if (opts.listReply) {
+          const { status, body: reply } = opts.listReply;
+          if (typeof reply === "string") {
+            res.writeHead(status, { "content-type": "text/plain" });
+            return res.end(reply);
+          }
+          return send(status, reply);
+        }
         return send(200, {
           profiles: opts.profiles.map((name) => ({
             name,
@@ -69,8 +81,9 @@ const issue = (rotated = false): KeyReply => ({
 async function fixture(
   keyReply: (rotate: boolean) => KeyReply,
   profiles = ["default", "vps-sam", "sophie"],
+  listReply?: KeyReply,
 ) {
-  const plugin = await startPlugin({ profiles, keyReply });
+  const plugin = await startPlugin({ profiles, keyReply, listReply });
   const owner = await seedUser("owner");
   const gateway = await seedGateway(owner.id, plugin.baseUrl);
   const { registerHermesProfile, bindGatewayToChannel } = {
@@ -122,6 +135,32 @@ test("the importable list is the gateway's profiles minus default and the ones a
   assert.equal(res.status, 200);
   assert.deepEqual((await res.json()).profiles, [{ name: "vps-sam", description: "vps-sam desc" }]);
   assert.ok(f.plugin.seen.every((c) => c.auth === "Bearer gateway-owner-key-1234567890"));
+});
+
+test("a failed list rides on 200 with a code the screen can explain", async () => {
+  for (const [reply, code] of [
+    // Hermes' answer when the registered key is not the listener owner's key (api_server.py).
+    [
+      {
+        status: 401,
+        body: {
+          error: {
+            message: "Invalid gateway API key (API_SERVER_KEY)",
+            type: "gateway_auth_error",
+            code: "gateway_auth_failed",
+          },
+        },
+      },
+      "gateway_auth_failed",
+    ],
+    // An older plugin has no such route: aiohttp answers a bare 404 text.
+    [{ status: 404, body: "404: Not Found" }, "plugin_update_required"],
+  ] as const) {
+    const f = await fixture(() => issue(), undefined, reply as KeyReply);
+    const res = await importable(f.gateway.id, f.owner.id);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).errorCode, code, code);
+  }
 });
 
 test("importing stores the key encrypted, clocks the employee in, and never returns the key", async () => {

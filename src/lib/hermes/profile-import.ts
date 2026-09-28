@@ -56,7 +56,12 @@ export async function listImportableProfiles(
   const gate = await ownedGateway(userId, gatewayId);
   if (!gate.ok) return gate;
   const res = await gate.client.listProfiles();
-  if (!res.ok) return { ok: false, status: 200, errorCode: res.failure.code, upstream: true };
+  if (!res.ok) {
+    // The list lives on the root listener, so a 404/405 means the plugin has no such route yet.
+    const code =
+      res.status === 404 || res.status === 405 ? "plugin_update_required" : res.failure.code;
+    return { ok: false, status: 200, errorCode: code, upstream: true };
+  }
   const taken = await registeredNames(gatewayId);
   const profiles = res.data.profiles
     .map((p) => (p && typeof p === "object" ? (p as Record<string, unknown>) : {}))

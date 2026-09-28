@@ -342,12 +342,36 @@ const ja: Record<string, string> = {
   "gateway.profile.status.unknown": "未テスト",
   "gateway.profile.import.title": "Hermes にいる社員を取り込む",
   "gateway.profile.import.hint":
-    "このゲートウェイの Hermes にはあるが、まだ社員ではないプロファイルです。取り込むと新しいキーを発行して保存し、接続されたオフィスに出勤します。",
+    "このゲートウェイの Hermes にはあるけれど、まだ社員ではないプロファイルです。取り込むと新しいキーを作って保存し、接続されたオフィスに出勤します。",
   "gateway.profile.import.button": "取り込む",
   "gateway.profile.import.importing": "取り込み中…",
   "gateway.profile.import.rotate": "新しいキーに替えて取り込む",
   "gateway.profile.import.done": "「{name}」を取り込みました。外見と表示名を設定してください。",
   "gateway.profile.import.setup": "設定する",
+  "gateway.profile.import.keyNote":
+    "すでにキーがあるプロファイルは、置き換えるか先に確認します。置き換えると、そのキーを使っていた別の連携は切れます。",
+  "gateway.profile.import.keyDetails":
+    "新しいキーは Hermes サーバーのそのプロファイルフォルダーの .env ファイルに API_SERVER_KEY として書き込まれます。DeskRPG は新しいキーを暗号化してサーバーにだけ保管し、元のキーの値は読みません。",
+  "gateway.profile.import.empty":
+    "取り込めるプロファイルはありません。このゲートウェイのプロファイルはすべて社員になっているか、既定(default)プロファイルだけです。",
+  "gateway.profile.import.reload": "再読み込み",
+  "gateway.profile.import.failure.ownerKey":
+    "このゲートウェイが管理者用キーで接続されていないため、Hermes のプロファイル一覧を見られません。ゲートウェイの接続設定で管理者用キーに切り替えてください。",
+  "gateway.profile.import.failure.ownerKeyDetails":
+    "プロファイル一覧はゲートウェイの基本アドレス(/deskrpg/profiles)で、Hermes default プロファイルの API_SERVER_KEY(リスナー所有者キー)でだけ開けます。今登録されているキーは別のプロファイルのキーか、変更前の古いキーかもしれません。",
+  "gateway.profile.import.failure.plugin":
+    "ゲートウェイの DeskRPG プラグインがプロファイル一覧を返せません。プラグインを最新版に更新してください。",
+  "gateway.profile.import.failure.pluginDetails":
+    "プラグインに GET /deskrpg/profiles がないか、想定外の応答が返りました。更新するまでは、下の高度な手動登録で社員を追加できます。",
+  "gateway.profile.import.failure.offline":
+    "ゲートウェイにつながらず、プロファイル一覧を読み込めませんでした。ゲートウェイが動いているか確認してから再読み込みしてください。",
+  "gateway.profile.import.failure.offlineDetails":
+    "DeskRPG サーバーがゲートウェイのアドレスに届かなかったか、応答待ちで時間切れになりました。",
+  "gateway.profile.import.failure.other":
+    "Hermes のプロファイル一覧を読み込めませんでした。少し待ってから再読み込みしてください。",
+  "gateway.profile.import.failure.otherDetails":
+    "何度も続く場合は、下のエラーコードを管理者に伝えてください。",
+  "gateway.profile.import.failure.code": "エラーコード: {code}",
   "hermes.discovery.optIn": "このマシンのHermesプロフィールを読み込む",
   "hermes.discovery.registerSelected": "選択したプロフィールを登録",
   "hermes.discovery.listTitle": "このマシンで見つかったプロファイル",

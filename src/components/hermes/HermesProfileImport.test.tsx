@@ -22,17 +22,56 @@ const imported = {
 
 test.afterEach(cleanup);
 
-test("lists the gateway's profiles that are not employees yet, and shows nothing when there are none", async () => {
+test("lists the gateway's profiles that are not employees yet, with how the key is handled", async () => {
   mockFetch({ [LIST]: { profiles: [{ name: "vps-sam", description: "리서치 담당" }] } });
   await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
   assert.match(text(), /Hermes 에 있는 직원 가져오기/);
   assert.match(text(), /vps-sam/);
   assert.match(text(), /리서치 담당/);
+  assert.ok($("[data-import-key-note]"), "says an existing key is only replaced after asking");
+  assert.ok($("[data-import-key-details]"), "where the key is written lives under more details");
+  assert.ok(!container.querySelector("[data-import-failure]"));
+  assert.ok(!container.querySelector("[data-import-empty]"));
+});
 
-  await cleanup();
+test("an empty list says there is nothing to import instead of vanishing", async () => {
   mockFetch({ [LIST]: { profiles: [] } });
   await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
-  assert.equal(text().trim(), "");
+  assert.ok($("[data-import-empty]"));
+  assert.ok(!container.querySelector("[data-import-profile]"));
+  assert.ok(!container.querySelector("[data-import-failure]"));
+});
+
+for (const [errorCode, kind] of [
+  ["gateway_auth_failed", "owner-key"],
+  ["plugin_update_required", "plugin"],
+  ["malformed_response", "plugin"],
+  ["unreachable", "offline"],
+  ["timeout", "offline"],
+  ["upstream_error", "other"],
+] as const) {
+  test(`a failed list (${errorCode}) explains why and offers a reload`, async () => {
+    const routes: Record<string, unknown> = { [LIST]: { errorCode, error: errorCode } };
+    const log = mockFetch(routes as never);
+    await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
+    assert.equal($("[data-import-failure]")?.getAttribute("data-import-failure"), kind);
+    assert.equal($("[data-import-failure-code]")?.textContent?.includes(errorCode), true);
+    assert.ok(!container.querySelector("[data-import-empty]"));
+
+    routes[LIST] = { profiles: [{ name: "vps-sam", description: "" }] };
+    await click("[data-import-reload]");
+    assert.equal(log.calls.filter((c) => c === LIST).length, 2);
+    assert.ok(!container.querySelector("[data-import-failure]"));
+    assert.ok($("[data-import-profile=vps-sam]"));
+  });
+}
+
+test("a list request that never reaches the server is explained too", async () => {
+  globalThis.fetch = (async () => {
+    throw new TypeError("network down");
+  }) as typeof fetch;
+  await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
+  assert.equal($("[data-import-failure]")?.getAttribute("data-import-failure"), "other");
 });
 
 test("importing reports the new employee, points at its settings, and refreshes the list", async () => {
