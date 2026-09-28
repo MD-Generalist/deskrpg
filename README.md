@@ -26,7 +26,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.928.1` — Windows and upstream package-manager installs stay up: the plugin no longer blocks the Hermes gateway while DeskRPG checks it (a Windows gateway used to deadlock and stop). The setup wizard prepares the plugin's Python dependencies and updates the plugin in a way upstream Hermes accepts without a terminal, and container startup does the same. When a gateway DeskRPG can reach stops answering, its owner gets a [Restart] button. Custom and local models no longer trigger a missing-provider warning, and a host step that runs out of time says Hermes may still be getting ready. Hostinger installs from before this release: paste the new compose file once ([Hostinger guide, "Replace the compose once"](deploy/hostinger/README.md#set-up-before-this-change-replace-the-compose-once)). Requires plugin 0.30.2.
+- Version: `v2026.928.2` — Bring existing Hermes profiles in at once: register the gateway with its default (owner) key only, and [Import all] turns every profile that is not an employee yet into one, issuing each profile's key for you. Profiles that already have a key are set aside and only change key when you say so, so other tools using that key keep working. When the list cannot load, the page says why (owner key, plugin version, or a stopped gateway) instead of hiding the section. Includes everything in 2026.928.1. Requires plugin 0.30.2.
 
 ## What You Can Do
 
