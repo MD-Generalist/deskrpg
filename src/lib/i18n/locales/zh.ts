@@ -321,6 +321,19 @@ const zh: Record<string, string> = {
   "gateway.profile.import.rotate": "更换密钥并导入",
   "gateway.profile.import.done": "已导入“{name}”。请设置外观和显示名称。",
   "gateway.profile.import.setup": "去设置",
+  "gateway.profile.import.all": "全部导入（{count} 个）",
+  "gateway.profile.import.importingAll": "正在逐个导入…",
+  "gateway.profile.import.select": "将 {name} 加入导入",
+  "gateway.profile.import.summary.imported":
+    "已导入 {count} 个。请在员工列表中设置外观和显示名称。",
+  "gateway.profile.import.summary.keyed": "{count} 个已有密钥，已跳过。可以在下方逐个决定。",
+  "gateway.profile.import.summary.failed": "{count} 个未能导入。请查看每个配置文件下的原因。",
+  "gateway.profile.import.summary.notTried": "{count} 个因网关问题未尝试。解决问题后请再点一次。",
+  "gateway.profile.import.keyed.title": "需要更换密钥才能导入的配置文件",
+  "gateway.profile.import.keyed.hint":
+    "这些配置文件已有密钥。更换后，使用该密钥的其他集成会断开，只在确认没问题时逐个点击。",
+  "gateway.profile.import.notice": "此网关的 Hermes 中有 {count} 个还不是员工的配置文件。",
+  "gateway.profile.import.noticeOpen": "打开导入页面",
   "gateway.profile.import.keyNote":
     "如果配置文件已有密钥，会先询问是否替换。替换后，使用旧密钥的其他集成会断开。",
   "gateway.profile.import.keyDetails":

@@ -80,6 +80,8 @@ export type ImportedProfile = {
   rotated: boolean;
 };
 
+type OwnedGateway = Extract<Awaited<ReturnType<typeof ownedGateway>>, { ok: true }>;
+
 export async function importHermesProfile(input: {
   userId: string;
   gatewayId: string;
@@ -88,6 +90,13 @@ export async function importHermesProfile(input: {
 }): Promise<({ ok: true } & ImportedProfile) | Refusal> {
   const gate = await ownedGateway(input.userId, input.gatewayId);
   if (!gate.ok) return gate;
+  return importOne(gate, input);
+}
+
+async function importOne(
+  gate: OwnedGateway,
+  input: { userId: string; gatewayId: string; profileName: string; rotate: boolean },
+): Promise<({ ok: true } & ImportedProfile) | Refusal> {
   const name = input.profileName;
   if (!isValidProfileName(name))
     return { ok: false, status: 400, errorCode: "invalid_profile_name" };
@@ -126,4 +135,57 @@ export async function importHermesProfile(input: {
   }
   const { tokenEncrypted: _tokenEncrypted, ...profile } = stored.profile;
   return { ok: true, profile, attendedChannels, rotated: res.data.rotated === true };
+}
+
+/** Most profiles one bulk import takes — a Hermes host rarely has more, and each one is a key issue. */
+export const BULK_IMPORT_LIMIT = 100;
+
+/**
+ * Failures that would repeat for every remaining profile (the gateway is down, refuses the owner key,
+ * or its plugin cannot issue keys). The batch stops there instead of waiting out a timeout per profile.
+ */
+const BATCH_STOPPERS = new Set([
+  "unreachable",
+  "timeout",
+  "gateway_auth_failed",
+  "plugin_update_required",
+]);
+
+export type BulkImportResult =
+  | { name: string; status: "imported"; attendedChannels: number }
+  | { name: string; status: "key_exists" }
+  | { name: string; status: "failed"; errorCode: string }
+  | { name: string; status: "not_tried" };
+
+/**
+ * Imports several profiles one after another — never in parallel, so the gateway sees one key issue
+ * at a time. A profile that already has a key is skipped (`key_exists`) and never re-keyed here:
+ * replacing it cuts off whatever used the old key, so that stays a per-profile choice. Profiles that
+ * were imported stay imported when a later one fails.
+ */
+export async function importHermesProfiles(input: {
+  userId: string;
+  gatewayId: string;
+  profileNames: string[];
+}): Promise<{ ok: true; results: BulkImportResult[] } | Refusal> {
+  const gate = await ownedGateway(input.userId, input.gatewayId);
+  if (!gate.ok) return gate;
+  const results: BulkImportResult[] = [];
+  let stoppedBy: string | null = null;
+  for (const name of input.profileNames) {
+    if (stoppedBy) {
+      results.push({ name, status: "not_tried" });
+      continue;
+    }
+    const one = await importOne(gate, { ...input, profileName: name, rotate: false });
+    if (one.ok) {
+      results.push({ name, status: "imported", attendedChannels: one.attendedChannels });
+    } else if (one.errorCode === "key_exists") {
+      results.push({ name, status: "key_exists" });
+    } else {
+      results.push({ name, status: "failed", errorCode: one.errorCode });
+      if (BATCH_STOPPERS.has(one.errorCode)) stoppedBy = one.errorCode;
+    }
+  }
+  return { ok: true, results };
 }

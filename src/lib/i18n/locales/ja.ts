@@ -348,6 +348,23 @@ const ja: Record<string, string> = {
   "gateway.profile.import.rotate": "新しいキーに替えて取り込む",
   "gateway.profile.import.done": "「{name}」を取り込みました。外見と表示名を設定してください。",
   "gateway.profile.import.setup": "設定する",
+  "gateway.profile.import.all": "すべて取り込む（{count}件）",
+  "gateway.profile.import.importingAll": "1件ずつ順番に取り込んでいます…",
+  "gateway.profile.import.select": "{name} を取り込みに含める",
+  "gateway.profile.import.summary.imported":
+    "{count}件を取り込みました。外見と表示名は社員一覧で決めてください。",
+  "gateway.profile.import.summary.keyed":
+    "{count}件はすでにキーがあるため飛ばしました。下で1件ずつ決められます。",
+  "gateway.profile.import.summary.failed":
+    "{count}件は取り込めませんでした。プロファイルごとの理由を確認してください。",
+  "gateway.profile.import.summary.notTried":
+    "{count}件はゲートウェイの問題で試せませんでした。問題を直してからもう一度押してください。",
+  "gateway.profile.import.keyed.title": "キーを置き換えると取り込めるプロファイル",
+  "gateway.profile.import.keyed.hint":
+    "これらのプロファイルにはすでにキーがあります。置き換えるとそのキーを使っていた別の連携が切れるので、問題ないときだけ1件ずつ押してください。",
+  "gateway.profile.import.notice":
+    "このゲートウェイの Hermes に、まだ社員ではないプロファイルが{count}件あります。",
+  "gateway.profile.import.noticeOpen": "取り込み画面を開く",
   "gateway.profile.import.keyNote":
     "すでにキーがあるプロファイルは、置き換えるか先に確認します。置き換えると、そのキーを使っていた別の連携は切れます。",
   "gateway.profile.import.keyDetails":
