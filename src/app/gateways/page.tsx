@@ -14,6 +14,7 @@ import {
 import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
+import ImportableProfilesNotice from "@/components/hermes/ImportableProfilesNotice";
 import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { useLocale, useT } from "@/lib/i18n";
 
@@ -960,6 +961,11 @@ function GatewayManagementPageInner() {
                 >
                   {t("gateways.employeesOpen")}
                 </Link>
+                {/* Also the first thing after connecting: a ready gateway is selected at once, so the
+                    wizard's success screen never stays up long enough to carry this. */}
+                {selectedGateway.isOwner && (
+                  <ImportableProfilesNotice gatewayId={selectedGateway.id} />
+                )}
               </section>
             )}
 

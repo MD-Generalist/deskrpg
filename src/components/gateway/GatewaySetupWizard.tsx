@@ -29,7 +29,6 @@ import {
 } from "../../lib/hermes/setup/system-packages";
 import SshHostRegistration from "./SshHostRegistration";
 import { CopyCommand } from "../CopyCommand";
-import ImportableProfilesNotice from "@/components/hermes/ImportableProfilesNotice";
 
 const API = "/api/gateways/setup";
 // Don't hand-copy the pinned commit/version — pin.ts is the source of truth and pin.test.ts checks it against the host script.
@@ -1243,7 +1242,6 @@ export default function GatewaySetupWizard({
           {result.pluginStatus === "plugin_ready" ? (
             <>
               <p role="status">{c.connected}</p>
-              <ImportableProfilesNotice gatewayId={result.gatewayId} />
               <a
                 className={`${button} inline-block`}
                 href={`/profiles?gateway=${encodeURIComponent(result.gatewayId)}`}
