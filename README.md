@@ -26,7 +26,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.928.2` — Bring existing Hermes profiles in at once: register the gateway with its default (owner) key only, and [Import all] turns every profile that is not an employee yet into one, issuing each profile's key for you. Profiles that already have a key are set aside and only change key when you say so, so other tools using that key keep working. When the list cannot load, the page says why (owner key, plugin version, or a stopped gateway) instead of hiding the section. Includes everything in 2026.928.1. Requires plugin 0.30.2.
+- Version: `v2026.929.1` — When profiles cannot be listed, the page now tells a plugin that is off or not loaded (enable it and restart the gateway) apart from one that is too old. The plugin setup command DeskRPG shows now upgrades an existing install (disable, reinstall at the pinned commit, enable, restart), and this README has an upgrade section. The "profiles to import" notice now appears on the gateway page right after connecting. Includes everything in 2026.928.2. Requires plugin 0.30.2.
 
 ## What You Can Do
 
