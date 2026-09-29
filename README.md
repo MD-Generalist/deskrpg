@@ -231,8 +231,30 @@ hermes plugins enable deskrpg
 ```
 
 `enable` is not optional: without it every plugin route answers 404 even though the install
-succeeded. DeskRPG shows the same command in the board and schedule screens when it detects the
-plugin is missing or out of date.
+succeeded. DeskRPG shows an equivalent one-line command in the board and schedule screens when it
+detects the plugin is missing or out of date.
+
+**Upgrading an installed plugin**
+
+Running `install` again over an existing plugin fails with "already exists", and the old version
+keeps running. Replace it in this order:
+
+```bash
+hermes plugins disable deskrpg
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref d1f1431639cb09b2da888422e89700a3efeff038 --force
+hermes plugins enable deskrpg
+hermes gateway restart
+```
+
+- Disable first. Hermes refuses to replace an enabled plugin from a script or any other
+  non-interactive shell, and leaves the old version in place.
+- Do not skip `enable`. A replaced plugin stays disabled, and a disabled plugin answers 404 on every
+  plugin route. This step also prepares the plugin's dependencies.
+- Routes are attached only at startup, so the new version serves nothing until the gateway restarts.
+- Run these in the root (default) Hermes home. A plugin installed with `-p <profile>` does not attach
+  to the root listener that DeskRPG talks to.
+
+Check the result with `hermes plugins list`: `deskrpg` should be `enabled` at version 0.30.x.
 
 **Approval policies work on upstream Hermes.** From plugin 0.27.0 the plugin enforces card approval (capability `review_hooks_v1`) with documented Hermes hooks and a plugin-owned store, without changing Hermes core: an implementer cannot finish its own card, a card waiting for a person sits in `review` with no assignee, and the reviewer never approves work it did itself. Gateways without the capability create cards without a policy, and the board says they complete without approval. On upstream's package-manager install, set `HERMES_BIN` to the Hermes launcher so kanban workers can start (the setup wizard does this on Linux, and the gateway page shows the command otherwise). If you ran the earlier Dante Labs compatibility patch, follow the plugin's [steps for moving off the patched core](https://github.com/dandacompany/deskrpg-hermes-plugin#moving-an-install-off-the-patched-core).
 

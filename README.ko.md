@@ -231,7 +231,29 @@ hermes plugins enable deskrpg
 ```
 
 `enable` 은 선택이 아닙니다. 설치만 하고 건너뛰면 모든 플러그인 라우트가 404를 냅니다.
-DeskRPG는 플러그인이 없거나 낡았다고 판단하면 보드·일정 화면에 같은 명령을 그대로 보여줍니다.
+DeskRPG는 플러그인이 없거나 낡았다고 판단하면 보드·일정 화면에 같은 일을 하는 한 줄 명령을 보여줍니다.
+
+**설치된 플러그인 업그레이드**
+
+이미 설치된 플러그인 위에 `install` 을 다시 실행하면 "already exists" 로 실패하고 옛 버전이
+그대로 돌아갑니다. 아래 순서로 교체합니다.
+
+```bash
+hermes plugins disable deskrpg
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref d1f1431639cb09b2da888422e89700a3efeff038 --force
+hermes plugins enable deskrpg
+hermes gateway restart
+```
+
+- 먼저 끕니다. 스크립트처럼 대화식이 아닌 셸에서는 Hermes 가 켜져 있는 플러그인의 교체를
+  거절하고 옛 버전을 남겨 둡니다.
+- `enable` 을 빠뜨리지 마세요. 교체된 플러그인은 꺼진 채로 남고, 꺼진 플러그인은 모든 플러그인
+  라우트에서 404를 냅니다. 플러그인 의존성도 이 단계에서 준비됩니다.
+- 라우트는 기동할 때만 붙으므로, 게이트웨이를 재시작해야 새 버전이 응답합니다.
+- 루트(default) Hermes 홈에서 실행하세요. `-p <프로필>` 로 설치한 플러그인은 DeskRPG 가 호출하는
+  루트 리스너에 붙지 않습니다.
+
+`hermes plugins list` 로 확인합니다. `deskrpg` 가 `enabled`, 버전 0.30.x 로 보여야 합니다.
 
 **승인 정책은 본가 Hermes 에서 동작합니다.** 플러그인 0.27.0 부터 Hermes core 를 바꾸지 않고, 문서화된 Hermes 훅과 플러그인 전용 저장소로 카드 승인을 지킵니다(`review_hooks_v1`). 구현자는 자기 카드를 스스로 끝낼 수 없고, 사람 승인을 기다리는 카드는 담당 없이 `review` 에 머물며, 검토자는 자기가 한 작업을 승인하지 않습니다. 이 기능이 없는 게이트웨이는 정책 없이 카드를 만들고, 보드가 승인 없이 완료된다고 알립니다. 본가의 패키지 매니저 설치에서는 칸반 워커가 뜨도록 `HERMES_BIN` 을 Hermes 실행 파일로 지정하세요(Linux 에서는 설치 마법사가 해 주고, 그 밖에는 게이트웨이 화면이 명령을 보여 줍니다). 예전 단테랩스 호환 패치를 쓰셨다면 플러그인의 [패치 core 에서 옮기는 절차](https://github.com/dandacompany/deskrpg-hermes-plugin#moving-an-install-off-the-patched-core)를 따르세요.
 
