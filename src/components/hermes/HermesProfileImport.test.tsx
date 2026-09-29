@@ -47,6 +47,7 @@ test("an empty list says there is nothing to import instead of vanishing", async
 for (const [errorCode, kind] of [
   ["gateway_auth_failed", "owner-key"],
   ["plugin_update_required", "plugin"],
+  ["plugin_not_loaded", "plugin-off"],
   ["malformed_response", "plugin"],
   ["unreachable", "offline"],
   ["timeout", "offline"],

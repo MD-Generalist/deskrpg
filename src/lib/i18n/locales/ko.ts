@@ -375,6 +375,10 @@ const ko: Record<string, string> = {
     "게이트웨이의 DeskRPG 플러그인이 프로필 목록을 알려 주지 못해요. 플러그인을 최신 버전으로 업데이트해 주세요.",
   "gateway.profile.import.failure.pluginDetails":
     "플러그인에 GET /deskrpg/profiles 가 없거나 예상과 다른 응답이 왔어요. 업데이트 전까지는 아래 고급 수동 등록으로 직원을 추가할 수 있어요.",
+  "gateway.profile.import.failure.pluginOff":
+    "게이트웨이에서 DeskRPG 플러그인이 꺼져 있거나 불러와지지 않아 프로필 목록을 볼 수 없어요. 게이트웨이 호스트에서 플러그인을 켠 뒤 게이트웨이를 다시 시작해 주세요.",
+  "gateway.profile.import.failure.pluginOffDetails":
+    "게이트웨이는 응답하지만 /deskrpg/info 와 /deskrpg/profiles 가 모두 404 였어요. 플러그인을 설치만 하고 켜지 않았거나 default 가 아닌 프로필에만 켠 경우예요. 게이트웨이 호스트에서 `hermes plugins list` 로 deskrpg 가 enabled 인지 확인하고, 꺼져 있으면 `hermes plugins enable deskrpg` 를 실행한 뒤 게이트웨이를 재시작하세요. 업데이트로는 해결되지 않아요.",
   "gateway.profile.import.failure.offline":
     "게이트웨이에 연결되지 않아 프로필 목록을 불러오지 못했어요. 게이트웨이가 켜져 있는지 확인한 뒤 다시 불러와 주세요.",
   "gateway.profile.import.failure.offlineDetails":
@@ -2760,6 +2764,8 @@ const ko: Record<string, string> = {
     "키는 발급됐지만 저장하지 못했습니다. 다시 시도하면 새 키로 바꿔 가져올 수 있습니다",
   "errors.pluginUpdateRequired":
     "게이트웨이의 DeskRPG 플러그인을 업데이트해야 합니다. 지금은 아래 수동 등록을 쓰세요",
+  "errors.pluginNotLoaded":
+    "게이트웨이에서 DeskRPG 플러그인이 꺼져 있거나 불러와지지 않았어요. 게이트웨이 호스트에서 플러그인을 켠 뒤 게이트웨이를 다시 시작해 주세요",
   "errors.templateDeleteConfirm": '"{name}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
 
   // 크론 화면 (T9)

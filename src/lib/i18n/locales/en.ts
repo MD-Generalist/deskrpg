@@ -377,6 +377,10 @@ const en: Record<string, string> = {
     "The gateway's DeskRPG plugin can't provide the profile list. Update the plugin to the latest version.",
   "gateway.profile.import.failure.pluginDetails":
     "The plugin has no GET /deskrpg/profiles, or answered in an unexpected way. Until you update, you can add employees with the advanced manual registration below.",
+  "gateway.profile.import.failure.pluginOff":
+    "The DeskRPG plugin is turned off or not loaded on the gateway, so the profile list isn't available. Turn it on at the gateway host, then restart the gateway.",
+  "gateway.profile.import.failure.pluginOffDetails":
+    "The gateway answers, but both /deskrpg/info and /deskrpg/profiles returned 404. This happens when the plugin was installed but never enabled, or enabled only for a profile other than default. On the gateway host, run `hermes plugins list` to check that deskrpg is enabled; if it isn't, run `hermes plugins enable deskrpg` and restart the gateway. Updating the plugin won't fix this.",
   "gateway.profile.import.failure.offline":
     "We couldn't reach the gateway, so the profile list didn't load. Check that the gateway is running, then reload.",
   "gateway.profile.import.failure.offlineDetails":
@@ -2775,6 +2779,8 @@ const en: Record<string, string> = {
     "The key was issued but could not be stored. Try again to replace it and import",
   "errors.pluginUpdateRequired":
     "The gateway needs a newer DeskRPG plugin. Use manual registration below for now",
+  "errors.pluginNotLoaded":
+    "The DeskRPG plugin is turned off or not loaded on the gateway. Turn it on at the gateway host, then restart the gateway",
   "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
 
   // Cron screen (T9)

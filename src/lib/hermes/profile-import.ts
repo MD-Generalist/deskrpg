@@ -13,7 +13,7 @@ import { and, eq } from "drizzle-orm";
 import { db, hermesProfiles } from "@/db";
 import { decryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { registerHermesProfile } from "@/lib/hermes-profiles";
-import { createPluginClient } from "@/lib/hermes/plugin-client";
+import { createOwnerPluginClient, createPluginClient } from "@/lib/hermes/plugin-client";
 import { isValidProfileName } from "@/lib/hermes/profile-name";
 import { hireProfileIntoBoundChannels } from "@/lib/npc-roster";
 
@@ -31,13 +31,26 @@ async function ownedGateway(userId: string, gatewayId: string) {
   const access = await getAccessibleGatewayResource(userId, gatewayId);
   if (!access) return { ok: false, status: 404, errorCode: "gateway_not_found" } as Refusal;
   if (!access.isOwner) return { ok: false, status: 403, errorCode: "forbidden" } as Refusal;
+  const baseUrl = access.resource.baseUrl;
+  const ownerToken = decryptGatewayToken(access.resource.tokenEncrypted);
   return {
     ok: true as const,
-    client: createPluginClient({
-      baseUrl: access.resource.baseUrl,
-      defaultToken: decryptGatewayToken(access.resource.tokenEncrypted),
-    }),
+    client: createPluginClient({ baseUrl, defaultToken: ownerToken }),
+    owner: createOwnerPluginClient({ baseUrl, ownerToken }),
   };
+}
+
+/**
+ * Why a plugin route answered 404/405. A plugin that is installed but not enabled — or enabled only
+ * on a non-root profile — is never loaded, so every `/deskrpg/*` route is a bare 404 while
+ * `/health` is fine. `/deskrpg/info` exists on every plugin version, so a 404 there too means the
+ * plugin is not loaded, and updating it would not help; otherwise the plugin is just too old.
+ */
+async function missingRouteCode(gate: OwnedGateway): Promise<string> {
+  const info = await gate.owner.info();
+  return !info.ok && (info.status === 404 || info.status === 405)
+    ? "plugin_not_loaded"
+    : "plugin_update_required";
 }
 
 async function registeredNames(gatewayId: string): Promise<Set<string>> {
@@ -57,9 +70,9 @@ export async function listImportableProfiles(
   if (!gate.ok) return gate;
   const res = await gate.client.listProfiles();
   if (!res.ok) {
-    // The list lives on the root listener, so a 404/405 means the plugin has no such route yet.
+    // The list lives on the root listener, so a 404/405 means the plugin is not loaded or too old.
     const code =
-      res.status === 404 || res.status === 405 ? "plugin_update_required" : res.failure.code;
+      res.status === 404 || res.status === 405 ? await missingRouteCode(gate) : res.failure.code;
     return { ok: false, status: 200, errorCode: code, upstream: true };
   }
   const taken = await registeredNames(gatewayId);
@@ -112,7 +125,7 @@ async function importOne(
   if (!res.ok) {
     const code = res.failure.code;
     if ((res.status === 404 || res.status === 405) && !KEY_ROUTE_CODES.has(code)) {
-      return { ok: false, status: 428, errorCode: "plugin_update_required" };
+      return { ok: false, status: 428, errorCode: await missingRouteCode(gate) };
     }
     return { ok: false, status: 200, errorCode: code, upstream: true };
   }
@@ -149,6 +162,7 @@ const BATCH_STOPPERS = new Set([
   "timeout",
   "gateway_auth_failed",
   "plugin_update_required",
+  "plugin_not_loaded",
 ]);
 
 export type BulkImportResult =
