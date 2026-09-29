@@ -571,17 +571,26 @@ WORKER_LAUNCH_DROPIN = 'hermes-bin.conf'
 def worker_launch_dropin_text():
     value = str(LAUNCHER).replace('\\', '\\\\').replace('"', '\\"')
     return '[Service]\n# Written by the DeskRPG setup wizard: kanban workers start through the Hermes launcher.\nEnvironment="HERMES_BIN=' + value + '"\n'
-def pm_launchd_arguments(name, home):
-    """ProgramArguments of the plist upstream's 'hermes gateway install' writes on the PM runtime
-    (hermes_cli/gateway_launchd.py generate_launchd_plist): osascript gives the job a Local Network identity and runs
-    the launcher through the stderr timestamper, logging under <home>/logs."""
+def pm_launchd_shell(name, home):
+    """The shell command inside the plist upstream's 'hermes gateway install' writes on the PM runtime
+    (hermes_cli/gateway_launchd.py generate_launchd_plist): the launcher runs through the stderr timestamper and logs
+    under <home>/logs."""
     logs = home / 'logs'
     stdout_log, stderr_log = str(logs / 'gateway.log'), str(logs / 'gateway.error.log')
     profile = ['--profile', name] if name != 'default' else []
     command = [str(LAUNCHER), '--run-module', 'hermes_cli.stderr_timestamp', '--error-log', stderr_log, '--', str(LAUNCHER)] + profile + ['gateway', 'run', '--external-supervisor']
-    shell = 'exec ' + shlex.join(command) + ' >> ' + shlex.quote(stdout_log) + ' 2>> ' + shlex.quote(stderr_log)
+    return 'exec ' + shlex.join(command) + ' >> ' + shlex.quote(stdout_log) + ' 2>> ' + shlex.quote(stderr_log)
+def pm_launchd_arguments(name, home):
+    """ProgramArguments around that shell command (launchd_program_arguments): osascript gives the job a Local Network
+    identity. Upstream 8682d5791b (2026-09-27) moved the wrapper from AppleScript to JXA."""
+    shell = pm_launchd_shell(name, home)
     script = 'ObjC.import("stdlib"); const status=$.system(' + json.dumps(shell) + '); const signal=status & 127; $.exit(status === -1 ? 1 : signal === 0 ? (status >> 8) & 255 : 128 + signal);'
     return ['/usr/bin/osascript', '-l', 'JavaScript', '-e', script]
+def pm_launchd_legacy_arguments(name, home):
+    """The AppleScript wrapper upstream wrote before 8682d5791b, around the same shell command. A gateway installed
+    back then keeps this plist until 'hermes gateway restart' refreshes it, so it is still upstream's own service."""
+    applescript = pm_launchd_shell(name, home).replace('\\', '\\\\').replace('"', '\\"')
+    return ['/usr/bin/osascript', '-e', 'do shell script "' + applescript + '"']
 def hermes_argv(*args):
     """A Hermes CLI command: the PM launcher, or the old venv interpreter with -m."""
     return ([str(LAUNCHER)] if PM_RUNTIME else [sys.executable, '-m', 'hermes_cli.main']) + list(args)
@@ -800,8 +809,9 @@ def identity(name, home):
             env = data.get('EnvironmentVariables', {})
             valid = data.get('Label') == label and env.get('HERMES_HOME') == str(home)
             if PM_RUNTIME:
-                # Upstream's PM plist, argument for argument (the profile is inside the osascript program).
-                valid = valid and args == pm_launchd_arguments(name, home)
+                # Upstream's PM plist, argument for argument (the profile is inside the osascript program), in either
+                # wrapper upstream has written. Anything else is not upstream's service.
+                valid = valid and args in (pm_launchd_arguments(name, home), pm_launchd_legacy_arguments(name, home))
             else:
                 valid = valid and len(args) >= 4
                 valid = valid and pathlib.Path(args[0]).parent.resolve() == pathlib.Path(python).parent.resolve() and pathlib.Path(args[0]).name in ('python', 'python3', pathlib.Path(python).name) and 'gateway' in args and 'run' in args
@@ -1158,6 +1168,13 @@ def probe(public, token):
     if status == 404: return 'plugin_absent', 'plugin_pending_restart' if public['pluginEnabled'] else 'plugin_disabled' if public['pluginInstalled'] else 'plugin_absent'
     return 'unknown', 'gateway_unreachable' if status == 0 else 'gateway_identity_unverified'
 
+def foreign_listener(owner):
+    """Fails for a listener that is not the service's own process. When the service itself could not be identified
+    there is no process to compare against, so the listener may well be this gateway: report the identity problem
+    instead of a port conflict, which would send the user to another port. No key is sent either way."""
+    warning = owner.get('warning')
+    fail(warning if not owner.get('pid') and warning in ('service_identity_mismatch', 'service_identity_ambiguous') else 'port_conflict')
+
 def assert_port_owned(public, owner):
     # Never send a discovered key to an arbitrary local listener. psutil verifies PID ownership first.
     import psutil
@@ -1176,7 +1193,7 @@ def assert_port_owned(public, owner):
                 parent = psutil.Process(owner['pid']) if owner['pid'] else None
                 owned = {parent.pid, *(p.pid for p in parent.children(recursive=True))} if parent else set()
             except psutil.Error: owned = set()
-            if any(pid not in owned for pid in pids): fail('port_conflict')
+            if any(pid not in owned for pid in pids): foreign_listener(owner)
             return True
         try:
             sock = socket.socket(); sock.bind(('127.0.0.1', public['port'])); sock.close(); return False
@@ -1187,7 +1204,7 @@ def assert_port_owned(public, owner):
             process = psutil.Process(owner['pid'])
             owned = {process.pid, *(p.pid for p in process.children(recursive=True))}
         except psutil.Error: pass
-    if not connections or any(c.pid not in owned for c in connections): fail('port_conflict')
+    if not connections or any(c.pid not in owned for c in connections): foreign_listener(owner)
     return True
 
 def port_free(port):
