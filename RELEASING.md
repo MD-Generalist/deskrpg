@@ -51,6 +51,8 @@ Release only from a verified, clean `master`. Use a fresh date version (no `v` p
 
 The release workflow checks that the tag commit is on remote `master`, verifies version consistency, and **first smoke-tests the built npm tarball from `node_modules` before publishing**. Then it publishes npm with provenance (`NPM_TOKEN`), waits for registry propagation, installs that exact **registry package globally under a temporary prefix**, starts it from `node_modules`, and requires `/auth` to answer. Its Docker jobs build `linux/amd64` on `ubuntu-24.04` and `linux/arm64` on `ubuntu-24.04-arm` in parallel, without QEMU. They push platform tags to `ghcr.io/dandacompany/deskrpg:<VERSION>-amd64` and `:<VERSION>-arm64`. **Only after the registry npm smoke succeeds** does the manifest job join them as `:<VERSION>` and `:latest`, check both platforms, and check anonymous visibility. GitHub Release is created only after npm and manifest jobs succeed.
 
+If "Wait for registry propagation" fails after its 45-minute limit, the publish has usually succeeded and the registry is just slow (2026.929.1 took about 26 minutes). Wait until `npm view deskrpg@<VERSION> version` prints the version, then run `gh run rerun <run-id> --failed`; the rerun skips `npm publish` because the version already exists and continues to the Docker manifest and GitHub Release.
+
 The only repository publishing secret is `NPM_TOKEN`. GHCR uses the workflow's `GITHUB_TOKEN` with `packages: write`. If the first package is not public, set its visibility to public in GitHub's package settings and rerun the manifest job; never announce a private container as a public release.
 
 ## Transition and verification
