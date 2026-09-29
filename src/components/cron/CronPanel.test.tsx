@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 
 import { I18nProvider } from "@/lib/i18n";
 import CronPanel, { type CronEventSource } from "./CronPanel";
-import type { CronJobView } from "./cron-api";
+import { PLUGIN_INSTALL_COMMAND, type CronJobView } from "./cron-api";
 
 const NPCS = [
   { npcId: "npc-a", npcName: "소피" },
@@ -249,10 +249,7 @@ test("428 plugin_upgrade_required -> update notice and install command (R31)", a
     assert.ok(notice);
     assert.match(notice.textContent ?? "", /플러그인 업데이트 필요/);
     assert.match(notice.textContent ?? "", /0\.6\.0/);
-    assert.match(
-      notice.textContent ?? "",
-      /hermes plugins install https:\/\/github\.com\/dandacompany\/deskrpg-hermes-plugin && hermes plugins enable deskrpg/,
-    );
+    assert.ok((notice.textContent ?? "").includes(PLUGIN_INSTALL_COMMAND));
     assert.equal(byTestId(host, "cron-error-gateway"), null);
   } finally {
     await cleanup();

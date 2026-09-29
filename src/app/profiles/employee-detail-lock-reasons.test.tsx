@@ -13,6 +13,7 @@ import {
   SearchParamsContext,
 } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { I18nProvider } from "@/lib/i18n";
+import { PINNED_PLUGIN_SETUP_COMMAND } from "@/lib/hermes/plugin-install-command";
 import { PLUGIN_PIN } from "@/lib/hermes/setup/pin";
 import EmployeeDetailPage from "./[name]/page";
 
@@ -117,14 +118,23 @@ test("a token that is not the owner key: says so and links to the gateway settin
   }
 });
 
-test("no plugin: gives the pinned install, enable and restart command to copy", async () => {
+test("no plugin: gives the disable, pinned install, enable and restart command to copy", async () => {
   const { el, cleanup } = await render("plugin_absent");
   try {
     assert.equal(lock(el)?.getAttribute("data-plugin-lock"), "plugin_absent");
     const command = lock(el)?.querySelector("pre")?.textContent ?? "";
-    assert.ok(command.includes(`--ref ${PLUGIN_PIN}`));
-    assert.ok(command.includes("--enable"));
-    assert.ok(command.includes("hermes gateway restart"));
+    assert.equal(command, PINNED_PLUGIN_SETUP_COMMAND);
+    const steps = [
+      "hermes plugins disable deskrpg",
+      `--ref ${PLUGIN_PIN} --force`,
+      "hermes plugins enable deskrpg",
+      "hermes gateway restart",
+    ].map((step) => command.indexOf(step));
+    assert.ok(steps.every((position) => position >= 0));
+    assert.deepEqual(
+      steps,
+      [...steps].sort((a, b) => a - b),
+    );
   } finally {
     await cleanup();
   }
