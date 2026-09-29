@@ -76,7 +76,7 @@ jobs:
   npm:
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       contents: read
       id-token: write # npm --provenance (Sigstore OIDC)
@@ -110,12 +110,22 @@ jobs:
       - name: Wait for registry propagation
         run: |
           V="${{ needs.verify.outputs.version }}"
-          # The npm registry can take over 2 minutes to process the large runtime assets.
-          for i in $(seq 1 240); do
-            npm view "deskrpg@$V" version >/dev/null 2>&1 && { echo "propagated after attempt $i"; exit 0; }
-            sleep 5
+          # The registry usually needs 5-7 minutes for the large runtime assets, but
+          # 2026.929.1 took about 26. Poll for up to 45 minutes, backing off from 5s to 30s.
+          deadline=$((SECONDS + 45 * 60))
+          delay=5
+          i=0
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            i=$((i + 1))
+            npm view "deskrpg@$V" version >/dev/null 2>&1 && { echo "propagated after attempt $i (${SECONDS}s)"; exit 0; }
+            sleep "$delay"
+            delay=$((delay < 30 ? delay + 5 : 30))
           done
-          echo "registry never propagated" >&2; exit 1
+          echo "::error::deskrpg@$V did not appear on the registry within 45 minutes. The publish may still have succeeded."
+          echo "Once 'npm view deskrpg@$V version' prints the version, rerun the failed jobs:" >&2
+          echo "  gh run rerun ${{ github.run_id }} --failed" >&2
+          echo "The rerun skips the publish step because the version already exists." >&2
+          exit 1
       # Tests from the source tree missed problems with the npm global install location (node_modules).
       - name: Smoke registry-installed npm CLI
         env:
