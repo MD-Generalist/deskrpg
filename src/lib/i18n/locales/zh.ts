@@ -349,6 +349,10 @@ const zh: Record<string, string> = {
     "网关的 DeskRPG 插件无法提供配置文件列表。请把插件更新到最新版本。",
   "gateway.profile.import.failure.pluginDetails":
     "插件没有 GET /deskrpg/profiles，或返回了意外的响应。更新前可以用下方的高级手动登记添加员工。",
+  "gateway.profile.import.failure.pluginOff":
+    "网关上的 DeskRPG 插件未启用或未加载，因此无法查看配置文件列表。请在网关主机上启用插件，然后重启网关。",
+  "gateway.profile.import.failure.pluginOffDetails":
+    "网关有响应，但 /deskrpg/info 和 /deskrpg/profiles 都返回 404。这是因为插件只安装了但没有启用，或只在 default 以外的配置文件上启用。请在网关主机上运行 `hermes plugins list` 确认 deskrpg 是否为 enabled；如果没有，运行 `hermes plugins enable deskrpg` 后重启网关。更新插件无法解决此问题。",
   "gateway.profile.import.failure.offline":
     "无法连接网关，配置文件列表没有加载。请确认网关正在运行，然后重新加载。",
   "gateway.profile.import.failure.offlineDetails":
@@ -2655,6 +2659,8 @@ const zh: Record<string, string> = {
   "errors.externalSecretProvider": "该配置文件使用外部密钥库中的密钥，请在 Hermes 主机上直接注册",
   "errors.keyStoreFailed": "密钥已签发但未能保存。再试一次即可换成新密钥并导入",
   "errors.pluginUpdateRequired": "网关的 DeskRPG 插件需要更新。暂时请使用下方的手动注册",
+  "errors.pluginNotLoaded":
+    "网关上的 DeskRPG 插件未启用或未加载。请在网关主机上启用插件，然后重启网关",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
 
   // Cron screen (T9)

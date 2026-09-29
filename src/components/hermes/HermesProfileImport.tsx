@@ -11,13 +11,14 @@ import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 type Importable = { name: string; description: string };
 
 /** Why the list could not be read, grouped by what the owner can do about it. */
-type FailureKind = "owner-key" | "plugin" | "offline" | "other";
+type FailureKind = "owner-key" | "plugin" | "plugin-off" | "offline" | "other";
 
 const FAILURE_KINDS: Record<string, FailureKind> = {
   // Hermes refused the key: the gateway was registered with a profile key or an old key.
   gateway_auth_failed: "owner-key",
   unauthorized: "owner-key",
   plugin_update_required: "plugin",
+  plugin_not_loaded: "plugin-off",
   plugin_upgrade_required: "plugin",
   malformed_response: "plugin",
   unreachable: "offline",
@@ -30,6 +31,7 @@ const ALL = "*all";
 const FAILURE_KEYS: Record<FailureKind, string> = {
   "owner-key": "ownerKey",
   plugin: "plugin",
+  "plugin-off": "pluginOff",
   offline: "offline",
   other: "other",
 };

@@ -18,11 +18,16 @@ setupThrowawaySqlite("profile-import-route-test");
 
 type KeyReply = { status: number; body: unknown };
 
-/** A plugin stand-in: lists profiles and answers the key route with `keyReply`. */
+/**
+ * A plugin stand-in: lists profiles and answers the key route with `keyReply`. `/deskrpg/info`
+ * answers 200 as a loaded plugin does, unless `notLoaded` makes it the bare 404 Hermes gives when
+ * the plugin is installed but not enabled.
+ */
 async function startPlugin(opts: {
   profiles: string[];
   keyReply: (rotate: boolean, name: string) => KeyReply;
   listReply?: KeyReply;
+  notLoaded?: boolean;
 }) {
   const seen: { method: string; url: string; auth: string; body: string }[] = [];
   // Key requests being answered at once — each answer is held briefly so overlap would show.
@@ -41,6 +46,13 @@ async function startPlugin(opts: {
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(json));
       };
+      if (req.method === "GET" && req.url === "/deskrpg/info") {
+        if (opts.notLoaded) {
+          res.writeHead(404, { "content-type": "text/plain" });
+          return res.end("404: Not Found");
+        }
+        return send(200, { name: "deskrpg", version: "0.30.2", capabilities: {} });
+      }
       if (req.method === "GET" && req.url === "/deskrpg/profiles") {
         if (opts.listReply) {
           const { status, body: reply } = opts.listReply;
@@ -95,8 +107,9 @@ async function fixture(
   keyReply: (rotate: boolean, name: string) => KeyReply,
   profiles = ["default", "vps-sam", "sophie"],
   listReply?: KeyReply,
+  notLoaded = false,
 ) {
-  const plugin = await startPlugin({ profiles, keyReply, listReply });
+  const plugin = await startPlugin({ profiles, keyReply, listReply, notLoaded });
   const owner = await seedUser("owner");
   const gateway = await seedGateway(owner.id, plugin.baseUrl);
   const { registerHermesProfile, bindGatewayToChannel } = {
@@ -174,6 +187,38 @@ test("a failed list rides on 200 with a code the screen can explain", async () =
     assert.equal(res.status, 200);
     assert.equal((await res.json()).errorCode, code, code);
   }
+});
+
+test("a 404 list tells a plugin that is not loaded apart from one that is too old", async () => {
+  const missing = { status: 404, body: "404: Not Found" };
+  for (const [notLoaded, code] of [
+    // Installed but not enabled (or enabled only on a non-root profile): /deskrpg/info is gone too.
+    [true, "plugin_not_loaded"],
+    // Loaded, but the plugin predates the profile list.
+    [false, "plugin_update_required"],
+  ] as const) {
+    const f = await fixture(() => issue(), undefined, missing, notLoaded);
+    const res = await importable(f.gateway.id, f.owner.id);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).errorCode, code, code);
+    assert.deepEqual(
+      f.plugin.seen.map((c) => c.url),
+      ["/deskrpg/profiles", "/deskrpg/info"],
+    );
+    assert.ok(f.plugin.seen.every((c) => c.auth === "Bearer gateway-owner-key-1234567890"));
+  }
+});
+
+test("a list that fails for another reason does not probe /deskrpg/info", async () => {
+  const f = await fixture(() => issue(), undefined, {
+    status: 401,
+    body: { error: { code: "gateway_auth_failed" } },
+  });
+  await importable(f.gateway.id, f.owner.id);
+  assert.deepEqual(
+    f.plugin.seen.map((c) => c.url),
+    ["/deskrpg/profiles"],
+  );
 });
 
 async function importAll(gatewayId: string, userId: string, body: unknown) {
@@ -263,6 +308,25 @@ test("a failure keeps what was imported, and a gateway-wide failure stops the re
   ]);
   assert.deepEqual(await registered(f.gateway.id), ["ann", "sophie"]);
   assert.ok(!f.plugin.seen.some((c) => c.url === "/deskrpg/profiles/dee/key"));
+});
+
+test("a plugin that is not loaded stops the batch like the other gateway-wide failures", async () => {
+  const f = await fixture(
+    (_rotate, name) =>
+      name === "bo" ? { status: 404, body: "404: Not Found" } : issue(false, name),
+    MANY,
+    undefined,
+    true,
+  );
+  const body = await (
+    await importAll(f.gateway.id, f.owner.id, { names: ["ann", "bo", "cy"] })
+  ).json();
+  assert.deepEqual(body.results, [
+    { name: "ann", status: "imported", attendedChannels: 1 },
+    { name: "bo", status: "failed", errorCode: "plugin_not_loaded" },
+    { name: "cy", status: "not_tried" },
+  ]);
+  assert.ok(!f.plugin.seen.some((c) => c.url === "/deskrpg/profiles/cy/key"));
 });
 
 test("only the chosen names are imported, and a bad list is refused", async () => {
@@ -362,6 +426,18 @@ test("plugin refusals pass through as their own codes", async () => {
     const res = await importProfile(f.gateway.id, "vps-sam", f.owner.id);
     assert.equal((await res.json()).errorCode, code, code);
   }
+});
+
+test("a bare 404 on the key route is plugin_not_loaded when /deskrpg/info is gone too", async () => {
+  const f = await fixture(
+    () => ({ status: 404, body: "404: Not Found" }),
+    undefined,
+    undefined,
+    true,
+  );
+  const res = await importProfile(f.gateway.id, "vps-sam", f.owner.id);
+  assert.equal(res.status, 428);
+  assert.equal((await res.json()).errorCode, "plugin_not_loaded");
 });
 
 test("only the gateway owner imports: shared user 403, no access 404, and the plugin is not called", async () => {

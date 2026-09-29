@@ -380,6 +380,10 @@ const ja: Record<string, string> = {
     "ゲートウェイの DeskRPG プラグインがプロファイル一覧を返せません。プラグインを最新版に更新してください。",
   "gateway.profile.import.failure.pluginDetails":
     "プラグインに GET /deskrpg/profiles がないか、想定外の応答が返りました。更新するまでは、下の高度な手動登録で社員を追加できます。",
+  "gateway.profile.import.failure.pluginOff":
+    "ゲートウェイで DeskRPG プラグインがオフになっているか読み込まれていないため、プロファイル一覧を見られません。ゲートウェイのホストでプラグインをオンにしてから、ゲートウェイを再起動してください。",
+  "gateway.profile.import.failure.pluginOffDetails":
+    "ゲートウェイは応答していますが、/deskrpg/info と /deskrpg/profiles がどちらも 404 でした。プラグインをインストールしただけで有効にしていないか、default 以外のプロファイルだけで有効にした場合です。ゲートウェイのホストで `hermes plugins list` を実行して deskrpg が enabled か確認し、オフなら `hermes plugins enable deskrpg` を実行してからゲートウェイを再起動してください。更新では解決しません。",
   "gateway.profile.import.failure.offline":
     "ゲートウェイにつながらず、プロファイル一覧を読み込めませんでした。ゲートウェイが動いているか確認してから再読み込みしてください。",
   "gateway.profile.import.failure.offlineDetails":
@@ -2792,6 +2796,8 @@ const ja: Record<string, string> = {
     "キーは発行されましたが保存できませんでした。もう一度試すと新しいキーに替えて取り込めます",
   "errors.pluginUpdateRequired":
     "ゲートウェイの DeskRPG プラグインを更新する必要があります。今は下の手動登録を使ってください",
+  "errors.pluginNotLoaded":
+    "ゲートウェイで DeskRPG プラグインがオフになっているか、読み込まれていません。ゲートウェイのホストでプラグインをオンにしてから、ゲートウェイを再起動してください",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
 
   // Cron screen (T9)
