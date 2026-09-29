@@ -40,6 +40,18 @@ test("host remediation is present in all four locales without raw error codes", 
     }
   }
 });
+test("an unrecognized service definition tells the user how to refresh it", () => {
+  for (const code of ["service_identity_mismatch", "service_identity_ambiguous"]) {
+    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+      const message = setupHostError(locale, code) ?? "";
+      const update = message.indexOf("`hermes update`");
+      const restart = message.indexOf("`hermes gateway restart`");
+      assert.ok(update >= 0 && restart > update, `${locale}: ${code}`);
+    }
+  }
+  // Codes about a changed or unknown candidate keep the advice to discover again.
+  assert.ok(!setupHostError("en", "candidate_changed")?.includes("hermes update"));
+});
 test("only known repairable warning states allow preparation", () => {
   for (const code of [
     undefined,

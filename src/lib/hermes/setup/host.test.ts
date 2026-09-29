@@ -172,6 +172,7 @@ production_identity = identity
 def fixture_identity(name,home):
     return {'id':hashlib.sha256(str(home).encode()).hexdigest(),'service':'hermes-gateway' + ('' if name == 'default' else '-' + name) + '.service','command':['false'],'pid':0,'warning':None}
 identity = fixture_identity
+production_assert_port_owned = assert_port_owned
 assert_port_owned = lambda public, owner: False
 port_listening = lambda port: False
 original_main = main
@@ -3091,6 +3092,150 @@ print(json.dumps([tampered, bare_launcher, wrong_profile]))
     "service_identity_mismatch",
     "service_identity_mismatch",
     "service_identity_mismatch",
+  ]);
+});
+// Before upstream 8682d5791b (2026-09-27) the same shell command was wrapped in AppleScript. The shape below is
+// copied from that release's launchd_program_arguments, not built by the helper.
+const LEGACY_LAUNCHD = String.raw`
+def legacy_args(name, home):
+    shell = json.loads(upstream_args(name, home)[-1].split('$.system(', 1)[1].split('); const signal', 1)[0])
+    return ['/usr/bin/osascript', '-e', 'do shell script "' + shell.replace('\\', '\\\\').replace('"', '\\"') + '"']
+`;
+test("PM runtime on macOS — the AppleScript plist of an older Hermes is recognized and yields the pid", () => {
+  const result = fixture(
+    PM_LAUNCHD +
+      LEGACY_LAUNCHD +
+      String.raw`
+write_plist('default', ROOT, legacy_args('default', ROOT))
+legacy = identity('default', ROOT)
+sophie = ROOT / 'profiles' / 'sophie'
+sophie.mkdir(parents=True)
+write_plist('sophie', sophie, legacy_args('sophie', sophie))
+profile = identity('sophie', sophie)
+write_plist('default', ROOT)
+current = identity('default', ROOT)
+print(json.dumps({k: {'warning': v['warning'], 'pid': v['pid'], 'command': v['command'], 'wrapper': w} for k, v, w in (('legacy',legacy,legacy_args('default', ROOT)[1]),('profile',profile,legacy_args('sophie', sophie)[1]),('current',current,upstream_args('default', ROOT)[1]))}))
+`,
+  );
+  const kick = (label: string) => [
+    "launchctl",
+    "kickstart",
+    "-k",
+    `gui/${process.getuid!()}/${label}`,
+  ];
+  assert.deepEqual(result.body.legacy, {
+    warning: null,
+    pid: 321,
+    command: kick("ai.hermes.gateway"),
+    wrapper: "-e",
+  });
+  assert.deepEqual(result.body.profile, {
+    warning: null,
+    pid: 321,
+    command: kick("ai.hermes.gateway-sophie"),
+    wrapper: "-e",
+  });
+  assert.deepEqual(result.body.current, {
+    warning: null,
+    pid: 321,
+    command: kick("ai.hermes.gateway"),
+    wrapper: "-l",
+  });
+});
+test("PM runtime on macOS — an AppleScript plist that runs anything else is still rejected", () => {
+  const result = fixture(
+    PM_LAUNCHD +
+      LEGACY_LAUNCHD +
+      String.raw`
+def warning_for(args):
+    write_plist('default', ROOT, args)
+    return identity('default', ROOT)['warning']
+good = legacy_args('default', ROOT)
+print(json.dumps([
+    warning_for([good[0], good[1], good[2].replace('gateway run', 'gateway run --replace')]),
+    warning_for(legacy_args('sophie', ROOT)),
+    warning_for([good[0], good[1], good[2] + ' & do shell script "true"']),
+    warning_for(good + ['-e', 'do shell script "true"']),
+    warning_for(['/usr/bin/osascript', '-l', 'JavaScript', '-e', good[2]]),
+    warning_for(['/bin/sh', '-c', good[2]]),
+]))
+`,
+  );
+  assert.deepEqual(result.body, Array(6).fill("service_identity_mismatch"));
+});
+// psutil is stubbed: the listener on the port belongs to pid 900, which the helper cannot tie to any service.
+const LISTENER = String.raw`
+class FakeProcess:
+    def __init__(self, pid): self.pid = pid
+    def children(self, recursive=False): return [FakeProcess(self.pid + 1)]
+fake_psutil = types.ModuleType('psutil')
+fake_psutil.CONN_LISTEN = 'LISTEN'
+fake_psutil.Error = type('Error', (Exception,), {})
+fake_psutil.AccessDenied = type('AccessDenied', (fake_psutil.Error,), {})
+fake_psutil.Process = FakeProcess
+LISTENERS = [900]
+DENIED = False
+def net_connections(kind='tcp'):
+    if DENIED: raise fake_psutil.AccessDenied()
+    return [types.SimpleNamespace(status='LISTEN', laddr=types.SimpleNamespace(port=8642), pid=pid) for pid in LISTENERS]
+fake_psutil.net_connections = net_connections
+sys.modules['psutil'] = fake_psutil
+def lsof(argv, timeout=8, env=None):
+    return type('Result',(),{'returncode':0,'stdout':''.join('p' + str(pid) + '\n' for pid in LISTENERS)})()
+def outcome(owner):
+    try: return production_assert_port_owned({'port': 8642}, owner)
+    except Failure as error: return str(error)
+def both(owner):
+    global DENIED, run
+    DENIED = False
+    direct = outcome(owner)
+    DENIED, run = True, lsof
+    return [direct, outcome(owner)]
+`;
+test("a listener on the port with an unidentified service reports the identity problem, not a port conflict", () => {
+  const result = fixture(
+    LISTENER +
+      String.raw`
+print(json.dumps({
+    'mismatch': both({'pid': 0, 'warning': 'service_identity_mismatch'}),
+    'ambiguous': both({'pid': 0, 'warning': 'service_identity_ambiguous'}),
+    'no_service': both({'pid': 0, 'warning': 'managed_service_required'}),
+    'stopped': both({'pid': 0, 'warning': None}),
+    'foreign': both({'pid': 321, 'warning': None}),
+    'own': both({'pid': 900, 'warning': None}),
+    'own_child': both({'pid': 899, 'warning': None}),
+}))
+`,
+  );
+  assert.deepEqual(result.body, {
+    mismatch: ["service_identity_mismatch", "service_identity_mismatch"],
+    ambiguous: ["service_identity_ambiguous", "service_identity_ambiguous"],
+    no_service: ["port_conflict", "port_conflict"],
+    stopped: ["port_conflict", "port_conflict"],
+    foreign: ["port_conflict", "port_conflict"],
+    own: [true, true],
+    own_child: [true, true],
+  });
+});
+test("inspection offers no other port when the listener may be the unidentified gateway itself", () => {
+  const result = fixture(
+    LISTENER +
+      String.raw`
+assert_port_owned = production_assert_port_owned
+suggest_port = lambda current: 8643
+def with_warning(warning):
+    global identity
+    identity = lambda name, home: {**fixture_identity(name, home), 'command': None if warning else ['false'], 'warning': warning, 'launch': None}
+    import io, contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out): entry('inspect', main('discover')['candidates'][0]['id'])
+    return json.loads(out.getvalue())
+print(json.dumps([with_warning('service_identity_mismatch'), with_warning(None)]))
+`,
+  );
+  assert.deepEqual(result.body, [
+    { error: "service_identity_mismatch" },
+    { error: "port_conflict", suggestedPort: 8643 },
   ]);
 });
 test("PM runtime on macOS — inspection plans the worker launch step and a restart", () => {

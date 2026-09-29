@@ -413,8 +413,8 @@ export function setupStep(copy: Copy, code: string): string {
 // Browser-owned presentation codes only: never import the server host executor here.
 const hostErrorGroups: Record<string, string> = {
   managed_service_required: "service",
-  service_identity_ambiguous: "identity",
-  service_identity_mismatch: "identity",
+  service_identity_ambiguous: "serviceIdentity",
+  service_identity_mismatch: "serviceIdentity",
   listener_owner_required: "identity",
   listener_ownership_unverified: "identity",
   gateway_identity_unverified: "identity",
@@ -484,6 +484,8 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
       "플러그인 배포 저장소에 접근할 수 없습니다. 관리자가 배포 주소와 네트워크 접근을 확인해야 합니다.",
     service:
       "관리되는 게이트웨이 서비스를 찾지 못했습니다. 관리자가 Hermes 서비스를 등록하고 실행 상태를 확인한 뒤 다시 확인하세요.",
+    serviceIdentity:
+      "게이트웨이 서비스 정의가 이 Hermes 설치가 만드는 것과 다릅니다. Hermes 를 업데이트한 뒤 서비스가 예전 정의로 남아 있을 때 흔히 생깁니다. 서버에서 `hermes update` 후 `hermes gateway restart` 로 서비스 정의를 새로 고친 뒤 다시 확인하세요. 그래도 같으면 관리자가 서비스의 Hermes 경로·프로필을 확인해야 합니다.",
     identity:
       "선택한 설치와 실행 중인 게이트웨이의 소유 관계를 확인할 수 없습니다. 관리자가 서비스의 Hermes 경로·프로필·API 포트를 확인한 뒤 설치를 다시 검색하세요.",
     secret:
@@ -551,6 +553,8 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
       "The plugin source repository is unavailable. Ask the administrator to verify the distribution URL and network access.",
     service:
       "No managed gateway service was found. Ask the administrator to register the Hermes service and check its state, then check again.",
+    serviceIdentity:
+      "The gateway service definition differs from the one this Hermes installation writes. This is common when the service still has an older definition after a Hermes update. On the server, run `hermes update` and then `hermes gateway restart` to refresh the service definition, then check again. If it stays the same, ask the administrator to check the Hermes path and profile of the service.",
     identity:
       "The selected installation cannot be matched safely to the running gateway. Ask the administrator to check its Hermes path, profile and API port, then discover installations again.",
     secret:
@@ -618,6 +622,8 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
       "プラグインの配布リポジトリにアクセスできません。管理者が配布URLとネットワークを確認してください。",
     service:
       "管理対象のゲートウェイサービスが見つかりません。管理者がHermesサービスを登録し、実行状態を確認してから再確認してください。",
+    serviceIdentity:
+      "ゲートウェイのサービス定義が、このHermesインストールが作成するものと異なります。Hermesの更新後にサービスが古い定義のまま残っている場合によく起こります。サーバーで `hermes update` を実行してから `hermes gateway restart` でサービス定義を更新し、再確認してください。変わらない場合は、管理者がサービスのHermesパスとプロファイルを確認してください。",
     identity:
       "選択したインストールと実行中のゲートウェイの対応を確認できません。管理者がHermesのパス、プロファイル、APIポートを確認してから再検索してください。",
     secret:
@@ -683,6 +689,8 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
       "Hermes安全扫描阻止了安装。管理员需要审查此版本的扫描结果和代码。此向导不会自动绕过阻止。",
     sourceUnavailable: "无法访问插件源仓库。请管理员检查分发地址和网络访问。",
     service: "未找到受管理的网关服务。请管理员注册Hermes服务并检查运行状态，然后重新检查。",
+    serviceIdentity:
+      "网关服务定义与此Hermes安装生成的定义不一致。Hermes更新后服务仍保留旧定义时，常会出现这种情况。请在服务器上运行 `hermes update`，再运行 `hermes gateway restart` 刷新服务定义，然后重新检查。如果仍然相同，请管理员检查服务的Hermes路径和配置文件。",
     identity:
       "无法安全确认所选安装与运行中网关的对应关系。请管理员检查Hermes路径、配置文件和API端口，然后重新搜索安装。",
     secret:
