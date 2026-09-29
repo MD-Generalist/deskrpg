@@ -26,7 +26,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.929.1` — When profiles cannot be listed, the page now tells a plugin that is off or not loaded (enable it and restart the gateway) apart from one that is too old. The plugin setup command DeskRPG shows now upgrades an existing install (disable, reinstall at the pinned commit, enable, restart), and this README has an upgrade section. The "profiles to import" notice now appears on the gateway page right after connecting. Includes everything in 2026.928.2. Requires plugin 0.30.2.
+- Version: `v2026.929.2` — On macOS the setup wizard now recognizes the gateway service of Hermes builds from before 2026-09-27 (the older launchd wrapper), so it no longer reports the gateway's own port 8642 as taken by another process or offers to move it; when it cannot identify the service it says so and suggests `hermes update` then `hermes gateway restart`. The model picker now lists Gemini, xAI, Mistral and Groq models by family with the newest first. The release workflow waits longer for the npm registry. Includes everything in 2026.929.1. Requires plugin 0.30.3.
 
 ## What You Can Do
 
