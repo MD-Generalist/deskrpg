@@ -201,6 +201,7 @@ export type ErrorCode =
   | "invalid_profile_id"
   | "profile_not_found"
   | "gateway_not_found"
+  | "gateway_not_connected"
   | "bad_request"
   | "unsupported_config_key"
   | "malformed_response"
@@ -443,6 +444,8 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   invalid_profile_id: "errors.invalidProfileId",
   profile_not_found: "errors.profileNotFound",
   gateway_not_found: "errors.gatewayNotFound",
+  // Chat skill chips on a channel with no gateway bound (same text the DM already shows).
+  gateway_not_connected: "npc.gatewayNotConnected",
   bad_request: "errors.badRequest",
   unsupported_config_key: "errors.unsupportedConfigKey",
   malformed_response: "errors.malformedResponse",
