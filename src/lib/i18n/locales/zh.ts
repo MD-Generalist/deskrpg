@@ -3396,6 +3396,7 @@ const zh: Record<string, string> = {
   "skills.file.locked": "可执行代码 — 不可编辑",
   "skills.file.readOnly": "只读",
   "skills.edit": "编辑",
+  "skills.use": "使用",
   "skills.save": "保存",
   "skills.saved": "已保存",
   "skills.pin": "固定",

@@ -3536,6 +3536,7 @@ const ko: Record<string, string> = {
   "skills.file.locked": "실행 코드 — 편집 불가",
   "skills.file.readOnly": "읽기 전용",
   "skills.edit": "편집",
+  "skills.use": "사용",
   "skills.save": "저장",
   "skills.saved": "저장했습니다",
   "skills.pin": "고정",
