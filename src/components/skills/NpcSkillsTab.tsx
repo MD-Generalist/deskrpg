@@ -15,6 +15,8 @@ export type NpcSkillsTabProps = {
   npcId: string;
   /** Opens the manager modal. If `skillName` is given, opens it with that skill selected (a row's [Edit]). */
   onOpenManager(skillName?: string): void;
+  /** Puts the skill into this NPC's chat input as a chip. Shown only when the gateway can expand chips. */
+  onUseSkill?(skillName: string): void;
   api?: SkillsApi;
 };
 
@@ -27,6 +29,7 @@ export default function NpcSkillsTab({
   channelId,
   npcId,
   onOpenManager,
+  onUseSkill,
   api: injected,
 }: NpcSkillsTabProps) {
   const t = useT();
@@ -85,6 +88,7 @@ export default function NpcSkillsTab({
   }
   if (!view) return null;
   const groups = groupSkills(view.skills, q);
+  const canUse = Boolean(onUseSkill && view.skillInvocation);
 
   return (
     <div className="flex h-full flex-col text-sm">
@@ -169,6 +173,16 @@ export default function NpcSkillsTab({
                   )}
                   {row.essential && (
                     <span className="text-[10px] text-text-muted">{t("skills.essential")}</span>
+                  )}
+                  {canUse && !row.disabled && (
+                    <button
+                      type="button"
+                      data-use-skill={row.name}
+                      onClick={() => onUseSkill?.(row.name)}
+                      className="flex-shrink-0 rounded px-1.5 text-[11px] text-primary hover:bg-surface"
+                    >
+                      {t("skills.use")}
+                    </button>
                   )}
                 </div>
                 <p className="pl-9 text-[11px] text-text-dim">

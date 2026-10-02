@@ -3547,6 +3547,7 @@ const en: Record<string, string> = {
   "skills.file.locked": "Executable code — read only",
   "skills.file.readOnly": "Read only",
   "skills.edit": "Edit",
+  "skills.use": "Use",
   "skills.save": "Save",
   "skills.saved": "Saved",
   "skills.pin": "Pin",

@@ -247,7 +247,7 @@ export default function ChatPanel({
   npcTabRequest = null,
   skillChipRequest = null,
   // Passed to NpcSkillsTab once that tab takes `onUseSkill` (skills-tab [Use] task).
-  onUseSkill: _onUseSkill,
+  onUseSkill,
   onOpenConnectorManager,
   onOpenApprovalPolicy,
   approvalSocket,
@@ -932,6 +932,9 @@ export default function ChatPanel({
                   channelId={cron.channelId}
                   npcId={dialogNpc!.npcId}
                   onOpenManager={(skillName) => onOpenSkillManager?.(dialogNpc!.npcId, skillName)}
+                  onUseSkill={
+                    onUseSkill ? (skillName) => onUseSkill(dialogNpc!.npcId, skillName) : undefined
+                  }
                 />
               </div>
             ) : cron && npcTab === "cards" ? (

@@ -117,3 +117,41 @@ test("an expanded row's [Edit] opens the manager modal with that skill's name", 
   );
   assert.deepEqual(opened, ["weekly", undefined]);
 });
+
+test("[Use] appears on enabled rows only and passes the skill name", async () => {
+  mockFetch({
+    [LIST]: view({
+      skills: [row("research"), row("weekly", { disabled: true })],
+      skillInvocation: true,
+    }),
+  });
+  const used: string[] = [];
+  await render(
+    <NpcSkillsTab
+      channelId="ch-1"
+      npcId="n-1"
+      onOpenManager={() => {}}
+      onUseSkill={(name) => used.push(name)}
+    />,
+  );
+  const buttons = container.querySelectorAll<HTMLButtonElement>("[data-use-skill]");
+  assert.deepEqual(
+    [...buttons].map((b) => b.dataset.useSkill),
+    ["research"],
+  );
+  assert.equal(buttons[0].textContent, "사용");
+  await act(async () => buttons[0].click());
+  assert.deepEqual(used, ["research"]);
+});
+
+test("[Use] is hidden without the skill_invocation capability or a handler", async () => {
+  mockFetch({ [LIST]: view({ skills: [row("research")] }) });
+  await render(
+    <NpcSkillsTab channelId="ch-1" npcId="n-1" onOpenManager={() => {}} onUseSkill={() => {}} />,
+  );
+  assert.equal(container.querySelectorAll("[data-use-skill]").length, 0);
+  await cleanup();
+  mockFetch({ [LIST]: view({ skills: [row("research")], skillInvocation: true }) });
+  await render(tab());
+  assert.equal(container.querySelectorAll("[data-use-skill]").length, 0);
+});

@@ -380,8 +380,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
   // "Ask in chat" from the skill manager must land on the chat tab even for the employee already open.
   const [npcTabRequest, setNpcTabRequest] = useState<NpcTabRequest | null>(null);
-  // Set by the skills tab's [Use] (wired with the tab request); ChatPanel adds the chip to the DM draft.
-  const [skillChipRequest] = useState<SkillChipRequest | null>(null);
+  const [skillChipRequest, setSkillChipRequest] = useState<SkillChipRequest | null>(null);
+  // A skills-tab [Use] switches that NPC's window to chat and drops the skill into its input as a chip.
+  const handleUseSkill = useCallback((npcId: string, skill: string) => {
+    setNpcTabRequest((prev) => ({ npcId, tab: "chat", seq: (prev?.seq ?? 0) + 1 }));
+    setSkillChipRequest((prev) => ({ npcId, skill, seq: (prev?.seq ?? 0) + 1 }));
+  }, []);
   /** The employee whose skill management modal is open — opened by "관리 열기" in the dialog's [스킬] tab. */
   const [skillManagerNpc, setSkillManagerNpc] = useState<{
     npcId: string;
@@ -3025,6 +3029,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         onOpenAssignedCard={openNoticeCard}
         npcTabRequest={npcTabRequest}
         skillChipRequest={skillChipRequest}
+        onUseSkill={handleUseSkill}
         onOpenSkillManager={(npcId, skillName) =>
           setSkillManagerNpc({
             npcId,

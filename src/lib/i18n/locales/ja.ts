@@ -3578,6 +3578,7 @@ const ja: Record<string, string> = {
   "skills.file.locked": "実行コード — 編集不可",
   "skills.file.readOnly": "読み取り専用",
   "skills.edit": "編集",
+  "skills.use": "使う",
   "skills.save": "保存",
   "skills.saved": "保存しました",
   "skills.pin": "固定",
