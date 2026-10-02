@@ -650,8 +650,8 @@ def model_state(cfg, home):
 RESERVED = {'hermes','test','tmp','root','sudo'}
 # Excluded from names the wizard can newly create or issue keys for. 'default' is handled by configure.
 RESERVED_PROFILE = RESERVED | {'default'}
-PIN = 'e27013eeb9e954eba27d46a544d8913f8b1e698e'
-PLUGIN_VERSION = '0.30.3'
+PIN = '8e0feded1749100910fdfa87397beb30c68246dc'
+PLUGIN_VERSION = '0.31.0'
 HERMES_MIN = '0.21.1'
 SOURCE = 'https://github.com/dandacompany/deskrpg-hermes-plugin'
 TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
