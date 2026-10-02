@@ -36,3 +36,20 @@ test("unknown codes give a generic failure toast, with neither rejoin nor naviga
   assert.deepEqual(decideChatError(null), generic);
   assert.deepEqual(decideChatError({}), generic);
 });
+
+test("skill-chip refusals toast the shared wording for their code and do not move the screen", () => {
+  assert.deepEqual(decideChatError({ code: "skill_requires_single_mention" }), {
+    toastKey: "errors.skillRequiresSingleMention",
+    rejoin: false,
+    backToList: false,
+  });
+  assert.equal(decideChatError({ code: "too_many_skills" }).toastKey, "errors.tooManySkills");
+  assert.equal(decideChatError({ code: "skill_disabled" }).toastKey, "errors.skillDisabled");
+  assert.equal(
+    decideChatError({ code: "plugin_update_required" }).toastKey,
+    "errors.pluginUpdateRequired",
+  );
+  assert.equal(decideChatError({ code: "plugin_not_loaded" }).toastKey, "errors.pluginNotLoaded");
+  assert.equal(decideChatError({ code: "gateway_unreachable" }).toastKey, "npc.gatewayUnreachable");
+  assert.equal(decideChatError({ code: "made_up" }).toastKey, "game.channelChatFailed");
+});

@@ -107,6 +107,14 @@ export class OpenChatRuntime {
   private readonly cancelled = new Set<string>();
   private disposed = false;
 
+  /**
+   * Skill-chip messages expanded through the plugin, by source message id. The expanded text is used
+   * for exactly one turn: the mentioned NPC's answer to that message. Every other prompt, the recent
+   * cache and the stored line keep the chips (`/skill …`) — the skill body never leaks to a colleague's
+   * turn or into history.
+   */
+  private readonly expansions = new Map<string, { npcId: string; text: string }>();
+
   constructor(deps: OpenChatDeps, callbacks: OpenChatCallbacks) {
     this.deps = deps;
     this.callbacks = callbacks;
@@ -134,7 +142,22 @@ export class OpenChatRuntime {
     return this.queue.size(npcId) > 0;
   }
 
+  /** Participants a human message mentions, by `@[name]`, in order of appearance. */
+  mentionedParticipants(text: string): string[] {
+    return parseAllMentions(text, this.participantsView(), null);
+  }
+
+  /**
+   * Registers the plugin-expanded message for `sourceMessageId`, to replace that line in the prompt of
+   * `npcId`'s turn on it. Call before `handleHumanMessage`; the entry is dropped once that message has
+   * been handled.
+   */
+  setExpandedMessage(sourceMessageId: string, npcId: string, text: string): void {
+    this.expansions.set(sourceMessageId, { npcId, text });
+  }
+
   dispose(): void {
+    this.expansions.clear();
     if (this.disposed) return;
     this.disposed = true;
     this.callbacks.onDisposed?.();
@@ -173,17 +196,21 @@ export class OpenChatRuntime {
     const recent = (this.deps.recentForSource?.(sourceMessageId) ?? this.deps.recent()).map(
       (line) => ({ ...line }),
     );
-    await this.dispatch(
-      targets,
-      senderName,
-      true,
-      callerSocketId,
-      sourceMessageId,
-      recent,
-      callerContext,
-      callerLocale,
-      callerUserId,
-    );
+    try {
+      await this.dispatch(
+        targets,
+        senderName,
+        true,
+        callerSocketId,
+        sourceMessageId,
+        recent,
+        callerContext,
+        callerLocale,
+        callerUserId,
+      );
+    } finally {
+      this.expansions.delete(sourceMessageId);
+    }
   }
 
   private participantsView(): Array<{ npcId: string; displayName: string }> {
@@ -285,10 +312,18 @@ export class OpenChatRuntime {
       const others = this.deps.participants
         .filter((p) => p.npcId !== npcId)
         .map((p) => ({ displayName: p.displayName, role: p.role ?? "" }));
+      // Only the mentioned NPC's own turn on the chip message sees the expanded text (see `expansions`).
+      const expansion = this.expansions.get(context.sourceMessageId);
+      const lines =
+        expansion && expansion.npcId === npcId
+          ? recent.map((line) =>
+              line.id === context.sourceMessageId ? { ...line, content: expansion.text } : line,
+            )
+          : recent;
       const prompt = formatOpenChatMessage(
         { displayName: runtime.displayName },
         others,
-        recent,
+        lines,
         calledBy,
         context.callerContext,
         context.callerLocale,

@@ -595,3 +595,48 @@ test("a room reply the provider rejected fails with its cause and without the pr
   assert.equal(wire.includes("Incorrect API key"), false, "provider text reached the room");
   assert.equal(wire.includes("sk-test"), false, "a key fragment reached the room");
 });
+
+test("a room's recent cache carries message ids, so a registered expansion replaces that line in the mentioned NPC's prompt only", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 2 });
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  const emitted: Emitted[] = [];
+  const promptsSophie: string[] = [];
+  const promptsSky: string[] = [];
+  const deps = injected(seeded.channelId, [
+    {
+      id: seeded.npcIds[0],
+      name: "소피",
+      adapter: mockAdapter("@[하늘] 네가 마무리해", promptsSophie),
+    },
+    { id: seeded.npcIds[1], name: "하늘", adapter: mockAdapter("네", promptsSky) },
+  ]);
+  invalidateRoomRuntime(office.id);
+  const runtime = await getOrCreateRoomRuntime(
+    fakeIo(emitted) as never,
+    office,
+    seeded.userId,
+    deps,
+  );
+  assert.ok(runtime);
+
+  const saved = await rooms.appendRoomMessage({
+    roomId: office.id,
+    senderKind: "user",
+    senderId: seeded.userId,
+    senderName: "단테",
+    content: "@[소피] /research 정리해 줘",
+  });
+  runtime.setExpandedMessage(saved.id, seeded.npcIds[0], "EXPANDED SKILL BODY\n정리해 줘");
+  await runtime.handleHumanMessage("단테", "@[소피] /research 정리해 줘", "s1", saved.id);
+  await settle();
+
+  assert.equal(promptsSophie.length, 1);
+  assert.match(promptsSophie[0], /단테: EXPANDED SKILL BODY/);
+  assert.doesNotMatch(promptsSophie[0], /\/research/);
+  assert.equal(promptsSky.length, 1);
+  assert.match(promptsSky[0], /단테: @\[소피\] \/research 정리해 줘/);
+  assert.doesNotMatch(promptsSky[0], /EXPANDED SKILL BODY/);
+  // History holds the chip line and the two answers, nothing expanded.
+  const stored = (await rooms.recentRoomMessages(office.id, 10, null)).map((m) => m.content);
+  assert.deepEqual(stored, ["@[소피] /research 정리해 줘", "@[하늘] 네가 마무리해", "네"]);
+});

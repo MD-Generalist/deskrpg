@@ -30,6 +30,12 @@ const TEST_CODES: Record<NpcResponseMessageCode, string> = {
   too_many_files: "npc.tooManyFiles",
   npc_unbound: "npc.unbound",
   hermes_image_unsupported: "npc.hermesImageUnsupported",
+  plugin_update_required: "errors.pluginUpdateRequired",
+  plugin_not_loaded: "errors.pluginNotLoaded",
+  skill_not_found: "errors.skillNotFound",
+  skill_disabled: "errors.skillDisabled",
+  skill_load_failed: "errors.skillLoadFailed",
+  too_many_skills: "errors.tooManySkills",
 };
 
 test("npc response message codes map to stable translation keys", () => {

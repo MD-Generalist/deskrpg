@@ -54,7 +54,12 @@ import {
   routeAskUser,
   type FakeAskUserState,
 } from "./fake-ask-user-routes";
-import { createFakeSkillState, routeSkills, type FakeSkillState } from "./fake-skill-routes";
+import {
+  createFakeSkillState,
+  routeSkillInvocation,
+  routeSkills,
+  type FakeSkillState,
+} from "./fake-skill-routes";
 import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
 
 // ---------------------------------------------------------------------------
@@ -1854,6 +1859,11 @@ export async function startFakePluginServer(
   }
 
   function routeProfile(profile: string, req: ParsedRequest): Reply {
+    // Like the real plugin, the route only exists on a version that announces the capability.
+    if (info.capabilities.includes("skill_invocation")) {
+      const invokeReply = routeSkillInvocation(skillsFor(profile), req);
+      if (invokeReply) return invokeReply;
+    }
     const skillReply = routeSkills(skillsFor(profile), req);
     if (skillReply) return skillReply;
     const mcpReply = routeMcp(mcpFor(profile), req);

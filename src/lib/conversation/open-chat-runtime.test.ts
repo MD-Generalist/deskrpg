@@ -631,3 +631,68 @@ describe("OpenChatRuntime — stopping a turn", () => {
     assert.deepEqual(cancelled.sort(), ["n1", "n1"]);
   });
 });
+
+/** Replies with `reply` and records every prompt it was given. */
+function recording(reply: string, prompts: string[]): NpcAdapter {
+  return {
+    type: "mock",
+    async execute(o: AdapterExecuteOptions) {
+      prompts.push(o.prompt);
+      return { response: reply, session: { sessionRef: o.sessionKey } };
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  } as NpcAdapter;
+}
+
+test("an expanded skill message reaches only the mentioned NPC's own turn; the chained colleague and history keep the chip line", async () => {
+  const promptsA: string[] = [];
+  const promptsB: string[] = [];
+  const a = p("n1", "단비", recording("@[하늘] 네가 이어서 해 줘", promptsA));
+  const b = p("n2", "하늘", recording("알겠어요", promptsB));
+  const lines = [{ id: "m1", sender: "단테", content: "@[단비] /research 정리해 줘" }];
+  const rt = new OpenChatRuntime(
+    { participants: [a, b], recent: () => lines.map((l) => ({ ...l })), turnTimeout: TIMEOUT },
+    {},
+  );
+  assert.deepEqual(rt.mentionedParticipants("@[단비] /research 정리해 줘"), ["n1"]);
+  assert.deepEqual(rt.mentionedParticipants("@[단비] @[하늘] 안녕"), ["n1", "n2"]);
+  assert.deepEqual(rt.mentionedParticipants("@[없음] 안녕"), []);
+
+  rt.setExpandedMessage("m1", "n1", "EXPANDED SKILL BODY\n정리해 줘");
+  await rt.handleHumanMessage("단테", "@[단비] /research 정리해 줘", null, "m1");
+  await until(() => promptsB.length === 1);
+
+  assert.equal(promptsA.length, 1);
+  assert.match(promptsA[0], /단테: EXPANDED SKILL BODY/);
+  assert.doesNotMatch(promptsA[0], /\/research/);
+  // The colleague's chained turn sees the stored chip line, not the skill body.
+  assert.match(promptsB[0], /단테: @\[단비\] \/research 정리해 줘/);
+  assert.doesNotMatch(promptsB[0], /EXPANDED SKILL BODY/);
+  // The recent lines were never rewritten.
+  assert.equal(lines[0].content, "@[단비] /research 정리해 줘");
+
+  // The expansion is used once: a later turn on the same message id gets the chip line.
+  await rt.handleHumanMessage("단테", "@[단비] /research 정리해 줘", null, "m1");
+  await until(() => promptsA.length === 2);
+  assert.doesNotMatch(promptsA[1], /EXPANDED SKILL BODY/);
+  rt.dispose();
+});
+
+test("an expansion registered for one NPC is not shown to another NPC answering the same message", async () => {
+  const promptsB: string[] = [];
+  const a = p("n1", "단비", always("네"));
+  const b = p("n2", "하늘", recording("저도요", promptsB));
+  const lines = [{ id: "m1", sender: "단테", content: "@[하늘] /research 봐 줘" }];
+  const rt = new OpenChatRuntime(
+    { participants: [a, b], recent: () => lines.map((l) => ({ ...l })), turnTimeout: TIMEOUT },
+    {},
+  );
+  rt.setExpandedMessage("m1", "n1", "EXPANDED");
+  await rt.handleHumanMessage("단테", "@[하늘] /research 봐 줘", null, "m1");
+  await until(() => promptsB.length === 1);
+  assert.doesNotMatch(promptsB[0], /EXPANDED/);
+  assert.match(promptsB[0], /\/research 봐 줘/);
+  rt.dispose();
+});
