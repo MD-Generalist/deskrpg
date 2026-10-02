@@ -37,6 +37,8 @@ export type SkillListView = {
   sharedChannelCount: number;
   /** Per-feature switches. An older server omits them — every feature then follows `capabilityReady`. */
   features?: SkillFeatures;
+  /** Chat skill chips ('/' in chat, the Use button) are available. An older server omits it — treat as false. */
+  skillInvocation?: boolean;
   isGatewayOwner?: boolean;
   profileName?: string;
 };

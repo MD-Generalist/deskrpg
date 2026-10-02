@@ -21,7 +21,11 @@ import {
   type CronChannelContext,
 } from "@/lib/cron-access";
 import { decryptGatewayToken } from "@/lib/gateway-resources";
-import { SKILL_ADMIN_CAPABILITY, SKILL_ADMIN_MIN_VERSION } from "@/lib/hermes/deskrpg-plugin-types";
+import {
+  SKILL_ADMIN_CAPABILITY,
+  SKILL_ADMIN_MIN_VERSION,
+  SKILL_INVOCATION_CAPABILITY,
+} from "@/lib/hermes/deskrpg-plugin-types";
 import type { ProfilePluginClient } from "@/lib/hermes/plugin-client-types";
 import {
   noSkillManagement,
@@ -40,6 +44,8 @@ export type SkillContext = {
   /** Any skill management at all (a plugin new enough). Each screen still checks its own feature. */
   capabilityReady: boolean;
   features: SkillFeatures;
+  /** Chat skill chips can be expanded on this gateway (capability `skill_invocation`). */
+  skillInvocation?: boolean;
   client: ProfilePluginClient;
   gatewayId: string;
 };
@@ -50,6 +56,8 @@ export async function resolveSkillContext(input: {
   userId: string | null;
   channelId: string;
   npcId: string;
+  /** The skill list also reports chat chips; only then does a missing `skill_invocation` re-probe. */
+  checkChips?: boolean;
 }): Promise<Result<{ ctx: SkillContext }>> {
   const channel = await resolveCronChannelContext({
     userId: input.userId,
@@ -66,7 +74,7 @@ export async function resolveSkillContext(input: {
       npcId: input.npcId,
       profileName: npc.value.profile.profileName,
       isGatewayOwner: channel.ctx.gateway.ownerUserId === channel.ctx.userId,
-      ...(await resolveFeatures(channel.ctx)),
+      ...(await resolveFeatures(channel.ctx, input.checkChips === true)),
       client: npc.value.client,
       gatewayId: channel.ctx.gateway.id,
     },
@@ -79,16 +87,29 @@ export async function resolveSkillContext(input: {
  */
 async function resolveFeatures(
   channel: Pick<CronChannelContext, "gateway" | "info">,
-): Promise<{ features: SkillFeatures; capabilityReady: boolean }> {
-  let features = skillFeaturesOf(channel.info.capabilities);
-  if (Object.values(features).some((on) => !on)) {
+  checkChips: boolean,
+): Promise<{ features: SkillFeatures; capabilityReady: boolean; skillInvocation: boolean }> {
+  let capabilities = channel.info.capabilities;
+  let features = skillFeaturesOf(capabilities);
+  // A missing chat-chip capability also re-probes (rate-limited per gateway): the plugin may have just been upgraded.
+  const chips = (caps: readonly string[] | undefined) =>
+    (caps ?? []).includes(SKILL_INVOCATION_CAPABILITY);
+  if (Object.values(features).some((on) => !on) || (checkChips && !chips(capabilities))) {
     const fresh = await forceReprobePluginInfo(
       channel.gateway,
       decryptGatewayToken(channel.gateway.tokenEncrypted),
     );
-    if (fresh) features = skillFeaturesOf(fresh.capabilities);
+    if (fresh) {
+      capabilities = fresh.capabilities;
+      features = skillFeaturesOf(capabilities);
+    }
   }
-  return { features, capabilityReady: !noSkillManagement(features) };
+  return {
+    features,
+    capabilityReady: !noSkillManagement(features),
+    // Chat skill chips. Kept out of `features`: those decide whether skill management exists at all.
+    skillInvocation: chips(capabilities),
+  };
 }
 
 /**

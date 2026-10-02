@@ -316,6 +316,7 @@ export async function handleSkillRoute(
     userId: getUserId(req),
     channelId: params.id,
     npcId: params.npcId,
+    checkChips: req.method === "GET" && (params.path ?? []).length === 0,
   });
   if (!resolved.ok) return resolved.response;
   const { ctx } = resolved;
@@ -331,6 +332,8 @@ export async function handleSkillRoute(
       isGatewayOwner: ctx.isGatewayOwner,
       capabilityReady: ctx.capabilityReady,
       features: ctx.features,
+      // Whether chat skill chips work on this gateway (plugin capability `skill_invocation`).
+      skillInvocation: ctx.skillInvocation === true,
       // For the CLI line shown where a removed action used to be (`hermes -p <profile> curator purge`).
       profileName: ctx.profileName,
       sharedChannelCount: await sharedChannelCount(ctx),

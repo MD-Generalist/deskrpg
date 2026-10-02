@@ -375,3 +375,21 @@ test("purging one archived skill is gone: 410 and no plugin call", async () => {
   assert.equal((await res.json()).code, "skill_purge_removed");
   assert.equal(server.requests().length, before);
 });
+
+test("the list tells the chat whether skill chips work (capability skill_invocation)", async () => {
+  const { owner, channel, npc } = await seed();
+  const without = await (await call(owner.id, "GET", channel.id, npc.id, [])).json();
+  assert.equal(without.skillInvocation, false);
+  await withInfo(
+    { ...FULL_INFO, capabilities: [...FULL_INFO.capabilities, "skill_invocation"] },
+    async () => {
+      const fresh = await seed();
+      const list = await (
+        await call(fresh.owner.id, "GET", fresh.channel.id, fresh.npc.id, [])
+      ).json();
+      assert.equal(list.skillInvocation, true);
+      // Skill management stays as it was: the new capability is not a skill feature.
+      assert.equal(list.capabilityReady, true);
+    },
+  );
+});
