@@ -21,3 +21,9 @@ export function tabFor(state: NpcTabState, dialogNpcId: string | null): NpcPanel
  * (and refocuses the input) while a re-render with the same request changes nothing.
  */
 export type NpcTabRequest = { npcId: string; tab: NpcPanelTab; seq: number };
+
+/**
+ * An outside request to add a skill chip to an employee's chat input — the Skills tab "Use" button.
+ * `seq` makes each press distinct; the chat input ignores a chip it already holds.
+ */
+export type SkillChipRequest = { npcId: string; skill: string; seq: number };

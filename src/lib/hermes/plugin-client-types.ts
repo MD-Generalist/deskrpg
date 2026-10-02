@@ -254,6 +254,8 @@ export type SkillAdminApi = {
     body: { id: string; baseHash: string },
     actor: string,
   ): Promise<PluginResponse<{ id: string; kind: string; result: string }>>;
+  /** Expand chat skill chips into Hermes' skill invocation message (capability `skill_invocation`). */
+  invoke(body: SkillInvocationRequest): Promise<PluginResponse<SkillInvocationResponse>>;
 };
 
 export type SkillsPayload = { skills: SkillRow[] };
@@ -434,7 +436,11 @@ import type {
   UpdateTaskBody,
   WorkerLog,
 } from "./deskrpg-plugin-types";
-import type { KanbanReviewPolicy } from "./deskrpg-plugin-types";
+import type {
+  KanbanReviewPolicy,
+  SkillInvocationRequest,
+  SkillInvocationResponse,
+} from "./deskrpg-plugin-types";
 
 /** Body per card action. Actions other than reassign, request-changes, and unblock are an empty object. */
 export type KanbanTaskActionInput<A extends KanbanTaskAction> = A extends "approve"

@@ -2781,6 +2781,12 @@ const en: Record<string, string> = {
     "The gateway needs a newer DeskRPG plugin. Use manual registration below for now",
   "errors.pluginNotLoaded":
     "The DeskRPG plugin is turned off or not loaded on the gateway. Turn it on at the gateway host, then restart the gateway",
+  "errors.skillNotFound": "That skill could not be found.",
+  "errors.skillDisabled":
+    "That skill is turned off. Turn it on in the Skills tab, then send again.",
+  "errors.skillLoadFailed": "The skill could not be loaded. Try sending again in a moment.",
+  "errors.skillRequiresSingleMention": "Mention one staff member to use skills.",
+  "errors.tooManySkills": "You can use up to 5 skills at once.",
   "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
 
   // Cron screen (T9)

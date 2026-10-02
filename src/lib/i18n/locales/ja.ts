@@ -2798,6 +2798,13 @@ const ja: Record<string, string> = {
     "ゲートウェイの DeskRPG プラグインを更新する必要があります。今は下の手動登録を使ってください",
   "errors.pluginNotLoaded":
     "ゲートウェイで DeskRPG プラグインがオフになっているか、読み込まれていません。ゲートウェイのホストでプラグインをオンにしてから、ゲートウェイを再起動してください",
+  "errors.skillNotFound": "そのスキルが見つかりません。",
+  "errors.skillDisabled":
+    "このスキルはオフになっています。スキルタブでオンにしてから、もう一度送信してください。",
+  "errors.skillLoadFailed":
+    "スキルを読み込めませんでした。少し待ってから、もう一度送信してください。",
+  "errors.skillRequiresSingleMention": "スタッフを1人指名するとスキルを使えます。",
+  "errors.tooManySkills": "スキルは一度に5個まで使えます。",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
 
   // Cron screen (T9)

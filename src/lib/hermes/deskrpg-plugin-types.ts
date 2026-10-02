@@ -850,6 +850,18 @@ export const SKILL_HUB_CAPABILITY = "profile_skill_hub";
 export const CURATOR_CAPABILITY = "profile_curator";
 export const LEARNING_GRAPH_CAPABILITY = "profile_learning_graph";
 
+/**
+ * 0.31.0 — expand chat skill chips the way Hermes' TUI expands `/skill …`
+ * (`POST /p/{profile}/deskrpg/skill-invocation`). The plugin calls Hermes' public
+ * `build_skill_invocation_message` / `build_stacked_skill_invocation_message` scoped to the profile.
+ * Errors: 400 invalid_skills · 400 too_many_skills · 404 skill_not_found (+missing) ·
+ * 409 skill_disabled (+disabled) · 422 skill_load_failed.
+ */
+export const SKILL_INVOCATION_MIN_VERSION = "0.31.0";
+export const SKILL_INVOCATION_CAPABILITY = "skill_invocation";
+export type SkillInvocationRequest = { skills: string[]; instruction: string };
+export type SkillInvocationResponse = { message: string; loaded: string[]; missing: string[] };
+
 /** 0.17.0 — NPC MCP connector management (`/p/{profile}/deskrpg/mcp/**`). */
 export const MCP_ADMIN_MIN_VERSION = "0.17.0";
 export const MCP_ADMIN_CAPABILITY = "profile_mcp_admin";

@@ -211,6 +211,11 @@ export type ErrorCode =
   | "key_store_failed"
   | "plugin_update_required"
   | "plugin_not_loaded"
+  | "skill_not_found"
+  | "skill_disabled"
+  | "skill_load_failed"
+  | "skill_requires_single_mention"
+  | "too_many_skills"
   | "oauth_denied"
   | "oauth_expired"
   | "oauth_error"
@@ -449,6 +454,12 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   key_store_failed: "errors.keyStoreFailed",
   plugin_update_required: "errors.pluginUpdateRequired",
   plugin_not_loaded: "errors.pluginNotLoaded",
+  // Chat skill chips (plugin skill_invocation).
+  skill_not_found: "errors.skillNotFound",
+  skill_disabled: "errors.skillDisabled",
+  skill_load_failed: "errors.skillLoadFailed",
+  skill_requires_single_mention: "errors.skillRequiresSingleMention",
+  too_many_skills: "errors.tooManySkills",
   // Provider auth (plugin profile_oauth · profile_provider_keys). The proxy loads the
   // upstream code dynamically, and oauth_denied·oauth_expired·oauth_error are produced by
   // ProviderAuthPanel from poll state. Messages live in the hermes.providerAuth.* block.

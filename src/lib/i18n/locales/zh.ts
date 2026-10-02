@@ -2661,6 +2661,11 @@ const zh: Record<string, string> = {
   "errors.pluginUpdateRequired": "网关的 DeskRPG 插件需要更新。暂时请使用下方的手动注册",
   "errors.pluginNotLoaded":
     "网关上的 DeskRPG 插件未启用或未加载。请在网关主机上启用插件，然后重启网关",
+  "errors.skillNotFound": "找不到该技能。",
+  "errors.skillDisabled": "该技能已关闭。请在技能标签中开启后重新发送。",
+  "errors.skillLoadFailed": "无法加载该技能。请稍后重新发送。",
+  "errors.skillRequiresSingleMention": "指定一名员工后即可使用技能。",
+  "errors.tooManySkills": "一次最多可使用 5 个技能。",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
 
   // Cron screen (T9)

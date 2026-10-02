@@ -563,6 +563,7 @@ export function createProfilePluginClient(
 
   const skills: SkillAdminApi = {
     list: () => call(`${prof}/skills`, token),
+    invoke: (body) => call(`${prof}/skill-invocation`, token, { method: "POST", body }),
     detail: (name) => call(skill(name), token),
     readFile: (name, path) => call(`${skill(name, "/file")}${query({ path })}`, token),
     writeFile: (name, body, actor) =>
