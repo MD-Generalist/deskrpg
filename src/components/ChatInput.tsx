@@ -1,13 +1,23 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { accentClasses, type ChatAccent } from "./chat-accent";
 import { useT } from "@/lib/i18n";
-import MentionEditor, { type MentionEditorHandle } from "./mention-input/MentionEditor";
-import type { MentionCandidate } from "./mention-input/mention-model";
+import MentionEditor, {
+  type MentionEditorHandle,
+  type SkillsBlockedReason,
+} from "./mention-input/MentionEditor";
+import {
+  serializeSegments,
+  splitSkillSegments,
+  type MentionCandidate,
+  type Segment,
+  type SkillCandidate,
+} from "./mention-input/mention-model";
 
 interface ChatInputProps {
-  onSend: (message: string, files?: File[]) => void;
+  /** `skills` is set only when the message carries skill chips (they are not part of `message`). */
+  onSend: (message: string, files?: File[], skills?: string[]) => void;
   value?: string;
   onValueChange?: (value: string) => void;
   placeholder?: string;
@@ -27,6 +37,19 @@ interface ChatInputProps {
    * The sent value is serialized as `@[name]`.
    */
   mentionCandidates?: MentionCandidate[];
+  /**
+   * The conversation's draft with its chips. When present, the chip editor is used (with or
+   * without mentions) and the draft is reported through `onDraftSegmentsChange`.
+   */
+  draftSegments?: Segment[];
+  onDraftSegmentsChange?: (segments: Segment[]) => void;
+  /** A new value remounts the editor so it shows `draftSegments` again (another conversation, or a chip added from outside). */
+  editorKey?: string;
+  /** Skills `/` can pick. See `MentionEditor`. */
+  skillCandidates?: SkillCandidate[];
+  skillsBlockedReason?: SkillsBlockedReason;
+  /** `/` opened a skill query — load the list. See `MentionEditor`. */
+  onSkillTrigger?: () => void;
   /** Which conversation this input belongs to. Not shown on screen, only exposed via `data-chat-scope` (picked up by captures/e2e). */
   scope?: "room" | "npc" | "meeting";
   /** A reply is running: the send button becomes a stop button that calls this. */
@@ -47,6 +70,12 @@ export default function ChatInput({
   showFileUpload = false,
   accent = "npc",
   mentionCandidates,
+  draftSegments,
+  onDraftSegmentsChange,
+  editorKey,
+  skillCandidates,
+  skillsBlockedReason,
+  onSkillTrigger,
   scope,
   onStop,
 }: ChatInputProps) {
@@ -56,9 +85,16 @@ export default function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionRef = useRef<MentionEditorHandle>(null);
-  const useMentions = Array.isArray(mentionCandidates);
-  const controlled = value !== undefined;
-  const draft = controlled ? value : input;
+  const useMentions = Array.isArray(mentionCandidates) || draftSegments !== undefined;
+  const [editorSegments, setEditorSegments] = useState<Segment[]>(() => draftSegments ?? []);
+  const segments = draftSegments ?? editorSegments;
+  const skills = useMemo(
+    () => (useMentions ? splitSkillSegments(segments).skills : []),
+    [useMentions, segments],
+  );
+  const controlled = value !== undefined || draftSegments !== undefined;
+  const draft =
+    draftSegments !== undefined ? serializeSegments(draftSegments) : controlled ? value! : input;
   const updateDraft = useCallback(
     (next: string) => {
       if (!controlled) setInput(next);
@@ -81,31 +117,43 @@ export default function ChatInput({
 
   // Auto-focus when enabled
   useEffect(() => {
-    if (autoFocus && !disabled && textareaRef.current) {
-      textareaRef.current.focus();
+    if (autoFocus && !disabled) {
+      textareaRef.current?.focus();
+      mentionRef.current?.focus();
     }
   }, [autoFocus, disabled, focusKey]);
 
   // Re-focus when cooldown/disabled ends
   useEffect(() => {
-    if (!disabled && !cooldown && textareaRef.current) {
-      textareaRef.current.focus();
+    if (!disabled && !cooldown) {
+      textareaRef.current?.focus();
+      mentionRef.current?.focus();
     }
   }, [disabled, cooldown]);
 
+  const updateSegments = useCallback(
+    (next: Segment[]) => {
+      if (draftSegments === undefined) setEditorSegments(next);
+      onDraftSegmentsChange?.(next);
+    },
+    [draftSegments, onDraftSegmentsChange],
+  );
+
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
-    if (!trimmed && files.length === 0) return;
+    if (!trimmed && files.length === 0 && skills.length === 0) return;
     if (cooldown || disabled) return;
-    onSend(trimmed, files.length > 0 ? files : undefined);
+    if (skills.length > 0) onSend(trimmed, files.length > 0 ? files : undefined, skills);
+    else onSend(trimmed, files.length > 0 ? files : undefined);
     updateDraft("");
+    updateSegments([]);
     setFiles([]);
     mentionRef.current?.clear();
     // Reset height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [draft, files, cooldown, disabled, onSend, updateDraft]);
+  }, [draft, files, skills, cooldown, disabled, onSend, updateDraft, updateSegments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -132,7 +180,7 @@ export default function ChatInput({
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
-  const canSend = (draft.trim() || files.length > 0) && !cooldown && !disabled;
+  const canSend = (draft.trim() || files.length > 0 || skills.length > 0) && !cooldown && !disabled;
 
   const accentTheme = accentClasses(accent);
   const btnColor = canSend
@@ -205,10 +253,18 @@ export default function ChatInput({
         {/* Textarea or mention editor */}
         {useMentions ? (
           <MentionEditor
+            key={editorKey}
             ref={mentionRef}
-            candidates={mentionCandidates ?? []}
+            candidates={mentionCandidates}
+            skillCandidates={skillCandidates}
+            skillsBlockedReason={skillsBlockedReason}
+            onSkillTrigger={onSkillTrigger}
+            initialSegments={draftSegments}
             value={draft}
-            onChange={(v) => updateDraft(v.slice(0, maxLength))}
+            onChange={(v, segs) => {
+              if (draftSegments === undefined) updateDraft(v.slice(0, maxLength));
+              updateSegments(segs);
+            }}
             onSubmit={handleSend}
             placeholder={
               cooldown

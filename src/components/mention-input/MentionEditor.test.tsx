@@ -169,3 +169,177 @@ test("a mention chip is colored with a brand token, with no assembled classes", 
     `칩에 조립 팔레트 클래스가 남아 있다: ${cls}`,
   );
 });
+
+const skills = [
+  { name: "research", description: "Dig into a topic" },
+  { name: "write-report", description: "Write a report" },
+];
+
+test("'/' opens the skill list and Enter turns the pick into a skill chip", async () => {
+  let segments: unknown[] = [];
+  let text = "x";
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        skillCandidates={skills}
+        onChange={(v, segs) => {
+          text = v;
+          segments = segs;
+        }}
+        onSubmit={() => {}}
+      />
+    </I18nProvider>,
+  );
+  const ed = editor(el);
+  await typeText(ed, "/wri");
+  assert.ok(el.querySelector("[data-skill-list]"));
+  assert.deepEqual(
+    [...el.querySelectorAll("[data-skill-option]")].map((o) => o.getAttribute("data-skill-option")),
+    ["write-report"],
+  );
+  await keydown(ed, "Enter");
+  const chip = ed.querySelector("[data-skill-name]");
+  assert.equal(chip?.getAttribute("data-skill-name"), "write-report");
+  assert.equal(chip?.getAttribute("contenteditable"), "false");
+  assert.ok(!el.querySelector("[data-skill-list]"), "the list closes after a pick");
+  assert.equal(text.trim(), "", "a skill chip is not part of the sent text");
+  assert.deepEqual(segments[0], { kind: "skill", name: "write-report" });
+});
+
+test("a skill already chosen is not offered again", async () => {
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        skillCandidates={skills}
+        initialSegments={[{ kind: "skill", name: "research" }]}
+        onChange={() => {}}
+        onSubmit={() => {}}
+      />
+    </I18nProvider>,
+  );
+  await typeText(editor(el), "/");
+  assert.deepEqual(
+    [...el.querySelectorAll("[data-skill-option]")].map((o) => o.getAttribute("data-skill-option")),
+    ["write-report"],
+  );
+});
+
+test("with five chips the list gives way to the limit note", async () => {
+  const many = ["a1", "a2", "a3", "a4", "a5", "a6"].map((name) => ({ name, description: "" }));
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        skillCandidates={many}
+        initialSegments={many.slice(0, 5).map((s) => ({ kind: "skill" as const, name: s.name }))}
+        onChange={() => {}}
+        onSubmit={() => {}}
+      />
+    </I18nProvider>,
+  );
+  await typeText(editor(el), "/");
+  assert.equal(el.querySelector("[data-skill-note]")?.getAttribute("data-skill-note"), "limit");
+  assert.ok(!el.querySelector("[data-skill-list]"));
+});
+
+test("a room without exactly one named teammate shows the single-mention note", async () => {
+  const sent: string[] = [];
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        candidates={candidates}
+        skillsBlockedReason="single_mention"
+        onChange={() => {}}
+        onSubmit={() => sent.push("x")}
+      />
+    </I18nProvider>,
+  );
+  const ed = editor(el);
+  await typeText(ed, "/res");
+  assert.equal(
+    el.querySelector("[data-skill-note]")?.getAttribute("data-skill-note"),
+    "single_mention",
+  );
+  assert.ok(!el.querySelector("[data-skill-list]"));
+  await keydown(ed, "Enter");
+  assert.equal(sent.length, 1, "a note never takes Enter");
+  assert.ok(!ed.querySelector("[data-skill-name]"));
+});
+
+test("an older plugin keeps '/' a plain character and shows the update note", async () => {
+  let text = "";
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        skillsBlockedReason="plugin_update"
+        onChange={(v) => (text = v)}
+        onSubmit={() => {}}
+      />
+    </I18nProvider>,
+  );
+  await typeText(editor(el), "/tmp");
+  assert.equal(
+    el.querySelector("[data-skill-note]")?.getAttribute("data-skill-note"),
+    "plugin_update",
+  );
+  assert.equal(text, "/tmp");
+});
+
+test("without skill props '/' does nothing, and without candidates '@' does nothing", async () => {
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor onChange={() => {}} onSubmit={() => {}} />
+    </I18nProvider>,
+  );
+  await typeText(editor(el), "/tmp @so");
+  assert.ok(!el.querySelector("[data-skill-note], [data-skill-list], [role='listbox']"));
+});
+
+test("Backspace removes a skill chip whole", async () => {
+  let segments: unknown[] = [{}];
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        skillCandidates={skills}
+        initialSegments={[{ kind: "skill", name: "research" }]}
+        onChange={(_v, segs) => (segments = segs)}
+        onSubmit={() => {}}
+      />
+    </I18nProvider>,
+  );
+  const ed = editor(el);
+  assert.ok(ed.querySelector("[data-skill-name]"));
+  await act(async () => {
+    const range = document.createRange();
+    range.setStart(ed, 1);
+    range.collapse(true);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  await keydown(ed, "Backspace");
+  assert.ok(!ed.querySelector("[data-skill-name]"));
+  assert.deepEqual(segments, []);
+});
+
+test("the saved draft is shown with its chips when the editor mounts", async () => {
+  const { el } = await mount(
+    <I18nProvider>
+      <MentionEditor
+        candidates={candidates}
+        skillCandidates={skills}
+        initialSegments={[
+          { kind: "mention", id: "a", name: "소피" },
+          { kind: "text", text: " " },
+          { kind: "skill", name: "research" },
+          { kind: "text", text: " 이번 주 정리" },
+        ]}
+        onChange={() => {}}
+        onSubmit={() => {}}
+      />
+    </I18nProvider>,
+  );
+  const ed = editor(el);
+  assert.equal(ed.querySelector("[data-mention-id]")?.getAttribute("data-mention-id"), "a");
+  assert.equal(ed.querySelector("[data-skill-name]")?.textContent, "/research");
+  assert.ok(ed.textContent?.endsWith(" 이번 주 정리"));
+});

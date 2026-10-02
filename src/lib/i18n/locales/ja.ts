@@ -2128,6 +2128,13 @@ const ja: Record<string, string> = {
   "chat.imageUnavailable": "画像を読み込めませんでした",
   "chat.placeholder": "メッセージを入力...",
   "chat.mentionNoMatch": "該当する社員がいません",
+  "chat.skills.loading": "スキル一覧を読み込んでいます。",
+  "chat.skills.limit": "スキルは一度に5つまで使えます。",
+  "chat.skills.needSingleMention": "社員を1人指名するとスキルを使えます。",
+  "chat.skills.pluginUpdate":
+    "スキルを使うには、ゲートウェイの DeskRPG プラグインを更新してください。",
+  "chat.skills.empty": "オンになっているスキルがありません。スキルタブでオンにしてください。",
+  "chat.skills.noMatch": "該当するスキルがありません。",
   "chat.tab": "チャット",
   "chat.npcPlaceholder": "{name}に挨拶...",
   "chat.noMessages": "まだメッセージはありません",

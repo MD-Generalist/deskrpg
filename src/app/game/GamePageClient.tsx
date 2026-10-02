@@ -96,7 +96,8 @@ import {
 } from "@/game/npc-placement-request";
 import ReportBadge from "@/components/report/ReportBadge";
 import ChatPanel from "@/components/ChatPanel";
-import type { NpcTabRequest } from "@/components/chat/npc-tab-state";
+import type { NpcTabRequest, SkillChipRequest } from "@/components/chat/npc-tab-state";
+import { formatSkillChipLine } from "@/lib/chat/skill-chips";
 import ConversationPane from "@/components/conversation/ConversationPane";
 import ConversationWorkspace from "@/components/conversation/ConversationWorkspace";
 import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
@@ -379,6 +380,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
   // "Ask in chat" from the skill manager must land on the chat tab even for the employee already open.
   const [npcTabRequest, setNpcTabRequest] = useState<NpcTabRequest | null>(null);
+  // Set by the skills tab's [Use] (wired with the tab request); ChatPanel adds the chip to the DM draft.
+  const [skillChipRequest] = useState<SkillChipRequest | null>(null);
   /** The employee whose skill management modal is open — opened by "관리 열기" in the dialog's [스킬] tab. */
   const [skillManagerNpc, setSkillManagerNpc] = useState<{
     npcId: string;
@@ -1610,7 +1613,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
 
   const handleDialogSend = useCallback(
-    async (message: string, files?: File[]) => {
+    async (message: string, files?: File[], skills?: string[]) => {
       if (!socket || !dialogNpc) return;
       if (!socket.connected) {
         showToastNotification(
@@ -1619,11 +1622,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         );
         return;
       }
-      // Add player message immediately (with file names if attached)
+      // Add player message immediately (with file names if attached). With skill chips it reads
+      // as the line the server stores (`/skill … instruction`), so it looks the same after a reload.
+      const sentLine = skills?.length ? formatSkillChipLine(skills, message) : message;
       const displayMessage =
         files && files.length > 0
-          ? `${message}\n📎 ${files.map((f) => f.name).join(", ")}`
-          : message;
+          ? `${sentLine}\n📎 ${files.map((f) => f.name).join(", ")}`
+          : sentLine;
       const sourceMessageId = crypto.randomUUID();
       setNpcMessages((prev) => [
         ...prev,
@@ -1663,7 +1668,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         {
           ...previous.find((thread) => thread.npcId === dialogNpc.npcId),
           npcId: dialogNpc.npcId,
-          lastMessage: { role: "player" as const, content: message },
+          lastMessage: { role: "player" as const, content: sentLine },
           lastAt: Date.now(),
         },
         ...previous.filter((thread) => thread.npcId !== dialogNpc.npcId),
@@ -1676,19 +1681,24 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         // Send the character along so conversation in that window is not lost (the server verifies ownership).
         characterId: characterId ?? undefined,
         files: filePayloads,
+        ...(skills?.length ? { skills } : {}),
       });
     },
     [socket, channelId, dialogNpc, characterId, showToastNotification, t],
   );
 
   const handleRoomSend = useCallback(
-    (message: string) => {
+    (message: string, skills?: string[]) => {
       if (!socket || !socket.connected) {
         showToastNotification("channel-chat-disconnected", t("game.channelChatDisconnected"));
         return;
       }
       if (!currentRoomId) return;
-      socket.emit("room:send", { roomId: currentRoomId, message });
+      socket.emit("room:send", {
+        roomId: currentRoomId,
+        message,
+        ...(skills?.length ? { skills } : {}),
+      });
       if (socket.id) EventBus.emit("chat:speech", { actorId: socket.id, text: message });
       // A message restarting the conversation — call participants who went back to their seats to our side again.
       // The server calls mentioned NPCs separately, and if they are already beside us or walking the scene ignores the recall.
@@ -3014,6 +3024,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         cardsRefreshTick={kanbanRefreshTick}
         onOpenAssignedCard={openNoticeCard}
         npcTabRequest={npcTabRequest}
+        skillChipRequest={skillChipRequest}
         onOpenSkillManager={(npcId, skillName) =>
           setSkillManagerNpc({
             npcId,

@@ -293,7 +293,7 @@ test("with a cron context, the 'cron' tab opens single-mode for just that NPC (R
     // Returning to the chat tab makes the input box visible again.
     await click(buttonByText(el, "대화"));
     assert.ok(!el.querySelector('[data-testid="cron-panel"]'));
-    assert.ok(el.querySelector("textarea"), "대화 입력창");
+    assert.ok(el.querySelector('[data-chat-scope="npc"] [contenteditable="true"]'), "대화 입력창");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1551,7 +1551,7 @@ test("a tab request switches the open employee back to the chat tab and focuses 
       el.querySelector('[role="tab"][data-tab="chat"]')?.getAttribute("aria-selected"),
       "true",
     );
-    const input = el.querySelector('[data-chat-scope="npc"] textarea');
+    const input = el.querySelector('[data-chat-scope="npc"] [contenteditable="true"]');
     assert.equal(Boolean(input), true);
     assert.equal(document.activeElement === input, true);
 
@@ -1572,5 +1572,244 @@ test("a tab request switches the open employee back to the chat tab and focuses 
       "true",
     );
     await act(async () => root.unmount());
+  });
+});
+
+// ── Skill chips ─────────────────────────────────────────────────────────────
+
+const SKILL_LIST = {
+  skills: [
+    { name: "research", category: "", description: "Dig in", disabled: false, essential: false },
+    { name: "archived", category: "", description: "", disabled: true, essential: false },
+  ],
+  canManage: false,
+  capabilityReady: true,
+  sharedChannelCount: 1,
+  skillInvocation: true,
+};
+
+/** Answers the skill list for any employee; counts list reads. */
+async function withSkillList<T>(
+  list: Record<string, unknown>,
+  run: (reads: string[]) => Promise<T>,
+): Promise<T> {
+  const originalFetch = globalThis.fetch;
+  const reads: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (/\/skills\/?$/.test(url)) reads.push(url);
+    return new Response(JSON.stringify(/\/skills\/?$/.test(url) ? list : { columns: [] }), {
+      status: 200,
+    });
+  }) as typeof fetch;
+  try {
+    return await run(reads);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+async function typeInto(ed: HTMLElement, text: string) {
+  await act(async () => {
+    ed.appendChild(document.createTextNode(text));
+    ed.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  // Let the list fetch resolve and render.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+const dmEditor = (el: HTMLElement) =>
+  el.querySelector('[data-chat-scope="npc"] [contenteditable="true"]') as HTMLElement;
+
+test("a DM reads the skill list only on the first '/', then sends the chip in skills[]", async () => {
+  await withSkillList(SKILL_LIST, async (reads) => {
+    const sent: unknown[][] = [];
+    const el = await mount(cardsPanel({ onSend: (...args) => sent.push(args) }));
+    assert.equal(reads.length, 0, "opening the DM costs no list read");
+    const ed = dmEditor(el);
+    await typeInto(ed, "/re");
+    assert.deepEqual(reads, ["/api/channels/ch1/npcs/npc-a/skills/"]);
+    assert.deepEqual(
+      [...el.querySelectorAll("[data-skill-option]")].map((o) =>
+        o.getAttribute("data-skill-option"),
+      ),
+      ["research"],
+      "only skills that are on are offered",
+    );
+    await act(async () => {
+      (el.querySelector("[data-skill-option]") as HTMLElement).click();
+    });
+    await typeInto(ed, "이번 주 정리");
+    await act(async () => {
+      ed.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    assert.deepEqual(sent, [["이번 주 정리", undefined, ["research"]]]);
+    await typeInto(ed, "/");
+    assert.equal(reads.length, 1, "the list is read once per employee");
+  });
+});
+
+test("a plugin without skill_invocation keeps '/' plain and shows the update note", async () => {
+  await withSkillList({ ...SKILL_LIST, skillInvocation: false }, async () => {
+    const el = await mount(cardsPanel());
+    await typeInto(dmEditor(el), "/tmp");
+    assert.equal(
+      el.querySelector("[data-skill-note]")?.getAttribute("data-skill-note"),
+      "plugin_update",
+    );
+  });
+});
+
+test("a [Use] request adds the chip to that employee's draft once and focuses the input", async () => {
+  await withSkillList(SKILL_LIST, async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const root = createRoot(el);
+    await act(async () => root.render(cardsPanel()));
+    await click(el.querySelector('[role="tab"][data-tab="skills"]')!);
+    await act(async () => {
+      root.render(
+        cardsPanel({
+          npcTabRequest: { npcId: "npc-a", tab: "chat", seq: 1 },
+          skillChipRequest: { npcId: "npc-a", skill: "research", seq: 1 },
+        }),
+      );
+    });
+    const ed = dmEditor(el);
+    assert.deepEqual(
+      [...ed.querySelectorAll("[data-skill-name]")].map((c) => c.getAttribute("data-skill-name")),
+      ["research"],
+    );
+    assert.equal(document.activeElement, ed);
+    // The same skill again: no second chip.
+    await act(async () => {
+      root.render(
+        cardsPanel({
+          npcTabRequest: { npcId: "npc-a", tab: "chat", seq: 2 },
+          skillChipRequest: { npcId: "npc-a", skill: "research", seq: 2 },
+        }),
+      );
+    });
+    assert.equal(dmEditor(el).querySelectorAll("[data-skill-name]").length, 1);
+    await act(async () => root.unmount());
+  });
+});
+
+test("a draft keeps its skill chip when the conversation is left and reopened", async () => {
+  await withSkillList(SKILL_LIST, async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const root = createRoot(el);
+    await act(async () =>
+      root.render(cardsPanel({ skillChipRequest: { npcId: "npc-a", skill: "research", seq: 1 } })),
+    );
+    await act(async () =>
+      root.render(
+        cardsPanel({
+          dialogNpc: { npcId: "npc-b", npcName: "올리버" },
+          skillChipRequest: { npcId: "npc-a", skill: "research", seq: 1 },
+        }),
+      ),
+    );
+    assert.equal(dmEditor(el).querySelectorAll("[data-skill-name]").length, 0);
+    await act(async () =>
+      root.render(cardsPanel({ skillChipRequest: { npcId: "npc-a", skill: "research", seq: 1 } })),
+    );
+    assert.equal(
+      dmEditor(el).querySelector("[data-skill-name]")?.getAttribute("data-skill-name"),
+      "research",
+    );
+    await act(async () => root.unmount());
+  });
+});
+
+test("sent DM lines draw the employee's skill names as chips, and '/tmp …' stays text", async () => {
+  await withSkillList(SKILL_LIST, async () => {
+    const el = await mount(
+      cardsPanel({
+        npcMessages: [
+          { id: "m1", role: "player", content: "/research /archived 이번 주 정리" },
+          { id: "m2", role: "player", content: "/tmp 폴더 정리해" },
+        ],
+      }),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const bubbles = [...el.querySelectorAll('[data-chat-bubble="player"]')];
+    assert.deepEqual(
+      [...bubbles[0].querySelectorAll("[data-bubble-skill]")].map((c) =>
+        c.getAttribute("data-bubble-skill"),
+      ),
+      ["research", "archived"],
+      "a skill turned off later still reads as a chip",
+    );
+    assert.ok(bubbles[0].textContent?.includes("이번 주 정리"));
+    assert.equal(bubbles[1].querySelectorAll("[data-bubble-skill]").length, 0);
+    assert.ok(bubbles[1].textContent?.includes("/tmp 폴더 정리해"));
+  });
+});
+
+function skillRoomState(messages: RoomState["messages"][string]): RoomState {
+  return {
+    ...listState(),
+    view: "room",
+    currentRoomId: "g1",
+    messages: { g1: messages },
+  };
+}
+
+const roomMsg = (id: string, content: string) =>
+  ({
+    id,
+    roomId: "g1",
+    senderKind: "user",
+    senderId: "u1",
+    senderName: "나",
+    content,
+    createdAt: "2026-10-02T00:00:00Z",
+  }) as RoomState["messages"][string][number];
+
+test("a room without exactly one named employee offers no skills, only the single-mention note", async () => {
+  await withSkillList(SKILL_LIST, async (reads) => {
+    const el = await mount(
+      panel(skillRoomState([]), {
+        presentation: "workspace",
+        cron: { channelId: "ch1" },
+        mentionCandidatesFor: () => [{ id: "npc-a", name: "소피" }],
+      }),
+    );
+    const ed = el.querySelector('[data-chat-scope="room"] [contenteditable="true"]') as HTMLElement;
+    await typeInto(ed, "/re");
+    assert.equal(
+      el.querySelector("[data-skill-note]")?.getAttribute("data-skill-note"),
+      "single_mention",
+    );
+    assert.equal(reads.length, 0);
+  });
+});
+
+test("a room line addressed to one employee draws its skill chips after the mention", async () => {
+  await withSkillList(SKILL_LIST, async (reads) => {
+    const el = await mount(
+      panel(skillRoomState([roomMsg("r1", "@[소피] /research 이번 주 정리")]), {
+        presentation: "workspace",
+        cron: { channelId: "ch1" },
+        currentPlayerName: "나",
+        mentionCandidatesFor: () => [{ id: "npc-a", name: "소피" }],
+      }),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(reads, ["/api/channels/ch1/npcs/npc-a/skills/"]);
+    const bubble = el.querySelector('[data-chat-bubble="player"]');
+    assert.equal(
+      bubble?.querySelector("[data-bubble-skill]")?.getAttribute("data-bubble-skill"),
+      "research",
+    );
+    assert.ok(bubble?.textContent?.startsWith("@[소피] "));
   });
 });

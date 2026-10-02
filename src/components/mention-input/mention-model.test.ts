@@ -3,7 +3,10 @@ import test from "node:test";
 
 import {
   filterCandidates,
+  filterSkillCandidates,
   findMentionQuery,
+  findSkillQuery,
+  splitSkillSegments,
   reduceDropdown,
   serializeSegments,
   type Segment,
@@ -64,4 +67,44 @@ test("a chip whose name contains brackets serializes with the shared mention esc
     { kind: "text", text: " hi" },
   ];
   assert.equal(serializeSegments(segs), "@[Kim \\]] hi");
+});
+
+test("findSkillQuery opens at line start or after whitespace only", () => {
+  assert.deepEqual(findSkillQuery("/res"), { start: 0, query: "res" });
+  assert.deepEqual(findSkillQuery("@[Sophie] /wr"), { start: 10, query: "wr" });
+  assert.equal(findSkillQuery("a/b"), null);
+  assert.equal(findSkillQuery("/res x"), null);
+});
+
+test("splitSkillSegments separates chips from text", () => {
+  const segs: Segment[] = [
+    { kind: "mention", id: "n1", name: "Sophie" },
+    { kind: "text", text: " " },
+    { kind: "skill", name: "research" },
+    { kind: "skill", name: "research" },
+    { kind: "text", text: " do it" },
+  ];
+  assert.deepEqual(splitSkillSegments(segs), { skills: ["research"], text: "@[Sophie]  do it" });
+});
+
+test("serializeSegments drops skill chips (they travel in skills[])", () => {
+  assert.equal(
+    serializeSegments([
+      { kind: "skill", name: "x" },
+      { kind: "text", text: "hi" },
+    ]),
+    "hi",
+  );
+});
+
+test("filterSkillCandidates matches the name case-insensitively", () => {
+  const skills = [
+    { name: "research", description: "" },
+    { name: "Write-Report", description: "" },
+  ];
+  assert.deepEqual(
+    filterSkillCandidates("wri", skills).map((s) => s.name),
+    ["Write-Report"],
+  );
+  assert.equal(filterSkillCandidates("", skills).length, 2);
 });
