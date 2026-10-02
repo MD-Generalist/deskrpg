@@ -8,6 +8,7 @@ import * as rooms from "@/lib/chat-rooms";
 import type { RoomSummary } from "@/lib/chat-rooms-policy";
 import { attachRoomReads } from "@/lib/conversation-reads";
 import { registerRoomHandlers } from "./room-socket";
+import type { SkillExpansion, SkillExpansionInput } from "./skill-expansion";
 
 type Emitted = [string, unknown];
 
@@ -61,6 +62,10 @@ function setup(
     cookie?: string;
     createRoom?: typeof rooms.createRoom;
     attachReads?: (userId: string, list: RoomSummary[]) => Promise<RoomSummary[]>;
+    /** What the fake runtime reports as mentioned employees. Default: nobody. */
+    mentions?: (text: string) => string[];
+    /** Stands in for the plugin expansion. Default: refuses with skill_load_failed. */
+    expandSkills?: (input: SkillExpansionInput) => Promise<SkillExpansion>;
   } = {},
 ) {
   const emitted: Emitted[] = [];
@@ -71,6 +76,8 @@ function setup(
   const callerContexts: unknown[] = [];
   const callerLocales: unknown[] = [];
   const callerUserIds: unknown[] = [];
+  const expansions: [string, string, string][] = [];
+  const expandCalls: SkillExpansionInput[] = [];
   return {
     emitted,
     socket,
@@ -79,6 +86,8 @@ function setup(
     callerContexts,
     callerLocales,
     callerUserIds,
+    expansions,
+    expandCalls,
     async register(seeded: Seeded) {
       // Default identity is the channel owner. Given `userId`, registers as that person — for permission branches.
       const actingUserId = opts.userId ?? seeded.userId;
@@ -106,8 +115,18 @@ function setup(
           cooldownMs: 2000,
           getParticipationAccess: async () => ({ access: { allowed: opts.allowed ?? true } }),
           rooms: opts.createRoom ? { ...rooms, createRoom: opts.createRoom } : rooms,
+          expandSkills: async (input) => {
+            expandCalls.push(input);
+            return opts.expandSkills
+              ? opts.expandSkills(input)
+              : { ok: false, errorCode: "skill_load_failed" };
+          },
           getRuntime: async (_io, room) =>
             ({
+              mentionedParticipants: (text: string) => opts.mentions?.(text) ?? [],
+              setExpandedMessage: (id: string, npcId: string, text: string) => {
+                expansions.push([id, npcId, text]);
+              },
               handleHumanMessage: async (
                 _s: string,
                 text: string,
@@ -589,4 +608,142 @@ test("an office line is not announced — every socket already listens to the of
   await t.socket.trigger("room:send", { roomId: office!.id, message: "모두에게" });
   assert.ok(ev(t.emitted, "room:message").length > 0, "the line itself went out");
   assert.equal(t.emitted.filter(([e]) => e.startsWith("room:activity@")).length, 0);
+});
+
+const oneMention = (text: string) => (text.includes("@[소피]") ? ["n1"] : []);
+
+test("room:send with chips: one mentioned employee, stored chip line, expansion handed to the runtime for that employee", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup({
+    mentions: oneMention,
+    expandSkills: async (input) => ({
+      ok: true,
+      message: `EXPANDED(${input.skills.join("+")}): ${input.instruction}`,
+    }),
+  });
+  await t.register(seeded);
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  await t.socket.trigger("room:open", { roomId: office.id });
+  await t.socket.trigger("room:send", {
+    roomId: office.id,
+    message: "@[소피]  정리해 줘",
+    skills: ["/research", "write-report"],
+  });
+  const [msg] = ev(t.emitted, `room:message@room-${office.id}`) as {
+    message: { id: string; content: string };
+  }[];
+  assert.equal(msg.message.content, "@[소피] /research /write-report 정리해 줘");
+  assert.deepEqual(t.expandCalls, [
+    {
+      channelId: seeded.channelId,
+      npcId: "n1",
+      skills: ["research", "write-report"],
+      instruction: "정리해 줘",
+    },
+  ]);
+  assert.deepEqual(t.expansions, [
+    [msg.message.id, "n1", "EXPANDED(research+write-report): 정리해 줘"],
+  ]);
+  // The runtime and the store see the chip line, never the expansion.
+  assert.deepEqual(t.woke, [
+    { roomId: office.id, text: "@[소피] /research /write-report 정리해 줘" },
+  ]);
+  const stored = await rooms.recentRoomMessages(office.id, 5, null);
+  assert.deepEqual(
+    stored.map((m) => m.content),
+    ["@[소피] /research /write-report 정리해 줘"],
+  );
+  assert.deepEqual(ev(t.emitted, "room:error"), []);
+});
+
+test("room:send with chips alone (no instruction) is not an empty message", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup({
+    mentions: oneMention,
+    expandSkills: async () => ({ ok: true, message: "EXPANDED" }),
+  });
+  await t.register(seeded);
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  await t.socket.trigger("room:open", { roomId: office.id });
+  await t.socket.trigger("room:send", {
+    roomId: office.id,
+    message: "@[소피]",
+    skills: ["research"],
+  });
+  assert.deepEqual(ev(t.emitted, "room:error"), []);
+  assert.deepEqual(t.woke, [{ roomId: office.id, text: "@[소피] /research" }]);
+  assert.equal(t.expandCalls[0]?.instruction, "");
+});
+
+test("room:send with chips but zero or two mentioned employees is refused and nothing is stored", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 2 });
+  const t = setup({
+    mentions: (text) =>
+      ["소피", "하늘"].filter((n) => text.includes(`@[${n}]`)).map((n) => `id-${n}`),
+    expandSkills: async () => ({ ok: true, message: "EXPANDED" }),
+  });
+  await t.register(seeded);
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  await t.socket.trigger("room:open", { roomId: office.id });
+  await t.socket.trigger("room:send", {
+    roomId: office.id,
+    message: "다들 봐줘",
+    skills: ["research"],
+  });
+  await t.socket.trigger("room:send", {
+    roomId: office.id,
+    message: "@[소피] @[하늘] 봐줘",
+    skills: ["research"],
+  });
+  assert.deepEqual(ev(t.emitted, "room:error"), [
+    { roomId: office.id, code: "skill_requires_single_mention" },
+    { roomId: office.id, code: "skill_requires_single_mention" },
+  ]);
+  assert.deepEqual(t.expandCalls, []);
+  assert.deepEqual(t.woke, []);
+  assert.equal((await rooms.recentRoomMessages(office.id, 5, null)).length, 0);
+});
+
+test("room:send whose chips cannot be expanded is refused with the expansion code and nothing is stored", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup({
+    mentions: oneMention,
+    expandSkills: async () => ({ ok: false, errorCode: "skill_disabled" }),
+  });
+  await t.register(seeded);
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  await t.socket.trigger("room:open", { roomId: office.id });
+  await t.socket.trigger("room:send", {
+    roomId: office.id,
+    message: "@[소피] 봐줘",
+    skills: ["research"],
+  });
+  assert.deepEqual(ev(t.emitted, "room:error"), [{ roomId: office.id, code: "skill_disabled" }]);
+  assert.deepEqual(t.woke, []);
+  assert.deepEqual(t.expansions, []);
+  assert.equal((await rooms.recentRoomMessages(office.id, 5, null)).length, 0);
+  // Malformed chips never reach the mention check or the plugin.
+  await t.socket.trigger("room:send", {
+    roomId: office.id,
+    message: "@[소피] 봐줘",
+    skills: ["a1", "a2", "a3", "a4", "a5", "a6"],
+  });
+  assert.deepEqual(ev(t.emitted, "room:error").at(-1), {
+    roomId: office.id,
+    code: "too_many_skills",
+  });
+  assert.equal(t.expandCalls.length, 1);
+});
+
+test("room:send without chips is unchanged: no mention check, no expansion", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const t = setup({ mentions: () => [] });
+  await t.register(seeded);
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  await t.socket.trigger("room:open", { roomId: office.id });
+  await t.socket.trigger("room:send", { roomId: office.id, message: "/tmp 폴더 정리해" });
+  assert.deepEqual(ev(t.emitted, "room:error"), []);
+  assert.deepEqual(t.expandCalls, []);
+  assert.deepEqual(t.expansions, []);
+  assert.deepEqual(t.woke, [{ roomId: office.id, text: "/tmp 폴더 정리해" }]);
 });

@@ -58,11 +58,11 @@ class RecentCache {
   readThrough(sourceMessageId: string): ChatLine[] {
     const end = this.entries.findIndex((entry) => entry.id === sourceMessageId);
     const entries = end < 0 ? this.entries : this.entries.slice(0, end + 1);
-    return entries.slice(-RECENT_LIMIT).map(({ sender, content }) => ({ sender, content }));
+    return entries.slice(-RECENT_LIMIT).map(({ id, sender, content }) => ({ id, sender, content }));
   }
 
   read(): ChatLine[] {
-    return this.entries.map(({ sender, content }) => ({ sender, content }));
+    return this.entries.map(({ id, sender, content }) => ({ id, sender, content }));
   }
 }
 

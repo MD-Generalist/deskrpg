@@ -19,6 +19,8 @@ import {
 import { deriveChannelMotionLayout, closestValidUnoccupiedSpawn } from "./channel-motion-layout";
 import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
 import { runTrackedDm, executeDmAdapter } from "./dm-response-runtime";
+import { skillExpansion, validateSkillChips } from "./skill-expansion";
+import { formatSkillChipLine } from "@/lib/chat/skill-chips";
 import { Server, Socket } from "socket.io";
 import type { NpcAdapter } from "../lib/adapters/types";
 import {
@@ -1628,6 +1630,8 @@ export function setupSocketHandlers(io: Server) {
         characterId?: string;
         sourceMessageId?: string;
         files?: Array<{ name: string; type: string; size: number; data: ArrayBuffer }>;
+        /** Skill chips (`/skill`), at most MAX_SKILL_CHIPS. Expanded through the plugin before Hermes sees them. */
+        skills?: string[];
       }) => {
         const { npcId, message, files } = data;
         chatLog(
@@ -1636,11 +1640,26 @@ export function setupSocketHandlers(io: Server) {
           files
             ? `+${files.length} files [${files.map((f) => `${f.name}(${(f.size / 1024).toFixed(0)}KB)`).join(", ")}]`
             : "",
+          data.skills?.length ? `+skills [${data.skills.join(", ")}]` : "",
         );
 
-        // Validate
-        if (!npcId || !message || typeof message !== "string") return;
-        const trimmed = message.trim().slice(0, 500);
+        // Validate. Without chips the message is required, as before; chips alone are a message too.
+        if (!npcId) return;
+        if (data.skills === undefined && (!message || typeof message !== "string")) return;
+        if (typeof message !== "string" && message !== undefined && message !== null) return;
+        const chips =
+          data.skills === undefined
+            ? { ok: true as const, skills: [] }
+            : validateSkillChips(data.skills);
+        if (!chips.ok) {
+          emitNpcSystemResponse(socket, npcId, chips.errorCode);
+          return;
+        }
+        // The 500-character limit is for the instruction; the chips are not counted.
+        const instruction = (message ?? "").trim().slice(0, 500);
+        const trimmed = chips.skills.length
+          ? formatSkillChipLine(chips.skills, instruction)
+          : instruction;
         if (!trimmed && (!files || files.length === 0)) return;
 
         // Rate limit
@@ -1749,7 +1768,25 @@ export function setupSocketHandlers(io: Server) {
 
               const fileSection = buildFilePromptSection(extractedFiles, socketLocale(socket));
               if (!isActive()) return;
-              const messageToSend = trimmed + fileSection;
+              // Chips go to Hermes as the message its TUI would build for `/skill …`; the stored line
+              // keeps the chips. A failed expansion ends the turn here — Hermes is never called with
+              // the chips stripped — and the failure code marks the stored line like any DM failure.
+              let body = trimmed;
+              if (chips.skills.length) {
+                const expanded = await skillExpansion.expand({
+                  channelId: npcConfig._channelId,
+                  npcId,
+                  skills: chips.skills,
+                  instruction,
+                });
+                if (!isActive()) return;
+                if (!expanded.ok) {
+                  emitNpcSystemResponse(responseSocket, npcId, expanded.errorCode);
+                  return;
+                }
+                body = expanded.message;
+              }
+              const messageToSend = body + fileSection;
 
               // Stream response via OpenClaw
               chatLog(

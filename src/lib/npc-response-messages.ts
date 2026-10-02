@@ -31,6 +31,13 @@ const NPC_RESPONSE_MESSAGE_KEYS = {
   too_many_files: "npc.tooManyFiles",
   npc_unbound: "npc.unbound",
   hermes_image_unsupported: "npc.hermesImageUnsupported",
+  // Skill chips (skill-expansion.ts) — the same wording the REST layer uses for these codes.
+  plugin_update_required: "errors.pluginUpdateRequired",
+  plugin_not_loaded: "errors.pluginNotLoaded",
+  skill_not_found: "errors.skillNotFound",
+  skill_disabled: "errors.skillDisabled",
+  skill_load_failed: "errors.skillLoadFailed",
+  too_many_skills: "errors.tooManySkills",
 } as const;
 
 export type NpcResponseMessageCode = keyof typeof NPC_RESPONSE_MESSAGE_KEYS;

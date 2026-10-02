@@ -31,6 +31,9 @@ export type FakeSkillState = {
   paused: boolean;
   /** The last received `X-DeskRPG-Actor` value. */
   lastActor: string | null;
+  /** 0.31.0 `skill-invocation`: the bodies received, and an optional scripted failure for the next call. */
+  invocations: { skills: string[]; instruction: string }[];
+  invocationFailure: { status: number; error: string } | null;
   seed(
     name: string,
     opts?: { source?: FakeSkill["source"]; files?: Record<string, string>; useCount?: number },
@@ -60,6 +63,8 @@ export function createFakeSkillState(): FakeSkillState {
     jobs: new Map(),
     paused: false,
     lastActor: null,
+    invocations: [],
+    invocationFailure: null,
     seed(name, opts = {}) {
       const files = new Map<string, string>([
         ["SKILL.md", `---\nname: ${name}\ndescription: ${name}\n---\n# ${name}\n`],
@@ -369,6 +374,42 @@ function routeSkillArea(
  * null unless `/deskrpg/skills…`·`/deskrpg/curator…`·`/deskrpg/learning…` — the caller continues its original
  * routing.
  */
+/**
+ * `POST /deskrpg/skill-invocation` (plugin 0.31.0): the message Hermes' TUI would send for `/skill …`. The fake
+ * does not run Hermes' builders — it answers with a recognizable stand-in that carries the names and the
+ * instruction, and the same error codes as the plugin.
+ */
+export function routeSkillInvocation(state: FakeSkillState, req: Req): Reply | null {
+  if (req.pathname !== "/deskrpg/skill-invocation") return null;
+  if (req.method !== "POST") return err(405, "method_not_allowed");
+  const body = (req.json ?? {}) as { skills?: unknown; instruction?: unknown };
+  const skills = Array.isArray(body.skills) ? body.skills : null;
+  const instruction = typeof body.instruction === "string" ? body.instruction : "";
+  if (!skills || skills.length === 0 || skills.some((s) => typeof s !== "string"))
+    return err(400, "invalid_skills");
+  if (skills.length > 5) return err(400, "too_many_skills");
+  const names = (skills as string[]).map((s) => s.replace(/^\//, ""));
+  if (new Set(names).size !== names.length) return err(400, "invalid_skills");
+  state.invocations.push({ skills: names, instruction });
+  if (state.invocationFailure) {
+    const failure = state.invocationFailure;
+    state.invocationFailure = null;
+    return err(failure.status, failure.error);
+  }
+  const missing = names.filter((n) => !state.skills.has(n));
+  if (missing.length) return { status: 404, body: { error: "skill_not_found", missing } };
+  const disabled = names.filter((n) => state.skills.get(n)!.disabled);
+  if (disabled.length) return { status: 409, body: { error: "skill_disabled", disabled } };
+  return {
+    status: 200,
+    body: {
+      message: `[skills: ${names.join(", ")}] ${instruction}`.trim(),
+      loaded: names,
+      missing: [],
+    },
+  };
+}
+
 export function routeSkills(state: FakeSkillState, req: Req): Reply | null {
   const m = /^\/deskrpg\/(skills|curator|learning)(\/.*)?$/.exec(req.pathname);
   if (!m) return null;

@@ -17,10 +17,28 @@ import type * as chatRooms from "@/lib/chat-rooms";
 import type { PlayerState } from "./socket-handlers";
 import type { getOrCreateRoomRuntime, invalidateRoomRuntime } from "./room-runtime";
 import { cancelRoomResponse } from "./room-runtime";
+import {
+  formatRoomSkillLine,
+  skillExpansion,
+  splitLeadingMentions,
+  validateSkillChips,
+  type SkillExpansion,
+  type SkillExpansionErrorCode,
+  type SkillExpansionInput,
+} from "./skill-expansion";
 import { broadcastRoomActivity, broadcastRoomMessage, roomSocketRoom } from "./room-broadcast";
 
 export type RoomErrorCode =
-  "forbidden" | "not_found" | "not_open" | "empty" | "cooldown" | "not_joined" | "invalid";
+  | "forbidden"
+  | "not_found"
+  | "not_open"
+  | "empty"
+  | "cooldown"
+  | "not_joined"
+  | "invalid"
+  // Skill chips: only one mentioned employee may receive them, and expansion can fail (skill-expansion.ts).
+  | "skill_requires_single_mention"
+  | SkillExpansionErrorCode;
 
 /** Max length of a single human message. Carried over as-is from the old `handleChatSend` rule. */
 const MAX_MESSAGE_LENGTH = 500;
@@ -60,6 +78,8 @@ export type RegisterRoomHandlersArgs = {
     rooms: typeof chatRooms;
     getRuntime: typeof getOrCreateRoomRuntime;
     invalidateRuntime: typeof invalidateRoomRuntime;
+    /** Expands a message's skill chips through the plugin. Defaults to the live plugin round trip. */
+    expandSkills?: (input: SkillExpansionInput) => Promise<SkillExpansion>;
     /** Adds the viewer's unread count and read point to their list. Omitted: the list goes as is. */
     attachReads?: (userId: string, rooms: RoomSummary[]) => Promise<RoomSummary[]>;
     /** Stops a room reply as this user. Defaults to the live room runtimes. */
@@ -114,6 +134,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
     getRuntime,
     cancelResponse = cancelRoomResponse,
     invalidateRuntime,
+    expandSkills = (input) => skillExpansion.expand(input),
     now = () => Date.now(),
     attachReads,
   } = deps;
@@ -270,9 +291,17 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
     },
 
     async send(payload) {
-      const { roomId, message } = (payload ?? {}) as { roomId?: unknown; message?: unknown };
+      const { roomId, message, skills } = (payload ?? {}) as {
+        roomId?: unknown;
+        message?: unknown;
+        skills?: unknown;
+      };
       const id = asString(roomId);
       if (!id) return fail(null, "invalid");
+      // Chips are checked before anything else touches the room: a bad list is refused outright.
+      const chips =
+        skills === undefined ? { ok: true as const, skills: [] } : validateSkillChips(skills);
+      if (!chips.ok) return fail(id, chips.errorCode);
 
       // New socket.id after reconnect — the client gets this code and sends player:join again.
       const player = players.get(socket.id);
@@ -283,14 +312,46 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
 
       if (!openRooms.has(id)) return fail(id, "not_open");
 
+      // The length limit applies to the instruction; the chips are not part of it.
       const content = String(message ?? "")
         .trim()
         .slice(0, MAX_MESSAGE_LENGTH);
-      if (!content) return fail(id, "empty");
+      if (!content && chips.skills.length === 0) return fail(id, "empty");
+
+      // With chips, the message must name exactly one employee — an input error, refused before the
+      // cooldown like an empty message — and the plugin must expand it **before** anything is stored:
+      // a message whose chips cannot be expanded is not sent at all. The stored line keeps the chips;
+      // only that employee's turn sees the expansion.
+      let runtime: Awaited<ReturnType<typeof getRuntime>> = null;
+      let target: string | null = null;
+      if (chips.skills.length > 0) {
+        try {
+          runtime = await getRuntime(io, access.room, user.userId);
+        } catch (err) {
+          console.error("[room] runtime unavailable:", err);
+        }
+        const targets = runtime ? runtime.mentionedParticipants(content) : [];
+        if (targets.length !== 1) return fail(id, "skill_requires_single_mention");
+        target = targets[0];
+      }
 
       const at = now();
       if (at - (lastChatTime.get(socket.id) || 0) < cooldownMs) return fail(id, "cooldown");
       lastChatTime.set(socket.id, at);
+
+      let stored = content;
+      let expansion: { npcId: string; text: string } | null = null;
+      if (target) {
+        const expanded = await expandSkills({
+          channelId: access.room.channelId,
+          npcId: target,
+          skills: chips.skills,
+          instruction: splitLeadingMentions(content).rest,
+        });
+        if (!expanded.ok) return fail(id, expanded.errorCode);
+        stored = formatRoomSkillLine(content, chips.skills);
+        expansion = { npcId: target, text: expanded.message };
+      }
 
       const senderName = player.characterName || user.nickname;
       const saved = await rooms.appendRoomMessage({
@@ -298,7 +359,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         senderKind: "user",
         senderId: user.userId,
         senderName,
-        content,
+        content: stored,
       });
       broadcastRoomMessage(roomIo, id, saved);
       if (access.room.kind === "group") await announceActivity(id, saved);
@@ -306,12 +367,13 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       // Runtime assembly (DB + adapter resolution) is awaited, but **the NPC's turn is not.**
       // A turn takes tens of seconds, so awaiting here would block the next message.
       try {
-        const runtime = await getRuntime(io, access.room, user.userId);
+        runtime ??= await getRuntime(io, access.room, user.userId);
         if (runtime) {
+          if (expansion) runtime.setExpandedMessage(saved.id, expansion.npcId, expansion.text);
           void runtime
             .handleHumanMessage(
               senderName,
-              content,
+              stored,
               socket.id,
               saved.id,
               socket.data?.userContext ?? null,

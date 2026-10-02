@@ -11,7 +11,8 @@ import { promptLocale, type PromptLocale } from "@/lib/i18n/prompt-locale";
 import { formatReportFormat } from "@/lib/report-format";
 import { formatUserContext, type UserContext } from "@/lib/user-context";
 
-export type ChatLine = { sender: string; content: string };
+/** `id` is the stored message id when the producer has one — the open-chat runtime swaps a line by it. */
+export type ChatLine = { sender: string; content: string; id?: string };
 
 type Words = {
   intro: (self: string, calledBy: string) => string;
