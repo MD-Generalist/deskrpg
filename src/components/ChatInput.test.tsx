@@ -108,3 +108,47 @@ test("while a reply is running, the send button becomes a stop button", async ()
   await act(async () => stop.click());
   assert.equal(stops, 1);
 });
+
+test("a skill chip travels as the third onSend argument, and a chip alone can be sent", async () => {
+  const sent: unknown[][] = [];
+  const el = await mount(
+    <I18nProvider>
+      <ChatInput
+        onSend={(...args) => sent.push(args)}
+        skillCandidates={[{ name: "research", description: "" }]}
+        mentionCandidates={[]}
+      />
+    </I18nProvider>,
+  );
+  const ed = el.querySelector('[contenteditable="true"]') as HTMLElement;
+  await act(async () => {
+    ed.appendChild(document.createTextNode("/re"));
+    ed.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    (el.querySelector("[data-skill-option]") as HTMLElement).click();
+  });
+  const send = [...el.querySelectorAll("button")].find((b) => !b.disabled);
+  assert.ok(send, "a chip alone enables send");
+  await act(async () => send!.click());
+  assert.deepEqual(sent, [["", undefined, ["research"]]]);
+});
+
+test("without chips onSend keeps its two-argument call", async () => {
+  const sent: unknown[][] = [];
+  const el = await mount(
+    <I18nProvider>
+      <ChatInput onSend={(...args) => sent.push(args)} />
+    </I18nProvider>,
+  );
+  const ta = el.querySelector("textarea") as HTMLTextAreaElement;
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    setter.call(ta, "hello");
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  assert.deepEqual(sent, [["hello", undefined]]);
+});

@@ -38,7 +38,19 @@ import {
   type NpcPanelTab,
   type NpcTabRequest,
   type NpcTabState,
+  type SkillChipRequest,
 } from "./chat/npc-tab-state";
+import { createSkillsApi } from "./skills/skills-api";
+import type { Segment } from "./mention-input/mention-model";
+import { MAX_SKILL_CHIPS } from "@/lib/chat/skill-chips";
+import {
+  chatSkillsFrom,
+  leadingMentionName,
+  roomSkillTarget,
+  skillInputProps,
+  splitSkillBubble,
+  type NpcChatSkills,
+} from "./chat/skill-chip-view";
 import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
 import { formatMention } from "@/lib/conversation/mention";
 
@@ -75,7 +87,8 @@ interface ChatPanelProps {
   roomResponses?: ChatResponse[];
   npcChatInputDisabled?: boolean;
   npcChatDisabledPlaceholder?: string;
-  onSend: (message: string, files?: File[]) => void;
+  /** `skills` is set only when the message carries skill chips. */
+  onSend: (message: string, files?: File[], skills?: string[]) => void;
   /** Stops the open NPC's reply in progress. Without it, no stop button is shown. */
   onStopNpcResponse?: (requestId: string) => void;
   /** Stops a room reply to the viewer's own message. Without it, no stop button is shown. */
@@ -95,7 +108,8 @@ interface ChatPanelProps {
   roomState: RoomState;
   channelChatOpen?: boolean;
   channelChatInputDisabled?: boolean;
-  onRoomSend: (message: string) => void;
+  /** `skills` is set only when the message carries skill chips (for the one named employee). */
+  onRoomSend: (message: string, skills?: string[]) => void;
   onRoomAction: (action: RoomAction) => void;
   onRoomCreate: (name: string, npcIds: string[], userIds: string[]) => void;
   onRoomInvite: (roomId: string, npcIds: string[], userIds: string[]) => void;
@@ -121,6 +135,10 @@ interface ChatPanelProps {
   onOpenSkillManager?: (npcId: string, skillName?: string) => void;
   /** Shows a tab of that employee's panel (and focuses the input when it is chat). Latest request wins. */
   npcTabRequest?: NpcTabRequest | null;
+  /** Adds a skill chip to that employee's chat input (the skills tab's [Use]). A chip already there is not added twice. */
+  skillChipRequest?: SkillChipRequest | null;
+  /** [Use] on a skill row — the wiring turns it into a tab request and a `skillChipRequest`. */
+  onUseSkill?: (npcId: string, skillName: string) => void;
   /** "Manage" in the connectors tab — opens that employee's connector manager, optionally on one server. */
   onOpenConnectorManager?: (npcId: string, serverName?: string) => void;
   /** Opens an NPC's unattended run policy modal (from the [Connectors] tab, owner only). */
@@ -227,6 +245,9 @@ export default function ChatPanel({
   onOpenAssignedCard,
   onOpenSkillManager,
   npcTabRequest = null,
+  skillChipRequest = null,
+  // Passed to NpcSkillsTab once that tab takes `onUseSkill` (skills-tab [Use] task).
+  onUseSkill: _onUseSkill,
   onOpenConnectorManager,
   onOpenApprovalPolicy,
   approvalSocket,
@@ -364,9 +385,63 @@ export default function ChatPanel({
         ? `room:${roomState.currentRoomId}`
         : "room:list";
   const conversationDraft = sessions.get(conversationKey).draft;
-  const updateConversationDraft = (draft: string) => {
+  const updateConversationDraft = (draft: Segment[]) => {
     sessions.setDraft(conversationKey, draft);
     setSessionRevision((revision) => revision + 1);
+  };
+  // Bumped when a chip is added to a draft from outside the input, so the editor shows it.
+  const [draftEpoch, setDraftEpoch] = useState(0);
+  const editorKey = `${conversationKey}:${draftEpoch}`;
+  // [Use] in the skills tab: append the chip to that employee's draft (once), like a typed pick.
+  const [appliedSkillRequest, setAppliedSkillRequest] = useState(0);
+  if (skillChipRequest && skillChipRequest.seq !== appliedSkillRequest) {
+    setAppliedSkillRequest(skillChipRequest.seq);
+    const key = `npc:${skillChipRequest.npcId}`;
+    const draft = sessions.get(key).draft;
+    const chips = draft.flatMap((seg) => (seg.kind === "skill" ? [seg.name] : []));
+    if (!chips.includes(skillChipRequest.skill) && chips.length < MAX_SKILL_CHIPS) {
+      sessions.setDraft(key, [
+        ...draft,
+        { kind: "skill", name: skillChipRequest.skill },
+        { kind: "text", text: " " },
+      ]);
+      setDraftEpoch((epoch) => epoch + 1);
+    }
+  }
+
+  // Each employee's skills for `/` and for drawing sent chips — fetched once per employee, on demand.
+  const [chatSkills, setChatSkills] = useState<Record<string, NpcChatSkills | "loading">>({});
+  const skillsChannelId = cron?.channelId ?? null;
+  const skillsRequested = useRef(new Set<string>());
+  const ensureChatSkills = useCallback(
+    (npcId: string) => {
+      if (!skillsChannelId || skillsRequested.current.has(npcId)) return;
+      skillsRequested.current.add(npcId);
+      setChatSkills((cur) => ({ ...cur, [npcId]: "loading" }));
+      createSkillsApi(skillsChannelId, npcId)
+        .list()
+        .then((view) => {
+          const skills = chatSkillsFrom(view);
+          setChatSkills((cur) => ({ ...cur, [npcId]: skills }));
+        })
+        .catch(() => {
+          // Without the list, `/` stays a plain character and sent lines draw as written.
+          skillsRequested.current.delete(npcId);
+          setChatSkills((cur) => {
+            const { [npcId]: _dropped, ...rest } = cur;
+            return rest;
+          });
+        });
+    },
+    [skillsChannelId],
+  );
+  const readySkills = (npcId: string | null | undefined): NpcChatSkills | undefined => {
+    const entry = npcId ? chatSkills[npcId] : undefined;
+    return entry && entry !== "loading" ? entry : undefined;
+  };
+  const knownSkills = (npcId: string | null | undefined): ReadonlySet<string> | null => {
+    const entry = readySkills(npcId);
+    return entry ? new Set(entry.known) : null;
   };
   const isWorkspace = presentation === "workspace";
   const isOpen = isWorkspace || manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
@@ -395,6 +470,63 @@ export default function ChatPanel({
     () => (roomState.currentRoomId ? (roomState.messages[roomState.currentRoomId] ?? []) : []),
     [roomState.currentRoomId, roomState.messages],
   );
+
+  // Skill lists are read lazily — on the first `/`, or when a sent chip line has to be drawn —
+  // so opening a conversation costs no plugin call.
+  const dmHasChipLine = npcMessages.some((m) => m.role === "player" && m.content.startsWith("/"));
+  useEffect(() => {
+    if (dialogNpcId && dmHasChipLine) ensureChatSkills(dialogNpcId);
+  }, [dialogNpcId, dmHasChipLine, ensureChatSkills]);
+  // Room: `/` is for the one employee the draft names; sent chip lines need their addressee's list.
+  const roomCandidates = mentionCandidatesFor(roomState.currentRoomId);
+  const roomTargetId =
+    !dialogNpc && roomState.view === "room"
+      ? roomSkillTarget(conversationDraft, roomCandidates)
+      : null;
+  const roomCandidateIdByName = useMemo(
+    () => new Map(roomCandidates.map((c) => [c.name, c.id])),
+    [roomCandidates],
+  );
+  const roomChipNpcIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of roomMessages) {
+      if (m.senderKind !== "user" || m.notice) continue;
+      const name = leadingMentionName(m.content);
+      const id = name ? roomCandidateIdByName.get(name) : undefined;
+      if (id && /^@\[(?:\\.|[^\]\\])*\]\s+\//.test(m.content)) ids.add(id);
+    }
+    return [...ids].sort().join(",");
+  }, [roomMessages, roomCandidateIdByName]);
+  useEffect(() => {
+    for (const id of roomChipNpcIds ? roomChipNpcIds.split(",") : []) ensureChatSkills(id);
+  }, [roomChipNpcIds, ensureChatSkills]);
+
+  /** A sent line with its leading skill names drawn as chips; the plain text when none are known. */
+  const renderSentLine = (
+    content: string,
+    npcId: string | null | undefined,
+    opts: { mention?: boolean; mine: boolean },
+  ): React.ReactNode => {
+    const parts = splitSkillBubble(content, knownSkills(npcId), { mention: opts.mention });
+    if (!parts) return content;
+    return (
+      <span className="whitespace-pre-wrap">
+        {parts.prefix}
+        {parts.skills.map((name) => (
+          <span
+            key={name}
+            data-bubble-skill={name}
+            className={`mr-1 inline-block rounded px-1.5 py-0.5 text-sm font-semibold ${
+              opts.mine ? "bg-white/20 text-white" : "bg-primary/15 text-primary"
+            }`}
+          >
+            /{name}
+          </span>
+        ))}
+        {parts.instruction}
+      </span>
+    );
+  };
   // The newest reply still running for a message the viewer sent — the server lets only its
   // sender stop it, so replies to someone else's message get no stop button.
   const activeRoomResponse = useMemo(() => {
@@ -876,7 +1008,9 @@ export default function ChatPanel({
                             msg.role === "npc" && isNpcStreaming && i === npcMessages.length - 1
                           }
                         >
-                          {msg.content}
+                          {msg.role === "player"
+                            ? renderSentLine(msg.content, dialogNpc?.npcId, { mine: true })
+                            : msg.content}
                         </ChatBubble>
                       )}
                       {onCreateTaskFromChat &&
@@ -977,8 +1111,13 @@ export default function ChatPanel({
                       ? () => onStopNpcResponse(activeNpcResponse.requestId)
                       : undefined
                   }
-                  value={conversationDraft}
-                  onValueChange={updateConversationDraft}
+                  draftSegments={conversationDraft}
+                  onDraftSegmentsChange={updateConversationDraft}
+                  editorKey={editorKey}
+                  {...skillInputProps(readySkills(dialogNpc?.npcId))}
+                  onSkillTrigger={
+                    skillsChannelId ? () => ensureChatSkills(dialogNpc!.npcId) : undefined
+                  }
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
                   disabled={!!npcChatInputDisabled}
                   scope="npc"
@@ -1081,7 +1220,13 @@ export default function ChatPanel({
                       }
                       continued={sameSpeaker(roomMessages[index - 1], msg)}
                     >
-                      {msg.content}
+                      {msg.senderKind === "user"
+                        ? renderSentLine(
+                            msg.content,
+                            roomCandidateIdByName.get(leadingMentionName(msg.content) ?? ""),
+                            { mention: true, mine: isMe },
+                          )
+                        : msg.content}
                     </ChatBubble>
                     {
                       <ResponseProgress
@@ -1111,19 +1256,28 @@ export default function ChatPanel({
               />
             )}
             <ChatInput
-              onSend={onRoomSend}
+              onSend={(message, _files, skills) => onRoomSend(message, skills)}
               onStop={
                 onStopRoomResponse && activeRoomResponse && roomState.currentRoomId
                   ? () => onStopRoomResponse(roomState.currentRoomId!, activeRoomResponse.requestId)
                   : undefined
               }
-              value={conversationDraft}
-              onValueChange={updateConversationDraft}
+              draftSegments={conversationDraft}
+              onDraftSegmentsChange={updateConversationDraft}
+              editorKey={editorKey}
+              {...(skillsChannelId
+                ? roomTargetId
+                  ? {
+                      ...skillInputProps(readySkills(roomTargetId)),
+                      onSkillTrigger: () => ensureChatSkills(roomTargetId),
+                    }
+                  : { skillsBlockedReason: "single_mention" as const }
+                : {})}
               placeholder={t("chat.placeholder")}
               disabledPlaceholder={t("chat.moveCloser")}
               disabled={!!channelChatInputDisabled}
               scope="room"
-              mentionCandidates={mentionCandidatesFor(roomState.currentRoomId)}
+              mentionCandidates={roomCandidates}
               autoFocus
             />
           </>
