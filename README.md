@@ -26,7 +26,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.929.2` — On macOS the setup wizard now recognizes the gateway service of Hermes builds from before 2026-09-27 (the older launchd wrapper), so it no longer reports the gateway's own port 8642 as taken by another process or offers to move it; when it cannot identify the service it says so and suggests `hermes update` then `hermes gateway restart`. The model picker now lists Gemini, xAI, Mistral and Groq models by family with the newest first. The release workflow waits longer for the npm registry. Includes everything in 2026.929.1. Requires plugin 0.30.3.
+- Version: `v2026.1003.1` — Skills as chat chips: type `/` in a DM or a room to pick an employee's skills (up to five); they appear as chips in the input, and the employee receives the same message Hermes' TUI builds for `/skill …`. In a room, mention exactly one employee to use skills. The Skills tab has a Use button that drops the skill into that employee's DM input. If a skill is off or cannot be loaded, the message is marked failed instead of being sent without it. Includes everything in 2026.929.2. Requires plugin 0.31.0.
 
 ## What You Can Do
 
