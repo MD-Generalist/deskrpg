@@ -26,7 +26,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.1003.1` — Skills as chat chips: type `/` in a DM or a room to pick an employee's skills (up to five); they appear as chips in the input, and the employee receives the same message Hermes' TUI builds for `/skill …`. In a room, mention exactly one employee to use skills. The Skills tab has a Use button that drops the skill into that employee's DM input. If a skill is off or cannot be loaded, the message is marked failed instead of being sent without it. Includes everything in 2026.929.2. Requires plugin 0.31.0.
+- Version: `v2026.1007.1` — The AI model step of the hire wizard lists the same providers as Hermes' `hermes model`, in its order: each provider appears once (Nebius Token Factory and Meta Model API used to repeat once per alias), and OpenRouter, Mixture of Agents and custom endpoints now appear. Providers you can already use stay at the top, and an OpenRouter API key can be entered in the wizard. Includes everything in 2026.1003.1. Requires plugin 0.31.1.
 
 ## What You Can Do
 
